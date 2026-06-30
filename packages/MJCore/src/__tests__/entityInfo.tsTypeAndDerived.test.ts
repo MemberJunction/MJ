@@ -72,6 +72,29 @@ describe('EntityFieldInfo.TSType — every distinct SQL-type branch', () => {
     });
 });
 
+describe('EntityFieldInfo.IsUniqueIdentifier — SQL Server + PostgreSQL type names', () => {
+    it('is true for SQL Server uniqueidentifier', () => {
+        expect(makeField('uniqueidentifier').IsUniqueIdentifier).toBe(true);
+    });
+
+    it('is true for PostgreSQL uuid (the regression this guards)', () => {
+        // On PG the metadata Type is reported as `uuid`; a uniqueidentifier-only
+        // check would miss every UUID PK and break NewRecord() UUID generation.
+        expect(makeField('uuid').IsUniqueIdentifier).toBe(true);
+    });
+
+    it('is case- and whitespace-insensitive', () => {
+        expect(makeField('  UUID ').IsUniqueIdentifier).toBe(true);
+        expect(makeField('UNIQUEIDENTIFIER').IsUniqueIdentifier).toBe(true);
+    });
+
+    it('is false for non-GUID types', () => {
+        expect(makeField('nvarchar').IsUniqueIdentifier).toBe(false);
+        expect(makeField('int').IsUniqueIdentifier).toBe(false);
+        expect(makeField('varchar').IsUniqueIdentifier).toBe(false);
+    });
+});
+
 describe('EntityInfo.FieldByName — lookup edge cases', () => {
     function entity(): EntityInfo {
         return new EntityInfo({

@@ -203,12 +203,12 @@ describe('PheedLoopConnector — BuildPaginatedURL', () => {
             page, 0, undefined, 500
         );
 
-    it('emits page (1-based) + page_size; loop page 0 → page=1', () => {
-        expect(build('/events/', 0)).toBe('/events/?page=1&page_size=500');
+    it('emits page (1-based) + page_size; loop page 1 → page=1', () => {
+        expect(build('/events/', 1)).toBe('/events/?page=1&page_size=500');
     });
 
-    it('loop page 1 → page=2 and uses & when a query already exists', () => {
-        expect(build('/events/?date_updated_gte=2026-01-01', 1)).toBe('/events/?date_updated_gte=2026-01-01&page=2&page_size=500');
+    it('loop page 2 → page=2 and uses & when a query already exists', () => {
+        expect(build('/events/?date_updated_gte=2026-01-01', 2)).toBe('/events/?date_updated_gte=2026-01-01&page=2&page_size=500');
     });
 });
 

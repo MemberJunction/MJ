@@ -734,6 +734,55 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     }
 
     /**
+     * Folds a conversation that was created OUTSIDE this engine (e.g. server-side by a
+     * realtime-session mint, which never fires a client BaseEntity event) into the cached
+     * list so {@link Conversations$} emits reactively — the sidebar list updates without a
+     * manual refresh. Costs at most ONE single-row query, and only when the conversation
+     * isn't already cached:
+     *
+     *  - Already in the list → no-op (returns the cached entity).
+     *  - Not cached → loads the single row, and (unless it's app-scoped, which lives
+     *    outside the main-chat list — see {@link CreateConversation}) prepends it and
+     *    re-emits. Returns the loaded entity, or null when the row can't be read.
+     *
+     * Idempotent and safe to call from a session-start hook on every start.
+     *
+     * @param id - The conversation ID to ensure is present in the cache
+     * @param contextUser - The current user context
+     * @returns The cached/loaded conversation entity, or null when it can't be loaded
+     */
+    public async EnsureConversationLoaded(
+        id: string,
+        contextUser: UserInfo
+    ): Promise<MJConversationEntity | null> {
+        const existing = this.GetConversation(id);
+        if (existing) {
+            return existing;
+        }
+
+        const md = this.ProviderToUse;
+        const conversation = await md.GetEntityObject<MJConversationEntity>('MJ: Conversations', contextUser);
+        const loaded = await conversation.Load(id);
+        if (!loaded) {
+            return null;
+        }
+
+        // App-scoped conversations live inside their owning Application's embedded surface,
+        // not the main-chat list this engine caches — mirror CreateConversation and skip them.
+        if (conversation.ApplicationScope === 'Application') {
+            return conversation;
+        }
+
+        // Re-check under the loaded row in case a concurrent emit added it meanwhile.
+        if (this.GetConversation(id)) {
+            return this.GetConversation(id)!;
+        }
+
+        this._conversations$.next([conversation, ...this._conversations$.value]);
+        return conversation;
+    }
+
+    /**
      * Deletes a conversation from the database and removes it from the cached list.
      *
      * @param id - The conversation ID to delete
@@ -1601,6 +1650,21 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             if (existing) {
                 this.mergeDataOntoRecord(existing, data);
                 this._conversations$.next([...this._conversations$.value]);
+            } else if (event.baseEntity) {
+                // A conversation created OUTSIDE this engine (local save event) that we don't
+                // yet hold — append it so the list updates reactively. Only fold in the
+                // main-chat scope this engine caches, and only for the loaded environment;
+                // app-scoped rows live in their owning surface (see CreateConversation), and
+                // archived rows don't belong in the active list.
+                const scope = data['ApplicationScope'] as string | undefined;
+                const environmentId = data['EnvironmentID'] as string | undefined;
+                const isArchived = data['IsArchived'] === true;
+                const inLoadedEnvironment =
+                    !this._lastEnvironmentId ||
+                    (environmentId != null && UUIDsEqual(environmentId, this._lastEnvironmentId));
+                if (scope !== 'Application' && !isArchived && inLoadedEnvironment) {
+                    this._conversations$.next([event.baseEntity as MJConversationEntity, ...this._conversations$.value]);
+                }
             }
         } else if (action === 'delete') {
             const existing = this.GetConversation(id);

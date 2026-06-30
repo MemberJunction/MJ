@@ -24,6 +24,7 @@
 import {
     LogError,
     LogStatus,
+    LogStatusEx,
     Metadata,
     RunView,
     type UserInfo,
@@ -96,7 +97,9 @@ export function registerIntegrationCustomColumnPromoter(): void {
         const promoter = new IntegrationCustomColumnPromoter(user, provider);
         return promoter.PromoteForSync(ctx.CompanyIntegrationID, ctx.SyncedEntityNames);
     });
-    LogStatus('[CustomColumnPromoter] Registered post-sync custom-column promotion hook (auto-promote opt-in, default OFF).');
+    // Verbose-only: this is a boot-time registration confirmation, not operator-actionable at
+    // standard level. Routes through the global verbose gate (set from the server's telemetry.level).
+    LogStatusEx({ message: '[CustomColumnPromoter] Registered post-sync custom-column promotion hook (auto-promote opt-in, default OFF).', verboseOnly: true });
 }
 
 /** Reads the per-connection `autoPromoteCustomColumns` flag (default false = capture-only, on-demand promotion). */

@@ -27,7 +27,7 @@ import { GeminiRealtime, type GeminiLiveSession, type GeminiConnectArgs } from '
 /*  network.                                                          */
 /* ------------------------------------------------------------------ */
 class FakeLiveSession implements GeminiLiveSession {
-    public RealtimeInputs: Array<{ audio?: GeminiBlob; media?: GeminiBlob; text?: string }> = [];
+    public RealtimeInputs: Array<{ audio?: GeminiBlob; media?: GeminiBlob; text?: string; activityStart?: unknown; activityEnd?: unknown }> = [];
     public ClientContents: Array<{ turns?: Content[]; turnComplete?: boolean }> = [];
     public ToolResponses: Array<{ functionResponses: FunctionResponse[] | FunctionResponse }> = [];
     public Closed = false;
@@ -35,7 +35,7 @@ class FakeLiveSession implements GeminiLiveSession {
     /** The driver-supplied callback that translates inbound server messages. */
     public Emit: (message: LiveServerMessage) => void = () => {};
 
-    public sendRealtimeInput(params: { audio?: GeminiBlob; media?: GeminiBlob; text?: string }): void {
+    public sendRealtimeInput(params: { audio?: GeminiBlob; media?: GeminiBlob; text?: string; activityStart?: unknown; activityEnd?: unknown }): void {
         this.RealtimeInputs.push(params);
     }
     public sendClientContent(params: { turns?: Content[]; turnComplete?: boolean }): void {
@@ -227,6 +227,66 @@ describe('GeminiRealtime', () => {
         it('does not seed when InitialContext is absent or blank', async () => {
             await driver.StartSession(makeParams({ InitialContext: '   ' }));
             expect(driver.Fake.ClientContents).toHaveLength(0);
+        });
+
+        it('meeting mode: translates the neutral disableAutoResponse flag to disabled automatic activity detection (and never sends it raw)', async () => {
+            await driver.StartSession(makeParams({ Config: { disableAutoResponse: true } }));
+            const config = driver.LastConnectArgs!.Config as Record<string, unknown> & {
+                realtimeInputConfig?: { automaticActivityDetection?: { disabled?: boolean } };
+            };
+            // The host-neutral flag is consumed, NOT forwarded raw to the Gemini config.
+            expect(config.disableAutoResponse).toBeUndefined();
+            expect(config.realtimeInputConfig?.automaticActivityDetection?.disabled).toBe(true);
+        });
+
+        it('1:1 call: no realtimeInputConfig when disableAutoResponse is absent (model auto-responds)', async () => {
+            await driver.StartSession(makeParams());
+            const config = driver.LastConnectArgs!.Config as { realtimeInputConfig?: unknown };
+            expect(config.realtimeInputConfig).toBeUndefined();
+        });
+
+        it('capability: reports it CANNOT reconfigure turn mode mid-session (activity detection fixed at connect)', async () => {
+            const session = await driver.StartSession(makeParams());
+            expect(session.Capabilities?.CanReconfigureTurnMode).toBe(false);
+            expect(session.Reconfigure).toBeUndefined(); // method omitted — container must not blind-call
+        });
+    });
+
+    describe('meeting mode — manual activity signals', () => {
+        let driver: TestGeminiRealtime;
+
+        beforeEach(() => {
+            driver = new TestGeminiRealtime('k');
+        });
+
+        it('opens an activity window lazily before the first audio, then commits the turn on RequestSpokenUpdate', async () => {
+            const session = await driver.StartSession(makeParams({ Config: { disableAutoResponse: true } }));
+            session.SendInput(new Uint8Array([1, 2, 3]).buffer);
+            session.SendInput(new Uint8Array([4, 5, 6]).buffer);
+
+            const inputs = driver.Fake.RealtimeInputs;
+            // First send is the activityStart (opens the window), then the two audio chunks (no second start).
+            expect(inputs[0].activityStart).toBeDefined();
+            expect(inputs[1].audio).toBeDefined();
+            expect(inputs[2].audio).toBeDefined();
+            expect(inputs.filter((i) => i.activityStart).length).toBe(1);
+
+            // RequestSpokenUpdate commits the turn (activityEnd) — the bridge is the sole trigger.
+            session.RequestSpokenUpdate?.('');
+            expect(driver.Fake.RealtimeInputs.some((i) => i.activityEnd)).toBe(true);
+
+            // Next audio re-opens a fresh window.
+            session.SendInput(new Uint8Array([7]).buffer);
+            expect(driver.Fake.RealtimeInputs.filter((i) => i.activityStart).length).toBe(2);
+        });
+
+        it('1:1 call: streams audio with no activity markers and RequestSpokenUpdate sends a text nudge', async () => {
+            const session = await driver.StartSession(makeParams());
+            session.SendInput(new Uint8Array([1]).buffer);
+            session.RequestSpokenUpdate?.('go');
+            const inputs = driver.Fake.RealtimeInputs;
+            expect(inputs.some((i) => i.activityStart || i.activityEnd)).toBe(false);
+            expect(inputs.some((i) => i.text === 'go')).toBe(true);
         });
     });
 

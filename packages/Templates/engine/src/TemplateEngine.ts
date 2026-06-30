@@ -1,7 +1,7 @@
 import { IMetadataProvider, LogError, UserInfo, ValidationErrorInfo } from "@memberjunction/core";
-import { MJTemplateContentEntity, MJTemplateEntityExtended, MJTemplateParamEntity } from "@memberjunction/core-entities";
+import { MJTemplateCategoryEntity, MJTemplateContentEntity, MJTemplateContentTypeEntity, MJTemplateEntityExtended, MJTemplateParamEntity } from "@memberjunction/core-entities";
 import nunjucks from 'nunjucks';
-import { MJGlobal, UUIDsEqual } from "@memberjunction/global";
+import { BaseSingleton, MJGlobal, UUIDsEqual } from "@memberjunction/global";
 import { TemplateExtensionBase } from "./extensions/TemplateExtensionBase";
 import { TemplateRenderResult, TemplateEngineBase } from '@memberjunction/templates-base-types'
   
@@ -43,47 +43,82 @@ export class TemplateEntityLoader extends nunjucks.Loader {
 /**
  * TemplateEngine is used for accessing template metadata/caching it, and rendering templates
  */
-export class TemplateEngineServer extends TemplateEngineBase {
+export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
     public static get Instance(): TemplateEngineServer {
         return super.getInstance<TemplateEngineServer>();
     }
 
-    private _oneTimeLoadingComplete: boolean = false;
-    override Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
-        // call the base class to ensure we get the config loaded
-        this.ClearTemplateCache(); // clear the template cache before we load the config
-        return super.Config(forceRefresh, contextUser, provider);
+    /**
+     * Composition over inheritance (mirrors AIEngine/AIEngineBase): this is the server-side template
+     * RENDERER (nunjucks environment + compiled-template cache) wrapping the single TemplateEngineBase
+     * metadata cache, which it proxies. Previously this EXTENDED the base, so TemplateEngineServer.Instance
+     * was a SECOND BaseEngine singleton that loaded a full second copy of the `Template_Metadata` dataset
+     * (a silent double dataset-load — it never tripped the duplicate-RunView telemetry, but doubled memory).
+     */
+    private get Base(): TemplateEngineBase {
+        return TemplateEngineBase.Instance;
     }
-    protected async AdditionalLoading(contextUser?: UserInfo): Promise<void> {
-        // pass along the call to our base class so it can do whatever it wants
-        await super.AdditionalLoading(contextUser);
 
-        // clear our template cache as we are going to reload all of the templates
-        this.ClearTemplateCache();
-        if (!this._oneTimeLoadingComplete) {
-            this._oneTimeLoadingComplete = true; // flag to make sure we don't do this again
+    /** Server-side context user, captured on Config() and settable directly (mirrors AIEngine). */
+    private _contextUser?: UserInfo;
+    private _oneTimeLoadingComplete: boolean = false;
 
-            // do this after the templates are loaded and doing it inside AdditionalLoading() ensures it is done after the templates are loaded and
-            // only done once
-            this._templateLoader = new TemplateEntityLoader();
-            this._nunjucksEnv = new nunjucks.Environment(this._templateLoader as unknown as nunjucks.ILoader, { autoescape: true, dev: true });
+    /**
+     * Loads the single TemplateEngineBase metadata cache, then (re)initializes the render layer. The base
+     * runs its own AdditionalLoading (associating content/params with each template) inside its Config();
+     * afterwards we drop any stale compiled templates and one-time-initialize the nunjucks environment.
+     *
+     * NOTE: when this extended the base, the nunjucks setup lived in an AdditionalLoading() override that
+     * the base's Load() invoked. Under composition the base's Load() calls the BASE's AdditionalLoading,
+     * not ours, so we drive the render-layer init explicitly here after the cache is loaded.
+     */
+    public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
+        if (contextUser) {
+            this._contextUser = contextUser;
+        }
+        await this.Base.Config(forceRefresh, contextUser, provider);
+        this.ClearTemplateCache(); // base templates (re)loaded — drop any stale compiled templates
+        this.ensureNunjucksInitialized(contextUser);
+    }
 
-            // Add custom filters
-            this.addCustomFilters();
+    /** One-time nunjucks environment + registered-extension setup, performed after the base templates load. */
+    private ensureNunjucksInitialized(contextUser?: UserInfo): void {
+        if (this._oneTimeLoadingComplete) {
+            return;
+        }
+        this._oneTimeLoadingComplete = true;
 
-            // get all of the extensions that are registered and register them with nunjucks
-            const extensions = MJGlobal.Instance.ClassFactory.GetAllRegistrations(TemplateExtensionBase);
-            if (extensions && extensions.length > 0) {
-                for (const ext of extensions) {
-                    const SubClassConstructor = ext.SubClass as new (contextUser: UserInfo) => TemplateExtensionBase;
-                    const instance = new SubClassConstructor(contextUser!);
-                    if (ext.Key) {
-                        this._nunjucksEnv.addExtension(ext.Key, instance);
-                    }
+        this._templateLoader = new TemplateEntityLoader();
+        this._nunjucksEnv = new nunjucks.Environment(this._templateLoader as unknown as nunjucks.ILoader, { autoescape: true, dev: true });
+
+        // Add custom filters
+        this.addCustomFilters();
+
+        // get all of the extensions that are registered and register them with nunjucks
+        const extensions = MJGlobal.Instance.ClassFactory.GetAllRegistrations(TemplateExtensionBase);
+        if (extensions && extensions.length > 0) {
+            for (const ext of extensions) {
+                const SubClassConstructor = ext.SubClass as new (contextUser: UserInfo) => TemplateExtensionBase;
+                const instance = new SubClassConstructor(contextUser!);
+                if (ext.Key) {
+                    this._nunjucksEnv.addExtension(ext.Key, instance);
                 }
             }
         }
     }
+
+    /** True once the underlying TemplateEngineBase cache has loaded. */
+    public get Loaded(): boolean { return this.Base.Loaded; }
+    public get ContextUser(): UserInfo { return this._contextUser ?? this.Base.ContextUser; }
+    public set ContextUser(value: UserInfo) { this._contextUser = value; }
+
+    // ── Proxied cached collections + lookup (single source of truth: TemplateEngineBase.Instance) ──
+    public get Templates(): MJTemplateEntityExtended[] { return this.Base.Templates; }
+    public get TemplateContentTypes(): MJTemplateContentTypeEntity[] { return this.Base.TemplateContentTypes; }
+    public get TemplateCategories(): MJTemplateCategoryEntity[] { return this.Base.TemplateCategories; }
+    public get TemplateContents(): MJTemplateContentEntity[] { return this.Base.TemplateContents; }
+    public get TemplateParams(): MJTemplateParamEntity[] { return this.Base.TemplateParams; }
+    public FindTemplate(templateName: string): MJTemplateEntityExtended { return this.Base.FindTemplate(templateName); }
 
     public SetupNunjucks(): void {
         this._templateLoader = new TemplateEntityLoader();

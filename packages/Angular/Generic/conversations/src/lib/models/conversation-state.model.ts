@@ -98,7 +98,7 @@ export type ConversationGroupBy = 'project' | 'date' | 'none';
 /**
  * Type of entity being mentioned
  */
-export type MentionType = 'agent' | 'user' | 'entity';
+export type MentionType = 'agent' | 'user' | 'entity' | 'query';
 
 /**
  * Represents a mention in a message (@Agent or @User)

@@ -19,6 +19,10 @@ import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType, BaseRealtimeModel, GetAIAPIKey, IRealtimeSession, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
 import { CopyScalarsAndArrays, JSONValidator, MJGlobal, SafeExpressionEvaluator, UUIDsEqual } from '@memberjunction/global';
+// token optimization via @memberjunction/context-crush (SmartCrusher/CacheAligner-inspired)
+import { CrushJSON, DescribeCrush, PartitionStablePrefix, type JsonValue } from '@memberjunction/context-crush';
+// AST-aware code reduction (CodeCompressor-inspired) — opt-in per agent type
+import { CrushCode, type CodeLang } from '@memberjunction/context-crush/code';
 import {
     RealtimeSessionRunner,
     RealtimeSessionRunnerDeps,
@@ -29,12 +33,17 @@ import {
 } from './realtime/realtime-session-runner';
 import { ResolveNarrationInstructionsTemplate } from './realtime/realtime-narration';
 import {
+    BuildRealtimeOverridesJson,
     BuildVoiceMannerSection,
     GetNarrationPaceMs,
     GetProviderVoiceSettings,
     RealtimeCoAgentConfig,
     ResolveEffectiveRealtimeConfig
 } from './realtime/realtime-coagent-config';
+import { RealtimeClientSessionService, PrepareClientSessionInput } from './realtime/realtime-client-session-service';
+import { BuildRealtimeAgentFraming } from './realtime/realtime-tool-broker';
+import { RealtimeRecordingController, RealtimeRecordingMedia } from './realtime/realtime-recording-capture';
+import { resolveRecordingStorageAccountID, storeRealtimeRecording } from './realtime/realtime-recording-store';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
@@ -73,6 +82,8 @@ import {
     AgentClientToolInvocation,
     ClientToolResultSummary,
     ClientToolMetadata,
+    ResolveClientTools,
+    AppContextSnapshot,
     InputArtifact,
     AgentPipelineRequest,
     initAgentRunStep,
@@ -119,6 +130,24 @@ interface ActionResultSummary {
     resultCode: string;
     message: string;
     aiDirectives?: AIDirective[];
+}
+
+/**
+ * Resolved per-run configuration for structurally compressing inline action-result
+ * payloads via @memberjunction/context-crush. Undefined means crushing is disabled
+ * for the run (the agent opted out via `crushActionResults: false`).
+ */
+export interface ActionResultCrushConfig {
+    /** Minimum stringified length of an object/array (or code string) value before crushing. */
+    threshold: number;
+    /** Optional character budget passed to CrushJSON (undefined = no row truncation). */
+    maxChars: number | undefined;
+    /**
+     * When set, large *string* output params are reduced with CrushCode for this language.
+     * Undefined (default) means code-string crushing is off — only structural JSON crushing
+     * applies. Opt in per agent type via the `crushCodeLang` prompt param or a subclass override.
+     */
+    codeLang: CodeLang | undefined;
 }
 
 interface BaseIterationContext {
@@ -498,6 +527,14 @@ export class BaseAgent {
     private static readonly LARGE_BINARY_THRESHOLD = 10000;
 
     /**
+     * Minimum stringified length (chars) of an object/array action-result value before
+     * structural JSON compression (CrushJSON) is applied. Small payloads aren't worth a
+     * legend, so they pass through verbatim.
+     * @private
+     */
+    private static readonly ACTION_RESULT_CRUSH_THRESHOLD = 600;
+
+    /**
      * Inspects a set of action output params for any value matching the FileOutputRef shape
      * (an object with `fileName`, `mimeType`, and either `fileData` or `fileId`).
      * Returns all matching FileOutputRef values found across all output params.
@@ -855,6 +892,15 @@ export class BaseAgent {
      * prompt execution occurred after them.
      */
     private _promptTurnCount: number = 0;
+
+    /**
+     * Per-run config for structurally compressing inline action-result payloads.
+     * Resolved once at run start from the agent-type prompt params (default on);
+     * read by formatActionResultsAsMarkdown so both the direct and loop callers
+     * share the same setting without threading it through every signature.
+     * @private
+     */
+    private _actionResultCrush: ActionResultCrushConfig | undefined = undefined;
 
     /**
      * Execution limits for dynamically added actions.
@@ -1582,6 +1628,18 @@ export class BaseAgent {
      * @param config The loaded agent configuration (provides the system prompt, if any).
      * @returns The finalized {@link ExecuteAgentResult}.
      */
+    // ── Realtime per-session capture state (scoped to one executeRealtimeSession run) ──────────
+    /**
+     * In-flight realtime turn rows keyed by transcript role (`'user'`/`'assistant'`), driving the
+     * create-on-start / update-on-complete persistence lifecycle. Reset at the start of every
+     * realtime session so a prior run can never leak an in-flight id into the next.
+     */
+    private realtimeInFlightTurns: Map<string, string> = new Map();
+    /** Active audio recording controller for the current realtime session, or `null` when recording is off. */
+    private realtimeRecording: RealtimeRecordingController | null = null;
+    /** Storage account id the active recording stores to (RecordingStorageProviderID ?? AttachmentStorageProviderID). */
+    private realtimeRecordingAccountId: string | null = null;
+
     protected async executeRealtimeSession<R = any>(
         params: ExecuteAgentParams,
         config: AgentConfiguration
@@ -1601,7 +1659,12 @@ export class BaseAgent {
         // 2) Create the single long-lived AIPromptRun that usage is checkpointed onto.
         const promptRun = await this.createRealtimePromptRun(params, config, modelResolution);
 
-        // 3) Build the injected deps and run the session.
+        // 3) Resolve recording (OFF by default; runtime > agent > off; consent + storage gated) and reset
+        //    the per-session turn-lifecycle state, then build the injected deps and run the session.
+        this.realtimeInFlightTurns = new Map();
+        const recording = await this.resolveRealtimeRecording(params);
+        this.realtimeRecording = recording?.controller ?? null;
+        this.realtimeRecordingAccountId = recording?.storageAccountId ?? null;
         try {
             const deps = await this.buildRealtimeSessionDeps(params, config, modelResolution, promptRun);
             const runner = new RealtimeSessionRunner(deps);
@@ -1640,27 +1703,79 @@ export class BaseAgent {
     public async StartBridgeRealtimeSession(params: ExecuteAgentParams): Promise<IRealtimeSession> {
         // Mirror Execute()'s provider wiring so the realtime helpers operate on the request-scoped provider.
         this._activeProvider = params.provider ?? Metadata.Provider;
-        await AIEngine.Instance.Config(false, params.contextUser, params.provider);
+        const provider = params.provider ?? Metadata.Provider;
 
-        const config = await this.loadAgentConfiguration(params.agent);
-        if (!config.success) {
-            throw new Error(config.errorMessage ?? `Failed to load configuration for agent '${params.agent.Name}'.`);
-        }
-
-        const modelResolution = await this.resolveRealtimeModel(params);
-        if (!modelResolution) {
+        // A LiveKit / Zoom / Teams bridge is a thin TRANSPORT over the realtime co-agent — it does NOT build
+        // session prep itself. It CONSUMES the one shared producer
+        // ({@link RealtimeClientSessionService.PrepareRealtimeSessionParams}) so the agent's identity (it
+        // speaks first-person AS the target — Sage / Marketing Agent / …), the model + voice precedence
+        // cascade, the tool set (always incl. invoke-target-agent), and memory are byte-for-byte identical to
+        // the native realtime chat. Bridges differ ONLY in opening the session server-side (StartSession) and
+        // their media transport. See plans/realtime/realtime-core-host-convergence.md.
+        // ONE service instance: it produces the prep AND wires the long-lived runtime, so the in-flight
+        // delegation registry (barge-in cancel) is shared between them.
+        const service = new RealtimeClientSessionService();
+        const input = this.buildBridgePrepInput(params);
+        const contextUser = params.contextUser as UserInfo;
+        const prep = await service.PrepareRealtimeSessionParams(input, contextUser, provider);
+        if (!prep.Success || !prep.Resolution || !prep.SessionParams) {
             throw new Error(
-                `No usable Realtime model resolved for agent '${params.agent.Name}'. Configure an Active ` +
-                    `AIModelType 'Realtime' model with an active vendor whose DriverClass has a resolvable API key.`,
+                prep.ErrorMessage ?? `Failed to prepare a realtime session for agent '${params.agent.Name}'. ` +
+                    `Configure an Active AIModelType 'Realtime' model with an active vendor whose DriverClass has a ` +
+                    `resolvable API key.`,
             );
         }
+        const session = await prep.Resolution.Model.StartSession(prep.SessionParams);
 
-        const effectiveConfig = this.resolveRealtimeEffectiveConfig(params.agent);
-        const sessionParams = await this.buildRealtimeSessionParams(
-            params, config, modelResolution.apiName, effectiveConfig, modelResolution.driverClass,
-        );
+        // Phase 2: wire the SAME core runtime the native chat uses — real `invoke-target-agent` delegation
+        // (target runs via AgentRunner, nested + tracked) + co-agent run/prompt-run observability, finalized
+        // when the bridge calls `session.Close()`. No host-local tool re-implementation. The runtime handle's
+        // side effects live on `session` (OnToolCall + a finalize-wrapped Close), so the bridge just owns the
+        // session. See plans/realtime/realtime-core-host-convergence.md (Phase 2).
+        await service.WireBridgeRealtimeSession(session, input, prep, contextUser, provider);
+        return session;
+    }
 
-        return await modelResolution.model.StartSession(sessionParams);
+    /**
+     * Adapts {@link ExecuteAgentParams} → the core {@link PrepareClientSessionInput} for a server-bridged
+     * session. The CO-AGENT is the executed agent; the TARGET agent + the per-session model/voice override
+     * ride `params.data` (the same conduit the native dev picker uses, funneled into the one
+     * `ConfigOverridesJson` cascade slot via {@link BuildRealtimeOverridesJson}). Tools are left empty — a
+     * bridge host injects its OWN UX tools (none for LiveKit audio today); identity/precedence/invoke-target
+     * come from the core. `AgentSessionID` groups this session's observability runs (see
+     * {@link RealtimeClientSessionService.WireBridgeRealtimeSession}).
+     *
+     * @param params The bridge execution parameters.
+     * @returns The core prep input.
+     */
+    private buildBridgePrepInput(params: ExecuteAgentParams): PrepareClientSessionInput {
+        const modelID = (params.data?.realtimeModelID as string | undefined)?.trim() || undefined;
+        const voice = (params.data?.realtimeVoice as string | undefined)?.trim() || undefined;
+        const targetID = (params.data?.targetAgentID as string | undefined)?.trim() || '';
+        // Multi-agent meeting signal (set by the room coordinator when the agent joins a room that already
+        // has agents): disable the model's blind auto-response + add meeting discipline to the prompt so it
+        // hears everything but speaks only when addressed. SelfNames feed only the prompt phrasing; the
+        // addressing GATE is the bridge's matcher. See plans/realtime/multi-agent-meeting-turn-taking.md.
+        const meetingMode = params.data?.realtimeMeetingMode === true;
+        const selfNames = Array.isArray(params.data?.realtimeSelfNames)
+            ? (params.data?.realtimeSelfNames as unknown[]).filter((n): n is string => typeof n === 'string')
+            : undefined;
+        return {
+            CoAgent: params.agent,
+            TargetAgentID: targetID,
+            AgentSessionID: (params.data?.agentSessionId as string | undefined) ?? '',
+            PreferredModelID: modelID,
+            ConfigOverridesJson: BuildRealtimeOverridesJson(modelID, voice) ?? undefined,
+            ConversationMessages: params.conversationMessages,
+            UserID: params.contextUser?.ID,
+            DisableAutoResponse: meetingMode || undefined,
+            SelfNames: selfNames,
+            // App awareness (Move 1/3/4): the app the session runs in (sources the app cascade layer +
+            // RelevantAgents → allowed-agent union) and the live app-context snapshot injected at mint.
+            // Both ride params.data, the same conduit async agents use for appContext.
+            ApplicationID: (params.data?.applicationId as string | undefined)?.trim() || undefined,
+            AppContext: params.data?.appContext as AppContextSnapshot | undefined,
+        };
     }
 
     /**
@@ -1681,62 +1796,74 @@ export class BaseAgent {
      * @returns The resolved model instance plus its model/vendor identifiers, or `null`.
      */
     protected async resolveRealtimeModel(
-        params: ExecuteAgentParams
+        params: ExecuteAgentParams,
+        overrideModelID?: string
     ): Promise<{ model: BaseRealtimeModel; modelID: string; vendorID: string; apiName: string; driverClass?: string } | null> {
-        const model = this.selectRealtimeModelEntity(params.agent);
-        if (!model) {
-            return null;
+        // Walk candidates in resolution order (preference first, then highest PowerRank), returning the
+        // FIRST that FULLY resolves (active vendor + resolvable API key + ClassFactory driver). Single-pick
+        // would dead-end whenever the top model lacked a key — e.g. a power-11 model with no env key
+        // (Inworld/AssemblyAI) outranking GPT Realtime — and surface "No usable Realtime model" even though
+        // a usable model exists. This mirrors the same fix in RealtimeClientSessionService.
+        const candidates = this.selectRealtimeModelCandidates(params.agent, overrideModelID);
+        for (const model of candidates) {
+            const vendor = this.selectRealtimeVendor(model.ID);
+            if (!vendor) {
+                continue;
+            }
+            const apiKey = GetAIAPIKey(vendor.driverClass);
+            if (!apiKey) {
+                continue;
+            }
+            const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseRealtimeModel>(
+                BaseRealtimeModel,
+                vendor.driverClass,
+                apiKey
+            );
+            if (!instance) {
+                continue;
+            }
+            return { model: instance, modelID: model.ID, vendorID: vendor.vendorID, apiName: vendor.apiName, driverClass: vendor.driverClass };
         }
-
-        const vendor = this.selectRealtimeVendor(model.ID);
-        if (!vendor) {
-            return null;
-        }
-
-        const apiKey = GetAIAPIKey(vendor.driverClass);
-        if (!apiKey) {
-            return null;
-        }
-
-        const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseRealtimeModel>(
-            BaseRealtimeModel,
-            vendor.driverClass,
-            apiKey
-        );
-        if (!instance) {
-            return null;
-        }
-
-        return { model: instance, modelID: model.ID, vendorID: vendor.vendorID, apiName: vendor.apiName, driverClass: vendor.driverClass };
+        return null;
     }
 
     /**
-     * Selects the `MJ: AI Models` row to use for a realtime session: the highest-power active
-     * model of AIModelType `Realtime`. Returns `null` when no `Realtime` model exists in metadata
-     * (expected before P4).
+     * The active `Realtime`-AIModelType models to try, in resolution order — the candidate list
+     * {@link resolveRealtimeModel} walks until one yields a usable vendor + key + driver. Returns ALL
+     * candidates (not just the top pick) so a keyless / undriveable higher-power model falls through to
+     * the next usable one instead of dead-ending the whole resolution.
      *
-     * @param agent The agent being executed (reserved for future per-agent model preference).
-     * @returns The chosen model entity, or `null`.
+     * Ordering: an effective-config model preference (`realtime.modelPreference`, an MJ: AI Models Name
+     * or ID) goes FIRST when it resolves, followed by the rest by descending PowerRank (so even a keyless
+     * preferred model degrades gracefully). An unsatisfiable preference logs and is ignored.
+     *
+     * @param agent The agent being executed.
+     * @returns The candidate models in resolution order (empty when none are active).
      */
-    private selectRealtimeModelEntity(agent: MJAIAgentEntityExtended): MJAIModelEntityExtended | null {
+    private selectRealtimeModelCandidates(agent: MJAIAgentEntityExtended, overrideModelID?: string): MJAIModelEntityExtended[] {
         const isRealtime = (m: MJAIModelEntityExtended): boolean =>
             typeof m.AIModelType === 'string' && m.AIModelType.trim().toLowerCase() === 'realtime';
 
         const realtimeModels = AIEngine.Instance.Models.filter(m => m.IsActive && isRealtime(m));
         if (realtimeModels.length === 0) {
-            return null;
+            return [];
         }
 
-        // Effective-config model preference (realtime.modelPreference, an MJ: AI Models Name or
-        // ID) participates first. METADATA preferences degrade gracefully: an unsatisfiable
-        // preference logs and falls through to the default highest-PowerRank selection.
-        const preference = this.resolveRealtimeEffectiveConfig(agent).realtime?.modelPreference;
+        const byPower = [...realtimeModels].sort((a, b) => (b.PowerRank ?? 0) - (a.PowerRank ?? 0));
+
+        // A per-session override (a dev picking a specific Realtime model for this bridged agent) wins over
+        // the config's modelPreference — same "preferred first, rest by power as fallback" semantics.
+        const preference = (overrideModelID && overrideModelID.trim().length > 0)
+            ? overrideModelID.trim()
+            : this.resolveRealtimeEffectiveConfig(agent).realtime?.modelPreference;
         if (preference) {
             const wanted = preference.trim().toLowerCase();
             const preferred = realtimeModels.find(m => UUIDsEqual(m.ID, preference))
                 ?? realtimeModels.find(m => m.Name?.trim().toLowerCase() === wanted);
             if (preferred) {
-                return preferred;
+                // Preference first, the rest (by power) as fallback so a keyless preferred model still
+                // falls through to a usable one rather than dead-ending.
+                return [preferred, ...byPower.filter(m => !UUIDsEqual(m.ID, preferred.ID))];
             }
             this.logError(
                 `Realtime model preference '${preference}' for agent '${agent.Name}' matches no Active Realtime ` +
@@ -1745,7 +1872,7 @@ export class BaseAgent {
             );
         }
 
-        return realtimeModels.sort((a, b) => (b.PowerRank ?? 0) - (a.PowerRank ?? 0))[0];
+        return byPower;
     }
 
     /**
@@ -1871,6 +1998,8 @@ export class BaseAgent {
             DelegateToTarget: (request) => this.delegateRealtimeToTarget(params, config, request),
             ExecuteTool: (call) => this.executeRealtimeTool(params, call),
             PersistTranscript: (transcript) => this.persistRealtimeTranscript(params, transcript),
+            Recording: this.realtimeRecording ?? undefined,
+            FinalizeRecording: () => this.finalizeRealtimeRecording(params),
             CheckpointUsage: (usage) => this.checkpointRealtimeUsage(promptRun, usage),
             // DB-driven spoken-progress wording (shared lookup with the client-direct path);
             // null → the runner's documented built-in first-person fallback.
@@ -1903,17 +2032,11 @@ export class BaseAgent {
         effectiveConfig?: RealtimeCoAgentConfig,
         driverClass?: string
     ): Promise<RealtimeSessionParams> {
-        const framing =
-            `You are the real-time voice for the agent "${params.agent.Name}". Hold a natural, ` +
-            `low-latency conversation with the user. When actual work is required, call the ` +
-            `'invoke-target-agent' tool and narrate progress while it runs — do not attempt to do ` +
-            `the work yourself. ONE EXCEPTION: besides 'invoke-target-agent' you may have been given ` +
-            `interactive-surface tools (for example 'browser_*' to drive a LIVE web browser the user ` +
-            `can watch, or 'Whiteboard_*' to draw on a shared board). Those surfaces are operated by ` +
-            `YOU, directly — when the user asks to use one (e.g. "open/show a browser", "go to a ` +
-            `site", "add to the whiteboard"), call the matching tool yourself immediately and narrate ` +
-            `what you're doing. NEVER route an interactive-surface request through 'invoke-target-agent', ` +
-            `and never claim you lack a session — calling the tool is all that's needed.`;
+        // Identity framing comes from the ONE shared producer so the agent speaks first-person AS the
+        // TARGET (Sage / Marketing Agent / …), identical to every other realtime host — not as the co-agent.
+        // See BuildRealtimeAgentFraming + plans/realtime/realtime-core-host-convergence.md.
+        const targetAgent = this.resolveRealtimeTargetAgent(params);
+        const framing = BuildRealtimeAgentFraming(targetAgent?.Name ?? 'the configured target agent');
 
         const basePrompt = config.systemPrompt?.TemplateText ? config.systemPrompt.TemplateText : '';
         // Effective-config voice persona (realtime.voice.default) → short "Voice & manner" section.
@@ -2157,37 +2280,225 @@ export class BaseAgent {
     }
 
     /**
-     * Persists a single realtime transcript turn as a `ConversationDetail` stamped with the
-     * session id. User turns are written as `Role='User'`, assistant turns as `Role='AI'`. Only
-     * final transcripts are persisted (interim/partial updates are skipped to avoid churn).
+     * Persists a realtime transcript turn as a `ConversationDetail` with a **create-on-start /
+     * update-on-complete** lifecycle, so each turn carries both a start (`__mj_CreatedAt`) and an
+     * immutable end (`TurnEndedAt`):
+     * - **Interim** (`IsFinal=false`): on the FIRST delta for a role, CREATE the row with
+     *   `Status='In-Progress'` (so a live UI can show the turn streaming), stamping the recording-relative
+     *   `UtteranceStartMs` and the speaker `UserID` (user turns only). Subsequent interim deltas are no-ops.
+     * - **Final** (`IsFinal=true`): UPDATE that in-flight row with the full text, `Status='Complete'`,
+     *   `TurnEndedAt`, and `UtteranceEndMs`. If no interim was seen (some providers only emit final), the
+     *   row is created and finalized in one step.
      *
-     * @param params The execution parameters (provides conversation id + context user).
-     * @param transcript The transcript turn emitted by the model.
+     * Returns the new row's ID the first time a DISTINCT turn is created, and `null` when an existing
+     * in-flight row is merely updated — the runner uses that to count turns (not events). User turns are
+     * `Role='User'`, assistant turns `Role='AI'`. When recording is active, `MediaType='Audio'` and the
+     * media-relative utterance offsets are stamped from the recording clock.
+     *
+     * @param params The execution parameters (provides conversation id + context user + session id).
+     * @param transcript The transcript turn (interim delta or final) emitted by the model.
+     * @returns The created row id on first creation of a turn, else `null`.
      */
-    private async persistRealtimeTranscript(params: ExecuteAgentParams, transcript: RealtimeTranscript): Promise<void> {
-        if (!transcript.IsFinal || !transcript.Text?.trim()) {
-            return;
+    private async persistRealtimeTranscript(params: ExecuteAgentParams, transcript: RealtimeTranscript): Promise<string | null> {
+        if (!transcript.Text?.trim()) {
+            return null;
         }
-
         const conversationID = params.data?.conversationId as string | undefined;
         if (!conversationID) {
-            return; // Without a conversation we have nowhere to durably attach the turn.
+            return null; // Without a conversation we have nowhere to durably attach the turn.
         }
 
         const md = params.provider || this._activeProvider;
-        const detail = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', params.contextUser);
-        detail.NewRecord();
-        detail.ConversationID = conversationID;
-        detail.Role = transcript.Role === 'user' ? 'User' : 'AI';
-        detail.Message = transcript.Text;
-        if (params.agentSessionID) {
-            detail.AgentSessionID = params.agentSessionID;
+        const roleKey = transcript.Role; // 'user' | 'assistant'
+        const mjRole: 'User' | 'AI' = transcript.Role === 'user' ? 'User' : 'AI';
+
+        // ── INTERIM: create the In-Progress row once per turn (first delta) ───────────────────────
+        if (!transcript.IsFinal) {
+            if (this.realtimeInFlightTurns.has(roleKey)) {
+                return null; // already created for this turn; ignore subsequent deltas
+            }
+            const detail = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', params.contextUser);
+            detail.NewRecord();
+            detail.ConversationID = conversationID;
+            detail.Role = mjRole;
+            detail.Message = transcript.Text;
+            detail.Status = 'In-Progress';
+            this.applyRealtimeTurnSpeakerAndMedia(detail, transcript, params, /*atStart*/ true);
+            if (params.agentSessionID) {
+                detail.AgentSessionID = params.agentSessionID;
+            }
+            if (!await detail.Save()) {
+                this.logError(`Failed to create in-progress realtime transcript turn: ${detail.LatestResult?.CompleteMessage ?? 'unknown error'}`, {
+                    agent: params.agent, category: 'RealtimeSession'
+                });
+                return null;
+            }
+            this.realtimeInFlightTurns.set(roleKey, detail.ID);
+            return detail.ID;
         }
 
+        // ── FINAL: update the in-flight row (or create+finalize when no interim was seen) ─────────
+        const inFlightId = this.realtimeInFlightTurns.get(roleKey);
+        this.realtimeInFlightTurns.delete(roleKey);
+        let detail = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', params.contextUser);
+        let created = false;
+        if (inFlightId && await detail.Load(inFlightId)) {
+            // updating the existing streaming row → not a new turn
+        } else {
+            detail.NewRecord();
+            detail.ConversationID = conversationID;
+            detail.Role = mjRole;
+            this.applyRealtimeTurnSpeakerAndMedia(detail, transcript, params, /*atStart*/ true);
+            if (params.agentSessionID) {
+                detail.AgentSessionID = params.agentSessionID;
+            }
+            created = true;
+        }
+        detail.Message = transcript.Text;
+        detail.Status = 'Complete';
+        detail.TurnEndedAt = new Date();
+        if (this.realtimeRecording) {
+            detail.UtteranceEndMs = this.realtimeRecording.NowOffsetMs();
+        }
         if (!await detail.Save()) {
-            this.logError(`Failed to persist realtime transcript turn: ${detail.LatestResult?.CompleteMessage ?? 'unknown error'}`, {
-                agent: params.agent,
-                category: 'RealtimeSession'
+            this.logError(`Failed to finalize realtime transcript turn: ${detail.LatestResult?.CompleteMessage ?? 'unknown error'}`, {
+                agent: params.agent, category: 'RealtimeSession'
+            });
+        }
+        return created ? detail.ID : null;
+    }
+
+    /**
+     * Stamps the speaker identity and recording-relative media fields on a freshly-created turn row.
+     * `UserID` is set only for **user** turns (an AI turn has no human speaker). When recording is
+     * active, `MediaType='Audio'` and `UtteranceStartMs` is captured from the recording clock.
+     *
+     * @param detail The new conversation-detail row.
+     * @param transcript The transcript turn.
+     * @param params The execution parameters.
+     * @param atStart Whether this is the turn's start (stamps `UtteranceStartMs`).
+     */
+    private applyRealtimeTurnSpeakerAndMedia(
+        detail: MJConversationDetailEntity, transcript: RealtimeTranscript, params: ExecuteAgentParams, atStart: boolean
+    ): void {
+        if (transcript.Role === 'user' && params.contextUser?.ID) {
+            detail.UserID = params.contextUser.ID;
+        }
+        if (this.realtimeRecording) {
+            detail.MediaType = 'Audio';
+            if (atStart) {
+                detail.UtteranceStartMs = this.realtimeRecording.NowOffsetMs();
+            }
+        }
+    }
+
+    /**
+     * Resolves whether to record this realtime session, OFF by default, with the precedence
+     * **runtime param > agent (`RecordingDefault`) > off**, hard-gated by consent and a resolvable
+     * storage provider. Returns the recording controller + the resolved storage account, or `null`
+     * to record nothing (fail-closed). Never throws — any resolution problem disables recording.
+     *
+     * Storage resolves to **`AIAgent.RecordingStorageProviderID` ?? `AIAgent.AttachmentStorageProviderID`**
+     * (recordings default to the attachments account), then to that provider's first account. With no
+     * provider configured, or consent not granted, recording is OFF.
+     *
+     * @param params The execution parameters (agent + runtime `data.recording`).
+     * @returns `{ controller, storageAccountId }` when recording is enabled, else `null`.
+     */
+    private async resolveRealtimeRecording(
+        params: ExecuteAgentParams
+    ): Promise<{ controller: RealtimeRecordingController; storageAccountId: string } | null> {
+        try {
+            const agent = params.agent as MJAIAgentEntityExtended;
+            const runtime = (params.data?.recording ?? null) as { media?: string; consent?: boolean } | null;
+
+            // Media: runtime > agent default > off.
+            const rawMedia = runtime?.media ?? agent.RecordingDefault ?? 'None';
+            const media: RealtimeRecordingMedia | 'None' =
+                rawMedia === 'Audio' || rawMedia === 'AudioVideo' ? rawMedia : 'None';
+            if (media === 'None') {
+                return null; // recording off
+            }
+
+            // Consent is a HARD gate — never record without explicit consent.
+            if (runtime?.consent !== true) {
+                this.logStatus('🔴 Realtime recording requested but consent was not granted — recording disabled.', false, params);
+                return null;
+            }
+
+            // Storage: recording provider, else attachment provider; then that provider's first account.
+            const storageAccountId = params.contextUser
+                ? await resolveRecordingStorageAccountID(agent, params.contextUser, params.provider || this._activeProvider)
+                : null;
+            if (!storageAccountId) {
+                this.logStatus('🔴 Realtime recording on but no resolvable storage account (RecordingStorageProviderID/AttachmentStorageProviderID) — recording disabled.', false, params);
+                return null;
+            }
+
+            const controller = new RealtimeRecordingController({ Media: media });
+            return { controller, storageAccountId };
+        } catch (error) {
+            this.logError(`Failed to resolve realtime recording (recording disabled): ${error instanceof Error ? error.message : String(error)}`, {
+                agent: params.agent, category: 'RealtimeSession'
+            });
+            return null;
+        }
+    }
+
+    /**
+     * Finalizes the active recording after the session closes: encodes the captured audio to a WAV,
+     * stores it via MJStorage to the resolved account, links it to the `AIAgentSession` (via
+     * `MJ: File Entity Record Links`), and stamps `RecordingFileID` / `RecordingMedia` /
+     * `RecordingStartedAt` on the session. Never throws — a recording failure must not fail the
+     * session run. No-op when recording is off, nothing was captured, or there is no session id.
+     *
+     * @param params The execution parameters (provides the session id + context user + provider).
+     */
+    private async finalizeRealtimeRecording(params: ExecuteAgentParams): Promise<void> {
+        const controller = this.realtimeRecording;
+        if (!controller) {
+            return;
+        }
+        // One-shot: clear instance state up front so a re-entrant/duplicate Stop can't double-store.
+        this.realtimeRecording = null;
+        const storageAccountId = this.realtimeRecordingAccountId;
+        this.realtimeRecordingAccountId = null;
+
+        try {
+            controller.Stop();
+            const sessionID = params.agentSessionID;
+            const contextUser = params.contextUser;
+            if (!sessionID || !storageAccountId || !contextUser) {
+                return; // nowhere to attach / store (or no user context to store under)
+            }
+            const encoded = controller.EncodeWav();
+            if (!encoded) {
+                this.logStatus('🔇 Realtime session produced no audio to record.', true, params);
+                return;
+            }
+
+            const md = params.provider || this._activeProvider;
+            // Capture-time waveform peaks (max-abs per bucket, normalized 0..1) computed from the
+            // same mixed PCM as the WAV — persisted as a peaks.json sidecar so the player renders the
+            // real waveform without re-decoding the audio. Best-effort: an empty array writes no sidecar.
+            const peaks = controller.GetPeaks();
+            const fileID = await storeRealtimeRecording({
+                Audio: encoded.Buffer,
+                MimeType: 'audio/wav',
+                Media: controller.Media,
+                StartedAt: controller.StartedAt ?? new Date(),
+                StorageAccountID: storageAccountId,
+                SessionID: sessionID,
+                ContextUser: contextUser,
+                Provider: md,
+                Peaks: peaks.length > 0 ? peaks : undefined
+            });
+            if (fileID) {
+                this.logStatus(`🎬 Realtime recording stored (${Math.round(encoded.DurationMs / 1000)}s, file ${fileID}).`, true, params);
+            }
+        } catch (error) {
+            this.logError(`Failed to finalize realtime recording: ${error instanceof Error ? error.message : String(error)}`, {
+                agent: params.agent, category: 'RealtimeSession'
             });
         }
     }
@@ -5889,7 +6200,9 @@ The context is now within limits. Please retry your request with the recovered c
                 SecondaryScopes: params.SecondaryScopes,
                 onAgentRunCreated: async (agentRunId: string) => {
                     stepEntity.TargetLogID = agentRunId;
-                    this.queueStepSave(stepEntity);
+                    // Re-apply post-INSERT: this callback can fire while the step's INSERT is still in flight,
+                    // and the INSERT's reload would otherwise revert TargetLogID back to null.
+                    this.queueStepSave(stepEntity, (s) => { s.TargetLogID = agentRunId; });
                 }
             });
             
@@ -6016,48 +6329,45 @@ The context is now within limits. Please retry your request with the recovered c
     /**
      * Build the client tool prompt section for system prompt injection.
      *
-     * Tool sources (checked in order, all merged — first registration wins):
-     * 1. Metadata tools from AI Agent Client Tools junction table
-     * 2. Session-level enriched tools from ClientToolRequestManager (set by client SDK)
-     * 3. Tools provided directly in extraData.clientTools (runtime override)
+     * Resolution is delegated to the shared, tier-agnostic {@link ResolveClientTools}
+     * (`@memberjunction/ai-core-plus`) — the single source of truth used by the async
+     * path (here), the realtime co-agent broker, and the conversations runtime. Tiers,
+     * highest precedence first:
+     *
+     * 1. **override** — tools passed directly in the run's `data.clientTools`
+     * 2. **session (dynamic)** — client-SDK enriched tools from {@link ClientToolRequestManager}
+     * 3. **app** — tools the active surface published in the app-context capability manifest
+     * 4. **static** — the agent's metadata tools from the `AI Agent Client Tools` junction
+     *
+     * NOTE (behavior change): the previous inline merge resolved *static-wins* (metadata
+     * was added first and won name collisions). The unified resolver uses the more-correct
+     * *override > session > app > static* — a runtime/dynamic tool now overrides a stale
+     * static metadata tool of the same name. Collisions are rare in practice.
      */
     private buildClientToolPromptSection(agent: MJAIAgentEntityExtended, extraData?: Record<string, unknown>): string {
-        const toolMap = new Map<string, ClientToolMetadata>();
-
-        // 1. Metadata tools from junction table (authoritative source)
+        // Static tier — agent's metadata tools from the AI Agent Client Tools junction.
         const engine = AIEngine.Instance;
-        const metadataTools = engine.GetClientToolsForAgent(agent.ID);
-        for (const tool of metadataTools) {
-            toolMap.set(tool.Name, {
-                Name: tool.Name,
-                Description: tool.Description,
-                InputSchema: tool.InputSchemaJSON ? JSON.parse(tool.InputSchemaJSON) : {},
-                OutputSchema: tool.OutputSchemaJSON ? JSON.parse(tool.OutputSchemaJSON) : undefined,
-                Category: tool.Category || undefined,
-                DefaultTimeoutMs: tool.DefaultTimeoutMs || undefined
-            });
-        }
+        const staticTools: ClientToolMetadata[] = engine.GetClientToolsForAgent(agent.ID).map(tool => ({
+            Name: tool.Name,
+            Description: tool.Description,
+            InputSchema: tool.InputSchemaJSON ? JSON.parse(tool.InputSchemaJSON) : {},
+            OutputSchema: tool.OutputSchemaJSON ? JSON.parse(tool.OutputSchemaJSON) : undefined,
+            Category: tool.Category || undefined,
+            DefaultTimeoutMs: tool.DefaultTimeoutMs || undefined
+        }));
 
-        // 2. Session-level enriched tools (client SDK decorated tools)
+        // Dynamic (session) tier — client-SDK enriched tools for this session.
         const sessionID = extraData?.sessionID as string | undefined;
-        if (sessionID) {
-            for (const tool of ClientToolRequestManager.Instance.GetSessionTools(sessionID)) {
-                if (!toolMap.has(tool.Name)) {
-                    toolMap.set(tool.Name, tool);
-                }
-            }
-        }
+        const sessionTools = sessionID ? ClientToolRequestManager.Instance.GetSessionTools(sessionID) : [];
 
-        // 3. Runtime extraData override
-        if (extraData?.clientTools) {
-            for (const tool of extraData.clientTools as ClientToolMetadata[]) {
-                if (!toolMap.has(tool.Name)) {
-                    toolMap.set(tool.Name, tool);
-                }
-            }
-        }
+        // App tier — tools the active surface published in the app-context capability manifest.
+        const appContext = extraData?.appContext as { Capabilities?: { Tools?: ClientToolMetadata[] } } | undefined;
+        const appTools = appContext?.Capabilities?.Tools ?? [];
 
-        const tools = Array.from(toolMap.values());
+        // Override tier — tools passed directly in the run's data.
+        const overrideTools = (extraData?.clientTools as ClientToolMetadata[] | undefined) ?? [];
+
+        const tools = ResolveClientTools({ agentId: agent.ID, staticTools, sessionTools, appTools, overrideTools });
 
         if (tools.length === 0) {
             return ''; // No client tools available
@@ -6284,12 +6594,29 @@ The context is now within limits. Please retry your request with the recovered c
             return `\`${String(value)}\``;
         }
 
-        let stringValue: string;
         if (typeof value === 'string') {
-            stringValue = value;
-        } else {
-            // Compact JSON (no pretty-printing) for objects/arrays
-            stringValue = JSON.stringify(value);
+            // A string param may carry JSON (many actions JSON.stringify their payloads),
+            // SQL/TS code, or plain text. Try structural JSON compression first — it is a
+            // safe no-op on non-JSON (crushParamValue's internal JSON.parse failure is
+            // caught and returns null) — then opt-in AST code reduction (SQL/TS), then pass
+            // through (optionally length-capped).
+            const crushedJson = this.crushParamValue(value);
+            if (crushedJson !== null) {
+                return crushedJson;
+            }
+            const crushedCode = this.crushCodeValue(value);
+            if (crushedCode !== null) {
+                return crushedCode;
+            }
+            return maxLength > 0 && value.length > maxLength ? `${value.substring(0, maxLength)}…` : value;
+        }
+
+        // Objects/arrays: compact JSON (no pretty-printing), optionally structurally
+        // compressed via context-crush when crushing is enabled and the value is large.
+        const stringValue = JSON.stringify(value);
+        const crushed = this.crushParamValue(stringValue);
+        if (crushed !== null) {
+            return crushed;
         }
 
         if (maxLength > 0 && stringValue.length > maxLength) {
@@ -6297,6 +6624,86 @@ The context is now within limits. Please retry your request with the recovered c
         }
 
         return stringValue;
+    }
+
+    /**
+     * Resolve the per-run action-result compression config from the agent-type prompt
+     * params. Crushing is on by default and only disabled when an agent explicitly sets
+     * `crushActionResults: false`, mirroring the `includeXxxDocs` opt-out convention.
+     * @private
+     */
+    protected resolveActionResultCrush(params: ExecuteAgentParams): ActionResultCrushConfig | undefined {
+        const agentTypePromptParams = params.data?.__agentTypePromptParams as Record<string, unknown> | undefined;
+        if (agentTypePromptParams?.crushActionResults === false) {
+            return undefined;
+        }
+        const requestedLang = agentTypePromptParams?.crushCodeLang;
+        const codeLang: CodeLang | undefined =
+            requestedLang === 'sql' || requestedLang === 'typescript' ? requestedLang : undefined;
+        return { threshold: BaseAgent.ACTION_RESULT_CRUSH_THRESHOLD, maxChars: undefined, codeLang };
+    }
+
+    /**
+     * AST-reduce a large code-string action-result value when the agent opted into a code
+     * language (via `crushCodeLang` or a subclass override) and the value clears the size
+     * threshold. Returns reduced code plus a one-line legend, or null to keep the string
+     * verbatim (crushing disabled, too small, or no net saving).
+     *
+     * token optimization via @memberjunction/context-crush (CodeCompressor-inspired)
+     * @private
+     */
+    private crushCodeValue(stringValue: string): string | null {
+        const config = this._actionResultCrush;
+        if (!config || !config.codeLang || stringValue.length < config.threshold) {
+            return null;
+        }
+        // Crushing is a best-effort optimization — it must never break an agent turn. Any
+        // failure falls back to the verbatim value.
+        try {
+            const result = CrushCode(stringValue, config.codeLang);
+            if (result.CrushedChars >= result.OriginalChars) {
+                return null;
+            }
+            const legend = DescribeCrush(result);
+            return legend ? `${result.Text}\n  ↳ ${legend}` : result.Text;
+        } catch {
+            return null;
+        }
+    }
+
+    /**
+     * Structurally compress a JSON action-result value when crushing is enabled for the run
+     * and the value clears the size threshold. Accepts either the `JSON.stringify` of an
+     * object/array param, or a raw string param that itself contains JSON (many actions
+     * stringify their payloads, e.g. `run-adhoc-query`'s `Results`). Returns crushed text
+     * plus a one-line legend, or null when crushing is disabled, the value is too small, the
+     * value isn't valid JSON, or compression wouldn't actually save characters — so callers
+     * fall back to verbatim (and, for strings, to code crushing) behavior.
+     *
+     * token optimization via @memberjunction/context-crush (SmartCrusher-inspired)
+     * @private
+     */
+    private crushParamValue(stringValue: string): string | null {
+        const config = this._actionResultCrush;
+        if (!config || stringValue.length < config.threshold) {
+            return null;
+        }
+        // Crushing is a best-effort optimization — it must never break an agent turn. Any
+        // failure (non-JSON input, pathologically deep payloads) falls back to verbatim.
+        try {
+            // Parse to a plain JSON value. This is the JSON.stringify of an object/array
+            // param, or a raw string param that contains JSON; non-JSON strings throw here
+            // and are caught below (caller then tries code crushing / verbatim).
+            const json = JSON.parse(stringValue) as JsonValue;
+            const result = CrushJSON(json, { MaxChars: config.maxChars });
+            if (result.CrushedChars >= result.OriginalChars) {
+                return null; // no net saving — keep the verbatim JSON
+            }
+            const legend = DescribeCrush(result);
+            return legend ? `${result.Text}\n  ↳ ${legend}` : result.Text;
+        } catch {
+            return null;
+        }
     }
 
     /**
@@ -6539,6 +6946,10 @@ The context is now within limits. Please retry your request with the recovered c
         
         // Reset prompt turn counter for this execution
         this._promptTurnCount = 0;
+
+        // Resolve action-result compression config for this run (default on; opt out via
+        // crushActionResults: false in the agent-type prompt params).
+        this._actionResultCrush = this.resolveActionResultCrush(params);
 
         // Create MJAIAgentRunEntity
         this._agentRun = await (params.provider || this._activeProvider).GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', params.contextUser);
@@ -6865,17 +7276,29 @@ The context is now within limits. Please retry your request with the recovered c
      */
     protected async finalizeStepEntity(stepEntity: MJAIAgentRunStepEntityExtended, success: boolean, errorMessage?: string, outputData?: any): Promise<void> {
         try {
-            // Apply the completion state to the in-memory entity NOW (so the run's Steps array / UI see
-            // Completed immediately) via the shared single-source-of-truth helper, then fire-and-forget the
-            // UPDATE via queueStepSave — which chains after the INSERT and force-persists (IgnoreDirtyState).
-            // The agent flow never blocks on this UPDATE.
-            finalizeAgentRunStep(stepEntity, {
+            // Capture the completion timestamp NOW so the duration is accurate regardless of when the
+            // mutation is actually applied/persisted.
+            const finalizeOpts = {
                 success,
                 errorMessage,
-                outputData: outputData ? CopyScalarsAndArrays(outputData, true) : undefined
-            });
+                outputData: outputData ? CopyScalarsAndArrays(outputData, true) : undefined,
+                completedAt: new Date(),
+                // Capture any TargetLogID already stamped on the entity (e.g. a prompt-run / sub-agent-run id
+                // set before finalize) so the post-INSERT re-apply restores it too — otherwise the INSERT's
+                // reload could leave it null on a fast step.
+                targetLogID: stepEntity.TargetLogID ?? undefined
+            };
 
-            this.queueStepSave(stepEntity);
+            // Apply to the in-memory entity NOW so the run's Steps array / UI see the terminal state
+            // immediately. This in-memory copy can be reverted by the INSERT's post-save reload if the step
+            // finished while its INSERT was still in flight, which is why we ALSO re-apply it inside the
+            // post-INSERT continuation below (idempotent — same completedAt).
+            finalizeAgentRunStep(stepEntity, finalizeOpts);
+
+            // Fire-and-forget the UPDATE, but re-assert the finalize state AFTER the INSERT (and its reload)
+            // lands so the force-persisted UPDATE never writes stale pre-finalize values. The agent flow
+            // never blocks on this UPDATE.
+            this.queueStepSave(stepEntity, (s) => finalizeAgentRunStep(s, finalizeOpts));
         }
         catch (e) {
             LogError(`Failed to update agent run step record: ${(e as Error)?.message ?? e}`, undefined, e);
@@ -6890,8 +7313,8 @@ The context is now within limits. Please retry your request with the recovered c
      *
      * @protected
      */
-    protected queueStepSave(stepEntity: MJAIAgentRunStepEntityExtended): void {
-        this._stepSaveQueue.QueueUpdate(stepEntity);
+    protected queueStepSave(stepEntity: MJAIAgentRunStepEntityExtended, applyMutation?: (stepEntity: MJAIAgentRunStepEntityExtended) => void): void {
+        this._stepSaveQueue.QueueUpdate(stepEntity, applyMutation);
     }
 
     /**
@@ -7328,7 +7751,9 @@ The context is now within limits. Please retry your request with the recovered c
             
             promptParams.onPromptRunCreated = async (promptRunId: string) => {
                 stepEntity.TargetLogID = promptRunId;
-                this.queueStepSave(stepEntity);
+                // Re-apply post-INSERT: onPromptRunCreated can fire before the step's INSERT lands, and the
+                // INSERT's reload would otherwise revert TargetLogID back to null.
+                this.queueStepSave(stepEntity, (s) => { s.TargetLogID = promptRunId; });
             };
             
             // Execute the prompt
@@ -9415,8 +9840,11 @@ The context is now within limits. Please retry your request with the recovered c
                     
                     // Update step entity with ActionExecutionLog ID if available
                     if (actionResult.LogEntry?.ID) {
-                        stepEntity.TargetLogID = actionResult.LogEntry.ID;
-                        this.queueStepSave(stepEntity);
+                        const logId = actionResult.LogEntry.ID;
+                        stepEntity.TargetLogID = logId;
+                        // Re-apply post-INSERT: a fast action can finish before the step's INSERT lands, and
+                        // the INSERT's reload would otherwise revert TargetLogID back to null.
+                        this.queueStepSave(stepEntity, (s) => { s.TargetLogID = logId; });
                     }
                     
                     // Prepare output data with action result
@@ -10311,6 +10739,18 @@ The context is now within limits. Please retry your request with the recovered c
      * Strips "payload." prefix if present (for LLM convenience)
      */
     private getCollectionFromPayload(payload: any, path: string): any[] | null {
+        // Support a literal static collection: "static:[1,2,3,4,5]". This lets a ForEach iterate a
+        // fixed list/range without a prior step having to build the array in the payload first.
+        const trimmed = path.trim();
+        if (trimmed.toLowerCase().startsWith('static:')) {
+            try {
+                const parsed = JSON.parse(trimmed.substring(trimmed.indexOf(':') + 1).trim());
+                return Array.isArray(parsed) ? parsed : null;
+            } catch {
+                return null;
+            }
+        }
+
         // Remove "payload." prefix if present
         const cleanPath = path.toLowerCase().startsWith('payload.')
             ? path.substring(8)
@@ -11339,6 +11779,17 @@ The context is now within limits. Please retry your request with the recovered c
         }> = [];
         const messagesToRemove: number[] = [];
 
+        // Cache-aware guard: confine pruning/compaction to the volatile tail so we don't
+        // perturb the provider's KV-cached prompt prefix. The stable prefix is the maximal
+        // contiguous leading run of non-result messages (system/RAG context, injected
+        // memory, the original user request). Expired messages that fall inside that prefix
+        // are deferred — genuine context overflow still reaches them via attemptContextRecovery.
+        // token optimization via @memberjunction/context-crush (CacheAligner-inspired)
+        const { Boundary: stablePrefixBoundary } = PartitionStablePrefix(
+            params.conversationMessages,
+            (msg) => !this.IsVolatileResultMessage(msg as ChatMessage)
+        );
+
         // Phase 1: Identify expired messages
         for (let i = 0; i < params.conversationMessages.length; i++) {
             const msg = params.conversationMessages[i] as AgentChatMessage;
@@ -11359,6 +11810,13 @@ The context is now within limits. Please retry your request with the recovered c
 
             // Check if expired
             if (turnsAlive > msg.metadata.expirationTurns) {
+                // Defer expiry of messages inside the cache-stable prefix to preserve the
+                // provider's cached prompt prefix; overflow recovery handles them if needed.
+                if (i < stablePrefixBoundary) {
+                    this.logStatus(`[Turn ${currentTurn}] Deferred expiry of cache-stable prefix message at index ${i}`, true, params);
+                    continue;
+                }
+
                 msg.metadata.isExpired = true;
 
                 if (msg.metadata.expirationMode === 'Remove') {
@@ -11669,6 +12127,22 @@ The context is now within limits. Please retry your request with the recovered c
         return messageType === 'action-result'
             || messageType === 'client-tool-result'
             || messageType === 'tool-result';
+    }
+
+    /**
+     * Returns true if the message is a turn-generated result (action, tool, client tool,
+     * sub-agent, or loop). These are the volatile, expirable messages that accumulate over
+     * turns. Everything else — system/RAG context, injected memory, the original user
+     * request — anchors the cache-stable prompt prefix and is protected from routine pruning.
+     * @protected
+     */
+    protected IsVolatileResultMessage(msg: ChatMessage): boolean {
+        const messageType = (msg as AgentChatMessage).metadata?.messageType;
+        return messageType === 'action-result'
+            || messageType === 'client-tool-result'
+            || messageType === 'tool-result'
+            || messageType === 'sub-agent-result'
+            || messageType === 'loop-result';
     }
 
     protected estimateTokens(content: ChatMessage['content'], modelName?: string): number {

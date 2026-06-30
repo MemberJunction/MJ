@@ -1,0 +1,102 @@
+[
+  {
+    "fields": {
+      "Name": "Model Development Agent - Main Prompt",
+      "Description": "System prompt for the Model Development Agent — the conversational Loop orchestrator that collaborates with a business user to build a strongly-typed ModelingPlanSpec, gates on approval, drives the deterministic experiment session, enforces the leakage warn/sign-off rule, and authors the ML Experiment Results artifact.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/model-development-agent/model-development-agent.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "OutputType": "object",
+      "OutputExample": "@file:output/model-development-agent/model-development-agent.example.json",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=Predictive Studio?create&Description=System prompts for the Predictive Studio Model Development Agent and its sub-agents"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": []
+    },
+    "primaryKey": {
+      "ID": "44F868D2-20ED-407E-ACB0-0720344B1BDE"
+    },
+    "sync": {
+      "lastModified": "2026-06-28T22:12:21.986Z",
+      "checksum": "e76744e1a345af3457b5edd16844e47dcd982ede190568d94d6e0af0bb099ea5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Goal Analyst - Main Prompt",
+      "Description": "System prompt for the Goal Analyst sub-agent. Refines a fuzzy business goal into a precise target definition (entity, target variable, problem type, success metric, as-of strategy). Writes only the Goal and TargetDefinition slices of the ModelingPlanSpec.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/model-development-agent/goal-analyst.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "OutputType": "object",
+      "OutputExample": "@file:output/model-development-agent/goal-analyst.example.json",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=Predictive Studio"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": []
+    },
+    "primaryKey": {
+      "ID": "4F1D56B0-7D1B-4C69-B282-341C830A6A1C"
+    },
+    "sync": {
+      "lastModified": "2026-06-27T15:16:01.082Z",
+      "checksum": "50e599a53c8186f912c820e1ba8ff94c9db525ac31bbadfdb789965409a37da7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Data Scout - Main Prompt",
+      "Description": "System prompt for the Data Scout sub-agent. Studies approved MJ: Queries, DBAutoDoc, Agent Notes, and existing approved ML Models to propose candidate sources/features and to flag leakage risks. Writes only the CandidateSources, CandidateFeatures, and LeakageNotes slices of the ModelingPlanSpec; agent-drafted queries land Status='Pending'.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/model-development-agent/data-scout.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "OutputType": "object",
+      "OutputExample": "@file:output/model-development-agent/data-scout.example.json",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=Predictive Studio"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": []
+    },
+    "primaryKey": {
+      "ID": "D8DF8DC9-87EB-4E4C-939A-7CBD2F8813C7"
+    },
+    "sync": {
+      "lastModified": "2026-06-27T15:16:01.103Z",
+      "checksum": "db4b41db32594a4020847d90ae79ed8ec487b003fbd844e472c73438ab2d5901"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Experiment Designer - Main Prompt",
+      "Description": "System prompt for the Experiment Designer sub-agent. Proposes a ranked set of experiments (features × algorithms × hyperparameters) with rationale, a validation strategy with a locked holdout, and a proposed budget. Writes only the ProposedExperiments, ValidationStrategy, and ProposedBudget slices of the ModelingPlanSpec.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/model-development-agent/experiment-designer.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "OutputType": "object",
+      "OutputExample": "@file:output/model-development-agent/experiment-designer.example.json",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=Predictive Studio"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": []
+    },
+    "primaryKey": {
+      "ID": "E97FE2BB-C7E5-458E-B80D-02A90531FADA"
+    },
+    "sync": {
+      "lastModified": "2026-06-27T15:16:01.119Z",
+      "checksum": "c347a11bee439a507e51eaa00e4d731f99f94db0b4c6b278a4f4bbd3670e3188"
+    }
+  }
+]

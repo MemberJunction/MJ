@@ -316,6 +316,15 @@ export class CredentialsCategoriesResourceComponent extends BaseResourceComponen
         this.cdr.markForCheck();
     }
 
+    /** Empty-state CTA: clear search when narrowing, otherwise create. */
+    public onEmptyStateAction(): void {
+        if (this.searchText) {
+            this.clearSearch();
+        } else {
+            this.createNewCategory();
+        }
+    }
+
     public expandAll(): void {
         const expand = (nodes: CategoryNode[]): void => {
             for (const node of nodes) {

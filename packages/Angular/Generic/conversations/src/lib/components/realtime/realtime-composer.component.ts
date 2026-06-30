@@ -1,4 +1,4 @@
-import { Component, ElementRef, EventEmitter, Input, Output, ViewChild, inject } from '@angular/core';
+import { Component, ElementRef, EventEmitter, HostListener, Input, Output, ViewChild, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RealtimeSessionService } from '../../services/realtime-session.service';
@@ -36,6 +36,15 @@ export class RealtimeComposerComponent {
    */
   @Input() Open = false;
 
+  /**
+   * COMPACT (Calm Orb · overlay) presentation: collapse the phone-call strip to the
+   * mockup's lean dock — **Mute + End + a "•••"** overflow button. The "•••" blooms a small
+   * sheet hosting the secondary actions (Captions / Details / Type). The fused level-2 dock
+   * (minis + text input) is unchanged. Fed from the overlay's resolved `Ui.compact`.
+   * Default `false` (the full 5-button strip is unchanged).
+   */
+  @Input() Compact = false;
+
   /** Emitted when the user opens (Type control / typing) or closes (hide control) the dock. */
   @Output() OpenChanged = new EventEmitter<boolean>();
 
@@ -57,15 +66,22 @@ export class RealtimeComposerComponent {
   /** Emitted when the user ends the call from the strip's End control. */
   @Output() EndRequested = new EventEmitter<void>();
 
+  /** Emitted with the new muted state whenever the user toggles the mic from the dock. */
+  @Output() MuteChanged = new EventEmitter<boolean>();
+
   /** Current draft text in the dock's composer input. */
   public Draft = '';
 
-  /** Local mic mute state, reflected from the service. */
-  public IsMuted = false;
+  /**
+   * The mic mute state. A two-way reflection: the overlay may push it down (e.g. its
+   * `SetMuted()` / focus-pill toggle) so all mute affordances stay in sync, and this
+   * component updates it locally + emits {@link MuteChanged} when its own button is used.
+   */
+  @Input() IsMuted = false;
 
   @ViewChild('dockInput') private dockInput?: ElementRef<HTMLInputElement>;
 
-  private voice = inject(RealtimeSessionService);
+  private realtime = inject(RealtimeSessionService);
 
   /** True when there's non-whitespace text to send. */
   public get CanSend(): boolean {
@@ -77,9 +93,30 @@ export class RealtimeComposerComponent {
     return !this.Open;
   }
 
-  /** Toggle the local microphone mute. */
+  /**
+   * Whether the compact "•••" overflow sheet (Captions / Details / Type) is open. Only used
+   * in {@link Compact} strip mode; any outside click or action selection closes it.
+   */
+  public MoreOpen = false;
+
+  /** Open/close the compact overflow sheet (stops propagation so the outside-click close skips it). */
+  public ToggleMore(event: MouseEvent): void {
+    event.stopPropagation();
+    this.MoreOpen = !this.MoreOpen;
+  }
+
+  /** Any outside click closes the compact overflow sheet. */
+  @HostListener('document:click')
+  public OnDocumentClick(): void {
+    if (this.MoreOpen) {
+      this.MoreOpen = false;
+    }
+  }
+
+  /** Toggle the local microphone mute and surface the new state to the overlay. */
   public ToggleMute(): void {
-    this.IsMuted = this.voice.ToggleMute();
+    this.IsMuted = this.realtime.ToggleMute();
+    this.MuteChanged.emit(this.IsMuted);
   }
 
   /** Toggle captions visibility and notify the overlay. */
@@ -98,7 +135,7 @@ export class RealtimeComposerComponent {
     if (!this.CanSend) {
       return;
     }
-    this.voice.SendText(this.Draft);
+    this.realtime.SendText(this.Draft);
     this.Draft = '';
   }
 

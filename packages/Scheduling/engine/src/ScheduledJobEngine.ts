@@ -1305,6 +1305,10 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
             ExtraFilter: `ID IN (${idList}) AND (LockToken IS NULL OR ExpectedCompletionAt IS NULL OR ExpectedCompletionAt < '${nowIso}')`,
             Fields: ['ID', 'Name', 'ExpectedCompletionAt'],
             ResultType: 'simple',
+            // Deliberately a fresh, narrowly-filtered read of LIVE lock/lease state — the cached
+            // SchedulingEngineBase copy would be stale (and possibly cross-process stale). Exempt it
+            // from the "Entity Already in Engine" optimization analyzer rather than have it flagged.
+            Telemetry: { Exempt: true, Reason: 'Live lock-state read for hung-job sweep; engine cache would be stale' },
         }, contextUser);
 
         if (!result.Success || result.Results.length === 0) return 0;

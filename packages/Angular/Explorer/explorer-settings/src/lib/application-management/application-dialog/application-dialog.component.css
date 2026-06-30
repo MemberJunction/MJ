@@ -376,34 +376,6 @@
 }
 
 /* -----------------------------------------------------------------------------
-   Alert Messages
-   ----------------------------------------------------------------------------- */
-.alert {
-  padding: 1rem 1.25rem;
-  border-radius: var(--mj-radius-md);
-  margin-bottom: 1rem;
-  display: flex;
-  align-items: flex-start;
-  gap: 0.75rem;
-}
-
-.alert i {
-  font-size: 1rem;
-  flex-shrink: 0;
-  margin-top: 0.125rem;
-}
-
-.alert.alert-error {
-  background: var(--mj-status-error-bg);
-  border: 1px solid color-mix(in srgb, var(--mj-status-error) 20%, transparent);
-  color: var(--mj-status-error);
-}
-
-.alert.alert-error i {
-  color: var(--mj-status-error);
-}
-
-/* -----------------------------------------------------------------------------
    Entity Management Styles
    ----------------------------------------------------------------------------- */
 .subsection-title {
@@ -966,64 +938,8 @@
   color: var(--mj-brand-primary);
 }
 
-/* -----------------------------------------------------------------------------
-   MJ Button System
-   ----------------------------------------------------------------------------- */
-.mj-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  padding: 0.75rem 1.5rem;
-  font-size: 0.875rem;
-  font-weight: 600;
-  border: none;
-  border-radius: var(--mj-radius-full);
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  white-space: nowrap;
-  min-height: 44px;
-}
-
-.mj-btn:disabled {
-  opacity: 0.38;
-  cursor: not-allowed;
-}
-
-/* Primary Button - Dark, lightens on hover */
-.mj-btn-primary {
-  background: var(--mj-brand-primary);
-  color: var(--mj-brand-on-primary);
-  box-shadow: var(--mj-shadow-sm);
-}
-
-.mj-btn-primary:hover:not(:disabled) {
-  background: var(--mj-brand-primary-light);
-  box-shadow: var(--mj-shadow-md);
-}
-
-.mj-btn-primary:active:not(:disabled) {
-  background: var(--mj-brand-primary-light);
-  transform: scale(0.98);
-}
-
-/* Secondary Button - Light, darkens on hover */
-.mj-btn-secondary {
-  background: var(--mj-bg-page);
-  color: var(--mj-brand-primary);
-  border: 1px solid var(--mj-border-strong);
-}
-
-.mj-btn-secondary:hover:not(:disabled) {
-  background: var(--mj-brand-primary);
-  color: var(--mj-brand-on-primary);
-  border-color: var(--mj-brand-primary);
-}
-
-.mj-btn-secondary:active:not(:disabled) {
-  background: var(--mj-brand-primary);
-  border-color: var(--mj-brand-primary);
-}
+/* Buttons use the global `mjButton` directive (variant/size inputs) — no
+   component-scoped `.mj-btn` overrides (they would collide with the directive). */
 
 /* -----------------------------------------------------------------------------
    Animations
@@ -1054,7 +970,6 @@
 .field-input:focus-visible,
 .field-select:focus-visible,
 .field-textarea:focus-visible,
-.mj-btn:focus-visible,
 .btn-icon:focus-visible,
 .entity-chip:focus-visible {
   outline: 2px solid var(--mj-brand-primary);
@@ -1144,10 +1059,11 @@
     flex-direction: column;
   }
 
-  .modal-footer .mj-btn {
+  /* Full-width footer buttons on mobile — wrapper-scoped layout only, so the
+     global mjButton directive still owns each button's appearance/shape. */
+  .modal-footer button {
     width: 100%;
     justify-content: center;
-    border-radius: var(--mj-radius-full);
   }
 
   /* Entity item mobile layout */

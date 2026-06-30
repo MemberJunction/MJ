@@ -53,8 +53,7 @@
         }
     </div>
 } @else {
-    <div class="summary-empty">
-        <i class="fa-regular fa-calendar-xmark"></i>
-        <span>No schedule configured</span>
-    </div>
+    <mj-empty-state class="summary-empty" Size="compact"
+        Icon="fa-regular fa-calendar-xmark"
+        Title="No schedule configured" />
 }

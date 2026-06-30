@@ -89,28 +89,6 @@
   flex: 1;
 }
 
-/* Empty State */
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  color: var(--mj-text-disabled);
-  text-align: center;
-}
-
-.empty-state i {
-  font-size: 32px;
-  margin-bottom: 12px;
-  opacity: 0.5;
-}
-
-.empty-state p {
-  margin: 0;
-  font-size: 13px;
-}
-
 /* Cards Container */
 .cards-container {
   display: flex;

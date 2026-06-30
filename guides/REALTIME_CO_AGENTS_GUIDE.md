@@ -172,6 +172,22 @@ The same tool-execution semantics run in two transport topologies. The shared pi
 | Delegation cancel | Explicit-only: the overlay's per-card ✕ → `CancelRealtimeSessionTool` mutation → the service's in-flight registry aborts the run. **Barge-in never aborts delegations** (deliberate host policy — the narration design expects the user to keep talking while work runs) | Barge-in aborts the in-flight delegated run via `RealtimeToolBroker.AbortInFlight` (no human ✕ exists on this topology) |
 | Usage telemetry | Browser accumulates `OnUsage` deltas → debounced (10 s) + teardown-flushed `RelayRealtimeUsage` mutation → accumulated onto the co-agent `AIPromptRun` | Runner checkpoints accumulated usage onto the long-lived `AIPromptRun` (debounced 5 s, crash-safe) |
 
+### 🚨 Single source of truth: ONE prep, the precedence cascade, the core↔host boundary
+
+Every realtime host — native chat, **LiveKit**, and future **Zoom/Teams/GoToMeeting/Webex** — must be the **same agent**: same identity, personality, model/voice, delegation, and session tracking. Only **media transport** and **host UX tools** vary. The full rationale + roadmap is in [`plans/realtime/realtime-core-host-convergence.md`](../plans/realtime/realtime-core-host-convergence.md).
+
+**There is exactly ONE producer of realtime session prep:** `RealtimeClientSessionService.PrepareRealtimeSessionParams` (`packages/AI/Agents/src/realtime/realtime-client-session-service.ts`). It resolves the model, builds the **target-identity** system prompt (via the single `BuildRealtimeAgentFraming` in `realtime-tool-broker.ts` — first-person AS the target, never the co-agent), the stable tool set (always incl. `invoke-target-agent`), voice, and memory. **Do NOT build session prep in a host.** The LiveKit bridge (`BaseAgent.StartBridgeRealtimeSession`) *consumes* it and differs only in opening server-side (`StartSession`) vs the browser mint (`CreateClientSession`); a bridge re-implementing prep is exactly the drift this convergence removed (guarded by `__tests__/realtime-convergence-drift.test.ts`).
+
+**Model + voice resolve through ONE precedence cascade** (`ResolveEffectiveRealtimeConfig`), identical on every host:
+
+```
+runtime override  >  target agent's TypeConfiguration  >  co-agent config  >  agent-type default
+```
+
+The **target** layer is what lets a voiced agent (Sage, Marketing Agent, …) carry its own persisted voice/model that the shared co-agent then speaks with. The runtime-override input funnels into one slot — the native picker builds `ConfigOverridesJson` client-side (`BuildRealtimeConfigOverridesJson`), the server-bridged hosts build the **identical** envelope via `BuildRealtimeOverridesJson` — so both ride the same highest-precedence cascade layer.
+
+**Core (one place, all hosts):** identity, model/voice precedence, base prompt + memory, `invoke-target-agent` delegation, session/run tracking. **Host (varies):** media transport (LiveKit audio → video) + host UX tools (whiteboard/browser/… — injected via `RealtimeSessionRunnerDeps.ExtraTools`/`ExecuteTool`, never baked into core).
+
 ### Client-direct flow (the shipped path)
 
 1. **Mint.** The browser (`VoiceSessionService.StartVoiceSession`) calls `StartRealtimeClientSession(targetAgentId, conversationId?, lastSessionId?, preferredModelId?, clientToolsJson?, coAgentId?)`. The resolver authorizes `CanRun` on the **target** agent, resolves the co-agent (chain in §1), creates the durable `AIAgentSession` via `SessionManager.CreateSession` (storing `targetAgentID` **server-side** in the session's `Config` column — accessed as `Config_` on the generated entity), then `RealtimeClientSessionService.PrepareClientSession` resolves the model, assembles the companion system prompt (framing + co-agent prompt + target identity + history + memory via `AgentMemoryContextBuilder` — the same context a loop agent injects), builds the stable tool set, and asks the driver to `CreateClientSession`. When a `lastSessionId` is supplied, the resolver also loads the **prior session chain's transcript** (`loadPriorTranscript` — ownership-checked, hidden/error rows skipped, capped at 30 newest turns / 8,000 chars / 5 chain legs, with a cycle guard) and frames it into the system prompt so the resumed model *remembers* the last leg. Strictly best-effort — any problem yields no hydration, never a failed start. On mint failure the just-created session is closed with `CloseReason = 'Error'` so nothing half-open leaks.
@@ -301,6 +317,87 @@ Gate implementation: `RealtimeClientSessionResolver.assertRuntimeOverridesAuthor
 
 **Write-side schema enforcement**: when an agent type publishes `ConfigSchema`, `MJAIAgentEntityServer.ValidateAsync` (in `MJCoreEntitiesServer`) validates `TypeConfiguration` against it with a dependency-free JSON-Schema-subset validator (`json-schema-lite.ts`: type / required / properties / enum / items / additionalProperties). Non-object configuration always fails; a malformed `ConfigSchema` only WARNS (a metadata bug on the type row must not brick agent saves).
 
+### App awareness — the app cascade layer, mint-time context, and multi-agent delegation
+
+The co-agent is **app-aware** and can voice **one lead while delegating to many colleagues**. Three additive capabilities, all flowing through the one shared prep (`RealtimeClientSessionService.PrepareRealtimeSessionParams`) so client-direct and server-bridged behave identically:
+
+**1. The app cascade layer.** When the session knows its `ApplicationID` (threaded via `PrepareClientSessionInput.ApplicationID` — the `StartRealtimeClientSession` `applicationId` arg client-direct, or `params.data.applicationId` server-bridged), the app's `Application.AgentSettings` contributes a NEW cascade layer **between the target agent and the runtime override**:
+
+```
+AIAgentType.DefaultConfiguration  <  co-agent TypeConfiguration  <  target TypeConfiguration  <  APP (Application.AgentSettings.Realtime)  <  runtime override
+```
+
+`AgentSettings.Realtime` (persona / disclosure / model preference) + `AgentSettings.RelevantAgents` are mapped to the canonical `{"realtime":{…}}` shape by `BuildAppRealtimeOverridesJson` and merged via the extended `ResolveEffectiveRealtimeConfig(typeDefault, agent, override, target?, appSettings?, dynamic?)`. Scalars (persona/disclosure/model) follow the per-key cascade; `allowedAgents` is the deliberate exception — see below.
+
+**2. Mint-time app context.** `PrepareClientSessionInput.AppContext` (an `AppContextSnapshot` from `@memberjunction/ai-core-plus` — where the user is, what they see, the live capability manifest) is rendered by `FormatAppContextNote` into a `CURRENT APP CONTEXT` section of the companion system prompt, so the co-agent knows the user's situation from its first word (the *session-start* half of client-context delivery). Client-direct passes it as the `appContextJson` arg; server-bridged as `params.data.appContext`.
+
+**2b. Continuous streaming + acting — the `ClientContextChannel`.** The *mid-session* half is a **headless** interactive channel (`ClientContextChannel`, `IsHeadless: 1`, never mounts a tab — server half `ClientContextChannelServer` in `@memberjunction/ai-agents`, browser half in `@memberjunction/ng-conversations`). It does two things, both client-side in the client-direct topology (no server round-trip):
+
+- **Perception (stream).** It subscribes to the host's live app-context stream (`RealtimeChannelContext.AppContext$`, fed by Explorer's `MJExplorerAppComponent` from `NavigationService` — every `SetAgentContext` / nav change re-publishes the `AppContextSnapshot`, now including a `Capabilities.Tools` manifest of what's callable right now) and pushes each change as a compact `SendContextNote`. So as the user navigates, the co-agent's picture stays current.
+- **Action — the `ContextTool` proxy.** It declares ONE stable provider tool, `ContextTool`, so the tool surface never changes mid-session (connect-bound providers reject re-declaration); the live catalog of valid actions rides context. The model calls `ContextTool({ action, params })`; the channel routes it to `RealtimeChannelContext.ExecuteClientTool`, which runs the surface handler the host registered from `SetAgentClientTools` (mirrored into the realtime session via `RealtimeSessionService.RegisterAppClientTools`), and returns a structured result. This is what lets the co-agent navigate / show / *do* things in the app on the user's behalf, executed in the browser.
+
+The seam is boundary-clean: the generic channel never imports Explorer — it is *fed* `AppContext$` + `ExecuteClientTool` through the (optional) `RealtimeChannelContext` members, which the `RealtimeSessionService` implements and Explorer drives. The same `SetAgentContext`/`SetAgentClientTools` call a dashboard already makes for the async chat agent now feeds the realtime co-agent too — one surface API, both agents.
+
+**3. Multi-agent delegation (lead + colleagues).** The effective `realtime.allowedAgents` is a **union-accumulated** set (NOT array-replaced) across every cascade layer (`accumulateAllowedAgents`) plus the app's `RelevantAgents` plus runtime/channel-registered additions, deduped by `agentId` (later layers win per-field). The lead's identity stays single (the voiced target / app default agent); the union is *who the lead can call*. At mint, the colleagues are rendered into the framing (`BuildRealtimeAgentFraming(leadName, surfaceClause, colleagues)` → `BuildColleaguesClause`) with per-target **disclosure** guidance. The model names a colleague in the `invoke-target-agent` arguments (`{ agent, request }`); `RealtimeClientSessionService.resolveDelegationTarget` validates the name against the session's persisted allowed union (client-direct: persisted on `AIAgentSession.Config_` and read back per relayed call; server-bridged: from the live `EffectiveConfig`), routes to that agent, or returns a structured "not available" result naming the valid colleagues so the model self-corrects. **`CanRun` on the resolved agent remains the security boundary** — the union is an affordance filter, both apply.
+
+**Delegation disclosure** (`RealtimeDisclosurePolicy = 'silent' | 'mention' | 'hand-voice'`, default `'mention'`) — how the co-agent narrates a handoff: `mention` names it ("let me get Skip on this"), `silent` absorbs the result and speaks it as its own, `hand-voice` is reserved. Resolved per-target by `GetDisclosureForTarget` (per-entry override → effective default from the scalar cascade). Configurable at the type default, co-agent, app, and per-target levels.
+
+### Live session capabilities — `RealtimeSessionCapabilities` + `Reconfigure`
+
+A live `IRealtimeSession` exposes a small **capability surface** (the realtime-session analogue of the bridge's `IBridgeProviderFeatures` and of `BaseRealtimeModel.SupportsClientDirect`) so the container can ask "is it safe to call X?" instead of blind-invoking optional methods that no-op — or *can't* be supported — on some providers. Both members are **optional** on the interface (`@memberjunction/ai`, `baseRealtime.ts`), so a driver that hasn't declared them is treated **conservatively** (unsupported), and the 6 existing drivers compile unchanged:
+
+- **`Capabilities?: RealtimeSessionCapabilities`** — currently `{ CanReconfigureTurnMode }`: whether the session can change its turn-taking / auto-response mode on a **live** socket without reconnecting. Grow this object as providers gain runtime abilities.
+- **`Reconfigure?(params: RealtimeReconfigureParams): void`** — applies a live change (e.g. `{ DisableAutoResponse: true }`). **Gate on the capability before calling.** OpenAI implements it via a partial `session.update` and reports `CanReconfigureTurnMode: true`; Gemini Live's activity detection is fixed at connect, so it reports `false` and *omits* the method.
+
+Prime consumer: the bridge engine's first-agent re-gating (`AIBridgeEngine.ReconfigureSessionToMeeting` → meeting mode when a room becomes multi-agent — see the Bridges guide §9). As models gain mid-session reconfiguration, a driver flips one flag and the container starts using it with **zero container changes**.
+
+### Turn moderator (multi-agent turn-taking)
+
+When **two or more agents** share one realtime room (a LiveKit panel, a meeting), the hard question is *who speaks next*. The original answer was a per-agent regex name-match (`RegexAddressedMatcher`): each agent independently checked "was I addressed?" That routes direct address but nothing else — it can't bring a relevant-but-unaddressed agent in, can't let two agents have a productive back-and-forth, and can't tell a useful exchange from an unproductive ping-pong loop. The **turn moderator** replaces it with a room-level decision.
+
+Once per turn, a single fast LLM looks at the room roster + the recent diarized conversation and returns the **ordered agent(s) who should speak next** — zero, one, or several. It routes direct address *and* relevance (send a question to Sage **and** Skip when both matter), lets a *productive* agent↔agent discussion continue, and goes quiet on unproductive ping-pong or when nobody should speak (hand back to the human). The engine speaks the returned agents **serially via the floor** — never overlapping. The **audio plane is untouched**: every agent always hears the raw room audio; the moderator only decides *when* each agent is triggered to commit and speak. (It's called a *moderator*, not a judge, because it *brings agents in* as much as it restrains them — the informal nickname is "nanny mode," but that undersells the half that matters.)
+
+#### Prompt, not agent
+
+The moderator is `RealtimeTurnModerator` (`packages/AI/Agents/src/realtime/realtime-turn-moderator.ts`; exported as `RealtimeTurnModeratorDecision`, the `(ctx) => Promise<string[]>` function wired into the bridge engine). It is a stateless yes/who classification — no planning, tools, or sub-agents — so it runs as an **`AIPromptRun` via `AIPromptRunner`, not an agent run**. Each decision's `agentRunId` is tied to the **co-agent's `AIAgentRun`**, so the per-turn "who spoke and why" trail (including the moderator's structured `reason` per speaker and an optional `note`) is fully observable through standard prompt-run logs — and those logs are exactly the data for deciding when this mechanism can be relaxed as realtime models get smarter. The prompt returns structured `{ speakers: [{ agent, reason }], note }`; the plugin maps the returned names back to roster `AgentSessionID`s (in order, de-duplicated).
+
+#### Config cascade + the `turnTaking` shape
+
+Two parts of the effective-config cascade carry turn-taking, and they live at different layers:
+
+- **Room-wide moderator brain** — the `turnTaking.moderator` block on the **Realtime agent type's `DefaultConfiguration`** (`metadata/agent-types/schemas/realtime-type-default-config.json`). A room has exactly one moderator.
+- **Per-agent participation `mode`** — `turnTaking.mode` on the **target agent's `TypeConfiguration`**: `'proactive'` (default — may be brought in unaddressed when the moderator judges it relevant) or `'addressed-only'` (speaks only when directly addressed by name).
+
+Both ride the existing cascade (agent-type `DefaultConfiguration` ← co-agent `TypeConfiguration` ← **target agent** `TypeConfiguration` ← runtime override — see [§4 the effective-configuration merge](#the-effective-configuration-merge)). The shape (in `packages/AI/Agents/src/realtime/realtime-coagent-config.ts`):
+
+```jsonc
+{ "realtime": { "turnTaking": {
+    "mode": "proactive",                 // per TARGET agent (TypeConfiguration)
+    "moderator": {                       // room-wide (agent-type DefaultConfiguration)
+        "promptId": "<AI Prompt ID>",    // authored as @lookup:, stored as the resolved ID
+        "contextWindowTurns": 30,        // diarized turns the moderator sees; clamped ≤ 50
+        "maxCharsPerTurn": 240,          // per-turn clip (token savings + cacheable prefix)
+        "maxConsecutiveAgentOnlyTurns": null,  // null = no cap (trust the model's progress read)
+        "timeoutMs": 800,                // per-decision budget on the latency-critical path
+        "onError": "silent",             // 'silent' (no one speaks) | 'addressed-only' (cheap fallback)
+        "prestageOnAgentSpeech": true    // run the next decision during the prior agent's playback
+} } } }
+```
+
+`GetEffectiveModeratorConfig` / `GetEffectiveTurnMode` are the typed accessors; absent fields fall back to `REALTIME_MODERATOR_DEFAULTS`. `GetEffectiveModeratorConfig` returns `null` when no `promptId` is configured — which the engine reads as "no moderator, fall back to the matcher."
+
+#### Serialized multi-route + pre-staging
+
+The moderator can name several speakers; the engine queues them and drains the queue **one at a time through the room floor**, so a multi-agent route is heard as a clean sequence, never a pile-up. The moderator also runs on **agent turns**, not just human ones — that powers both agent↔agent continuation and **pre-staging**: when `prestageOnAgentSpeech` is on (the default), the next decision runs *during the prior agent's audio playback* (the model emits its full response text seconds before the user finishes hearing it), so the agent→agent hand-off pays ~zero added latency. A human **barge-in discards the pre-staged decision** (the user changed the topic). The optional `maxConsecutiveAgentOnlyTurns` is a hard backstop against runaway agent-only loops; left `null`, the room relies on the moderator's own progress assessment so a genuine discussion is never gated by a counter.
+
+#### The model — small, fast, swappable
+
+A small/fast LLM is the right call because this runs **every turn on the latency-critical path**. The seeded prompt (`"Realtime: Turn Moderator"`, `metadata/prompts/.realtime-prompts.json`) is bound to **GPT-OSS-120B on Cerebras**. The structured output, plus putting the static roster near the top of the prompt and the variable conversation at the bottom, maximizes prefill caching. The whole mechanism is metadata-driven: swap the model binding (e.g. to Gemma on Cerebras) or retune the windows entirely in metadata, **no code change** — and the `prestageOnAgentSpeech` design means a slower model still hides most of its latency.
+
+#### No-moderator fallback
+
+When no moderator is injected into the engine — or no `promptId` is configured — the engine **falls back to the per-agent `RegexAddressedMatcher` broadcast** (still present): the room's utterance is broadcast to every agent's `TurnPolicy` and each independently decides "was I addressed?" The plugin itself also degrades to a crude name-contains safety net only when no prompt is configured, so a room is never left mute by a metadata gap. The engine seam (`SetTurnModerator`, the lookback buffer, the serialized queue, barge-in invalidation) is documented in the [Bridges guide §9](REALTIME_BRIDGES_GUIDE.md#9-multi-party-livekit--multiple-agents).
+
 ---
 
 ## 5. Channels — The Heart of the System
@@ -315,6 +412,8 @@ Every interactive channel implements two directions:
 ### The definition registry
 
 `MJ: AI Agent Channels` rows define what channels exist (see [§4 schema](#4-session-lifecycle)). At session start `VoiceSessionService` reads the **active** rows and instantiates one plugin per row via the ClassFactory (`ClientPluginClass` key) — one fresh instance per session, never a singleton. Registry failures degrade to "no channels"; the voice session always proceeds. The **server half** mirrors this exactly: when `SessionManager.CreateSession` mints the durable session, `RealtimeChannelServerHost` reads the same active rows and resolves each `ServerPluginClass` into one fresh `BaseRealtimeChannelServer` instance per session (unregistered keys skip with a log, never fatal).
+
+The shipped channels: **Whiteboard**, **Media**, **Remote Browser** (all surface-bearing — they mount a tab), and **`ClientContextChannel`** (the **headless** app-context wire — `IsHeadless: 1`, no tab; perception + the `ContextTool` proxy, see [§ App awareness 2b](#app-awareness--the-app-cascade-layer-mint-time-context-and-multi-agent-delegation)). The registry row carries extra presentation/behavior metadata: `IsHeadless` (skip surface-mounting) and a `UIConfig` JSONType bag (`DisplayName` / `GroupName` / `Color` / `Icon` for surface channels' tab chrome).
 
 ### Per-session state of record
 
@@ -390,6 +489,18 @@ The whiteboard now lives in **two layers**, and the split is the point:
 **Artifact snapshots**: "Save to artifacts" snapshots the board JSON as a versioned `MJ: Artifacts` record via `SaveSessionChannelArtifact` — typed with the seeded **`Whiteboard` artifact type** (`metadata/artifact-types/`, `ContentType: application/json`, viewer `DriverClass: WhiteboardArtifactViewerPlugin` — the viewer component stays in the conversations package and renders through `WhiteboardSnapshotComponent`), best-effort linked into conversation history via a `MJ: Conversation Detail Artifacts` junction row against the latest session-stamped detail. On success the plugin tells the model the user saved the board, so it can reference the artifact naturally.
 
 **Restore-on-resume**: `RestoreState` rehydrates a prior session's board **in place** into the same `WhiteboardState` instance (`LoadFromJSON`), so the save subscription and any later surface binding keep pointing at one engine. Malformed payloads return `false` and the board starts fresh.
+
+### The Media channel's agent media library (Collections as kits)
+
+The **Media** channel (`MediaChannelServer` / `RealtimeMediaChannel`, seeded row `Name: 'Media'`) lets the agent put images/video/audio/PDF/web on a shared surface. Beyond ad-hoc `Media_ShowMedia({ url | fileId })`, an agent can be given a **curated, governed media kit** it reasons over — built by **reusing Artifacts + Collections**, not a bespoke entity:
+
+- **A `MJ: Collections` of `MJ: Artifacts` IS the kit.** The artifact (+ current version) describes the media — `FileID → MJ: Files`, `MimeType`, name, viewer, versioning, permissions. Bytes stream through the authenticated `/media` route. Nothing is duplicated.
+- **Agent-reasoning metadata lives per-membership** on `MJ: Collection Artifacts`: `Sequence` (priority/order, pre-existing) + **`ContextDescription`** (the agent-facing "what this is / when to show it") + **`Preload`** (eager hint). Per-membership means the same artifact can be framed differently in different kits.
+- **Binding:** `AIAgent.DefaultMediaCollectionID` (FK → `Collection`) is the agent's default kit; per-session resolution is `runtime override > agent default > none`.
+- **Per-session runtime override (wired).** `StartRealtimeClientSession` accepts an optional `mediaCollectionId` arg — **UUID-validated at the resolver boundary** (`IsValidUUID` from `@memberjunction/global`; a malformed value is dropped + logged, the session still starts) and stored on the session config (`RealtimeSessionConfig.mediaCollectionID` → `AIAgentSession.Config_`). `SessionManager` hands the verbatim config blob to data-aware channels via **`RealtimeChannelServerContext.AgentSessionConfig`**; `MediaChannelServer` parses `mediaCollectionID` from it and passes it as the override (re-validated downstream — defense in depth). So a caller (e.g. a Praxis Protocol) can hand a session its own kit, overriding the agent default; absent ⇒ the agent default applies. *Note: `AgentSessionConfig` (the persisted `AIAgentSession.Config_`) is intentionally distinct from the driver-level `ClientRealtimeSessionConfig.SessionConfig` "private pact" (§5.8) — same word, different layer.*
+- **Server-side resolution, existing client tool.** `MediaChannelServer` implements `IRealtimeChannelServerDataAware` (the host hands it the session `contextUser` + `provider` between `Initialize` and `OnSessionStarted`); on start it resolves the kit via `agent-media-library.ts` (`buildAgentMediaContextNote`) and `SendContextNote`s a manifest (`fileId`, type, display name, when-to-show, PRELOAD). The agent then surfaces items with the **existing** `Media_ShowMedia({ fileId, mediaType, displayName })` — no new client tool, no client round-trips. An agent with no kit is unaffected.
+
+The resolver (`mediaTypeFromMimeType` / `resolveAgentMediaManifest` / `formatAgentMediaManifest`) is exported from `@memberjunction/ai-agents` and unit-tested. See `plans/praxis/AGENT_MEDIA_LIBRARY_PLAN.md`.
 
 ### Interactions between channels
 

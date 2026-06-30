@@ -10,6 +10,7 @@ import { SchedulingDashboardsModule } from './scheduling-dashboards.module';
 import { CommunicationDashboardsModule } from './communication-dashboards.module';
 import { CredentialsDashboardsModule } from './credentials-dashboards.module';
 import { DataExplorerDashboardsModule } from './data-explorer-dashboards.module';
+import { PredictiveStudioDashboardsModule } from './predictive-studio-dashboards.module';
 import { ListsDashboardsModule } from './lists-dashboards.module';
 import { ComponentStudioDashboardsModule } from './component-studio-dashboards.module';
 import { ArchivingDashboardsModule } from './archiving-dashboards.module';
@@ -47,6 +48,7 @@ import { NgTreesModule } from '@memberjunction/ng-trees';
     CommunicationDashboardsModule,
     CredentialsDashboardsModule,
     DataExplorerDashboardsModule,
+    PredictiveStudioDashboardsModule,
     ListsDashboardsModule,
     ComponentStudioDashboardsModule,
     ArchivingDashboardsModule,
@@ -74,6 +76,7 @@ import { NgTreesModule } from '@memberjunction/ng-trees';
     CommunicationDashboardsModule,
     CredentialsDashboardsModule,
     DataExplorerDashboardsModule,
+    PredictiveStudioDashboardsModule,
     ListsDashboardsModule,
     ComponentStudioDashboardsModule,
     ArchivingDashboardsModule,

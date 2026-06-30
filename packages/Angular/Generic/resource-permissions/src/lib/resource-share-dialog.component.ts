@@ -46,6 +46,11 @@ export class GenericShareDialogComponent implements OnChanges {
     public Error: string | null = null;
     public UserSearchFilter = '';
 
+    /** Message for the no-results empty-state, echoing the current search term. */
+    public get NoUsersFoundMessage(): string {
+        return `No users found matching "${this.UserSearchFilter}"`;
+    }
+
     constructor(private cdr: ChangeDetectorRef) {}
 
     ngOnChanges(changes: SimpleChanges): void {

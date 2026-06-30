@@ -191,23 +191,6 @@
   color: var(--mj-status-warning);
 }
 
-.empty-state {
-  text-align: center;
-  padding: 30px;
-  color: var(--mj-text-muted);
-}
-
-.empty-state i {
-  font-size: 2em;
-  color: var(--mj-border-default);
-  margin-bottom: 10px;
-}
-
-.empty-state p {
-  margin: 0;
-  font-size: 0.9em;
-}
-
 .dialog-actions {
   display: flex;
   justify-content: flex-end;

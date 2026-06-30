@@ -2,7 +2,7 @@ import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AngularSplitModule } from 'angular-split';
-import { MJButtonDirective, MJDropdownComponent } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJDropdownComponent, MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 
 import { ERDDiagramComponent } from './components/erd-diagram.component';
 import { MJEntityERDComponent } from './components/mj-entity-erd.component';
@@ -92,6 +92,7 @@ import { ERDCompositeComponent } from './components/erd-composite/erd-composite.
     AngularSplitModule,
     MJButtonDirective,
     MJDropdownComponent,
+    MJEmptyStateComponent,
   ],
   exports: [
     ERDDiagramComponent,

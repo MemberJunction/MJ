@@ -32,13 +32,12 @@
     <!-- Panel Content -->
     <div class="panel-content">
       <!-- Status Banner -->
-      <div class="status-banner" [ngClass]="getStatusClass(Log.Status)">
-        <i [class]="getStatusIcon(Log.Status)"></i>
-        <span class="status-text">{{ Log.Status }}</span>
+      <mj-alert [Variant]="getStatusVariant(Log.Status)" [Icon]="getStatusIcon(Log.Status)">
+        {{ Log.Status }}
         @if (Log.DurationMs) {
-          <span class="duration">{{ formatDuration(Log.DurationMs) }}</span>
+          <span class="duration" actions>{{ formatDuration(Log.DurationMs) }}</span>
         }
-      </div>
+      </mj-alert>
       <!-- Tool Info -->
       <div class="info-section">
         <h3 class="section-title">
@@ -99,9 +98,9 @@
             </button>
           </div>
           @if (ErrorSection.expanded) {
-            <div class="error-card">
+            <mj-alert Variant="error">
               <pre class="error-message">{{ Log.ErrorMessage }}</pre>
-            </div>
+            </mj-alert>
           }
         </div>
       }

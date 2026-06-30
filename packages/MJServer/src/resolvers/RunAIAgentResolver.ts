@@ -329,15 +329,7 @@ export class RunAIAgentResolver extends ResolverBase {
                 console.error('❌ No agent run available for streaming callback');
                 return;
             }
-            
-            console.log('💬 Publishing streaming content:', {
-                content: chunk.content.substring(0, 50) + '...',
-                isComplete: chunk.isComplete,
-                stepType: chunk.stepType,
-                sessionId,
-                agentRunId: agentRun.ID
-            });
-            
+
             // Publish streaming content with the full serialized agent run
             const streamMsg: AgentExecutionStreamMessage = {
                 sessionId,

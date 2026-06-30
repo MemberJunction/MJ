@@ -36,8 +36,11 @@ class Capture {
     public captured: RtcAudioFrame[] = [];
     public audioSourceRates: Array<[number, number]> = [];
     public audioStreamRates: Array<[number, number]> = [];
-    public publishedTrackNames: string[] = [];
+    public publishedSources: number[] = [];
     public publishedData: Uint8Array[] = [];
+    public inFlightCaptures = 0;
+    public maxConcurrentCaptures = 0;
+    public clearQueueCalls = 0;
     public disconnected = false;
 }
 
@@ -66,8 +69,10 @@ function makeFakeRtc(remote: RtcParticipant[] = []): {
 
     const localParticipant = {
         identity: 'agent-bot',
-        publishTrack: vi.fn(async (_t: unknown, opts?: Record<string, unknown>) => {
-            cap.publishedTrackNames.push(String(opts?.name ?? ''));
+        publishTrack: vi.fn(async (_t: unknown, opts?: { source?: number }) => {
+            // Capture the publish-options `source` — it MUST be set (SOURCE_MICROPHONE) for the native
+            // AudioSource to accept captured frames; a missing source is the `InvalidState` bug.
+            cap.publishedSources.push(Number(opts?.source ?? -1));
             return {};
         }),
         publishData: vi.fn(async (payload: Uint8Array) => {
@@ -97,7 +102,17 @@ function makeFakeRtc(remote: RtcParticipant[] = []): {
     }
     function FakeAudioSource(this: unknown, rate: number, ch: number): RtcAudioSource {
         cap.audioSourceRates.push([rate, ch]);
-        return { captureFrame: async (f: RtcAudioFrame) => { cap.captured.push(f); } };
+        return {
+            captureFrame: async (f: RtcAudioFrame) => {
+                // Track concurrency: with the serial drain, only ONE capture may be in flight at a time.
+                cap.inFlightCaptures++;
+                cap.maxConcurrentCaptures = Math.max(cap.maxConcurrentCaptures, cap.inFlightCaptures);
+                await Promise.resolve(); // yield — overlapping captures would be observable here
+                cap.captured.push(f);
+                cap.inFlightCaptures--;
+            },
+            clearQueue: () => { cap.clearQueueCalls++; },
+        };
     }
     function FakeAudioFrame(this: unknown, data: Int16Array, sampleRate: number, channels: number, samplesPerChannel: number): RtcAudioFrame {
         return { data, sampleRate, channels, samplesPerChannel };
@@ -115,6 +130,13 @@ function makeFakeRtc(remote: RtcParticipant[] = []): {
         LocalAudioTrack: { createAudioTrack: () => ({ __isLocalAudioTrack: true as const }) },
         RoomEvent: ROOM_EVENT,
         TrackKind: TRACK_KIND,
+        TrackPublishOptions: class {
+            source?: number;
+            constructor(data?: { source?: number }) {
+                this.source = data?.source;
+            }
+        } as unknown as RtcNodeModule['TrackPublishOptions'],
+        TrackSource: { SOURCE_MICROPHONE: 2 },
     };
 
     const emit = (event: string, ...args: unknown[]) => {
@@ -165,7 +187,7 @@ describe('LiveKitRtcNodeRoomClient — connect + audio', () => {
         const client = new LiveKitRtcNodeRoomClient(DEFAULT_SAMPLE_RATE, DEFAULT_SAMPLE_RATE, 1, async () => module);
         const result = await client.connect(connectArgs);
         expect(result).toEqual({ localIdentity: 'agent-bot', roomName: 'demo-room' });
-        expect(cap.publishedTrackNames).toEqual(['Agent']);
+        expect(cap.publishedSources).toEqual([2]); // SOURCE_MICROPHONE — required for captureFrame to succeed
         expect(cap.audioSourceRates).toEqual([[DEFAULT_SAMPLE_RATE, 1]]); // outbound source at model rate
     });
 
@@ -182,6 +204,26 @@ describe('LiveKitRtcNodeRoomClient — connect + audio', () => {
         expect(cap.captured[0].sampleRate).toBe(16000); // OUTBOUND rate
         expect(Array.from(cap.captured[0].data)).toEqual([10, 20, 30, 40]);
         expect(cap.captured[0].samplesPerChannel).toBe(4);
+    });
+
+    it('serializes a burst of frames: captures in FIFO order, never more than one capture in flight', async () => {
+        const { module, cap } = makeFakeRtc();
+        const client = new LiveKitRtcNodeRoomClient(24000, 24000, 1, async () => module);
+        await client.connect(connectArgs);
+
+        // Fire a burst synchronously (the realtime model emits its reply faster than real time).
+        client.publishAudio(new Int16Array([1]).buffer);
+        client.publishAudio(new Int16Array([2]).buffer);
+        client.publishAudio(new Int16Array([3]).buffer);
+        client.publishAudio(new Int16Array([4]).buffer);
+
+        // Let the serial drain run to completion.
+        for (let i = 0; i < 10 && cap.captured.length < 4; i++) {
+            await new Promise((r) => setTimeout(r, 0));
+        }
+
+        expect(cap.captured.map((f) => Array.from(f.data)[0])).toEqual([1, 2, 3, 4]); // FIFO, no reorder
+        expect(cap.maxConcurrentCaptures).toBe(1); // never overlapped — the bug this fix prevents
     });
 
     it('inbound subscribed audio is read at the model INPUT rate and forwarded as a diarized frame', async () => {

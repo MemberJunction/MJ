@@ -1,7 +1,9 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, AfterViewInit, ChangeDetectorRef } from '@angular/core';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { RegisterClass, MJGlobal } from '@memberjunction/global';
 import { DevToolsPrefs } from './dev-tools-prefs';
+import { buildClassRegistryAgentContext } from './dev-tools-agent-context';
+import { AgentToolResult, validateStringParam } from '../shared/agent-tool-validation';
 
 /** Local mirror of MJGlobal's ClassRegistration shape (avoids importing the type). */
 interface ClassRegistration {
@@ -34,7 +36,7 @@ interface RegistrationGroup {
     templateUrl: './class-registry.component.html',
     styleUrls: ['./inspector-shared.css', './class-registry.component.css']
 })
-export class ClassRegistryInspectorComponent extends BaseResourceComponent implements OnInit, OnDestroy {
+export class ClassRegistryInspectorComponent extends BaseResourceComponent implements OnInit, OnDestroy, AfterViewInit {
 
     public Groups: RegistrationGroup[] = [];
     public Stats = { total: 0, baseClasses: 0, withOverrides: 0 };
@@ -57,6 +59,13 @@ export class ClassRegistryInspectorComponent extends BaseResourceComponent imple
             }
         }
         this.NotifyLoadComplete();
+    }
+
+    public ngAfterViewInit(): void {
+        // Publish initial agent context + register the read-only client tools.
+        // Re-emit happens on every search / filter change (OnSearchChange, the tools).
+        this.publishAgentContext();
+        this.registerAgentClientTools();
     }
 
     public override ngOnDestroy(): void {
@@ -148,6 +157,7 @@ export class ClassRegistryInspectorComponent extends BaseResourceComponent imple
     public OnSearchChange(value: string): void {
         this.SearchQuery = value;
         this.savePrefs();
+        this.publishAgentContext();
     }
 
     public get FilteredGroups(): RegistrationGroup[] {
@@ -210,4 +220,102 @@ export class ClassRegistryInspectorComponent extends BaseResourceComponent imple
 
     public TrackByBase = (_i: number, g: RegistrationGroup) => g.baseClassName;
     public TrackByReg = (_i: number, r: ClassRegistration) => `${r.SubClass?.name ?? ''}|${r.Key ?? ''}|${r.Priority}`;
+
+    // ========================================
+    // AI AGENT CONTEXT & CLIENT TOOLS
+    //
+    // 🔒 SAFETY BOUNDARY — CLASSIFICATION: SAFE developer diagnostic.
+    // The Class Registry is a read-only browser of the ClassFactory's
+    // @RegisterClass registrations. The context reports registration counts and
+    // the user's search/filter; the tools only search and filter that read-only
+    // list. No tool reads or mutates application data or class registrations.
+    // ========================================
+
+    /**
+     * The current base-class filter — non-empty only when the active search term
+     * exactly matches a known base class name (the registry's only filter is the
+     * search box). Lets the agent know the user has narrowed to one base class.
+     */
+    private get activeBaseClassFilter(): string {
+        const q = this.SearchQuery.trim();
+        if (!q) return '';
+        const match = this.Groups.find(g => g.baseClassName.toLowerCase() === q.toLowerCase());
+        return match ? match.baseClassName : '';
+    }
+
+    /** Publish the current Class Registry browse state to the AI agent. */
+    private publishAgentContext(): void {
+        const visible = this.FilteredGroups;
+        const context = buildClassRegistryAgentContext({
+            TotalClassCount: this.Stats.total,
+            BaseClassCount: this.Stats.baseClasses,
+            OverrideCount: this.Stats.withOverrides,
+            SearchTerm: this.SearchQuery,
+            FilterByBase: this.activeBaseClassFilter,
+            VisibleGroupCount: visible.length,
+            VisibleBaseClassNames: visible.map(g => g.baseClassName),
+        });
+        this.navigationService.SetAgentContext(this, context);
+    }
+
+    /**
+     * Register the read-only client tools the AI agent can invoke against the
+     * Class Registry: SearchClassRegistry, FilterByBaseClass, ClearClassRegistryFilters.
+     */
+    private registerAgentClientTools(): void {
+        this.navigationService.SetAgentClientTools(this, [
+            {
+                Name: 'SearchClassRegistry',
+                Description: 'Search the class registry by base class, subclass, or key. Pass an empty string to clear the search.',
+                ParameterSchema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] },
+                Handler: async (params: Record<string, unknown>) => this.toolSearch(params),
+            },
+            {
+                Name: 'FilterByBaseClass',
+                Description: 'Narrow the registry to a single base class by its exact name (e.g. "BaseEntity").',
+                ParameterSchema: { type: 'object', properties: { baseClass: { type: 'string' } }, required: ['baseClass'] },
+                Handler: async (params: Record<string, unknown>) => this.toolFilterByBaseClass(params),
+            },
+            {
+                Name: 'ClearClassRegistryFilters',
+                Description: 'Clear the class registry search / filter so all registrations are shown.',
+                ParameterSchema: { type: 'object', properties: {} },
+                Handler: async () => {
+                    this.OnSearchChange('');
+                    this.cdr.markForCheck();
+                    return { Success: true };
+                },
+            },
+        ]);
+    }
+
+    /** Apply (or clear, on empty string) the registry search query. */
+    private toolSearch(params: Record<string, unknown>): AgentToolResult {
+        const validated = validateStringParam(params['query'], 'query');
+        if (!validated.ok) {
+            return validated.result;
+        }
+        this.OnSearchChange(validated.value);
+        this.cdr.markForCheck();
+        return { Success: true };
+    }
+
+    /** Narrow to a single base class by exact name (case-insensitive). */
+    private toolFilterByBaseClass(params: Record<string, unknown>): AgentToolResult {
+        const validated = validateStringParam(params['baseClass'], 'baseClass');
+        if (!validated.ok) {
+            return validated.result;
+        }
+        const name = validated.value.trim();
+        if (name.length === 0) {
+            return { Success: false, ErrorMessage: 'baseClass must be a non-empty class name.' };
+        }
+        const match = this.Groups.find(g => g.baseClassName.toLowerCase() === name.toLowerCase());
+        if (!match) {
+            return { Success: false, ErrorMessage: `No base class named "${name}" is registered.` };
+        }
+        this.OnSearchChange(match.baseClassName);
+        this.cdr.markForCheck();
+        return { Success: true };
+    }
 }

@@ -405,15 +405,13 @@
 }
 
 /* Loading & Empty States */
-.loading-state,
-.empty-state {
+.loading-state {
   text-align: center;
   padding: 40px;
   color: var(--mj-text-secondary);
 }
 
-.loading-state i,
-.empty-state i {
+.loading-state i {
   font-size: 36px;
   margin-bottom: 15px;
   color: var(--mj-text-muted);
@@ -421,11 +419,6 @@
 
 .loading-state i.fa-spin {
   color: var(--mj-brand-primary);
-}
-
-.empty-state p {
-  margin: 5px 0;
-  font-size: 14px;
 }
 
 /* JSON Preview Section */

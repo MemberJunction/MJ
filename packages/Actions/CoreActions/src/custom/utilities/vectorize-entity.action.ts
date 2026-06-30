@@ -2,7 +2,7 @@ import { ActionResultSimple, RunActionParams, ActionParam } from "@memberjunctio
 import { BaseAction } from "@memberjunction/actions";
 
 import { RegisterClass } from "@memberjunction/global";
-import { EntityVectorSyncer } from "@memberjunction/ai-vector-sync";
+import { EntityVectorSyncer, VectorizeEntityResponse } from "@memberjunction/ai-vector-sync";
 import { MJEntityDocumentEntity } from "@memberjunction/core-entities";
 import { LogStatus, LogError } from "@memberjunction/core";
 
@@ -76,8 +76,6 @@ export class VectorizeEntityAction extends BaseAction {
         const entityDocumentTypeParam: ActionParam | undefined = params.Params.find(p => p.Name.trim().toLowerCase() === 'entitydocumenttype');
         const entityDocumentType: string = (entityDocumentTypeParam?.Value ? String(entityDocumentTypeParam.Value).trim() : '') || 'Record Duplicate';
 
-        LogStatus(`VectorizeEntityAction: Entities to vectorize: ${entityNames.join(', ') || '(all)'} (EntityDocumentType="${entityDocumentType}")`);
-
         try {
             const vectorizer = new EntityVectorSyncer();
             await vectorizer.Config(false, params.ContextUser);
@@ -90,35 +88,39 @@ export class VectorizeEntityAction extends BaseAction {
             // distinct result code so operators can tell "nothing to do" apart
             // from "did work" — and so the scheduled-job run isn't flagged failed.
             if (entityDocuments.length === 0) {
-                const msg = `No active "${entityDocumentType}" Entity Documents found` +
-                    `${entityNames.length ? ` for: ${entityNames.join(', ')}` : ''} — nothing to vectorize.`;
-                LogStatus(`VectorizeEntityAction: ${msg}`);
+                const scope = entityNames.length ? ` for: ${entityNames.join(', ')}` : '';
+                const msg = `No active "${entityDocumentType}" Entity Documents found${scope} — nothing to vectorize.`;
+                LogStatus(`   ${msg}`);
                 return { Success: true, Message: msg, ResultCode: "NO_DOCUMENTS" };
             }
 
-            const results: ActionResultSimple[] = await Promise.all(entityDocuments.map(async (entityDocument: MJEntityDocumentEntity) => {
+            // Header line (regular mode). Per-page / per-pipeline detail is emitted by the
+            // EntityVectorSyncer under verbose logging (MJ_VERBOSE), entity-prefixed so the
+            // concurrent pipelines stay attributable.
+            LogStatus(`   Vectorizing ${entityDocuments.length} "${entityDocumentType}" Entity Document${entityDocuments.length === 1 ? '' : 's'}…`);
+
+            const docResults = await Promise.all(entityDocuments.map(async (entityDocument: MJEntityDocumentEntity) => {
                 try {
-                    await vectorizer.VectorizeEntity({
+                    const response: VectorizeEntityResponse = await vectorizer.VectorizeEntity({
                         entityID: entityDocument.EntityID,
                         entityDocumentID: entityDocument.ID,
                         listBatchCount: 20,
                         options: {},
                     }, params.ContextUser);
-
-                    return { Success: true, ResultCode: "SUCCESS" };
+                    return { name: entityDocument.Name, response, error: undefined as string | undefined };
                 }
                 catch (error) {
                     const message = error instanceof Error ? error.message : String(error);
                     LogError(`VectorizeEntityAction: failed to vectorize Entity Document "${entityDocument.Name}" (${entityDocument.ID})`, undefined, message);
-                    return { Success: false, Message: message, ResultCode: "FAILED" };
+                    return { name: entityDocument.Name, response: undefined, error: message };
                 }
             }));
 
-            const allSucceeded = results.every(r => r.Success);
+            const summary = this.summarizeAndLog(docResults);
             return {
-                Success: allSucceeded,
-                Message: results.map(r => r.Message).filter(Boolean).join('\n'),
-                ResultCode: allSucceeded ? "SUCCESS" : "FAILED"
+                Success: summary.allSucceeded,
+                Message: summary.message,
+                ResultCode: summary.allSucceeded ? "SUCCESS" : "FAILED"
             };
         }
         catch (error) {
@@ -128,5 +130,50 @@ export class VectorizeEntityAction extends BaseAction {
             LogError(`VectorizeEntityAction: unexpected error`, undefined, message);
             return { Success: false, Message: message, ResultCode: "FAILED" };
         }
+    }
+
+    /**
+     * Renders the concise, aligned per-document summary (regular mode) and computes the
+     * aggregate result. One `✓`/`✗` line per Entity Document with `processed/total` counts
+     * and duration, then a totals line. Returns the overall success flag and a combined
+     * error message for the ActionResult.
+     */
+    private summarizeAndLog(
+        docResults: Array<{ name: string; response?: VectorizeEntityResponse; error?: string }>
+    ): { allSucceeded: boolean; message: string } {
+        const nameWidth = Math.max(...docResults.map(d => d.name.length));
+        let totalProcessed = 0;
+        let totalErrors = 0;
+        let allSucceeded = true;
+        const errorMessages: string[] = [];
+
+        for (const d of docResults) {
+            const name = d.name.padEnd(nameWidth);
+            if (d.error) {
+                allSucceeded = false;
+                totalErrors++;
+                errorMessages.push(`${d.name}: ${d.error}`);
+                LogStatus(`   ✗ ${name}  ${d.error}`);
+                continue;
+            }
+            const r = d.response!;
+            totalProcessed += r.processedRecords ?? 0;
+            totalErrors += r.errorCount ?? 0;
+            if (!r.success) {
+                allSucceeded = false;
+                if (r.errorMessage) errorMessages.push(`${d.name}: ${r.errorMessage}`);
+            }
+            const secs = ((r.elapsedMs ?? 0) / 1000).toFixed(1);
+            const counts = `${r.processedRecords ?? 0}/${r.totalRecords ?? 0}`.padEnd(11);
+            const errSuffix = (r.errorCount ?? 0) > 0 ? `  ${r.errorCount} error(s)` : '';
+            LogStatus(`   ${r.success ? '✓' : '✗'} ${name}  ${counts} ${secs.padStart(5)}s${errSuffix}`);
+        }
+
+        LogStatus(
+            `   ${allSucceeded ? '✓' : '⚠'} ${totalProcessed.toLocaleString()} record(s) vectorized across ` +
+            `${docResults.length} document(s)${totalErrors ? `, ${totalErrors} error(s)` : ''}`
+        );
+
+        return { allSucceeded, message: errorMessages.join('\n') };
     }
 }

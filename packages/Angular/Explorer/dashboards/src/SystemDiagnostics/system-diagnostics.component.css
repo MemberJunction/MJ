@@ -158,36 +158,6 @@
     color: var(--mj-status-success);
 }
 
-.error-banner {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 16px;
-    background: var(--mj-color-error-100);
-    border: 1px solid var(--mj-color-error-100);
-    border-radius: var(--mj-radius-md);
-    color: var(--mj-status-error);
-    font-size: 13px;
-    margin-bottom: 16px;
-}
-
-.error-banner i {
-    color: var(--mj-status-error);
-}
-
-.error-banner .dismiss-btn {
-    margin-left: auto;
-    background: transparent;
-    border: none;
-    color: var(--mj-text-muted);
-    cursor: pointer;
-    padding: 4px;
-}
-
-.error-banner .dismiss-btn:hover {
-    color: var(--mj-status-error);
-}
-
 .action-btn {
     background: var(--mj-bg-surface);
     border: none;
@@ -238,37 +208,6 @@
     font-size: 11px;
     opacity: 0.7;
     margin-left: 4px;
-}
-
-/* Empty State */
-.empty-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 60px 20px;
-    color: var(--mj-text-muted);
-}
-
-.empty-state i {
-    font-size: 48px;
-    margin-bottom: 16px;
-    color: var(--mj-border-default);
-}
-
-.empty-state.success-state i {
-    color: var(--mj-status-success);
-}
-
-.empty-state p {
-    margin: 0;
-    font-size: 16px;
-    color: var(--mj-text-secondary);
-}
-
-.empty-hint {
-    font-size: 13px;
-    margin-top: 8px;
 }
 
 /* Engine Grid */
@@ -396,40 +335,6 @@
     color: var(--mj-text-primary);
 }
 
-/* Info Banner */
-.info-banner {
-    display: flex;
-    gap: 12px;
-    padding: 16px 20px;
-    background: var(--mj-color-accent-300);
-    border-radius: var(--mj-radius-md);
-    font-size: 13px;
-    color: var(--mj-brand-primary);
-    margin-bottom: 20px;
-}
-
-.info-banner i {
-    margin-top: 2px;
-    flex-shrink: 0;
-}
-
-/* Recommendation Banner */
-.recommendation-banner {
-    display: flex;
-    gap: 12px;
-    padding: 16px 20px;
-    background: var(--mj-color-warning-50);
-    border-radius: var(--mj-radius-md);
-    font-size: 13px;
-    color: var(--mj-color-warning-800);
-    margin-top: 20px;
-}
-
-.recommendation-banner i {
-    margin-top: 2px;
-    flex-shrink: 0;
-    color: var(--mj-color-warning-500);
-}
 
 /* Redundant Loads Table */
 .redundant-loads-table-wrapper {
@@ -524,14 +429,6 @@
 }
 
 /* Performance Section Styles */
-.warning-banner {
-    background: var(--mj-color-warning-50) !important;
-    color: var(--mj-color-warning-800) !important;
-}
-
-.warning-banner i {
-    color: var(--mj-color-warning-500);
-}
 
 .telemetry-summary {
     display: grid;
@@ -1406,20 +1303,6 @@
     padding: 2px 6px;
 }
 
-/* Small empty state */
-.empty-state.small {
-    padding: 30px 20px;
-}
-
-.empty-state.small i {
-    font-size: 32px;
-    margin-bottom: 12px;
-}
-
-.empty-state.small p {
-    font-size: 14px;
-}
-
 /* Performance Sub-Tabs */
 .perf-tabs {
     display: flex;
@@ -1489,22 +1372,9 @@
     padding: 20px 24px;
 }
 
-/* Success Banner */
-.success-banner {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 16px 20px;
-    background: var(--mj-color-success-100);
-    border-radius: var(--mj-radius-md);
-    font-size: 13px;
-    color: var(--mj-color-success-800);
+/* Telemetry "no slow ops" alert — positioning only; box chrome owned by <mj-alert> */
+.telemetry-success-alert {
     margin-top: 16px;
-}
-
-.success-banner i {
-    font-size: 18px;
-    color: var(--mj-status-success);
 }
 
 /* Compact Filter Bar */
@@ -2314,22 +2184,10 @@
     margin-top: 4px;
 }
 
-.pattern-warning {
-    margin-top: 12px;
-    padding: 12px;
-    background: var(--mj-color-warning-50);
-    border-radius: var(--mj-radius-md);
-    font-size: 12px;
-    color: var(--mj-color-warning-800);
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
-}
 
-.pattern-warning i {
-    color: var(--mj-color-warning-500);
-    margin-top: 2px;
-}
+/* Position the migrated mj-alerts (component is margin-less apart from its bottom) */
+.recommendation-spacing { margin-top: 20px; }
+.pattern-hint-spacing { margin-top: 12px; }
 
 /* Detail Actions */
 .detail-actions {
@@ -2819,19 +2677,6 @@
 
 .sample-data-table tbody tr:hover {
     background: var(--mj-bg-surface-sunken);
-}
-
-/* Small empty state */
-.empty-state.small {
-    padding: 30px 20px;
-}
-
-.empty-state.small i {
-    font-size: 32px;
-}
-
-.empty-state.small p {
-    font-size: 14px;
 }
 
 /* Spinning animation for refresh icon */

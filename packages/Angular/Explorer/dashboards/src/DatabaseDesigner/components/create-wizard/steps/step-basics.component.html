@@ -58,11 +58,10 @@
         }
       </select>
     } @else {
-      <div class="no-schemas-warning">
-        <i class="fa-solid fa-lock"></i>
+      <mj-alert Variant="warning">
         You do not have authorization to create entities in any schema.
         Contact your administrator.
-      </div>
+      </mj-alert>
     }
 
     @if (ShowCustomSchemaInput) {

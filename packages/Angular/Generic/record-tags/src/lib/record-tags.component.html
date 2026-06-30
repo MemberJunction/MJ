@@ -12,11 +12,12 @@
     @if (IsLoading) {
         <mj-loading text="Loading tags..."></mj-loading>
     } @else if (TaggedItems.length === 0) {
-        <div class="mj-record-tags-empty">
-            <i class="fa-solid fa-tags mj-record-tags-empty-icon"></i>
-            <p>No tags have been applied to this record yet.</p>
+        <mj-empty-state
+            Icon="fa-solid fa-tags"
+            Title="No tags yet"
+            Message="No tags have been applied to this record yet.">
             <p class="mj-record-tags-hint">Tags are automatically applied when content is processed through the Knowledge Hub autotagging pipeline.</p>
-        </div>
+        </mj-empty-state>
     } @else {
         <div class="mj-record-tags-container">
             <div class="mj-record-tags-header">
@@ -77,9 +78,8 @@
                         <mj-loading text="Finding related records..." size="small"></mj-loading>
                     </div>
                 } @else if (RelatedRecords.length === 0) {
-                    <div class="mj-related-empty">
-                        <p>No related records found via shared tags.</p>
-                    </div>
+                    <mj-empty-state class="mj-related-empty" Size="compact"
+                        Icon="" Title="No related records found via shared tags." />
                 } @else {
                     <div class="mj-related-list">
                         @for (related of RelatedRecords; track related.RecordID) {

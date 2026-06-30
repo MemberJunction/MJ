@@ -24,11 +24,12 @@
  *
  * @module @memberjunction/server
  */
-import { Resolver, Mutation, Arg, Ctx, Int, ObjectType, Field, PubSub, PubSubEngine } from 'type-graphql';
+import { Resolver, Mutation, Arg, Ctx, Int, Float, ObjectType, Field, PubSub, PubSubEngine } from 'type-graphql';
 import { AppContext, UserPayload } from '../types.js';
 import { AuthorizationEvaluator, UserInfo, IMetadataProvider, LogError, LogStatus, RunView } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { UUIDsEqual, IsValidUUID } from '@memberjunction/global';
 import {
+    MJAIAgentEntity,
     MJAIAgentSessionEntity,
     MJAIAgentSessionChannelEntity,
     MJArtifactEntity,
@@ -46,9 +47,14 @@ import {
     EvaluateRuntimeOverrideAuthorization,
     ParseRealtimeTypeConfiguration,
     ResolveEffectiveRealtimeConfig,
+    RealtimeAllowedAgent,
     REALTIME_ADVANCED_SESSION_CONTROLS_AUTHORIZATION,
+    resolveRecordingStorageAccountID,
+    storeRealtimeRecording,
+    writeRealtimeRecordingSegment,
+    deleteRealtimeRecordingSegments,
 } from '@memberjunction/ai-agents';
-import { AgentExecutionProgressCallback, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import { AgentExecutionProgressCallback, MJAIAgentEntityExtended, AppContextSnapshot } from '@memberjunction/ai-core-plus';
 import { RealtimeToolDefinition } from '@memberjunction/ai';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
@@ -155,6 +161,24 @@ interface RealtimeSessionConfig {
      * rather than starting fresh. Re-stored if the resumed run pauses again.
      */
     pendingFeedbackRunID?: string;
+    /**
+     * The application the session runs in (sourced the app cascade layer + RelevantAgents). Persisted
+     * for observability / continuity; absent when the session carries no app context.
+     */
+    applicationID?: string;
+    /**
+     * The session's effective allowed delegation targets (union from the config cascade, incl. the app's
+     * `RelevantAgents`). Persisted at start so each relayed `invoke-target-agent` call can validate a
+     * model-named colleague against it without re-resolving the cascade. Absent ⇒ single-target behavior.
+     */
+    allowedAgents?: RealtimeAllowedAgent[];
+    /**
+     * Per-session override for the agent's media kit — a `MJ: Collections` id that takes precedence
+     * over the agent's `DefaultMediaCollectionID` when the server-side `MediaChannelServer` resolves
+     * the media manifest at session start. Validated as a UUID at the mutation boundary; absent ⇒ the
+     * agent default kit is used (the common case).
+     */
+    mediaCollectionID?: string;
 }
 
 /**
@@ -290,6 +314,27 @@ export class CancelRealtimeSessionToolResult {
 }
 
 /**
+ * Result of {@link RealtimeClientSessionResolver.UploadRealtimeRecording} — a structured
+ * success/failure envelope. A recording-storage failure must never throw to the browser (the
+ * session it belongs to has already ended), so problems come back as `Success: false` with a
+ * human-readable reason; only ownership/authn violations (from `loadOwnedSession`) still throw.
+ */
+@ObjectType()
+export class UploadRealtimeRecordingResult {
+    /** True when the audio was stored and the session was stamped with the recording file. */
+    @Field(() => Boolean)
+    Success: boolean;
+
+    /** Human-readable failure reason. Null on success. */
+    @Field(() => String, { nullable: true })
+    ErrorMessage?: string;
+
+    /** ID of the created `MJ: Files` row holding the uploaded recording. Null on failure. */
+    @Field(() => String, { nullable: true })
+    FileID?: string;
+}
+
+/**
  * Resolver for the client-direct realtime voice topology. A single {@link SessionManager} and a
  * single {@link RealtimeClientSessionService} are shared across requests — neither holds per-user or
  * per-provider state; every method is passed the request `contextUser` + provider explicitly.
@@ -348,6 +393,11 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         @Arg('clientToolsJson', () => String, { nullable: true }) clientToolsJson?: string,
         @Arg('coAgentId', () => String, { nullable: true }) coAgentId?: string,
         @Arg('configOverridesJson', () => String, { nullable: true }) configOverridesJson?: string,
+        @Arg('recordingStartedAt', () => String, { nullable: true }) recordingStartedAt?: string,
+        @Arg('recordingConsent', () => Boolean, { nullable: true }) recordingConsent?: boolean,
+        @Arg('mediaCollectionId', () => String, { nullable: true }) mediaCollectionId?: string,
+        @Arg('applicationId', () => String, { nullable: true }) applicationId?: string,
+        @Arg('appContextJson', () => String, { nullable: true }) appContextJson?: string,
     ): Promise<StartRealtimeClientSessionResult> {
         const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
 
@@ -363,6 +413,20 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         await this.assertRuntimeOverridesAuthorized(coAgentID, configOverridesJson, preferredModelId, contextUser, provider);
 
         const config: RealtimeSessionConfig = { targetAgentID: effectiveTargetId };
+        // Per-session media-kit override: stored on the session config so the server-side MediaChannelServer
+        // resolves it (over the agent default) at start. Validate the id here — a malformed value is
+        // dropped (logged), never interpolated; the session still starts and falls back to the agent kit.
+        const mediaOverride = mediaCollectionId?.trim();
+        if (mediaOverride) {
+            if (IsValidUUID(mediaOverride)) {
+                config.mediaCollectionID = mediaOverride;
+            } else {
+                LogStatus(
+                    `StartRealtimeClientSession: ignoring malformed mediaCollectionId '${mediaCollectionId}' — ` +
+                        'using the agent default media kit.',
+                );
+            }
+        }
         const session = await this.sessionManager.CreateSession(
             {
                 agentID: coAgentID,
@@ -375,6 +439,9 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             provider,
         );
 
+        // Best-effort: stamp recording-start metadata when the browser captured (with consent) at start.
+        await this.stampRecordingStart(session, recordingConsent, recordingStartedAt);
+
         const clientTools = this.parseClientTools(clientToolsJson);
         // Best-effort model-context hydration: the PRIOR session chain's transcript (ownership-
         // checked, capped) is framed into the system prompt so the model REMEMBERS the last leg.
@@ -382,7 +449,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         const priorTranscript = await this.loadPriorTranscript(lastSessionId, contextUser, provider);
         const result = await this.prepareClientSessionOrClose(
             session, coAgentID, effectiveTargetId, contextUser, provider, preferredModelId, clientTools, priorTranscript,
-            configOverridesJson,
+            configOverridesJson, applicationId, this.parseAppContext(appContextJson),
         );
         // Best-effort restore of the PRIOR session's persisted channel states (e.g. the whiteboard
         // board). Strictly tolerant — any problem yields a null field, never a failed start.
@@ -416,6 +483,9 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             {
                 AgentSessionID: agentSessionId,
                 TargetAgentID: config.targetAgentID,
+                // Multi-target (Move 4): the session's persisted allowed-agent union — a model-named
+                // colleague in the call is validated against this; absent ⇒ single-target behavior.
+                AllowedAgents: config.allowedAgents,
                 // Nest the delegated target-agent run under the co-agent observability run (when present).
                 ParentRunID: config.coAgentRunID,
                 Call: { CallID: callId, ToolName: toolName, Arguments: argsJson },
@@ -492,6 +562,8 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             promptRunID: config.promptRunID,
             coAgentRunStepID: config.coAgentRunStepID,
             pendingFeedbackRunID: pausedRunID,
+            applicationID: config.applicationID,
+            allowedAgents: config.allowedAgents,
         };
         session.Config_ = JSON.stringify(next);
         if (!(await session.Save())) {
@@ -521,13 +593,15 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         @Arg('text', () => String) text: string,
         @Ctx() { userPayload, providers }: AppContext,
         @Arg('replacesPrevious', () => Boolean, { nullable: true }) replacesPrevious?: boolean,
+        @Arg('utteranceStartMs', () => Int, { nullable: true }) utteranceStartMs?: number,
+        @Arg('utteranceEndMs', () => Int, { nullable: true }) utteranceEndMs?: number,
     ): Promise<boolean> {
         const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
         const session = await this.loadOwnedActiveSession(agentSessionId, contextUser, provider);
 
         const saved = replacesPrevious
-            ? await this.replacePreviousTranscriptTurn(session, role, text, contextUser, provider)
-            : await this.persistTranscriptTurn(session, role, text, contextUser, provider);
+            ? await this.replacePreviousTranscriptTurn(session, role, text, contextUser, provider, utteranceStartMs, utteranceEndMs)
+            : await this.persistTranscriptTurn(session, role, text, contextUser, provider, utteranceStartMs, utteranceEndMs);
         if (!saved) {
             return false;
         }
@@ -555,6 +629,145 @@ export class RealtimeClientSessionResolver extends ResolverBase {
      */
     private mapTranscriptRoleToChatRole(role: string): 'user' | 'assistant' {
         return role.trim().toLowerCase() === 'user' ? 'user' : 'assistant';
+    }
+
+    /**
+     * Upload a CLIENT-DIRECT session audio recording, store it in MJStorage, link it to the owning
+     * `AIAgentSession`, and stamp the session's recording fields. The browser records locally during
+     * the call and uploads the assembled blob (base64) once the session ends.
+     *
+     * Hard gates (in order):
+     * 1. Ownership — `loadOwnedSession` enforces `UserID === contextUser.ID` (throws on violation).
+     * 2. Consent — `consent !== true` is a hard refusal: no audio is ever stored without it.
+     * 3. Storage configuration — the session's agent must resolve a recording storage account (the
+     *    agent's `RecordingStorageProviderID`, else `AttachmentStorageProviderID`).
+     *
+     * Storage failures (and any unexpected throw) come back as `Success: false` with a reason — they
+     * NEVER throw to the browser, mirroring the shared {@link storeRealtimeRecording} contract.
+     *
+     * @param agentSessionId The session the recording belongs to (ownership-gated).
+     * @param audioBase64 The base64-encoded recording bytes (client-direct: seekable WAV/PCM).
+     * @param mimeType The audio MIME type (`audio/wav` for client-direct; legacy `audio/webm`/`ogg`/`mp4`).
+     * @param durationMs Optional client-measured recording duration (ms) — informational.
+     * @param consent Whether the user consented to recording. MUST be `true` or the upload is refused.
+     * @param peaks Optional capture-time waveform peaks (max-abs per bucket, normalized 0..1). When
+     *   present, persisted as a `peaks.json` sidecar beside the recording for fast waveform rendering
+     *   without re-decoding the audio.
+     * @returns A structured {@link UploadRealtimeRecordingResult} with the created `MJ: Files` id.
+     */
+    @Mutation(() => UploadRealtimeRecordingResult)
+    async UploadRealtimeRecording(
+        @Arg('agentSessionId', () => String) agentSessionId: string,
+        @Arg('audioBase64', () => String) audioBase64: string,
+        @Arg('mimeType', () => String) mimeType: string,
+        @Ctx() ctx: AppContext,
+        @Arg('durationMs', () => Int, { nullable: true }) durationMs?: number,
+        @Arg('consent', () => Boolean, { nullable: true }) consent?: boolean,
+        @Arg('peaks', () => [Float], { nullable: true }) peaks?: number[],
+    ): Promise<UploadRealtimeRecordingResult> {
+        const { contextUser, provider } = this.requireUserAndProvider(ctx.userPayload, ctx.providers);
+        const session = await this.loadOwnedSession(agentSessionId, contextUser, provider);
+
+        // HARD consent gate — no audio is ever stored without an explicit grant.
+        if (consent !== true) {
+            return { Success: false, ErrorMessage: 'Recording consent was not granted.' };
+        }
+
+        try {
+            const agent = await provider.GetEntityObject<MJAIAgentEntity>('MJ: AI Agents', contextUser);
+            if (!(await agent.Load(session.AgentID))) {
+                return { Success: false, ErrorMessage: `Co-agent ${session.AgentID} for the session could not be loaded.` };
+            }
+
+            const accountID = await resolveRecordingStorageAccountID(agent, contextUser, provider);
+            if (!accountID) {
+                return { Success: false, ErrorMessage: 'No recording storage account is configured for this agent.' };
+            }
+
+            const buffer = Buffer.from(audioBase64, 'base64');
+            if (buffer.length === 0) {
+                return { Success: false, ErrorMessage: 'The uploaded recording was empty.' };
+            }
+
+            const fileID = await storeRealtimeRecording({
+                Audio: buffer,
+                MimeType: mimeType,
+                Media: 'Audio',
+                StartedAt: session.RecordingStartedAt ?? new Date(),
+                StorageAccountID: accountID,
+                SessionID: agentSessionId,
+                ContextUser: contextUser,
+                Provider: provider,
+                // Sanitized capture-time waveform peaks → persisted as a peaks.json sidecar.
+                Peaks: this.sanitizePeaks(peaks),
+            });
+
+            // Canonical consolidated file written — drop the crash-recovery shards (best-effort).
+            if (fileID) {
+                await deleteRealtimeRecordingSegments(agentSessionId, accountID, contextUser);
+            }
+
+            return {
+                Success: !!fileID,
+                FileID: fileID ?? undefined,
+                ErrorMessage: fileID ? undefined : 'Storage upload failed.',
+            };
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            LogError(`RealtimeClientSessionResolver.UploadRealtimeRecording failed for session ${agentSessionId}: ${message}`);
+            return { Success: false, ErrorMessage: message };
+        }
+    }
+
+    /**
+     * Uploads ONE crash-recovery audio shard (~15s) for an IN-PROGRESS recording into the session's
+     * folder (`realtime-recordings/<sessionId>/seg-NNNN.<ext>`) as a raw storage object. Durability
+     * insurance during a live call so a browser/tab death loses at most the last window; the shards are
+     * deleted once the canonical consolidated file lands via {@link UploadRealtimeRecording}. Ownership-
+     * gated; consent was already established at session start. Best-effort — returns `false` (never
+     * throws) on any problem so a failed shard never disrupts the live call.
+     *
+     * @param agentSessionId The in-progress session (ownership-gated).
+     * @param segmentIndex 0-based shard index within the session.
+     * @param audioBase64 The base64-encoded shard bytes.
+     * @param mimeType The audio MIME type.
+     * @returns `true` when the shard was stored.
+     */
+    @Mutation(() => Boolean)
+    async UploadRealtimeRecordingSegment(
+        @Arg('agentSessionId', () => String) agentSessionId: string,
+        @Arg('segmentIndex', () => Int) segmentIndex: number,
+        @Arg('audioBase64', () => String) audioBase64: string,
+        @Arg('mimeType', () => String) mimeType: string,
+        @Ctx() ctx: AppContext,
+    ): Promise<boolean> {
+        try {
+            const { contextUser, provider } = this.requireUserAndProvider(ctx.userPayload, ctx.providers);
+            const session = await this.loadOwnedSession(agentSessionId, contextUser, provider);
+            const agent = await provider.GetEntityObject<MJAIAgentEntity>('MJ: AI Agents', contextUser);
+            if (!(await agent.Load(session.AgentID))) {
+                return false;
+            }
+            const accountID = await resolveRecordingStorageAccountID(agent, contextUser, provider);
+            if (!accountID) {
+                return false;
+            }
+            const buffer = Buffer.from(audioBase64, 'base64');
+            if (buffer.length === 0) {
+                return false;
+            }
+            return await writeRealtimeRecordingSegment({
+                SessionID: agentSessionId,
+                SegmentIndex: segmentIndex,
+                Audio: buffer,
+                MimeType: mimeType,
+                StorageAccountID: accountID,
+                ContextUser: contextUser,
+            });
+        } catch (error) {
+            LogError(`RealtimeClientSessionResolver.UploadRealtimeRecordingSegment failed for session ${agentSessionId}: ${error instanceof Error ? error.message : String(error)}`);
+            return false;
+        }
     }
 
     /**
@@ -688,6 +901,23 @@ export class RealtimeClientSessionResolver extends ResolverBase {
     /** Clamps a relayed token delta: negative / non-finite values become 0. */
     private clampTokenDelta(value: number): number {
         return Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+    }
+
+    /**
+     * Sanitizes client-supplied waveform peaks before they're persisted: drops anything that isn't a
+     * finite number, clamps each to `[0, 1]`, and caps the array length so a hostile client can't bloat
+     * the sidecar. Returns `undefined` for a missing/empty array (no sidecar written).
+     */
+    private sanitizePeaks(peaks: number[] | undefined): number[] | undefined {
+        if (!Array.isArray(peaks) || peaks.length === 0) {
+            return undefined;
+        }
+        const MAX_PEAKS = 4096; // generous ceiling above the client's ~600-bucket target
+        const cleaned = peaks
+            .slice(0, MAX_PEAKS)
+            .filter((v) => Number.isFinite(v))
+            .map((v) => (v < 0 ? 0 : v > 1 ? 1 : v));
+        return cleaned.length > 0 ? cleaned : undefined;
     }
 
     /**
@@ -1305,6 +1535,8 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         clientTools?: RealtimeToolDefinition[],
         priorTranscript?: string,
         configOverridesJson?: string,
+        applicationId?: string,
+        appContext?: AppContextSnapshot,
     ): Promise<StartRealtimeClientSessionResult> {
         const prep = await this.clientSessionService.PrepareClientSession(
             {
@@ -1325,6 +1557,10 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 PriorTranscript: priorTranscript,
                 // Pre-authorized runtime override layer (assertRuntimeOverridesAuthorized gated it).
                 ConfigOverridesJson: configOverridesJson,
+                // App awareness (Move 1/3/4): the app sources the app cascade layer + RelevantAgents
+                // (allowed-agent union); the snapshot is injected into the system prompt at mint.
+                ApplicationID: applicationId,
+                AppContext: appContext,
             },
             contextUser,
             provider,
@@ -1336,7 +1572,10 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             throw new Error(prep.ErrorMessage ?? 'Failed to prepare the client realtime session.');
         }
 
-        await this.persistObservabilityRunIDs(session, targetAgentId, prep.CoAgentRunID, prep.PromptRunID, prep.CoAgentRunStepID);
+        await this.persistObservabilityRunIDs(
+            session, targetAgentId, prep.CoAgentRunID, prep.PromptRunID, prep.CoAgentRunStepID,
+            applicationId, prep.EffectiveConfig?.realtime?.allowedAgents,
+        );
 
         const cfg = prep.ClientConfig;
         return {
@@ -1366,8 +1605,13 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         coAgentRunID?: string,
         promptRunID?: string,
         coAgentRunStepID?: string,
+        applicationID?: string,
+        allowedAgents?: RealtimeAllowedAgent[],
     ): Promise<void> {
-        const config: RealtimeSessionConfig = { targetAgentID, coAgentRunID, promptRunID, coAgentRunStepID };
+        const config: RealtimeSessionConfig = {
+            targetAgentID, coAgentRunID, promptRunID, coAgentRunStepID, applicationID,
+            allowedAgents: allowedAgents && allowedAgents.length > 0 ? allowedAgents : undefined,
+        };
         session.Config_ = JSON.stringify(config);
         const saved = await session.Save();
         if (!saved) {
@@ -1998,6 +2242,28 @@ export class RealtimeClientSessionResolver extends ResolverBase {
     }
 
     /**
+     * Tolerantly parses the `appContextJson` mutation arg into an {@link AppContextSnapshot}. Returns
+     * `undefined` for absent/blank/malformed/non-object payloads — app context is best-effort enrichment
+     * and must never fail a session start.
+     *
+     * @param appContextJson The raw JSON string the browser sent, or undefined.
+     * @returns The parsed snapshot, or `undefined`.
+     */
+    private parseAppContext(appContextJson?: string): AppContextSnapshot | undefined {
+        if (!appContextJson || !appContextJson.trim()) {
+            return undefined;
+        }
+        try {
+            const parsed: unknown = JSON.parse(appContextJson);
+            return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+                ? (parsed as AppContextSnapshot)
+                : undefined;
+        } catch {
+            return undefined;
+        }
+    }
+
+    /**
      * Tolerantly parses + validates client-declared UI tool definitions (see the SECURITY NOTE on
      * {@link StartRealtimeClientSession}). Never throws — any rejection logs and returns
      * `undefined` (the session simply minted without client tools):
@@ -2069,6 +2335,8 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                         coAgentRunStepID: typeof parsed.coAgentRunStepID === 'string' ? parsed.coAgentRunStepID : undefined,
                         pendingFeedbackRunID:
                             typeof parsed.pendingFeedbackRunID === 'string' ? parsed.pendingFeedbackRunID : undefined,
+                        applicationID: typeof parsed.applicationID === 'string' ? parsed.applicationID : undefined,
+                        allowedAgents: Array.isArray(parsed.allowedAgents) ? parsed.allowedAgents : undefined,
                     };
                 }
             } catch {
@@ -2084,12 +2352,45 @@ export class RealtimeClientSessionResolver extends ResolverBase {
      *
      * @returns The boolean save result (logs `CompleteMessage` on failure).
      */
+    /**
+     * Stamps `RecordingStartedAt` (the recording `t0` alignment origin) + `RecordingMedia` on a
+     * just-started session when the browser captured WITH consent. Best-effort: a parse/save failure
+     * is logged and swallowed — a recording-metadata problem must never fail the session start.
+     *
+     * @param session The freshly created/loaded session.
+     * @param recordingConsent Whether the user consented to recording — only `true` stamps anything.
+     * @param recordingStartedAt ISO-8601 recording start timestamp from the browser.
+     */
+    private async stampRecordingStart(
+        session: MJAIAgentSessionEntity,
+        recordingConsent: boolean | undefined,
+        recordingStartedAt: string | undefined,
+    ): Promise<void> {
+        if (recordingConsent !== true || !recordingStartedAt) {
+            return;
+        }
+        const startedAt = new Date(recordingStartedAt);
+        if (Number.isNaN(startedAt.getTime())) {
+            LogError(`RealtimeClientSessionResolver.stampRecordingStart: invalid recordingStartedAt '${recordingStartedAt}' for session ${session.ID}`);
+            return;
+        }
+        session.RecordingStartedAt = startedAt;
+        session.RecordingMedia = 'Audio';
+        if (!(await session.Save())) {
+            LogError(
+                `RealtimeClientSessionResolver.stampRecordingStart save failed: ${session.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+            );
+        }
+    }
+
     private async persistTranscriptTurn(
         session: MJAIAgentSessionEntity,
         role: string,
         text: string,
         contextUser: UserInfo,
         provider: IMetadataProvider,
+        utteranceStartMs?: number,
+        utteranceEndMs?: number,
     ): Promise<boolean> {
         const detail = await provider.GetEntityObject<MJConversationDetailEntity>(
             CONVERSATION_DETAIL_ENTITY,
@@ -2101,6 +2402,12 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         detail.Message = text;
         detail.AgentSessionID = session.ID;
         detail.UserID = contextUser.ID;
+        if (typeof utteranceStartMs === 'number' && utteranceStartMs >= 0) {
+            detail.UtteranceStartMs = utteranceStartMs;
+        }
+        if (typeof utteranceEndMs === 'number' && utteranceEndMs >= 0) {
+            detail.UtteranceEndMs = utteranceEndMs;
+        }
 
         const saved = await detail.Save();
         if (!saved) {
@@ -2124,6 +2431,8 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         text: string,
         contextUser: UserInfo,
         provider: IMetadataProvider,
+        utteranceStartMs?: number,
+        utteranceEndMs?: number,
     ): Promise<boolean> {
         const mappedRole = this.mapTranscriptRole(role);
         const rv = RunView.FromMetadataProvider(provider);
@@ -2139,9 +2448,17 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         );
         const previous = result.Success ? (result.Results?.[0] ?? null) : null;
         if (!previous) {
-            return this.persistTranscriptTurn(session, role, text, contextUser, provider);
+            return this.persistTranscriptTurn(session, role, text, contextUser, provider, utteranceStartMs, utteranceEndMs);
         }
         previous.Message = text;
+        // The correction extends the existing turn: always refresh the end boundary when provided,
+        // but only set the start when it wasn't already captured on the superseded turn.
+        if (typeof utteranceEndMs === 'number' && utteranceEndMs >= 0) {
+            previous.UtteranceEndMs = utteranceEndMs;
+        }
+        if (typeof utteranceStartMs === 'number' && utteranceStartMs >= 0 && previous.UtteranceStartMs == null) {
+            previous.UtteranceStartMs = utteranceStartMs;
+        }
         const saved = await previous.Save();
         if (!saved) {
             LogError(

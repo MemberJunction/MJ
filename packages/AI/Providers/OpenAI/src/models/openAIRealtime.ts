@@ -1,13 +1,17 @@
 import { RegisterClass } from '@memberjunction/global';
 import {
     BaseRealtimeModel,
+    RealtimeDiagLog,
     IRealtimeSession,
+    RealtimeSessionCapabilities,
+    RealtimeReconfigureParams,
     RealtimeSessionParams,
     RealtimeToolDefinition,
     RealtimeTranscript,
     RealtimeToolCall,
     RealtimeUsage,
     RealtimeSessionError,
+    RealtimeVoiceOption,
     JSONObject,
 } from '@memberjunction/ai';
 import { ClientRealtimeSessionConfig } from '@memberjunction/ai';
@@ -24,6 +28,7 @@ import type {
     RealtimeConversationItemSystemMessage,
     RealtimeConversationItemUserMessage,
     RealtimeSessionCreateRequest,
+    RealtimeAudioInputTurnDetection,
 } from 'openai/resources/realtime/realtime';
 import type {
     ClientSecretCreateParams,
@@ -162,6 +167,23 @@ export class OpenAIRealtime extends BaseRealtimeModel {
     }
 
     /**
+     * The voices the OpenAI Realtime API can speak with — used to populate the dev voice picker so two
+     * agents in one room can be given distinct voices. Kept in sync with OpenAI's realtime voice set.
+     */
+    public override get SupportedVoices(): RealtimeVoiceOption[] {
+        return [
+            { ID: 'alloy', Name: 'Alloy' },
+            { ID: 'ash', Name: 'Ash' },
+            { ID: 'ballad', Name: 'Ballad' },
+            { ID: 'coral', Name: 'Coral' },
+            { ID: 'echo', Name: 'Echo' },
+            { ID: 'sage', Name: 'Sage' },
+            { ID: 'shimmer', Name: 'Shimmer' },
+            { ID: 'verse', Name: 'Verse' },
+        ];
+    }
+
+    /**
      * Mints the ephemeral client secret via OpenAI's Realtime client-secrets API. Overridable
      * seam for testing — unit tests return a fake response so no network call is made.
      *
@@ -193,7 +215,14 @@ export class OpenAIRealtime extends BaseRealtimeModel {
         // Enable transcription of the user's mic input so BOTH sides of the conversation are
         // captured (live captions + persisted ConversationDetail turns). Realtime models accept
         // audio natively, so input transcription is a separate ASR pass that must be opted into.
-        session.audio = { input: { transcription: { model: OPENAI_INPUT_TRANSCRIPTION_MODEL } } };
+        // The OUTPUT voice comes from the effective config's per-provider voice (`params.Config.voice`,
+        // shaped by GetProviderVoiceSettings) — this is what lets a co-agent's configured voice OR a
+        // per-session override actually take effect in the client-direct topology.
+        const voice = (params.Config as { voice?: string } | undefined)?.voice;
+        session.audio = {
+            input: { transcription: { model: OPENAI_INPUT_TRANSCRIPTION_MODEL } },
+            ...(voice && voice.trim().length > 0 ? { output: { voice: voice.trim() } } : {}),
+        };
         const response = await this.mintClientSecret({ session });
         return {
             Provider: 'openai',
@@ -249,16 +278,33 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
     }
 
     /**
-     * Applies the initial session config: system prompt + tools via `session.update`, optional
-     * initial context as a user message. Called once by {@link OpenAIRealtime.StartSession}.
+     * Applies the initial session config: system prompt + tools via `session.update`, optional initial
+     * context as a user message. Called once by {@link OpenAIRealtime.StartSession}.
+     *
+     * **Deferred to `session.created`.** When `StartSession` returns, the realtime WebSocket is NOT open yet
+     * — sending `session.update` synchronously races the handshake and the instructions (the **system
+     * prompt + tools**) are silently dropped, so the model runs with NO prompt (no identity, no companion
+     * framing). We therefore wait for the server's `session.created` frame — the first event once the socket
+     * is open and the session exists, and the canonical moment to configure a realtime session — exactly the
+     * point the browser/client-direct path applies its config. Idempotent (a re-emitted `session.created`
+     * can't double-apply); the listener removes itself once it fires.
      *
      * @param params The session parameters.
      */
     public applyInitialConfig(params: RealtimeSessionParams): void {
-        this.sendSessionUpdate(params.SystemPrompt, params.Tools, params.Config);
-        if (params.InitialContext && params.InitialContext.length > 0) {
-            this.sendInitialContext(params.InitialContext);
-        }
+        let applied = false;
+        const applyWhenReady = (event: RealtimeServerEvent): void => {
+            if (applied || event.type !== 'session.created') {
+                return;
+            }
+            applied = true;
+            this.connection.off('event', applyWhenReady);
+            this.sendSessionUpdate(params.SystemPrompt, params.Tools, params.Config);
+            if (params.InitialContext && params.InitialContext.length > 0) {
+                this.sendInitialContext(params.InitialContext);
+            }
+        };
+        this.connection.on('event', applyWhenReady);
     }
 
     // ---- IRealtimeSession outbound ----
@@ -335,14 +381,55 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
      * When sent, the flag is set eagerly (before the server's `response.created` echo) so two
      * back-to-back local triggers can't both fire.
      *
-     * @param instructions Instructions for the single spoken update.
+     * @param instructions Instructions for the single spoken update. **Blank/empty means "respond now using
+     *   the SESSION system prompt"** (the meeting-mode bridge trigger passes `''`); only a non-empty value is
+     *   forwarded as a per-response override.
      */
-    public RequestSpokenUpdate(instructions: string): void {
+    public RequestSpokenUpdate(instructions: string): boolean {
         if (this.responseActive) {
-            return;
+            RealtimeDiagLog('[OpenAIRealtime][diag] RequestSpokenUpdate SKIPPED — a response is already active (interim updates are disposable)');
+            return false; // NOT sent — the caller (bridge) releases the floor instead of wedging on it
         }
         this.responseActive = true;
-        this.connection.send({ type: 'response.create', response: { instructions } });
+        RealtimeDiagLog(`[OpenAIRealtime][diag] RequestSpokenUpdate → sending response.create (perResponseInstructions=${typeof instructions === 'string' && instructions.trim().length > 0 ? 'yes' : 'none → session prompt governs'})`);
+        // CRITICAL: only set per-response `instructions` when the caller actually supplied some. OpenAI's
+        // `response.create` treats `response.instructions` as a FULL override of the session system prompt for
+        // that response — so forwarding `''` would wipe the co-agent identity framing (incl. the
+        // "call invoke-target-agent, don't do the work yourself" directive), and the model would answer
+        // directly instead of delegating. A blank value ⇒ plain `response.create` ⇒ the session prompt governs.
+        const hasInstructions = typeof instructions === 'string' && instructions.trim().length > 0;
+        this.connection.send(
+            hasInstructions ? { type: 'response.create', response: { instructions } } : { type: 'response.create' },
+        );
+        return true; // a response.create was issued — the bridge may hold the floor for this turn
+    }
+
+    /** @inheritdoc — OpenAI's `session.update` is runtime-mutable, so a live turn-mode change is supported. */
+    public get Capabilities(): RealtimeSessionCapabilities {
+        return { CanReconfigureTurnMode: true };
+    }
+
+    /**
+     * @inheritdoc
+     *
+     * Live turn-mode change via a partial `session.update` — flips server-VAD auto-response on/off without
+     * reconnecting (e.g. re-gate a 1:1 agent to meeting mode when its room becomes multi-agent). The input
+     * transcription block is re-sent alongside so the partial update can't drop it.
+     */
+    public Reconfigure(params: RealtimeReconfigureParams): void {
+        const disable = params.DisableAutoResponse === true;
+        const turnDetection: RealtimeAudioInputTurnDetection = {
+            type: 'server_vad',
+            create_response: !disable,
+            interrupt_response: true,
+        };
+        this.connection.send({
+            type: 'session.update',
+            session: {
+                type: 'realtime',
+                audio: { input: { transcription: { model: OPENAI_INPUT_TRANSCRIPTION_MODEL }, turn_detection: turnDetection } },
+            },
+        });
     }
 
     // ---- IRealtimeSession handler registration ----
@@ -501,6 +588,23 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
 
     /** Sends the `session.update` that establishes instructions, input transcription, and tools. */
     private sendSessionUpdate(systemPrompt: string, tools?: RealtimeToolDefinition[], config?: JSONObject): void {
+        // Pull the host-neutral meeting flag OUT of the open Config bag so it is never sent raw to the API.
+        // In a multi-agent meeting the BRIDGE (after its turn policy gates on addressing), not the model,
+        // decides WHEN to speak — so we disable server-VAD auto-response while KEEPING detection so input
+        // transcription and barge-in still work. A 1:1 call (flag absent) keeps the default auto-response.
+        const cfg = { ...(config ?? {}) } as JSONObject & { disableAutoResponse?: boolean; voice?: string };
+        const disableAutoResponse = cfg.disableAutoResponse === true;
+        delete cfg.disableAutoResponse;
+        // Pull the OUTPUT voice out of the bag too — OpenAI's realtime session takes it at
+        // `audio.output.voice` (NOT top-level), so letting it spread via `...cfg` would silently no-op (the
+        // co-agent's configured voice / a per-session dev override would be ignored on the server-bridged path).
+        const voice = typeof cfg.voice === 'string' ? cfg.voice.trim() : '';
+        delete cfg.voice;
+
+        const turnDetection: RealtimeAudioInputTurnDetection | undefined = disableAutoResponse
+            ? { type: 'server_vad', create_response: false, interrupt_response: true }
+            : undefined;
+
         const session: RealtimeSessionCreateRequest = {
             type: 'realtime',
             instructions: systemPrompt,
@@ -508,8 +612,11 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
             // the client-direct topology — so user-role transcripts flow server-bridged too (the
             // contract promises BOTH roles). The config bag spreads after this so a
             // per-conversation override can still replace the audio block.
-            audio: { input: { transcription: { model: OPENAI_INPUT_TRANSCRIPTION_MODEL } } },
-            ...config,
+            audio: {
+                input: { transcription: { model: OPENAI_INPUT_TRANSCRIPTION_MODEL }, ...(turnDetection ? { turn_detection: turnDetection } : {}) },
+                ...(voice ? { output: { voice } } : {}),
+            },
+            ...cfg,
         };
         if (tools && tools.length > 0) {
             session.tools = this.mapTools(tools);

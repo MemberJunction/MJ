@@ -1,0 +1,114 @@
+[
+  {
+    "fields": {
+      "Name": "Binary classification (yes/no)",
+      "Description": "Predict one of two outcomes (e.g., will renew / won't renew, will lapse / won't lapse, will attend / won't attend).",
+      "ProblemTypeScope": "classification",
+      "Guidance": "The most common Predictive Studio shape. Churn, renewal, lapse risk, lead scoring, and attendee-return are all this same binary-classification shape — the business label differs but the algorithm suitability does not, which is why guidance keys off this scenario rather than the business name. Favor algorithms that output a well-calibrated probability and rank-order well (AUC).",
+      "DisplayOrder": 1
+    },
+    "primaryKey": {
+      "ID": "4623913E-1559-48B0-9217-EA9C7F95C792"
+    },
+    "sync": {
+      "lastModified": "2026-06-27T01:23:05.458Z",
+      "checksum": "9d6be62f4e420a9617a6e77bc26a1cb5d0521f2e6601f31e46421cbc24fb3fde"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Regression (predict a number)",
+      "Description": "Predict a continuous numeric value (e.g., expected lifetime value, days until next purchase, projected gift amount).",
+      "ProblemTypeScope": "regression",
+      "Guidance": "Use when the target is a number rather than a yes/no. Tree ensembles handle non-linearities and interactions automatically; linear/ridge is the interpretable baseline. Logistic regression does not apply here.",
+      "DisplayOrder": 2
+    },
+    "primaryKey": {
+      "ID": "F2D6DAD2-5E77-4831-8764-9ED0DBD302C2"
+    },
+    "sync": {
+      "lastModified": "2026-06-27T01:23:05.475Z",
+      "checksum": "f0e3049a2890130875b15c36c4776370d0f491312058af23a6bfef4b9966825d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Interpretability required",
+      "Description": "A stakeholder must be able to see exactly why each prediction was made (per-feature coefficients / a defensible explanation).",
+      "ProblemTypeScope": "any",
+      "Guidance": "When a human needs to defend or audit individual predictions (regulatory, fairness, exec sign-off), prefer models with simple, signed coefficients (Logistic for classification, Ridge for regression). Tree ensembles give feature importances but not simple per-prediction reasons; deep nets are effectively opaque.",
+      "DisplayOrder": 3
+    },
+    "primaryKey": {
+      "ID": "62F5CABD-7D01-419B-8986-FB8EB7D3EE81"
+    },
+    "sync": {
+      "lastModified": "2026-06-27T01:23:05.490Z",
+      "checksum": "d1b8beb06762292841ed48d43a05f167477e55660511e5f9add0c2584636a6ca"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Minimal tuning (business-user)",
+      "Description": "A non-expert user wants a strong result with sensible defaults and little or no hyperparameter tuning.",
+      "ProblemTypeScope": "any",
+      "Guidance": "Favor algorithms that are robust out-of-the-box and forgiving of defaults. Random Forest and linear models rarely blow up; gradient boosting is strong but more sensitive to learning-rate/depth; MLPs need the most care. This scenario weights 'works well untuned' over peak ceiling.",
+      "DisplayOrder": 4
+    },
+    "primaryKey": {
+      "ID": "E7B73638-7202-41D0-B2F0-37F79E9C47B4"
+    },
+    "sync": {
+      "lastModified": "2026-06-27T01:23:05.505Z",
+      "checksum": "91cd615401d7ac2a1952f6eccdb5bd7b8b3932da5602169e21e7862453ada62a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Large/wide dataset (speed)",
+      "Description": "Many rows and/or many features, where training and scoring speed and memory efficiency matter.",
+      "ProblemTypeScope": "any",
+      "Guidance": "Favor algorithms that scale to large/wide data efficiently. LightGBM is built for this (histogram-based, fast, low memory); XGBoost and linear models also scale well; Random Forest can get memory-heavy; MLP training cost grows quickly.",
+      "DisplayOrder": 5
+    },
+    "primaryKey": {
+      "ID": "2A416652-0F64-4688-8E3E-666F6444A88D"
+    },
+    "sync": {
+      "lastModified": "2026-06-27T01:23:05.519Z",
+      "checksum": "0e6683e5017335b85fa505a10bb6c72077a9eacf4e086c1d786f823c45919c1a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Embedding/LLM-feature-heavy",
+      "Description": "Features are dominated by dense high-dimensional vectors (text/entity embeddings, LLM-derived numeric features).",
+      "ProblemTypeScope": "any",
+      "Guidance": "When most features are dense embedding dimensions, models that exploit smooth high-dimensional geometry shine. MLPs are well-suited to dense vectors; gradient boosting still does implicit feature selection across many dimensions and remains a strong, safer default. Pure linear models underfit rich embedding interactions.",
+      "DisplayOrder": 6
+    },
+    "primaryKey": {
+      "ID": "B72FC20C-0218-497A-A356-5617F3264CA9"
+    },
+    "sync": {
+      "lastModified": "2026-06-27T01:23:05.534Z",
+      "checksum": "68acdd9ecb6639ac8ec7a4f9f27ff945613ef0ac5e8c09f41d01bbb7a4beecdd"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Small dataset",
+      "Description": "Relatively few training rows, where high-capacity models would overfit.",
+      "ProblemTypeScope": "any",
+      "Guidance": "With limited data, prefer lower-variance models that resist overfitting: regularized linear/logistic and Random Forest generalize well on small samples. Gradient boosting can work with careful early stopping; MLPs typically overfit small data badly.",
+      "DisplayOrder": 7
+    },
+    "primaryKey": {
+      "ID": "60FD0483-3F3D-4123-A879-5C6C70F85A37"
+    },
+    "sync": {
+      "lastModified": "2026-06-27T01:23:05.548Z",
+      "checksum": "b71d884f4616f3110379479c8f7938d2e9f786c0e28046c8792ee1a80fb709c0"
+    }
+  }
+]

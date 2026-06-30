@@ -30,10 +30,10 @@
     <div class="panel-content">
       <!-- Empty state -->
       @if (CardAggregates.length === 0) {
-        <div class="empty-state">
-          <i class="fa-solid fa-chart-simple"></i>
-          <p>No summaries configured</p>
-        </div>
+        <mj-empty-state
+          Size="compact"
+          Icon="fa-solid fa-chart-simple"
+          Title="No summaries configured" />
       }
       <!-- Cards Container -->
       <div class="cards-container"

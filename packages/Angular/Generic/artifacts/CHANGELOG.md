@@ -1,5 +1,64 @@
 # @memberjunction/ng-artifacts
 
+## 5.43.0
+
+### Patch Changes
+
+- Updated dependencies [40eb4e0]
+- Updated dependencies [9f6aa87]
+- Updated dependencies [9200b13]
+- Updated dependencies [a975e3d]
+- Updated dependencies [ad8d8f1]
+- Updated dependencies [a4cdfb0]
+- Updated dependencies [54183aa]
+  - @memberjunction/core@5.43.0
+  - @memberjunction/global@5.43.0
+  - @memberjunction/core-entities@5.43.0
+  - @memberjunction/ng-base-forms@5.43.0
+  - @memberjunction/ng-ui-components@5.43.0
+  - @memberjunction/ng-pagination@5.43.0
+  - @memberjunction/ng-base-types@5.43.0
+  - @memberjunction/ng-code-editor@5.43.0
+  - @memberjunction/ng-notifications@5.43.0
+  - @memberjunction/ng-query-viewer@5.43.0
+  - @memberjunction/ng-react@5.43.0
+  - @memberjunction/ng-shared-generic@5.43.0
+  - @memberjunction/ng-trees@5.43.0
+  - @memberjunction/graphql-dataprovider@5.43.0
+  - @memberjunction/interactive-component-types@5.43.0
+  - @memberjunction/ng-export-service@5.43.0
+  - @memberjunction/ng-markdown@5.43.0
+
+## 5.42.0
+
+### Patch Changes
+
+- Updated dependencies [313c1c5]
+- Updated dependencies [9b9b484]
+- Updated dependencies [5fde509]
+- Updated dependencies [4ec1732]
+- Updated dependencies [2f225e4]
+- Updated dependencies [6d970cd]
+- Updated dependencies [0fa3cbc]
+- Updated dependencies [da5a3dd]
+  - @memberjunction/ng-ui-components@5.42.0
+  - @memberjunction/core@5.42.0
+  - @memberjunction/graphql-dataprovider@5.42.0
+  - @memberjunction/core-entities@5.42.0
+  - @memberjunction/global@5.42.0
+  - @memberjunction/ng-base-forms@5.42.0
+  - @memberjunction/ng-base-types@5.42.0
+  - @memberjunction/ng-code-editor@5.42.0
+  - @memberjunction/ng-notifications@5.42.0
+  - @memberjunction/ng-query-viewer@5.42.0
+  - @memberjunction/ng-react@5.42.0
+  - @memberjunction/ng-shared-generic@5.42.0
+  - @memberjunction/ng-trees@5.42.0
+  - @memberjunction/interactive-component-types@5.42.0
+  - @memberjunction/ng-export-service@5.42.0
+  - @memberjunction/ng-markdown@5.42.0
+  - @memberjunction/ng-pagination@5.42.0
+
 ## 5.41.0
 
 ### Minor Changes

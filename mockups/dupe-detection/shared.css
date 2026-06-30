@@ -1,0 +1,211 @@
+/* ============================================================================
+   Intelligent Duplicate Detection — shared mockup design tokens & components
+   Mirrors MemberJunction's semantic design-token system (_tokens.scss) so the
+   eventual Angular build can map 1:1. Light theme default; .dark on <html>
+   flips to dark mode. Standalone (no CDN) so files open straight off disk.
+   ============================================================================ */
+
+:root {
+    /* Backgrounds */
+    --mj-bg-page:           #eef1f6;
+    --mj-bg-surface:        #ffffff;
+    --mj-bg-surface-card:   #f8fafc;
+    --mj-bg-surface-sunken: #eef1f5;
+    --mj-bg-surface-hover:  #f1f5f9;
+    --mj-bg-surface-active: #e6edf5;
+    --mj-bg-overlay:        rgba(15, 23, 42, 0.45);
+
+    /* Text */
+    --mj-text-primary:   #1e293b;
+    --mj-text-secondary: #475569;
+    --mj-text-muted:     #64748b;
+    --mj-text-disabled:  #94a3b8;
+    --mj-text-inverse:   #ffffff;
+    --mj-text-link:      #0076b6;
+
+    /* Borders */
+    --mj-border-subtle:  #eef2f6;
+    --mj-border-default: #e2e8f0;
+    --mj-border-strong:  #cbd5e1;
+    --mj-border-focus:   #0076b6;
+
+    /* Brand */
+    --mj-brand-primary:        #0076b6;
+    --mj-brand-primary-hover:  #005f93;
+    --mj-brand-primary-active: #004d78;
+    --mj-brand-soft:           #e0f2fe;
+
+    /* Status */
+    --mj-status-success:        #16a34a;
+    --mj-status-success-bg:     #dcfce7;
+    --mj-status-success-text:   #15803d;
+    --mj-status-success-border: #bbf7d0;
+
+    --mj-status-warning:        #d97706;
+    --mj-status-warning-bg:     #fef3c7;
+    --mj-status-warning-text:   #b45309;
+    --mj-status-warning-border: #fde68a;
+
+    --mj-status-error:        #dc2626;
+    --mj-status-error-bg:     #fee2e2;
+    --mj-status-error-text:   #b91c1c;
+    --mj-status-error-border: #fecaca;
+
+    --mj-status-info:        #0076b6;
+    --mj-status-info-bg:     #e0f2fe;
+    --mj-status-info-text:   #0369a1;
+    --mj-status-info-border: #bae6fd;
+
+    /* Recommendation accents */
+    --rec-merge:   #16a34a;
+    --rec-notdupe: #dc2626;
+    --rec-uncertain: #d97706;
+    --vector-accent: #7c3aed;   /* vectors = violet, LLM = brand blue */
+
+    --mj-shadow-sm: 0 1px 2px rgba(15,23,42,.06), 0 1px 3px rgba(15,23,42,.04);
+    --mj-shadow-md: 0 4px 12px rgba(15,23,42,.10), 0 2px 4px rgba(15,23,42,.06);
+    --mj-shadow-lg: 0 12px 32px rgba(15,23,42,.16);
+    --mj-radius: 10px;
+    --mj-radius-sm: 6px;
+}
+
+html.dark {
+    --mj-bg-page:           #0b1220;
+    --mj-bg-surface:        #161f30;
+    --mj-bg-surface-card:   #1c283b;
+    --mj-bg-surface-sunken: #111a29;
+    --mj-bg-surface-hover:  #243244;
+    --mj-bg-surface-active: #2b3b53;
+    --mj-bg-overlay:        rgba(0,0,0,0.6);
+
+    --mj-text-primary:   #e6edf6;
+    --mj-text-secondary: #b6c2d4;
+    --mj-text-muted:     #8a99ad;
+    --mj-text-disabled:  #5d6b80;
+    --mj-text-inverse:   #0b1220;
+    --mj-text-link:      #56b6e8;
+
+    --mj-border-subtle:  #1e293b;
+    --mj-border-default: #2c3a4f;
+    --mj-border-strong:  #41526b;
+    --mj-border-focus:   #38bdf8;
+
+    --mj-brand-primary:        #38bdf8;
+    --mj-brand-primary-hover:  #5cc8fa;
+    --mj-brand-primary-active: #7dd3fc;
+    --mj-brand-soft:           #0c2e44;
+
+    --mj-status-success-bg:   #0f2e1d; --mj-status-success-text:#4ade80; --mj-status-success-border:#1a5235;
+    --mj-status-warning-bg:   #2e2410; --mj-status-warning-text:#fbbf24; --mj-status-warning-border:#5a4216;
+    --mj-status-error-bg:     #321616; --mj-status-error-text:#f87171; --mj-status-error-border:#5e2424;
+    --mj-status-info-bg:      #0c2e44; --mj-status-info-text:#7dd3fc; --mj-status-info-border:#15486b;
+
+    --rec-merge:#4ade80; --rec-notdupe:#f87171; --rec-uncertain:#fbbf24; --vector-accent:#a78bfa;
+
+    --mj-shadow-sm: 0 1px 2px rgba(0,0,0,.4);
+    --mj-shadow-md: 0 4px 14px rgba(0,0,0,.5);
+    --mj-shadow-lg: 0 16px 40px rgba(0,0,0,.6);
+}
+
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--mj-bg-page);
+    color: var(--mj-text-primary);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* ---- Mockup chrome (top nav shared across the three patterns) ---- */
+.mock-nav {
+    position: sticky; top: 0; z-index: 50;
+    display: flex; align-items: center; gap: 18px;
+    padding: 10px 20px;
+    background: var(--mj-bg-surface);
+    border-bottom: 1px solid var(--mj-border-default);
+    box-shadow: var(--mj-shadow-sm);
+}
+.mock-nav .brand { display:flex; align-items:center; gap:10px; font-weight:700; letter-spacing:.2px; }
+.mock-nav .brand .dot { width:22px; height:22px; border-radius:6px; background:linear-gradient(135deg,var(--mj-brand-primary),#7c3aed); }
+.mock-nav .brand small { font-weight:500; color: var(--mj-text-muted); }
+.mock-nav .links { display:flex; gap:6px; margin-left:8px; }
+.mock-nav .links a {
+    text-decoration:none; color:var(--mj-text-secondary);
+    padding:6px 12px; border-radius:999px; font-weight:600; font-size:13px;
+    border:1px solid transparent;
+}
+.mock-nav .links a:hover { background: var(--mj-bg-surface-hover); }
+.mock-nav .links a.active { background: var(--mj-brand-soft); color: var(--mj-text-link); border-color: var(--mj-status-info-border); }
+.mock-nav .spacer { flex:1; }
+.mock-nav .pattern-tag { font-size:12px; color:var(--mj-text-muted); }
+
+.theme-toggle {
+    display:inline-flex; align-items:center; gap:7px; cursor:pointer;
+    background: var(--mj-bg-surface-card); border:1px solid var(--mj-border-default);
+    color: var(--mj-text-secondary); padding:6px 12px; border-radius:999px; font-size:13px; font-weight:600;
+}
+.theme-toggle:hover { background: var(--mj-bg-surface-hover); }
+
+/* ---- Reusable chips / badges ---- */
+.chip {
+    display:inline-flex; align-items:center; gap:6px;
+    padding:3px 10px; border-radius:999px; font-size:12px; font-weight:600;
+    border:1px solid var(--mj-border-default); background: var(--mj-bg-surface-card); color:var(--mj-text-secondary);
+    white-space:nowrap;
+}
+.chip .ico { width:12px; height:12px; }
+.chip.merge    { background:var(--mj-status-success-bg); color:var(--mj-status-success-text); border-color:var(--mj-status-success-border); }
+.chip.notdupe  { background:var(--mj-status-error-bg);   color:var(--mj-status-error-text);   border-color:var(--mj-status-error-border); }
+.chip.uncertain{ background:var(--mj-status-warning-bg); color:var(--mj-status-warning-text); border-color:var(--mj-status-warning-border); }
+.chip.vector   { background:transparent; color:var(--vector-accent); border-color:color-mix(in srgb, var(--vector-accent) 40%, transparent); }
+.chip.brand    { background:var(--mj-brand-soft); color:var(--mj-text-link); border-color:var(--mj-status-info-border); }
+.chip.ghost    { background:transparent; }
+.chip.disagree { background:var(--mj-status-warning-bg); color:var(--mj-status-warning-text); border-color:var(--mj-status-warning-border); }
+
+.prov {
+    display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:600;
+    padding:2px 8px; border-radius:5px; border:1px solid var(--mj-border-default);
+    color:var(--mj-text-muted); background:var(--mj-bg-surface-card);
+}
+.prov .swatch { width:8px; height:8px; border-radius:2px; }
+.prov.sf .swatch     { background:#00a1e0; }
+.prov.hubspot .swatch{ background:#ff7a59; }
+.prov.local .swatch  { background:#94a3b8; }
+
+/* ---- Buttons ---- */
+.btn {
+    display:inline-flex; align-items:center; justify-content:center; gap:8px;
+    padding:9px 16px; border-radius:var(--mj-radius-sm); font-size:13px; font-weight:700;
+    border:1px solid var(--mj-border-default); background:var(--mj-bg-surface); color:var(--mj-text-primary);
+    cursor:pointer; white-space:nowrap;
+}
+.btn:hover { background: var(--mj-bg-surface-hover); }
+.btn .kbd { font-size:10px; opacity:.7; border:1px solid currentColor; border-radius:4px; padding:0 4px; font-weight:700; }
+.btn.primary { background:var(--mj-brand-primary); border-color:var(--mj-brand-primary); color:#fff; }
+.btn.primary:hover { background:var(--mj-brand-primary-hover); }
+.btn.success { background:var(--mj-status-success); border-color:var(--mj-status-success); color:#fff; }
+.btn.success:hover { filter:brightness(.95); }
+.btn.danger-ghost { color:var(--mj-status-error-text); }
+.btn.danger-ghost:hover { background:var(--mj-status-error-bg); }
+.btn.sm { padding:6px 11px; font-size:12px; }
+
+/* ---- Confidence bars ---- */
+.bar { height:8px; border-radius:999px; background:var(--mj-bg-surface-sunken); overflow:hidden; }
+.bar > span { display:block; height:100%; border-radius:999px; }
+.bar.vector > span { background:var(--vector-accent); }
+.bar.llm > span    { background:var(--mj-brand-primary); }
+.bar.merge > span  { background:var(--rec-merge); }
+
+.card { background:var(--mj-bg-surface); border:1px solid var(--mj-border-default); border-radius:var(--mj-radius); box-shadow:var(--mj-shadow-sm); }
+.muted { color:var(--mj-text-muted); }
+.tiny  { font-size:11.5px; }
+.mono  { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+.kbd-hint { font-family: ui-monospace, Menlo, monospace; font-size:10px; background:var(--mj-bg-surface-sunken); border:1px solid var(--mj-border-default); border-radius:4px; padding:1px 5px; color:var(--mj-text-muted); }
+
+/* scrollbars */
+*::-webkit-scrollbar { width:10px; height:10px; }
+*::-webkit-scrollbar-thumb { background:var(--mj-border-strong); border-radius:999px; border:2px solid transparent; background-clip:content-box; }
+*::-webkit-scrollbar-track { background:transparent; }

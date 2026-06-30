@@ -1,0 +1,65 @@
+{
+  "fields": {
+    "Name": "Predictive Studio",
+    "Description": "Build genuinely useful predictive models on your own data — assemble features across entities, queries, external sources and vectors; train from a curated algorithm catalog; run agent-driven experiments; promote, score, and maintain models. The Model Development Agent can drive the whole flow from plain-English goals.",
+    "Icon": "fa-solid fa-wand-magic-sparkles",
+    "DefaultForNewUser": false,
+    "DefaultSequence": 1020,
+    "Color": "#2050c8",
+    "DefaultNavItems": [
+      {
+        "Label": "Home",
+        "Icon": "fa-solid fa-gauge-high",
+        "ResourceType": "Custom",
+        "DriverClass": "PredictiveStudioHomeResource",
+        "isDefault": true
+      },
+      {
+        "Label": "Training Pipelines",
+        "Icon": "fa-solid fa-diagram-project",
+        "ResourceType": "Custom",
+        "DriverClass": "PredictiveStudioPipelinesResource"
+      },
+      {
+        "Label": "Algorithm Catalog",
+        "Icon": "fa-solid fa-shapes",
+        "ResourceType": "Custom",
+        "DriverClass": "PredictiveStudioCatalogResource"
+      },
+      {
+        "Label": "Experiments",
+        "Icon": "fa-solid fa-flask",
+        "ResourceType": "Custom",
+        "DriverClass": "PredictiveStudioExperimentsResource"
+      },
+      {
+        "Label": "Model Registry",
+        "Icon": "fa-solid fa-cubes",
+        "ResourceType": "Custom",
+        "DriverClass": "PredictiveStudioRegistryResource"
+      },
+      {
+        "Label": "Models in Production",
+        "Icon": "fa-solid fa-satellite-dish",
+        "ResourceType": "Custom",
+        "DriverClass": "PredictiveStudioProductionResource"
+      },
+      {
+        "Label": "Compare Runs",
+        "Icon": "fa-solid fa-chart-column",
+        "ResourceType": "Custom",
+        "DriverClass": "PredictiveStudioCompareResource"
+      }
+    ]
+  },
+  "relatedEntities": {
+    "MJ: Application Entities": []
+  },
+  "primaryKey": {
+    "ID": "299C9272-8D38-40CA-85D4-0980F2C9FAD1"
+  },
+  "sync": {
+    "lastModified": "2026-06-28T22:48:10.614Z",
+    "checksum": "b0df671a9d2a9c5421ebe590f8a52a06480f8cd5f9d8169cb217263e6c4515e1"
+  }
+}

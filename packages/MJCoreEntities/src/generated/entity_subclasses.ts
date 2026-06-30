@@ -1107,7 +1107,7 @@ export const MJAIAgentChannelSchema = z.object({
         * * Description: Optional JSON Schema used to validate the per-instance channel configuration (AIAgentSessionChannel.Config).`),
     IsActive: z.boolean().describe(`
         * * Field Name: IsActive
-        * * Display Name: Is Active
+        * * Display Name: Active
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: Whether this channel definition is available for use. Inactive channels cannot be attached to a session.`),
@@ -1121,6 +1121,18 @@ export const MJAIAgentChannelSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    IsHeadless: z.boolean().describe(`
+        * * Field Name: IsHeadless
+        * * Display Name: Headless
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When 1, the channel has no visible surface and is never mounted as a tab — it is a live wire (e.g. the headless ClientContextChannel that streams app context + capability manifest to the co-agent). When 0 (default), the channel renders a surface.`),
+    UIConfig: z.any().nullable().describe(`
+        * * Field Name: UIConfig
+        * * Display Name: UI Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJAIAgentChannelEntity_IChannelUIConfig
+        * * Description: Channel-definition-level presentation/chrome config JSON (shape = IChannelUIConfig): tab DisplayName, GroupName, Color (prefer a design-token name), Icon, SortOrder. Distinct from ConfigSchema, which validates per-session AIAgentSessionChannel.Config state-of-record. Null = host defaults.`),
 });
 
 export type MJAIAgentChannelEntityType = z.infer<typeof MJAIAgentChannelSchema>;
@@ -3752,6 +3764,26 @@ export const MJAIAgentSessionSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    RecordingMedia: z.union([z.literal('Audio'), z.literal('AudioVideo'), z.literal('None')]).nullable().describe(`
+        * * Field Name: RecordingMedia
+        * * Display Name: Recording Media
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Audio
+    *   * AudioVideo
+    *   * None
+        * * Description: The media actually captured for this session, resolved at session start (runtime param > agent-level RecordingDefault > OFF). Values: None, Audio, AudioVideo. NULL/None = not recorded.`),
+    RecordingStartedAt: z.date().nullable().describe(`
+        * * Field Name: RecordingStartedAt
+        * * Display Name: Recording Started At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Recording alignment origin (t0): the wall-clock moment audio capture began for this session. Per-turn ConversationDetail timestamps are converted to audio seek offsets relative to this value.`),
+    RecordingFileID: z.string().nullable().describe(`
+        * * Field Name: RecordingFileID
+        * * Display Name: Recording File ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Files (vwFiles.ID)`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent
@@ -3764,6 +3796,10 @@ export const MJAIAgentSessionSchema = z.object({
         * * Field Name: Conversation
         * * Display Name: Conversation
         * * SQL Data Type: nvarchar(255)`),
+    RecordingFile: z.string().nullable().describe(`
+        * * Field Name: RecordingFile
+        * * Display Name: Recording File
+        * * SQL Data Type: nvarchar(500)`),
     RootLastSessionID: z.string().nullable().describe(`
         * * Field Name: RootLastSessionID
         * * Display Name: Root Last Session ID
@@ -4170,17 +4206,17 @@ export const MJAIAgentSchema = z.object({
         * * Description: When true, enables automatic compression of conversation context when the message threshold is reached.`),
     ContextCompressionMessageThreshold: z.number().nullable().describe(`
         * * Field Name: ContextCompressionMessageThreshold
-        * * Display Name: Context Compression Message Threshold
+        * * Display Name: Compression Message Threshold
         * * SQL Data Type: int
         * * Description: Number of messages that triggers context compression when EnableContextCompression is true.`),
     ContextCompressionPromptID: z.string().nullable().describe(`
         * * Field Name: ContextCompressionPromptID
-        * * Display Name: Context Compression Prompt
+        * * Display Name: Compression Prompt
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)`),
     ContextCompressionMessageRetentionCount: z.number().nullable().describe(`
         * * Field Name: ContextCompressionMessageRetentionCount
-        * * Display Name: Context Compression Message Retention Count
+        * * Display Name: Compression Message Retention
         * * SQL Data Type: int
         * * Description: Number of recent messages to keep uncompressed when context compression is applied.`),
     TypeID: z.string().nullable().describe(`
@@ -4344,7 +4380,7 @@ if this limit is exceeded.`),
         * * Description: Default artifact type produced by this agent. This is the primary artifact type; additional artifact types can be linked via AIAgentArtifactType junction table. Can be NULL if agent does not produce artifacts by default.`),
     OwnerUserID: z.string().describe(`
         * * Field Name: OwnerUserID
-        * * Display Name: Owner User
+        * * Display Name: Owner
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
         * * Default Value: ECAFCCEC-6A37-EF11-86D4-000D3A4E707E
@@ -4463,7 +4499,7 @@ if this limit is exceeded.`),
         * * Description: Base path within the storage provider for this agent's attachments. Agent run ID and sequence number are appended to create unique paths. Format: /folder/subfolder`),
     InlineStorageThresholdBytes: z.number().nullable().describe(`
         * * Field Name: InlineStorageThresholdBytes
-        * * Display Name: Inline Storage Threshold Bytes
+        * * Display Name: Inline Storage Threshold (Bytes)
         * * SQL Data Type: int
         * * Description: File size threshold for inline storage. Files <= this size are stored as base64 inline, larger files use MJStorage. NULL uses system default (1MB). Set to 0 to always use MJStorage.`),
     AgentTypePromptParams: z.string().nullable().describe(`
@@ -4473,7 +4509,7 @@ if this limit is exceeded.`),
         * * Description: JSON object containing parameter values that customize how this agent's type-level system prompt is rendered. The schema is defined by the agent type's PromptParamsSchema field. Allows per-agent control over which prompt sections are included, enabling token savings by excluding unused documentation.`),
     ScopeConfig: z.string().nullable().describe(`
         * * Field Name: ScopeConfig
-        * * Display Name: Scope Config
+        * * Display Name: Scope Configuration
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON configuration defining scope dimensions for multi-tenant deployments. Example: {"dimensions":[{"name":"OrganizationID","entityId":"...","isPrimary":true,"required":true},{"name":"ContactID","entityId":"...","isPrimary":false,"required":false}],"inheritanceMode":"cascading"}`),
     NoteRetentionDays: z.number().nullable().describe(`
@@ -4551,6 +4587,28 @@ if this limit is exceeded.`),
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: When enabled, the agent may commit durable memories mid-run via the memoryWrites loop-response field. Writes are framework-guarded (type restriction, scope clamp, near-duplicate check, per-run cap) and land as Provisional notes pending Memory Manager hardening. On by default; disable for restricted or experimental agents.`),
+    RecordingDefault: z.union([z.literal('Audio'), z.literal('AudioVideo'), z.literal('None')]).nullable().describe(`
+        * * Field Name: RecordingDefault
+        * * Display Name: Recording Default
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Audio
+    *   * AudioVideo
+    *   * None
+        * * Description: Agent-level default recording media for realtime sessions: None, Audio, or AudioVideo. Overridden per session by a runtime parameter; if unset, recording is OFF. Capture only runs when a storage provider is resolvable (RecordingStorageProviderID, else the agent's AttachmentStorageProviderID) AND consent is satisfied.`),
+    RecordingStorageProviderID: z.string().nullable().describe(`
+        * * Field Name: RecordingStorageProviderID
+        * * Display Name: Recording Storage Provider
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: File Storage Providers (vwFileStorageProviders.ID)
+        * * Description: OPTIONAL override for where session recordings are stored. When NULL, recordings fall back to the agent's AttachmentStorageProviderID. Set this only when recordings must live in a different storage account than attachments.`),
+    DefaultMediaCollectionID: z.string().nullable().describe(`
+        * * Field Name: DefaultMediaCollectionID
+        * * Display Name: Default Media Collection
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Collections (vwCollections.ID)
+        * * Description: OPTIONAL default media kit for this agent: a Collection of Artifacts the agent may show on the realtime Media channel during a conversation. Resolved per session as runtime-override > this agent default > none. When set, the agent is given a manifest (each item's display name, media type, when-to-show ContextDescription and Preload flag) so it can surface items via the Media_ShowMedia tool. When NULL the agent has no curated kit (ad-hoc Media_ShowMedia still works).`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
@@ -4565,7 +4623,7 @@ if this limit is exceeded.`),
         * * SQL Data Type: nvarchar(100)`),
     DefaultArtifactType: z.string().nullable().describe(`
         * * Field Name: DefaultArtifactType
-        * * Display Name: Default Artifact Type
+        * * Display Name: Default Artifact Type Name
         * * SQL Data Type: nvarchar(100)`),
     OwnerUser: z.string().describe(`
         * * Field Name: OwnerUser
@@ -4573,27 +4631,35 @@ if this limit is exceeded.`),
         * * SQL Data Type: nvarchar(100)`),
     AttachmentStorageProvider: z.string().nullable().describe(`
         * * Field Name: AttachmentStorageProvider
-        * * Display Name: Attachment Storage Provider
+        * * Display Name: Attachment Storage Provider Name
         * * SQL Data Type: nvarchar(50)`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
-        * * Display Name: Category
+        * * Display Name: Category Name
         * * SQL Data Type: nvarchar(200)`),
     DefaultStorageAccount: z.string().nullable().describe(`
         * * Field Name: DefaultStorageAccount
-        * * Display Name: Default Storage Account
+        * * Display Name: Default Storage Account Name
         * * SQL Data Type: nvarchar(200)`),
     DefaultCoAgent: z.string().nullable().describe(`
         * * Field Name: DefaultCoAgent
-        * * Display Name: Default Co-Agent
+        * * Display Name: Default Co-Agent Name
+        * * SQL Data Type: nvarchar(255)`),
+    RecordingStorageProvider: z.string().nullable().describe(`
+        * * Field Name: RecordingStorageProvider
+        * * Display Name: Recording Storage Provider Name
+        * * SQL Data Type: nvarchar(50)`),
+    DefaultMediaCollection: z.string().nullable().describe(`
+        * * Field Name: DefaultMediaCollection
+        * * Display Name: Default Media Collection Name
         * * SQL Data Type: nvarchar(255)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
-        * * Display Name: Root Parent ID
+        * * Display Name: Root Parent
         * * SQL Data Type: uniqueidentifier`),
     RootDefaultCoAgentID: z.string().nullable().describe(`
         * * Field Name: RootDefaultCoAgentID
-        * * Display Name: Root Default Co-Agent ID
+        * * Display Name: Root Default Co-Agent
         * * SQL Data Type: uniqueidentifier`),
 });
 
@@ -8215,7 +8281,7 @@ export const MJApplicationSchema = z.object({
         * * Default Value: getutcdate()`),
     SchemaAutoAddNewEntities: z.string().nullable().describe(`
         * * Field Name: SchemaAutoAddNewEntities
-        * * Display Name: Schema Auto Add New Entities
+        * * Display Name: Auto Add Entities From Schema
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Comma-delimited list of schema names where entities will be automatically added to the application when created in those schemas`),
     Color: z.string().nullable().describe(`
@@ -8289,6 +8355,12 @@ export const MJApplicationSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: When true, Path is automatically generated from Name on save. Set to false to manually control the Path value. Defaults to true for new applications.`),
+    AgentSettings: z.any().nullable().describe(`
+        * * Field Name: AgentSettings
+        * * Display Name: Agent Settings
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJApplicationEntity_IAgentSettings
+        * * Description: App-scoped agent configuration JSON (shape = IAgentSettings). Declares the default/lead agent, relevant agents available to conversational and realtime co-agents, app-scoped client tool references, and realtime persona/disclosure overrides that layer into the agent config cascade. Null = no app-level agent config.`),
 });
 
 export type MJApplicationEntityType = z.infer<typeof MJApplicationSchema>;
@@ -9605,7 +9677,7 @@ export const MJCollectionArtifactSchema = z.object({
         * * Default Value: newsequentialid()`),
     CollectionID: z.string().describe(`
         * * Field Name: CollectionID
-        * * Display Name: Collection ID
+        * * Display Name: Collection
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Collections (vwCollections.ID)`),
     Sequence: z.number().describe(`
@@ -9626,17 +9698,28 @@ export const MJCollectionArtifactSchema = z.object({
         * * Default Value: getutcdate()`),
     ArtifactVersionID: z.string().describe(`
         * * Field Name: ArtifactVersionID
-        * * Display Name: Artifact Version ID
+        * * Display Name: Artifact Version
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Artifact Versions (vwArtifactVersions.ID)
         * * Description: Required. Specific version of the artifact saved to this collection. Collections store version-specific artifacts to enable proper version tracking and Links tab filtering.`),
+    ContextDescription: z.string().nullable().describe(`
+        * * Field Name: ContextDescription
+        * * Display Name: Context Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Agent-facing description of what this media item is and WHEN to show it during a conversation. Read by a realtime agent (alongside the artifact's own name/type) to decide autonomously whether/when to surface the item. Per-membership: the same artifact can carry different guidance in different Collections (media kits).`),
+    Preload: z.boolean().describe(`
+        * * Field Name: Preload
+        * * Display Name: Preload
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Eager-load hint for a realtime media kit: when 1, the agent is told to show / the client to prefetch this item at session start rather than waiting until it is contextually relevant. Default 0 (lazy — surfaced only when the agent chooses).`),
     Collection: z.string().describe(`
         * * Field Name: Collection
-        * * Display Name: Collection
+        * * Display Name: Collection Name
         * * SQL Data Type: nvarchar(255)`),
     ArtifactVersion: z.string().nullable().describe(`
         * * Field Name: ArtifactVersion
-        * * Display Name: Artifact Version
+        * * Display Name: Artifact Version Name
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -12850,24 +12933,24 @@ export const MJConversationDetailSchema = z.object({
         * * Description: This column stores human or AI-generated reflections on how to improve future responses based on the user feedback and the AI output generated for prior messages in the conversation.`),
     SummaryOfEarlierConversation: z.string().nullable().describe(`
         * * Field Name: SummaryOfEarlierConversation
-        * * Display Name: Conversation Summary
+        * * Display Name: Summary of Earlier Conversation
         * * SQL Data Type: nvarchar(MAX)
         * * Description: This column optionally stores a summary of the entire conversation leading up to this particular conversation detail record. It is used in long-running conversations to optimize performance by summarizing earlier parts.`),
     UserID: z.string().nullable().describe(`
         * * Field Name: UserID
-        * * Display Name: User
+        * * Display Name: User ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
         * * Description: This field, when populated, overrides the UserID at the Conversation level to specify a different user created the message.`),
     ArtifactID: z.string().nullable().describe(`
         * * Field Name: ArtifactID
-        * * Display Name: Artifact
+        * * Display Name: Artifact ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Conversation Artifacts (vwConversationArtifacts.ID)
         * * Description: Optional reference to a conversation artifact associated with this conversation detail`),
     ArtifactVersionID: z.string().nullable().describe(`
         * * Field Name: ArtifactVersionID
-        * * Display Name: Artifact Version
+        * * Display Name: Artifact Version ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Conversation Artifact Versions (vwConversationArtifactVersions.ID)
         * * Description: Optional reference to a specific version of a conversation artifact associated with this conversation detail`),
@@ -12878,19 +12961,19 @@ export const MJConversationDetailSchema = z.object({
         * * Description: Duration in milliseconds representing how long the AI response processing took to complete for this conversation detail.`),
     IsPinned: z.boolean().describe(`
         * * Field Name: IsPinned
-        * * Display Name: Pinned
+        * * Display Name: Is Pinned
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Indicates if this message is pinned within the conversation for easy reference`),
     ParentID: z.string().nullable().describe(`
         * * Field Name: ParentID
-        * * Display Name: Parent Message
+        * * Display Name: Parent ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Conversation Details (vwConversationDetails.ID)
         * * Description: Optional reference to parent message for threaded conversations. NULL for top-level messages.`),
     AgentID: z.string().nullable().describe(`
         * * Field Name: AgentID
-        * * Display Name: Agent
+        * * Display Name: Agent ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
         * * Description: Denormalized agent ID for quick lookup of agent name and icon without joining through AgentRun`),
@@ -12907,12 +12990,12 @@ export const MJConversationDetailSchema = z.object({
         * * Description: Status of the conversation message. Complete indicates finished processing, In-Progress indicates active agent work, Error indicates processing failed.`),
     SuggestedResponses: z.string().nullable().describe(`
         * * Field Name: SuggestedResponses
-        * * Display Name: Suggested Responses (Legacy)
+        * * Display Name: Suggested Responses
         * * SQL Data Type: nvarchar(MAX)
         * * Description: DEPRECATED: Use ResponseForm, ActionableCommands, and AutomaticCommands instead. Legacy field for simple text-based suggested responses. Replaced in v2.118 by more powerful structured forms and commands system. Retained for historical data only.`),
     TestRunID: z.string().nullable().describe(`
         * * Field Name: TestRunID
-        * * Display Name: Test Run
+        * * Display Name: Test Run ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Test Runs (vwTestRuns.ID)
         * * Description: Optional Foreign Key - Links this conversation detail to a test run if this message was part of a test conversation. Allows filtering and analyzing test-specific conversation turns.`),
@@ -12933,43 +13016,68 @@ export const MJConversationDetailSchema = z.object({
         * * Description: JSON array of automatic commands that execute immediately when received (no user interaction). Supports refresh:data (refresh entity data or caches) and notification (show toast messages). Used for keeping UI in sync after agent makes changes and providing user feedback.`),
     OriginalMessageChanged: z.boolean().describe(`
         * * Field Name: OriginalMessageChanged
-        * * Display Name: Message Modified
+        * * Display Name: Original Message Changed
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Indicates if the original message content was modified after initial creation. Set automatically by the server when the Message field is changed on update.`),
     AgentSessionID: z.string().nullable().describe(`
         * * Field Name: AgentSessionID
-        * * Display Name: Agent Session
+        * * Display Name: Agent Session ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agent Sessions (vwAIAgentSessions.ID)
         * * Description: Links this message to the AIAgentSession that was active when it was created. NULL for messages typed in standard text chat outside any live session. Lets the conversation timeline group a sessions messages into a single collapsible block.`),
+    TurnEndedAt: z.date().nullable().describe(`
+        * * Field Name: TurnEndedAt
+        * * Display Name: Turn Ended At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Immutable timestamp marking when this turn ended/finalized. Set once on turn completion (do NOT read __mj_UpdatedAt for this — it moves on later edits). Paired with __mj_CreatedAt (turn start) and AIAgentSession.RecordingStartedAt (t0) to derive audio seek offsets.`),
+    UtteranceStartMs: z.number().nullable().describe(`
+        * * Field Name: UtteranceStartMs
+        * * Display Name: Utterance Start (ms)
+        * * SQL Data Type: int
+        * * Description: Precise media-relative start of this turn, in integer milliseconds from the recording t0 (AIAgentSession.RecordingStartedAt). Populated only when the realtime driver supplies frame timing; NULL otherwise (fall back to __mj_CreatedAt - t0). Used by the evidence player for click-to-seek.`),
+    UtteranceEndMs: z.number().nullable().describe(`
+        * * Field Name: UtteranceEndMs
+        * * Display Name: Utterance End (ms)
+        * * SQL Data Type: int
+        * * Description: Precise media-relative end of this turn, in integer milliseconds from the recording t0 (AIAgentSession.RecordingStartedAt). Populated only when the realtime driver supplies frame timing; NULL otherwise. Used by the evidence player for click-to-seek.`),
+    MediaType: z.union([z.literal('Audio'), z.literal('Text'), z.literal('Video')]).nullable().describe(`
+        * * Field Name: MediaType
+        * * Display Name: Media Type
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Audio
+    *   * Text
+    *   * Video
+        * * Description: Modality of this turn's content: Text, Audio, or Video. Forward-compat so video turns reuse the same record shape when realtime models support it. NULL = text (legacy default).`),
     Conversation: z.string().nullable().describe(`
         * * Field Name: Conversation
-        * * Display Name: Conversation Reference
+        * * Display Name: Conversation
         * * SQL Data Type: nvarchar(255)`),
     User: z.string().nullable().describe(`
         * * Field Name: User
-        * * Display Name: User Reference
+        * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
     Artifact: z.string().nullable().describe(`
         * * Field Name: Artifact
-        * * Display Name: Artifact Reference
+        * * Display Name: Artifact
         * * SQL Data Type: nvarchar(255)`),
     ArtifactVersion: z.string().nullable().describe(`
         * * Field Name: ArtifactVersion
-        * * Display Name: Artifact Version Reference
+        * * Display Name: Artifact Version
         * * SQL Data Type: nvarchar(255)`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
-        * * Display Name: Parent Reference
+        * * Display Name: Parent
         * * SQL Data Type: nvarchar(100)`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
-        * * Display Name: Agent Reference
+        * * Display Name: Agent
         * * SQL Data Type: nvarchar(255)`),
     TestRun: z.string().nullable().describe(`
         * * Field Name: TestRun
-        * * Display Name: Test Run Reference
+        * * Display Name: Test Run
         * * SQL Data Type: nvarchar(255)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
@@ -12990,7 +13098,7 @@ export const MJConversationSchema = z.object({
         * * Default Value: newsequentialid()`),
     UserID: z.string().describe(`
         * * Field Name: UserID
-        * * Display Name: User
+        * * Display Name: User ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)`),
     ExternalID: z.string().nullable().describe(`
@@ -13014,13 +13122,13 @@ export const MJConversationSchema = z.object({
         * * Description: The type or category of conversation (Skip, Support, Chat, etc.).`),
     IsArchived: z.boolean().describe(`
         * * Field Name: IsArchived
-        * * Display Name: Archived
+        * * Display Name: Is Archived
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Indicates if this conversation has been archived and should not appear in active lists.`),
     LinkedEntityID: z.string().nullable().describe(`
         * * Field Name: LinkedEntityID
-        * * Display Name: Linked Entity
+        * * Display Name: Linked Entity ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
         * * Description: Generic 'what is this conversation about?' pointer. Names the Entity whose record this conversation references (e.g. MJ: Components when the conversation was started in the Form Builder cockpit about a specific form). Paired with LinkedRecordID via the CK_Conversation_LinkBinding cross-column CHECK — both NULL or both populated. Surfaces use this to filter their conversation list to entries about the currently-loaded record (e.g. 'show prior conversations about THIS form'). Reusable beyond Form Builder by any future dashboard / record-context surface that wants the same UX without further schema work.`),
@@ -13031,7 +13139,7 @@ export const MJConversationSchema = z.object({
         * * Description: The primary key of the record this conversation is about, serialized as a string so any entity type can be referenced regardless of its PK shape (UUID, int, composite). Used together with LinkedEntityID — see CK_Conversation_LinkBinding. Wide enough (NVARCHAR(500) in the baseline schema) to handle chunky composite keys. Surfaces query by (LinkedEntityID, LinkedRecordID) — or by LinkedRecordID IN (...) when a lineage of records shares conversation context (e.g. multiple Component versions of the same form lineage).`),
     DataContextID: z.string().nullable().describe(`
         * * Field Name: DataContextID
-        * * Display Name: Data Context
+        * * Display Name: Data Context ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Data Contexts (vwDataContexts.ID)`),
     __mj_CreatedAt: z.date().describe(`
@@ -13056,24 +13164,24 @@ export const MJConversationSchema = z.object({
         * * Description: Tracks the processing status of the conversation: Available, Processing`),
     EnvironmentID: z.string().describe(`
         * * Field Name: EnvironmentID
-        * * Display Name: Environment
+        * * Display Name: Environment ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Environments (vwEnvironments.ID)
         * * Default Value: F51358F3-9447-4176-B313-BF8025FD8D09`),
     ProjectID: z.string().nullable().describe(`
         * * Field Name: ProjectID
-        * * Display Name: Project
+        * * Display Name: Project ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Projects (vwProjects.ID)`),
     IsPinned: z.boolean().describe(`
         * * Field Name: IsPinned
-        * * Display Name: Pinned
+        * * Display Name: Is Pinned
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Indicates if this conversation is pinned to the top of lists`),
     TestRunID: z.string().nullable().describe(`
         * * Field Name: TestRunID
-        * * Display Name: Test Run
+        * * Display Name: Test Run ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Test Runs (vwTestRuns.ID)
         * * Description: Optional Foreign Key - Links this conversation to a test run if this conversation was generated as part of a test. Enables tracking test conversations separately from production conversations.`),
@@ -13090,13 +13198,13 @@ export const MJConversationSchema = z.object({
         * * Description: Controls where this conversation surfaces in the UI. Global = appears in the main Chat app (no application binding). Application = scoped to a specific Application's embedded chat surface (e.g. the Form Builder cockpit); hidden from the main chat list by default. Both = explicitly promoted to appear in BOTH the main chat list and the bound Application's embedded surface. Defaults to Global so pre-existing conversations stay visible in main chat. Paired with ApplicationID via a cross-column CHECK constraint: Global => ApplicationID IS NULL; Application or Both => ApplicationID IS NOT NULL.`),
     ApplicationID: z.string().nullable().describe(`
         * * Field Name: ApplicationID
-        * * Display Name: Application
+        * * Display Name: Application ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Applications (vwApplications.ID)
         * * Description: Optional Application this conversation is bound to. Required when ApplicationScope is 'Application' or 'Both'; must be NULL when ApplicationScope is 'Global'. Enforced by the CK_Conversation_ScopeAppBinding cross-column CHECK. Used by embedded chat surfaces (e.g. the Form Builder cockpit) to filter their conversation list to just their own application's conversations.`),
     DefaultAgentID: z.string().nullable().describe(`
         * * Field Name: DefaultAgentID
-        * * Display Name: Default Agent
+        * * Display Name: Default Agent ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
         * * Description: Optional per-conversation default AI agent. When set, the message router targets this agent for non-mention, non-continuity messages instead of falling through to the embedder-supplied default (e.g. Form Builder) or to Sage. Lets a user pin a conversation to a specific specialist agent (e.g. Research Agent) so Sage is never invoked for that thread. Routing precedence: @mention > continuity (last responder) > Conversation.DefaultAgentID > embedder's defaultAgentId input > Sage fallback.`),
@@ -13105,38 +13213,53 @@ export const MJConversationSchema = z.object({
         * * Display Name: Additional Data
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Free-form JSON extensibility column. Apps that want to attach conversation-scoped metadata (UI state, draft notes, custom analytics tags, etc.) can stuff it here without a schema change. **Namespace your keys** to avoid collisions across apps — store e.g. {"form-builder.lastPreviewRecordId":"...","my-app.fooFlag":true} rather than top-level lastPreviewRecordId. Core MJ code paths do NOT read this column; it's purely for downstream apps. NVARCHAR(MAX) so callers can store arbitrarily large blobs, but treat that as a smell — heavy data belongs in a real entity, not a JSON dump.`),
+    RecordingFileID: z.string().nullable().describe(`
+        * * Field Name: RecordingFileID
+        * * Display Name: Recording File ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Files (vwFiles.ID)
+        * * Description: For a Meeting-Room conversation, the MJ: Files row holding the room-level composite recording (the LiveKit egress MP4, copied into MJStorage). NULL when the meeting was not recorded.`),
+    EgressID: z.string().nullable().describe(`
+        * * Field Name: EgressID
+        * * Display Name: Egress ID
+        * * SQL Data Type: nvarchar(255)
+        * * Description: The LiveKit egress session id for this meeting's room recording. Set when recording starts; used to stop the egress and to correlate the egress-completion result with this conversation. NULL when the meeting was not recorded.`),
     User: z.string().describe(`
         * * Field Name: User
-        * * Display Name: User Name
+        * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
     LinkedEntity: z.string().nullable().describe(`
         * * Field Name: LinkedEntity
-        * * Display Name: Linked Entity Name
+        * * Display Name: Linked Entity
         * * SQL Data Type: nvarchar(255)`),
     DataContext: z.string().nullable().describe(`
         * * Field Name: DataContext
-        * * Display Name: Data Context Name
+        * * Display Name: Data Context
         * * SQL Data Type: nvarchar(255)`),
     Environment: z.string().describe(`
         * * Field Name: Environment
-        * * Display Name: Environment Name
+        * * Display Name: Environment
         * * SQL Data Type: nvarchar(255)`),
     Project: z.string().nullable().describe(`
         * * Field Name: Project
-        * * Display Name: Project Name
+        * * Display Name: Project
         * * SQL Data Type: nvarchar(255)`),
     TestRun: z.string().nullable().describe(`
         * * Field Name: TestRun
-        * * Display Name: Test Run Name
+        * * Display Name: Test Run
         * * SQL Data Type: nvarchar(255)`),
     Application: z.string().nullable().describe(`
         * * Field Name: Application
-        * * Display Name: Application Name
+        * * Display Name: Application
         * * SQL Data Type: nvarchar(100)`),
     DefaultAgent: z.string().nullable().describe(`
         * * Field Name: DefaultAgent
-        * * Display Name: Default Agent Name
+        * * Display Name: Default Agent
         * * SQL Data Type: nvarchar(255)`),
+    RecordingFile: z.string().nullable().describe(`
+        * * Field Name: RecordingFile
+        * * Display Name: Recording File
+        * * SQL Data Type: nvarchar(500)`),
 });
 
 export type MJConversationEntityType = z.infer<typeof MJConversationSchema>;
@@ -14221,7 +14344,7 @@ export const MJDuplicateRunDetailMatchSchema = z.object({
         * * Default Value: newsequentialid()`),
     DuplicateRunDetailID: z.string().describe(`
         * * Field Name: DuplicateRunDetailID
-        * * Display Name: Duplicate Run Detail ID
+        * * Display Name: Duplicate Run Detail
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Duplicate Run Details (vwDuplicateRunDetails.ID)`),
     MatchSource: z.union([z.literal('SP'), z.literal('Vector')]).describe(`
@@ -14236,7 +14359,7 @@ export const MJDuplicateRunDetailMatchSchema = z.object({
         * * Description: Either Vector or SP`),
     MatchRecordID: z.string().describe(`
         * * Field Name: MatchRecordID
-        * * Display Name: Match Record ID
+        * * Display Name: Matched Record
         * * SQL Data Type: nvarchar(500)
         * * Description: The ID of the record identified as a potential duplicate match.`),
     MatchProbability: z.number().describe(`
@@ -14270,7 +14393,7 @@ export const MJDuplicateRunDetailMatchSchema = z.object({
         * * Description: Current approval status of the proposed action (Pending, Approved, Rejected).`),
     RecordMergeLogID: z.string().nullable().describe(`
         * * Field Name: RecordMergeLogID
-        * * Display Name: Record Merge Log ID
+        * * Display Name: Merge Log
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Record Merge Logs (vwRecordMergeLogs.ID)`),
     MergeStatus: z.union([z.literal('Complete'), z.literal('Error'), z.literal('Pending')]).describe(`
@@ -14305,14 +14428,64 @@ export const MJDuplicateRunDetailMatchSchema = z.object({
         * * Display Name: Record Metadata
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON metadata snapshot of the matched record from the vector database at detection time. Contains display fields (Name, Description, EntityIcon, etc.) for rich UI rendering without additional lookups.`),
+    AIAgentRunID: z.string().nullable().describe(`
+        * * Field Name: AIAgentRunID
+        * * Display Name: AI Agent Run
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
+        * * Description: When the match was reasoned by an AI Agent (ReasoningMode = Agent), the AIAgentRun that produced the recommendation. Full audit trail; NULL when no agent ran (gated out, or Prompt mode, or reasoning disabled).`),
+    AIPromptRunID: z.string().nullable().describe(`
+        * * Field Name: AIPromptRunID
+        * * Display Name: AI Prompt Run
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Prompt Runs (vwAIPromptRuns.ID)
+        * * Description: When the match was reasoned by a single-shot AI Prompt (ReasoningMode = Prompt, the default), the AIPromptRun that produced the recommendation. Full audit trail; NULL when no prompt ran.`),
+    LLMRecommendation: z.union([z.literal('Merge'), z.literal('NotDuplicate'), z.literal('Uncertain')]).nullable().describe(`
+        * * Field Name: LLMRecommendation
+        * * Display Name: LLM Recommendation
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Merge
+    *   * NotDuplicate
+    *   * Uncertain
+        * * Description: The LLM's recommendation for this candidate match: Merge, NotDuplicate, or Uncertain. Annotates the vector-derived candidate; NULL when reasoning did not run for this match.`),
+    LLMConfidence: z.number().nullable().describe(`
+        * * Field Name: LLMConfidence
+        * * Display Name: LLM Confidence
+        * * SQL Data Type: numeric(12, 11)
+        * * Description: Reasoning-adjusted confidence (0-1) that this is a true duplicate. Distinct from MatchProbability (the vector/RRF score); the LLM strengthens or weakens the vector signal rather than replacing it.`),
+    LLMReasoning: z.string().nullable().describe(`
+        * * Field Name: LLMReasoning
+        * * Display Name: LLM Reasoning
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Human-readable rationale for the LLM's recommendation. Surfaced in the review UI and powers the transparency / disagreement explanation.`),
+    LLMProposedSurvivorRecordID: z.string().nullable().describe(`
+        * * Field Name: LLMProposedSurvivorRecordID
+        * * Display Name: Proposed Survivor Record
+        * * SQL Data Type: nvarchar(500)
+        * * Description: The record the LLM proposes as the surviving record for this matched set, as a URL-segment composite key. Preloads the comparison panel; the user can override.`),
+    LLMProposedFieldMap: z.string().nullable().describe(`
+        * * Field Name: LLMProposedFieldMap
+        * * Display Name: Proposed Field Map
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON of the LLM's proposed per-field survivor choices for the matched set. Resolved to literal {FieldName, Value} entries (the existing MergeRecords FieldMap contract) and applied to the surviving record before the transactional merge; the user can override per field.`),
     DuplicateRunDetail: z.string().describe(`
         * * Field Name: DuplicateRunDetail
-        * * Display Name: Duplicate Run Detail
+        * * Display Name: Duplicate Run Detail Object
         * * SQL Data Type: nvarchar(500)`),
     RecordMergeLog: z.string().nullable().describe(`
         * * Field Name: RecordMergeLog
-        * * Display Name: Record Merge Log
+        * * Display Name: Merge Log Object
         * * SQL Data Type: nvarchar(450)`),
+    AIAgentRun: z.string().nullable().describe(`
+        * * Field Name: AIAgentRun
+        * * Display Name: AI Agent Run Object
+        * * SQL Data Type: nvarchar(255)`),
+    AIPromptRun: z.string().nullable().describe(`
+        * * Field Name: AIPromptRun
+        * * Display Name: AI Prompt Run Object
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type MJDuplicateRunDetailMatchEntityType = z.infer<typeof MJDuplicateRunDetailMatchSchema>;
@@ -15540,6 +15713,11 @@ export const MJEntityActionInvocationSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    RuntimeUXDriverClass: z.string().nullable().describe(`
+        * * Field Name: RuntimeUXDriverClass
+        * * Display Name: Runtime UX Driver Class
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Optional class name of a registered runtime-UX driver component (a BaseEntityActionRuntimeUX subclass resolved via MJGlobal.ClassFactory) that owns this invocation's interaction — parameter collection, dry-run preview, confirmation, and progress. NULL invokes the action directly with no custom UX. This lets any action opt into a richer, reusable runtime experience while the grid/toolbar stays operation-agnostic.`),
     EntityAction: z.string().describe(`
         * * Field Name: EntityAction
         * * Display Name: Entity Action Name
@@ -16070,9 +16248,53 @@ export const MJEntityDocumentSchema = z.object({
         * * Display Name: Configuration
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON configuration settings for this entity document. Controls vector metadata field inclusion (which fields get stored in the vector index for search result display), large field truncation limits, and future settings like sync scheduling and threshold overrides. NULL means use system defaults.`),
+    EnableLLMReasoning: z.boolean().describe(`
+        * * Field Name: EnableLLMReasoning
+        * * Display Name: Enable LLM Reasoning
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Master switch for the LLM reasoning layer on this entity. When 0 (default), duplicate detection runs the existing vector-only path unchanged and the reasoning columns/AutomationLevel are ignored. When 1, candidates above ReasoningThreshold are reasoned over.`),
+    ReasoningMode: z.union([z.literal('Agent'), z.literal('Prompt')]).describe(`
+        * * Field Name: ReasoningMode
+        * * Display Name: Reasoning Mode
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Prompt
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Agent
+    *   * Prompt
+        * * Description: Which reasoning provider runs for this entity. Prompt (default) = a single-shot AI Prompt (cheap/fast); Agent = an AI Agent with memory + context-exploration tools (for heavy entities needing deeper reasoning). Both consume one shared core instruction set.`),
+    ReasoningThreshold: z.number().nullable().describe(`
+        * * Field Name: ReasoningThreshold
+        * * Display Name: Reasoning Threshold
+        * * SQL Data Type: numeric(12, 11)
+        * * Description: Vector-score gate (0-1): reasoning runs once per source record's matched set only when the set's top MatchProbability is at or above this value. Controls cost and reasoning-log volume at scale. NULL falls back to engine/Configuration defaults.`),
+    ReasoningPromptID: z.string().nullable().describe(`
+        * * Field Name: ReasoningPromptID
+        * * Display Name: Reasoning Prompt
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
+        * * Description: The AI Prompt used when ReasoningMode = Prompt. Defaults (resolved in code/metadata) to the seeded "Duplicate Resolution" prompt. The prompt's own model configuration is the per-entity model knob for the prompt path.`),
+    ReasoningAgentID: z.string().nullable().describe(`
+        * * Field Name: ReasoningAgentID
+        * * Display Name: Reasoning Agent
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
+        * * Description: The AI Agent used when ReasoningMode = Agent. Defaults (resolved in code/metadata) to the seeded "Duplicate Resolution Agent". Unlocks memory-note injection and context-exploration tools.`),
+    AutomationLevel: z.union([z.literal('AutoMergeAboveAbsolute'), z.literal('LLMGated'), z.literal('ReviewAll')]).describe(`
+        * * Field Name: AutomationLevel
+        * * Display Name: Automation Level
+        * * SQL Data Type: nvarchar(30)
+        * * Default Value: ReviewAll
+    * * Value List Type: List
+    * * Possible Values 
+    *   * AutoMergeAboveAbsolute
+    *   * LLMGated
+    *   * ReviewAll
+        * * Description: Graduated human-in-the-loop level, consulted only when EnableLLMReasoning = 1. ReviewAll = every proposed merge goes to human review; LLMGated = only LLM "Merge" recommendations surface (NotDuplicate suppressed but logged); AutoMergeAboveAbsolute = at/above AbsoluteMatchThreshold AND LLM "Merge", auto-execute (still honoring the per-merge AllowRecordMerge guard).`),
     Type: z.string().describe(`
         * * Field Name: Type
-        * * Display Name: Type Name
+        * * Display Name: Type
         * * SQL Data Type: nvarchar(100)`),
     Entity: z.string().describe(`
         * * Field Name: Entity
@@ -16093,6 +16315,14 @@ export const MJEntityDocumentSchema = z.object({
     VectorIndex: z.string().nullable().describe(`
         * * Field Name: VectorIndex
         * * Display Name: Vector Index Name
+        * * SQL Data Type: nvarchar(255)`),
+    ReasoningPrompt: z.string().nullable().describe(`
+        * * Field Name: ReasoningPrompt
+        * * Display Name: Reasoning Prompt Name
+        * * SQL Data Type: nvarchar(255)`),
+    ReasoningAgent: z.string().nullable().describe(`
+        * * Field Name: ReasoningAgent
+        * * Display Name: Reasoning Agent Name
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -17507,6 +17737,238 @@ export const MJErrorLogSchema = z.object({
 export type MJErrorLogEntityType = z.infer<typeof MJErrorLogSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Experiment Session Iterations
+ */
+export const MJExperimentSessionIterationSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ExperimentSessionID: z.string().describe(`
+        * * Field Name: ExperimentSessionID
+        * * Display Name: Experiment Session
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Experiment Sessions (vwExperimentSessions.ID)
+        * * Description: Foreign key to the ExperimentSession this iteration belongs to`),
+    Sequence: z.number().describe(`
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Order of this iteration within its session`),
+    Label: z.string().nullable().describe(`
+        * * Field Name: Label
+        * * Display Name: Label
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Optional human-readable label for the attempt (e.g., "XGBoost + engagement features")`),
+    Status: z.union([z.literal('Completed'), z.literal('Failed'), z.literal('Pending'), z.literal('Pruned'), z.literal('Running')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Completed
+    *   * Failed
+    *   * Pending
+    *   * Pruned
+    *   * Running
+        * * Description: Iteration status: Pending, Running, Completed, Failed, or Pruned`),
+    Score: z.number().nullable().describe(`
+        * * Field Name: Score
+        * * Display Name: Score
+        * * SQL Data Type: decimal(18, 6)
+        * * Description: The normalized metric value this iteration achieved (the parent Experiment's TargetMetric) — used to rank the leaderboard`),
+    ComputeCost: z.number().nullable().describe(`
+        * * Field Name: ComputeCost
+        * * Display Name: Compute Cost
+        * * SQL Data Type: decimal(18, 6)
+        * * Description: Compute cost attributed to this iteration, for budget enforcement`),
+    TokensUsed: z.number().nullable().describe(`
+        * * Field Name: TokensUsed
+        * * Display Name: Tokens Used
+        * * SQL Data Type: int
+        * * Description: LLM tokens used by this iteration (e.g., agent internal choice prompts), for budget enforcement`),
+    Rationale: z.string().nullable().describe(`
+        * * Field Name: Rationale
+        * * Display Name: Rationale
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Why this iteration was tried (agent rationale) and any observations`),
+    AIAgentRunID: z.string().nullable().describe(`
+        * * Field Name: AIAgentRunID
+        * * Display Name: AI Agent Run
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
+        * * Description: Optional foreign key to the MJ: AI Agent Run that executed this iteration (NULL when executed by deterministic code with no dedicated agent run)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    ExperimentSession: z.string().describe(`
+        * * Field Name: ExperimentSession
+        * * Display Name: Experiment Session Name
+        * * SQL Data Type: nvarchar(255)`),
+    AIAgentRun: z.string().nullable().describe(`
+        * * Field Name: AIAgentRun
+        * * Display Name: AI Agent Run Name
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJExperimentSessionIterationEntityType = z.infer<typeof MJExperimentSessionIterationSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Experiment Sessions
+ */
+export const MJExperimentSessionSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ExperimentID: z.string().describe(`
+        * * Field Name: ExperimentID
+        * * Display Name: Experiment
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Experiments (vwExperiments.ID)
+        * * Description: Foreign key to the Experiment definition this session executes`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Human-readable name of this session/execution`),
+    Goal: z.string().nullable().describe(`
+        * * Field Name: Goal
+        * * Display Name: Goal Override
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional per-session objective override (defaults to the parent Experiment's Goal)`),
+    Budget: z.string().nullable().describe(`
+        * * Field Name: Budget
+        * * Display Name: Budget Constraints
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON budget bounding autonomy for this session: max compute-cost / max iterations / max wallclock`),
+    Status: z.union([z.literal('AwaitingApproval'), z.literal('Cancelled'), z.literal('Completed'), z.literal('Paused'), z.literal('Planning'), z.literal('Running')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Planning
+    * * Value List Type: List
+    * * Possible Values 
+    *   * AwaitingApproval
+    *   * Cancelled
+    *   * Completed
+    *   * Paused
+    *   * Planning
+    *   * Running
+        * * Description: Lifecycle status: Planning, AwaitingApproval, Running, Paused, Completed, or Cancelled`),
+    PlanSpec: z.string().nullable().describe(`
+        * * Field Name: PlanSpec
+        * * Display Name: Plan Specification
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON of the approved plan the deterministic orchestrator executes for this session (consumer-specific shape; for Predictive Studio this is the ModelingPlanSpec). Opaque to the generic substrate.`),
+    Leaderboard: z.string().nullable().describe(`
+        * * Field Name: Leaderboard
+        * * Display Name: Leaderboard Snapshot
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON snapshot of the best iterations so far (also derivable from ExperimentSessionIteration scores)`),
+    AgentRunID: z.string().nullable().describe(`
+        * * Field Name: AgentRunID
+        * * Display Name: Agent Run
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
+        * * Description: Foreign key to the MJ: AI Agent Run that owns/drives this session`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Experiment: z.string().describe(`
+        * * Field Name: Experiment
+        * * Display Name: Experiment Name
+        * * SQL Data Type: nvarchar(255)`),
+    AgentRun: z.string().nullable().describe(`
+        * * Field Name: AgentRun
+        * * Display Name: Agent Run Name
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJExperimentSessionEntityType = z.infer<typeof MJExperimentSessionSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Experiments
+ */
+export const MJExperimentSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Human-readable name of the experiment`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional description of the experiment`),
+    ExperimentType: z.string().describe(`
+        * * Field Name: ExperimentType
+        * * Display Name: Experiment Type
+        * * SQL Data Type: nvarchar(50)
+        * * Description: Discriminator naming the kind of experiment / consuming subsystem (e.g., "MLModelSearch", "PromptOptimization", "AgentConfigSearch"). Intentionally an open NVARCHAR (no CHECK constraint) so new consumers can introduce types without a schema migration.`),
+    Goal: z.string().nullable().describe(`
+        * * Field Name: Goal
+        * * Display Name: Goal
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Natural-language objective of the experiment (e.g., "maximize holdout AUC for renewal prediction")`),
+    TargetMetric: z.string().nullable().describe(`
+        * * Field Name: TargetMetric
+        * * Display Name: Target Metric
+        * * SQL Data Type: nvarchar(100)
+        * * Description: The metric the experiment optimizes (e.g., "AUC", "F1", "RMSE") — the normalized number iterations are scored and ranked by`),
+    PlanSpecTemplate: z.string().nullable().describe(`
+        * * Field Name: PlanSpecTemplate
+        * * Display Name: Plan Spec Template
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional JSON reusable plan template that seeds new sessions' PlanSpec (consumer-specific shape; opaque to the generic substrate)`),
+    Status: z.union([z.literal('Active'), z.literal('Archived')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Archived
+        * * Description: Lifecycle status: Active or Archived`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type MJExperimentEntityType = z.infer<typeof MJExperimentSchema>;
+
+/**
  * zod schema definition for the entity MJ: Explorer Navigation Items
  */
 export const MJExplorerNavigationItemSchema = z.object({
@@ -18334,7 +18796,7 @@ export const MJIntegrationObjectSchema = z.object({
         * * Description: Primary key`),
     IntegrationID: z.string().describe(`
         * * Field Name: IntegrationID
-        * * Display Name: Integration
+        * * Display Name: Integration ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Integrations (vwIntegrations.ID)
         * * Description: Foreign key to the Integration that owns this object`),
@@ -18604,7 +19066,7 @@ export const MJIntegrationObjectSchema = z.object({
         * * Description: Stable, monotonic ordering column (usually the PK) used for keyset/no-watermark resume of a scan. Null when the object has no stable key.`),
     Integration: z.string().describe(`
         * * Field Name: Integration
-        * * Display Name: Integration Name
+        * * Display Name: Integration
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -20302,6 +20764,631 @@ export const MJMCPToolFavoriteSchema = z.object({
 export type MJMCPToolFavoriteEntityType = z.infer<typeof MJMCPToolFavoriteSchema>;
 
 /**
+ * zod schema definition for the entity MJ: ML Algorithm Use Case Rankings
+ */
+export const MJMLAlgorithmUseCaseRankingSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    MLAlgorithmID: z.string().describe(`
+        * * Field Name: MLAlgorithmID
+        * * Display Name: ML Algorithm ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: ML Algorithms (vwMLAlgorithms.ID)
+        * * Description: Foreign key to the algorithm being ranked`),
+    MLAlgorithmUseCaseID: z.string().describe(`
+        * * Field Name: MLAlgorithmUseCaseID
+        * * Display Name: ML Algorithm Use Case ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: ML Algorithm Use Cases (vwMLAlgorithmUseCases.ID)
+        * * Description: Foreign key to the use-case scenario the algorithm is ranked for`),
+    SuitabilityScore: z.number().describe(`
+        * * Field Name: SuitabilityScore
+        * * Display Name: Suitability Score
+        * * SQL Data Type: int
+        * * Description: Numeric suitability for sorting/ranking, 1 (worst) to 5 (best)`),
+    RecommendationLevel: z.union([z.literal('NotRecommended'), z.literal('Primary'), z.literal('Strong'), z.literal('Viable'), z.literal('Weak')]).describe(`
+        * * Field Name: RecommendationLevel
+        * * Display Name: Recommendation Level
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * NotRecommended
+    *   * Primary
+    *   * Strong
+    *   * Viable
+    *   * Weak
+        * * Description: Categorical recommendation: Primary, Strong, Viable, Weak, or NotRecommended`),
+    Rationale: z.string().nullable().describe(`
+        * * Field Name: Rationale
+        * * Display Name: Rationale
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Plain-language explanation of the ranking, readable by both agents and humans (e.g., "Gives feature importances but not simple coefficients — if a stakeholder needs to see exactly why each prediction was made, prefer Logistic/Ridge.")`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    MLAlgorithm: z.string().describe(`
+        * * Field Name: MLAlgorithm
+        * * Display Name: ML Algorithm
+        * * SQL Data Type: nvarchar(255)`),
+    MLAlgorithmUseCase: z.string().describe(`
+        * * Field Name: MLAlgorithmUseCase
+        * * Display Name: ML Algorithm Use Case
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJMLAlgorithmUseCaseRankingEntityType = z.infer<typeof MJMLAlgorithmUseCaseRankingSchema>;
+
+/**
+ * zod schema definition for the entity MJ: ML Algorithm Use Cases
+ */
+export const MJMLAlgorithmUseCaseSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Display name of the scenario (e.g., "Interpretability required")`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional description of the scenario`),
+    ProblemTypeScope: z.union([z.literal('any'), z.literal('classification'), z.literal('regression')]).describe(`
+        * * Field Name: ProblemTypeScope
+        * * Display Name: Problem Type Scope
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: any
+    * * Value List Type: List
+    * * Possible Values 
+    *   * any
+    *   * classification
+    *   * regression
+        * * Description: Which problem type this scenario applies to: classification, regression, or any`),
+    Guidance: z.string().nullable().describe(`
+        * * Field Name: Guidance
+        * * Display Name: Guidance
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Longer agent-readable guidance on when this scenario applies and what it implies for algorithm choice`),
+    DisplayOrder: z.number().describe(`
+        * * Field Name: DisplayOrder
+        * * Display Name: Display Order
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Ordering hint for displaying scenarios in the UI`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type MJMLAlgorithmUseCaseEntityType = z.infer<typeof MJMLAlgorithmUseCaseSchema>;
+
+/**
+ * zod schema definition for the entity MJ: ML Algorithms
+ */
+export const MJMLAlgorithmSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Display name of the algorithm (e.g., "Gradient Boosting (XGBoost)", "Logistic Regression")`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional description of the algorithm and when to use it`),
+    ProblemTypes: z.string().describe(`
+        * * Field Name: ProblemTypes
+        * * Display Name: Problem Types
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Comma-delimited list of supported problem types (e.g., "classification", "regression", or "classification,regression")`),
+    DriverClass: z.string().describe(`
+        * * Field Name: DriverClass
+        * * Display Name: Driver Class
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Algorithm key passed to the Python training/inference sidecar (e.g., "xgboost", "lightgbm", "logistic_regression", "random_forest", "ridge", "mlp")`),
+    HyperparameterSchema: z.string().nullable().describe(`
+        * * Field Name: HyperparameterSchema
+        * * Display Name: Hyperparameter Schema
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON Schema describing the algorithm's tunable hyperparameters (drives the UI form and validation)`),
+    DefaultHyperparameters: z.string().nullable().describe(`
+        * * Field Name: DefaultHyperparameters
+        * * Display Name: Default Hyperparameters
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON object of default hyperparameter values applied when a pipeline does not override them`),
+    SupportsFeatureImportance: z.boolean().describe(`
+        * * Field Name: SupportsFeatureImportance
+        * * Display Name: Supports Feature Importance
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When 1, the algorithm produces per-feature importance scores used for explainability and the leakage guard`),
+    Status: z.union([z.literal('Active'), z.literal('Deprecated')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Deprecated
+        * * Description: Lifecycle status: Active (selectable) or Deprecated`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type MJMLAlgorithmEntityType = z.infer<typeof MJMLAlgorithmSchema>;
+
+/**
+ * zod schema definition for the entity MJ: ML Model Scoring Bindings
+ */
+export const MJMLModelScoringBindingSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    MLModelID: z.string().describe(`
+        * * Field Name: MLModelID
+        * * Display Name: ML Model ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: ML Models (vwMLModels.ID)
+        * * Description: Foreign key to the MLModel that does the scoring`),
+    RecordProcessID: z.string().nullable().describe(`
+        * * Field Name: RecordProcessID
+        * * Display Name: Record Process ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Record Processes (vwRecordProcesses.ID)
+        * * Description: Foreign key to the Record Process that runs the ML inference work for this binding`),
+    TargetEntityID: z.string().nullable().describe(`
+        * * Field Name: TargetEntityID
+        * * Display Name: Target Entity ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: Foreign key to the entity that receives the prediction (when scores are written back)`),
+    TargetColumn: z.string().nullable().describe(`
+        * * Field Name: TargetColumn
+        * * Display Name: Target Column
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Name of the column that receives the prediction (when scores are written back / materialized)`),
+    Mode: z.union([z.literal('Materialized'), z.literal('OnDemand'), z.literal('Scheduled')]).describe(`
+        * * Field Name: Mode
+        * * Display Name: Scoring Mode
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: OnDemand
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Materialized
+    *   * OnDemand
+    *   * Scheduled
+        * * Description: Scoring mode: OnDemand, Scheduled, or Materialized`),
+    MaterializedResultID: z.string().nullable().describe(`
+        * * Field Name: MaterializedResultID
+        * * Display Name: Materialized Result ID
+        * * SQL Data Type: uniqueidentifier
+        * * Description: Soft reference to a MJ: Materialized Results row (PR #2770) when Mode=Materialized; not a FK until that table exists`),
+    LastScoredAt: z.date().nullable().describe(`
+        * * Field Name: LastScoredAt
+        * * Display Name: Last Scored At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Timestamp of the most recent scoring run for this binding`),
+    LastRowCount: z.number().nullable().describe(`
+        * * Field Name: LastRowCount
+        * * Display Name: Last Row Count
+        * * SQL Data Type: int
+        * * Description: Number of records scored in the most recent scoring run`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    RecordProcess: z.string().nullable().describe(`
+        * * Field Name: RecordProcess
+        * * Display Name: Record Process
+        * * SQL Data Type: nvarchar(255)`),
+    TargetEntity: z.string().nullable().describe(`
+        * * Field Name: TargetEntity
+        * * Display Name: Target Entity
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJMLModelScoringBindingEntityType = z.infer<typeof MJMLModelScoringBindingSchema>;
+
+/**
+ * zod schema definition for the entity MJ: ML Models
+ */
+export const MJMLModelSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: Model ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    PipelineID: z.string().describe(`
+        * * Field Name: PipelineID
+        * * Display Name: Pipeline ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: ML Training Pipelines (vwMLTrainingPipelines.ID)
+        * * Description: Foreign key to the ML Training Pipeline that produced this model (lineage)`),
+    Version: z.number().describe(`
+        * * Field Name: Version
+        * * Display Name: Version
+        * * SQL Data Type: int
+        * * Default Value: 1
+        * * Description: Monotonic version number of this model under its pipeline`),
+    AlgorithmID: z.string().describe(`
+        * * Field Name: AlgorithmID
+        * * Display Name: Algorithm ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: ML Algorithms (vwMLAlgorithms.ID)
+        * * Description: Foreign key to the algorithm used to train this model`),
+    ArtifactFileID: z.string().nullable().describe(`
+        * * Field Name: ArtifactFileID
+        * * Display Name: Artifact File ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Files (vwFiles.ID)
+        * * Description: Foreign key to the MJ: Files record holding the serialized model artifact in MJStorage`),
+    FittedPreprocessing: z.string().nullable().describe(`
+        * * Field Name: FittedPreprocessing
+        * * Display Name: Fitted Preprocessing
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON of the fitted preprocessing parameters (means/std, one-hot vocabularies, bin edges, imputation fills) learned at training time and re-applied verbatim at inference — the anti train/serve skew payload`),
+    FeatureSchema: z.string().describe(`
+        * * Field Name: FeatureSchema
+        * * Display Name: Feature Schema
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON ordered list of feature names + kinds the model expects as input (the inference input contract)`),
+    TargetVariable: z.string().describe(`
+        * * Field Name: TargetVariable
+        * * Display Name: Target Variable
+        * * SQL Data Type: nvarchar(500)
+        * * Description: The label this model predicts`),
+    ProblemType: z.union([z.literal('classification'), z.literal('regression')]).describe(`
+        * * Field Name: ProblemType
+        * * Display Name: Problem Type
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * classification
+    *   * regression
+        * * Description: Problem type: classification or regression`),
+    Metrics: z.string().nullable().describe(`
+        * * Field Name: Metrics
+        * * Display Name: Training Metrics
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON of training + validation metrics (AUC, F1, accuracy, RMSE, etc.)`),
+    HoldoutMetrics: z.string().nullable().describe(`
+        * * Field Name: HoldoutMetrics
+        * * Display Name: Holdout Metrics
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON metrics on the locked holdout set the search never saw — scored exactly once for an honest performance number`),
+    FeatureImportance: z.string().nullable().describe(`
+        * * Field Name: FeatureImportance
+        * * Display Name: Feature Importance
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON per-feature importance/contribution for explainability and the leakage guard`),
+    Lineage: z.string().nullable().describe(`
+        * * Field Name: Lineage
+        * * Display Name: Lineage Details
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON lineage: data version(s), pipeline version, source bindings, as-of date, sidecar version, and any embedding/LLM model versions used to build features`),
+    TrainedAt: z.date().nullable().describe(`
+        * * Field Name: TrainedAt
+        * * Display Name: Trained At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Timestamp when training completed`),
+    TrainingDurationSec: z.number().nullable().describe(`
+        * * Field Name: TrainingDurationSec
+        * * Display Name: Training Duration (Seconds)
+        * * SQL Data Type: int
+        * * Description: Wall-clock training duration in seconds`),
+    TrainingRowCount: z.number().nullable().describe(`
+        * * Field Name: TrainingRowCount
+        * * Display Name: Training Row Count
+        * * SQL Data Type: int
+        * * Description: Number of rows used to train the model`),
+    Status: z.union([z.literal('Archived'), z.literal('Draft'), z.literal('Published'), z.literal('Validated')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Draft
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Archived
+    *   * Draft
+    *   * Published
+    *   * Validated
+        * * Description: Lifecycle status: Draft, Validated, Published, or Archived`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Pipeline: z.string().describe(`
+        * * Field Name: Pipeline
+        * * Display Name: Pipeline
+        * * SQL Data Type: nvarchar(255)`),
+    Algorithm: z.string().describe(`
+        * * Field Name: Algorithm
+        * * Display Name: Algorithm
+        * * SQL Data Type: nvarchar(255)`),
+    ArtifactFile: z.string().nullable().describe(`
+        * * Field Name: ArtifactFile
+        * * Display Name: Artifact File
+        * * SQL Data Type: nvarchar(500)`),
+});
+
+export type MJMLModelEntityType = z.infer<typeof MJMLModelSchema>;
+
+/**
+ * zod schema definition for the entity MJ: ML Training Pipelines
+ */
+export const MJMLTrainingPipelineSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Human-readable name of the pipeline`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional description of what this pipeline predicts and how`),
+    Version: z.number().describe(`
+        * * Field Name: Version
+        * * Display Name: Version
+        * * SQL Data Type: int
+        * * Default Value: 1
+        * * Description: Monotonic version number of the pipeline definition`),
+    Status: z.union([z.literal('Archived'), z.literal('Draft'), z.literal('Published')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Draft
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Archived
+    *   * Draft
+    *   * Published
+        * * Description: Lifecycle status: Draft, Published, or Archived`),
+    TargetEntityID: z.string().describe(`
+        * * Field Name: TargetEntityID
+        * * Display Name: Target Entity ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: Foreign key to the entity whose records are the training units (e.g., Members)`),
+    TargetVariable: z.string().describe(`
+        * * Field Name: TargetVariable
+        * * Display Name: Target Variable
+        * * SQL Data Type: nvarchar(500)
+        * * Description: The label being predicted — a column or expression on the target entity (e.g., "Renewed")`),
+    ProblemType: z.union([z.literal('classification'), z.literal('regression')]).describe(`
+        * * Field Name: ProblemType
+        * * Display Name: Problem Type
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * classification
+    *   * regression
+        * * Description: Problem type: classification or regression`),
+    AlgorithmID: z.string().describe(`
+        * * Field Name: AlgorithmID
+        * * Display Name: Algorithm ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: ML Algorithms (vwMLAlgorithms.ID)
+        * * Description: Foreign key to the chosen algorithm in the catalog`),
+    Hyperparameters: z.string().nullable().describe(`
+        * * Field Name: Hyperparameters
+        * * Display Name: Hyperparameters
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON hyperparameter overrides for the chosen algorithm`),
+    SourceBindings: z.string().nullable().describe(`
+        * * Field Name: SourceBindings
+        * * Display Name: Source Bindings
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON ordered references to source entities / queries / external entities / vector sets the features are drawn from`),
+    FeatureSteps: z.string().nullable().describe(`
+        * * Field Name: FeatureSteps
+        * * Display Name: Feature Steps
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON ordered DAG of FeatureAssembly steps (selection, null-handling, encoding, scaling, embedding/LLM featurization) executed by the single FeatureAssembly executor`),
+    AsOfStrategy: z.string().nullable().describe(`
+        * * Field Name: AsOfStrategy
+        * * Display Name: As Of Strategy
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON point-in-time configuration: { Mode: none|column|offset, Column?, OffsetDays? } — assembles features as of the decision point to prevent future leakage`),
+    LeakageGuard: z.string().nullable().describe(`
+        * * Field Name: LeakageGuard
+        * * Display Name: Leakage Guard
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON leakage guard: deny-list of fields/sources that must not enter features, plus the single-feature-dominance threshold that flags suspicious runs`),
+    ValidationStrategy: z.string().nullable().describe(`
+        * * Field Name: ValidationStrategy
+        * * Display Name: Validation Strategy
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON validation strategy: { Strategy: train_test_split|kfold|holdout, TestSize?, K?, LockedHoldoutFraction }`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    TargetEntity: z.string().describe(`
+        * * Field Name: TargetEntity
+        * * Display Name: Target Entity
+        * * SQL Data Type: nvarchar(255)`),
+    Algorithm: z.string().describe(`
+        * * Field Name: Algorithm
+        * * Display Name: Algorithm
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJMLTrainingPipelineEntityType = z.infer<typeof MJMLTrainingPipelineSchema>;
+
+/**
+ * zod schema definition for the entity MJ: ML Training Runs
+ */
+export const MJMLTrainingRunSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    PipelineID: z.string().describe(`
+        * * Field Name: PipelineID
+        * * Display Name: Pipeline ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: ML Training Pipelines (vwMLTrainingPipelines.ID)
+        * * Description: Foreign key to the ML Training Pipeline this run executed`),
+    ResultingModelID: z.string().nullable().describe(`
+        * * Field Name: ResultingModelID
+        * * Display Name: Resulting Model ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: ML Models (vwMLModels.ID)
+        * * Description: Foreign key to the MLModel this run produced, when it produced one (NULL for pruned/failed runs)`),
+    ExperimentSessionIterationID: z.string().nullable().describe(`
+        * * Field Name: ExperimentSessionIterationID
+        * * Display Name: Experiment Session Iteration ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Experiment Session Iterations (vwExperimentSessionIterations.ID)
+        * * Description: Optional foreign key to the generic ExperimentSessionIteration that owns this run (NULL for standalone/manual training outside a session)`),
+    FeaturesUsed: z.string().nullable().describe(`
+        * * Field Name: FeaturesUsed
+        * * Display Name: Features Used
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON of the exact feature set used for this run`),
+    AlgorithmID: z.string().describe(`
+        * * Field Name: AlgorithmID
+        * * Display Name: Algorithm ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: ML Algorithms (vwMLAlgorithms.ID)
+        * * Description: Foreign key to the algorithm used for this run`),
+    Hyperparameters: z.string().nullable().describe(`
+        * * Field Name: Hyperparameters
+        * * Display Name: Hyperparameters
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON hyperparameters used for this run`),
+    ValidationResults: z.string().nullable().describe(`
+        * * Field Name: ValidationResults
+        * * Display Name: Validation Results
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON of all validation metrics, per-fold where applicable (the full metric blob; the parent iteration's Score is the single normalized leaderboard number)`),
+    Status: z.union([z.literal('Completed'), z.literal('Failed'), z.literal('Pending'), z.literal('Pruned'), z.literal('Running')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Completed
+    *   * Failed
+    *   * Pending
+    *   * Pruned
+    *   * Running
+        * * Description: Run status: Pending, Running, Completed, Failed, or Pruned`),
+    StartedAt: z.date().nullable().describe(`
+        * * Field Name: StartedAt
+        * * Display Name: Started At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Timestamp the run started`),
+    CompletedAt: z.date().nullable().describe(`
+        * * Field Name: CompletedAt
+        * * Display Name: Completed At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Timestamp the run completed`),
+    ComputeCost: z.number().nullable().describe(`
+        * * Field Name: ComputeCost
+        * * Display Name: Compute Cost
+        * * SQL Data Type: decimal(18, 6)
+        * * Description: Compute cost attributed to this run, for budget enforcement`),
+    TokensUsed: z.number().nullable().describe(`
+        * * Field Name: TokensUsed
+        * * Display Name: Tokens Used
+        * * SQL Data Type: int
+        * * Description: LLM tokens used by this run, for budget enforcement`),
+    Notes: z.string().nullable().describe(`
+        * * Field Name: Notes
+        * * Display Name: Notes
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Notes / observations about this run`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Pipeline: z.string().describe(`
+        * * Field Name: Pipeline
+        * * Display Name: Pipeline
+        * * SQL Data Type: nvarchar(255)`),
+    ExperimentSessionIteration: z.string().nullable().describe(`
+        * * Field Name: ExperimentSessionIteration
+        * * Display Name: Experiment Session Iteration
+        * * SQL Data Type: nvarchar(255)`),
+    Algorithm: z.string().describe(`
+        * * Field Name: Algorithm
+        * * Display Name: Algorithm
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJMLTrainingRunEntityType = z.infer<typeof MJMLTrainingRunSchema>;
+
+/**
  * zod schema definition for the entity MJ: O Auth Auth Server Metadata Caches
  */
 export const MJOAuthAuthServerMetadataCacheSchema = z.object({
@@ -20854,7 +21941,7 @@ export const MJOpenAppSchema = z.object({
         * * Default Value: newsequentialid()`),
     Name: z.string().describe(`
         * * Field Name: Name
-        * * Display Name: Name
+        * * Display Name: App Name
         * * SQL Data Type: nvarchar(64)
         * * Description: Unique lowercase identifier for the app (e.g. acme-crm). Must contain only lowercase letters, digits, and hyphens.`),
     DisplayName: z.string().describe(`
@@ -20919,12 +22006,12 @@ export const MJOpenAppSchema = z.object({
         * * Description: Optional hex color code for branding in the UI (e.g. #FF5733)`),
     ManifestJSON: z.string().describe(`
         * * Field Name: ManifestJSON
-        * * Display Name: Manifest JSON
+        * * Display Name: Manifest
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Full mj-app.json manifest stored as JSON for the currently installed version`),
     ConfigurationSchemaJSON: z.string().nullable().describe(`
         * * Field Name: ConfigurationSchemaJSON
-        * * Display Name: Configuration Schema JSON
+        * * Display Name: Configuration Schema
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Optional JSON Schema defining the configuration options this app accepts`),
     InstalledByUserID: z.string().describe(`
@@ -20957,6 +22044,11 @@ export const MJOpenAppSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Subpath: z.string().nullable().describe(`
+        * * Field Name: Subpath
+        * * Display Name: Subpath
+        * * SQL Data Type: nvarchar(500)
+        * * Description: In-repo subdirectory the app was installed from for multi-app repositories (e.g. 'CRM/HubSpot'). NULL when the app's mj-app.json is at the repository root.`),
     InstalledByUser: z.string().describe(`
         * * Field Name: InstalledByUser
         * * Display Name: Installed By User
@@ -21145,6 +22237,300 @@ export const MJPermissionDomainSchema = z.object({
 });
 
 export type MJPermissionDomainEntityType = z.infer<typeof MJPermissionDomainSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Process Run Details
+ */
+export const MJProcessRunDetailSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ProcessRunID: z.string().describe(`
+        * * Field Name: ProcessRunID
+        * * Display Name: Process Run
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Process Runs (vwProcessRuns.ID)
+        * * Description: Foreign key to the parent Process Run`),
+    EntityID: z.string().describe(`
+        * * Field Name: EntityID
+        * * Display Name: Entity ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: Foreign key to the entity of the processed record. Stored (not inherited) because a single run may span entities for ad-hoc / engine-driven runs.`),
+    RecordID: z.string().describe(`
+        * * Field Name: RecordID
+        * * Display Name: Record ID
+        * * SQL Data Type: nvarchar(450)
+        * * Description: Primary key of the processed record, stored as text to remain composite-key safe`),
+    Status: z.union([z.literal('Failed'), z.literal('Pending'), z.literal('Skipped'), z.literal('Succeeded')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Failed
+    *   * Pending
+    *   * Skipped
+    *   * Succeeded
+        * * Description: Per-record status: Pending, Succeeded, Failed, or Skipped`),
+    StartedAt: z.date().nullable().describe(`
+        * * Field Name: StartedAt
+        * * Display Name: Started At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When processing of this record started`),
+    CompletedAt: z.date().nullable().describe(`
+        * * Field Name: CompletedAt
+        * * Display Name: Completed At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When processing of this record completed`),
+    DurationMs: z.number().nullable().describe(`
+        * * Field Name: DurationMs
+        * * Display Name: Duration (ms)
+        * * SQL Data Type: int
+        * * Description: Processing duration for this record in milliseconds`),
+    AttemptCount: z.number().describe(`
+        * * Field Name: AttemptCount
+        * * Display Name: Attempt Count
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Number of processing attempts for this record (supports retry)`),
+    ResultPayload: z.string().nullable().describe(`
+        * * Field Name: ResultPayload
+        * * Display Name: Result Payload
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Structured output payload (JSON) produced for this record`),
+    ErrorMessage: z.string().nullable().describe(`
+        * * Field Name: ErrorMessage
+        * * Display Name: Error Message
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Per-record error message when Status=Failed`),
+    ActionExecutionLogID: z.string().nullable().describe(`
+        * * Field Name: ActionExecutionLogID
+        * * Display Name: Action Execution Log ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Action Execution Logs (vwActionExecutionLogs.ID)
+        * * Description: Foreign key to the Action Execution Log for deep tracing, when the work was an Action`),
+    AIAgentRunID: z.string().nullable().describe(`
+        * * Field Name: AIAgentRunID
+        * * Display Name: AI Agent Run ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
+        * * Description: Foreign key to the AI Agent Run for deep tracing, when the work was an Agent`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Entity: z.string().describe(`
+        * * Field Name: Entity
+        * * Display Name: Entity Name
+        * * SQL Data Type: nvarchar(255)`),
+    ActionExecutionLog: z.string().nullable().describe(`
+        * * Field Name: ActionExecutionLog
+        * * Display Name: Action Execution Log
+        * * SQL Data Type: nvarchar(425)`),
+    AIAgentRun: z.string().nullable().describe(`
+        * * Field Name: AIAgentRun
+        * * Display Name: AI Agent Run
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJProcessRunDetailEntityType = z.infer<typeof MJProcessRunDetailSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Process Runs
+ */
+export const MJProcessRunSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    RecordProcessID: z.string().nullable().describe(`
+        * * Field Name: RecordProcessID
+        * * Display Name: Record Process
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Record Processes (vwRecordProcesses.ID)
+        * * Description: Foreign key to the Record Process that spawned this run; NULL for ad-hoc / engine-driven runs not tied to a saved definition`),
+    EntityID: z.string().nullable().describe(`
+        * * Field Name: EntityID
+        * * Display Name: Entity
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: Foreign key to the entity processed by this run, when the run is entity-scoped`),
+    TriggeredBy: z.union([z.literal('Manual'), z.literal('OnChange'), z.literal('OnDemand'), z.literal('Schedule')]).describe(`
+        * * Field Name: TriggeredBy
+        * * Display Name: Triggered By
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Manual
+    *   * OnChange
+    *   * OnDemand
+    *   * Schedule
+        * * Description: What triggered this run: OnChange, Schedule, OnDemand, or Manual`),
+    SourceType: z.union([z.literal('Array'), z.literal('Filter'), z.literal('Keyset'), z.literal('List'), z.literal('SingleRecord'), z.literal('View')]).describe(`
+        * * Field Name: SourceType
+        * * Display Name: Source Type
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Array
+    *   * Filter
+    *   * Keyset
+    *   * List
+    *   * SingleRecord
+    *   * View
+        * * Description: The kind of record-set source resolved for this run: View, List, Filter, Array, Keyset, or SingleRecord`),
+    SourceID: z.string().nullable().describe(`
+        * * Field Name: SourceID
+        * * Display Name: Source ID
+        * * SQL Data Type: uniqueidentifier
+        * * Description: Polymorphic source identifier (e.g., ViewID or ListID) when applicable; no FK because it spans entities`),
+    SourceFilter: z.string().nullable().describe(`
+        * * Field Name: SourceFilter
+        * * Display Name: Source Filter
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Resolved filter snapshot used to materialize the record set for this run`),
+    ScheduledJobRunID: z.string().nullable().describe(`
+        * * Field Name: ScheduledJobRunID
+        * * Display Name: Scheduled Job Run
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Scheduled Job Runs (vwScheduledJobRuns.ID)
+        * * Description: Foreign key to the Scheduled Job Run that launched this run, when scheduler-launched`),
+    Status: z.union([z.literal('Cancelled'), z.literal('Completed'), z.literal('Failed'), z.literal('Paused'), z.literal('Pending'), z.literal('Running')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Cancelled
+    *   * Completed
+    *   * Failed
+    *   * Paused
+    *   * Pending
+    *   * Running
+        * * Description: Run status: Pending, Running, Paused, Completed, Failed, or Cancelled`),
+    StartTime: z.date().nullable().describe(`
+        * * Field Name: StartTime
+        * * Display Name: Start Time
+        * * SQL Data Type: datetimeoffset
+        * * Description: When the run started`),
+    EndTime: z.date().nullable().describe(`
+        * * Field Name: EndTime
+        * * Display Name: End Time
+        * * SQL Data Type: datetimeoffset
+        * * Description: When the run ended`),
+    TotalItemCount: z.number().nullable().describe(`
+        * * Field Name: TotalItemCount
+        * * Display Name: Total Item Count
+        * * SQL Data Type: int
+        * * Description: Estimated or known total number of records to process`),
+    ProcessedItems: z.number().describe(`
+        * * Field Name: ProcessedItems
+        * * Display Name: Processed Items
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Count of records processed so far`),
+    SuccessCount: z.number().describe(`
+        * * Field Name: SuccessCount
+        * * Display Name: Success Count
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Count of records processed successfully`),
+    ErrorCount: z.number().describe(`
+        * * Field Name: ErrorCount
+        * * Display Name: Error Count
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Count of records that failed processing`),
+    SkippedCount: z.number().describe(`
+        * * Field Name: SkippedCount
+        * * Display Name: Skipped Count
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Count of records skipped (e.g., unchanged per watermark)`),
+    LastProcessedOffset: z.number().nullable().describe(`
+        * * Field Name: LastProcessedOffset
+        * * Display Name: Last Processed Offset
+        * * SQL Data Type: int
+        * * Description: Offset-based resume cursor (StartRow) for sources that paginate by offset`),
+    LastProcessedKey: z.string().nullable().describe(`
+        * * Field Name: LastProcessedKey
+        * * Display Name: Last Processed Key
+        * * SQL Data Type: nvarchar(450)
+        * * Description: Keyset-based resume cursor (AfterKey) for sources that paginate by seek`),
+    BatchSize: z.number().nullable().describe(`
+        * * Field Name: BatchSize
+        * * Display Name: Batch Size
+        * * SQL Data Type: int
+        * * Description: Effective batch size for this run`),
+    CancellationRequested: z.boolean().describe(`
+        * * Field Name: CancellationRequested
+        * * Display Name: Cancellation Requested
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Pause/cancel handshake flag honored by the processor between batches`),
+    Configuration: z.string().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration JSON
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON snapshot of the effective configuration for this run`),
+    ErrorMessage: z.string().nullable().describe(`
+        * * Field Name: ErrorMessage
+        * * Display Name: Error Message
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Run-level error message when Status=Failed`),
+    StartedByUserID: z.string().nullable().describe(`
+        * * Field Name: StartedByUserID
+        * * Display Name: Started By User
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: Foreign key to the user who started the run`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    DryRun: z.boolean().describe(`
+        * * Field Name: DryRun
+        * * Display Name: Is Dry Run
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When 1, this run was a dry-run (compute-only) preview: the per-record diffs were computed and persisted as Process Run Details, but no changes were written back to the target records. When 0, the run applied its changes.`),
+    RecordProcess: z.string().nullable().describe(`
+        * * Field Name: RecordProcess
+        * * Display Name: Record Process Name
+        * * SQL Data Type: nvarchar(255)`),
+    Entity: z.string().nullable().describe(`
+        * * Field Name: Entity
+        * * Display Name: Entity Name
+        * * SQL Data Type: nvarchar(255)`),
+    ScheduledJobRun: z.string().nullable().describe(`
+        * * Field Name: ScheduledJobRun
+        * * Display Name: Scheduled Job Run Name
+        * * SQL Data Type: nvarchar(200)`),
+    StartedByUser: z.string().nullable().describe(`
+        * * Field Name: StartedByUser
+        * * Display Name: Started By User Name
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJProcessRunEntityType = z.infer<typeof MJProcessRunSchema>;
 
 /**
  * zod schema definition for the entity MJ: Projects
@@ -22908,6 +24294,579 @@ export const MJRecordMergeLogSchema = z.object({
 });
 
 export type MJRecordMergeLogEntityType = z.infer<typeof MJRecordMergeLogSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Record Process Categories
+ */
+export const MJRecordProcessCategorySchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Display name of the category`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional description of what belongs in this category`),
+    ParentID: z.string().nullable().describe(`
+        * * Field Name: ParentID
+        * * Display Name: Parent Category
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Record Process Categories (vwRecordProcessCategories.ID)
+        * * Description: Self-referencing foreign key to the parent category, enabling a nested folder hierarchy (NULL for a top-level category)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Parent: z.string().nullable().describe(`
+        * * Field Name: Parent
+        * * Display Name: Parent Name
+        * * SQL Data Type: nvarchar(255)`),
+    RootParentID: z.string().nullable().describe(`
+        * * Field Name: RootParentID
+        * * Display Name: Root Parent
+        * * SQL Data Type: uniqueidentifier`),
+});
+
+export type MJRecordProcessCategoryEntityType = z.infer<typeof MJRecordProcessCategorySchema>;
+
+/**
+ * zod schema definition for the entity MJ: Record Process Watermarks
+ */
+export const MJRecordProcessWatermarkSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    RecordProcessID: z.string().describe(`
+        * * Field Name: RecordProcessID
+        * * Display Name: Record Process
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Record Processes (vwRecordProcesses.ID)
+        * * Description: Foreign key to the Record Process this watermark belongs to`),
+    EntityID: z.string().describe(`
+        * * Field Name: EntityID
+        * * Display Name: Entity
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: Foreign key to the entity of the watermarked record`),
+    RecordID: z.string().describe(`
+        * * Field Name: RecordID
+        * * Display Name: Record ID
+        * * SQL Data Type: nvarchar(450)
+        * * Description: Primary key of the watermarked record, stored as text to remain composite-key safe`),
+    Hash: z.string().describe(`
+        * * Field Name: Hash
+        * * Display Name: Content Hash
+        * * SQL Data Type: nvarchar(128)
+        * * Description: Content hash of the record as of the last time it was processed by this Record Process`),
+    LastProcessedAt: z.date().describe(`
+        * * Field Name: LastProcessedAt
+        * * Display Name: Last Processed At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When this record was last processed by this Record Process`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    RecordProcess: z.string().describe(`
+        * * Field Name: RecordProcess
+        * * Display Name: Record Process Name
+        * * SQL Data Type: nvarchar(255)`),
+    Entity: z.string().describe(`
+        * * Field Name: Entity
+        * * Display Name: Entity Name
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJRecordProcessWatermarkEntityType = z.infer<typeof MJRecordProcessWatermarkSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Record Processes
+ */
+export const MJRecordProcessSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Human-readable name of the process definition (e.g., "Weekly Customer Health Summary")`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional description of what this process does`),
+    CategoryID: z.string().nullable().describe(`
+        * * Field Name: CategoryID
+        * * Display Name: Category
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Record Process Categories (vwRecordProcessCategories.ID)
+        * * Description: Optional hierarchical category for organizing this process in the UI`),
+    EntityID: z.string().describe(`
+        * * Field Name: EntityID
+        * * Display Name: Entity
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: Foreign key to the target entity whose records this process operates on`),
+    Status: z.union([z.literal('Active'), z.literal('Disabled'), z.literal('Draft')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Draft
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    *   * Draft
+        * * Description: Lifecycle status: Draft (not yet wired), Active (triggers live), or Disabled`),
+    WorkType: z.union([z.literal('Action'), z.literal('Agent'), z.literal('FieldRules'), z.literal('Infer'), z.literal('ML Model')]).describe(`
+        * * Field Name: WorkType
+        * * Display Name: Work Type
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Action
+    *   * Agent
+    *   * FieldRules
+    *   * Infer
+    *   * ML Model
+        * * Description: Whether the work is an Action, an Agent, or an Infer (per-record AI Prompt). Agents are dispatched through the Execute Agent action and must be top-level + ExposeAsAction; Infer runs the AI Prompt named by PromptID for each record and writes its structured output back via OutputMapping.`),
+    ActionID: z.string().nullable().describe(`
+        * * Field Name: ActionID
+        * * Display Name: Action
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Actions (vwActions.ID)
+        * * Description: Foreign key to the Action to run, when WorkType=Action`),
+    AgentID: z.string().nullable().describe(`
+        * * Field Name: AgentID
+        * * Display Name: Agent
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
+        * * Description: Foreign key to the AI Agent to run, when WorkType=Agent`),
+    PromptID: z.string().nullable().describe(`
+        * * Field Name: PromptID
+        * * Display Name: Prompt
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
+        * * Description: Foreign key to the AI Prompt to run for each record, when WorkType=Infer. The prompt's structured output is written back to the data model via OutputMapping.`),
+    ScopeType: z.union([z.literal('Filter'), z.literal('List'), z.literal('SingleRecord'), z.literal('View')]).describe(`
+        * * Field Name: ScopeType
+        * * Display Name: Scope Type
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Filter
+    *   * List
+    *   * SingleRecord
+    *   * View
+        * * Description: How the record set is scoped for the Schedule and On-Demand triggers: SingleRecord, View, List, or Filter. The On-Change trigger is always single-record and ignores this.`),
+    ScopeViewID: z.string().nullable().describe(`
+        * * Field Name: ScopeViewID
+        * * Display Name: Scope View
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: User Views (vwUserViews.ID)
+        * * Description: Foreign key to the User View defining the scope, when ScopeType=View`),
+    ScopeListID: z.string().nullable().describe(`
+        * * Field Name: ScopeListID
+        * * Display Name: Scope List
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Lists (vwLists.ID)
+        * * Description: Foreign key to the List defining the scope, when ScopeType=List`),
+    ScopeFilter: z.string().nullable().describe(`
+        * * Field Name: ScopeFilter
+        * * Display Name: Scope Filter
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Ad-hoc WHERE clause used to resolve the record set, when ScopeType=Filter`),
+    OnChangeEnabled: z.boolean().describe(`
+        * * Field Name: OnChangeEnabled
+        * * Display Name: On-Change Enabled
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When 1, the process runs per-record on save via an owned Entity Action`),
+    OnChangeInvocationType: z.union([z.literal('AfterCreate'), z.literal('AfterDelete'), z.literal('AfterUpdate'), z.literal('Validate')]).nullable().describe(`
+        * * Field Name: OnChangeInvocationType
+        * * Display Name: On-Change Invocation Type
+        * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * AfterCreate
+    *   * AfterDelete
+    *   * AfterUpdate
+    *   * Validate
+        * * Description: Which save event fires the on-change trigger: AfterCreate, AfterUpdate, AfterDelete, or Validate`),
+    OnChangeFilter: z.string().nullable().describe(`
+        * * Field Name: OnChangeFilter
+        * * Display Name: On-Change Filter
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Gating expression evaluated against the changed record (with changed-fields context) that compiles into the owned Entity Action Filter; only when it passes does the on-change trigger fire`),
+    ScheduleEnabled: z.boolean().describe(`
+        * * Field Name: ScheduleEnabled
+        * * Display Name: Schedule Enabled
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When 1, the process runs on a cron schedule via an owned Scheduled Job`),
+    CronExpression: z.string().nullable().describe(`
+        * * Field Name: CronExpression
+        * * Display Name: Cron Expression
+        * * SQL Data Type: nvarchar(120)
+        * * Description: Cron expression for the schedule trigger, when ScheduleEnabled=1`),
+    Timezone: z.string().nullable().describe(`
+        * * Field Name: Timezone
+        * * Display Name: Timezone
+        * * SQL Data Type: nvarchar(100)
+        * * Default Value: UTC
+        * * Description: IANA timezone for evaluating the cron expression (default UTC)`),
+    OnDemandEnabled: z.boolean().describe(`
+        * * Field Name: OnDemandEnabled
+        * * Display Name: On-Demand Enabled
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When 1, the process can be run on demand (button / resolver)`),
+    InputMapping: z.string().nullable().describe(`
+        * * Field Name: InputMapping
+        * * Display Name: Input Mapping
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON mapping describing how a record maps to the work inputs (optionally including an EntityDocumentID for render-to-text)`),
+    OutputMapping: z.string().nullable().describe(`
+        * * Field Name: OutputMapping
+        * * Display Name: Output Mapping
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON mapping describing how the structured output payload writes back (to fields, a child record, or tags)`),
+    SkipUnchanged: z.boolean().describe(`
+        * * Field Name: SkipUnchanged
+        * * Display Name: Skip Unchanged
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When 1, records whose watermark indicates no change since the last run are skipped`),
+    WatermarkStrategy: z.union([z.literal('Checksum'), z.literal('None'), z.literal('UpdatedAt')]).nullable().describe(`
+        * * Field Name: WatermarkStrategy
+        * * Display Name: Watermark Strategy
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Checksum
+    *   * None
+    *   * UpdatedAt
+        * * Description: How unchanged records are detected for SkipUnchanged: Checksum (per-record content hash, stored in RecordProcessWatermark), UpdatedAt (compares __mj_UpdatedAt, stores nothing), or None`),
+    BatchSize: z.number().nullable().describe(`
+        * * Field Name: BatchSize
+        * * Display Name: Batch Size
+        * * SQL Data Type: int
+        * * Default Value: 100
+        * * Description: Number of records processed per batch (default 100)`),
+    MaxConcurrency: z.number().nullable().describe(`
+        * * Field Name: MaxConcurrency
+        * * Display Name: Max Concurrency
+        * * SQL Data Type: int
+        * * Default Value: 1
+        * * Description: Maximum number of records processed concurrently within a batch (default 1)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Configuration: z.string().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON configuration for the process's work, used by work types that need structured config beyond Input/Output mappings. For WorkType='FieldRules' this holds the serialized FieldRuleSet (the rules applied to each record). NULL for work types that do not use it.`),
+    Category: z.string().nullable().describe(`
+        * * Field Name: Category
+        * * Display Name: Category Name
+        * * SQL Data Type: nvarchar(255)`),
+    Entity: z.string().describe(`
+        * * Field Name: Entity
+        * * Display Name: Entity Name
+        * * SQL Data Type: nvarchar(255)`),
+    Action: z.string().nullable().describe(`
+        * * Field Name: Action
+        * * Display Name: Action Name
+        * * SQL Data Type: nvarchar(425)`),
+    Agent: z.string().nullable().describe(`
+        * * Field Name: Agent
+        * * Display Name: Agent Name
+        * * SQL Data Type: nvarchar(255)`),
+    Prompt: z.string().nullable().describe(`
+        * * Field Name: Prompt
+        * * Display Name: Prompt Name
+        * * SQL Data Type: nvarchar(255)`),
+    ScopeView: z.string().nullable().describe(`
+        * * Field Name: ScopeView
+        * * Display Name: Scope View Name
+        * * SQL Data Type: nvarchar(100)`),
+    ScopeList: z.string().nullable().describe(`
+        * * Field Name: ScopeList
+        * * Display Name: Scope List Name
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJRecordProcessEntityType = z.infer<typeof MJRecordProcessSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Remote Operation Categories
+ */
+export const MJRemoteOperationCategorySchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Display name of the category`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional description of what belongs in this category`),
+    ParentID: z.string().nullable().describe(`
+        * * Field Name: ParentID
+        * * Display Name: Parent Category
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Remote Operation Categories (vwRemoteOperationCategories.ID)
+        * * Description: Self-referencing foreign key to the parent category, enabling a nested folder hierarchy (NULL for a top-level category)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Parent: z.string().nullable().describe(`
+        * * Field Name: Parent
+        * * Display Name: Parent Name
+        * * SQL Data Type: nvarchar(255)`),
+    RootParentID: z.string().nullable().describe(`
+        * * Field Name: RootParentID
+        * * Display Name: Root Parent
+        * * SQL Data Type: uniqueidentifier`),
+});
+
+export type MJRemoteOperationCategoryEntityType = z.infer<typeof MJRemoteOperationCategorySchema>;
+
+/**
+ * zod schema definition for the entity MJ: Remote Operations
+ */
+export const MJRemoteOperationSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Human-readable name of the operation`),
+    OperationKey: z.string().describe(`
+        * * Field Name: OperationKey
+        * * Display Name: Operation Key
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Stable, unique registry key and wire token used to dispatch the operation (e.g., "RecordProcess.RunNow"). Namespaced by convention.`),
+    CategoryID: z.string().nullable().describe(`
+        * * Field Name: CategoryID
+        * * Display Name: Category
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Remote Operation Categories (vwRemoteOperationCategories.ID)
+        * * Description: Optional hierarchical category for organizing this operation in the UI`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Human description of the operation; also the seed for AI-generated implementation code when GenerationType=AI`),
+    InputTypeName: z.string().nullable().describe(`
+        * * Field Name: InputTypeName
+        * * Display Name: Input Type Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: TypeScript type name for the operation input (emitted by CodeGen as the TInput interface)`),
+    InputTypeDefinition: z.string().nullable().describe(`
+        * * Field Name: InputTypeDefinition
+        * * Display Name: Input Type Definition
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Raw TypeScript interface/type source defining the input shape (same mechanism as EntityField JSON-type definitions)`),
+    InputTypeIsArray: z.boolean().describe(`
+        * * Field Name: InputTypeIsArray
+        * * Display Name: Input Is Array
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When 1, the input type is emitted as an array (TInput[])`),
+    OutputTypeName: z.string().nullable().describe(`
+        * * Field Name: OutputTypeName
+        * * Display Name: Output Type Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: TypeScript type name for the operation output (emitted by CodeGen as the TOutput interface)`),
+    OutputTypeDefinition: z.string().nullable().describe(`
+        * * Field Name: OutputTypeDefinition
+        * * Display Name: Output Type Definition
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Raw TypeScript interface/type source defining the output shape`),
+    OutputTypeIsArray: z.boolean().describe(`
+        * * Field Name: OutputTypeIsArray
+        * * Display Name: Output Is Array
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When 1, the output type is emitted as an array (TOutput[])`),
+    ExecutionMode: z.union([z.literal('LongRunning'), z.literal('Sync')]).describe(`
+        * * Field Name: ExecutionMode
+        * * Display Name: Execution Mode
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Sync
+    * * Value List Type: List
+    * * Possible Values 
+    *   * LongRunning
+    *   * Sync
+        * * Description: Sync (request/response) or LongRunning (returns a handle; supports detached and attached consumption)`),
+    RequiredScope: z.string().nullable().describe(`
+        * * Field Name: RequiredScope
+        * * Display Name: Required Scope
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Optional API-key scope string (e.g., recordprocess:execute) enforced for API-key/MCP callers; NULL means no scope gate (interactive users are still bounded by their entity permissions)`),
+    RequiresSystemUser: z.boolean().describe(`
+        * * Field Name: RequiresSystemUser
+        * * Display Name: Requires System User
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When 1, only the system user may invoke this operation`),
+    GenerationType: z.union([z.literal('AI'), z.literal('Default'), z.literal('Manual')]).describe(`
+        * * Field Name: GenerationType
+        * * Display Name: Generation Type
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Manual
+    * * Value List Type: List
+    * * Possible Values 
+    *   * AI
+    *   * Default
+    *   * Manual
+        * * Description: How the server implementation is provided: Manual (hand-written subclass), AI (generated from Description), or Default (standard generated plumbing)`),
+    Code: z.string().nullable().describe(`
+        * * Field Name: Code
+        * * Display Name: Code
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: The AI-generated implementation body (when GenerationType=AI); regenerated only when Description changes`),
+    CodeApprovalStatus: z.union([z.literal('Approved'), z.literal('Pending'), z.literal('Rejected')]).describe(`
+        * * Field Name: CodeApprovalStatus
+        * * Display Name: Code Approval Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Approved
+    *   * Pending
+    *   * Rejected
+        * * Description: Human approval gate for AI-generated code: Pending, Approved, or Rejected. Only Approved AI code is emitted and routable.`),
+    CodeApprovedByUserID: z.string().nullable().describe(`
+        * * Field Name: CodeApprovedByUserID
+        * * Display Name: Code Approved By User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: Foreign key to the user who approved the generated code`),
+    CodeApprovedAt: z.date().nullable().describe(`
+        * * Field Name: CodeApprovedAt
+        * * Display Name: Code Approved At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When the generated code was approved`),
+    ContractFingerprint: z.string().nullable().describe(`
+        * * Field Name: ContractFingerprint
+        * * Display Name: Contract Fingerprint
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Fingerprint of the input/output contract; carried in the wire envelope so the server can reject a stale client loudly instead of mis-deserializing`),
+    Status: z.union([z.literal('Active'), z.literal('Disabled'), z.literal('Pending')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    *   * Pending
+        * * Description: Lifecycle status: Active (routable), Disabled, or Pending. Only Active operations can be invoked.`),
+    CacheTTLSeconds: z.number().nullable().describe(`
+        * * Field Name: CacheTTLSeconds
+        * * Display Name: Cache TTL (Seconds)
+        * * SQL Data Type: int
+        * * Description: Optional result cache TTL in seconds (NULL = no caching)`),
+    TimeoutMS: z.number().nullable().describe(`
+        * * Field Name: TimeoutMS
+        * * Display Name: Timeout (MS)
+        * * SQL Data Type: int
+        * * Description: Optional execution timeout in milliseconds`),
+    MaxConcurrency: z.number().nullable().describe(`
+        * * Field Name: MaxConcurrency
+        * * Display Name: Max Concurrency
+        * * SQL Data Type: int
+        * * Description: Optional cap on concurrent executions of this operation`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    CodeLocked: z.boolean().describe(`
+        * * Field Name: CodeLocked
+        * * Display Name: Code Locked
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When 1, the AI-generated Code is frozen and Save() will not regenerate it even if Description changes (the Generated-Actions CodeLocked analog). Default 0.`),
+    CodeComments: z.string().nullable().describe(`
+        * * Field Name: CodeComments
+        * * Display Name: Code Comments
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: The model's explanation / comments for the AI-generated Code (populated alongside Code when GenerationType=AI). Human-facing review aid.`),
+    Libraries: z.any().nullable().describe(`
+        * * Field Name: Libraries
+        * * Display Name: Libraries
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: Array<MJRemoteOperationEntity_RemoteOperationLibrary>
+        * * Description: JSON array of the libraries the generated body imports: [{ "Library": "@memberjunction/ai-prompts", "ItemsUsed": ["AIPromptRunner"] }, ...]. Bound to the RemoteOperationLibrary JSONType via metadata sync so CodeGen emits a typed LibrariesObject accessor; CodeGen uses it to emit the imports at the top of the generated remote_operations.ts. NULL/empty = only the default always-available libraries are imported.`),
+    Category: z.string().nullable().describe(`
+        * * Field Name: Category
+        * * Display Name: Category Name
+        * * SQL Data Type: nvarchar(255)`),
+    CodeApprovedByUser: z.string().nullable().describe(`
+        * * Field Name: CodeApprovedByUser
+        * * Display Name: Code Approved By User
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJRemoteOperationEntityType = z.infer<typeof MJRemoteOperationSchema>;
 
 /**
  * zod schema definition for the entity MJ: Report Categories
@@ -31547,6 +33506,153 @@ export class MJAIAgentActionEntity extends BaseEntity<MJAIAgentActionEntityType>
     }
 
     /**
+    * Validate() method override for MJ: AI Agent Actions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * CompactLength: This rule ensures that if a value is provided for CompactLength, it must be greater than zero. If CompactLength is left empty, no rule applies.
+    * * CompactMode: CompactMode can be left empty, but if a value is provided it must be either 'AI Summary' or 'First N Chars' to ensure only supported compact display options are used.
+    * * MaxExecutionsPerRun: This rule ensures that if the maximum executions per run is specified, the number must be greater than zero. If it is not specified, no restriction applies.
+    * * MinExecutionsPerRun: This rule ensures that if a minimum executions per run value is provided, it must be zero or greater.
+    * * ResultExpirationTurns: This rule ensures that if the ResultExpirationTurns field has a value, it must be zero or greater (it cannot be negative). If ResultExpirationTurns is left empty, there is no restriction.
+    * * Table-Level: This rule ensures that if the compact mode is set to 'First N Chars', a compact length must be specified. For any other compact mode, the compact length can be left empty.
+    * * Table-Level: This rule ensures that if the result expiration mode is set to 'Compact', a compact mode value must also be provided. If the result expiration mode is not 'Compact', compact mode can be left empty.
+    * * Table-Level: This rule ensures that if both minimum and maximum executions per run are specified, the minimum cannot be greater than the maximum. If either value is not specified, the rule is not enforced.
+    * * Table-Level: This rule ensures that if the result expiration mode is set to 'Compact', then CompactMode, CompactLength, and CompactPromptID must all be empty (null). If the expiration mode is not 'Compact', these fields may be filled in.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateCompactLengthGreaterThanZero(result);
+        this.ValidateCompactModeAllowedValues(result);
+        this.ValidateMaxExecutionsPerRunGreaterThanZero(result);
+        this.ValidateMinExecutionsPerRunIsNonNegative(result);
+        this.ValidateResultExpirationTurnsNonNegative(result);
+        this.ValidateCompactLengthRequiredForFirstNCharsMode(result);
+        this.ValidateCompactModeWhenResultExpirationModeIsCompact(result);
+        this.ValidateMinExecutionsPerRunIsLessThanOrEqualToMaxExecutionsPerRun(result);
+        this.ValidateResultExpirationModeRequiresCompactFieldsEmpty(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that if a value is provided for CompactLength, it must be greater than zero. If CompactLength is left empty, no rule applies.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCompactLengthGreaterThanZero(result: ValidationResult) {
+    	if (this.CompactLength != null && this.CompactLength <= 0) {
+    		result.Errors.push(new ValidationErrorInfo("CompactLength", "CompactLength must be greater than zero if specified.", this.CompactLength, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * CompactMode can be left empty, but if a value is provided it must be either 'AI Summary' or 'First N Chars' to ensure only supported compact display options are used.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCompactModeAllowedValues(result: ValidationResult) {
+    	// CompactMode is optional; if set, it must be one of the allowed options
+    	if (this.CompactMode != null && this.CompactMode !== 'AI Summary' && this.CompactMode !== 'First N Chars') {
+    		result.Errors.push(new ValidationErrorInfo(
+    			'CompactMode',
+    			"CompactMode must be either 'AI Summary' or 'First N Chars' when provided.",
+    			this.CompactMode,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * This rule ensures that if the maximum executions per run is specified, the number must be greater than zero. If it is not specified, no restriction applies.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateMaxExecutionsPerRunGreaterThanZero(result: ValidationResult) {
+    	if (this.MaxExecutionsPerRun != null && this.MaxExecutionsPerRun <= 0) {
+    		result.Errors.push(new ValidationErrorInfo("MaxExecutionsPerRun", "When provided, the maximum executions per run must be greater than zero.", this.MaxExecutionsPerRun, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that if a minimum executions per run value is provided, it must be zero or greater.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateMinExecutionsPerRunIsNonNegative(result: ValidationResult) {
+    	if (this.MinExecutionsPerRun != null && this.MinExecutionsPerRun < 0) {
+    		result.Errors.push(new ValidationErrorInfo("MinExecutionsPerRun", "The minimum executions per run must be zero or greater.", this.MinExecutionsPerRun, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that if the ResultExpirationTurns field has a value, it must be zero or greater (it cannot be negative). If ResultExpirationTurns is left empty, there is no restriction.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateResultExpirationTurnsNonNegative(result: ValidationResult) {
+    	if (this.ResultExpirationTurns != null && this.ResultExpirationTurns < 0) {
+    		result.Errors.push(new ValidationErrorInfo("ResultExpirationTurns", "If provided, ResultExpirationTurns must be zero or greater.", this.ResultExpirationTurns, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that if the compact mode is set to 'First N Chars', a compact length must be specified. For any other compact mode, the compact length can be left empty.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCompactLengthRequiredForFirstNCharsMode(result: ValidationResult) {
+    	if (this.CompactMode === "First N Chars" && this.CompactLength == null) {
+    		result.Errors.push(new ValidationErrorInfo("CompactLength", "When CompactMode is set to 'First N Chars', CompactLength must be specified.", this.CompactLength, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that if the result expiration mode is set to 'Compact', a compact mode value must also be provided. If the result expiration mode is not 'Compact', compact mode can be left empty.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCompactModeWhenResultExpirationModeIsCompact(result: ValidationResult) {
+    	if (this.ResultExpirationMode === "Compact" && this.CompactMode == null) {
+    		result.Errors.push(new ValidationErrorInfo("CompactMode", "CompactMode must be specified when ResultExpirationMode is 'Compact'.", this.CompactMode, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that if both minimum and maximum executions per run are specified, the minimum cannot be greater than the maximum. If either value is not specified, the rule is not enforced.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateMinExecutionsPerRunIsLessThanOrEqualToMaxExecutionsPerRun(result: ValidationResult) {
+    	if (this.MinExecutionsPerRun != null && this.MaxExecutionsPerRun != null && this.MinExecutionsPerRun > this.MaxExecutionsPerRun) {
+    		result.Errors.push(new ValidationErrorInfo("MinExecutionsPerRun", "Minimum executions per run cannot be greater than maximum executions per run.", this.MinExecutionsPerRun, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that if the result expiration mode is set to 'Compact', then CompactMode, CompactLength, and CompactPromptID must all be empty (null). If the expiration mode is not 'Compact', these fields may be filled in.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateResultExpirationModeRequiresCompactFieldsEmpty(result: ValidationResult) {
+    	if (this.ResultExpirationMode === "Compact") {
+    		if (this.CompactMode != null || this.CompactLength != null || this.CompactPromptID != null) {
+    			result.Errors.push(new ValidationErrorInfo("ResultExpirationMode", "When ResultExpirationMode is set to 'Compact', the fields CompactMode, CompactLength, and CompactPromptID must be empty.", this.ResultExpirationMode, ValidationErrorType.Failure));
+    		}
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -32061,6 +34167,31 @@ export class MJAIAgentCategoryEntity extends BaseEntity<MJAIAgentCategoryEntityT
 
 
 /**
+ * Channel-definition-level presentation/chrome config.
+ *
+ * Stored as a JSON object in the `UIConfig` column of the `MJ: AI Agent Channels` entity.
+ * CodeGen emits a strongly-typed `UIConfigObject` accessor on `AIAgentChannelEntity`
+ * that returns `MJAIAgentChannelEntity_IChannelUIConfig | null`.
+ *
+ * Distinct from the channel's `ConfigSchema` column, which validates the *per-session*
+ * `AIAgentSessionChannel.Config` state-of-record. This bag is the channel-definition's
+ * own UI chrome, read in-memory by the host when rendering channel tabs. Extensible with
+ * no DB change — add future chrome fields here.
+ */
+export interface MJAIAgentChannelEntity_IChannelUIConfig {
+    /** Human label for the tab/chrome. Null → fall back to the channel's Name. */
+    DisplayName?: string | null;
+    /** Optional group for clustering channels in the UI. Null → ungrouped. */
+    GroupName?: string | null;
+    /** Chrome accent. Prefer a semantic design-token name (e.g. "--mj-brand-primary"); hex allowed but discouraged. */
+    Color?: string | null;
+    /** Font Awesome class, e.g. "fa-solid fa-satellite-dish". */
+    Icon?: string | null;
+    /** Display order within a group/list. */
+    SortOrder?: number | null;
+}
+
+/**
  * MJ: AI Agent Channels - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: AIAgentChannel
@@ -32188,7 +34319,7 @@ export class MJAIAgentChannelEntity extends BaseEntity<MJAIAgentChannelEntityTyp
 
     /**
     * * Field Name: IsActive
-    * * Display Name: Is Active
+    * * Display Name: Active
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: Whether this channel definition is available for use. Inactive channels cannot be attached to a session.
@@ -32218,6 +34349,55 @@ export class MJAIAgentChannelEntity extends BaseEntity<MJAIAgentChannelEntityTyp
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: IsHeadless
+    * * Display Name: Headless
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1, the channel has no visible surface and is never mounted as a tab — it is a live wire (e.g. the headless ClientContextChannel that streams app context + capability manifest to the co-agent). When 0 (default), the channel renders a surface.
+    */
+    get IsHeadless(): boolean {
+        return this.Get('IsHeadless');
+    }
+    set IsHeadless(value: boolean) {
+        this.Set('IsHeadless', value);
+    }
+
+    /**
+    * * Field Name: UIConfig
+    * * Display Name: UI Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJAIAgentChannelEntity_IChannelUIConfig
+    * * Description: Channel-definition-level presentation/chrome config JSON (shape = IChannelUIConfig): tab DisplayName, GroupName, Color (prefer a design-token name), Icon, SortOrder. Distinct from ConfigSchema, which validates per-session AIAgentSessionChannel.Config state-of-record. Null = host defaults.
+    */
+    get UIConfig(): string | null {
+        return this.Get('UIConfig');
+    }
+    set UIConfig(value: string | null) {
+        this.Set('UIConfig', value);
+    }
+
+    private _UIConfigObject_cached: MJAIAgentChannelEntity_IChannelUIConfig | null | undefined = undefined;
+    private _UIConfigObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for UIConfig — returns parsed JSON as MJAIAgentChannelEntity_IChannelUIConfig.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get UIConfigObject(): MJAIAgentChannelEntity_IChannelUIConfig | null {
+        const raw = this.UIConfig;
+        if (raw !== this._UIConfigObject_lastRaw) {
+            this._UIConfigObject_cached = raw ? JSON.parse(raw) : null;
+            this._UIConfigObject_lastRaw = raw;
+        }
+        return this._UIConfigObject_cached!;
+    }
+    set UIConfigObject(value: MJAIAgentChannelEntity_IChannelUIConfig | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.UIConfig = raw;
+        this._UIConfigObject_cached = value;
+        this._UIConfigObject_lastRaw = raw;
     }
 }
 
@@ -32386,6 +34566,68 @@ export class MJAIAgentCoAgentEntity extends BaseEntity<MJAIAgentCoAgentEntityTyp
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: AI Agent Co Agents entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: Exactly one of Target Agent or Target Agent Type must be specified. You cannot provide both, and you cannot leave both empty.
+    * * Table-Level: An agent cannot be assigned as both the Co-Agent and the Target Agent on the same record.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateExclusiveTargetAgentOrType(result);
+        this.ValidateTargetAgentNotEqualToCoAgent(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Exactly one of Target Agent or Target Agent Type must be specified. You cannot provide both, and you cannot leave both empty.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateExclusiveTargetAgentOrType(result: ValidationResult) {
+    	const hasAgent = this.TargetAgentID != null;
+    	const hasAgentType = this.TargetAgentTypeID != null;
+    
+    	if (hasAgent && hasAgentType) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"TargetAgentID",
+    			"Cannot specify both a Target Agent and a Target Agent Type. Please choose only one.",
+    			this.TargetAgentID,
+    			ValidationErrorType.Failure
+    		));
+    	} else if (!hasAgent && !hasAgentType) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"TargetAgentID",
+    			"Either a Target Agent or a Target Agent Type must be specified.",
+    			null,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * An agent cannot be assigned as both the Co-Agent and the Target Agent on the same record.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateTargetAgentNotEqualToCoAgent(result: ValidationResult) {
+    	// If TargetAgentID is specified, it must not be the same as CoAgentID
+    	if (this.TargetAgentID != null && this.CoAgentID === this.TargetAgentID) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"TargetAgentID",
+    			"The Target Agent cannot be the same as the Co-Agent.",
+    			this.TargetAgentID,
+    			ValidationErrorType.Failure
+    		));
+    	}
     }
 
     /**
@@ -32799,6 +35041,81 @@ export class MJAIAgentDataSourceEntity extends BaseEntity<MJAIAgentDataSourceEnt
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: AI Agent Data Sources entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * ResultType: Result Type can be left blank or set only to the values 'entity_object' or 'simple'. Any other value is not allowed, ensuring that the system only processes recognized result formats.
+    * * Table-Level: This rule ensures that if the cache policy is set to 'PerAgent', a cache timeout value must be provided. For other cache policies, providing a cache timeout is optional.
+    * * Table-Level: This rule makes sure that if the source type is 'RunView', the entity name must be provided. If the source type is anything else, the entity name can be left blank.
+    * * Table-Level: This rule ensures that when the Source Type is set to 'RunQuery', a Query Name must be provided. If Source Type is anything other than 'RunQuery', Query Name is optional.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateResultTypeAllowedValues(result);
+        this.ValidateCacheTimeoutSecondsRequiredForPerAgentPolicy(result);
+        this.ValidateEntityNameRequiredWhenSourceTypeRunView(result);
+        this.ValidateQueryNameRequiredWhenSourceTypeIsRunQuery(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Result Type can be left blank or set only to the values 'entity_object' or 'simple'. Any other value is not allowed, ensuring that the system only processes recognized result formats.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateResultTypeAllowedValues(result: ValidationResult) {
+    	// If ResultType has a value, ensure it is one of the permitted options
+    	if (this.ResultType != null && this.ResultType !== 'entity_object' && this.ResultType !== 'simple') {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"ResultType",
+    			"Result Type must be either 'entity_object' or 'simple' when specified",
+    			this.ResultType,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * This rule ensures that if the cache policy is set to 'PerAgent', a cache timeout value must be provided. For other cache policies, providing a cache timeout is optional.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCacheTimeoutSecondsRequiredForPerAgentPolicy(result: ValidationResult) {
+    	if (this.CachePolicy === "PerAgent" && this.CacheTimeoutSeconds == null) {
+    		result.Errors.push(new ValidationErrorInfo("CacheTimeoutSeconds", "When the cache policy is set to 'PerAgent', you must specify a cache timeout value.", this.CacheTimeoutSeconds, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule makes sure that if the source type is 'RunView', the entity name must be provided. If the source type is anything else, the entity name can be left blank.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateEntityNameRequiredWhenSourceTypeRunView(result: ValidationResult) {
+    	if (this.SourceType === "RunView" && this.EntityName == null) {
+    		result.Errors.push(new ValidationErrorInfo("EntityName", "EntityName is required when SourceType is 'RunView'.", this.EntityName, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that when the Source Type is set to 'RunQuery', a Query Name must be provided. If Source Type is anything other than 'RunQuery', Query Name is optional.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateQueryNameRequiredWhenSourceTypeIsRunQuery(result: ValidationResult) {
+    	if (this.SourceType === "RunQuery" && this.QueryName == null) {
+    		result.Errors.push(new ValidationErrorInfo("QueryName", "The query name must be provided when Source Type is 'RunQuery'.", this.QueryName, ValidationErrorType.Failure));
+    	}
     }
 
     /**
@@ -34702,6 +37019,40 @@ export class MJAIAgentPermissionEntity extends BaseEntity<MJAIAgentPermissionEnt
     }
 
     /**
+    * Validate() method override for MJ: AI Agent Permissions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: This rule ensures that either a Role or a User is specified, but not both at the same time. You must provide one or the other, but never both, and neither can be left blank at the same time.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateRoleIDAndUserIDExclusive(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that either a Role or a User is specified, but not both at the same time. You must provide one or the other, but never both, and neither can be left blank at the same time.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateRoleIDAndUserIDExclusive(result: ValidationResult) {
+    	const hasRole = this.RoleID !== null;
+    	const hasUser = this.UserID !== null;
+    	if ((hasRole && hasUser) || (!hasRole && !hasUser)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"RoleID/UserID",
+    			"You must specify either a Role or a User, but not both and not neither.",
+    			`RoleID: $${this.RoleID}, UserID: $${this.UserID}`,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -34901,6 +37252,33 @@ export class MJAIAgentPromptEntity extends BaseEntity<MJAIAgentPromptEntityType>
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: AI Agent Prompts entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: This rule ensures that if the context behavior is set to 'InitialMessages' or 'RecentMessages', then a value for context message count must be provided. For any other context behavior, the context message count may be left empty.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateContextMessageCountForSelectedBehaviors(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that if the context behavior is set to 'InitialMessages' or 'RecentMessages', then a value for context message count must be provided. For any other context behavior, the context message count may be left empty.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateContextMessageCountForSelectedBehaviors(result: ValidationResult) {
+    	if ((this.ContextBehavior === "InitialMessages" || this.ContextBehavior === "RecentMessages") && this.ContextMessageCount == null) {
+    		result.Errors.push(new ValidationErrorInfo("ContextMessageCount", "When ContextBehavior is 'InitialMessages' or 'RecentMessages', ContextMessageCount must be provided.", this.ContextMessageCount, ValidationErrorType.Failure));
+    	}
     }
 
     /**
@@ -35117,6 +37495,33 @@ export class MJAIAgentRelationshipEntity extends BaseEntity<MJAIAgentRelationshi
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: AI Agent Relationships entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * MaxMessages: This rule makes sure that if a value is specified for MaxMessages, it must be greater than 0.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateMaxMessagesGreaterThanZero(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * This rule makes sure that if a value is specified for MaxMessages, it must be greater than 0.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateMaxMessagesGreaterThanZero(result: ValidationResult) {
+    	if (this.MaxMessages != null && this.MaxMessages <= 0) {
+    		result.Errors.push(new ValidationErrorInfo("MaxMessages", "MaxMessages must be greater than 0 when specified.", this.MaxMessages, ValidationErrorType.Failure));
+    	}
     }
 
     /**
@@ -35477,6 +37882,39 @@ export class MJAIAgentRequestEntity extends BaseEntity<MJAIAgentRequestEntityTyp
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: AI Agent Requests entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Priority: Priority must be between 1 and 100 to ensure requests are correctly ranked and processed within the allowed range.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidatePriorityRange(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Priority must be between 1 and 100 to ensure requests are correctly ranked and processed within the allowed range.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidatePriorityRange(result: ValidationResult) {
+    	// Check if Priority is within the allowed range of 1 to 100
+    	if (this.Priority != null && (this.Priority < 1 || this.Priority > 100)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"Priority",
+    			"Priority must be between 1 and 100.",
+    			this.Priority,
+    			ValidationErrorType.Failure
+    		));
+    	}
     }
 
     /**
@@ -36197,6 +38635,55 @@ export class MJAIAgentRunStepEntity extends BaseEntity<MJAIAgentRunStepEntityTyp
     }
 
     /**
+    * Validate() method override for MJ: AI Agent Run Steps entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * FinalPayloadValidationResult: The final payload validation result must be one of the approved statuses: Warn, Fail, Retry, or Pass, to ensure consistent reporting of validation outcomes.
+    * * StepNumber: This rule ensures that the step number must be greater than zero.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateFinalPayloadValidationResultStatus(result);
+        this.ValidateStepNumberGreaterThanZero(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * The final payload validation result must be one of the approved statuses: Warn, Fail, Retry, or Pass, to ensure consistent reporting of validation outcomes.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateFinalPayloadValidationResultStatus(result: ValidationResult) {
+    	if (this.FinalPayloadValidationResult != null) {
+    		const allowedValues = ["Warn", "Fail", "Retry", "Pass"];
+    		if (allowedValues.indexOf(this.FinalPayloadValidationResult) === -1) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"FinalPayloadValidationResult",
+    				"The validation result must be one of the following values: " + allowedValues.join(", ") + ".",
+    				this.FinalPayloadValidationResult,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	}
+    }
+
+    /**
+    * This rule ensures that the step number must be greater than zero.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateStepNumberGreaterThanZero(result: ValidationResult) {
+    	if (this.StepNumber <= 0) {
+    		result.Errors.push(new ValidationErrorInfo("StepNumber", "Step number must be greater than zero.", this.StepNumber, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -36604,6 +39091,57 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
             // For network providers, cascading deletes are handled server-side
             return super.Delete(options);
         }
+    }
+
+    /**
+    * Validate() method override for MJ: AI Agent Runs entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * EffortLevel: This rule ensures that the effort level, if specified, must be a number between 1 and 100, inclusive.
+    * * FinalStep: The FinalStep field can be left empty, but if a value is provided it must be one of the approved step names – While, ForEach, Chat, Sub-Agent, Actions, Retry, Failed, or Success. This ensures only valid workflow steps are recorded.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateEffortLevelBetween1And100(result);
+        this.ValidateFinalStepAllowedValues(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the effort level, if specified, must be a number between 1 and 100, inclusive.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateEffortLevelBetween1And100(result: ValidationResult) {
+    	if (this.EffortLevel != null && (this.EffortLevel < 1 || this.EffortLevel > 100)) {
+    		result.Errors.push(new ValidationErrorInfo("EffortLevel", "Effort level must be between 1 and 100.", this.EffortLevel, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * The FinalStep field can be left empty, but if a value is provided it must be one of the approved step names – While, ForEach, Chat, Sub-Agent, Actions, Retry, Failed, or Success. This ensures only valid workflow steps are recorded.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateFinalStepAllowedValues(result: ValidationResult) {
+    	// If FinalStep has a value, it must be one of the permitted options
+    	if (this.FinalStep != null) {
+    		const allowed = ["While", "ForEach", "Chat", "Sub-Agent", "Actions", "Retry", "Failed", "Success"];
+    		const allowedValues = allowed.join(", ");
+    		if (!allowed.includes(this.FinalStep)) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"FinalStep",
+    				"FinalStep must be one of the allowed values: " + allowedValues + ".",
+    				this.FinalStep,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	}
     }
 
     /**
@@ -38566,6 +41104,50 @@ export class MJAIAgentSessionEntity extends BaseEntity<MJAIAgentSessionEntityTyp
     }
 
     /**
+    * * Field Name: RecordingMedia
+    * * Display Name: Recording Media
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Audio
+    *   * AudioVideo
+    *   * None
+    * * Description: The media actually captured for this session, resolved at session start (runtime param > agent-level RecordingDefault > OFF). Values: None, Audio, AudioVideo. NULL/None = not recorded.
+    */
+    get RecordingMedia(): 'Audio' | 'AudioVideo' | 'None' | null {
+        return this.Get('RecordingMedia');
+    }
+    set RecordingMedia(value: 'Audio' | 'AudioVideo' | 'None' | null) {
+        this.Set('RecordingMedia', value);
+    }
+
+    /**
+    * * Field Name: RecordingStartedAt
+    * * Display Name: Recording Started At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Recording alignment origin (t0): the wall-clock moment audio capture began for this session. Per-turn ConversationDetail timestamps are converted to audio seek offsets relative to this value.
+    */
+    get RecordingStartedAt(): Date | null {
+        return this.Get('RecordingStartedAt');
+    }
+    set RecordingStartedAt(value: Date | null) {
+        this.Set('RecordingStartedAt', value);
+    }
+
+    /**
+    * * Field Name: RecordingFileID
+    * * Display Name: Recording File ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Files (vwFiles.ID)
+    */
+    get RecordingFileID(): string | null {
+        return this.Get('RecordingFileID');
+    }
+    set RecordingFileID(value: string | null) {
+        this.Set('RecordingFileID', value);
+    }
+
+    /**
     * * Field Name: Agent
     * * Display Name: Agent
     * * SQL Data Type: nvarchar(255)
@@ -38590,6 +41172,15 @@ export class MJAIAgentSessionEntity extends BaseEntity<MJAIAgentSessionEntityTyp
     */
     get Conversation(): string | null {
         return this.Get('Conversation');
+    }
+
+    /**
+    * * Field Name: RecordingFile
+    * * Display Name: Recording File
+    * * SQL Data Type: nvarchar(500)
+    */
+    get RecordingFile(): string | null {
+        return this.Get('RecordingFile');
     }
 
     /**
@@ -38631,6 +41222,33 @@ export class MJAIAgentStepPathEntity extends BaseEntity<MJAIAgentStepPathEntityT
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: AI Agent Step Paths entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: This rule ensures that the origin step and the destination step must be different. They cannot be the same step.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateOriginStepIDAgainstDestinationStepIDDifferent(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the origin step and the destination step must be different. They cannot be the same step.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateOriginStepIDAgainstDestinationStepIDDifferent(result: ValidationResult) {
+    	if (this.OriginStepID === this.DestinationStepID) {
+    		result.Errors.push(new ValidationErrorInfo("OriginStepID", "The origin step cannot be the same as the destination step.", this.OriginStepID, ValidationErrorType.Failure));
+    	}
     }
 
     /**
@@ -38826,6 +41444,47 @@ export class MJAIAgentStepEntity extends BaseEntity<MJAIAgentStepEntityType> {
             // For network providers, cascading deletes are handled server-side
             return super.Delete(options);
         }
+    }
+
+    /**
+    * Validate() method override for MJ: AI Agent Steps entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * RetryCount: This rule ensures that the number of retries allowed cannot be negative.
+    * * TimeoutSeconds: This rule ensures that, if provided, the timeout value must be greater than zero seconds.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateRetryCountNonNegative(result);
+        this.ValidateTimeoutSecondsGreaterThanZero(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the number of retries allowed cannot be negative.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateRetryCountNonNegative(result: ValidationResult) {
+    	if (this.RetryCount < 0) {
+    		result.Errors.push(new ValidationErrorInfo("RetryCount", "Retry count cannot be negative.", this.RetryCount, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that, if provided, the timeout value must be greater than zero seconds.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateTimeoutSecondsGreaterThanZero(result: ValidationResult) {
+    	if (this.TimeoutSeconds != null && this.TimeoutSeconds <= 0) {
+    		result.Errors.push(new ValidationErrorInfo("TimeoutSeconds", "TimeoutSeconds must be greater than zero if specified.", this.TimeoutSeconds, ValidationErrorType.Failure));
+    	}
     }
 
     /**
@@ -39517,6 +42176,128 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
     }
 
     /**
+    * Validate() method override for MJ: AI Agents entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * DefaultPromptEffortLevel: This rule ensures that if a default prompt effort level is specified, it must be a number between 1 and 100, inclusive.
+    * * MaxExecutionsPerRun: This rule ensures that if 'MaxExecutionsPerRun' is provided, it must be a value greater than zero. If it is left blank, that's acceptable.
+    * * MaxMessages: This rule ensures that the maximum number of messages, if specified, must be greater than zero.
+    * * MinExecutionsPerRun: This rule ensures that if a minimum executions per run value is specified, it cannot be negative. If the field is not specified, there is no restriction.
+    * * Table-Level: This rule ensures that if context compression is enabled, then the message threshold, prompt ID, and message retention count must all be provided. If context compression is not enabled, then these fields can be left empty.
+    * * Table-Level: This rule ensures that if both the minimum and maximum number of executions per run are provided, the minimum cannot be greater than the maximum. If either value is not provided, no check is performed.
+    * * Table-Level: This rule ensures that if a ParentID is specified, then ExposeAsAction must be set to false. If ParentID is not specified, ExposeAsAction can be either true or false.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateDefaultPromptEffortLevelInAllowedRange(result);
+        this.ValidateMaxExecutionsPerRunGreaterThanZero(result);
+        this.ValidateMaxMessagesGreaterThanZero(result);
+        this.ValidateMinExecutionsPerRunNonNegative(result);
+        this.ValidateContextCompressionFieldsWhenEnabled(result);
+        this.ValidateMinExecutionsPerRunLessThanOrEqualToMaxExecutionsPerRun(result);
+        this.ValidateParentIDRequiresExposeAsActionFalse(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that if a default prompt effort level is specified, it must be a number between 1 and 100, inclusive.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateDefaultPromptEffortLevelInAllowedRange(result: ValidationResult) {
+    	if (this.DefaultPromptEffortLevel != null && (this.DefaultPromptEffortLevel < 1 || this.DefaultPromptEffortLevel > 100)) {
+    		result.Errors.push(new ValidationErrorInfo("DefaultPromptEffortLevel", "If specified, DefaultPromptEffortLevel must be between 1 and 100.", this.DefaultPromptEffortLevel, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that if 'MaxExecutionsPerRun' is provided, it must be a value greater than zero. If it is left blank, that's acceptable.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateMaxExecutionsPerRunGreaterThanZero(result: ValidationResult) {
+    	if (this.MaxExecutionsPerRun != null && this.MaxExecutionsPerRun <= 0) {
+    		result.Errors.push(new ValidationErrorInfo("MaxExecutionsPerRun", "If specified, the maximum executions per run must be greater than zero.", this.MaxExecutionsPerRun, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that the maximum number of messages, if specified, must be greater than zero.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateMaxMessagesGreaterThanZero(result: ValidationResult) {
+    	if (this.MaxMessages != null && this.MaxMessages <= 0) {
+    		result.Errors.push(new ValidationErrorInfo("MaxMessages", "If a maximum number of messages is specified, it must be greater than zero.", this.MaxMessages, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that if a minimum executions per run value is specified, it cannot be negative. If the field is not specified, there is no restriction.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateMinExecutionsPerRunNonNegative(result: ValidationResult) {
+    	if (this.MinExecutionsPerRun != null && this.MinExecutionsPerRun < 0) {
+    		result.Errors.push(new ValidationErrorInfo("MinExecutionsPerRun", "Minimum executions per run cannot be less than zero.", this.MinExecutionsPerRun, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that if context compression is enabled, then the message threshold, prompt ID, and message retention count must all be provided. If context compression is not enabled, then these fields can be left empty.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateContextCompressionFieldsWhenEnabled(result: ValidationResult) {
+    	if (this.EnableContextCompression) {
+    		if (this.ContextCompressionMessageThreshold == null) {
+    			result.Errors.push(new ValidationErrorInfo("ContextCompressionMessageThreshold", "Context compression message threshold must be provided when context compression is enabled.", this.ContextCompressionMessageThreshold, ValidationErrorType.Failure));
+    		}
+    		if (this.ContextCompressionPromptID == null) {
+    			result.Errors.push(new ValidationErrorInfo("ContextCompressionPromptID", "Context compression prompt ID must be provided when context compression is enabled.", this.ContextCompressionPromptID, ValidationErrorType.Failure));
+    		}
+    		if (this.ContextCompressionMessageRetentionCount == null) {
+    			result.Errors.push(new ValidationErrorInfo("ContextCompressionMessageRetentionCount", "Context compression message retention count must be provided when context compression is enabled.", this.ContextCompressionMessageRetentionCount, ValidationErrorType.Failure));
+    		}
+    	}
+    }
+
+    /**
+    * This rule ensures that if both the minimum and maximum number of executions per run are provided, the minimum cannot be greater than the maximum. If either value is not provided, no check is performed.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateMinExecutionsPerRunLessThanOrEqualToMaxExecutionsPerRun(result: ValidationResult) {
+    	if (this.MinExecutionsPerRun != null && this.MaxExecutionsPerRun != null) {
+    		if (this.MinExecutionsPerRun > this.MaxExecutionsPerRun) {
+    			result.Errors.push(new ValidationErrorInfo("MinExecutionsPerRun", "The minimum number of executions per run cannot be greater than the maximum.", this.MinExecutionsPerRun, ValidationErrorType.Failure));
+    		}
+    	}
+    }
+
+    /**
+    * This rule ensures that if a ParentID is specified, then ExposeAsAction must be set to false. If ParentID is not specified, ExposeAsAction can be either true or false.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateParentIDRequiresExposeAsActionFalse(result: ValidationResult) {
+    	if (this.ParentID != null && this.ExposeAsAction) {
+    		result.Errors.push(new ValidationErrorInfo("ExposeAsAction", "If ParentID is specified, ExposeAsAction must be false.", this.ExposeAsAction, ValidationErrorType.Failure));
+    	}
+    }
+    
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -39665,7 +42446,7 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
 
     /**
     * * Field Name: ContextCompressionMessageThreshold
-    * * Display Name: Context Compression Message Threshold
+    * * Display Name: Compression Message Threshold
     * * SQL Data Type: int
     * * Description: Number of messages that triggers context compression when EnableContextCompression is true.
     */
@@ -39678,7 +42459,7 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
 
     /**
     * * Field Name: ContextCompressionPromptID
-    * * Display Name: Context Compression Prompt
+    * * Display Name: Compression Prompt
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
     */
@@ -39691,7 +42472,7 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
 
     /**
     * * Field Name: ContextCompressionMessageRetentionCount
-    * * Display Name: Context Compression Message Retention Count
+    * * Display Name: Compression Message Retention
     * * SQL Data Type: int
     * * Description: Number of recent messages to keep uncompressed when context compression is applied.
     */
@@ -40055,7 +42836,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: OwnerUserID
-    * * Display Name: Owner User
+    * * Display Name: Owner
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     * * Default Value: ECAFCCEC-6A37-EF11-86D4-000D3A4E707E
@@ -40302,7 +43083,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: InlineStorageThresholdBytes
-    * * Display Name: Inline Storage Threshold Bytes
+    * * Display Name: Inline Storage Threshold (Bytes)
     * * SQL Data Type: int
     * * Description: File size threshold for inline storage. Files <= this size are stored as base64 inline, larger files use MJStorage. NULL uses system default (1MB). Set to 0 to always use MJStorage.
     */
@@ -40328,7 +43109,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: ScopeConfig
-    * * Display Name: Scope Config
+    * * Display Name: Scope Configuration
     * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON configuration defining scope dimensions for multi-tenant deployments. Example: {"dimensions":[{"name":"OrganizationID","entityId":"...","isPrimary":true,"required":true},{"name":"ContactID","entityId":"...","isPrimary":false,"required":false}],"inheritanceMode":"cascading"}
     */
@@ -40511,6 +43292,52 @@ if this limit is exceeded.
     }
 
     /**
+    * * Field Name: RecordingDefault
+    * * Display Name: Recording Default
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Audio
+    *   * AudioVideo
+    *   * None
+    * * Description: Agent-level default recording media for realtime sessions: None, Audio, or AudioVideo. Overridden per session by a runtime parameter; if unset, recording is OFF. Capture only runs when a storage provider is resolvable (RecordingStorageProviderID, else the agent's AttachmentStorageProviderID) AND consent is satisfied.
+    */
+    get RecordingDefault(): 'Audio' | 'AudioVideo' | 'None' | null {
+        return this.Get('RecordingDefault');
+    }
+    set RecordingDefault(value: 'Audio' | 'AudioVideo' | 'None' | null) {
+        this.Set('RecordingDefault', value);
+    }
+
+    /**
+    * * Field Name: RecordingStorageProviderID
+    * * Display Name: Recording Storage Provider
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: File Storage Providers (vwFileStorageProviders.ID)
+    * * Description: OPTIONAL override for where session recordings are stored. When NULL, recordings fall back to the agent's AttachmentStorageProviderID. Set this only when recordings must live in a different storage account than attachments.
+    */
+    get RecordingStorageProviderID(): string | null {
+        return this.Get('RecordingStorageProviderID');
+    }
+    set RecordingStorageProviderID(value: string | null) {
+        this.Set('RecordingStorageProviderID', value);
+    }
+
+    /**
+    * * Field Name: DefaultMediaCollectionID
+    * * Display Name: Default Media Collection
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Collections (vwCollections.ID)
+    * * Description: OPTIONAL default media kit for this agent: a Collection of Artifacts the agent may show on the realtime Media channel during a conversation. Resolved per session as runtime-override > this agent default > none. When set, the agent is given a manifest (each item's display name, media type, when-to-show ContextDescription and Preload flag) so it can surface items via the Media_ShowMedia tool. When NULL the agent has no curated kit (ad-hoc Media_ShowMedia still works).
+    */
+    get DefaultMediaCollectionID(): string | null {
+        return this.Get('DefaultMediaCollectionID');
+    }
+    set DefaultMediaCollectionID(value: string | null) {
+        this.Set('DefaultMediaCollectionID', value);
+    }
+
+    /**
     * * Field Name: Parent
     * * Display Name: Parent
     * * SQL Data Type: nvarchar(255)
@@ -40539,7 +43366,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: DefaultArtifactType
-    * * Display Name: Default Artifact Type
+    * * Display Name: Default Artifact Type Name
     * * SQL Data Type: nvarchar(100)
     */
     get DefaultArtifactType(): string | null {
@@ -40557,7 +43384,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: AttachmentStorageProvider
-    * * Display Name: Attachment Storage Provider
+    * * Display Name: Attachment Storage Provider Name
     * * SQL Data Type: nvarchar(50)
     */
     get AttachmentStorageProvider(): string | null {
@@ -40566,7 +43393,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: Category
-    * * Display Name: Category
+    * * Display Name: Category Name
     * * SQL Data Type: nvarchar(200)
     */
     get Category(): string | null {
@@ -40575,7 +43402,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: DefaultStorageAccount
-    * * Display Name: Default Storage Account
+    * * Display Name: Default Storage Account Name
     * * SQL Data Type: nvarchar(200)
     */
     get DefaultStorageAccount(): string | null {
@@ -40584,7 +43411,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: DefaultCoAgent
-    * * Display Name: Default Co-Agent
+    * * Display Name: Default Co-Agent Name
     * * SQL Data Type: nvarchar(255)
     */
     get DefaultCoAgent(): string | null {
@@ -40592,8 +43419,26 @@ if this limit is exceeded.
     }
 
     /**
+    * * Field Name: RecordingStorageProvider
+    * * Display Name: Recording Storage Provider Name
+    * * SQL Data Type: nvarchar(50)
+    */
+    get RecordingStorageProvider(): string | null {
+        return this.Get('RecordingStorageProvider');
+    }
+
+    /**
+    * * Field Name: DefaultMediaCollection
+    * * Display Name: Default Media Collection Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get DefaultMediaCollection(): string | null {
+        return this.Get('DefaultMediaCollection');
+    }
+
+    /**
     * * Field Name: RootParentID
-    * * Display Name: Root Parent ID
+    * * Display Name: Root Parent
     * * SQL Data Type: uniqueidentifier
     */
     get RootParentID(): string | null {
@@ -40602,7 +43447,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: RootDefaultCoAgentID
-    * * Display Name: Root Default Co-Agent ID
+    * * Display Name: Root Default Co-Agent
     * * SQL Data Type: uniqueidentifier
     */
     get RootDefaultCoAgentID(): string | null {
@@ -41984,6 +44829,121 @@ export class MJAICredentialBindingEntity extends BaseEntity<MJAICredentialBindin
     }
 
     /**
+    * Validate() method override for MJ: AI Credential Bindings entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: Ensures that the type of binding specified in the record matches exactly one related ID column: when BindingType is 'Vendor' an AIVendorID must be provided and the other two IDs must be empty; when BindingType is 'ModelVendor' an AIModelVendorID must be provided and the other IDs must be empty; when BindingType is 'PromptModel' an AIPromptModelID must be provided and the other IDs must be empty. This prevents ambiguous or missing references.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateBindingTypeAndRelatedIds(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Ensures that the type of binding specified in the record matches exactly one related ID column: when BindingType is 'Vendor' an AIVendorID must be provided and the other two IDs must be empty; when BindingType is 'ModelVendor' an AIModelVendorID must be provided and the other IDs must be empty; when BindingType is 'PromptModel' an AIPromptModelID must be provided and the other IDs must be empty. This prevents ambiguous or missing references.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateBindingTypeAndRelatedIds(result: ValidationResult) {
+    	// Validate that the ID fields correspond to the selected BindingType
+    	if (this.BindingType === 'Vendor') {
+    		// AIVendorID must be present
+    		if (this.AIVendorID == null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"AIVendorID",
+    				"When BindingType is 'Vendor', AIVendorID must be provided.",
+    				this.AIVendorID,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    		// The other IDs must be empty
+    		if (this.AIModelVendorID != null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"AIModelVendorID",
+    				"When BindingType is 'Vendor', AIModelVendorID must be empty.",
+    				this.AIModelVendorID,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    		if (this.AIPromptModelID != null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"AIPromptModelID",
+    				"When BindingType is 'Vendor', AIPromptModelID must be empty.",
+    				this.AIPromptModelID,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	} else if (this.BindingType === 'ModelVendor') {
+    		// AIModelVendorID must be present
+    		if (this.AIModelVendorID == null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"AIModelVendorID",
+    				"When BindingType is 'ModelVendor', AIModelVendorID must be provided.",
+    				this.AIModelVendorID,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    		// The other IDs must be empty
+    		if (this.AIVendorID != null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"AIVendorID",
+    				"When BindingType is 'ModelVendor', AIVendorID must be empty.",
+    				this.AIVendorID,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    		if (this.AIPromptModelID != null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"AIPromptModelID",
+    				"When BindingType is 'ModelVendor', AIPromptModelID must be empty.",
+    				this.AIPromptModelID,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	} else if (this.BindingType === 'PromptModel') {
+    		// AIPromptModelID must be present
+    		if (this.AIPromptModelID == null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"AIPromptModelID",
+    				"When BindingType is 'PromptModel', AIPromptModelID must be provided.",
+    				this.AIPromptModelID,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    		// The other IDs must be empty
+    		if (this.AIVendorID != null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"AIVendorID",
+    				"When BindingType is 'PromptModel', AIVendorID must be empty.",
+    				this.AIVendorID,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    		if (this.AIModelVendorID != null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"AIModelVendorID",
+    				"When BindingType is 'PromptModel', AIModelVendorID must be empty.",
+    				this.AIModelVendorID,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	} else {
+    		// Unexpected BindingType value
+    		result.Errors.push(new ValidationErrorInfo(
+    			"BindingType",
+    			"BindingType must be one of 'Vendor', 'ModelVendor', or 'PromptModel'.",
+    			this.BindingType,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -42495,6 +45455,58 @@ export class MJAIModelArchitectureEntity extends BaseEntity<MJAIModelArchitectur
     }
 
     /**
+    * Validate() method override for MJ: AI Model Architectures entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Rank: Rank must be greater than zero, ensuring that every item has a positive ranking value.
+    * * Weight: Weight must be between 0 and 1 when a value is provided; if no weight is entered, it may be left empty.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateRankGreaterThanZero(result);
+        this.ValidateWeightRange(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Rank must be greater than zero, ensuring that every item has a positive ranking value.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateRankGreaterThanZero(result: ValidationResult) {
+    	if (this.Rank <= 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"Rank",
+    			"Rank must be greater than 0.",
+    			this.Rank,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * Weight must be between 0 and 1 when a value is provided; if no weight is entered, it may be left empty.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateWeightRange(result: ValidationResult) {
+    	// Ensure Weight is within the allowed range when it is provided
+    	if (this.Weight != null && (this.Weight < 0 || this.Weight > 1)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"Weight",
+    			"Weight must be between 0 and 1.",
+    			this.Weight,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -42640,6 +45652,77 @@ export class MJAIModelCostEntity extends BaseEntity<MJAIModelCostEntityType> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: AI Model Costs entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Currency: This rule ensures that the currency code is exactly 3 characters long and consists only of uppercase letters.
+    * * InputPricePerUnit: This rule ensures that the input price per unit cannot be negative. The value must be zero or higher.
+    * * OutputPricePerUnit: This rule ensures that the output price per unit must be zero or greater. In other words, negative prices are not allowed for the output price per unit.
+    * * Table-Level: This rule ensures that if both a start date and an end date are provided, the end date must be later than the start date. If either date is missing, no validation is enforced.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateCurrencyIsThreeUppercaseLetters(result);
+        this.ValidateInputPricePerUnitIsNonNegative(result);
+        this.ValidateOutputPricePerUnitNonNegative(result);
+        this.ValidateEndedAtAfterStartedAt(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the currency code is exactly 3 characters long and consists only of uppercase letters.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCurrencyIsThreeUppercaseLetters(result: ValidationResult) {
+    	if (this.Currency.length !== 3) {
+    		result.Errors.push(new ValidationErrorInfo("Currency", "Currency code must be exactly 3 characters long.", this.Currency, ValidationErrorType.Failure));
+    	} else if (this.Currency !== this.Currency.toUpperCase()) {
+    		result.Errors.push(new ValidationErrorInfo("Currency", "Currency code must be in uppercase letters.", this.Currency, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that the input price per unit cannot be negative. The value must be zero or higher.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateInputPricePerUnitIsNonNegative(result: ValidationResult) {
+    	if (this.InputPricePerUnit < 0) {
+    		result.Errors.push(new ValidationErrorInfo("InputPricePerUnit", "The input price per unit cannot be negative.", this.InputPricePerUnit, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that the output price per unit must be zero or greater. In other words, negative prices are not allowed for the output price per unit.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateOutputPricePerUnitNonNegative(result: ValidationResult) {
+    	if (this.OutputPricePerUnit < 0) {
+    		result.Errors.push(new ValidationErrorInfo("OutputPricePerUnit", "The output price per unit cannot be negative.", this.OutputPricePerUnit, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that if both a start date and an end date are provided, the end date must be later than the start date. If either date is missing, no validation is enforced.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateEndedAtAfterStartedAt(result: ValidationResult) {
+    	if (this.EndedAt !== null && this.StartedAt !== null && this.EndedAt <= this.StartedAt) {
+    		result.Errors.push(new ValidationErrorInfo("EndedAt", "When both an end date and a start date are set, the end date must be later than the start date.", this.EndedAt, ValidationErrorType.Failure));
+    	}
     }
 
     /**
@@ -43156,6 +46239,33 @@ export class MJAIModelPriceTypeEntity extends BaseEntity<MJAIModelPriceTypeEntit
     }
 
     /**
+    * Validate() method override for MJ: AI Model Price Types entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Name: This rule ensures that the Name field is not empty or just spaces. The Name must contain at least one non-space character.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateNameNotEmptyOrWhitespace(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the Name field is not empty or just spaces. The Name must contain at least one non-space character.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateNameNotEmptyOrWhitespace(result: ValidationResult) {
+    	if (this.Name.trim().length === 0) {
+    		result.Errors.push(new ValidationErrorInfo("Name", "Name must not be empty or only spaces.", this.Name, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -43244,6 +46354,47 @@ export class MJAIModelPriceUnitTypeEntity extends BaseEntity<MJAIModelPriceUnitT
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: AI Model Price Unit Types entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * DriverClass: This rule ensures that the DriverClass field contains at least one non-whitespace character and is not left blank.
+    * * Name: This rule ensures that the Name field is not empty or made up only of spaces. It must contain at least one non-space character.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateDriverClassNotBlank(result);
+        this.ValidateNameHasNonWhitespaceCharacters(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the DriverClass field contains at least one non-whitespace character and is not left blank.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateDriverClassNotBlank(result: ValidationResult) {
+    	if (this.DriverClass != null && this.DriverClass.trim().length === 0) {
+    		result.Errors.push(new ValidationErrorInfo("DriverClass", "DriverClass cannot be blank or consist only of whitespace.", this.DriverClass, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that the Name field is not empty or made up only of spaces. It must contain at least one non-space character.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateNameHasNonWhitespaceCharacters(result: ValidationResult) {
+    	if (this.Name != null && this.Name.trim().length === 0) {
+    		result.Errors.push(new ValidationErrorInfo("Name", "Name cannot be empty or consist only of spaces.", this.Name, ValidationErrorType.Failure));
+    	}
     }
 
     /**
@@ -43510,6 +46661,61 @@ export class MJAIModelVendorEntity extends BaseEntity<MJAIModelVendorEntityType>
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: AI Model Vendors entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * MaxInputTokens: This rule ensures that the value for MaxInputTokens, if provided, must be zero or greater (i.e., cannot be a negative number).
+    * * MaxOutputTokens: This rule ensures that if a maximum output tokens value is provided, it must be greater than or equal to zero. If no value is provided, there is no restriction.
+    * * Priority: This rule ensures that the Priority value must not be less than zero. In other words, Priority cannot be negative.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateMaxInputTokensIsNonNegative(result);
+        this.ValidateMaxOutputTokensNonNegative(result);
+        this.ValidatePriorityIsNonNegative(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the value for MaxInputTokens, if provided, must be zero or greater (i.e., cannot be a negative number).
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateMaxInputTokensIsNonNegative(result: ValidationResult) {
+    	if (this.MaxInputTokens != null && this.MaxInputTokens < 0) {
+    		result.Errors.push(new ValidationErrorInfo("MaxInputTokens", "MaxInputTokens, if specified, must be zero or a positive number.", this.MaxInputTokens, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that if a maximum output tokens value is provided, it must be greater than or equal to zero. If no value is provided, there is no restriction.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateMaxOutputTokensNonNegative(result: ValidationResult) {
+    	if (this.MaxOutputTokens !== null && this.MaxOutputTokens < 0) {
+    		result.Errors.push(new ValidationErrorInfo("MaxOutputTokens", "If specified, the maximum output tokens must be greater than or equal to zero.", this.MaxOutputTokens, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that the Priority value must not be less than zero. In other words, Priority cannot be negative.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidatePriorityIsNonNegative(result: ValidationResult) {
+    	if (this.Priority < 0) {
+    		result.Errors.push(new ValidationErrorInfo("Priority", "Priority must not be negative.", this.Priority, ValidationErrorType.Failure));
+    	}
     }
 
     /**
@@ -43809,6 +47015,61 @@ export class MJAIModelEntity extends BaseEntity<MJAIModelEntityType> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: AI Models entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * CostRank: This rule ensures that if a CostRank value is provided, it must be zero or a positive number. CostRank cannot be negative.
+    * * PowerRank: This rule ensures that if a value is provided for PowerRank, it must not be negative.
+    * * SpeedRank: This rule ensures that the SpeedRank, if specified, must be zero or a positive number. Negative values are not allowed.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateCostRankNonNegative(result);
+        this.ValidatePowerRankIsNonNegative(result);
+        this.ValidateSpeedRankNonNegative(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that if a CostRank value is provided, it must be zero or a positive number. CostRank cannot be negative.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCostRankNonNegative(result: ValidationResult) {
+    	if (this.CostRank != null && this.CostRank < 0) {
+    		result.Errors.push(new ValidationErrorInfo("CostRank", "CostRank must be greater than or equal to zero.", this.CostRank, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that if a value is provided for PowerRank, it must not be negative.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidatePowerRankIsNonNegative(result: ValidationResult) {
+    	if (this.PowerRank != null && this.PowerRank < 0) {
+    		result.Errors.push(new ValidationErrorInfo("PowerRank", "PowerRank must be zero or positive.", this.PowerRank, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that the SpeedRank, if specified, must be zero or a positive number. Negative values are not allowed.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateSpeedRankNonNegative(result: ValidationResult) {
+    	if (this.SpeedRank != null && this.SpeedRank < 0) {
+    		result.Errors.push(new ValidationErrorInfo("SpeedRank", "SpeedRank must be zero or a positive number.", this.SpeedRank, ValidationErrorType.Failure));
+    	}
     }
 
     /**
@@ -44248,6 +47509,101 @@ export class MJAIPromptModelEntity extends BaseEntity<MJAIPromptModelEntityType>
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: AI Prompt Models entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * EffortLevel: Effort level must be between 1 and 100 whenever it is provided. This ensures that effort values stay within the allowed range.
+    * * ExecutionGroup: This rule ensures that the ExecutionGroup value must be zero or a positive number. Negative values are not allowed.
+    * * ParallelCount: This rule ensures that the ParallelCount value must always be at least 1.
+    * * Priority: This rule ensures that the priority value must be zero or a positive number; in other words, priority cannot be negative.
+    * * Table-Level: This rule ensures that, depending on the parallelization mode, the configuration parameter for parallelization is either required or must not be set. Specifically: If the parallelization mode is 'None' or 'StaticCount', the configuration parameter must be empty. If the parallelization mode is 'ConfigParam', the configuration parameter is required.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateEffortLevelRange(result);
+        this.ValidateExecutionGroupNonNegative(result);
+        this.ValidateParallelCountAtLeastOne(result);
+        this.ValidatePriorityIsNonNegative(result);
+        this.ValidateParallelizationModeAndConfigParam(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Effort level must be between 1 and 100 whenever it is provided. This ensures that effort values stay within the allowed range.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateEffortLevelRange(result: ValidationResult) {
+    	// Only validate when a value is provided
+    	if (this.EffortLevel != null && (this.EffortLevel < 1 || this.EffortLevel > 100)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"EffortLevel",
+    			"Effort level must be between 1 and 100.",
+    			this.EffortLevel,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * This rule ensures that the ExecutionGroup value must be zero or a positive number. Negative values are not allowed.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateExecutionGroupNonNegative(result: ValidationResult) {
+    	if (this.ExecutionGroup < 0) {
+    		result.Errors.push(new ValidationErrorInfo("ExecutionGroup", "ExecutionGroup must be zero or a positive integer.", this.ExecutionGroup, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that the ParallelCount value must always be at least 1.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateParallelCountAtLeastOne(result: ValidationResult) {
+    	if (this.ParallelCount < 1) {
+    		result.Errors.push(new ValidationErrorInfo("ParallelCount", "ParallelCount must be greater than or equal to 1.", this.ParallelCount, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that the priority value must be zero or a positive number; in other words, priority cannot be negative.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidatePriorityIsNonNegative(result: ValidationResult) {
+    	if (this.Priority < 0) {
+    		result.Errors.push(new ValidationErrorInfo("Priority", "Priority must be zero or a positive number.", this.Priority, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that, depending on the parallelization mode, the configuration parameter for parallelization is either required or must not be set. Specifically: If the parallelization mode is 'None' or 'StaticCount', the configuration parameter must be empty. If the parallelization mode is 'ConfigParam', the configuration parameter is required.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateParallelizationModeAndConfigParam(result: ValidationResult) {
+    	if (this.ParallelizationMode === "ConfigParam") {
+    		if (this.ParallelConfigParam == null) {
+    			result.Errors.push(new ValidationErrorInfo("ParallelConfigParam", "ParallelConfigParam must be provided when ParallelizationMode is 'ConfigParam'.", this.ParallelConfigParam, ValidationErrorType.Failure));
+    		}
+    	} else if (this.ParallelizationMode === "None" || this.ParallelizationMode === "StaticCount") {
+    		if (this.ParallelConfigParam != null) {
+    			result.Errors.push(new ValidationErrorInfo("ParallelConfigParam", "ParallelConfigParam must be null when ParallelizationMode is 'None' or 'StaticCount'.", this.ParallelConfigParam, ValidationErrorType.Failure));
+    		}
+    	}
     }
 
     /**
@@ -44824,6 +48180,65 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
             // For network providers, cascading deletes are handled server-side
             return super.Delete(options);
         }
+    }
+
+    /**
+    * Validate() method override for MJ: AI Prompt Runs entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * EffortLevel: This rule ensures that if an effort level is provided, it must be between 1 and 100, inclusive.
+    * * Table-Level: This rule ensures that if the 'CompletedAt' date is provided, it must be the same as or later than the 'RunAt' date. If 'CompletedAt' is not specified, there is no restriction.
+    * * Table-Level: This rule ensures that if either the number of prompt tokens or completion tokens is missing, or the total tokens used is missing, the check passes automatically. However, if all three are provided, then the total tokens used must exactly equal the sum of prompt tokens and completion tokens.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateEffortLevelIsBetween1And100(result);
+        this.ValidateCompletedAtNotBeforeRunAt(result);
+        this.ValidateTokensUsedEqualsPromptPlusCompletion(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that if an effort level is provided, it must be between 1 and 100, inclusive.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateEffortLevelIsBetween1And100(result: ValidationResult) {
+    	if (this.EffortLevel != null && (this.EffortLevel < 1 || this.EffortLevel > 100)) {
+    		result.Errors.push(new ValidationErrorInfo("EffortLevel", "Effort level must be between 1 and 100 if provided.", this.EffortLevel, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that if the 'CompletedAt' date is provided, it must be the same as or later than the 'RunAt' date. If 'CompletedAt' is not specified, there is no restriction.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCompletedAtNotBeforeRunAt(result: ValidationResult) {
+    	if (this.CompletedAt !== null && this.CompletedAt < this.RunAt) {
+    		result.Errors.push(new ValidationErrorInfo("CompletedAt", "If provided, CompletedAt must be the same as or later than RunAt.", this.CompletedAt, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that if either the number of prompt tokens or completion tokens is missing, or the total tokens used is missing, the check passes automatically. However, if all three are provided, then the total tokens used must exactly equal the sum of prompt tokens and completion tokens.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateTokensUsedEqualsPromptPlusCompletion(result: ValidationResult) {
+    	// Allow missing values for any of the three fields
+    	if (this.TokensUsed != null && this.TokensPrompt != null && this.TokensCompletion != null) {
+    		if (this.TokensUsed !== this.TokensPrompt + this.TokensCompletion) {
+    			result.Errors.push(new ValidationErrorInfo("TokensUsed", "The total tokens used must equal the sum of the prompt tokens and completion tokens.", this.TokensUsed, ValidationErrorType.Failure));
+    		}
+    	}
+    	// Otherwise, skip the check (it passes)
     }
 
     /**
@@ -46296,6 +49711,131 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
             // For network providers, cascading deletes are handled server-side
             return super.Delete(options);
         }
+    }
+
+    /**
+    * Validate() method override for MJ: AI Prompts entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * CacheSimilarityThreshold: This rule ensures that the "CacheSimilarityThreshold" value, if provided, must be between 0 and 1 (including both 0 and 1). If it is not set, there is no restriction.
+    * * CacheTTLSeconds: This rule ensures that if a cache time-to-live (CacheTTLSeconds) value is provided, it must be greater than zero. If it is not set, that's allowed.
+    * * EffortLevel: This rule ensures that if an Effort Level is provided, it must be a number between 1 and 100, inclusive.
+    * * Table-Level: This rule ensures that if the cache match type is set to 'Vector', a cache similarity threshold must be provided. For other cache match types, the cache similarity threshold can be left blank.
+    * * Table-Level: This rule ensures that if the OutputType is set to "object", then an OutputExample must be provided. For all other OutputType values, OutputExample can be left empty.
+    * * Table-Level: This rule ensures that if the Parallelization Mode is set to 'ConfigParam', then a configuration parameter must be provided. For all other modes, the configuration parameter can be left blank.
+    * * Table-Level: This rule ensures that if the parallelization mode is set to 'StaticCount', then a value for parallel count must be provided. For other parallelization modes, parallel count can be left blank.
+    * * Table-Level: This rule makes sure that the 'ResultSelectorPromptID' field cannot have the same value as the record's own 'ID'. In other words, the record cannot select itself as its own result selector prompt.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateCacheSimilarityThresholdBetweenZeroAndOne(result);
+        this.ValidateCacheTTLSecondsIsPositive(result);
+        this.ValidateEffortLevelIsBetween1And100(result);
+        this.ValidateCacheSimilarityThresholdRequiredForVectorMatchType(result);
+        this.ValidateOutputExampleRequiredWhenOutputTypeIsObject(result);
+        this.ValidateParallelConfigParamRequiredForConfigParamMode(result);
+        this.ValidateParallelCountRequiredForStaticCount(result);
+        this.ValidateResultSelectorPromptIDNotEqualID(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the "CacheSimilarityThreshold" value, if provided, must be between 0 and 1 (including both 0 and 1). If it is not set, there is no restriction.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCacheSimilarityThresholdBetweenZeroAndOne(result: ValidationResult) {
+    	if (this.CacheSimilarityThreshold != null && (this.CacheSimilarityThreshold < 0 || this.CacheSimilarityThreshold > 1)) {
+    		result.Errors.push(new ValidationErrorInfo("CacheSimilarityThreshold", "CacheSimilarityThreshold must be between 0 and 1, inclusive.", this.CacheSimilarityThreshold, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that if a cache time-to-live (CacheTTLSeconds) value is provided, it must be greater than zero. If it is not set, that's allowed.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCacheTTLSecondsIsPositive(result: ValidationResult) {
+    	if (this.CacheTTLSeconds != null && this.CacheTTLSeconds <= 0) {
+    		result.Errors.push(new ValidationErrorInfo("CacheTTLSeconds", "Cache time-to-live (CacheTTLSeconds) must be greater than 0 if specified.", this.CacheTTLSeconds, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that if an Effort Level is provided, it must be a number between 1 and 100, inclusive.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateEffortLevelIsBetween1And100(result: ValidationResult) {
+    	if (this.EffortLevel != null && (this.EffortLevel < 1 || this.EffortLevel > 100)) {
+    		result.Errors.push(new ValidationErrorInfo("EffortLevel", "Effort Level must be between 1 and 100.", this.EffortLevel, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that if the cache match type is set to 'Vector', a cache similarity threshold must be provided. For other cache match types, the cache similarity threshold can be left blank.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCacheSimilarityThresholdRequiredForVectorMatchType(result: ValidationResult) {
+    	if (this.CacheMatchType === "Vector" && this.CacheSimilarityThreshold == null) {
+    		result.Errors.push(new ValidationErrorInfo("CacheSimilarityThreshold", "A cache similarity threshold must be set when CacheMatchType is 'Vector'.", this.CacheSimilarityThreshold, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that if the OutputType is set to "object", then an OutputExample must be provided. For all other OutputType values, OutputExample can be left empty.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateOutputExampleRequiredWhenOutputTypeIsObject(result: ValidationResult) {
+    	if (this.OutputType === "object" && this.OutputExample == null) {
+    		result.Errors.push(new ValidationErrorInfo("OutputExample", "An output example must be provided when OutputType is 'object'.", this.OutputExample, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that if the Parallelization Mode is set to 'ConfigParam', then a configuration parameter must be provided. For all other modes, the configuration parameter can be left blank.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateParallelConfigParamRequiredForConfigParamMode(result: ValidationResult) {
+    	if (this.ParallelizationMode === "ConfigParam" && this.ParallelConfigParam == null) {
+    		result.Errors.push(new ValidationErrorInfo("ParallelConfigParam", "ParallelConfigParam must be provided when ParallelizationMode is set to 'ConfigParam'.", this.ParallelConfigParam, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that if the parallelization mode is set to 'StaticCount', then a value for parallel count must be provided. For other parallelization modes, parallel count can be left blank.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateParallelCountRequiredForStaticCount(result: ValidationResult) {
+    	if (this.ParallelizationMode === "StaticCount" && this.ParallelCount == null) {
+    		result.Errors.push(new ValidationErrorInfo("ParallelCount", "A parallel count must be provided when parallelization mode is set to 'StaticCount'.", this.ParallelCount, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule makes sure that the 'ResultSelectorPromptID' field cannot have the same value as the record's own 'ID'. In other words, the record cannot select itself as its own result selector prompt.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateResultSelectorPromptIDNotEqualID(result: ValidationResult) {
+    	if (this.ResultSelectorPromptID != null && this.ResultSelectorPromptID === this.ID) {
+    		result.Errors.push(new ValidationErrorInfo("ResultSelectorPromptID", "ResultSelectorPromptID cannot be the same as the ID of this record.", this.ResultSelectorPromptID, ValidationErrorType.Failure));
+    	}
     }
 
     /**
@@ -47872,6 +51412,33 @@ export class MJAIVendorTypeEntity extends BaseEntity<MJAIVendorTypeEntityType> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: AI Vendor Types entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Rank: This rule ensures that the Rank value cannot be negative. It must be zero or higher.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateRankIsNonNegative(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the Rank value cannot be negative. It must be zero or higher.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateRankIsNonNegative(result: ValidationResult) {
+    	if (this.Rank < 0) {
+    		result.Errors.push(new ValidationErrorInfo("Rank", "Rank must be zero or greater.", this.Rank, ValidationErrorType.Failure));
+    	}
     }
 
     /**
@@ -49770,6 +53337,70 @@ export interface MJApplicationEntity_IDefaultNavItem {
 }
 
 /**
+ * App-scoped agent configuration.
+ *
+ * Stored as a JSON object in the `AgentSettings` column of the `Applications` entity.
+ * CodeGen emits a strongly-typed `AgentSettingsObject` accessor on `ApplicationEntity`
+ * that returns `MJApplicationEntity_IAgentSettings | null`.
+ *
+ * Read by the conversations default-agent resolver (for the app's default/lead agent)
+ * and by the realtime co-agent cascade (relevant agents, app-scoped client tools, and
+ * realtime persona/disclosure overrides). Every field is optional — an app opts into
+ * exactly what it needs.
+ *
+ * Disclosure values ('silent' | 'mention' | 'hand-voice') mirror the AgentDisclosurePolicy
+ * union declared in @memberjunction/ai-core-plus. Keep the two in lockstep.
+ */
+export interface MJApplicationEntity_IAgentSettings {
+    /** The app's default/lead agent (conversational default AND realtime lead identity). Agent ID. */
+    DefaultAgentID?: string | null;
+
+    /**
+     * Agents relevant to this app — the static allowed-target set for the co-agent.
+     * Union-accumulated at runtime with agent-type defaults and dynamic (channel) registrations.
+     */
+    RelevantAgents?: Array<{
+        /** Agent ID (loop or flow — transparent to the co-agent). */
+        AgentID: string;
+        /** Optional friendly label for the capability manifest / disclosure ("Skip", "Query Builder"). */
+        Label?: string | null;
+        /** Per-target disclosure override; falls back to the effective default disclosure. */
+        Disclosure?: 'silent' | 'mention' | 'hand-voice' | null;
+        /** If true, surfaced in pickers / proactively offered; if false, available but not advertised. */
+        Advertised?: boolean | null;
+    }>;
+
+    /**
+     * App-scoped static client tools, by tool-definition reference.
+     * Surfaced to every agent acting in this app and resolved by the unified client-tool resolver.
+     */
+    ClientTools?: Array<{
+        /** References MJ: AI Client Tool Definitions by ID (preferred) or Name. */
+        ClientToolDefinitionID?: string | null;
+        Name?: string | null;
+        /** Optional app-level priority for first-match-wins resolution. */
+        Priority?: number | null;
+    }>;
+
+    /**
+     * Realtime co-agent overrides that layer into the config cascade above the agent's own
+     * TypeConfiguration (and below runtime overrides). Only keys set here override; unset keys
+     * fall through to the agent / type defaults.
+     */
+    Realtime?: {
+        /** Default delegation disclosure for this app's co-agent. */
+        Disclosure?: 'silent' | 'mention' | 'hand-voice' | null;
+        /** Persona override folded into the session system prompt at mint. */
+        Persona?: {
+            Tone?: string | null;
+            SpeakingStyle?: string | null;
+        } | null;
+        /** Model preference override (AI Models Name or ID). */
+        ModelPreference?: string | null;
+    } | null;
+}
+
+/**
  * MJ: Applications - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: Application
@@ -49920,7 +53551,7 @@ export class MJApplicationEntity extends BaseEntity<MJApplicationEntityType> {
 
     /**
     * * Field Name: SchemaAutoAddNewEntities
-    * * Display Name: Schema Auto Add New Entities
+    * * Display Name: Auto Add Entities From Schema
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Comma-delimited list of schema names where entities will be automatically added to the application when created in those schemas
     */
@@ -50101,6 +53732,41 @@ export class MJApplicationEntity extends BaseEntity<MJApplicationEntityType> {
     }
     set AutoUpdatePath(value: boolean) {
         this.Set('AutoUpdatePath', value);
+    }
+
+    /**
+    * * Field Name: AgentSettings
+    * * Display Name: Agent Settings
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJApplicationEntity_IAgentSettings
+    * * Description: App-scoped agent configuration JSON (shape = IAgentSettings). Declares the default/lead agent, relevant agents available to conversational and realtime co-agents, app-scoped client tool references, and realtime persona/disclosure overrides that layer into the agent config cascade. Null = no app-level agent config.
+    */
+    get AgentSettings(): string | null {
+        return this.Get('AgentSettings');
+    }
+    set AgentSettings(value: string | null) {
+        this.Set('AgentSettings', value);
+    }
+
+    private _AgentSettingsObject_cached: MJApplicationEntity_IAgentSettings | null | undefined = undefined;
+    private _AgentSettingsObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for AgentSettings — returns parsed JSON as MJApplicationEntity_IAgentSettings.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get AgentSettingsObject(): MJApplicationEntity_IAgentSettings | null {
+        const raw = this.AgentSettings;
+        if (raw !== this._AgentSettingsObject_lastRaw) {
+            this._AgentSettingsObject_cached = raw ? JSON.parse(raw) : null;
+            this._AgentSettingsObject_lastRaw = raw;
+        }
+        return this._AgentSettingsObject_cached!;
+    }
+    set AgentSettingsObject(value: MJApplicationEntity_IAgentSettings | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.AgentSettings = raw;
+        this._AgentSettingsObject_cached = value;
+        this._AgentSettingsObject_lastRaw = raw;
     }
 }
 
@@ -53359,7 +57025,7 @@ export class MJCollectionArtifactEntity extends BaseEntity<MJCollectionArtifactE
 
     /**
     * * Field Name: CollectionID
-    * * Display Name: Collection ID
+    * * Display Name: Collection
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Collections (vwCollections.ID)
     */
@@ -53406,7 +57072,7 @@ export class MJCollectionArtifactEntity extends BaseEntity<MJCollectionArtifactE
 
     /**
     * * Field Name: ArtifactVersionID
-    * * Display Name: Artifact Version ID
+    * * Display Name: Artifact Version
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Artifact Versions (vwArtifactVersions.ID)
     * * Description: Required. Specific version of the artifact saved to this collection. Collections store version-specific artifacts to enable proper version tracking and Links tab filtering.
@@ -53419,8 +57085,35 @@ export class MJCollectionArtifactEntity extends BaseEntity<MJCollectionArtifactE
     }
 
     /**
+    * * Field Name: ContextDescription
+    * * Display Name: Context Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Agent-facing description of what this media item is and WHEN to show it during a conversation. Read by a realtime agent (alongside the artifact's own name/type) to decide autonomously whether/when to surface the item. Per-membership: the same artifact can carry different guidance in different Collections (media kits).
+    */
+    get ContextDescription(): string | null {
+        return this.Get('ContextDescription');
+    }
+    set ContextDescription(value: string | null) {
+        this.Set('ContextDescription', value);
+    }
+
+    /**
+    * * Field Name: Preload
+    * * Display Name: Preload
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Eager-load hint for a realtime media kit: when 1, the agent is told to show / the client to prefetch this item at session start rather than waiting until it is contextually relevant. Default 0 (lazy — surfaced only when the agent chooses).
+    */
+    get Preload(): boolean {
+        return this.Get('Preload');
+    }
+    set Preload(value: boolean) {
+        this.Set('Preload', value);
+    }
+
+    /**
     * * Field Name: Collection
-    * * Display Name: Collection
+    * * Display Name: Collection Name
     * * SQL Data Type: nvarchar(255)
     */
     get Collection(): string {
@@ -53429,7 +57122,7 @@ export class MJCollectionArtifactEntity extends BaseEntity<MJCollectionArtifactE
 
     /**
     * * Field Name: ArtifactVersion
-    * * Display Name: Artifact Version
+    * * Display Name: Artifact Version Name
     * * SQL Data Type: nvarchar(255)
     */
     get ArtifactVersion(): string | null {
@@ -54353,6 +58046,33 @@ export class MJCommunicationProviderEntity extends BaseEntity<MJCommunicationPro
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Communication Providers entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: This rule ensures that scheduled sending is only supported if sending is also supported. In other words, you cannot support scheduled sending without also supporting sending.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateSupportsScheduledSendingOnlyIfSendingIsSupported(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that scheduled sending is only supported if sending is also supported. In other words, you cannot support scheduled sending without also supporting sending.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateSupportsScheduledSendingOnlyIfSendingIsSupported(result: ValidationResult) {
+    	if (this.SupportsScheduledSending && !this.SupportsSending) {
+    		result.Errors.push(new ValidationErrorInfo("SupportsScheduledSending", "Scheduled sending cannot be supported if sending is not supported.", this.SupportsScheduledSending, ValidationErrorType.Failure));
+    	}
     }
 
     /**
@@ -60796,6 +64516,33 @@ export class MJConversationArtifactVersionEntity extends BaseEntity<MJConversati
     }
 
     /**
+    * Validate() method override for MJ: Conversation Artifact Versions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Version: This rule ensures that the Version field must always be greater than 0. Any value for Version must be a positive integer.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateVersionGreaterThanZero(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the Version field must always be greater than 0. Any value for Version must be a positive integer.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateVersionGreaterThanZero(result: ValidationResult) {
+    	if (this.Version <= 0) {
+    		result.Errors.push(new ValidationErrorInfo("Version", "Version must be greater than zero.", this.Version, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -61271,6 +65018,39 @@ export class MJConversationDetailAttachmentEntity extends BaseEntity<MJConversat
     }
 
     /**
+    * Validate() method override for MJ: Conversation Detail Attachments entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: Each record must include content either directly (InlineData) or by reference (FileID); they cannot both be empty.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateInlineDataOrFileIDPresence(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Each record must include content either directly (InlineData) or by reference (FileID); they cannot both be empty.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateInlineDataOrFileIDPresence(result: ValidationResult) {
+    	// Ensure that at least one source of content is supplied
+    	if (this.InlineData == null && this.FileID == null) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"InlineDataOrFileID",
+    			"Either InlineData or FileID must be provided; both cannot be empty.",
+    			null,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -61558,6 +65338,33 @@ export class MJConversationDetailRatingEntity extends BaseEntity<MJConversationD
     }
 
     /**
+    * Validate() method override for MJ: Conversation Detail Ratings entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Rating: This rule ensures that the rating must be a whole number between 1 and 10, inclusive.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateRatingWithinAllowedRange(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the rating must be a whole number between 1 and 10, inclusive.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateRatingWithinAllowedRange(result: ValidationResult) {
+    	if (this.Rating < 1 || this.Rating > 10) {
+    		result.Errors.push(new ValidationErrorInfo("Rating", "Rating must be between 1 and 10.", this.Rating, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -61730,6 +65537,33 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
     }
 
     /**
+    * Validate() method override for MJ: Conversation Details entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * UserRating: This rule ensures that if a user rating is provided, it must be a whole number between 1 and 10, inclusive.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateUserRatingBetween1And10(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that if a user rating is provided, it must be a whole number between 1 and 10, inclusive.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateUserRatingBetween1And10(result: ValidationResult) {
+    	if (this.UserRating != null && (this.UserRating < 1 || this.UserRating > 10)) {
+    		result.Errors.push(new ValidationErrorInfo("UserRating", "User rating must be between 1 and 10.", this.UserRating, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -61888,7 +65722,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: SummaryOfEarlierConversation
-    * * Display Name: Conversation Summary
+    * * Display Name: Summary of Earlier Conversation
     * * SQL Data Type: nvarchar(MAX)
     * * Description: This column optionally stores a summary of the entire conversation leading up to this particular conversation detail record. It is used in long-running conversations to optimize performance by summarizing earlier parts.
     */
@@ -61901,7 +65735,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: UserID
-    * * Display Name: User
+    * * Display Name: User ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     * * Description: This field, when populated, overrides the UserID at the Conversation level to specify a different user created the message.
@@ -61915,7 +65749,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: ArtifactID
-    * * Display Name: Artifact
+    * * Display Name: Artifact ID
     * * 
     * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Conversation Artifacts (vwConversationArtifacts.ID)
@@ -61930,7 +65764,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: ArtifactVersionID
-    * * Display Name: Artifact Version
+    * * Display Name: Artifact Version ID
     * * 
     * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Conversation Artifact Versions (vwConversationArtifactVersions.ID)
@@ -61958,7 +65792,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: IsPinned
-    * * Display Name: Pinned
+    * * Display Name: Is Pinned
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Indicates if this message is pinned within the conversation for easy reference
@@ -61972,7 +65806,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: ParentID
-    * * Display Name: Parent Message
+    * * Display Name: Parent ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Conversation Details (vwConversationDetails.ID)
     * * Description: Optional reference to parent message for threaded conversations. NULL for top-level messages.
@@ -61986,7 +65820,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: AgentID
-    * * Display Name: Agent
+    * * Display Name: Agent ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
     * * Description: Denormalized agent ID for quick lookup of agent name and icon without joining through AgentRun
@@ -62019,7 +65853,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: SuggestedResponses
-    * * Display Name: Suggested Responses (Legacy)
+    * * Display Name: Suggested Responses
     * * 
     * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: nvarchar(MAX)
     * * Description: DEPRECATED: Use ResponseForm, ActionableCommands, and AutomaticCommands instead. Legacy field for simple text-based suggested responses. Replaced in v2.118 by more powerful structured forms and commands system. Retained for historical data only.
@@ -62033,7 +65867,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: TestRunID
-    * * Display Name: Test Run
+    * * Display Name: Test Run ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Test Runs (vwTestRuns.ID)
     * * Description: Optional Foreign Key - Links this conversation detail to a test run if this message was part of a test conversation. Allows filtering and analyzing test-specific conversation turns.
@@ -62086,7 +65920,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: OriginalMessageChanged
-    * * Display Name: Message Modified
+    * * Display Name: Original Message Changed
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Indicates if the original message content was modified after initial creation. Set automatically by the server when the Message field is changed on update.
@@ -62100,7 +65934,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: AgentSessionID
-    * * Display Name: Agent Session
+    * * Display Name: Agent Session ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Agent Sessions (vwAIAgentSessions.ID)
     * * Description: Links this message to the AIAgentSession that was active when it was created. NULL for messages typed in standard text chat outside any live session. Lets the conversation timeline group a sessions messages into a single collapsible block.
@@ -62113,8 +65947,65 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
     }
 
     /**
+    * * Field Name: TurnEndedAt
+    * * Display Name: Turn Ended At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Immutable timestamp marking when this turn ended/finalized. Set once on turn completion (do NOT read __mj_UpdatedAt for this — it moves on later edits). Paired with __mj_CreatedAt (turn start) and AIAgentSession.RecordingStartedAt (t0) to derive audio seek offsets.
+    */
+    get TurnEndedAt(): Date | null {
+        return this.Get('TurnEndedAt');
+    }
+    set TurnEndedAt(value: Date | null) {
+        this.Set('TurnEndedAt', value);
+    }
+
+    /**
+    * * Field Name: UtteranceStartMs
+    * * Display Name: Utterance Start (ms)
+    * * SQL Data Type: int
+    * * Description: Precise media-relative start of this turn, in integer milliseconds from the recording t0 (AIAgentSession.RecordingStartedAt). Populated only when the realtime driver supplies frame timing; NULL otherwise (fall back to __mj_CreatedAt - t0). Used by the evidence player for click-to-seek.
+    */
+    get UtteranceStartMs(): number | null {
+        return this.Get('UtteranceStartMs');
+    }
+    set UtteranceStartMs(value: number | null) {
+        this.Set('UtteranceStartMs', value);
+    }
+
+    /**
+    * * Field Name: UtteranceEndMs
+    * * Display Name: Utterance End (ms)
+    * * SQL Data Type: int
+    * * Description: Precise media-relative end of this turn, in integer milliseconds from the recording t0 (AIAgentSession.RecordingStartedAt). Populated only when the realtime driver supplies frame timing; NULL otherwise. Used by the evidence player for click-to-seek.
+    */
+    get UtteranceEndMs(): number | null {
+        return this.Get('UtteranceEndMs');
+    }
+    set UtteranceEndMs(value: number | null) {
+        this.Set('UtteranceEndMs', value);
+    }
+
+    /**
+    * * Field Name: MediaType
+    * * Display Name: Media Type
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Audio
+    *   * Text
+    *   * Video
+    * * Description: Modality of this turn's content: Text, Audio, or Video. Forward-compat so video turns reuse the same record shape when realtime models support it. NULL = text (legacy default).
+    */
+    get MediaType(): 'Audio' | 'Text' | 'Video' | null {
+        return this.Get('MediaType');
+    }
+    set MediaType(value: 'Audio' | 'Text' | 'Video' | null) {
+        this.Set('MediaType', value);
+    }
+
+    /**
     * * Field Name: Conversation
-    * * Display Name: Conversation Reference
+    * * Display Name: Conversation
     * * SQL Data Type: nvarchar(255)
     */
     get Conversation(): string | null {
@@ -62123,7 +66014,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: User
-    * * Display Name: User Reference
+    * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
     get User(): string | null {
@@ -62132,7 +66023,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: Artifact
-    * * Display Name: Artifact Reference
+    * * Display Name: Artifact
     * * SQL Data Type: nvarchar(255)
     */
     get Artifact(): string | null {
@@ -62141,7 +66032,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: ArtifactVersion
-    * * Display Name: Artifact Version Reference
+    * * Display Name: Artifact Version
     * * SQL Data Type: nvarchar(255)
     */
     get ArtifactVersion(): string | null {
@@ -62150,7 +66041,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: Parent
-    * * Display Name: Parent Reference
+    * * Display Name: Parent
     * * SQL Data Type: nvarchar(100)
     */
     get Parent(): string | null {
@@ -62159,7 +66050,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: Agent
-    * * Display Name: Agent Reference
+    * * Display Name: Agent
     * * SQL Data Type: nvarchar(255)
     */
     get Agent(): string | null {
@@ -62168,7 +66059,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: TestRun
-    * * Display Name: Test Run Reference
+    * * Display Name: Test Run
     * * SQL Data Type: nvarchar(255)
     */
     get TestRun(): string | null {
@@ -62252,6 +66143,69 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
     }
 
     /**
+    * Validate() method override for MJ: Conversations entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: Ensures that records scoped as 'Global' do not have an associated Application ID, while records scoped to 'Application' or 'Both' must have a valid Application ID assigned.
+    * * Table-Level: Both the linked entity and the linked record must be provided together, or both must be left empty, to ensure that a reference to an external record is complete.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateApplicationScopeAndIDConsistency(result);
+        this.ValidateLinkedEntityAndRecordCoexistence(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Ensures that records scoped as 'Global' do not have an associated Application ID, while records scoped to 'Application' or 'Both' must have a valid Application ID assigned.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateApplicationScopeAndIDConsistency(result: ValidationResult) {
+    	// If the scope is Global, ApplicationID must be null
+    	if (this.ApplicationScope === 'Global' && this.ApplicationID != null) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"ApplicationID",
+    			"Application ID must be empty when the application scope is set to Global.",
+    			this.ApplicationID,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    
+    	// If the scope is Application or Both, ApplicationID must be provided
+    	if ((this.ApplicationScope === 'Application' || this.ApplicationScope === 'Both') && this.ApplicationID == null) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"ApplicationID",
+    			"An Application ID is required when the application scope is set to Application or Both.",
+    			this.ApplicationID,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * Both the linked entity and the linked record must be provided together, or both must be left empty, to ensure that a reference to an external record is complete.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateLinkedEntityAndRecordCoexistence(result: ValidationResult) {
+    	// The constraint ensures that LinkedEntityID and LinkedRecordID are either both null or both populated
+    	if ((this.LinkedEntityID == null && this.LinkedRecordID != null) || (this.LinkedEntityID != null && this.LinkedRecordID == null)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"LinkedEntityID",
+    			"Both Linked Entity and Linked Record must be provided together, or both must be empty.",
+    			this.LinkedEntityID,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -62266,7 +66220,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: UserID
-    * * Display Name: User
+    * * Display Name: User ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     */
@@ -62330,7 +66284,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: IsArchived
-    * * Display Name: Archived
+    * * Display Name: Is Archived
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Indicates if this conversation has been archived and should not appear in active lists.
@@ -62344,7 +66298,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: LinkedEntityID
-    * * Display Name: Linked Entity
+    * * Display Name: Linked Entity ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
     * * Description: Generic 'what is this conversation about?' pointer. Names the Entity whose record this conversation references (e.g. MJ: Components when the conversation was started in the Form Builder cockpit about a specific form). Paired with LinkedRecordID via the CK_Conversation_LinkBinding cross-column CHECK — both NULL or both populated. Surfaces use this to filter their conversation list to entries about the currently-loaded record (e.g. 'show prior conversations about THIS form'). Reusable beyond Form Builder by any future dashboard / record-context surface that wants the same UX without further schema work.
@@ -62371,7 +66325,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: DataContextID
-    * * Display Name: Data Context
+    * * Display Name: Data Context ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Data Contexts (vwDataContexts.ID)
     */
@@ -62422,7 +66376,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: EnvironmentID
-    * * Display Name: Environment
+    * * Display Name: Environment ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Environments (vwEnvironments.ID)
     * * Default Value: F51358F3-9447-4176-B313-BF8025FD8D09
@@ -62436,7 +66390,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: ProjectID
-    * * Display Name: Project
+    * * Display Name: Project ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Projects (vwProjects.ID)
     */
@@ -62449,7 +66403,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: IsPinned
-    * * Display Name: Pinned
+    * * Display Name: Is Pinned
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Indicates if this conversation is pinned to the top of lists
@@ -62463,7 +66417,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: TestRunID
-    * * Display Name: Test Run
+    * * Display Name: Test Run ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Test Runs (vwTestRuns.ID)
     * * Description: Optional Foreign Key - Links this conversation to a test run if this conversation was generated as part of a test. Enables tracking test conversations separately from production conversations.
@@ -62496,7 +66450,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: ApplicationID
-    * * Display Name: Application
+    * * Display Name: Application ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Applications (vwApplications.ID)
     * * Description: Optional Application this conversation is bound to. Required when ApplicationScope is 'Application' or 'Both'; must be NULL when ApplicationScope is 'Global'. Enforced by the CK_Conversation_ScopeAppBinding cross-column CHECK. Used by embedded chat surfaces (e.g. the Form Builder cockpit) to filter their conversation list to just their own application's conversations.
@@ -62510,7 +66464,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: DefaultAgentID
-    * * Display Name: Default Agent
+    * * Display Name: Default Agent ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
     * * Description: Optional per-conversation default AI agent. When set, the message router targets this agent for non-mention, non-continuity messages instead of falling through to the embedder-supplied default (e.g. Form Builder) or to Sage. Lets a user pin a conversation to a specific specialist agent (e.g. Research Agent) so Sage is never invoked for that thread. Routing precedence: @mention > continuity (last responder) > Conversation.DefaultAgentID > embedder's defaultAgentId input > Sage fallback.
@@ -62536,8 +66490,35 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
     }
 
     /**
+    * * Field Name: RecordingFileID
+    * * Display Name: Recording File ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Files (vwFiles.ID)
+    * * Description: For a Meeting-Room conversation, the MJ: Files row holding the room-level composite recording (the LiveKit egress MP4, copied into MJStorage). NULL when the meeting was not recorded.
+    */
+    get RecordingFileID(): string | null {
+        return this.Get('RecordingFileID');
+    }
+    set RecordingFileID(value: string | null) {
+        this.Set('RecordingFileID', value);
+    }
+
+    /**
+    * * Field Name: EgressID
+    * * Display Name: Egress ID
+    * * SQL Data Type: nvarchar(255)
+    * * Description: The LiveKit egress session id for this meeting's room recording. Set when recording starts; used to stop the egress and to correlate the egress-completion result with this conversation. NULL when the meeting was not recorded.
+    */
+    get EgressID(): string | null {
+        return this.Get('EgressID');
+    }
+    set EgressID(value: string | null) {
+        this.Set('EgressID', value);
+    }
+
+    /**
     * * Field Name: User
-    * * Display Name: User Name
+    * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
     get User(): string {
@@ -62546,7 +66527,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: LinkedEntity
-    * * Display Name: Linked Entity Name
+    * * Display Name: Linked Entity
     * * SQL Data Type: nvarchar(255)
     */
     get LinkedEntity(): string | null {
@@ -62555,7 +66536,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: DataContext
-    * * Display Name: Data Context Name
+    * * Display Name: Data Context
     * * SQL Data Type: nvarchar(255)
     */
     get DataContext(): string | null {
@@ -62564,7 +66545,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: Environment
-    * * Display Name: Environment Name
+    * * Display Name: Environment
     * * SQL Data Type: nvarchar(255)
     */
     get Environment(): string {
@@ -62573,7 +66554,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: Project
-    * * Display Name: Project Name
+    * * Display Name: Project
     * * SQL Data Type: nvarchar(255)
     */
     get Project(): string | null {
@@ -62582,7 +66563,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: TestRun
-    * * Display Name: Test Run Name
+    * * Display Name: Test Run
     * * SQL Data Type: nvarchar(255)
     */
     get TestRun(): string | null {
@@ -62591,7 +66572,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: Application
-    * * Display Name: Application Name
+    * * Display Name: Application
     * * SQL Data Type: nvarchar(100)
     */
     get Application(): string | null {
@@ -62600,11 +66581,20 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: DefaultAgent
-    * * Display Name: Default Agent Name
+    * * Display Name: Default Agent
     * * SQL Data Type: nvarchar(255)
     */
     get DefaultAgent(): string | null {
         return this.Get('DefaultAgent');
+    }
+
+    /**
+    * * Field Name: RecordingFile
+    * * Display Name: Recording File
+    * * SQL Data Type: nvarchar(500)
+    */
+    get RecordingFile(): string | null {
+        return this.Get('RecordingFile');
     }
 }
 
@@ -64175,6 +68165,33 @@ export class MJDashboardUserPreferenceEntity extends BaseEntity<MJDashboardUserP
     }
 
     /**
+    * Validate() method override for MJ: Dashboard User Preferences entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: This rule ensures that when the scope is set to 'Global', there should not be an application assigned, and when the scope is set to 'App', an application must be assigned.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateScopeAndApplicationIDConsistency(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that when the scope is set to 'Global', there should not be an application assigned, and when the scope is set to 'App', an application must be assigned.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateScopeAndApplicationIDConsistency(result: ValidationResult) {
+    	if ((this.Scope === "Global" && this.ApplicationID !== null) || (this.Scope === "App" && this.ApplicationID === null)) {
+    		result.Errors.push(new ValidationErrorInfo("Scope", "When the scope is 'Global', ApplicationID must be null. When scope is 'App', ApplicationID must not be null.", this.Scope + ":" + this.ApplicationID, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -65430,7 +69447,7 @@ export class MJDuplicateRunDetailMatchEntity extends BaseEntity<MJDuplicateRunDe
 
     /**
     * * Field Name: DuplicateRunDetailID
-    * * Display Name: Duplicate Run Detail ID
+    * * Display Name: Duplicate Run Detail
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Duplicate Run Details (vwDuplicateRunDetails.ID)
     */
@@ -65461,7 +69478,7 @@ export class MJDuplicateRunDetailMatchEntity extends BaseEntity<MJDuplicateRunDe
 
     /**
     * * Field Name: MatchRecordID
-    * * Display Name: Match Record ID
+    * * Display Name: Matched Record
     * * SQL Data Type: nvarchar(500)
     * * Description: The ID of the record identified as a potential duplicate match.
     */
@@ -65535,7 +69552,7 @@ export class MJDuplicateRunDetailMatchEntity extends BaseEntity<MJDuplicateRunDe
 
     /**
     * * Field Name: RecordMergeLogID
-    * * Display Name: Record Merge Log ID
+    * * Display Name: Merge Log
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Record Merge Logs (vwRecordMergeLogs.ID)
     */
@@ -65613,8 +69630,106 @@ export class MJDuplicateRunDetailMatchEntity extends BaseEntity<MJDuplicateRunDe
     }
 
     /**
+    * * Field Name: AIAgentRunID
+    * * Display Name: AI Agent Run
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
+    * * Description: When the match was reasoned by an AI Agent (ReasoningMode = Agent), the AIAgentRun that produced the recommendation. Full audit trail; NULL when no agent ran (gated out, or Prompt mode, or reasoning disabled).
+    */
+    get AIAgentRunID(): string | null {
+        return this.Get('AIAgentRunID');
+    }
+    set AIAgentRunID(value: string | null) {
+        this.Set('AIAgentRunID', value);
+    }
+
+    /**
+    * * Field Name: AIPromptRunID
+    * * Display Name: AI Prompt Run
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Prompt Runs (vwAIPromptRuns.ID)
+    * * Description: When the match was reasoned by a single-shot AI Prompt (ReasoningMode = Prompt, the default), the AIPromptRun that produced the recommendation. Full audit trail; NULL when no prompt ran.
+    */
+    get AIPromptRunID(): string | null {
+        return this.Get('AIPromptRunID');
+    }
+    set AIPromptRunID(value: string | null) {
+        this.Set('AIPromptRunID', value);
+    }
+
+    /**
+    * * Field Name: LLMRecommendation
+    * * Display Name: LLM Recommendation
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Merge
+    *   * NotDuplicate
+    *   * Uncertain
+    * * Description: The LLM's recommendation for this candidate match: Merge, NotDuplicate, or Uncertain. Annotates the vector-derived candidate; NULL when reasoning did not run for this match.
+    */
+    get LLMRecommendation(): 'Merge' | 'NotDuplicate' | 'Uncertain' | null {
+        return this.Get('LLMRecommendation');
+    }
+    set LLMRecommendation(value: 'Merge' | 'NotDuplicate' | 'Uncertain' | null) {
+        this.Set('LLMRecommendation', value);
+    }
+
+    /**
+    * * Field Name: LLMConfidence
+    * * Display Name: LLM Confidence
+    * * SQL Data Type: numeric(12, 11)
+    * * Description: Reasoning-adjusted confidence (0-1) that this is a true duplicate. Distinct from MatchProbability (the vector/RRF score); the LLM strengthens or weakens the vector signal rather than replacing it.
+    */
+    get LLMConfidence(): number | null {
+        return this.Get('LLMConfidence');
+    }
+    set LLMConfidence(value: number | null) {
+        this.Set('LLMConfidence', value);
+    }
+
+    /**
+    * * Field Name: LLMReasoning
+    * * Display Name: LLM Reasoning
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Human-readable rationale for the LLM's recommendation. Surfaced in the review UI and powers the transparency / disagreement explanation.
+    */
+    get LLMReasoning(): string | null {
+        return this.Get('LLMReasoning');
+    }
+    set LLMReasoning(value: string | null) {
+        this.Set('LLMReasoning', value);
+    }
+
+    /**
+    * * Field Name: LLMProposedSurvivorRecordID
+    * * Display Name: Proposed Survivor Record
+    * * SQL Data Type: nvarchar(500)
+    * * Description: The record the LLM proposes as the surviving record for this matched set, as a URL-segment composite key. Preloads the comparison panel; the user can override.
+    */
+    get LLMProposedSurvivorRecordID(): string | null {
+        return this.Get('LLMProposedSurvivorRecordID');
+    }
+    set LLMProposedSurvivorRecordID(value: string | null) {
+        this.Set('LLMProposedSurvivorRecordID', value);
+    }
+
+    /**
+    * * Field Name: LLMProposedFieldMap
+    * * Display Name: Proposed Field Map
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON of the LLM's proposed per-field survivor choices for the matched set. Resolved to literal {FieldName, Value} entries (the existing MergeRecords FieldMap contract) and applied to the surviving record before the transactional merge; the user can override per field.
+    */
+    get LLMProposedFieldMap(): string | null {
+        return this.Get('LLMProposedFieldMap');
+    }
+    set LLMProposedFieldMap(value: string | null) {
+        this.Set('LLMProposedFieldMap', value);
+    }
+
+    /**
     * * Field Name: DuplicateRunDetail
-    * * Display Name: Duplicate Run Detail
+    * * Display Name: Duplicate Run Detail Object
     * * SQL Data Type: nvarchar(500)
     */
     get DuplicateRunDetail(): string {
@@ -65623,11 +69738,29 @@ export class MJDuplicateRunDetailMatchEntity extends BaseEntity<MJDuplicateRunDe
 
     /**
     * * Field Name: RecordMergeLog
-    * * Display Name: Record Merge Log
+    * * Display Name: Merge Log Object
     * * SQL Data Type: nvarchar(450)
     */
     get RecordMergeLog(): string | null {
         return this.Get('RecordMergeLog');
+    }
+
+    /**
+    * * Field Name: AIAgentRun
+    * * Display Name: AI Agent Run Object
+    * * SQL Data Type: nvarchar(255)
+    */
+    get AIAgentRun(): string | null {
+        return this.Get('AIAgentRun');
+    }
+
+    /**
+    * * Field Name: AIPromptRun
+    * * Display Name: AI Prompt Run Object
+    * * SQL Data Type: nvarchar(255)
+    */
+    get AIPromptRun(): string | null {
+        return this.Get('AIPromptRun');
     }
 }
 
@@ -67331,6 +71464,33 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
     }
 
     /**
+    * Validate() method override for MJ: Entities entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: This rule ensures that if deleting via the API is allowed and the delete type is set to 'Soft', then record merging must also be allowed. In other words, you cannot allow API deletes with a soft delete type without also allowing record merging.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateAllowRecordMergeForSoftDeleteAPI(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that if deleting via the API is allowed and the delete type is set to 'Soft', then record merging must also be allowed. In other words, you cannot allow API deletes with a soft delete type without also allowing record merging.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateAllowRecordMergeForSoftDeleteAPI(result: ValidationResult) {
+    	if (this.AllowDeleteAPI && this.DeleteType === "Soft" && !this.AllowRecordMerge) {
+    		result.Errors.push(new ValidationErrorInfo("AllowRecordMerge", "When API deletes are allowed and delete type is 'Soft', record merging must be allowed.", this.AllowRecordMerge, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -68637,6 +72797,19 @@ export class MJEntityActionInvocationEntity extends BaseEntity<MJEntityActionInv
     }
 
     /**
+    * * Field Name: RuntimeUXDriverClass
+    * * Display Name: Runtime UX Driver Class
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Optional class name of a registered runtime-UX driver component (a BaseEntityActionRuntimeUX subclass resolved via MJGlobal.ClassFactory) that owns this invocation's interaction — parameter collection, dry-run preview, confirmation, and progress. NULL invokes the action directly with no custom UX. This lets any action opt into a richer, reusable runtime experience while the grid/toolbar stays operation-agnostic.
+    */
+    get RuntimeUXDriverClass(): string | null {
+        return this.Get('RuntimeUXDriverClass');
+    }
+    set RuntimeUXDriverClass(value: string | null) {
+        this.Set('RuntimeUXDriverClass', value);
+    }
+
+    /**
     * * Field Name: EntityAction
     * * Display Name: Entity Action Name
     * * SQL Data Type: nvarchar(425)
@@ -69850,6 +74023,39 @@ export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityTyp
     }
 
     /**
+    * Validate() method override for MJ: Entity Documents entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: This rule ensures that both the Potential Match Threshold and the Absolute Match Threshold are numbers between 0 and 1, inclusive. Additionally, the Potential Match Threshold must not be higher than the Absolute Match Threshold.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidatePotentialAndAbsoluteMatchThresholdRangeAndRelationship(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that both the Potential Match Threshold and the Absolute Match Threshold are numbers between 0 and 1, inclusive. Additionally, the Potential Match Threshold must not be higher than the Absolute Match Threshold.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidatePotentialAndAbsoluteMatchThresholdRangeAndRelationship(result: ValidationResult) {
+    	if (this.PotentialMatchThreshold < 0 || this.PotentialMatchThreshold > 1) {
+    		result.Errors.push(new ValidationErrorInfo("PotentialMatchThreshold", "Potential Match Threshold must be between 0 and 1.", this.PotentialMatchThreshold, ValidationErrorType.Failure));
+    	}
+    	if (this.AbsoluteMatchThreshold < 0 || this.AbsoluteMatchThreshold > 1) {
+    		result.Errors.push(new ValidationErrorInfo("AbsoluteMatchThreshold", "Absolute Match Threshold must be between 0 and 1.", this.AbsoluteMatchThreshold, ValidationErrorType.Failure));
+    	}
+    	if (this.PotentialMatchThreshold > this.AbsoluteMatchThreshold) {
+    		result.Errors.push(new ValidationErrorInfo("PotentialMatchThreshold", "Potential Match Threshold must not exceed the Absolute Match Threshold.", this.PotentialMatchThreshold, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -70032,8 +74238,100 @@ export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityTyp
     }
 
     /**
+    * * Field Name: EnableLLMReasoning
+    * * Display Name: Enable LLM Reasoning
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Master switch for the LLM reasoning layer on this entity. When 0 (default), duplicate detection runs the existing vector-only path unchanged and the reasoning columns/AutomationLevel are ignored. When 1, candidates above ReasoningThreshold are reasoned over.
+    */
+    get EnableLLMReasoning(): boolean {
+        return this.Get('EnableLLMReasoning');
+    }
+    set EnableLLMReasoning(value: boolean) {
+        this.Set('EnableLLMReasoning', value);
+    }
+
+    /**
+    * * Field Name: ReasoningMode
+    * * Display Name: Reasoning Mode
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Prompt
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Agent
+    *   * Prompt
+    * * Description: Which reasoning provider runs for this entity. Prompt (default) = a single-shot AI Prompt (cheap/fast); Agent = an AI Agent with memory + context-exploration tools (for heavy entities needing deeper reasoning). Both consume one shared core instruction set.
+    */
+    get ReasoningMode(): 'Agent' | 'Prompt' {
+        return this.Get('ReasoningMode');
+    }
+    set ReasoningMode(value: 'Agent' | 'Prompt') {
+        this.Set('ReasoningMode', value);
+    }
+
+    /**
+    * * Field Name: ReasoningThreshold
+    * * Display Name: Reasoning Threshold
+    * * SQL Data Type: numeric(12, 11)
+    * * Description: Vector-score gate (0-1): reasoning runs once per source record's matched set only when the set's top MatchProbability is at or above this value. Controls cost and reasoning-log volume at scale. NULL falls back to engine/Configuration defaults.
+    */
+    get ReasoningThreshold(): number | null {
+        return this.Get('ReasoningThreshold');
+    }
+    set ReasoningThreshold(value: number | null) {
+        this.Set('ReasoningThreshold', value);
+    }
+
+    /**
+    * * Field Name: ReasoningPromptID
+    * * Display Name: Reasoning Prompt
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
+    * * Description: The AI Prompt used when ReasoningMode = Prompt. Defaults (resolved in code/metadata) to the seeded "Duplicate Resolution" prompt. The prompt's own model configuration is the per-entity model knob for the prompt path.
+    */
+    get ReasoningPromptID(): string | null {
+        return this.Get('ReasoningPromptID');
+    }
+    set ReasoningPromptID(value: string | null) {
+        this.Set('ReasoningPromptID', value);
+    }
+
+    /**
+    * * Field Name: ReasoningAgentID
+    * * Display Name: Reasoning Agent
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
+    * * Description: The AI Agent used when ReasoningMode = Agent. Defaults (resolved in code/metadata) to the seeded "Duplicate Resolution Agent". Unlocks memory-note injection and context-exploration tools.
+    */
+    get ReasoningAgentID(): string | null {
+        return this.Get('ReasoningAgentID');
+    }
+    set ReasoningAgentID(value: string | null) {
+        this.Set('ReasoningAgentID', value);
+    }
+
+    /**
+    * * Field Name: AutomationLevel
+    * * Display Name: Automation Level
+    * * SQL Data Type: nvarchar(30)
+    * * Default Value: ReviewAll
+    * * Value List Type: List
+    * * Possible Values 
+    *   * AutoMergeAboveAbsolute
+    *   * LLMGated
+    *   * ReviewAll
+    * * Description: Graduated human-in-the-loop level, consulted only when EnableLLMReasoning = 1. ReviewAll = every proposed merge goes to human review; LLMGated = only LLM "Merge" recommendations surface (NotDuplicate suppressed but logged); AutoMergeAboveAbsolute = at/above AbsoluteMatchThreshold AND LLM "Merge", auto-execute (still honoring the per-merge AllowRecordMerge guard).
+    */
+    get AutomationLevel(): 'AutoMergeAboveAbsolute' | 'LLMGated' | 'ReviewAll' {
+        return this.Get('AutomationLevel');
+    }
+    set AutomationLevel(value: 'AutoMergeAboveAbsolute' | 'LLMGated' | 'ReviewAll') {
+        this.Set('AutomationLevel', value);
+    }
+
+    /**
     * * Field Name: Type
-    * * Display Name: Type Name
+    * * Display Name: Type
     * * SQL Data Type: nvarchar(100)
     */
     get Type(): string {
@@ -70083,6 +74381,24 @@ export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityTyp
     */
     get VectorIndex(): string | null {
         return this.Get('VectorIndex');
+    }
+
+    /**
+    * * Field Name: ReasoningPrompt
+    * * Display Name: Reasoning Prompt Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ReasoningPrompt(): string | null {
+        return this.Get('ReasoningPrompt');
+    }
+
+    /**
+    * * Field Name: ReasoningAgent
+    * * Display Name: Reasoning Agent Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ReasoningAgent(): string | null {
+        return this.Get('ReasoningAgent');
     }
 }
 
@@ -71313,6 +75629,58 @@ export class MJEntityFormOverrideEntity extends BaseEntity<MJEntityFormOverrideE
     }
 
     /**
+    * Validate() method override for MJ: Entity Form Overrides entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: Ensures that the correct identifier is provided based on the selected scope: 'User' requires a User ID without a Role, 'Role' requires a Role ID without a User, and 'Global' requires both to be empty. This prevents data inconsistency by ensuring records are correctly assigned to exactly one target type.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateScopeAndIdentifierConsistency(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Ensures that the correct identifier is provided based on the selected scope: 'User' requires a User ID without a Role, 'Role' requires a Role ID without a User, and 'Global' requires both to be empty. This prevents data inconsistency by ensuring records are correctly assigned to exactly one target type.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateScopeAndIdentifierConsistency(result: ValidationResult) {
+    	if (this.Scope === 'User') {
+    		if (this.UserID == null || this.RoleID != null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"UserID",
+    				"When the scope is set to 'User', a User must be specified and the Role must be left empty.",
+    				this.UserID,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	} else if (this.Scope === 'Role') {
+    		if (this.RoleID == null || this.UserID != null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"RoleID",
+    				"When the scope is set to 'Role', a Role must be specified and the User must be left empty.",
+    				this.RoleID,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	} else if (this.Scope === 'Global') {
+    		if (this.UserID != null || this.RoleID != null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"Scope",
+    				"When the scope is set to 'Global', both the User and Role fields must be empty.",
+    				this.Scope,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -71558,6 +75926,50 @@ export class MJEntityOrganicKeyRelatedEntityEntity extends BaseEntity<MJEntityOr
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Entity Organic Key Related Entities entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: To ensure clear data mapping, you must define a relationship using either the Related Entity Field Names or a complete Transitive Object configuration. This constraint prevents ambiguous setups by ensuring that only one of these two methods is used and that all required fields for a transitive relationship are provided together.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateRelatedEntityOrTransitiveMapping(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * To ensure clear data mapping, you must define a relationship using either the Related Entity Field Names or a complete Transitive Object configuration. This constraint prevents ambiguous setups by ensuring that only one of these two methods is used and that all required fields for a transitive relationship are provided together.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateRelatedEntityOrTransitiveMapping(result: ValidationResult) {
+    	const hasRelatedFields = this.RelatedEntityFieldNames != null;
+    	const hasTransitiveName = this.TransitiveObjectName != null;
+    	const hasTransitiveMatch = this.TransitiveObjectMatchFieldNames != null;
+    	const hasTransitiveOutput = this.TransitiveObjectOutputFieldName != null;
+    	const hasJoinField = this.RelatedEntityJoinFieldName != null;
+    
+    	// Option 1: Only RelatedEntityFieldNames is provided
+    	const isDirectMapping = hasRelatedFields && !hasTransitiveName && !hasTransitiveMatch && !hasTransitiveOutput && !hasJoinField;
+    	
+    	// Option 2: All transitive fields are provided and RelatedEntityFieldNames is null
+    	const isTransitiveMapping = !hasRelatedFields && hasTransitiveName && hasTransitiveMatch && hasTransitiveOutput && hasJoinField;
+    
+    	if (!isDirectMapping && !isTransitiveMapping) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"RelatedEntityFieldNames",
+    			"You must provide either only the Related Entity Field Names OR a complete set of Transitive Object fields (Object Name, Match Fields, Output Field, and Join Field). Partial or overlapping configurations are not allowed.",
+    			this.RelatedEntityFieldNames,
+    			ValidationErrorType.Failure
+    		));
+    	}
     }
 
     /**
@@ -73450,6 +77862,576 @@ export class MJErrorLogEntity extends BaseEntity<MJErrorLogEntityType> {
 
 
 /**
+ * MJ: Experiment Session Iterations - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ExperimentSessionIteration
+ * * Base View: vwExperimentSessionIterations
+ * * @description A GENERIC single attempt within an ExperimentSession — the polymorphic anchor and the leaderboard unit. Owns the cross-cutting "attempt" accounting every experiment type shares: sequence, status, the normalized Score, compute/token cost, the agent reasoning for trying it, and (optionally) the AI Agent Run that executed it. Consumer-specific detail hangs off this row: Predictive Studio attaches an MLTrainingRun; a future prompt-optimization consumer would attach its own leaf run table the same way.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Experiment Session Iterations')
+export class MJExperimentSessionIterationEntity extends BaseEntity<MJExperimentSessionIterationEntityType> {
+    /**
+    * Loads the MJ: Experiment Session Iterations record from the database
+    * @param ID: string - primary key value to load the MJ: Experiment Session Iterations record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJExperimentSessionIterationEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ExperimentSessionID
+    * * Display Name: Experiment Session
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Experiment Sessions (vwExperimentSessions.ID)
+    * * Description: Foreign key to the ExperimentSession this iteration belongs to
+    */
+    get ExperimentSessionID(): string {
+        return this.Get('ExperimentSessionID');
+    }
+    set ExperimentSessionID(value: string) {
+        this.Set('ExperimentSessionID', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Order of this iteration within its session
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: Label
+    * * Display Name: Label
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Optional human-readable label for the attempt (e.g., "XGBoost + engagement features")
+    */
+    get Label(): string | null {
+        return this.Get('Label');
+    }
+    set Label(value: string | null) {
+        this.Set('Label', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Completed
+    *   * Failed
+    *   * Pending
+    *   * Pruned
+    *   * Running
+    * * Description: Iteration status: Pending, Running, Completed, Failed, or Pruned
+    */
+    get Status(): 'Completed' | 'Failed' | 'Pending' | 'Pruned' | 'Running' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Completed' | 'Failed' | 'Pending' | 'Pruned' | 'Running') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: Score
+    * * Display Name: Score
+    * * SQL Data Type: decimal(18, 6)
+    * * Description: The normalized metric value this iteration achieved (the parent Experiment's TargetMetric) — used to rank the leaderboard
+    */
+    get Score(): number | null {
+        return this.Get('Score');
+    }
+    set Score(value: number | null) {
+        this.Set('Score', value);
+    }
+
+    /**
+    * * Field Name: ComputeCost
+    * * Display Name: Compute Cost
+    * * SQL Data Type: decimal(18, 6)
+    * * Description: Compute cost attributed to this iteration, for budget enforcement
+    */
+    get ComputeCost(): number | null {
+        return this.Get('ComputeCost');
+    }
+    set ComputeCost(value: number | null) {
+        this.Set('ComputeCost', value);
+    }
+
+    /**
+    * * Field Name: TokensUsed
+    * * Display Name: Tokens Used
+    * * SQL Data Type: int
+    * * Description: LLM tokens used by this iteration (e.g., agent internal choice prompts), for budget enforcement
+    */
+    get TokensUsed(): number | null {
+        return this.Get('TokensUsed');
+    }
+    set TokensUsed(value: number | null) {
+        this.Set('TokensUsed', value);
+    }
+
+    /**
+    * * Field Name: Rationale
+    * * Display Name: Rationale
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Why this iteration was tried (agent rationale) and any observations
+    */
+    get Rationale(): string | null {
+        return this.Get('Rationale');
+    }
+    set Rationale(value: string | null) {
+        this.Set('Rationale', value);
+    }
+
+    /**
+    * * Field Name: AIAgentRunID
+    * * Display Name: AI Agent Run
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
+    * * Description: Optional foreign key to the MJ: AI Agent Run that executed this iteration (NULL when executed by deterministic code with no dedicated agent run)
+    */
+    get AIAgentRunID(): string | null {
+        return this.Get('AIAgentRunID');
+    }
+    set AIAgentRunID(value: string | null) {
+        this.Set('AIAgentRunID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: ExperimentSession
+    * * Display Name: Experiment Session Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ExperimentSession(): string {
+        return this.Get('ExperimentSession');
+    }
+
+    /**
+    * * Field Name: AIAgentRun
+    * * Display Name: AI Agent Run Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get AIAgentRun(): string | null {
+        return this.Get('AIAgentRun');
+    }
+}
+
+
+/**
+ * MJ: Experiment Sessions - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ExperimentSession
+ * * Base View: vwExperimentSessions
+ * * @description A GENERIC single execution of an Experiment: a budgeted, plan-then-execute-then-refine search that groups N iterations, maintains a leaderboard, and is driven by an owning agent run with a human approval gate. ML-agnostic — the ML-specific work hangs off ExperimentSessionIteration via MLTrainingRun. The execution phase runs iterations in WAVES through Record Set Processing (bounded concurrency, budget, pause/resume, audit), with the adaptive prune/what-next logic above it.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Experiment Sessions')
+export class MJExperimentSessionEntity extends BaseEntity<MJExperimentSessionEntityType> {
+    /**
+    * Loads the MJ: Experiment Sessions record from the database
+    * @param ID: string - primary key value to load the MJ: Experiment Sessions record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJExperimentSessionEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ExperimentID
+    * * Display Name: Experiment
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Experiments (vwExperiments.ID)
+    * * Description: Foreign key to the Experiment definition this session executes
+    */
+    get ExperimentID(): string {
+        return this.Get('ExperimentID');
+    }
+    set ExperimentID(value: string) {
+        this.Set('ExperimentID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Human-readable name of this session/execution
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Goal
+    * * Display Name: Goal Override
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional per-session objective override (defaults to the parent Experiment's Goal)
+    */
+    get Goal(): string | null {
+        return this.Get('Goal');
+    }
+    set Goal(value: string | null) {
+        this.Set('Goal', value);
+    }
+
+    /**
+    * * Field Name: Budget
+    * * Display Name: Budget Constraints
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON budget bounding autonomy for this session: max compute-cost / max iterations / max wallclock
+    */
+    get Budget(): string | null {
+        return this.Get('Budget');
+    }
+    set Budget(value: string | null) {
+        this.Set('Budget', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Planning
+    * * Value List Type: List
+    * * Possible Values 
+    *   * AwaitingApproval
+    *   * Cancelled
+    *   * Completed
+    *   * Paused
+    *   * Planning
+    *   * Running
+    * * Description: Lifecycle status: Planning, AwaitingApproval, Running, Paused, Completed, or Cancelled
+    */
+    get Status(): 'AwaitingApproval' | 'Cancelled' | 'Completed' | 'Paused' | 'Planning' | 'Running' {
+        return this.Get('Status');
+    }
+    set Status(value: 'AwaitingApproval' | 'Cancelled' | 'Completed' | 'Paused' | 'Planning' | 'Running') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: PlanSpec
+    * * Display Name: Plan Specification
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON of the approved plan the deterministic orchestrator executes for this session (consumer-specific shape; for Predictive Studio this is the ModelingPlanSpec). Opaque to the generic substrate.
+    */
+    get PlanSpec(): string | null {
+        return this.Get('PlanSpec');
+    }
+    set PlanSpec(value: string | null) {
+        this.Set('PlanSpec', value);
+    }
+
+    /**
+    * * Field Name: Leaderboard
+    * * Display Name: Leaderboard Snapshot
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON snapshot of the best iterations so far (also derivable from ExperimentSessionIteration scores)
+    */
+    get Leaderboard(): string | null {
+        return this.Get('Leaderboard');
+    }
+    set Leaderboard(value: string | null) {
+        this.Set('Leaderboard', value);
+    }
+
+    /**
+    * * Field Name: AgentRunID
+    * * Display Name: Agent Run
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
+    * * Description: Foreign key to the MJ: AI Agent Run that owns/drives this session
+    */
+    get AgentRunID(): string | null {
+        return this.Get('AgentRunID');
+    }
+    set AgentRunID(value: string | null) {
+        this.Set('AgentRunID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Experiment
+    * * Display Name: Experiment Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Experiment(): string {
+        return this.Get('Experiment');
+    }
+
+    /**
+    * * Field Name: AgentRun
+    * * Display Name: Agent Run Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get AgentRun(): string | null {
+        return this.Get('AgentRun');
+    }
+}
+
+
+/**
+ * MJ: Experiments - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: Experiment
+ * * Base View: vwExperiments
+ * * @description A GENERIC, reusable definition of an experiment — the durable "what we are trying to optimize," independent of any single execution. Each kick-off of the experiment creates an ExperimentSession under it (so retraining/re-optimizing monthly = new sessions under the same Experiment, enabling comparison over time). Deliberately NOT ML-specific: ExperimentType discriminates the consumer (MLModelSearch, PromptOptimization, AgentConfigSearch, ...) so prompt-optimization, agent-config search, and eval sweeps reuse the same Experiment/Session/Iteration substrate. Predictive Studio is the first consumer.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Experiments')
+export class MJExperimentEntity extends BaseEntity<MJExperimentEntityType> {
+    /**
+    * Loads the MJ: Experiments record from the database
+    * @param ID: string - primary key value to load the MJ: Experiments record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJExperimentEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Human-readable name of the experiment
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional description of the experiment
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: ExperimentType
+    * * Display Name: Experiment Type
+    * * SQL Data Type: nvarchar(50)
+    * * Description: Discriminator naming the kind of experiment / consuming subsystem (e.g., "MLModelSearch", "PromptOptimization", "AgentConfigSearch"). Intentionally an open NVARCHAR (no CHECK constraint) so new consumers can introduce types without a schema migration.
+    */
+    get ExperimentType(): string {
+        return this.Get('ExperimentType');
+    }
+    set ExperimentType(value: string) {
+        this.Set('ExperimentType', value);
+    }
+
+    /**
+    * * Field Name: Goal
+    * * Display Name: Goal
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Natural-language objective of the experiment (e.g., "maximize holdout AUC for renewal prediction")
+    */
+    get Goal(): string | null {
+        return this.Get('Goal');
+    }
+    set Goal(value: string | null) {
+        this.Set('Goal', value);
+    }
+
+    /**
+    * * Field Name: TargetMetric
+    * * Display Name: Target Metric
+    * * SQL Data Type: nvarchar(100)
+    * * Description: The metric the experiment optimizes (e.g., "AUC", "F1", "RMSE") — the normalized number iterations are scored and ranked by
+    */
+    get TargetMetric(): string | null {
+        return this.Get('TargetMetric');
+    }
+    set TargetMetric(value: string | null) {
+        this.Set('TargetMetric', value);
+    }
+
+    /**
+    * * Field Name: PlanSpecTemplate
+    * * Display Name: Plan Spec Template
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional JSON reusable plan template that seeds new sessions' PlanSpec (consumer-specific shape; opaque to the generic substrate)
+    */
+    get PlanSpecTemplate(): string | null {
+        return this.Get('PlanSpecTemplate');
+    }
+    set PlanSpecTemplate(value: string | null) {
+        this.Set('PlanSpecTemplate', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Archived
+    * * Description: Lifecycle status: Active or Archived
+    */
+    get Status(): 'Active' | 'Archived' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Archived') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
  * MJ: Explorer Navigation Items - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: ExplorerNavigationItem
@@ -73478,6 +78460,33 @@ export class MJExplorerNavigationItemEntity extends BaseEntity<MJExplorerNavigat
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Explorer Navigation Items entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Sequence: This rule ensures that the 'Sequence' value must always be greater than zero.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateSequenceGreaterThanZero(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the 'Sequence' value must always be greater than zero.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateSequenceGreaterThanZero(result: ValidationResult) {
+    	if (this.Sequence <= 0) {
+    		result.Errors.push(new ValidationErrorInfo("Sequence", "The Sequence value must be greater than zero.", this.Sequence, ValidationErrorType.Failure));
+    	}
     }
 
     /**
@@ -73906,6 +78915,43 @@ export class MJFileStorageAccountPermissionEntity extends BaseEntity<MJFileStora
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: File Storage Account Permissions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: Permissions must be correctly assigned based on the type: a 'User' type requires a User ID and no Role ID, a 'Role' type requires a Role ID and no User ID, and the 'Everyone' type requires both IDs to be empty. This ensures that permissions are always linked to the correct entity.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateTypeIdentifierAssignment(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Permissions must be correctly assigned based on the type: a 'User' type requires a User ID and no Role ID, a 'Role' type requires a Role ID and no User ID, and the 'Everyone' type requires both IDs to be empty. This ensures that permissions are always linked to the correct entity.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateTypeIdentifierAssignment(result: ValidationResult) {
+    	// Validates that the correct ID is provided or omitted based on the Type field
+    	const isUserValid = this.Type === "User" && this.UserID != null && this.RoleID == null;
+    	const isRoleValid = this.Type === "Role" && this.RoleID != null && this.UserID == null;
+    	const isEveryoneValid = this.Type === "Everyone" && this.UserID == null && this.RoleID == null;
+    
+    	if (!isUserValid && !isRoleValid && !isEveryoneValid) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"Type",
+    			"The identifier assignment is invalid for the selected Type. 'User' requires a User ID and no Role ID, 'Role' requires a Role ID and no User ID, and 'Everyone' requires both to be empty.",
+    			this.Type,
+    			ValidationErrorType.Failure
+    		));
+    	}
     }
 
     /**
@@ -75544,7 +80590,7 @@ export class MJIntegrationObjectEntity extends BaseEntity<MJIntegrationObjectEnt
 
     /**
     * * Field Name: IntegrationID
-    * * Display Name: Integration
+    * * Display Name: Integration ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Integrations (vwIntegrations.ID)
     * * Description: Foreign key to the Integration that owns this object
@@ -76144,7 +81190,7 @@ export class MJIntegrationObjectEntity extends BaseEntity<MJIntegrationObjectEnt
 
     /**
     * * Field Name: Integration
-    * * Display Name: Integration Name
+    * * Display Name: Integration
     * * SQL Data Type: nvarchar(100)
     */
     get Integration(): string {
@@ -78390,6 +83436,59 @@ export class MJMagicLinkInviteEntity extends BaseEntity<MJMagicLinkInviteEntityT
     }
 
     /**
+    * Validate() method override for MJ: Magic Link Invites entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: An email address must be provided if the identity mode is set to 'email'.
+    * * Table-Level: The number of times a token has been used must be greater than or equal to 0 and cannot exceed the maximum allowed uses.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateEmailRequiredForEmailIdentityMode(result);
+        this.ValidateUseCountWithinMaxUsesLimit(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * An email address must be provided if the identity mode is set to 'email'.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateEmailRequiredForEmailIdentityMode(result: ValidationResult) {
+    	if (this.IdentityMode && this.IdentityMode.toLowerCase() === 'email' && (this.Email == null || this.Email.trim() === '')) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"Email",
+    			"An email address is required when the identity mode is set to 'email'.",
+    			this.Email,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * The number of times a token has been used must be greater than or equal to 0 and cannot exceed the maximum allowed uses.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateUseCountWithinMaxUsesLimit(result: ValidationResult) {
+    	if (this.UseCount != null && this.MaxUses != null) {
+    		if (this.UseCount < 0 || this.UseCount > this.MaxUses) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"UseCount",
+    				"The use count must be between 0 and the maximum allowed uses of " + this.MaxUses + ".",
+    				this.UseCount,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -78871,6 +83970,39 @@ export class MJMCPServerConnectionPermissionEntity extends BaseEntity<MJMCPServe
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: MCP Server Connection Permissions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: Either a specific user or a role must be assigned to the permission record, but you cannot assign both at the same time and you cannot leave both empty. This ensures that each permission is linked to exactly one entity, maintaining clear ownership and preventing ambiguous access settings.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateUserIDOrRoleIDExclusive(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Either a specific user or a role must be assigned to the permission record, but you cannot assign both at the same time and you cannot leave both empty. This ensures that each permission is linked to exactly one entity, maintaining clear ownership and preventing ambiguous access settings.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateUserIDOrRoleIDExclusive(result: ValidationResult) {
+    	// Ensure that exactly one of UserID or RoleID is set
+    	if ((this.UserID != null && this.RoleID != null) || (this.UserID == null && this.RoleID == null)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"UserID",
+    			"Either a specific user or a role must be assigned, but not both and not neither.",
+    			this.UserID,
+    			ValidationErrorType.Failure
+    		));
+    	}
     }
 
     /**
@@ -80435,6 +85567,1569 @@ export class MJMCPToolFavoriteEntity extends BaseEntity<MJMCPToolFavoriteEntityT
 
 
 /**
+ * MJ: ML Algorithm Use Case Rankings - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: MLAlgorithmUseCaseRanking
+ * * Base View: vwMLAlgorithmUseCaseRankings
+ * * @description Codifies how well each algorithm fits each use-case scenario, so both the model-development agent and a non-expert human get guided, rationale-bearing defaults instead of guessing. One row per (algorithm, use case) pair.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: ML Algorithm Use Case Rankings')
+export class MJMLAlgorithmUseCaseRankingEntity extends BaseEntity<MJMLAlgorithmUseCaseRankingEntityType> {
+    /**
+    * Loads the MJ: ML Algorithm Use Case Rankings record from the database
+    * @param ID: string - primary key value to load the MJ: ML Algorithm Use Case Rankings record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJMLAlgorithmUseCaseRankingEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: ML Algorithm Use Case Rankings entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * SuitabilityScore: The suitability score must be a value between 1 and 5, inclusive.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateSuitabilityScoreRange(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * The suitability score must be a value between 1 and 5, inclusive.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateSuitabilityScoreRange(result: ValidationResult) {
+    	if (this.SuitabilityScore < 1 || this.SuitabilityScore > 5) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"SuitabilityScore",
+    			"Suitability score must be between 1 and 5.",
+    			this.SuitabilityScore,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: MLAlgorithmID
+    * * Display Name: ML Algorithm ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Algorithms (vwMLAlgorithms.ID)
+    * * Description: Foreign key to the algorithm being ranked
+    */
+    get MLAlgorithmID(): string {
+        return this.Get('MLAlgorithmID');
+    }
+    set MLAlgorithmID(value: string) {
+        this.Set('MLAlgorithmID', value);
+    }
+
+    /**
+    * * Field Name: MLAlgorithmUseCaseID
+    * * Display Name: ML Algorithm Use Case ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Algorithm Use Cases (vwMLAlgorithmUseCases.ID)
+    * * Description: Foreign key to the use-case scenario the algorithm is ranked for
+    */
+    get MLAlgorithmUseCaseID(): string {
+        return this.Get('MLAlgorithmUseCaseID');
+    }
+    set MLAlgorithmUseCaseID(value: string) {
+        this.Set('MLAlgorithmUseCaseID', value);
+    }
+
+    /**
+    * * Field Name: SuitabilityScore
+    * * Display Name: Suitability Score
+    * * SQL Data Type: int
+    * * Description: Numeric suitability for sorting/ranking, 1 (worst) to 5 (best)
+    */
+    get SuitabilityScore(): number {
+        return this.Get('SuitabilityScore');
+    }
+    set SuitabilityScore(value: number) {
+        this.Set('SuitabilityScore', value);
+    }
+
+    /**
+    * * Field Name: RecommendationLevel
+    * * Display Name: Recommendation Level
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * NotRecommended
+    *   * Primary
+    *   * Strong
+    *   * Viable
+    *   * Weak
+    * * Description: Categorical recommendation: Primary, Strong, Viable, Weak, or NotRecommended
+    */
+    get RecommendationLevel(): 'NotRecommended' | 'Primary' | 'Strong' | 'Viable' | 'Weak' {
+        return this.Get('RecommendationLevel');
+    }
+    set RecommendationLevel(value: 'NotRecommended' | 'Primary' | 'Strong' | 'Viable' | 'Weak') {
+        this.Set('RecommendationLevel', value);
+    }
+
+    /**
+    * * Field Name: Rationale
+    * * Display Name: Rationale
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Plain-language explanation of the ranking, readable by both agents and humans (e.g., "Gives feature importances but not simple coefficients — if a stakeholder needs to see exactly why each prediction was made, prefer Logistic/Ridge.")
+    */
+    get Rationale(): string | null {
+        return this.Get('Rationale');
+    }
+    set Rationale(value: string | null) {
+        this.Set('Rationale', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: MLAlgorithm
+    * * Display Name: ML Algorithm
+    * * SQL Data Type: nvarchar(255)
+    */
+    get MLAlgorithm(): string {
+        return this.Get('MLAlgorithm');
+    }
+
+    /**
+    * * Field Name: MLAlgorithmUseCase
+    * * Display Name: ML Algorithm Use Case
+    * * SQL Data Type: nvarchar(255)
+    */
+    get MLAlgorithmUseCase(): string {
+        return this.Get('MLAlgorithmUseCase');
+    }
+}
+
+
+/**
+ * MJ: ML Algorithm Use Cases - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: MLAlgorithmUseCase
+ * * Base View: vwMLAlgorithmUseCases
+ * * @description A curated, decision-relevant scenario used to guide algorithm choice — NOT a business label (churn/renewal/attendee-return are all the same "binary classification" shape, so they do not differentiate algorithms). Joined to MLAlgorithm via MLAlgorithmUseCaseRanking. EXAMPLES: "Binary classification (yes/no)", "Regression (predict a number)", "Interpretability required", "Minimal tuning (business-user)", "Large/wide dataset (speed)", "Embedding/LLM-feature-heavy", "Small dataset".
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: ML Algorithm Use Cases')
+export class MJMLAlgorithmUseCaseEntity extends BaseEntity<MJMLAlgorithmUseCaseEntityType> {
+    /**
+    * Loads the MJ: ML Algorithm Use Cases record from the database
+    * @param ID: string - primary key value to load the MJ: ML Algorithm Use Cases record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJMLAlgorithmUseCaseEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Display name of the scenario (e.g., "Interpretability required")
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional description of the scenario
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: ProblemTypeScope
+    * * Display Name: Problem Type Scope
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: any
+    * * Value List Type: List
+    * * Possible Values 
+    *   * any
+    *   * classification
+    *   * regression
+    * * Description: Which problem type this scenario applies to: classification, regression, or any
+    */
+    get ProblemTypeScope(): 'any' | 'classification' | 'regression' {
+        return this.Get('ProblemTypeScope');
+    }
+    set ProblemTypeScope(value: 'any' | 'classification' | 'regression') {
+        this.Set('ProblemTypeScope', value);
+    }
+
+    /**
+    * * Field Name: Guidance
+    * * Display Name: Guidance
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Longer agent-readable guidance on when this scenario applies and what it implies for algorithm choice
+    */
+    get Guidance(): string | null {
+        return this.Get('Guidance');
+    }
+    set Guidance(value: string | null) {
+        this.Set('Guidance', value);
+    }
+
+    /**
+    * * Field Name: DisplayOrder
+    * * Display Name: Display Order
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Ordering hint for displaying scenarios in the UI
+    */
+    get DisplayOrder(): number {
+        return this.Get('DisplayOrder');
+    }
+    set DisplayOrder(value: number) {
+        this.Set('DisplayOrder', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: ML Algorithms - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: MLAlgorithm
+ * * Base View: vwMLAlgorithms
+ * * @description Curated, fixed catalog of machine-learning algorithms a Training Pipeline can use. Opinionated by design (a small set of well-understood algorithms); the differentiation is in the data/features, not algorithm innovation. Each row declares the algorithm's supported problem types, its hyperparameter schema, and the Python-sidecar driver key that executes it. EXAMPLE: "Gradient Boosting (XGBoost)" with DriverClass "xgboost".
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: ML Algorithms')
+export class MJMLAlgorithmEntity extends BaseEntity<MJMLAlgorithmEntityType> {
+    /**
+    * Loads the MJ: ML Algorithms record from the database
+    * @param ID: string - primary key value to load the MJ: ML Algorithms record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJMLAlgorithmEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Display name of the algorithm (e.g., "Gradient Boosting (XGBoost)", "Logistic Regression")
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional description of the algorithm and when to use it
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: ProblemTypes
+    * * Display Name: Problem Types
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Comma-delimited list of supported problem types (e.g., "classification", "regression", or "classification,regression")
+    */
+    get ProblemTypes(): string {
+        return this.Get('ProblemTypes');
+    }
+    set ProblemTypes(value: string) {
+        this.Set('ProblemTypes', value);
+    }
+
+    /**
+    * * Field Name: DriverClass
+    * * Display Name: Driver Class
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Algorithm key passed to the Python training/inference sidecar (e.g., "xgboost", "lightgbm", "logistic_regression", "random_forest", "ridge", "mlp")
+    */
+    get DriverClass(): string {
+        return this.Get('DriverClass');
+    }
+    set DriverClass(value: string) {
+        this.Set('DriverClass', value);
+    }
+
+    /**
+    * * Field Name: HyperparameterSchema
+    * * Display Name: Hyperparameter Schema
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON Schema describing the algorithm's tunable hyperparameters (drives the UI form and validation)
+    */
+    get HyperparameterSchema(): string | null {
+        return this.Get('HyperparameterSchema');
+    }
+    set HyperparameterSchema(value: string | null) {
+        this.Set('HyperparameterSchema', value);
+    }
+
+    /**
+    * * Field Name: DefaultHyperparameters
+    * * Display Name: Default Hyperparameters
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON object of default hyperparameter values applied when a pipeline does not override them
+    */
+    get DefaultHyperparameters(): string | null {
+        return this.Get('DefaultHyperparameters');
+    }
+    set DefaultHyperparameters(value: string | null) {
+        this.Set('DefaultHyperparameters', value);
+    }
+
+    /**
+    * * Field Name: SupportsFeatureImportance
+    * * Display Name: Supports Feature Importance
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When 1, the algorithm produces per-feature importance scores used for explainability and the leakage guard
+    */
+    get SupportsFeatureImportance(): boolean {
+        return this.Get('SupportsFeatureImportance');
+    }
+    set SupportsFeatureImportance(value: boolean) {
+        this.Set('SupportsFeatureImportance', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Deprecated
+    * * Description: Lifecycle status: Active (selectable) or Deprecated
+    */
+    get Status(): 'Active' | 'Deprecated' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Deprecated') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: ML Model Scoring Bindings - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: MLModelScoringBinding
+ * * Base View: vwMLModelScoringBindings
+ * * @description Binds an MLModel to where it scores, so staleness can be detected and retraining driven (maintenance). The scoring itself runs as a Record Process (the new ML inference work type); the binding records the target entity/column written and the scoring mode. MaterializedResultID is a forward-compatible SOFT reference to MJ: Materialized Results (PR #2770), not yet a FK because that table is not merged.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: ML Model Scoring Bindings')
+export class MJMLModelScoringBindingEntity extends BaseEntity<MJMLModelScoringBindingEntityType> {
+    /**
+    * Loads the MJ: ML Model Scoring Bindings record from the database
+    * @param ID: string - primary key value to load the MJ: ML Model Scoring Bindings record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJMLModelScoringBindingEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: MLModelID
+    * * Display Name: ML Model ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Models (vwMLModels.ID)
+    * * Description: Foreign key to the MLModel that does the scoring
+    */
+    get MLModelID(): string {
+        return this.Get('MLModelID');
+    }
+    set MLModelID(value: string) {
+        this.Set('MLModelID', value);
+    }
+
+    /**
+    * * Field Name: RecordProcessID
+    * * Display Name: Record Process ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Record Processes (vwRecordProcesses.ID)
+    * * Description: Foreign key to the Record Process that runs the ML inference work for this binding
+    */
+    get RecordProcessID(): string | null {
+        return this.Get('RecordProcessID');
+    }
+    set RecordProcessID(value: string | null) {
+        this.Set('RecordProcessID', value);
+    }
+
+    /**
+    * * Field Name: TargetEntityID
+    * * Display Name: Target Entity ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Description: Foreign key to the entity that receives the prediction (when scores are written back)
+    */
+    get TargetEntityID(): string | null {
+        return this.Get('TargetEntityID');
+    }
+    set TargetEntityID(value: string | null) {
+        this.Set('TargetEntityID', value);
+    }
+
+    /**
+    * * Field Name: TargetColumn
+    * * Display Name: Target Column
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Name of the column that receives the prediction (when scores are written back / materialized)
+    */
+    get TargetColumn(): string | null {
+        return this.Get('TargetColumn');
+    }
+    set TargetColumn(value: string | null) {
+        this.Set('TargetColumn', value);
+    }
+
+    /**
+    * * Field Name: Mode
+    * * Display Name: Scoring Mode
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: OnDemand
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Materialized
+    *   * OnDemand
+    *   * Scheduled
+    * * Description: Scoring mode: OnDemand, Scheduled, or Materialized
+    */
+    get Mode(): 'Materialized' | 'OnDemand' | 'Scheduled' {
+        return this.Get('Mode');
+    }
+    set Mode(value: 'Materialized' | 'OnDemand' | 'Scheduled') {
+        this.Set('Mode', value);
+    }
+
+    /**
+    * * Field Name: MaterializedResultID
+    * * Display Name: Materialized Result ID
+    * * SQL Data Type: uniqueidentifier
+    * * Description: Soft reference to a MJ: Materialized Results row (PR #2770) when Mode=Materialized; not a FK until that table exists
+    */
+    get MaterializedResultID(): string | null {
+        return this.Get('MaterializedResultID');
+    }
+    set MaterializedResultID(value: string | null) {
+        this.Set('MaterializedResultID', value);
+    }
+
+    /**
+    * * Field Name: LastScoredAt
+    * * Display Name: Last Scored At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp of the most recent scoring run for this binding
+    */
+    get LastScoredAt(): Date | null {
+        return this.Get('LastScoredAt');
+    }
+    set LastScoredAt(value: Date | null) {
+        this.Set('LastScoredAt', value);
+    }
+
+    /**
+    * * Field Name: LastRowCount
+    * * Display Name: Last Row Count
+    * * SQL Data Type: int
+    * * Description: Number of records scored in the most recent scoring run
+    */
+    get LastRowCount(): number | null {
+        return this.Get('LastRowCount');
+    }
+    set LastRowCount(value: number | null) {
+        this.Set('LastRowCount', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: RecordProcess
+    * * Display Name: Record Process
+    * * SQL Data Type: nvarchar(255)
+    */
+    get RecordProcess(): string | null {
+        return this.Get('RecordProcess');
+    }
+
+    /**
+    * * Field Name: TargetEntity
+    * * Display Name: Target Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get TargetEntity(): string | null {
+        return this.Get('TargetEntity');
+    }
+}
+
+
+/**
+ * MJ: ML Models - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: MLModel
+ * * Base View: vwMLModels
+ * * @description An immutable, versioned trained predictive model produced by a training run — distinct from MJ: AI Models (the catalog of off-the-shelf foundation models we CALL). A model is never mutated in place; retraining produces a new MLModel. The serialized artifact lives in MJStorage (MJ: Files) and the FITTED preprocessing parameters travel WITH the model so inference applies the exact transforms learned at training time (prevents train/serve skew). Inference runs via the Python sidecar.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: ML Models')
+export class MJMLModelEntity extends BaseEntity<MJMLModelEntityType> {
+    /**
+    * Loads the MJ: ML Models record from the database
+    * @param ID: string - primary key value to load the MJ: ML Models record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJMLModelEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: Model ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: PipelineID
+    * * Display Name: Pipeline ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Training Pipelines (vwMLTrainingPipelines.ID)
+    * * Description: Foreign key to the ML Training Pipeline that produced this model (lineage)
+    */
+    get PipelineID(): string {
+        return this.Get('PipelineID');
+    }
+    set PipelineID(value: string) {
+        this.Set('PipelineID', value);
+    }
+
+    /**
+    * * Field Name: Version
+    * * Display Name: Version
+    * * SQL Data Type: int
+    * * Default Value: 1
+    * * Description: Monotonic version number of this model under its pipeline
+    */
+    get Version(): number {
+        return this.Get('Version');
+    }
+    set Version(value: number) {
+        this.Set('Version', value);
+    }
+
+    /**
+    * * Field Name: AlgorithmID
+    * * Display Name: Algorithm ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Algorithms (vwMLAlgorithms.ID)
+    * * Description: Foreign key to the algorithm used to train this model
+    */
+    get AlgorithmID(): string {
+        return this.Get('AlgorithmID');
+    }
+    set AlgorithmID(value: string) {
+        this.Set('AlgorithmID', value);
+    }
+
+    /**
+    * * Field Name: ArtifactFileID
+    * * Display Name: Artifact File ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Files (vwFiles.ID)
+    * * Description: Foreign key to the MJ: Files record holding the serialized model artifact in MJStorage
+    */
+    get ArtifactFileID(): string | null {
+        return this.Get('ArtifactFileID');
+    }
+    set ArtifactFileID(value: string | null) {
+        this.Set('ArtifactFileID', value);
+    }
+
+    /**
+    * * Field Name: FittedPreprocessing
+    * * Display Name: Fitted Preprocessing
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON of the fitted preprocessing parameters (means/std, one-hot vocabularies, bin edges, imputation fills) learned at training time and re-applied verbatim at inference — the anti train/serve skew payload
+    */
+    get FittedPreprocessing(): string | null {
+        return this.Get('FittedPreprocessing');
+    }
+    set FittedPreprocessing(value: string | null) {
+        this.Set('FittedPreprocessing', value);
+    }
+
+    /**
+    * * Field Name: FeatureSchema
+    * * Display Name: Feature Schema
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON ordered list of feature names + kinds the model expects as input (the inference input contract)
+    */
+    get FeatureSchema(): string {
+        return this.Get('FeatureSchema');
+    }
+    set FeatureSchema(value: string) {
+        this.Set('FeatureSchema', value);
+    }
+
+    /**
+    * * Field Name: TargetVariable
+    * * Display Name: Target Variable
+    * * SQL Data Type: nvarchar(500)
+    * * Description: The label this model predicts
+    */
+    get TargetVariable(): string {
+        return this.Get('TargetVariable');
+    }
+    set TargetVariable(value: string) {
+        this.Set('TargetVariable', value);
+    }
+
+    /**
+    * * Field Name: ProblemType
+    * * Display Name: Problem Type
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * classification
+    *   * regression
+    * * Description: Problem type: classification or regression
+    */
+    get ProblemType(): 'classification' | 'regression' {
+        return this.Get('ProblemType');
+    }
+    set ProblemType(value: 'classification' | 'regression') {
+        this.Set('ProblemType', value);
+    }
+
+    /**
+    * * Field Name: Metrics
+    * * Display Name: Training Metrics
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON of training + validation metrics (AUC, F1, accuracy, RMSE, etc.)
+    */
+    get Metrics(): string | null {
+        return this.Get('Metrics');
+    }
+    set Metrics(value: string | null) {
+        this.Set('Metrics', value);
+    }
+
+    /**
+    * * Field Name: HoldoutMetrics
+    * * Display Name: Holdout Metrics
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON metrics on the locked holdout set the search never saw — scored exactly once for an honest performance number
+    */
+    get HoldoutMetrics(): string | null {
+        return this.Get('HoldoutMetrics');
+    }
+    set HoldoutMetrics(value: string | null) {
+        this.Set('HoldoutMetrics', value);
+    }
+
+    /**
+    * * Field Name: FeatureImportance
+    * * Display Name: Feature Importance
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON per-feature importance/contribution for explainability and the leakage guard
+    */
+    get FeatureImportance(): string | null {
+        return this.Get('FeatureImportance');
+    }
+    set FeatureImportance(value: string | null) {
+        this.Set('FeatureImportance', value);
+    }
+
+    /**
+    * * Field Name: Lineage
+    * * Display Name: Lineage Details
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON lineage: data version(s), pipeline version, source bindings, as-of date, sidecar version, and any embedding/LLM model versions used to build features
+    */
+    get Lineage(): string | null {
+        return this.Get('Lineage');
+    }
+    set Lineage(value: string | null) {
+        this.Set('Lineage', value);
+    }
+
+    /**
+    * * Field Name: TrainedAt
+    * * Display Name: Trained At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp when training completed
+    */
+    get TrainedAt(): Date | null {
+        return this.Get('TrainedAt');
+    }
+    set TrainedAt(value: Date | null) {
+        this.Set('TrainedAt', value);
+    }
+
+    /**
+    * * Field Name: TrainingDurationSec
+    * * Display Name: Training Duration (Seconds)
+    * * SQL Data Type: int
+    * * Description: Wall-clock training duration in seconds
+    */
+    get TrainingDurationSec(): number | null {
+        return this.Get('TrainingDurationSec');
+    }
+    set TrainingDurationSec(value: number | null) {
+        this.Set('TrainingDurationSec', value);
+    }
+
+    /**
+    * * Field Name: TrainingRowCount
+    * * Display Name: Training Row Count
+    * * SQL Data Type: int
+    * * Description: Number of rows used to train the model
+    */
+    get TrainingRowCount(): number | null {
+        return this.Get('TrainingRowCount');
+    }
+    set TrainingRowCount(value: number | null) {
+        this.Set('TrainingRowCount', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Draft
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Archived
+    *   * Draft
+    *   * Published
+    *   * Validated
+    * * Description: Lifecycle status: Draft, Validated, Published, or Archived
+    */
+    get Status(): 'Archived' | 'Draft' | 'Published' | 'Validated' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Archived' | 'Draft' | 'Published' | 'Validated') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Pipeline
+    * * Display Name: Pipeline
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Pipeline(): string {
+        return this.Get('Pipeline');
+    }
+
+    /**
+    * * Field Name: Algorithm
+    * * Display Name: Algorithm
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Algorithm(): string {
+        return this.Get('Algorithm');
+    }
+
+    /**
+    * * Field Name: ArtifactFile
+    * * Display Name: Artifact File
+    * * SQL Data Type: nvarchar(500)
+    */
+    get ArtifactFile(): string | null {
+        return this.Get('ArtifactFile');
+    }
+}
+
+
+/**
+ * MJ: ML Training Pipelines - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: MLTrainingPipeline
+ * * Base View: vwMLTrainingPipelines
+ * * @description A declarative definition of how to build a predictive model: what to predict (target), over which entity's records, using which algorithm, assembled from which sources via which feature steps, validated how. Saving a pipeline saves intent, not results — each successful training run of it produces an immutable MLModel. EXAMPLE: "Member Renewal Predictor" predicts Member.Renewed using XGBoost from tenure/engagement features plus a member-summary embedding, with a point-in-time as-of strategy and a locked holdout.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: ML Training Pipelines')
+export class MJMLTrainingPipelineEntity extends BaseEntity<MJMLTrainingPipelineEntityType> {
+    /**
+    * Loads the MJ: ML Training Pipelines record from the database
+    * @param ID: string - primary key value to load the MJ: ML Training Pipelines record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJMLTrainingPipelineEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Human-readable name of the pipeline
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional description of what this pipeline predicts and how
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: Version
+    * * Display Name: Version
+    * * SQL Data Type: int
+    * * Default Value: 1
+    * * Description: Monotonic version number of the pipeline definition
+    */
+    get Version(): number {
+        return this.Get('Version');
+    }
+    set Version(value: number) {
+        this.Set('Version', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Draft
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Archived
+    *   * Draft
+    *   * Published
+    * * Description: Lifecycle status: Draft, Published, or Archived
+    */
+    get Status(): 'Archived' | 'Draft' | 'Published' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Archived' | 'Draft' | 'Published') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: TargetEntityID
+    * * Display Name: Target Entity ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Description: Foreign key to the entity whose records are the training units (e.g., Members)
+    */
+    get TargetEntityID(): string {
+        return this.Get('TargetEntityID');
+    }
+    set TargetEntityID(value: string) {
+        this.Set('TargetEntityID', value);
+    }
+
+    /**
+    * * Field Name: TargetVariable
+    * * Display Name: Target Variable
+    * * SQL Data Type: nvarchar(500)
+    * * Description: The label being predicted — a column or expression on the target entity (e.g., "Renewed")
+    */
+    get TargetVariable(): string {
+        return this.Get('TargetVariable');
+    }
+    set TargetVariable(value: string) {
+        this.Set('TargetVariable', value);
+    }
+
+    /**
+    * * Field Name: ProblemType
+    * * Display Name: Problem Type
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * classification
+    *   * regression
+    * * Description: Problem type: classification or regression
+    */
+    get ProblemType(): 'classification' | 'regression' {
+        return this.Get('ProblemType');
+    }
+    set ProblemType(value: 'classification' | 'regression') {
+        this.Set('ProblemType', value);
+    }
+
+    /**
+    * * Field Name: AlgorithmID
+    * * Display Name: Algorithm ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Algorithms (vwMLAlgorithms.ID)
+    * * Description: Foreign key to the chosen algorithm in the catalog
+    */
+    get AlgorithmID(): string {
+        return this.Get('AlgorithmID');
+    }
+    set AlgorithmID(value: string) {
+        this.Set('AlgorithmID', value);
+    }
+
+    /**
+    * * Field Name: Hyperparameters
+    * * Display Name: Hyperparameters
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON hyperparameter overrides for the chosen algorithm
+    */
+    get Hyperparameters(): string | null {
+        return this.Get('Hyperparameters');
+    }
+    set Hyperparameters(value: string | null) {
+        this.Set('Hyperparameters', value);
+    }
+
+    /**
+    * * Field Name: SourceBindings
+    * * Display Name: Source Bindings
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON ordered references to source entities / queries / external entities / vector sets the features are drawn from
+    */
+    get SourceBindings(): string | null {
+        return this.Get('SourceBindings');
+    }
+    set SourceBindings(value: string | null) {
+        this.Set('SourceBindings', value);
+    }
+
+    /**
+    * * Field Name: FeatureSteps
+    * * Display Name: Feature Steps
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON ordered DAG of FeatureAssembly steps (selection, null-handling, encoding, scaling, embedding/LLM featurization) executed by the single FeatureAssembly executor
+    */
+    get FeatureSteps(): string | null {
+        return this.Get('FeatureSteps');
+    }
+    set FeatureSteps(value: string | null) {
+        this.Set('FeatureSteps', value);
+    }
+
+    /**
+    * * Field Name: AsOfStrategy
+    * * Display Name: As Of Strategy
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON point-in-time configuration: { Mode: none|column|offset, Column?, OffsetDays? } — assembles features as of the decision point to prevent future leakage
+    */
+    get AsOfStrategy(): string | null {
+        return this.Get('AsOfStrategy');
+    }
+    set AsOfStrategy(value: string | null) {
+        this.Set('AsOfStrategy', value);
+    }
+
+    /**
+    * * Field Name: LeakageGuard
+    * * Display Name: Leakage Guard
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON leakage guard: deny-list of fields/sources that must not enter features, plus the single-feature-dominance threshold that flags suspicious runs
+    */
+    get LeakageGuard(): string | null {
+        return this.Get('LeakageGuard');
+    }
+    set LeakageGuard(value: string | null) {
+        this.Set('LeakageGuard', value);
+    }
+
+    /**
+    * * Field Name: ValidationStrategy
+    * * Display Name: Validation Strategy
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON validation strategy: { Strategy: train_test_split|kfold|holdout, TestSize?, K?, LockedHoldoutFraction }
+    */
+    get ValidationStrategy(): string | null {
+        return this.Get('ValidationStrategy');
+    }
+    set ValidationStrategy(value: string | null) {
+        this.Set('ValidationStrategy', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: TargetEntity
+    * * Display Name: Target Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get TargetEntity(): string {
+        return this.Get('TargetEntity');
+    }
+
+    /**
+    * * Field Name: Algorithm
+    * * Display Name: Algorithm
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Algorithm(): string {
+        return this.Get('Algorithm');
+    }
+}
+
+
+/**
+ * MJ: ML Training Runs - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: MLTrainingRun
+ * * Base View: vwMLTrainingRuns
+ * * @description The ML-specific detail of a training attempt — the leaf that hangs off a generic ExperimentSessionIteration when part of an agent-driven search, OR stands alone (ExperimentSessionIterationID NULL) for a one-off manual train. Captures the exact feature set, algorithm, hyperparameters, validation results, and the model produced (ResultingModelID is nullable: a run may be pruned/failed and produce no model). The generic search-level accounting (leaderboard Score, rationale, the driving agent run) lives on the parent iteration; this row keeps the ML execution detail.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: ML Training Runs')
+export class MJMLTrainingRunEntity extends BaseEntity<MJMLTrainingRunEntityType> {
+    /**
+    * Loads the MJ: ML Training Runs record from the database
+    * @param ID: string - primary key value to load the MJ: ML Training Runs record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJMLTrainingRunEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: PipelineID
+    * * Display Name: Pipeline ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Training Pipelines (vwMLTrainingPipelines.ID)
+    * * Description: Foreign key to the ML Training Pipeline this run executed
+    */
+    get PipelineID(): string {
+        return this.Get('PipelineID');
+    }
+    set PipelineID(value: string) {
+        this.Set('PipelineID', value);
+    }
+
+    /**
+    * * Field Name: ResultingModelID
+    * * Display Name: Resulting Model ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Models (vwMLModels.ID)
+    * * Description: Foreign key to the MLModel this run produced, when it produced one (NULL for pruned/failed runs)
+    */
+    get ResultingModelID(): string | null {
+        return this.Get('ResultingModelID');
+    }
+    set ResultingModelID(value: string | null) {
+        this.Set('ResultingModelID', value);
+    }
+
+    /**
+    * * Field Name: ExperimentSessionIterationID
+    * * Display Name: Experiment Session Iteration ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Experiment Session Iterations (vwExperimentSessionIterations.ID)
+    * * Description: Optional foreign key to the generic ExperimentSessionIteration that owns this run (NULL for standalone/manual training outside a session)
+    */
+    get ExperimentSessionIterationID(): string | null {
+        return this.Get('ExperimentSessionIterationID');
+    }
+    set ExperimentSessionIterationID(value: string | null) {
+        this.Set('ExperimentSessionIterationID', value);
+    }
+
+    /**
+    * * Field Name: FeaturesUsed
+    * * Display Name: Features Used
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON of the exact feature set used for this run
+    */
+    get FeaturesUsed(): string | null {
+        return this.Get('FeaturesUsed');
+    }
+    set FeaturesUsed(value: string | null) {
+        this.Set('FeaturesUsed', value);
+    }
+
+    /**
+    * * Field Name: AlgorithmID
+    * * Display Name: Algorithm ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Algorithms (vwMLAlgorithms.ID)
+    * * Description: Foreign key to the algorithm used for this run
+    */
+    get AlgorithmID(): string {
+        return this.Get('AlgorithmID');
+    }
+    set AlgorithmID(value: string) {
+        this.Set('AlgorithmID', value);
+    }
+
+    /**
+    * * Field Name: Hyperparameters
+    * * Display Name: Hyperparameters
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON hyperparameters used for this run
+    */
+    get Hyperparameters(): string | null {
+        return this.Get('Hyperparameters');
+    }
+    set Hyperparameters(value: string | null) {
+        this.Set('Hyperparameters', value);
+    }
+
+    /**
+    * * Field Name: ValidationResults
+    * * Display Name: Validation Results
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON of all validation metrics, per-fold where applicable (the full metric blob; the parent iteration's Score is the single normalized leaderboard number)
+    */
+    get ValidationResults(): string | null {
+        return this.Get('ValidationResults');
+    }
+    set ValidationResults(value: string | null) {
+        this.Set('ValidationResults', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Completed
+    *   * Failed
+    *   * Pending
+    *   * Pruned
+    *   * Running
+    * * Description: Run status: Pending, Running, Completed, Failed, or Pruned
+    */
+    get Status(): 'Completed' | 'Failed' | 'Pending' | 'Pruned' | 'Running' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Completed' | 'Failed' | 'Pending' | 'Pruned' | 'Running') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: StartedAt
+    * * Display Name: Started At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp the run started
+    */
+    get StartedAt(): Date | null {
+        return this.Get('StartedAt');
+    }
+    set StartedAt(value: Date | null) {
+        this.Set('StartedAt', value);
+    }
+
+    /**
+    * * Field Name: CompletedAt
+    * * Display Name: Completed At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp the run completed
+    */
+    get CompletedAt(): Date | null {
+        return this.Get('CompletedAt');
+    }
+    set CompletedAt(value: Date | null) {
+        this.Set('CompletedAt', value);
+    }
+
+    /**
+    * * Field Name: ComputeCost
+    * * Display Name: Compute Cost
+    * * SQL Data Type: decimal(18, 6)
+    * * Description: Compute cost attributed to this run, for budget enforcement
+    */
+    get ComputeCost(): number | null {
+        return this.Get('ComputeCost');
+    }
+    set ComputeCost(value: number | null) {
+        this.Set('ComputeCost', value);
+    }
+
+    /**
+    * * Field Name: TokensUsed
+    * * Display Name: Tokens Used
+    * * SQL Data Type: int
+    * * Description: LLM tokens used by this run, for budget enforcement
+    */
+    get TokensUsed(): number | null {
+        return this.Get('TokensUsed');
+    }
+    set TokensUsed(value: number | null) {
+        this.Set('TokensUsed', value);
+    }
+
+    /**
+    * * Field Name: Notes
+    * * Display Name: Notes
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Notes / observations about this run
+    */
+    get Notes(): string | null {
+        return this.Get('Notes');
+    }
+    set Notes(value: string | null) {
+        this.Set('Notes', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Pipeline
+    * * Display Name: Pipeline
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Pipeline(): string {
+        return this.Get('Pipeline');
+    }
+
+    /**
+    * * Field Name: ExperimentSessionIteration
+    * * Display Name: Experiment Session Iteration
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ExperimentSessionIteration(): string | null {
+        return this.Get('ExperimentSessionIteration');
+    }
+
+    /**
+    * * Field Name: Algorithm
+    * * Display Name: Algorithm
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Algorithm(): string {
+        return this.Get('Algorithm');
+    }
+}
+
+
+/**
  * MJ: O Auth Auth Server Metadata Caches - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: OAuthAuthServerMetadataCache
@@ -81877,6 +88572,40 @@ export class MJOpenAppEntity extends BaseEntity<MJOpenAppEntityType> {
     }
 
     /**
+    * Validate() method override for MJ: Open Apps entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Name: The name must consist only of lowercase letters, numbers, and hyphens to ensure it is compatible with system naming standards.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateNameAlphanumericHyphenOnly(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * The name must consist only of lowercase letters, numbers, and hyphens to ensure it is compatible with system naming standards.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateNameAlphanumericHyphenOnly(result: ValidationResult) {
+    	// The regex checks that the entire string consists only of lowercase letters, digits, or hyphens
+    	const regex = /^[a-z0-9-]+$/;
+    	if (this.Name != null && !regex.test(this.Name)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"Name",
+    			"The name must only contain lowercase letters, numbers, and hyphens.",
+    			this.Name,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -81891,7 +88620,7 @@ export class MJOpenAppEntity extends BaseEntity<MJOpenAppEntityType> {
 
     /**
     * * Field Name: Name
-    * * Display Name: Name
+    * * Display Name: App Name
     * * SQL Data Type: nvarchar(64)
     * * Description: Unique lowercase identifier for the app (e.g. acme-crm). Must contain only lowercase letters, digits, and hyphens.
     */
@@ -82060,7 +88789,7 @@ export class MJOpenAppEntity extends BaseEntity<MJOpenAppEntityType> {
 
     /**
     * * Field Name: ManifestJSON
-    * * Display Name: Manifest JSON
+    * * Display Name: Manifest
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Full mj-app.json manifest stored as JSON for the currently installed version
     */
@@ -82073,7 +88802,7 @@ export class MJOpenAppEntity extends BaseEntity<MJOpenAppEntityType> {
 
     /**
     * * Field Name: ConfigurationSchemaJSON
-    * * Display Name: Configuration Schema JSON
+    * * Display Name: Configuration Schema
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Optional JSON Schema defining the configuration options this app accepts
     */
@@ -82138,6 +88867,19 @@ export class MJOpenAppEntity extends BaseEntity<MJOpenAppEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Subpath
+    * * Display Name: Subpath
+    * * SQL Data Type: nvarchar(500)
+    * * Description: In-repo subdirectory the app was installed from for multi-app repositories (e.g. 'CRM/HubSpot'). NULL when the app's mj-app.json is at the repository root.
+    */
+    get Subpath(): string | null {
+        return this.Get('Subpath');
+    }
+    set Subpath(value: string | null) {
+        this.Set('Subpath', value);
     }
 
     /**
@@ -82643,6 +89385,699 @@ export class MJPermissionDomainEntity extends BaseEntity<MJPermissionDomainEntit
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: Process Run Details - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ProcessRunDetail
+ * * Base View: vwProcessRunDetails
+ * * @description Per-record result within a Process Run: powers audit, resume (skip already-done records), and the run-viewer UX. One row per processed record. EXAMPLE: customer CUST-00417 -> Succeeded with ResultPayload {"satisfaction":"High","sentiment":0.82} and a link to its AI Agent Run; customer CUST-00418 -> Failed with ErrorMessage "Model timeout".
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Process Run Details')
+export class MJProcessRunDetailEntity extends BaseEntity<MJProcessRunDetailEntityType> {
+    /**
+    * Loads the MJ: Process Run Details record from the database
+    * @param ID: string - primary key value to load the MJ: Process Run Details record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJProcessRunDetailEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ProcessRunID
+    * * Display Name: Process Run
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Process Runs (vwProcessRuns.ID)
+    * * Description: Foreign key to the parent Process Run
+    */
+    get ProcessRunID(): string {
+        return this.Get('ProcessRunID');
+    }
+    set ProcessRunID(value: string) {
+        this.Set('ProcessRunID', value);
+    }
+
+    /**
+    * * Field Name: EntityID
+    * * Display Name: Entity ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Description: Foreign key to the entity of the processed record. Stored (not inherited) because a single run may span entities for ad-hoc / engine-driven runs.
+    */
+    get EntityID(): string {
+        return this.Get('EntityID');
+    }
+    set EntityID(value: string) {
+        this.Set('EntityID', value);
+    }
+
+    /**
+    * * Field Name: RecordID
+    * * Display Name: Record ID
+    * * SQL Data Type: nvarchar(450)
+    * * Description: Primary key of the processed record, stored as text to remain composite-key safe
+    */
+    get RecordID(): string {
+        return this.Get('RecordID');
+    }
+    set RecordID(value: string) {
+        this.Set('RecordID', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Failed
+    *   * Pending
+    *   * Skipped
+    *   * Succeeded
+    * * Description: Per-record status: Pending, Succeeded, Failed, or Skipped
+    */
+    get Status(): 'Failed' | 'Pending' | 'Skipped' | 'Succeeded' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Failed' | 'Pending' | 'Skipped' | 'Succeeded') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: StartedAt
+    * * Display Name: Started At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When processing of this record started
+    */
+    get StartedAt(): Date | null {
+        return this.Get('StartedAt');
+    }
+    set StartedAt(value: Date | null) {
+        this.Set('StartedAt', value);
+    }
+
+    /**
+    * * Field Name: CompletedAt
+    * * Display Name: Completed At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When processing of this record completed
+    */
+    get CompletedAt(): Date | null {
+        return this.Get('CompletedAt');
+    }
+    set CompletedAt(value: Date | null) {
+        this.Set('CompletedAt', value);
+    }
+
+    /**
+    * * Field Name: DurationMs
+    * * Display Name: Duration (ms)
+    * * SQL Data Type: int
+    * * Description: Processing duration for this record in milliseconds
+    */
+    get DurationMs(): number | null {
+        return this.Get('DurationMs');
+    }
+    set DurationMs(value: number | null) {
+        this.Set('DurationMs', value);
+    }
+
+    /**
+    * * Field Name: AttemptCount
+    * * Display Name: Attempt Count
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Number of processing attempts for this record (supports retry)
+    */
+    get AttemptCount(): number {
+        return this.Get('AttemptCount');
+    }
+    set AttemptCount(value: number) {
+        this.Set('AttemptCount', value);
+    }
+
+    /**
+    * * Field Name: ResultPayload
+    * * Display Name: Result Payload
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Structured output payload (JSON) produced for this record
+    */
+    get ResultPayload(): string | null {
+        return this.Get('ResultPayload');
+    }
+    set ResultPayload(value: string | null) {
+        this.Set('ResultPayload', value);
+    }
+
+    /**
+    * * Field Name: ErrorMessage
+    * * Display Name: Error Message
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Per-record error message when Status=Failed
+    */
+    get ErrorMessage(): string | null {
+        return this.Get('ErrorMessage');
+    }
+    set ErrorMessage(value: string | null) {
+        this.Set('ErrorMessage', value);
+    }
+
+    /**
+    * * Field Name: ActionExecutionLogID
+    * * Display Name: Action Execution Log ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Action Execution Logs (vwActionExecutionLogs.ID)
+    * * Description: Foreign key to the Action Execution Log for deep tracing, when the work was an Action
+    */
+    get ActionExecutionLogID(): string | null {
+        return this.Get('ActionExecutionLogID');
+    }
+    set ActionExecutionLogID(value: string | null) {
+        this.Set('ActionExecutionLogID', value);
+    }
+
+    /**
+    * * Field Name: AIAgentRunID
+    * * Display Name: AI Agent Run ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
+    * * Description: Foreign key to the AI Agent Run for deep tracing, when the work was an Agent
+    */
+    get AIAgentRunID(): string | null {
+        return this.Get('AIAgentRunID');
+    }
+    set AIAgentRunID(value: string | null) {
+        this.Set('AIAgentRunID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Entity
+    * * Display Name: Entity Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Entity(): string {
+        return this.Get('Entity');
+    }
+
+    /**
+    * * Field Name: ActionExecutionLog
+    * * Display Name: Action Execution Log
+    * * SQL Data Type: nvarchar(425)
+    */
+    get ActionExecutionLog(): string | null {
+        return this.Get('ActionExecutionLog');
+    }
+
+    /**
+    * * Field Name: AIAgentRun
+    * * Display Name: AI Agent Run
+    * * SQL Data Type: nvarchar(255)
+    */
+    get AIAgentRun(): string | null {
+        return this.Get('AIAgentRun');
+    }
+}
+
+
+/**
+ * MJ: Process Runs - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ProcessRun
+ * * Base View: vwProcessRuns
+ * * @description Source-agnostic header for one execution of any set-processing job. Deliberately generic: a Record Process run sets RecordProcessID, but legacy/engine-driven jobs (e.g., a geocoding sweep or vector sync) keep their own source tables and still record a run here with RecordProcessID = NULL, giving every batch a uniform audit + resume trail. EXAMPLE: the Saturday 2am run of "Weekly Customer Health Summary" over 1,284 active customers (RecordProcessID set, TriggeredBy=Schedule); or a nightly geocoding sweep (RecordProcessID NULL).
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Process Runs')
+export class MJProcessRunEntity extends BaseEntity<MJProcessRunEntityType> {
+    /**
+    * Loads the MJ: Process Runs record from the database
+    * @param ID: string - primary key value to load the MJ: Process Runs record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJProcessRunEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: RecordProcessID
+    * * Display Name: Record Process
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Record Processes (vwRecordProcesses.ID)
+    * * Description: Foreign key to the Record Process that spawned this run; NULL for ad-hoc / engine-driven runs not tied to a saved definition
+    */
+    get RecordProcessID(): string | null {
+        return this.Get('RecordProcessID');
+    }
+    set RecordProcessID(value: string | null) {
+        this.Set('RecordProcessID', value);
+    }
+
+    /**
+    * * Field Name: EntityID
+    * * Display Name: Entity
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Description: Foreign key to the entity processed by this run, when the run is entity-scoped
+    */
+    get EntityID(): string | null {
+        return this.Get('EntityID');
+    }
+    set EntityID(value: string | null) {
+        this.Set('EntityID', value);
+    }
+
+    /**
+    * * Field Name: TriggeredBy
+    * * Display Name: Triggered By
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Manual
+    *   * OnChange
+    *   * OnDemand
+    *   * Schedule
+    * * Description: What triggered this run: OnChange, Schedule, OnDemand, or Manual
+    */
+    get TriggeredBy(): 'Manual' | 'OnChange' | 'OnDemand' | 'Schedule' {
+        return this.Get('TriggeredBy');
+    }
+    set TriggeredBy(value: 'Manual' | 'OnChange' | 'OnDemand' | 'Schedule') {
+        this.Set('TriggeredBy', value);
+    }
+
+    /**
+    * * Field Name: SourceType
+    * * Display Name: Source Type
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Array
+    *   * Filter
+    *   * Keyset
+    *   * List
+    *   * SingleRecord
+    *   * View
+    * * Description: The kind of record-set source resolved for this run: View, List, Filter, Array, Keyset, or SingleRecord
+    */
+    get SourceType(): 'Array' | 'Filter' | 'Keyset' | 'List' | 'SingleRecord' | 'View' {
+        return this.Get('SourceType');
+    }
+    set SourceType(value: 'Array' | 'Filter' | 'Keyset' | 'List' | 'SingleRecord' | 'View') {
+        this.Set('SourceType', value);
+    }
+
+    /**
+    * * Field Name: SourceID
+    * * Display Name: Source ID
+    * * SQL Data Type: uniqueidentifier
+    * * Description: Polymorphic source identifier (e.g., ViewID or ListID) when applicable; no FK because it spans entities
+    */
+    get SourceID(): string | null {
+        return this.Get('SourceID');
+    }
+    set SourceID(value: string | null) {
+        this.Set('SourceID', value);
+    }
+
+    /**
+    * * Field Name: SourceFilter
+    * * Display Name: Source Filter
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Resolved filter snapshot used to materialize the record set for this run
+    */
+    get SourceFilter(): string | null {
+        return this.Get('SourceFilter');
+    }
+    set SourceFilter(value: string | null) {
+        this.Set('SourceFilter', value);
+    }
+
+    /**
+    * * Field Name: ScheduledJobRunID
+    * * Display Name: Scheduled Job Run
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Scheduled Job Runs (vwScheduledJobRuns.ID)
+    * * Description: Foreign key to the Scheduled Job Run that launched this run, when scheduler-launched
+    */
+    get ScheduledJobRunID(): string | null {
+        return this.Get('ScheduledJobRunID');
+    }
+    set ScheduledJobRunID(value: string | null) {
+        this.Set('ScheduledJobRunID', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Cancelled
+    *   * Completed
+    *   * Failed
+    *   * Paused
+    *   * Pending
+    *   * Running
+    * * Description: Run status: Pending, Running, Paused, Completed, Failed, or Cancelled
+    */
+    get Status(): 'Cancelled' | 'Completed' | 'Failed' | 'Paused' | 'Pending' | 'Running' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Cancelled' | 'Completed' | 'Failed' | 'Paused' | 'Pending' | 'Running') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: StartTime
+    * * Display Name: Start Time
+    * * SQL Data Type: datetimeoffset
+    * * Description: When the run started
+    */
+    get StartTime(): Date | null {
+        return this.Get('StartTime');
+    }
+    set StartTime(value: Date | null) {
+        this.Set('StartTime', value);
+    }
+
+    /**
+    * * Field Name: EndTime
+    * * Display Name: End Time
+    * * SQL Data Type: datetimeoffset
+    * * Description: When the run ended
+    */
+    get EndTime(): Date | null {
+        return this.Get('EndTime');
+    }
+    set EndTime(value: Date | null) {
+        this.Set('EndTime', value);
+    }
+
+    /**
+    * * Field Name: TotalItemCount
+    * * Display Name: Total Item Count
+    * * SQL Data Type: int
+    * * Description: Estimated or known total number of records to process
+    */
+    get TotalItemCount(): number | null {
+        return this.Get('TotalItemCount');
+    }
+    set TotalItemCount(value: number | null) {
+        this.Set('TotalItemCount', value);
+    }
+
+    /**
+    * * Field Name: ProcessedItems
+    * * Display Name: Processed Items
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Count of records processed so far
+    */
+    get ProcessedItems(): number {
+        return this.Get('ProcessedItems');
+    }
+    set ProcessedItems(value: number) {
+        this.Set('ProcessedItems', value);
+    }
+
+    /**
+    * * Field Name: SuccessCount
+    * * Display Name: Success Count
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Count of records processed successfully
+    */
+    get SuccessCount(): number {
+        return this.Get('SuccessCount');
+    }
+    set SuccessCount(value: number) {
+        this.Set('SuccessCount', value);
+    }
+
+    /**
+    * * Field Name: ErrorCount
+    * * Display Name: Error Count
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Count of records that failed processing
+    */
+    get ErrorCount(): number {
+        return this.Get('ErrorCount');
+    }
+    set ErrorCount(value: number) {
+        this.Set('ErrorCount', value);
+    }
+
+    /**
+    * * Field Name: SkippedCount
+    * * Display Name: Skipped Count
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Count of records skipped (e.g., unchanged per watermark)
+    */
+    get SkippedCount(): number {
+        return this.Get('SkippedCount');
+    }
+    set SkippedCount(value: number) {
+        this.Set('SkippedCount', value);
+    }
+
+    /**
+    * * Field Name: LastProcessedOffset
+    * * Display Name: Last Processed Offset
+    * * SQL Data Type: int
+    * * Description: Offset-based resume cursor (StartRow) for sources that paginate by offset
+    */
+    get LastProcessedOffset(): number | null {
+        return this.Get('LastProcessedOffset');
+    }
+    set LastProcessedOffset(value: number | null) {
+        this.Set('LastProcessedOffset', value);
+    }
+
+    /**
+    * * Field Name: LastProcessedKey
+    * * Display Name: Last Processed Key
+    * * SQL Data Type: nvarchar(450)
+    * * Description: Keyset-based resume cursor (AfterKey) for sources that paginate by seek
+    */
+    get LastProcessedKey(): string | null {
+        return this.Get('LastProcessedKey');
+    }
+    set LastProcessedKey(value: string | null) {
+        this.Set('LastProcessedKey', value);
+    }
+
+    /**
+    * * Field Name: BatchSize
+    * * Display Name: Batch Size
+    * * SQL Data Type: int
+    * * Description: Effective batch size for this run
+    */
+    get BatchSize(): number | null {
+        return this.Get('BatchSize');
+    }
+    set BatchSize(value: number | null) {
+        this.Set('BatchSize', value);
+    }
+
+    /**
+    * * Field Name: CancellationRequested
+    * * Display Name: Cancellation Requested
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Pause/cancel handshake flag honored by the processor between batches
+    */
+    get CancellationRequested(): boolean {
+        return this.Get('CancellationRequested');
+    }
+    set CancellationRequested(value: boolean) {
+        this.Set('CancellationRequested', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration JSON
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON snapshot of the effective configuration for this run
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    /**
+    * * Field Name: ErrorMessage
+    * * Display Name: Error Message
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Run-level error message when Status=Failed
+    */
+    get ErrorMessage(): string | null {
+        return this.Get('ErrorMessage');
+    }
+    set ErrorMessage(value: string | null) {
+        this.Set('ErrorMessage', value);
+    }
+
+    /**
+    * * Field Name: StartedByUserID
+    * * Display Name: Started By User
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: Foreign key to the user who started the run
+    */
+    get StartedByUserID(): string | null {
+        return this.Get('StartedByUserID');
+    }
+    set StartedByUserID(value: string | null) {
+        this.Set('StartedByUserID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: DryRun
+    * * Display Name: Is Dry Run
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1, this run was a dry-run (compute-only) preview: the per-record diffs were computed and persisted as Process Run Details, but no changes were written back to the target records. When 0, the run applied its changes.
+    */
+    get DryRun(): boolean {
+        return this.Get('DryRun');
+    }
+    set DryRun(value: boolean) {
+        this.Set('DryRun', value);
+    }
+
+    /**
+    * * Field Name: RecordProcess
+    * * Display Name: Record Process Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get RecordProcess(): string | null {
+        return this.Get('RecordProcess');
+    }
+
+    /**
+    * * Field Name: Entity
+    * * Display Name: Entity Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Entity(): string | null {
+        return this.Get('Entity');
+    }
+
+    /**
+    * * Field Name: ScheduledJobRun
+    * * Display Name: Scheduled Job Run Name
+    * * SQL Data Type: nvarchar(200)
+    */
+    get ScheduledJobRun(): string | null {
+        return this.Get('ScheduledJobRun');
+    }
+
+    /**
+    * * Field Name: StartedByUser
+    * * Display Name: Started By User Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get StartedByUser(): string | null {
+        return this.Get('StartedByUser');
     }
 }
 
@@ -85302,6 +92737,33 @@ export class MJRecommendationItemEntity extends BaseEntity<MJRecommendationItemE
     }
 
     /**
+    * Validate() method override for MJ: Recommendation Items entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * MatchProbability: This rule ensures that if a match probability is set, it must be between 0 and 1, inclusive.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateMatchProbabilityIsBetweenZeroAndOne(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that if a match probability is set, it must be between 0 and 1, inclusive.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateMatchProbabilityIsBetweenZeroAndOne(result: ValidationResult) {
+    	if (this.MatchProbability != null && (this.MatchProbability < 0 || this.MatchProbability > 1)) {
+    		result.Errors.push(new ValidationErrorInfo("MatchProbability", "MatchProbability, if provided, must be between 0 and 1 (inclusive).", this.MatchProbability, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -87108,6 +94570,1411 @@ export class MJRecordMergeLogEntity extends BaseEntity<MJRecordMergeLogEntityTyp
 
 
 /**
+ * MJ: Record Process Categories - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: RecordProcessCategory
+ * * Base View: vwRecordProcessCategories
+ * * @description Hierarchical folder for organizing Record Processes in the UI. Example: "Customer Lifecycle" with a child category "Retention".
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Record Process Categories')
+export class MJRecordProcessCategoryEntity extends BaseEntity<MJRecordProcessCategoryEntityType> {
+    /**
+    * Loads the MJ: Record Process Categories record from the database
+    * @param ID: string - primary key value to load the MJ: Record Process Categories record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJRecordProcessCategoryEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Display name of the category
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional description of what belongs in this category
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: ParentID
+    * * Display Name: Parent Category
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Record Process Categories (vwRecordProcessCategories.ID)
+    * * Description: Self-referencing foreign key to the parent category, enabling a nested folder hierarchy (NULL for a top-level category)
+    */
+    get ParentID(): string | null {
+        return this.Get('ParentID');
+    }
+    set ParentID(value: string | null) {
+        this.Set('ParentID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Parent
+    * * Display Name: Parent Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Parent(): string | null {
+        return this.Get('Parent');
+    }
+
+    /**
+    * * Field Name: RootParentID
+    * * Display Name: Root Parent
+    * * SQL Data Type: uniqueidentifier
+    */
+    get RootParentID(): string | null {
+        return this.Get('RootParentID');
+    }
+}
+
+
+/**
+ * MJ: Record Process Watermarks - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: RecordProcessWatermark
+ * * Base View: vwRecordProcessWatermarks
+ * * @description Per-record change-detection watermark backing WatermarkStrategy=Checksum. Stores the last content hash a Record Process processed for a given record so unchanged records are skipped on the next run. Only used by Checksum mode; UpdatedAt mode compares __mj_UpdatedAt and stores nothing here.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Record Process Watermarks')
+export class MJRecordProcessWatermarkEntity extends BaseEntity<MJRecordProcessWatermarkEntityType> {
+    /**
+    * Loads the MJ: Record Process Watermarks record from the database
+    * @param ID: string - primary key value to load the MJ: Record Process Watermarks record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJRecordProcessWatermarkEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: RecordProcessID
+    * * Display Name: Record Process
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Record Processes (vwRecordProcesses.ID)
+    * * Description: Foreign key to the Record Process this watermark belongs to
+    */
+    get RecordProcessID(): string {
+        return this.Get('RecordProcessID');
+    }
+    set RecordProcessID(value: string) {
+        this.Set('RecordProcessID', value);
+    }
+
+    /**
+    * * Field Name: EntityID
+    * * Display Name: Entity
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Description: Foreign key to the entity of the watermarked record
+    */
+    get EntityID(): string {
+        return this.Get('EntityID');
+    }
+    set EntityID(value: string) {
+        this.Set('EntityID', value);
+    }
+
+    /**
+    * * Field Name: RecordID
+    * * Display Name: Record ID
+    * * SQL Data Type: nvarchar(450)
+    * * Description: Primary key of the watermarked record, stored as text to remain composite-key safe
+    */
+    get RecordID(): string {
+        return this.Get('RecordID');
+    }
+    set RecordID(value: string) {
+        this.Set('RecordID', value);
+    }
+
+    /**
+    * * Field Name: Hash
+    * * Display Name: Content Hash
+    * * SQL Data Type: nvarchar(128)
+    * * Description: Content hash of the record as of the last time it was processed by this Record Process
+    */
+    get Hash(): string {
+        return this.Get('Hash');
+    }
+    set Hash(value: string) {
+        this.Set('Hash', value);
+    }
+
+    /**
+    * * Field Name: LastProcessedAt
+    * * Display Name: Last Processed At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When this record was last processed by this Record Process
+    */
+    get LastProcessedAt(): Date {
+        return this.Get('LastProcessedAt');
+    }
+    set LastProcessedAt(value: Date) {
+        this.Set('LastProcessedAt', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: RecordProcess
+    * * Display Name: Record Process Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get RecordProcess(): string {
+        return this.Get('RecordProcess');
+    }
+
+    /**
+    * * Field Name: Entity
+    * * Display Name: Entity Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Entity(): string {
+        return this.Get('Entity');
+    }
+}
+
+
+/**
+ * MJ: Record Processes - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: RecordProcess
+ * * Base View: vwRecordProcesses
+ * * @description A declarative, reusable job definition that binds three axes of a business process: WORK (an Action or an Agent) x SCOPE (a single record, a User View, a List, or an ad-hoc Filter) x TRIGGER (on-change save hooks, a cron schedule, and/or on demand). One row is one configured process; each execution of it produces a Process Run with per-record Process Run Details. EXAMPLE: a "Weekly Customer Health Summary" row runs the "Customer Summarizer" agent over the "Active Customers" view every Saturday 2am, also whenever a customer's NPS/support fields change, and on demand; for each customer it infers {satisfaction, sentiment, personalityStyle, summary} and writes satisfaction/sentiment back onto the Customer plus a summary into a Customer Insights child row, skipping customers unchanged since the last run.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Record Processes')
+export class MJRecordProcessEntity extends BaseEntity<MJRecordProcessEntityType> {
+    /**
+    * Loads the MJ: Record Processes record from the database
+    * @param ID: string - primary key value to load the MJ: Record Processes record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJRecordProcessEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Human-readable name of the process definition (e.g., "Weekly Customer Health Summary")
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional description of what this process does
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: CategoryID
+    * * Display Name: Category
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Record Process Categories (vwRecordProcessCategories.ID)
+    * * Description: Optional hierarchical category for organizing this process in the UI
+    */
+    get CategoryID(): string | null {
+        return this.Get('CategoryID');
+    }
+    set CategoryID(value: string | null) {
+        this.Set('CategoryID', value);
+    }
+
+    /**
+    * * Field Name: EntityID
+    * * Display Name: Entity
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Description: Foreign key to the target entity whose records this process operates on
+    */
+    get EntityID(): string {
+        return this.Get('EntityID');
+    }
+    set EntityID(value: string) {
+        this.Set('EntityID', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Draft
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    *   * Draft
+    * * Description: Lifecycle status: Draft (not yet wired), Active (triggers live), or Disabled
+    */
+    get Status(): 'Active' | 'Disabled' | 'Draft' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Disabled' | 'Draft') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: WorkType
+    * * Display Name: Work Type
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Action
+    *   * Agent
+    *   * FieldRules
+    *   * Infer
+    *   * ML Model
+    * * Description: Whether the work is an Action, an Agent, or an Infer (per-record AI Prompt). Agents are dispatched through the Execute Agent action and must be top-level + ExposeAsAction; Infer runs the AI Prompt named by PromptID for each record and writes its structured output back via OutputMapping.
+    */
+    get WorkType(): 'Action' | 'Agent' | 'FieldRules' | 'Infer' | 'ML Model' {
+        return this.Get('WorkType');
+    }
+    set WorkType(value: 'Action' | 'Agent' | 'FieldRules' | 'Infer' | 'ML Model') {
+        this.Set('WorkType', value);
+    }
+
+    /**
+    * * Field Name: ActionID
+    * * Display Name: Action
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Actions (vwActions.ID)
+    * * Description: Foreign key to the Action to run, when WorkType=Action
+    */
+    get ActionID(): string | null {
+        return this.Get('ActionID');
+    }
+    set ActionID(value: string | null) {
+        this.Set('ActionID', value);
+    }
+
+    /**
+    * * Field Name: AgentID
+    * * Display Name: Agent
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
+    * * Description: Foreign key to the AI Agent to run, when WorkType=Agent
+    */
+    get AgentID(): string | null {
+        return this.Get('AgentID');
+    }
+    set AgentID(value: string | null) {
+        this.Set('AgentID', value);
+    }
+
+    /**
+    * * Field Name: PromptID
+    * * Display Name: Prompt
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
+    * * Description: Foreign key to the AI Prompt to run for each record, when WorkType=Infer. The prompt's structured output is written back to the data model via OutputMapping.
+    */
+    get PromptID(): string | null {
+        return this.Get('PromptID');
+    }
+    set PromptID(value: string | null) {
+        this.Set('PromptID', value);
+    }
+
+    /**
+    * * Field Name: ScopeType
+    * * Display Name: Scope Type
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Filter
+    *   * List
+    *   * SingleRecord
+    *   * View
+    * * Description: How the record set is scoped for the Schedule and On-Demand triggers: SingleRecord, View, List, or Filter. The On-Change trigger is always single-record and ignores this.
+    */
+    get ScopeType(): 'Filter' | 'List' | 'SingleRecord' | 'View' {
+        return this.Get('ScopeType');
+    }
+    set ScopeType(value: 'Filter' | 'List' | 'SingleRecord' | 'View') {
+        this.Set('ScopeType', value);
+    }
+
+    /**
+    * * Field Name: ScopeViewID
+    * * Display Name: Scope View
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: User Views (vwUserViews.ID)
+    * * Description: Foreign key to the User View defining the scope, when ScopeType=View
+    */
+    get ScopeViewID(): string | null {
+        return this.Get('ScopeViewID');
+    }
+    set ScopeViewID(value: string | null) {
+        this.Set('ScopeViewID', value);
+    }
+
+    /**
+    * * Field Name: ScopeListID
+    * * Display Name: Scope List
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Lists (vwLists.ID)
+    * * Description: Foreign key to the List defining the scope, when ScopeType=List
+    */
+    get ScopeListID(): string | null {
+        return this.Get('ScopeListID');
+    }
+    set ScopeListID(value: string | null) {
+        this.Set('ScopeListID', value);
+    }
+
+    /**
+    * * Field Name: ScopeFilter
+    * * Display Name: Scope Filter
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Ad-hoc WHERE clause used to resolve the record set, when ScopeType=Filter
+    */
+    get ScopeFilter(): string | null {
+        return this.Get('ScopeFilter');
+    }
+    set ScopeFilter(value: string | null) {
+        this.Set('ScopeFilter', value);
+    }
+
+    /**
+    * * Field Name: OnChangeEnabled
+    * * Display Name: On-Change Enabled
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1, the process runs per-record on save via an owned Entity Action
+    */
+    get OnChangeEnabled(): boolean {
+        return this.Get('OnChangeEnabled');
+    }
+    set OnChangeEnabled(value: boolean) {
+        this.Set('OnChangeEnabled', value);
+    }
+
+    /**
+    * * Field Name: OnChangeInvocationType
+    * * Display Name: On-Change Invocation Type
+    * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * AfterCreate
+    *   * AfterDelete
+    *   * AfterUpdate
+    *   * Validate
+    * * Description: Which save event fires the on-change trigger: AfterCreate, AfterUpdate, AfterDelete, or Validate
+    */
+    get OnChangeInvocationType(): 'AfterCreate' | 'AfterDelete' | 'AfterUpdate' | 'Validate' | null {
+        return this.Get('OnChangeInvocationType');
+    }
+    set OnChangeInvocationType(value: 'AfterCreate' | 'AfterDelete' | 'AfterUpdate' | 'Validate' | null) {
+        this.Set('OnChangeInvocationType', value);
+    }
+
+    /**
+    * * Field Name: OnChangeFilter
+    * * Display Name: On-Change Filter
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Gating expression evaluated against the changed record (with changed-fields context) that compiles into the owned Entity Action Filter; only when it passes does the on-change trigger fire
+    */
+    get OnChangeFilter(): string | null {
+        return this.Get('OnChangeFilter');
+    }
+    set OnChangeFilter(value: string | null) {
+        this.Set('OnChangeFilter', value);
+    }
+
+    /**
+    * * Field Name: ScheduleEnabled
+    * * Display Name: Schedule Enabled
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1, the process runs on a cron schedule via an owned Scheduled Job
+    */
+    get ScheduleEnabled(): boolean {
+        return this.Get('ScheduleEnabled');
+    }
+    set ScheduleEnabled(value: boolean) {
+        this.Set('ScheduleEnabled', value);
+    }
+
+    /**
+    * * Field Name: CronExpression
+    * * Display Name: Cron Expression
+    * * SQL Data Type: nvarchar(120)
+    * * Description: Cron expression for the schedule trigger, when ScheduleEnabled=1
+    */
+    get CronExpression(): string | null {
+        return this.Get('CronExpression');
+    }
+    set CronExpression(value: string | null) {
+        this.Set('CronExpression', value);
+    }
+
+    /**
+    * * Field Name: Timezone
+    * * Display Name: Timezone
+    * * SQL Data Type: nvarchar(100)
+    * * Default Value: UTC
+    * * Description: IANA timezone for evaluating the cron expression (default UTC)
+    */
+    get Timezone(): string | null {
+        return this.Get('Timezone');
+    }
+    set Timezone(value: string | null) {
+        this.Set('Timezone', value);
+    }
+
+    /**
+    * * Field Name: OnDemandEnabled
+    * * Display Name: On-Demand Enabled
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When 1, the process can be run on demand (button / resolver)
+    */
+    get OnDemandEnabled(): boolean {
+        return this.Get('OnDemandEnabled');
+    }
+    set OnDemandEnabled(value: boolean) {
+        this.Set('OnDemandEnabled', value);
+    }
+
+    /**
+    * * Field Name: InputMapping
+    * * Display Name: Input Mapping
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON mapping describing how a record maps to the work inputs (optionally including an EntityDocumentID for render-to-text)
+    */
+    get InputMapping(): string | null {
+        return this.Get('InputMapping');
+    }
+    set InputMapping(value: string | null) {
+        this.Set('InputMapping', value);
+    }
+
+    /**
+    * * Field Name: OutputMapping
+    * * Display Name: Output Mapping
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON mapping describing how the structured output payload writes back (to fields, a child record, or tags)
+    */
+    get OutputMapping(): string | null {
+        return this.Get('OutputMapping');
+    }
+    set OutputMapping(value: string | null) {
+        this.Set('OutputMapping', value);
+    }
+
+    /**
+    * * Field Name: SkipUnchanged
+    * * Display Name: Skip Unchanged
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When 1, records whose watermark indicates no change since the last run are skipped
+    */
+    get SkipUnchanged(): boolean {
+        return this.Get('SkipUnchanged');
+    }
+    set SkipUnchanged(value: boolean) {
+        this.Set('SkipUnchanged', value);
+    }
+
+    /**
+    * * Field Name: WatermarkStrategy
+    * * Display Name: Watermark Strategy
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Checksum
+    *   * None
+    *   * UpdatedAt
+    * * Description: How unchanged records are detected for SkipUnchanged: Checksum (per-record content hash, stored in RecordProcessWatermark), UpdatedAt (compares __mj_UpdatedAt, stores nothing), or None
+    */
+    get WatermarkStrategy(): 'Checksum' | 'None' | 'UpdatedAt' | null {
+        return this.Get('WatermarkStrategy');
+    }
+    set WatermarkStrategy(value: 'Checksum' | 'None' | 'UpdatedAt' | null) {
+        this.Set('WatermarkStrategy', value);
+    }
+
+    /**
+    * * Field Name: BatchSize
+    * * Display Name: Batch Size
+    * * SQL Data Type: int
+    * * Default Value: 100
+    * * Description: Number of records processed per batch (default 100)
+    */
+    get BatchSize(): number | null {
+        return this.Get('BatchSize');
+    }
+    set BatchSize(value: number | null) {
+        this.Set('BatchSize', value);
+    }
+
+    /**
+    * * Field Name: MaxConcurrency
+    * * Display Name: Max Concurrency
+    * * SQL Data Type: int
+    * * Default Value: 1
+    * * Description: Maximum number of records processed concurrently within a batch (default 1)
+    */
+    get MaxConcurrency(): number | null {
+        return this.Get('MaxConcurrency');
+    }
+    set MaxConcurrency(value: number | null) {
+        this.Set('MaxConcurrency', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON configuration for the process's work, used by work types that need structured config beyond Input/Output mappings. For WorkType='FieldRules' this holds the serialized FieldRuleSet (the rules applied to each record). NULL for work types that do not use it.
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    /**
+    * * Field Name: Category
+    * * Display Name: Category Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Category(): string | null {
+        return this.Get('Category');
+    }
+
+    /**
+    * * Field Name: Entity
+    * * Display Name: Entity Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Entity(): string {
+        return this.Get('Entity');
+    }
+
+    /**
+    * * Field Name: Action
+    * * Display Name: Action Name
+    * * SQL Data Type: nvarchar(425)
+    */
+    get Action(): string | null {
+        return this.Get('Action');
+    }
+
+    /**
+    * * Field Name: Agent
+    * * Display Name: Agent Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Agent(): string | null {
+        return this.Get('Agent');
+    }
+
+    /**
+    * * Field Name: Prompt
+    * * Display Name: Prompt Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Prompt(): string | null {
+        return this.Get('Prompt');
+    }
+
+    /**
+    * * Field Name: ScopeView
+    * * Display Name: Scope View Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get ScopeView(): string | null {
+        return this.Get('ScopeView');
+    }
+
+    /**
+    * * Field Name: ScopeList
+    * * Display Name: Scope List Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get ScopeList(): string | null {
+        return this.Get('ScopeList');
+    }
+}
+
+
+/**
+ * MJ: Remote Operation Categories - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: RemoteOperationCategory
+ * * Base View: vwRemoteOperationCategories
+ * * @description Hierarchical folder for organizing Remote Operations in the UI. Example: "Record Processes" with a child category "Control" holding RunNow / Pause / Cancel.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Remote Operation Categories')
+export class MJRemoteOperationCategoryEntity extends BaseEntity<MJRemoteOperationCategoryEntityType> {
+    /**
+    * Loads the MJ: Remote Operation Categories record from the database
+    * @param ID: string - primary key value to load the MJ: Remote Operation Categories record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJRemoteOperationCategoryEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Display name of the category
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional description of what belongs in this category
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: ParentID
+    * * Display Name: Parent Category
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Remote Operation Categories (vwRemoteOperationCategories.ID)
+    * * Description: Self-referencing foreign key to the parent category, enabling a nested folder hierarchy (NULL for a top-level category)
+    */
+    get ParentID(): string | null {
+        return this.Get('ParentID');
+    }
+    set ParentID(value: string | null) {
+        this.Set('ParentID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Parent
+    * * Display Name: Parent Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Parent(): string | null {
+        return this.Get('Parent');
+    }
+
+    /**
+    * * Field Name: RootParentID
+    * * Display Name: Root Parent
+    * * SQL Data Type: uniqueidentifier
+    */
+    get RootParentID(): string | null {
+        return this.Get('RootParentID');
+    }
+}
+
+
+/**
+ * One library that an AI-authored Remote Operation body imports. CodeGen turns the `LibrariesObject` array
+ * (the strongly-typed accessor bound to `MJ: Remote Operations.Libraries` via JSONType metadata) into one
+ * `import { ...ItemsUsed } from "Library"` per entry at the top of the generated `remote_operations.ts`.
+ * The always-available default libraries (RunView / Metadata / RunQuery from @memberjunction/core) are NOT
+ * listed here — they are emitted for every operation automatically.
+ */
+export interface MJRemoteOperationEntity_RemoteOperationLibrary {
+    /** The npm package to import from, e.g. "@memberjunction/ai-prompts". */
+    Library: string;
+    /** The exported items used from that package, e.g. ["AIPromptRunner"]. */
+    ItemsUsed: string[];
+}
+
+/**
+ * MJ: Remote Operations - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: RemoteOperation
+ * * Base View: vwRemoteOperations
+ * * @description Definition of a typed, provider-routed server operation invoked identically from the client (marshalled over GraphQL) and the server (dispatched in-process) - the typed peer of BaseEntity (CRUD) and RunView (set reads) for arbitrary capabilities. Input/output types are declared here and emitted by CodeGen into a typed base class; the body may be hand-written or AI-authored from Description. EXAMPLE: "RecordProcess.RunNow" (ExecutionMode=LongRunning) takes {recordProcessID} and returns {processRunID}, authorized by the recordprocess:execute scope plus the caller's entity permissions.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Remote Operations')
+export class MJRemoteOperationEntity extends BaseEntity<MJRemoteOperationEntityType> {
+    /**
+    * Loads the MJ: Remote Operations record from the database
+    * @param ID: string - primary key value to load the MJ: Remote Operations record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJRemoteOperationEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Human-readable name of the operation
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: OperationKey
+    * * Display Name: Operation Key
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Stable, unique registry key and wire token used to dispatch the operation (e.g., "RecordProcess.RunNow"). Namespaced by convention.
+    */
+    get OperationKey(): string {
+        return this.Get('OperationKey');
+    }
+    set OperationKey(value: string) {
+        this.Set('OperationKey', value);
+    }
+
+    /**
+    * * Field Name: CategoryID
+    * * Display Name: Category
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Remote Operation Categories (vwRemoteOperationCategories.ID)
+    * * Description: Optional hierarchical category for organizing this operation in the UI
+    */
+    get CategoryID(): string | null {
+        return this.Get('CategoryID');
+    }
+    set CategoryID(value: string | null) {
+        this.Set('CategoryID', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Human description of the operation; also the seed for AI-generated implementation code when GenerationType=AI
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: InputTypeName
+    * * Display Name: Input Type Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: TypeScript type name for the operation input (emitted by CodeGen as the TInput interface)
+    */
+    get InputTypeName(): string | null {
+        return this.Get('InputTypeName');
+    }
+    set InputTypeName(value: string | null) {
+        this.Set('InputTypeName', value);
+    }
+
+    /**
+    * * Field Name: InputTypeDefinition
+    * * Display Name: Input Type Definition
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Raw TypeScript interface/type source defining the input shape (same mechanism as EntityField JSON-type definitions)
+    */
+    get InputTypeDefinition(): string | null {
+        return this.Get('InputTypeDefinition');
+    }
+    set InputTypeDefinition(value: string | null) {
+        this.Set('InputTypeDefinition', value);
+    }
+
+    /**
+    * * Field Name: InputTypeIsArray
+    * * Display Name: Input Is Array
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1, the input type is emitted as an array (TInput[])
+    */
+    get InputTypeIsArray(): boolean {
+        return this.Get('InputTypeIsArray');
+    }
+    set InputTypeIsArray(value: boolean) {
+        this.Set('InputTypeIsArray', value);
+    }
+
+    /**
+    * * Field Name: OutputTypeName
+    * * Display Name: Output Type Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: TypeScript type name for the operation output (emitted by CodeGen as the TOutput interface)
+    */
+    get OutputTypeName(): string | null {
+        return this.Get('OutputTypeName');
+    }
+    set OutputTypeName(value: string | null) {
+        this.Set('OutputTypeName', value);
+    }
+
+    /**
+    * * Field Name: OutputTypeDefinition
+    * * Display Name: Output Type Definition
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Raw TypeScript interface/type source defining the output shape
+    */
+    get OutputTypeDefinition(): string | null {
+        return this.Get('OutputTypeDefinition');
+    }
+    set OutputTypeDefinition(value: string | null) {
+        this.Set('OutputTypeDefinition', value);
+    }
+
+    /**
+    * * Field Name: OutputTypeIsArray
+    * * Display Name: Output Is Array
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1, the output type is emitted as an array (TOutput[])
+    */
+    get OutputTypeIsArray(): boolean {
+        return this.Get('OutputTypeIsArray');
+    }
+    set OutputTypeIsArray(value: boolean) {
+        this.Set('OutputTypeIsArray', value);
+    }
+
+    /**
+    * * Field Name: ExecutionMode
+    * * Display Name: Execution Mode
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Sync
+    * * Value List Type: List
+    * * Possible Values 
+    *   * LongRunning
+    *   * Sync
+    * * Description: Sync (request/response) or LongRunning (returns a handle; supports detached and attached consumption)
+    */
+    get ExecutionMode(): 'LongRunning' | 'Sync' {
+        return this.Get('ExecutionMode');
+    }
+    set ExecutionMode(value: 'LongRunning' | 'Sync') {
+        this.Set('ExecutionMode', value);
+    }
+
+    /**
+    * * Field Name: RequiredScope
+    * * Display Name: Required Scope
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Optional API-key scope string (e.g., recordprocess:execute) enforced for API-key/MCP callers; NULL means no scope gate (interactive users are still bounded by their entity permissions)
+    */
+    get RequiredScope(): string | null {
+        return this.Get('RequiredScope');
+    }
+    set RequiredScope(value: string | null) {
+        this.Set('RequiredScope', value);
+    }
+
+    /**
+    * * Field Name: RequiresSystemUser
+    * * Display Name: Requires System User
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1, only the system user may invoke this operation
+    */
+    get RequiresSystemUser(): boolean {
+        return this.Get('RequiresSystemUser');
+    }
+    set RequiresSystemUser(value: boolean) {
+        this.Set('RequiresSystemUser', value);
+    }
+
+    /**
+    * * Field Name: GenerationType
+    * * Display Name: Generation Type
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Manual
+    * * Value List Type: List
+    * * Possible Values 
+    *   * AI
+    *   * Default
+    *   * Manual
+    * * Description: How the server implementation is provided: Manual (hand-written subclass), AI (generated from Description), or Default (standard generated plumbing)
+    */
+    get GenerationType(): 'AI' | 'Default' | 'Manual' {
+        return this.Get('GenerationType');
+    }
+    set GenerationType(value: 'AI' | 'Default' | 'Manual') {
+        this.Set('GenerationType', value);
+    }
+
+    /**
+    * * Field Name: Code
+    * * Display Name: Code
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: The AI-generated implementation body (when GenerationType=AI); regenerated only when Description changes
+    */
+    get Code(): string | null {
+        return this.Get('Code');
+    }
+    set Code(value: string | null) {
+        this.Set('Code', value);
+    }
+
+    /**
+    * * Field Name: CodeApprovalStatus
+    * * Display Name: Code Approval Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Approved
+    *   * Pending
+    *   * Rejected
+    * * Description: Human approval gate for AI-generated code: Pending, Approved, or Rejected. Only Approved AI code is emitted and routable.
+    */
+    get CodeApprovalStatus(): 'Approved' | 'Pending' | 'Rejected' {
+        return this.Get('CodeApprovalStatus');
+    }
+    set CodeApprovalStatus(value: 'Approved' | 'Pending' | 'Rejected') {
+        this.Set('CodeApprovalStatus', value);
+    }
+
+    /**
+    * * Field Name: CodeApprovedByUserID
+    * * Display Name: Code Approved By User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: Foreign key to the user who approved the generated code
+    */
+    get CodeApprovedByUserID(): string | null {
+        return this.Get('CodeApprovedByUserID');
+    }
+    set CodeApprovedByUserID(value: string | null) {
+        this.Set('CodeApprovedByUserID', value);
+    }
+
+    /**
+    * * Field Name: CodeApprovedAt
+    * * Display Name: Code Approved At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When the generated code was approved
+    */
+    get CodeApprovedAt(): Date | null {
+        return this.Get('CodeApprovedAt');
+    }
+    set CodeApprovedAt(value: Date | null) {
+        this.Set('CodeApprovedAt', value);
+    }
+
+    /**
+    * * Field Name: ContractFingerprint
+    * * Display Name: Contract Fingerprint
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Fingerprint of the input/output contract; carried in the wire envelope so the server can reject a stale client loudly instead of mis-deserializing
+    */
+    get ContractFingerprint(): string | null {
+        return this.Get('ContractFingerprint');
+    }
+    set ContractFingerprint(value: string | null) {
+        this.Set('ContractFingerprint', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    *   * Pending
+    * * Description: Lifecycle status: Active (routable), Disabled, or Pending. Only Active operations can be invoked.
+    */
+    get Status(): 'Active' | 'Disabled' | 'Pending' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Disabled' | 'Pending') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: CacheTTLSeconds
+    * * Display Name: Cache TTL (Seconds)
+    * * SQL Data Type: int
+    * * Description: Optional result cache TTL in seconds (NULL = no caching)
+    */
+    get CacheTTLSeconds(): number | null {
+        return this.Get('CacheTTLSeconds');
+    }
+    set CacheTTLSeconds(value: number | null) {
+        this.Set('CacheTTLSeconds', value);
+    }
+
+    /**
+    * * Field Name: TimeoutMS
+    * * Display Name: Timeout (MS)
+    * * SQL Data Type: int
+    * * Description: Optional execution timeout in milliseconds
+    */
+    get TimeoutMS(): number | null {
+        return this.Get('TimeoutMS');
+    }
+    set TimeoutMS(value: number | null) {
+        this.Set('TimeoutMS', value);
+    }
+
+    /**
+    * * Field Name: MaxConcurrency
+    * * Display Name: Max Concurrency
+    * * SQL Data Type: int
+    * * Description: Optional cap on concurrent executions of this operation
+    */
+    get MaxConcurrency(): number | null {
+        return this.Get('MaxConcurrency');
+    }
+    set MaxConcurrency(value: number | null) {
+        this.Set('MaxConcurrency', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: CodeLocked
+    * * Display Name: Code Locked
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1, the AI-generated Code is frozen and Save() will not regenerate it even if Description changes (the Generated-Actions CodeLocked analog). Default 0.
+    */
+    get CodeLocked(): boolean {
+        return this.Get('CodeLocked');
+    }
+    set CodeLocked(value: boolean) {
+        this.Set('CodeLocked', value);
+    }
+
+    /**
+    * * Field Name: CodeComments
+    * * Display Name: Code Comments
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: The model's explanation / comments for the AI-generated Code (populated alongside Code when GenerationType=AI). Human-facing review aid.
+    */
+    get CodeComments(): string | null {
+        return this.Get('CodeComments');
+    }
+    set CodeComments(value: string | null) {
+        this.Set('CodeComments', value);
+    }
+
+    /**
+    * * Field Name: Libraries
+    * * Display Name: Libraries
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: Array<MJRemoteOperationEntity_RemoteOperationLibrary>
+    * * Description: JSON array of the libraries the generated body imports: [{ "Library": "@memberjunction/ai-prompts", "ItemsUsed": ["AIPromptRunner"] }, ...]. Bound to the RemoteOperationLibrary JSONType via metadata sync so CodeGen emits a typed LibrariesObject accessor; CodeGen uses it to emit the imports at the top of the generated remote_operations.ts. NULL/empty = only the default always-available libraries are imported.
+    */
+    get Libraries(): string | null {
+        return this.Get('Libraries');
+    }
+    set Libraries(value: string | null) {
+        this.Set('Libraries', value);
+    }
+
+    private _LibrariesObject_cached: Array<MJRemoteOperationEntity_RemoteOperationLibrary> | null | undefined = undefined;
+    private _LibrariesObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for Libraries — returns parsed JSON as Array<MJRemoteOperationEntity_RemoteOperationLibrary>.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get LibrariesObject(): Array<MJRemoteOperationEntity_RemoteOperationLibrary> | null {
+        const raw = this.Libraries;
+        if (raw !== this._LibrariesObject_lastRaw) {
+            this._LibrariesObject_cached = raw ? JSON.parse(raw) : null;
+            this._LibrariesObject_lastRaw = raw;
+        }
+        return this._LibrariesObject_cached!;
+    }
+    set LibrariesObject(value: Array<MJRemoteOperationEntity_RemoteOperationLibrary> | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.Libraries = raw;
+        this._LibrariesObject_cached = value;
+        this._LibrariesObject_lastRaw = raw;
+    }
+
+    /**
+    * * Field Name: Category
+    * * Display Name: Category Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Category(): string | null {
+        return this.Get('Category');
+    }
+
+    /**
+    * * Field Name: CodeApprovedByUser
+    * * Display Name: Code Approved By User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get CodeApprovedByUser(): string | null {
+        return this.Get('CodeApprovedByUser');
+    }
+}
+
+
+/**
  * MJ: Report Categories - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: ReportCategory
@@ -87521,6 +96388,33 @@ export class MJReportVersionEntity extends BaseEntity<MJReportVersionEntityType>
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Report Versions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * VersionNumber: This rule ensures that the Version Number must be greater than zero.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateVersionNumberGreaterThanZero(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the Version Number must be greater than zero.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateVersionNumberGreaterThanZero(result: ValidationResult) {
+    	if (this.VersionNumber <= 0) {
+    		result.Errors.push(new ValidationErrorInfo("VersionNumber", "Version Number must be greater than zero.", this.VersionNumber, ValidationErrorType.Failure));
+    	}
     }
 
     /**
@@ -88228,6 +97122,45 @@ export class MJResourcePermissionEntity extends BaseEntity<MJResourcePermissionE
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Resource Permissions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: This rule ensures that if the type is set to 'Role', a role ID must be provided and a user ID must not be provided. If the type is set to 'User', a user ID must be provided and a role ID must not be provided.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateTypeAndRoleOrUserIDExclusive(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that if the type is set to 'Role', a role ID must be provided and a user ID must not be provided. If the type is set to 'User', a user ID must be provided and a role ID must not be provided.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateTypeAndRoleOrUserIDExclusive(result: ValidationResult) {
+    	if (this.Type === "Role") {
+    		if (this.RoleID == null) {
+    			result.Errors.push(new ValidationErrorInfo("RoleID", "When Type is 'Role', RoleID must be provided.", this.RoleID, ValidationErrorType.Failure));
+    		}
+    		if (this.UserID != null) {
+    			result.Errors.push(new ValidationErrorInfo("UserID", "When Type is 'Role', UserID must not be provided.", this.UserID, ValidationErrorType.Failure));
+    		}
+    	} else if (this.Type === "User") {
+    		if (this.UserID == null) {
+    			result.Errors.push(new ValidationErrorInfo("UserID", "When Type is 'User', UserID must be provided.", this.UserID, ValidationErrorType.Failure));
+    		}
+    		if (this.RoleID != null) {
+    			result.Errors.push(new ValidationErrorInfo("RoleID", "When Type is 'User', RoleID must not be provided.", this.RoleID, ValidationErrorType.Failure));
+    		}
+    	}
     }
 
     /**
@@ -89284,6 +98217,37 @@ export class MJScheduledJobRunEntity extends BaseEntity<MJScheduledJobRunEntityT
     }
 
     /**
+    * Validate() method override for MJ: Scheduled Job Runs entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Details: This rule ensures that if the Details field is not empty, it must contain a valid JSON value.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateDetailsAsJson(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that if the Details field is not empty, it must contain a valid JSON value.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateDetailsAsJson(result: ValidationResult) {
+    	if (this.Details != null) {
+    		try {
+    			JSON.parse(this.Details);
+    		} catch (e) {
+    			result.Errors.push(new ValidationErrorInfo("Details", "Details must be a valid JSON if provided.", this.Details, ValidationErrorType.Failure));
+    		}
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -89635,6 +98599,37 @@ export class MJScheduledJobEntity extends BaseEntity<MJScheduledJobEntityType> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Scheduled Jobs entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Configuration: This rule ensures that if the Configuration field has a value, it must be valid JSON. If the Configuration field is empty or not set, this rule does not apply.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateConfigurationIsJson(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that if the Configuration field has a value, it must be valid JSON. If the Configuration field is empty or not set, this rule does not apply.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateConfigurationIsJson(result: ValidationResult) {
+    	if (this.Configuration != null) {
+    		try {
+    			JSON.parse(this.Configuration);
+    		} catch (e) {
+    			result.Errors.push(new ValidationErrorInfo("Configuration", "If specified, Configuration must be valid JSON.", this.Configuration, ValidationErrorType.Failure));
+    		}
+    	}
     }
 
     /**
@@ -90106,6 +99101,50 @@ export class MJSchemaInfoEntity extends BaseEntity<MJSchemaInfoEntityType> {
     }
 
     /**
+    * Validate() method override for MJ: Schema Info entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: This rule ensures that the maximum entity ID value must be greater than the minimum entity ID value.
+    * * Table-Level: This rule ensures that both the minimum and maximum entity IDs must be greater than zero.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateEntityIDMaxGreaterThanEntityIDMin(result);
+        this.ValidateEntityIDMinEntityIDMaxGreaterThanZero(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the maximum entity ID value must be greater than the minimum entity ID value.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateEntityIDMaxGreaterThanEntityIDMin(result: ValidationResult) {
+    	if (this.EntityIDMax <= this.EntityIDMin) {
+    		result.Errors.push(new ValidationErrorInfo("EntityIDMax", "The maximum entity ID must be greater than the minimum entity ID.", this.EntityIDMax, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that both the minimum and maximum entity IDs must be greater than zero.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateEntityIDMinEntityIDMaxGreaterThanZero(result: ValidationResult) {
+    	if (this.EntityIDMin <= 0) {
+    		result.Errors.push(new ValidationErrorInfo("EntityIDMin", "The minimum entity ID must be greater than zero.", this.EntityIDMin, ValidationErrorType.Failure));
+    	}
+    	if (this.EntityIDMax <= 0) {
+    		result.Errors.push(new ValidationErrorInfo("EntityIDMax", "The maximum entity ID must be greater than zero.", this.EntityIDMax, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -90503,6 +99542,38 @@ export class MJSearchProviderEntity extends BaseEntity<MJSearchProviderEntityTyp
     }
 
     /**
+    * Validate() method override for MJ: Search Providers entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Priority: The priority level must be a non-negative value (0 or greater) to ensure valid ordering and categorization of records.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidatePriorityAtLeastZero(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * The priority level must be a non-negative value (0 or greater) to ensure valid ordering and categorization of records.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidatePriorityAtLeastZero(result: ValidationResult) {
+    	if (this.Priority < 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"Priority",
+    			"Priority must be 0 or greater.",
+    			this.Priority,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -90877,6 +99948,48 @@ export class MJSearchScopeExternalIndexEntity extends BaseEntity<MJSearchScopeEx
     }
 
     /**
+    * Validate() method override for MJ: Search Scope External Indexes entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: To ensure search functionality works correctly, vector-based indexes must have a Vector Index ID assigned, while all other index types must have an External Index Name specified.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateIndexTypeRequirements(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * To ensure search functionality works correctly, vector-based indexes must have a Vector Index ID assigned, while all other index types must have an External Index Name specified.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateIndexTypeRequirements(result: ValidationResult) {
+    	// If the index is a Vector type, ensure a Vector Index ID is provided
+    	if (this.IndexType === 'Vector' && this.VectorIndexID == null) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"VectorIndexID",
+    			"A Vector Index ID is required when the Index Type is set to 'Vector'.",
+    			this.VectorIndexID,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    	// If the index is not a Vector type, ensure an External Index Name is provided
+    	if (this.IndexType !== 'Vector' && (this.ExternalIndexName == null || this.ExternalIndexName.length === 0)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"ExternalIndexName",
+    			"An External Index Name is required for the selected Index Type.",
+    			this.ExternalIndexName,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -91045,6 +100158,48 @@ export class MJSearchScopePermissionEntity extends BaseEntity<MJSearchScopePermi
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Search Scope Permissions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: Each record must be assigned to either a specific user or a specific role, but not both. This ensures that permissions or scopes are clearly defined for a single entity type and prevents ambiguous assignments.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateUserIDAndRoleIDExclusiveAssignment(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Each record must be assigned to either a specific user or a specific role, but not both. This ensures that permissions or scopes are clearly defined for a single entity type and prevents ambiguous assignments.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateUserIDAndRoleIDExclusiveAssignment(result: ValidationResult) {
+    	// Check if both fields are null (violates the requirement that at least one must be set)
+    	if (this.UserID == null && this.RoleID == null) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"UserID",
+    			"Each record must be assigned to either a User or a Role.",
+    			this.UserID,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    	// Check if both fields are populated (violates the requirement that only one can be set)
+    	if (this.UserID != null && this.RoleID != null) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"UserID",
+    			"A record cannot be assigned to both a User and a Role simultaneously.",
+    			this.UserID,
+    			ValidationErrorType.Failure
+    		));
+    	}
     }
 
     /**
@@ -94784,6 +103939,38 @@ export class MJTaskDependencyEntity extends BaseEntity<MJTaskDependencyEntityTyp
     }
 
     /**
+    * Validate() method override for MJ: Task Dependencies entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: This rule ensures that a task cannot be set as dependent on itself. In other words, each task can only depend on a different task, not on itself.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateTaskIDNotEqualDependsOnTaskID(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that a task cannot be set as dependent on itself. In other words, each task can only depend on a different task, not on itself.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateTaskIDNotEqualDependsOnTaskID(result: ValidationResult) {
+    	if (this.TaskID === this.DependsOnTaskID) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"TaskID",
+    			"A task cannot be dependent on itself.",
+    			this.TaskID,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -95000,6 +104187,47 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Tasks entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * PercentComplete: This rule ensures that if a percent complete value is provided, it must be between 0 and 100 inclusive.
+    * * Table-Level: This rule ensures that for each record, either UserID or AgentID can be set, or both can be left empty, but not both can be filled in at the same time.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidatePercentCompleteWithinZeroAndOneHundred(result);
+        this.ValidateUserIDAndAgentIDMutualExclusivity(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that if a percent complete value is provided, it must be between 0 and 100 inclusive.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidatePercentCompleteWithinZeroAndOneHundred(result: ValidationResult) {
+    	if (this.PercentComplete != null && (this.PercentComplete < 0 || this.PercentComplete > 100)) {
+    		result.Errors.push(new ValidationErrorInfo("PercentComplete", "PercentComplete must be between 0 and 100 if specified.", this.PercentComplete, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that for each record, either UserID or AgentID can be set, or both can be left empty, but not both can be filled in at the same time.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateUserIDAndAgentIDMutualExclusivity(result: ValidationResult) {
+    	if (this.UserID != null && this.AgentID != null) {
+    		result.Errors.push(new ValidationErrorInfo("UserID", "UserID and AgentID cannot both have values at the same time. Only one or neither may be set.", this.UserID, ValidationErrorType.Failure));
+    	}
     }
 
     /**
@@ -96370,6 +105598,38 @@ export class MJTestRunFeedbackEntity extends BaseEntity<MJTestRunFeedbackEntityT
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Test Run Feedbacks entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Rating: When a rating is provided, it must be a whole number from 1 up to 10. This ensures that every recorded rating falls within the allowed scoring range.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateRatingRange(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * When a rating is provided, it must be a whole number from 1 up to 10. This ensures that every recorded rating falls within the allowed scoring range.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateRatingRange(result: ValidationResult) {
+    	if (this.Rating != null && (this.Rating < 1 || this.Rating > 10)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"Rating",
+    			"Rating must be between 1 and 10.",
+    			this.Rating,
+    			ValidationErrorType.Failure
+    		));
+    	}
     }
 
     /**
@@ -98301,6 +107561,39 @@ export class MJTestEntity extends BaseEntity<MJTestEntityType> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Tests entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * RepeatCount: If a repeat count is entered, it must be a positive number greater than zero; otherwise it can be left empty.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateRepeatCountPositive(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * If a repeat count is entered, it must be a positive number greater than zero; otherwise it can be left empty.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateRepeatCountPositive(result: ValidationResult) {
+    	// If a repeat count is set, it must be greater than zero
+    	if (this.RepeatCount != null && this.RepeatCount <= 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"RepeatCount",
+    			"Repeat count must be greater than zero if provided.",
+    			this.RepeatCount,
+    			ValidationErrorType.Failure
+    		));
+    	}
     }
 
     /**

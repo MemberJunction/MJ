@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 
 // MJ UI Components
-import { MJButtonDirective, MJWindowComponent, MJWindowTitlebarComponent } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJEmptyStateComponent, MJWindowComponent, MJWindowTitlebarComponent } from '@memberjunction/ng-ui-components';
 
 import { DataContextComponent } from './ng-data-context.component';
 import { DataContextDialogComponent } from './ng-data-context-dialog.component';
@@ -19,6 +19,7 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
     CommonModule,
     FormsModule,
     MJButtonDirective,
+    MJEmptyStateComponent,
     MJWindowComponent,
     MJWindowTitlebarComponent,
     ContainerDirectivesModule,

@@ -768,59 +768,6 @@ as-split {
   box-shadow: 0 4px 12px color-mix(in srgb, var(--mj-brand-primary) 35%, transparent);
 }
 
-/* Empty State */
-.empty-state {
-  text-align: center;
-  padding: 100px 32px;
-  color: var(--mj-text-muted);
-}
-
-.empty-state i {
-  font-size: 80px;
-  background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  margin-bottom: 28px;
-  display: block;
-}
-
-.empty-state h3 {
-  color: var(--mj-text-primary);
-  font-size: 24px;
-  font-weight: 700;
-  margin: 0 0 12px 0;
-}
-
-.empty-state p {
-  font-size: 16px;
-  line-height: 1.6;
-  max-width: 420px;
-  margin: 0 auto 32px;
-  color: var(--mj-text-muted);
-}
-
-.empty-state-btn {
-  background: var(--mj-brand-primary);
-  color: var(--mj-text-inverse);
-  border: none;
-  padding: 14px 28px;
-  border-radius: 12px;
-  font-size: 15px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  box-shadow: 0 4px 15px color-mix(in srgb, var(--mj-brand-primary) 30%, transparent);
-}
-
-.empty-state-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px color-mix(in srgb, var(--mj-brand-primary) 40%, transparent);
-}
-
 /* Loading State */
 .loading-container {
   display: flex;

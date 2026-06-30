@@ -1,5 +1,65 @@
 # @memberjunction/metadata-sync
 
+## 5.43.0
+
+### Patch Changes
+
+- Updated dependencies [40eb4e0]
+- Updated dependencies [fe89e68]
+- Updated dependencies [9f6aa87]
+- Updated dependencies [b98366b]
+- Updated dependencies [9200b13]
+- Updated dependencies [ad8d8f1]
+- Updated dependencies [a4cdfb0]
+- Updated dependencies [4e05350]
+  - @memberjunction/core@5.43.0
+  - @memberjunction/postgresql-dataprovider@5.43.0
+  - @memberjunction/global@5.43.0
+  - @memberjunction/sql-dialect@5.43.0
+  - @memberjunction/core-entities@5.43.0
+  - @memberjunction/sqlserver-dataprovider@5.43.0
+  - @memberjunction/generic-database-provider@5.43.0
+  - @memberjunction/graphql-dataprovider@5.43.0
+  - @memberjunction/core-entities-server@5.43.0
+  - @memberjunction/server-bootstrap-lite@5.43.0
+  - @memberjunction/cli-core@5.43.0
+  - @memberjunction/config@5.43.0
+
+## 5.42.0
+
+### Patch Changes
+
+- a72af01: Batch the deletion-audit database lookups so a large `mj sync push` no longer appears to hang for tens of minutes.
+  - **FK reference scan (`DatabaseReferenceScanner.scanForReferences`)**: group records-to-delete by entity and issue one `RunView` per (target entity, referencing FK field) using a chunked `IN (...)` filter, instead of one serial query per (record × referencing field). Found rows are attributed back to the exact deleted record via the FK value (case-insensitive, to handle SQL Server upper / PostgreSQL lower GUIDs). Metadata membership is resolved via a precomputed O(1) `Set` rather than re-scanning every metadata record per reference.
+  - **Existence check (`DeletionAuditor.checkRecordExistence`)**: single-primary-key entities are resolved with batched `IN (...)` queries instead of one `loadEntity` round-trip per record; composite-key / unknown entities keep the per-record fallback. Safe defaults preserved — a record whose key can't be determined, or whose query fails, is treated as still-existing so a real delete is never silently skipped.
+  - The batched queries pass `IgnoreMaxRows: true` so a scan matching more rows than the referencing entity's `UserViewMaxRows` cap is not silently truncated (which would miss references).
+
+  No behavioral change to the audit output; tests added for both batched paths.
+
+- 34152e1: Pluggable mj CLI with AI agent and automation friendly output: new cli-core package (BaseCLIPlugin + runtime host), json formatting for machine readable output and two tier progressive disclosure. with per-command runtime/timeout hints, and a fix for sync/push/pull hanging on DB-pool teardown after emitting results
+- Updated dependencies [9b9b484]
+- Updated dependencies [5ada858]
+- Updated dependencies [5fde509]
+- Updated dependencies [4ec1732]
+- Updated dependencies [2f225e4]
+- Updated dependencies [b7092ca]
+- Updated dependencies [6d970cd]
+- Updated dependencies [0fa3cbc]
+- Updated dependencies [da5a3dd]
+- Updated dependencies [34152e1]
+  - @memberjunction/core@5.42.0
+  - @memberjunction/generic-database-provider@5.42.0
+  - @memberjunction/server-bootstrap-lite@5.42.0
+  - @memberjunction/sqlserver-dataprovider@5.42.0
+  - @memberjunction/graphql-dataprovider@5.42.0
+  - @memberjunction/postgresql-dataprovider@5.42.0
+  - @memberjunction/core-entities@5.42.0
+  - @memberjunction/global@5.42.0
+  - @memberjunction/core-entities-server@5.42.0
+  - @memberjunction/cli-core@5.42.0
+  - @memberjunction/config@5.42.0
+  - @memberjunction/sql-dialect@5.42.0
+
 ## 5.41.0
 
 ### Minor Changes

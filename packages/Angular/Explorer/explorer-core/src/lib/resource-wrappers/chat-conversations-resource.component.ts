@@ -272,7 +272,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
    * "open session" pill). Applied once after the chat area renders — this is also the
    * reference example for invoking an EXISTING realtime session programmatically:
    * `await chatArea.OpenRealtimeSessionReview(agentSessionId)` (a NEW session starts
-   * through the composer's phone button / `RealtimeSessionService.StartVoiceSession`).
+   * through the composer's phone button / `RealtimeSessionService.StartRealtimeSession`).
    */
   public pendingRealtimeSessionId: string | null = null;
   public pendingArtifactVersionNumber: number | null = null;

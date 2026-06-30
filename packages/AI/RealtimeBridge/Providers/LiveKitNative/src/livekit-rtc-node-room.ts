@@ -84,6 +84,8 @@ export interface RtcTrack {
 export interface RtcAudioSource {
     /** Pushes one PCM frame onto the published track. */
     captureFrame(frame: RtcAudioFrame): Promise<void>;
+    /** Drops all audio still queued in the source (used to flush on barge-in / interruption). */
+    clearQueue(): void;
 }
 
 /** The bot's published local audio track. */
@@ -103,7 +105,7 @@ export interface RtcLocalParticipant {
     /** The bot's own identity. */
     identity: string;
     /** Publishes a track (the bot's audio). VERIFY: returns a publication / Promise. */
-    publishTrack(track: RtcLocalAudioTrack, options?: unknownRecord): Promise<unknownRecord>;
+    publishTrack(track: RtcLocalAudioTrack, options?: RtcTrackPublishOptions): Promise<unknownRecord>;
     /** Publishes a reliable data message. VERIFY: `(payload: Uint8Array, options)`. */
     publishData(payload: Uint8Array, options?: unknownRecord): Promise<void>;
 }
@@ -148,6 +150,20 @@ export interface RtcNodeModule {
     };
     /** Track-kind constants. VERIFY: `KIND_AUDIO`. */
     TrackKind: { KIND_AUDIO: number };
+    /**
+     * `new TrackPublishOptions({ source })` — the publish-options protobuf message. REQUIRED by
+     * `publishTrack`: passing a plain object leaves `source` unset and the track improperly bound, so the
+     * native `AudioSource.captureFrame` rejects every frame with `InvalidState`. Construct the real proto.
+     */
+    TrackPublishOptions: new (data?: { source?: number; dtx?: boolean; red?: boolean; stream?: string }) => RtcTrackPublishOptions;
+    /** Track-source constants — `SOURCE_MICROPHONE` tags the bot's published voice track. */
+    TrackSource: { SOURCE_MICROPHONE: number };
+}
+
+/** Opaque marker for a constructed `TrackPublishOptions` proto handed to `publishTrack`. */
+export interface RtcTrackPublishOptions {
+    /** The track source (e.g. `SOURCE_MICROPHONE`). */
+    readonly source?: number;
 }
 
 /** The injectable loader for `@livekit/rtc-node` (tests inject a fake; production lazy-imports the addon). */
@@ -237,7 +253,25 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
     private rtc: RtcNodeModule | null = null;
     private room: RtcRoom | null = null;
     private audioSource: RtcAudioSource | null = null;
+    /**
+     * The published outbound track. MUST be retained for the session's lifetime: it owns the FFI handle
+     * that binds the {@link audioSource} to the room. If only the source is kept and the track is left to
+     * GC, its handle is finalized, the rust-side track drops, and every `captureFrame` then rejects with
+     * `InvalidState` (the agent generates audio but is never heard).
+     */
+    private audioTrack: RtcLocalAudioTrack | null = null;
     private readonly inboundStreams: RtcAudioStream[] = [];
+
+    /**
+     * Outbound audio is fed through a SERIAL queue, not fired concurrently. The realtime model emits its
+     * reply as a fast burst (seconds of audio in a fraction of a second), and `AudioSource.captureFrame`
+     * is NOT concurrency-safe — it mutates shared playout-timing state (queue size, last-capture clock)
+     * on every call. Firing the burst as overlapping `captureFrame` promises clobbers that accounting, so
+     * frames play out of pace and overlap/chop. Draining one frame at a time (awaiting each) keeps the
+     * timing correct and lets the source's own backpressure pace playout to real time.
+     */
+    private readonly outboundQueue: Int16Array[] = [];
+    private draining = false;
 
     private audioHandler?: (frame: NativeRoomAudioFrame) => void;
     private participantConnectedHandler?: (p: NativeRoomParticipant) => void;
@@ -269,14 +303,18 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
         // VERIFY against @livekit/rtc-node: connect(url, token, { autoSubscribe, dynacast }).
         await room.connect(args.url, args.token, { autoSubscribe: true, dynacast: true });
 
-        // Publish the bot's outbound audio track (the agent's voice). VERIFY ctor + publishTrack option bag.
+        // Publish the bot's outbound audio track (the agent's voice). The options MUST be a real
+        // TrackPublishOptions proto with `source` set — a plain `{ name }` bag leaves the track unbound and
+        // every captureFrame() then fails with `InvalidState` (the agent generates audio but is never heard).
         const source = new rtc.AudioSource(this.outboundRate, this.channels);
         const track = rtc.LocalAudioTrack.createAudioTrack('agent-voice', source);
-        await room.localParticipant.publishTrack(track, { name: args.name });
+        const publishOptions = new rtc.TrackPublishOptions({ source: rtc.TrackSource.SOURCE_MICROPHONE });
+        await room.localParticipant.publishTrack(track, publishOptions);
 
         this.rtc = rtc;
         this.room = room;
         this.audioSource = source;
+        this.audioTrack = track; // retain — see field doc: losing this to GC orphans the source (InvalidState)
 
         return { localIdentity: room.localParticipant.identity, roomName: room.name ?? '' };
     }
@@ -285,8 +323,10 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
     public async disconnect(): Promise<void> {
         const room = this.room;
         this.closeInboundStreams();
+        this.outboundQueue.length = 0; // stop the drain loop (it bails when audioSource is null)
         this.room = null;
         this.audioSource = null;
+        this.audioTrack = null;
         this.rtc = null;
         if (room) {
             try {
@@ -297,19 +337,65 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
         }
     }
 
-    /** Captures one PCM frame onto the bot's audio track (the agent's voice). Fire-and-forget; never throws. */
+    /**
+     * Enqueues one PCM frame for the bot's audio track (the agent's voice). The sync seam contract is
+     * preserved (never throws), but the frame is fed through {@link drainOutbound} so captures are
+     * serialized — see {@link outboundQueue} for why concurrent captures corrupt playout pacing.
+     */
     public publishAudio(pcm: ArrayBuffer): void {
-        const rtc = this.rtc;
-        const source = this.audioSource;
-        if (!rtc || !source) {
+        if (!this.rtc || !this.audioSource) {
             return; // not connected yet — drop (matches the seam's pre-connect no-op contract)
         }
-        const samples = pcmToInt16(pcm);
-        const frame = new rtc.AudioFrame(samples, this.outboundRate, this.channels, samples.length / this.channels);
-        // captureFrame is async; the seam's publishAudio is sync fire-and-forget, so surface failures via log.
-        void source.captureFrame(frame).catch((err: unknown) =>
-            LogError(`[LiveKitRtcNodeRoomClient] captureFrame failed: ${err instanceof Error ? err.message : String(err)}`),
-        );
+        this.outboundQueue.push(pcmToInt16(pcm));
+        void this.drainOutbound();
+    }
+
+    /**
+     * Drains the {@link outboundQueue} one frame at a time, awaiting each `captureFrame` so exactly one
+     * capture is ever in flight. Re-entrancy-guarded by {@link draining}; frames enqueued during a drain
+     * are picked up by the loop (or a tail re-trigger). Bails immediately if the session disconnects.
+     */
+    private async drainOutbound(): Promise<void> {
+        if (this.draining) {
+            return; // a drain is already running — it will consume what we just enqueued
+        }
+        this.draining = true;
+        try {
+            while (this.outboundQueue.length > 0) {
+                const rtc = this.rtc;
+                const source = this.audioSource;
+                if (!rtc || !source) {
+                    this.outboundQueue.length = 0; // disconnected mid-drain — drop the rest
+                    break;
+                }
+                const samples = this.outboundQueue.shift()!;
+                const frame = new rtc.AudioFrame(samples, this.outboundRate, this.channels, samples.length / this.channels);
+                await source.captureFrame(frame);
+            }
+        } catch (err: unknown) {
+            LogError(`[LiveKitRtcNodeRoomClient] captureFrame failed: ${err instanceof Error ? err.message : String(err)}`);
+        } finally {
+            this.draining = false;
+            // A frame may have arrived after the loop's last length check — pick it up.
+            if (this.outboundQueue.length > 0 && this.rtc && this.audioSource) {
+                void this.drainOutbound();
+            }
+        }
+    }
+
+    /**
+     * Flushes all pending outbound audio — both our pre-capture {@link outboundQueue} and the audio
+     * already buffered inside the LiveKit `AudioSource`. Called on barge-in (the user interrupts the
+     * agent): without it, the agent keeps talking from buffered audio after the model has stopped
+     * generating, so interruption appears not to work. Never throws.
+     */
+    public flushOutbound(): void {
+        this.outboundQueue.length = 0;
+        try {
+            this.audioSource?.clearQueue();
+        } catch (err: unknown) {
+            LogError(`[LiveKitRtcNodeRoomClient] flushOutbound clearQueue failed: ${err instanceof Error ? err.message : String(err)}`);
+        }
     }
 
     /**
@@ -443,10 +529,17 @@ export function CreateLiveKitRtcNodeModule(opts: CreateLiveKitRtcNodeModuleOptio
     const channels = opts.Channels ?? DEFAULT_CHANNELS;
     const loader = opts.Loader ?? defaultRtcNodeLoader;
     return {
-        createRoomClient(_options: NativeRoomClientOptions): NativeRoomClient {
+        createRoomClient(options: NativeRoomClientOptions): NativeRoomClient {
             // Credentials (Url/ApiKey/ApiSecret) are not needed here — the bridge hands a pre-signed access
-            // token to client.connect(args). Options are accepted for contract conformance + future use.
-            return new LiveKitRtcNodeRoomClient(outbound, inbound, channels, loader);
+            // token to client.connect(args). The PER-SESSION sample rates ARE used: the agent's realtime
+            // model dictates them (OpenAI 24 kHz; Gemini Live 16 kHz IN), threaded down from the engine, so
+            // inbound room audio is resampled to what THIS model consumes. Fall back to the module defaults.
+            return new LiveKitRtcNodeRoomClient(
+                options.OutboundSampleRate ?? outbound,
+                options.InboundSampleRate ?? inbound,
+                channels,
+                loader,
+            );
         },
     };
 }

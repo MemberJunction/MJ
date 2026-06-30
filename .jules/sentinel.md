@@ -14,3 +14,7 @@
 **Vulnerability:** Angular components using `[innerHTML]` bindings without explicitly sanitizing rich text.
 **Learning:** While Angular's native `[innerHTML]` sanitizes standard HTML, it can aggressively strip expected content like SVGs or inline styles, or miss specific attack vectors when custom templates are involved. Developers often bypass this improperly or render unsanitized content directly if they assume the data is safe.
 **Prevention:** Always use the centralized `mjSafeRichHtml` pipe (from `@memberjunction/ng-shared-generic`), which utilizes DOMPurify with HTML and SVG profiles, to securely render rich text via `[innerHTML]`.
+## 2024-06-07 - [XSS in DOM innerHTML assignments]
+**Vulnerability:** Direct assignment of user-controlled properties (like title, queryInfo, entityName) to element `innerHTML` without HTML escaping.
+**Learning:** Constructing complex HTML structures dynamically using template strings and injecting variables into `innerHTML` exposes the application to XSS. Angular's built-in `[innerHTML]` sanitization doesn't protect against direct DOM manipulation in component logic.
+**Prevention:** Always wrap dynamically interpolated variables with the `EscapeHTML` utility from `@memberjunction/global` when directly constructing `.innerHTML` strings in TypeScript code.

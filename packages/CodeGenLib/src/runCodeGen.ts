@@ -10,30 +10,25 @@
 import { GraphQLServerGeneratorBase } from './Misc/graphql_server_codegen';
 import { SQLCodeGenBase } from './Database/sql_codegen';
 import { EntitySubClassGeneratorBase } from './Misc/entity_subclasses_codegen';
-import { SQLServerDataProvider, UserCache, setupSQLServerClient } from '@memberjunction/sqlserver-dataprovider';
-import { MSSQLConnection, getSqlConfig } from './Config/db-connection';
 import { ManageMetadataBase } from './Database/manage-metadata';
-import { outputDir, commands, mj_core_schema, configInfo, getSettingValue, dbPlatform, getExternalEntitySchemas, initializeConfig, CommandInfo } from './Config/config';
+import { outputDir, commands, configInfo, getSettingValue, dbPlatform, getExternalEntitySchemas, initializeConfig, CommandInfo } from './Config/config';
 import { logError, logStatus, logWarning, startSpinner, updateSpinner, succeedSpinner, failSpinner, warnSpinner } from './Misc/status_logging';
 import { CodeGenReporter } from './Misc/codegen-reporter';
 import * as MJ from '@memberjunction/core';
 import { RunCommandsBase, CommandExecutionResult } from './Misc/runCommand';
 import { DBSchemaGeneratorBase } from './Database/dbSchema';
 import { AngularClientGeneratorBase } from './Angular/angular-codegen';
-import { SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import { CreateNewUserBase } from './Misc/createNewUser';
-import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
+import { MJGlobal } from '@memberjunction/global';
 import { ActionSubClassGeneratorBase } from './Misc/action_subclasses_codegen';
+import { RemoteOperationGeneratorBase } from './Misc/remote_operations_codegen';
+import { MJRemoteOperationEntity } from '@memberjunction/core-entities';
 import { SQLLogging } from './Misc/sql_logging';
-import { SQLServerCodeGenConnection } from './Database/providers/sqlserver/SQLServerCodeGenConnection';
-import { PostgreSQLCodeGenConnection } from './Database/providers/postgresql/PostgreSQLCodeGenConnection';
-import { CodeGenConnection } from './Database/codeGenDatabaseProvider';
-import { PostgreSQLDataProvider, PostgreSQLProviderConfigData } from '@memberjunction/postgresql-dataprovider';
-import pg from 'pg';
+import { CodeGenConnection, CodeGenDatabaseProvider, DataSourceResult as ProviderDataSourceResult, resolveCodeGenDatabaseProvider } from './Database/codeGenDatabaseProvider';
 import { SystemIntegrityBase } from './Misc/system_integrity';
 import { ActionEngineBase } from '@memberjunction/actions-base';
 import { AIEngine } from '@memberjunction/aiengine';
-import { IMetadataProvider, SetProvider, UserInfo } from '@memberjunction/core';
+import { UserInfo } from '@memberjunction/core';
 // Type-only import — erased at runtime, so it adds no load cost to the heavy index.
 import type { MJCLIResult } from '@memberjunction/cli-core';
 
@@ -43,20 +38,11 @@ import '@memberjunction/server-bootstrap-lite/mj-class-registrations';
 /** Extract core schema name from configuration */
 const { mjCoreSchema } = configInfo;
 
-/**
- * Result from setupDataSource() providing both the data provider
- * and a CodeGenConnection for database operations.
- */
-export interface DataSourceResult {
-  /** The configured data provider (SQL Server or PostgreSQL) */
-  provider: IMetadataProvider;
-  /** Database-agnostic connection for CodeGen operations */
-  connection: CodeGenConnection;
-  /** The current user loaded from the user cache */
-  currentUser: UserInfo;
-  /** Connection info string for display */
-  connectionInfo: string;
-}
+// `DataSourceResult` lives on `CodeGenDatabaseProvider` now and is re-exported
+// from the package root via `./Database/codeGenDatabaseProvider`. Importing it
+// here as `ProviderDataSourceResult` keeps the type available to the
+// orchestrator without creating a duplicate-name re-export at the index level.
+type DataSourceResult = ProviderDataSourceResult;
 
 /**
  * Main orchestrator class for the MemberJunction code generation process.
@@ -85,102 +71,21 @@ export class RunCodeGenBase {
   }
 
   /**
-   * Sets up the data source based on the configured database type (SQL Server or PostgreSQL).
-   * Initializes the appropriate data provider, connection, and user cache.
+   * Acquire the per-platform data source for a CodeGen run.
+   *
+   * Dispatches via `MJGlobal.Instance.ClassFactory.CreateInstance(CodeGenDatabaseProvider, platform)`
+   * — the same factory pattern used elsewhere in CodeGen (see e.g.
+   * `manage-metadata.ts`'s `get dbProvider()`). The actual pool / provider /
+   * user-loading lives on the resolved subclass's `SetupDataSource()`
+   * method, so adding a new platform means registering a new provider, not
+   * touching the orchestrator.
+   *
+   * Throws when no provider is registered for `configInfo.dbPlatform` —
+   * `ClassFactory.CreateInstance` returns the abstract base on a missed
+   * lookup, so we disambiguate by constructor identity.
    */
   public async setupDataSource(): Promise<DataSourceResult> {
-    startSpinner('Initializing database connection...');
-    const platform = dbPlatform();
-
-    if (platform === 'postgresql') {
-      return this.setupPostgreSQLDataSource();
-    }
-    return this.setupSQLServerDataSource();
-  }
-
-  /**
-   * Sets up SQL Server data source (original behavior).
-   */
-  protected async setupSQLServerDataSource(): Promise<DataSourceResult> {
-    const pool = await MSSQLConnection();
-    const config = new SQLServerProviderConfigData(pool, mj_core_schema());
-    const provider: SQLServerDataProvider = await setupSQLServerClient(config);
-    const conn: CodeGenConnection = new SQLServerCodeGenConnection(pool);
-
-    // `getSqlConfig()` returns the config that was built lazily by
-    // MSSQLConnection() above. The non-null assertion is safe because the
-    // call to MSSQLConnection on the line above is what guarantees the
-    // accessor has a value to return.
-    const cfg = getSqlConfig()!;
-    let connectionInfo = cfg.server;
-    if (cfg.port) connectionInfo += ':' + cfg.port;
-    if (cfg.options?.instanceName) connectionInfo += '\\' + cfg.options.instanceName;
-    connectionInfo += '/' + cfg.database;
-
-    await UserCache.Instance.Refresh(pool);
-    const userMatch = UserCache.Users.find((u) => u?.Type?.trim().toLowerCase() === 'owner');
-    const currentUser = userMatch ? userMatch : UserCache.Users[0];
-
-    succeedSpinner('SQL Server connection initialized: ' + connectionInfo);
-    return { provider, connection: conn, currentUser, connectionInfo };
-  }
-
-  /**
-   * Sets up PostgreSQL data source.
-   */
-  protected async setupPostgreSQLDataSource(): Promise<DataSourceResult> {
-    const pgHost = process.env.PG_HOST ?? configInfo.dbHost;
-    const pgPort = parseInt(process.env.PG_PORT ?? String(configInfo.dbPort), 10) || 5432;
-    const pgDatabase = process.env.PG_DATABASE ?? configInfo.dbDatabase;
-    const pgUser = process.env.PG_USERNAME ?? configInfo.codeGenLogin;
-    const pgPassword = process.env.PG_PASSWORD ?? configInfo.codeGenPassword;
-    const coreSchema = mj_core_schema();
-
-    const pool = new pg.Pool({
-      host: pgHost,
-      port: pgPort,
-      database: pgDatabase,
-      user: pgUser,
-      password: pgPassword,
-      max: 20,
-    });
-
-    // Test connection
-    const client = await pool.connect();
-    client.release();
-    
-    // Configure the PostgreSQL data provider
-    const pgConfig = new PostgreSQLProviderConfigData(
-      { Host: pgHost, Port: pgPort, Database: pgDatabase, User: pgUser, Password: pgPassword },
-      coreSchema,
-      1  // checkRefreshIntervalSeconds: must be > 0 to trigger initial metadata load
-    );
-    const provider = new PostgreSQLDataProvider();
-    await provider.Config(pgConfig);
-    SetProvider(provider);
-
-    const conn = new PostgreSQLCodeGenConnection(pool);
-
-    // Load users (PostgreSQL version - query views directly)
-    const usersResult = await conn.query('SELECT * FROM "' + coreSchema + '"."vwUsers"');
-    const rolesResult = await conn.query('SELECT * FROM "' + coreSchema + '"."vwUserRoles"');
-
-    const userInfos: UserInfo[] = usersResult.recordset.map((user: Record<string, unknown>) => {
-      (user as Record<string, unknown>).UserRoles = rolesResult.recordset.filter(
-        (role: Record<string, unknown>) => UUIDsEqual(role.UserID as string, user.ID as string)
-      );
-      return new UserInfo(provider, user);
-    });
-
-    const userMatch = userInfos.find((u) => u?.Type?.trim().toLowerCase() === 'owner');
-    const currentUser = userMatch ?? userInfos[0];
-    if (!currentUser) {
-      throw new Error('No users found in PostgreSQL. Ensure vwUsers has at least one user.');
-    }
-
-    const connectionInfo = pgHost + ':' + pgPort + '/' + pgDatabase;
-    succeedSpinner('PostgreSQL connection initialized: ' + connectionInfo);
-    return { provider, connection: conn, currentUser, connectionInfo };
+    return resolveCodeGenDatabaseProvider(dbPlatform()).SetupDataSource();
   }
 
   /**
@@ -721,6 +626,38 @@ export class RunCodeGenBase {
           return false;
         } else if (isVerbose) succeedSpinner('Actions Code generated');
       } else if (isVerbose) warnSpinner('Actions output directory NOT found in config file, skipping...');
+
+      // Remote Operations — emit the typed BaseRemotableOperation subclass for each MJ: Remote Operations row.
+      // Two output targets, parallel to the entity-subclass split: `CoreRemoteOperations` (MJ core ops, shipped
+      // in @memberjunction/core-entities) and `RemoteOperations` (downstream/user ops, their GeneratedEntities).
+      // NOTE: ops have no SchemaName, so there is no automatic core/non-core PARTITION (the entity split keys on
+      // SchemaName === mjCoreSchema). Each configured target therefore receives the full op set; in practice a
+      // repo configures exactly one (this repo: CoreRemoteOperations only). A per-op core/non-core marker — the
+      // SchemaName-equivalent — is the open decision needed to let a single DB route ops to both targets.
+      const coreRemoteOpsDir = outputDir('CoreRemoteOperations', false);
+      const nonCoreRemoteOpsDir = outputDir('RemoteOperations', false);
+      if (coreRemoteOpsDir || nonCoreRemoteOpsDir) {
+        const remoteOpsResult = await new MJ.RunView().RunView<MJRemoteOperationEntity>(
+          { EntityName: 'MJ: Remote Operations', ResultType: 'entity_object' },
+          currentUser,
+        );
+        const remoteOps = remoteOpsResult.Results ?? [];
+        const remoteOpsGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<RemoteOperationGeneratorBase>(RemoteOperationGeneratorBase)!;
+        for (const target of [
+          { dir: coreRemoteOpsDir, label: 'CORE Remote Operation', phase: 'generateRemoteOperationsCore' },
+          { dir: nonCoreRemoteOpsDir, label: 'Remote Operation', phase: 'generateRemoteOperations' },
+        ]) {
+          if (!target.dir) continue;
+          if (isVerbose) startSpinner(`Generating ${target.label} typed bases...`);
+          const ok = await reporter.phase(target.phase, () =>
+            remoteOpsGenerator.generateRemoteOperations(remoteOps, target.dir!),
+          );
+          if (!ok) {
+            failSpinner(`Error generating ${target.label} code`);
+            return false;
+          } else if (isVerbose) succeedSpinner(`${target.label} typed bases generated`);
+        }
+      } else if (isVerbose) warnSpinner('Remote Operations output directory NOT found in config file, skipping...');
 
       SQLLogging.finishSQLLogging();
       if (!isVerbose) succeedSpinner('TypeScript code generation completed');

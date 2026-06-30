@@ -18,7 +18,7 @@ import { mj_core_schema } from '../config.js';
 
 
 
-import { MJAccessControlRuleEntity, MJActionAuthorizationEntity, MJActionCategoryEntity, MJActionContextTypeEntity, MJActionContextEntity, MJActionExecutionLogEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity, MJActionEntity, MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentArtifactTypeEntity, MJAIAgentCategoryEntity, MJAIAgentChannelEntity, MJAIAgentClientToolEntity, MJAIAgentCoAgentEntity, MJAIAgentConfigurationEntity, MJAIAgentDataSourceEntity, MJAIAgentExampleEntity, MJAIAgentLearningCycleEntity, MJAIAgentModalityEntity, MJAIAgentModelEntity, MJAIAgentNoteTypeEntity, MJAIAgentNoteEntity, MJAIAgentPermissionEntity, MJAIAgentPromptEntity, MJAIAgentRelationshipEntity, MJAIAgentRequestTypeEntity, MJAIAgentRequestEntity, MJAIAgentRunMediaEntity, MJAIAgentRunStepEntity, MJAIAgentRunEntity, MJAIAgentSearchScopeEntity, MJAIAgentSessionBridgeParticipantEntity, MJAIAgentSessionBridgeEntity, MJAIAgentSessionChannelEntity, MJAIAgentSessionEntity, MJAIAgentStepPathEntity, MJAIAgentStepEntity, MJAIAgentTypeEntity, MJAIAgentEntity, MJAIArchitectureEntity, MJAIBridgeAgentIdentityEntity, MJAIBridgeProviderChannelEntity, MJAIBridgeProviderEntity, MJAIClientToolDefinitionEntity, MJAIConfigurationParamEntity, MJAIConfigurationEntity, MJAICredentialBindingEntity, MJAIModalityEntity, MJAIModelActionEntity, MJAIModelArchitectureEntity, MJAIModelCostEntity, MJAIModelModalityEntity, MJAIModelPriceTypeEntity, MJAIModelPriceUnitTypeEntity, MJAIModelTypeEntity, MJAIModelVendorEntity, MJAIModelEntity, MJAIPromptCategoryEntity, MJAIPromptModelEntity, MJAIPromptRunMediaEntity, MJAIPromptRunEntity, MJAIPromptTypeEntity, MJAIPromptEntity, MJAIRemoteBrowserProviderEntity, MJAIResultCacheEntity, MJAIVendorTypeDefinitionEntity, MJAIVendorTypeEntity, MJAIVendorEntity, MJAPIApplicationScopeEntity, MJAPIApplicationEntity, MJAPIKeyApplicationEntity, MJAPIKeyScopeEntity, MJAPIKeyUsageLogEntity, MJAPIKeyEntity, MJAPIScopeEntity, MJApplicationEntityEntity, MJApplicationRoleEntity, MJApplicationSettingEntity, MJApplicationEntity, MJArchiveConfigurationEntityEntity, MJArchiveConfigurationEntity, MJArchiveRunDetailEntity, MJArchiveRunEntity, MJArtifactPermissionEntity, MJArtifactTypeEntity, MJArtifactUseEntity, MJArtifactVersionAttributeEntity, MJArtifactVersionEntity, MJArtifactEntity, MJAuditLogTypeEntity, MJAuditLogEntity, MJAuthorizationRoleEntity, MJAuthorizationEntity, MJClusterAnalysisEntity, MJClusterAnalysisClusterEntity, MJCollectionArtifactEntity, MJCollectionPermissionEntity, MJCollectionEntity, MJCommunicationBaseMessageTypeEntity, MJCommunicationLogEntity, MJCommunicationProviderMessageTypeEntity, MJCommunicationProviderEntity, MJCommunicationRunEntity, MJCompanyEntity, MJCompanyIntegrationEntityMapEntity, MJCompanyIntegrationFieldMapEntity, MJCompanyIntegrationRecordMapEntity, MJCompanyIntegrationRunAPILogEntity, MJCompanyIntegrationRunDetailEntity, MJCompanyIntegrationRunEntity, MJCompanyIntegrationSyncWatermarkEntity, MJCompanyIntegrationEntity, MJComponentDependencyEntity, MJComponentLibraryEntity, MJComponentLibraryLinkEntity, MJComponentRegistryEntity, MJComponentEntity, MJContentFileTypeEntity, MJContentItemAttributeEntity, MJContentItemDuplicateEntity, MJContentItemTagEntity, MJContentItemEntity, MJContentProcessRunDetailEntity, MJContentProcessRunPromptRunEntity, MJContentProcessRunEntity, MJContentSourceParamEntity, MJContentSourceTypeParamEntity, MJContentSourceTypeEntity, MJContentSourceEntity, MJContentTypeAttributeEntity, MJContentTypeEntity, MJConversationArtifactPermissionEntity, MJConversationArtifactVersionEntity, MJConversationArtifactEntity, MJConversationDetailArtifactEntity, MJConversationDetailAttachmentEntity, MJConversationDetailRatingEntity, MJConversationDetailEntity, MJConversationEntity, MJCountryEntity, MJCredentialCategoryEntity, MJCredentialTypeEntity, MJCredentialEntity, MJDashboardCategoryEntity, MJDashboardCategoryLinkEntity, MJDashboardCategoryPermissionEntity, MJDashboardPartTypeEntity, MJDashboardPermissionEntity, MJDashboardUserPreferenceEntity, MJDashboardUserStateEntity, MJDashboardEntity, MJDataContextItemEntity, MJDataContextEntity, MJDatasetItemEntity, MJDatasetEntity, MJDuplicateRunDetailMatchEntity, MJDuplicateRunDetailEntity, MJDuplicateRunEntity, MJEmployeeCompanyIntegrationEntity, MJEmployeeRoleEntity, MJEmployeeSkillEntity, MJEmployeeEntity, MJEncryptionAlgorithmEntity, MJEncryptionKeySourceEntity, MJEncryptionKeyEntity, MJEntityEntity, MJEntityActionFilterEntity, MJEntityActionInvocationTypeEntity, MJEntityActionInvocationEntity, MJEntityActionParamEntity, MJEntityActionEntity, MJEntityAIActionEntity, MJEntityCommunicationFieldEntity, MJEntityCommunicationMessageTypeEntity, MJEntityDocumentRunEntity, MJEntityDocumentSettingEntity, MJEntityDocumentTypeEntity, MJEntityDocumentEntity, MJEntityFieldValueEntity, MJEntityFieldEntity, MJEntityFormOverrideEntity, MJEntityOrganicKeyRelatedEntityEntity, MJEntityOrganicKeyEntity, MJEntityPermissionEntity, MJEntityRecordDocumentEntity, MJEntityRelationshipDisplayComponentEntity, MJEntityRelationshipEntity, MJEntitySettingEntity, MJEnvironmentEntity, MJErrorLogEntity, MJExplorerNavigationItemEntity, MJFileCategoryEntity, MJFileEntityRecordLinkEntity, MJFileStorageAccountPermissionEntity, MJFileStorageAccountEntity, MJFileStorageProviderEntity, MJFileEntity, MJGeneratedCodeCategoryEntity, MJGeneratedCodeEntity, MJInstanceConfigurationEntity, MJIntegrationObjectFieldEntity, MJIntegrationObjectEntity, MJIntegrationSourceTypeEntity, MJIntegrationURLFormatEntity, MJIntegrationEntity, MJKnowledgeHubSavedSearchEntity, MJLibraryEntity, MJLibraryItemEntity, MJListCategoryEntity, MJListDetailEntity, MJListInvitationEntity, MJListShareEntity, MJListEntity, MJMagicLinkInviteAllowedDomainEntity, MJMagicLinkInviteAllowedPathEntity, MJMagicLinkInviteApplicationEntity, MJMagicLinkInviteRoleEntity, MJMagicLinkInviteEntity, MJMagicLinkRedemptionEntity, MJMCPServerConnectionPermissionEntity, MJMCPServerConnectionToolEntity, MJMCPServerConnectionEntity, MJMCPServerToolEntity, MJMCPServerEntity, MJMCPToolExecutionLogEntity, MJMCPToolFavoriteEntity, MJOAuthAuthServerMetadataCacheEntity, MJOAuthAuthorizationStateEntity, MJOAuthClientRegistrationEntity, MJOAuthTokenEntity, MJOpenAppDependencyEntity, MJOpenAppInstallHistoryEntity, MJOpenAppEntity, MJOutputDeliveryTypeEntity, MJOutputFormatTypeEntity, MJOutputTriggerTypeEntity, MJPermissionDomainEntity, MJProjectEntity, MJPublicLinkEntity, MJQueryEntity, MJQueryCategoryEntity, MJQueryDependencyEntity, MJQueryEntityEntity, MJQueryFieldEntity, MJQueryParameterEntity, MJQueryPermissionEntity, MJQuerySQLEntity, MJQueueTaskEntity, MJQueueTypeEntity, MJQueueEntity, MJRecommendationItemEntity, MJRecommendationProviderEntity, MJRecommendationRunEntity, MJRecommendationEntity, MJRecordChangeReplayRunEntity, MJRecordChangeEntity, MJRecordGeoCodeEntity, MJRecordLinkEntity, MJRecordMergeDeletionLogEntity, MJRecordMergeLogEntity, MJReportCategoryEntity, MJReportSnapshotEntity, MJReportUserStateEntity, MJReportVersionEntity, MJReportEntity, MJResourceLinkEntity, MJResourcePermissionEntity, MJResourceTypeEntity, MJRoleEntity, MJRowLevelSecurityFilterEntity, MJScheduledActionParamEntity, MJScheduledActionEntity, MJScheduledJobRunEntity, MJScheduledJobTypeEntity, MJScheduledJobEntity, MJSchemaInfoEntity, MJSearchExecutionLogEntity, MJSearchProviderEntity, MJSearchScopeEntityEntity, MJSearchScopeExternalIndexEntity, MJSearchScopePermissionEntity, MJSearchScopeProviderEntity, MJSearchScopeStorageAccountEntity, MJSearchScopeTestQueryEntity, MJSearchScopeEntity, MJSignatureAccountEntity, MJSignatureProviderEntity, MJSignatureRequestDocumentEntity, MJSignatureRequestLogEntity, MJSignatureRequestRecipientEntity, MJSignatureRequestEntity, MJSkillEntity, MJSQLDialectEntity, MJStateProvinceEntity, MJTagAuditLogEntity, MJTagCoOccurrenceEntity, MJTagScopeEntity, MJTagSuggestionEntity, MJTagSynonymEntity, MJTaggedItemEntity, MJTagEntity, MJTaskDependencyEntity, MJTaskTypeEntity, MJTaskEntity, MJTemplateCategoryEntity, MJTemplateContentTypeEntity, MJTemplateContentEntity, MJTemplateParamEntity, MJTemplateEntity, MJTestRubricEntity, MJTestRunFeedbackEntity, MJTestRunOutputTypeEntity, MJTestRunOutputEntity, MJTestRunEntity, MJTestSuiteRunEntity, MJTestSuiteTestEntity, MJTestSuiteEntity, MJTestTypeEntity, MJTestEntity, MJUserApplicationEntityEntity, MJUserApplicationEntity, MJUserFavoriteEntity, MJUserNotificationPreferenceEntity, MJUserNotificationTypeEntity, MJUserNotificationEntity, MJUserRecordLogEntity, MJUserRoleEntity, MJUserSettingEntity, MJUserViewCategoryEntity, MJUserViewRunDetailEntity, MJUserViewRunEntity, MJUserViewEntity, MJUserEntity, MJVectorDatabaseEntity, MJVectorIndexEntity, MJVersionInstallationEntity, MJVersionLabelItemEntity, MJVersionLabelRestoreEntity, MJVersionLabelEntity, MJViewTypeEntity, MJWorkflowEngineEntity, MJWorkflowRunEntity, MJWorkflowEntity, MJWorkspaceItemEntity, MJWorkspaceEntity } from '@memberjunction/core-entities';
+import { MJAccessControlRuleEntity, MJActionAuthorizationEntity, MJActionCategoryEntity, MJActionContextTypeEntity, MJActionContextEntity, MJActionExecutionLogEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity, MJActionEntity, MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentArtifactTypeEntity, MJAIAgentCategoryEntity, MJAIAgentChannelEntity, MJAIAgentClientToolEntity, MJAIAgentCoAgentEntity, MJAIAgentConfigurationEntity, MJAIAgentDataSourceEntity, MJAIAgentExampleEntity, MJAIAgentLearningCycleEntity, MJAIAgentModalityEntity, MJAIAgentModelEntity, MJAIAgentNoteTypeEntity, MJAIAgentNoteEntity, MJAIAgentPermissionEntity, MJAIAgentPromptEntity, MJAIAgentRelationshipEntity, MJAIAgentRequestTypeEntity, MJAIAgentRequestEntity, MJAIAgentRunMediaEntity, MJAIAgentRunStepEntity, MJAIAgentRunEntity, MJAIAgentSearchScopeEntity, MJAIAgentSessionBridgeParticipantEntity, MJAIAgentSessionBridgeEntity, MJAIAgentSessionChannelEntity, MJAIAgentSessionEntity, MJAIAgentStepPathEntity, MJAIAgentStepEntity, MJAIAgentTypeEntity, MJAIAgentEntity, MJAIArchitectureEntity, MJAIBridgeAgentIdentityEntity, MJAIBridgeProviderChannelEntity, MJAIBridgeProviderEntity, MJAIClientToolDefinitionEntity, MJAIConfigurationParamEntity, MJAIConfigurationEntity, MJAICredentialBindingEntity, MJAIModalityEntity, MJAIModelActionEntity, MJAIModelArchitectureEntity, MJAIModelCostEntity, MJAIModelModalityEntity, MJAIModelPriceTypeEntity, MJAIModelPriceUnitTypeEntity, MJAIModelTypeEntity, MJAIModelVendorEntity, MJAIModelEntity, MJAIPromptCategoryEntity, MJAIPromptModelEntity, MJAIPromptRunMediaEntity, MJAIPromptRunEntity, MJAIPromptTypeEntity, MJAIPromptEntity, MJAIRemoteBrowserProviderEntity, MJAIResultCacheEntity, MJAIVendorTypeDefinitionEntity, MJAIVendorTypeEntity, MJAIVendorEntity, MJAPIApplicationScopeEntity, MJAPIApplicationEntity, MJAPIKeyApplicationEntity, MJAPIKeyScopeEntity, MJAPIKeyUsageLogEntity, MJAPIKeyEntity, MJAPIScopeEntity, MJApplicationEntityEntity, MJApplicationRoleEntity, MJApplicationSettingEntity, MJApplicationEntity, MJArchiveConfigurationEntityEntity, MJArchiveConfigurationEntity, MJArchiveRunDetailEntity, MJArchiveRunEntity, MJArtifactPermissionEntity, MJArtifactTypeEntity, MJArtifactUseEntity, MJArtifactVersionAttributeEntity, MJArtifactVersionEntity, MJArtifactEntity, MJAuditLogTypeEntity, MJAuditLogEntity, MJAuthorizationRoleEntity, MJAuthorizationEntity, MJClusterAnalysisEntity, MJClusterAnalysisClusterEntity, MJCollectionArtifactEntity, MJCollectionPermissionEntity, MJCollectionEntity, MJCommunicationBaseMessageTypeEntity, MJCommunicationLogEntity, MJCommunicationProviderMessageTypeEntity, MJCommunicationProviderEntity, MJCommunicationRunEntity, MJCompanyEntity, MJCompanyIntegrationEntityMapEntity, MJCompanyIntegrationFieldMapEntity, MJCompanyIntegrationRecordMapEntity, MJCompanyIntegrationRunAPILogEntity, MJCompanyIntegrationRunDetailEntity, MJCompanyIntegrationRunEntity, MJCompanyIntegrationSyncWatermarkEntity, MJCompanyIntegrationEntity, MJComponentDependencyEntity, MJComponentLibraryEntity, MJComponentLibraryLinkEntity, MJComponentRegistryEntity, MJComponentEntity, MJContentFileTypeEntity, MJContentItemAttributeEntity, MJContentItemDuplicateEntity, MJContentItemTagEntity, MJContentItemEntity, MJContentProcessRunDetailEntity, MJContentProcessRunPromptRunEntity, MJContentProcessRunEntity, MJContentSourceParamEntity, MJContentSourceTypeParamEntity, MJContentSourceTypeEntity, MJContentSourceEntity, MJContentTypeAttributeEntity, MJContentTypeEntity, MJConversationArtifactPermissionEntity, MJConversationArtifactVersionEntity, MJConversationArtifactEntity, MJConversationDetailArtifactEntity, MJConversationDetailAttachmentEntity, MJConversationDetailRatingEntity, MJConversationDetailEntity, MJConversationEntity, MJCountryEntity, MJCredentialCategoryEntity, MJCredentialTypeEntity, MJCredentialEntity, MJDashboardCategoryEntity, MJDashboardCategoryLinkEntity, MJDashboardCategoryPermissionEntity, MJDashboardPartTypeEntity, MJDashboardPermissionEntity, MJDashboardUserPreferenceEntity, MJDashboardUserStateEntity, MJDashboardEntity, MJDataContextItemEntity, MJDataContextEntity, MJDatasetItemEntity, MJDatasetEntity, MJDuplicateRunDetailMatchEntity, MJDuplicateRunDetailEntity, MJDuplicateRunEntity, MJEmployeeCompanyIntegrationEntity, MJEmployeeRoleEntity, MJEmployeeSkillEntity, MJEmployeeEntity, MJEncryptionAlgorithmEntity, MJEncryptionKeySourceEntity, MJEncryptionKeyEntity, MJEntityEntity, MJEntityActionFilterEntity, MJEntityActionInvocationTypeEntity, MJEntityActionInvocationEntity, MJEntityActionParamEntity, MJEntityActionEntity, MJEntityAIActionEntity, MJEntityCommunicationFieldEntity, MJEntityCommunicationMessageTypeEntity, MJEntityDocumentRunEntity, MJEntityDocumentSettingEntity, MJEntityDocumentTypeEntity, MJEntityDocumentEntity, MJEntityFieldValueEntity, MJEntityFieldEntity, MJEntityFormOverrideEntity, MJEntityOrganicKeyRelatedEntityEntity, MJEntityOrganicKeyEntity, MJEntityPermissionEntity, MJEntityRecordDocumentEntity, MJEntityRelationshipDisplayComponentEntity, MJEntityRelationshipEntity, MJEntitySettingEntity, MJEnvironmentEntity, MJErrorLogEntity, MJExperimentSessionIterationEntity, MJExperimentSessionEntity, MJExperimentEntity, MJExplorerNavigationItemEntity, MJFileCategoryEntity, MJFileEntityRecordLinkEntity, MJFileStorageAccountPermissionEntity, MJFileStorageAccountEntity, MJFileStorageProviderEntity, MJFileEntity, MJGeneratedCodeCategoryEntity, MJGeneratedCodeEntity, MJInstanceConfigurationEntity, MJIntegrationObjectFieldEntity, MJIntegrationObjectEntity, MJIntegrationSourceTypeEntity, MJIntegrationURLFormatEntity, MJIntegrationEntity, MJKnowledgeHubSavedSearchEntity, MJLibraryEntity, MJLibraryItemEntity, MJListCategoryEntity, MJListDetailEntity, MJListInvitationEntity, MJListShareEntity, MJListEntity, MJMagicLinkInviteAllowedDomainEntity, MJMagicLinkInviteAllowedPathEntity, MJMagicLinkInviteApplicationEntity, MJMagicLinkInviteRoleEntity, MJMagicLinkInviteEntity, MJMagicLinkRedemptionEntity, MJMCPServerConnectionPermissionEntity, MJMCPServerConnectionToolEntity, MJMCPServerConnectionEntity, MJMCPServerToolEntity, MJMCPServerEntity, MJMCPToolExecutionLogEntity, MJMCPToolFavoriteEntity, MJMLAlgorithmUseCaseRankingEntity, MJMLAlgorithmUseCaseEntity, MJMLAlgorithmEntity, MJMLModelScoringBindingEntity, MJMLModelEntity, MJMLTrainingPipelineEntity, MJMLTrainingRunEntity, MJOAuthAuthServerMetadataCacheEntity, MJOAuthAuthorizationStateEntity, MJOAuthClientRegistrationEntity, MJOAuthTokenEntity, MJOpenAppDependencyEntity, MJOpenAppInstallHistoryEntity, MJOpenAppEntity, MJOutputDeliveryTypeEntity, MJOutputFormatTypeEntity, MJOutputTriggerTypeEntity, MJPermissionDomainEntity, MJProcessRunDetailEntity, MJProcessRunEntity, MJProjectEntity, MJPublicLinkEntity, MJQueryEntity, MJQueryCategoryEntity, MJQueryDependencyEntity, MJQueryEntityEntity, MJQueryFieldEntity, MJQueryParameterEntity, MJQueryPermissionEntity, MJQuerySQLEntity, MJQueueTaskEntity, MJQueueTypeEntity, MJQueueEntity, MJRecommendationItemEntity, MJRecommendationProviderEntity, MJRecommendationRunEntity, MJRecommendationEntity, MJRecordChangeReplayRunEntity, MJRecordChangeEntity, MJRecordGeoCodeEntity, MJRecordLinkEntity, MJRecordMergeDeletionLogEntity, MJRecordMergeLogEntity, MJRecordProcessCategoryEntity, MJRecordProcessWatermarkEntity, MJRecordProcessEntity, MJRemoteOperationCategoryEntity, MJRemoteOperationEntity, MJReportCategoryEntity, MJReportSnapshotEntity, MJReportUserStateEntity, MJReportVersionEntity, MJReportEntity, MJResourceLinkEntity, MJResourcePermissionEntity, MJResourceTypeEntity, MJRoleEntity, MJRowLevelSecurityFilterEntity, MJScheduledActionParamEntity, MJScheduledActionEntity, MJScheduledJobRunEntity, MJScheduledJobTypeEntity, MJScheduledJobEntity, MJSchemaInfoEntity, MJSearchExecutionLogEntity, MJSearchProviderEntity, MJSearchScopeEntityEntity, MJSearchScopeExternalIndexEntity, MJSearchScopePermissionEntity, MJSearchScopeProviderEntity, MJSearchScopeStorageAccountEntity, MJSearchScopeTestQueryEntity, MJSearchScopeEntity, MJSignatureAccountEntity, MJSignatureProviderEntity, MJSignatureRequestDocumentEntity, MJSignatureRequestLogEntity, MJSignatureRequestRecipientEntity, MJSignatureRequestEntity, MJSkillEntity, MJSQLDialectEntity, MJStateProvinceEntity, MJTagAuditLogEntity, MJTagCoOccurrenceEntity, MJTagScopeEntity, MJTagSuggestionEntity, MJTagSynonymEntity, MJTaggedItemEntity, MJTagEntity, MJTaskDependencyEntity, MJTaskTypeEntity, MJTaskEntity, MJTemplateCategoryEntity, MJTemplateContentTypeEntity, MJTemplateContentEntity, MJTemplateParamEntity, MJTemplateEntity, MJTestRubricEntity, MJTestRunFeedbackEntity, MJTestRunOutputTypeEntity, MJTestRunOutputEntity, MJTestRunEntity, MJTestSuiteRunEntity, MJTestSuiteTestEntity, MJTestSuiteEntity, MJTestTypeEntity, MJTestEntity, MJUserApplicationEntityEntity, MJUserApplicationEntity, MJUserFavoriteEntity, MJUserNotificationPreferenceEntity, MJUserNotificationTypeEntity, MJUserNotificationEntity, MJUserRecordLogEntity, MJUserRoleEntity, MJUserSettingEntity, MJUserViewCategoryEntity, MJUserViewRunDetailEntity, MJUserViewRunEntity, MJUserViewEntity, MJUserEntity, MJVectorDatabaseEntity, MJVectorIndexEntity, MJVersionInstallationEntity, MJVersionLabelItemEntity, MJVersionLabelRestoreEntity, MJVersionLabelEntity, MJViewTypeEntity, MJWorkflowEngineEntity, MJWorkflowRunEntity, MJWorkflowEntity, MJWorkspaceItemEntity, MJWorkspaceEntity } from '@memberjunction/core-entities';
     
 
 //****************************************************************************
@@ -1031,6 +1031,9 @@ export class MJActionExecutionLog_ {
     @MaxLength(100)
     User: string;
         
+    @Field(() => [MJProcessRunDetail_])
+    MJProcessRunDetails_ActionExecutionLogIDArray: MJProcessRunDetail_[]; // Link to MJProcessRunDetails
+    
 }
 
 //****************************************************************************
@@ -1166,6 +1169,16 @@ export class MJActionExecutionLogResolver extends ResolverBase {
         return result;
     }
     
+    @FieldResolver(() => [MJProcessRunDetail_])
+    async MJProcessRunDetails_ActionExecutionLogIDArray(@Root() mjactionexecutionlog_: MJActionExecutionLog_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Process Run Details', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwProcessRunDetails')} WHERE ${provider.QuoteIdentifier('ActionExecutionLogID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Process Run Details', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjactionexecutionlog_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Process Run Details', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
     @Mutation(() => MJActionExecutionLog_)
     async CreateMJActionExecutionLog(
         @Arg('input', () => CreateMJActionExecutionLogInput) input: CreateMJActionExecutionLogInput,
@@ -2121,6 +2134,9 @@ export class MJAction_ {
     @Field(() => [MJAction_])
     MJActions_ParentIDArray: MJAction_[]; // Link to MJActions
     
+    @Field(() => [MJRecordProcess_])
+    MJRecordProcesses_ActionIDArray: MJRecordProcess_[]; // Link to MJRecordProcesses
+    
 }
 
 //****************************************************************************
@@ -2469,6 +2485,16 @@ export class MJActionResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwActions')} WHERE ${provider.QuoteIdentifier('ParentID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Actions', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, [mjaction_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Actions', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJRecordProcess_])
+    async MJRecordProcesses_ActionIDArray(@Root() mjaction_: MJAction_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Record Processes', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwRecordProcesses')} WHERE ${provider.QuoteIdentifier('ActionID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Record Processes', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjaction_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Record Processes', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -3394,6 +3420,12 @@ export class MJAIAgentChannel_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field(() => Boolean, {description: `When 1, the channel has no visible surface and is never mounted as a tab — it is a live wire (e.g. the headless ClientContextChannel that streams app context + capability manifest to the co-agent). When 0 (default), the channel renders a surface.`}) 
+    IsHeadless: boolean;
+        
+    @Field({nullable: true, description: `Channel-definition-level presentation/chrome config JSON (shape = IChannelUIConfig): tab DisplayName, GroupName, Color (prefer a design-token name), Icon, SortOrder. Distinct from ConfigSchema, which validates per-session AIAgentSessionChannel.Config state-of-record. Null = host defaults.`}) 
+    UIConfig?: string;
+        
     @Field(() => [MJAIAgentSessionChannel_])
     MJAIAgentSessionChannels_ChannelIDArray: MJAIAgentSessionChannel_[]; // Link to MJAIAgentSessionChannels
     
@@ -3431,6 +3463,12 @@ export class CreateMJAIAgentChannelInput {
     @Field(() => Boolean, { nullable: true })
     IsActive?: boolean;
 
+    @Field(() => Boolean, { nullable: true })
+    IsHeadless?: boolean;
+
+    @Field({ nullable: true })
+    UIConfig: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -3464,6 +3502,12 @@ export class UpdateMJAIAgentChannelInput {
 
     @Field(() => Boolean, { nullable: true })
     IsActive?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    IsHeadless?: boolean;
+
+    @Field({ nullable: true })
+    UIConfig?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -8147,6 +8191,18 @@ each time the agent processes a prompt step.`})
     @Field(() => [MJAIAgentRun_])
     MJAIAgentRuns_LastRunIDArray: MJAIAgentRun_[]; // Link to MJAIAgentRuns
     
+    @Field(() => [MJProcessRunDetail_])
+    MJProcessRunDetails_AIAgentRunIDArray: MJProcessRunDetail_[]; // Link to MJProcessRunDetails
+    
+    @Field(() => [MJDuplicateRunDetailMatch_])
+    MJDuplicateRunDetailMatches_AIAgentRunIDArray: MJDuplicateRunDetailMatch_[]; // Link to MJDuplicateRunDetailMatches
+    
+    @Field(() => [MJExperimentSessionIteration_])
+    MJExperimentSessionIterations_AIAgentRunIDArray: MJExperimentSessionIteration_[]; // Link to MJExperimentSessionIterations
+    
+    @Field(() => [MJExperimentSession_])
+    MJExperimentSessions_AgentRunIDArray: MJExperimentSession_[]; // Link to MJExperimentSessions
+    
 }
 
 //****************************************************************************
@@ -8603,6 +8659,46 @@ export class MJAIAgentRunResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIAgentRuns')} WHERE ${provider.QuoteIdentifier('LastRunID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Runs', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, [mjaiagentrun_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Runs', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJProcessRunDetail_])
+    async MJProcessRunDetails_AIAgentRunIDArray(@Root() mjaiagentrun_: MJAIAgentRun_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Process Run Details', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwProcessRunDetails')} WHERE ${provider.QuoteIdentifier('AIAgentRunID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Process Run Details', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjaiagentrun_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Process Run Details', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJDuplicateRunDetailMatch_])
+    async MJDuplicateRunDetailMatches_AIAgentRunIDArray(@Root() mjaiagentrun_: MJAIAgentRun_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Duplicate Run Detail Matches', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwDuplicateRunDetailMatches')} WHERE ${provider.QuoteIdentifier('AIAgentRunID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Duplicate Run Detail Matches', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjaiagentrun_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Duplicate Run Detail Matches', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJExperimentSessionIteration_])
+    async MJExperimentSessionIterations_AIAgentRunIDArray(@Root() mjaiagentrun_: MJAIAgentRun_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Experiment Session Iterations', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwExperimentSessionIterations')} WHERE ${provider.QuoteIdentifier('AIAgentRunID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Experiment Session Iterations', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjaiagentrun_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Experiment Session Iterations', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJExperimentSession_])
+    async MJExperimentSessions_AgentRunIDArray(@Root() mjaiagentrun_: MJAIAgentRun_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Experiment Sessions', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwExperimentSessions')} WHERE ${provider.QuoteIdentifier('AgentRunID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Experiment Sessions', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjaiagentrun_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Experiment Sessions', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -9655,6 +9751,17 @@ export class MJAIAgentSession_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `The media actually captured for this session, resolved at session start (runtime param > agent-level RecordingDefault > OFF). Values: None, Audio, AudioVideo. NULL/None = not recorded.`}) 
+    @MaxLength(20)
+    RecordingMedia?: string;
+        
+    @Field({nullable: true, description: `Recording alignment origin (t0): the wall-clock moment audio capture began for this session. Per-turn ConversationDetail timestamps are converted to audio seek offsets relative to this value.`}) 
+    RecordingStartedAt?: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    RecordingFileID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Agent?: string;
@@ -9666,6 +9773,10 @@ export class MJAIAgentSession_ {
     @Field({nullable: true}) 
     @MaxLength(255)
     Conversation?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(500)
+    RecordingFile?: string;
         
     @Field({nullable: true}) 
     @MaxLength(36)
@@ -9726,6 +9837,15 @@ export class CreateMJAIAgentSessionInput {
     @Field({ nullable: true })
     CloseReason: string | null;
 
+    @Field({ nullable: true })
+    RecordingMedia: string | null;
+
+    @Field({ nullable: true })
+    RecordingStartedAt: Date | null;
+
+    @Field({ nullable: true })
+    RecordingFileID: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -9768,6 +9888,15 @@ export class UpdateMJAIAgentSessionInput {
 
     @Field({ nullable: true })
     CloseReason?: string | null;
+
+    @Field({ nullable: true })
+    RecordingMedia?: string | null;
+
+    @Field({ nullable: true })
+    RecordingStartedAt?: Date | null;
+
+    @Field({ nullable: true })
+    RecordingFileID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -11014,6 +11143,18 @@ if this limit is exceeded.`})
     @Field(() => Boolean, {description: `When enabled, the agent may commit durable memories mid-run via the memoryWrites loop-response field. Writes are framework-guarded (type restriction, scope clamp, near-duplicate check, per-run cap) and land as Provisional notes pending Memory Manager hardening. On by default; disable for restricted or experimental agents.`}) 
     AllowMemoryWrite: boolean;
         
+    @Field({nullable: true, description: `Agent-level default recording media for realtime sessions: None, Audio, or AudioVideo. Overridden per session by a runtime parameter; if unset, recording is OFF. Capture only runs when a storage provider is resolvable (RecordingStorageProviderID, else the agent's AttachmentStorageProviderID) AND consent is satisfied.`}) 
+    @MaxLength(20)
+    RecordingDefault?: string;
+        
+    @Field({nullable: true, description: `OPTIONAL override for where session recordings are stored. When NULL, recordings fall back to the agent's AttachmentStorageProviderID. Set this only when recordings must live in a different storage account than attachments.`}) 
+    @MaxLength(36)
+    RecordingStorageProviderID?: string;
+        
+    @Field({nullable: true, description: `OPTIONAL default media kit for this agent: a Collection of Artifacts the agent may show on the realtime Media channel during a conversation. Resolved per session as runtime-override > this agent default > none. When set, the agent is given a manifest (each item's display name, media type, when-to-show ContextDescription and Preload flag) so it can surface items via the Media_ShowMedia tool. When NULL the agent has no curated kit (ad-hoc Media_ShowMedia still works).`}) 
+    @MaxLength(36)
+    DefaultMediaCollectionID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Parent?: string;
@@ -11049,6 +11190,14 @@ if this limit is exceeded.`})
     @Field({nullable: true}) 
     @MaxLength(255)
     DefaultCoAgent?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(50)
+    RecordingStorageProvider?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    DefaultMediaCollection?: string;
         
     @Field({nullable: true}) 
     @MaxLength(36)
@@ -11153,6 +11302,12 @@ if this limit is exceeded.`})
     
     @Field(() => [MJAIBridgeAgentIdentity_])
     MJAIBridgeAgentIdentities_AgentIDArray: MJAIBridgeAgentIdentity_[]; // Link to MJAIBridgeAgentIdentities
+    
+    @Field(() => [MJRecordProcess_])
+    MJRecordProcesses_AgentIDArray: MJRecordProcess_[]; // Link to MJRecordProcesses
+    
+    @Field(() => [MJEntityDocument_])
+    MJEntityDocuments_ReasoningAgentIDArray: MJEntityDocument_[]; // Link to MJEntityDocuments
     
 }
 
@@ -11361,6 +11516,15 @@ export class CreateMJAIAgentInput {
 
     @Field(() => Boolean, { nullable: true })
     AllowMemoryWrite?: boolean;
+
+    @Field({ nullable: true })
+    RecordingDefault: string | null;
+
+    @Field({ nullable: true })
+    RecordingStorageProviderID: string | null;
+
+    @Field({ nullable: true })
+    DefaultMediaCollectionID: string | null;
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
@@ -11572,6 +11736,15 @@ export class UpdateMJAIAgentInput {
 
     @Field(() => Boolean, { nullable: true })
     AllowMemoryWrite?: boolean;
+
+    @Field({ nullable: true })
+    RecordingDefault?: string | null;
+
+    @Field({ nullable: true })
+    RecordingStorageProviderID?: string | null;
+
+    @Field({ nullable: true })
+    DefaultMediaCollectionID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -11954,6 +12127,26 @@ export class MJAIAgentResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIBridgeAgentIdentities')} WHERE ${provider.QuoteIdentifier('AgentID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Bridge Agent Identities', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, [mjaiagent_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Bridge Agent Identities', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJRecordProcess_])
+    async MJRecordProcesses_AgentIDArray(@Root() mjaiagent_: MJAIAgent_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Record Processes', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwRecordProcesses')} WHERE ${provider.QuoteIdentifier('AgentID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Record Processes', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjaiagent_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Record Processes', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJEntityDocument_])
+    async MJEntityDocuments_ReasoningAgentIDArray(@Root() mjaiagent_: MJAIAgent_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Entity Documents', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwEntityDocuments')} WHERE ${provider.QuoteIdentifier('ReasoningAgentID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Entity Documents', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjaiagent_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Entity Documents', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -17629,6 +17822,9 @@ export class MJAIPromptRun_ {
     @Field(() => [MJAIPromptRun_])
     MJAIPromptRuns_ParentIDArray: MJAIPromptRun_[]; // Link to MJAIPromptRuns
     
+    @Field(() => [MJDuplicateRunDetailMatch_])
+    MJDuplicateRunDetailMatches_AIPromptRunIDArray: MJDuplicateRunDetailMatch_[]; // Link to MJDuplicateRunDetailMatches
+    
 }
 
 //****************************************************************************
@@ -18292,6 +18488,16 @@ export class MJAIPromptRunResolver extends ResolverBase {
         return result;
     }
         
+    @FieldResolver(() => [MJDuplicateRunDetailMatch_])
+    async MJDuplicateRunDetailMatches_AIPromptRunIDArray(@Root() mjaipromptrun_: MJAIPromptRun_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Duplicate Run Detail Matches', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwDuplicateRunDetailMatches')} WHERE ${provider.QuoteIdentifier('AIPromptRunID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Duplicate Run Detail Matches', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjaipromptrun_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Duplicate Run Detail Matches', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
     @Mutation(() => MJAIPromptRun_)
     async CreateMJAIPromptRun(
         @Arg('input', () => CreateMJAIPromptRunInput) input: CreateMJAIPromptRunInput,
@@ -18740,6 +18946,12 @@ export class MJAIPrompt_ {
     
     @Field(() => [MJAction_])
     MJActions_DefaultCompactPromptIDArray: MJAction_[]; // Link to MJActions
+    
+    @Field(() => [MJRecordProcess_])
+    MJRecordProcesses_PromptIDArray: MJRecordProcess_[]; // Link to MJRecordProcesses
+    
+    @Field(() => [MJEntityDocument_])
+    MJEntityDocuments_ReasoningPromptIDArray: MJEntityDocument_[]; // Link to MJEntityDocuments
     
 }
 
@@ -19271,6 +19483,26 @@ export class MJAIPromptResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwActions')} WHERE ${provider.QuoteIdentifier('DefaultCompactPromptID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Actions', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, [mjaiprompt_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Actions', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJRecordProcess_])
+    async MJRecordProcesses_PromptIDArray(@Root() mjaiprompt_: MJAIPrompt_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Record Processes', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwRecordProcesses')} WHERE ${provider.QuoteIdentifier('PromptID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Record Processes', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjaiprompt_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Record Processes', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJEntityDocument_])
+    async MJEntityDocuments_ReasoningPromptIDArray(@Root() mjaiprompt_: MJAIPrompt_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Entity Documents', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwEntityDocuments')} WHERE ${provider.QuoteIdentifier('ReasoningPromptID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Entity Documents', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjaiprompt_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Entity Documents', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -22561,6 +22793,9 @@ export class MJApplication_ {
     @Field(() => Boolean, {description: `When true, Path is automatically generated from Name on save. Set to false to manually control the Path value. Defaults to true for new applications.`}) 
     AutoUpdatePath: boolean;
         
+    @Field({nullable: true, description: `App-scoped agent configuration JSON (shape = IAgentSettings). Declares the default/lead agent, relevant agents available to conversational and realtime co-agents, app-scoped client tool references, and realtime persona/disclosure overrides that layer into the agent config cascade. Null = no app-level agent config.`}) 
+    AgentSettings?: string;
+        
     @Field(() => [MJApplicationEntity_])
     MJApplicationEntities_ApplicationIDArray: MJApplicationEntity_[]; // Link to MJApplicationEntities
     
@@ -22643,6 +22878,9 @@ export class CreateMJApplicationInput {
     @Field(() => Boolean, { nullable: true })
     AutoUpdatePath?: boolean;
 
+    @Field({ nullable: true })
+    AgentSettings: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -22700,6 +22938,9 @@ export class UpdateMJApplicationInput {
 
     @Field(() => Boolean, { nullable: true })
     AutoUpdatePath?: boolean;
+
+    @Field({ nullable: true })
+    AgentSettings?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -26815,6 +27056,12 @@ export class MJCollectionArtifact_ {
     @MaxLength(36)
     ArtifactVersionID: string;
         
+    @Field({nullable: true, description: `Agent-facing description of what this media item is and WHEN to show it during a conversation. Read by a realtime agent (alongside the artifact's own name/type) to decide autonomously whether/when to surface the item. Per-membership: the same artifact can carry different guidance in different Collections (media kits).`}) 
+    ContextDescription?: string;
+        
+    @Field(() => Boolean, {description: `Eager-load hint for a realtime media kit: when 1, the agent is told to show / the client to prefetch this item at session start rather than waiting until it is contextually relevant. Default 0 (lazy — surfaced only when the agent chooses).`}) 
+    Preload: boolean;
+        
     @Field() 
     @MaxLength(255)
     Collection: string;
@@ -26842,6 +27089,12 @@ export class CreateMJCollectionArtifactInput {
     @Field({ nullable: true })
     ArtifactVersionID?: string;
 
+    @Field({ nullable: true })
+    ContextDescription: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    Preload?: boolean;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -26863,6 +27116,12 @@ export class UpdateMJCollectionArtifactInput {
 
     @Field({ nullable: true })
     ArtifactVersionID?: string;
+
+    @Field({ nullable: true })
+    ContextDescription?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    Preload?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -27236,6 +27495,9 @@ export class MJCollection_ {
     @Field(() => [MJCollection_])
     MJCollections_ParentIDArray: MJCollection_[]; // Link to MJCollections
     
+    @Field(() => [MJAIAgent_])
+    MJAIAgents_DefaultMediaCollectionIDArray: MJAIAgent_[]; // Link to MJAIAgents
+    
 }
 
 //****************************************************************************
@@ -27398,6 +27660,16 @@ export class MJCollectionResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwCollections')} WHERE ${provider.QuoteIdentifier('ParentID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Collections', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, [mjcollection_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Collections', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJAIAgent_])
+    async MJAIAgents_DefaultMediaCollectionIDArray(@Root() mjcollection_: MJCollection_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Agents', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIAgents')} WHERE ${provider.QuoteIdentifier('DefaultMediaCollectionID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agents', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjcollection_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Agents', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -36536,6 +36808,19 @@ export class MJConversationDetail_ {
     @MaxLength(36)
     AgentSessionID?: string;
         
+    @Field({nullable: true, description: `Immutable timestamp marking when this turn ended/finalized. Set once on turn completion (do NOT read __mj_UpdatedAt for this — it moves on later edits). Paired with __mj_CreatedAt (turn start) and AIAgentSession.RecordingStartedAt (t0) to derive audio seek offsets.`}) 
+    TurnEndedAt?: Date;
+        
+    @Field(() => Int, {nullable: true, description: `Precise media-relative start of this turn, in integer milliseconds from the recording t0 (AIAgentSession.RecordingStartedAt). Populated only when the realtime driver supplies frame timing; NULL otherwise (fall back to __mj_CreatedAt - t0). Used by the evidence player for click-to-seek.`}) 
+    UtteranceStartMs?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Precise media-relative end of this turn, in integer milliseconds from the recording t0 (AIAgentSession.RecordingStartedAt). Populated only when the realtime driver supplies frame timing; NULL otherwise. Used by the evidence player for click-to-seek.`}) 
+    UtteranceEndMs?: number;
+        
+    @Field({nullable: true, description: `Modality of this turn's content: Text, Audio, or Video. Forward-compat so video turns reuse the same record shape when realtime models support it. NULL = text (legacy default).`}) 
+    @MaxLength(20)
+    MediaType?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Conversation?: string;
@@ -36680,6 +36965,18 @@ export class CreateMJConversationDetailInput {
     @Field({ nullable: true })
     AgentSessionID: string | null;
 
+    @Field({ nullable: true })
+    TurnEndedAt: Date | null;
+
+    @Field(() => Int, { nullable: true })
+    UtteranceStartMs: number | null;
+
+    @Field(() => Int, { nullable: true })
+    UtteranceEndMs: number | null;
+
+    @Field({ nullable: true })
+    MediaType: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -36767,6 +37064,18 @@ export class UpdateMJConversationDetailInput {
 
     @Field({ nullable: true })
     AgentSessionID?: string | null;
+
+    @Field({ nullable: true })
+    TurnEndedAt?: Date | null;
+
+    @Field(() => Int, { nullable: true })
+    UtteranceStartMs?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    UtteranceEndMs?: number | null;
+
+    @Field({ nullable: true })
+    MediaType?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -37034,6 +37343,14 @@ export class MJConversation_ {
     @Field({nullable: true, description: `Free-form JSON extensibility column. Apps that want to attach conversation-scoped metadata (UI state, draft notes, custom analytics tags, etc.) can stuff it here without a schema change. **Namespace your keys** to avoid collisions across apps — store e.g. {"form-builder.lastPreviewRecordId":"...","my-app.fooFlag":true} rather than top-level lastPreviewRecordId. Core MJ code paths do NOT read this column; it's purely for downstream apps. NVARCHAR(MAX) so callers can store arbitrarily large blobs, but treat that as a smell — heavy data belongs in a real entity, not a JSON dump.`}) 
     AdditionalData?: string;
         
+    @Field({nullable: true, description: `For a Meeting-Room conversation, the MJ: Files row holding the room-level composite recording (the LiveKit egress MP4, copied into MJStorage). NULL when the meeting was not recorded.`}) 
+    @MaxLength(36)
+    RecordingFileID?: string;
+        
+    @Field({nullable: true, description: `The LiveKit egress session id for this meeting's room recording. Set when recording starts; used to stop the egress and to correlate the egress-completion result with this conversation. NULL when the meeting was not recorded.`}) 
+    @MaxLength(255)
+    EgressID?: string;
+        
     @Field() 
     @MaxLength(100)
     User: string;
@@ -37065,6 +37382,10 @@ export class MJConversation_ {
     @Field({nullable: true}) 
     @MaxLength(255)
     DefaultAgent?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(500)
+    RecordingFile?: string;
         
     @Field(() => [MJConversationDetail_])
     MJConversationDetails_ConversationIDArray: MJConversationDetail_[]; // Link to MJConversationDetails
@@ -37151,6 +37472,12 @@ export class CreateMJConversationInput {
     @Field({ nullable: true })
     AdditionalData: string | null;
 
+    @Field({ nullable: true })
+    RecordingFileID: string | null;
+
+    @Field({ nullable: true })
+    EgressID: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -37217,6 +37544,12 @@ export class UpdateMJConversationInput {
 
     @Field({ nullable: true })
     AdditionalData?: string | null;
+
+    @Field({ nullable: true })
+    RecordingFileID?: string | null;
+
+    @Field({ nullable: true })
+    EgressID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -41029,6 +41362,31 @@ export class MJDuplicateRunDetailMatch_ {
     @Field({nullable: true, description: `JSON metadata snapshot of the matched record from the vector database at detection time. Contains display fields (Name, Description, EntityIcon, etc.) for rich UI rendering without additional lookups.`}) 
     RecordMetadata?: string;
         
+    @Field({nullable: true, description: `When the match was reasoned by an AI Agent (ReasoningMode = Agent), the AIAgentRun that produced the recommendation. Full audit trail; NULL when no agent ran (gated out, or Prompt mode, or reasoning disabled).`}) 
+    @MaxLength(36)
+    AIAgentRunID?: string;
+        
+    @Field({nullable: true, description: `When the match was reasoned by a single-shot AI Prompt (ReasoningMode = Prompt, the default), the AIPromptRun that produced the recommendation. Full audit trail; NULL when no prompt ran.`}) 
+    @MaxLength(36)
+    AIPromptRunID?: string;
+        
+    @Field({nullable: true, description: `The LLM's recommendation for this candidate match: Merge, NotDuplicate, or Uncertain. Annotates the vector-derived candidate; NULL when reasoning did not run for this match.`}) 
+    @MaxLength(20)
+    LLMRecommendation?: string;
+        
+    @Field(() => Float, {nullable: true, description: `Reasoning-adjusted confidence (0-1) that this is a true duplicate. Distinct from MatchProbability (the vector/RRF score); the LLM strengthens or weakens the vector signal rather than replacing it.`}) 
+    LLMConfidence?: number;
+        
+    @Field({nullable: true, description: `Human-readable rationale for the LLM's recommendation. Surfaced in the review UI and powers the transparency / disagreement explanation.`}) 
+    LLMReasoning?: string;
+        
+    @Field({nullable: true, description: `The record the LLM proposes as the surviving record for this matched set, as a URL-segment composite key. Preloads the comparison panel; the user can override.`}) 
+    @MaxLength(500)
+    LLMProposedSurvivorRecordID?: string;
+        
+    @Field({nullable: true, description: `JSON of the LLM's proposed per-field survivor choices for the matched set. Resolved to literal {FieldName, Value} entries (the existing MergeRecords FieldMap contract) and applied to the surviving record before the transactional merge; the user can override per field.`}) 
+    LLMProposedFieldMap?: string;
+        
     @Field() 
     @MaxLength(500)
     DuplicateRunDetail: string;
@@ -41036,6 +41394,14 @@ export class MJDuplicateRunDetailMatch_ {
     @Field({nullable: true}) 
     @MaxLength(450)
     RecordMergeLog?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    AIAgentRun?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    AIPromptRun?: string;
         
 }
 
@@ -41079,6 +41445,27 @@ export class CreateMJDuplicateRunDetailMatchInput {
 
     @Field({ nullable: true })
     RecordMetadata: string | null;
+
+    @Field({ nullable: true })
+    AIAgentRunID: string | null;
+
+    @Field({ nullable: true })
+    AIPromptRunID: string | null;
+
+    @Field({ nullable: true })
+    LLMRecommendation: string | null;
+
+    @Field(() => Float, { nullable: true })
+    LLMConfidence: number | null;
+
+    @Field({ nullable: true })
+    LLMReasoning: string | null;
+
+    @Field({ nullable: true })
+    LLMProposedSurvivorRecordID: string | null;
+
+    @Field({ nullable: true })
+    LLMProposedFieldMap: string | null;
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
@@ -41125,6 +41512,27 @@ export class UpdateMJDuplicateRunDetailMatchInput {
 
     @Field({ nullable: true })
     RecordMetadata?: string | null;
+
+    @Field({ nullable: true })
+    AIAgentRunID?: string | null;
+
+    @Field({ nullable: true })
+    AIPromptRunID?: string | null;
+
+    @Field({ nullable: true })
+    LLMRecommendation?: string | null;
+
+    @Field(() => Float, { nullable: true })
+    LLMConfidence?: number | null;
+
+    @Field({ nullable: true })
+    LLMReasoning?: string | null;
+
+    @Field({ nullable: true })
+    LLMProposedSurvivorRecordID?: string | null;
+
+    @Field({ nullable: true })
+    LLMProposedFieldMap?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -43677,6 +44085,24 @@ export class MJEntity_ {
     @Field(() => [MJSignatureRequest_])
     MJSignatureRequests_EntityIDArray: MJSignatureRequest_[]; // Link to MJSignatureRequests
     
+    @Field(() => [MJProcessRunDetail_])
+    MJProcessRunDetails_EntityIDArray: MJProcessRunDetail_[]; // Link to MJProcessRunDetails
+    
+    @Field(() => [MJProcessRun_])
+    MJProcessRuns_EntityIDArray: MJProcessRun_[]; // Link to MJProcessRuns
+    
+    @Field(() => [MJRecordProcessWatermark_])
+    MJRecordProcessWatermarks_EntityIDArray: MJRecordProcessWatermark_[]; // Link to MJRecordProcessWatermarks
+    
+    @Field(() => [MJRecordProcess_])
+    MJRecordProcesses_EntityIDArray: MJRecordProcess_[]; // Link to MJRecordProcesses
+    
+    @Field(() => [MJMLTrainingPipeline_])
+    MJMLTrainingPipelines_TargetEntityIDArray: MJMLTrainingPipeline_[]; // Link to MJMLTrainingPipelines
+    
+    @Field(() => [MJMLModelScoringBinding_])
+    MJMLModelScoringBindings_TargetEntityIDArray: MJMLModelScoringBinding_[]; // Link to MJMLModelScoringBindings
+    
 }
 
 //****************************************************************************
@@ -44754,6 +45180,66 @@ export class MJEntityResolverBase extends ResolverBase {
         return result;
     }
         
+    @FieldResolver(() => [MJProcessRunDetail_])
+    async MJProcessRunDetails_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Process Run Details', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwProcessRunDetails')} WHERE ${provider.QuoteIdentifier('EntityID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Process Run Details', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjentity_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Process Run Details', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJProcessRun_])
+    async MJProcessRuns_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Process Runs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwProcessRuns')} WHERE ${provider.QuoteIdentifier('EntityID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Process Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjentity_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Process Runs', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJRecordProcessWatermark_])
+    async MJRecordProcessWatermarks_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Record Process Watermarks', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwRecordProcessWatermarks')} WHERE ${provider.QuoteIdentifier('EntityID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Record Process Watermarks', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjentity_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Record Process Watermarks', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJRecordProcess_])
+    async MJRecordProcesses_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Record Processes', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwRecordProcesses')} WHERE ${provider.QuoteIdentifier('EntityID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Record Processes', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjentity_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Record Processes', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJMLTrainingPipeline_])
+    async MJMLTrainingPipelines_TargetEntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: ML Training Pipelines', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMLTrainingPipelines')} WHERE ${provider.QuoteIdentifier('TargetEntityID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: ML Training Pipelines', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjentity_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: ML Training Pipelines', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJMLModelScoringBinding_])
+    async MJMLModelScoringBindings_TargetEntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: ML Model Scoring Bindings', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMLModelScoringBindings')} WHERE ${provider.QuoteIdentifier('TargetEntityID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: ML Model Scoring Bindings', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjentity_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: ML Model Scoring Bindings', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
     @Mutation(() => MJEntity_)
     async CreateMJEntity(
         @Arg('input', () => CreateMJEntityInput) input: CreateMJEntityInput,
@@ -45159,6 +45645,10 @@ export class MJEntityActionInvocation_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `Optional class name of a registered runtime-UX driver component (a BaseEntityActionRuntimeUX subclass resolved via MJGlobal.ClassFactory) that owns this invocation's interaction — parameter collection, dry-run preview, confirmation, and progress. NULL invokes the action directly with no custom UX. This lets any action opt into a richer, reusable runtime experience while the grid/toolbar stays operation-agnostic.`}) 
+    @MaxLength(255)
+    RuntimeUXDriverClass?: string;
+        
     @Field() 
     @MaxLength(425)
     EntityAction: string;
@@ -45186,6 +45676,9 @@ export class CreateMJEntityActionInvocationInput {
     @Field({ nullable: true })
     Status?: string;
 
+    @Field({ nullable: true })
+    RuntimeUXDriverClass: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -45207,6 +45700,9 @@ export class UpdateMJEntityActionInvocationInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field({ nullable: true })
+    RuntimeUXDriverClass?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -46879,6 +47375,28 @@ export class MJEntityDocument_ {
     @Field({nullable: true, description: `JSON configuration settings for this entity document. Controls vector metadata field inclusion (which fields get stored in the vector index for search result display), large field truncation limits, and future settings like sync scheduling and threshold overrides. NULL means use system defaults.`}) 
     Configuration?: string;
         
+    @Field(() => Boolean, {description: `Master switch for the LLM reasoning layer on this entity. When 0 (default), duplicate detection runs the existing vector-only path unchanged and the reasoning columns/AutomationLevel are ignored. When 1, candidates above ReasoningThreshold are reasoned over.`}) 
+    EnableLLMReasoning: boolean;
+        
+    @Field({description: `Which reasoning provider runs for this entity. Prompt (default) = a single-shot AI Prompt (cheap/fast); Agent = an AI Agent with memory + context-exploration tools (for heavy entities needing deeper reasoning). Both consume one shared core instruction set.`}) 
+    @MaxLength(20)
+    ReasoningMode: string;
+        
+    @Field(() => Float, {nullable: true, description: `Vector-score gate (0-1): reasoning runs once per source record's matched set only when the set's top MatchProbability is at or above this value. Controls cost and reasoning-log volume at scale. NULL falls back to engine/Configuration defaults.`}) 
+    ReasoningThreshold?: number;
+        
+    @Field({nullable: true, description: `The AI Prompt used when ReasoningMode = Prompt. Defaults (resolved in code/metadata) to the seeded "Duplicate Resolution" prompt. The prompt's own model configuration is the per-entity model knob for the prompt path.`}) 
+    @MaxLength(36)
+    ReasoningPromptID?: string;
+        
+    @Field({nullable: true, description: `The AI Agent used when ReasoningMode = Agent. Defaults (resolved in code/metadata) to the seeded "Duplicate Resolution Agent". Unlocks memory-note injection and context-exploration tools.`}) 
+    @MaxLength(36)
+    ReasoningAgentID?: string;
+        
+    @Field({description: `Graduated human-in-the-loop level, consulted only when EnableLLMReasoning = 1. ReviewAll = every proposed merge goes to human review; LLMGated = only LLM "Merge" recommendations surface (NotDuplicate suppressed but logged); AutoMergeAboveAbsolute = at/above AbsoluteMatchThreshold AND LLM "Merge", auto-execute (still honoring the per-merge AllowRecordMerge guard).`}) 
+    @MaxLength(30)
+    AutomationLevel: string;
+        
     @Field() 
     @MaxLength(100)
     Type: string;
@@ -46902,6 +47420,14 @@ export class MJEntityDocument_ {
     @Field({nullable: true}) 
     @MaxLength(255)
     VectorIndex?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    ReasoningPrompt?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    ReasoningAgent?: string;
         
     @Field(() => [MJEntityDocumentRun_])
     MJEntityDocumentRuns_EntityDocumentIDArray: MJEntityDocumentRun_[]; // Link to MJEntityDocumentRuns
@@ -46958,6 +47484,24 @@ export class CreateMJEntityDocumentInput {
     @Field({ nullable: true })
     Configuration: string | null;
 
+    @Field(() => Boolean, { nullable: true })
+    EnableLLMReasoning?: boolean;
+
+    @Field({ nullable: true })
+    ReasoningMode?: string;
+
+    @Field(() => Float, { nullable: true })
+    ReasoningThreshold: number | null;
+
+    @Field({ nullable: true })
+    ReasoningPromptID: string | null;
+
+    @Field({ nullable: true })
+    ReasoningAgentID: string | null;
+
+    @Field({ nullable: true })
+    AutomationLevel?: string;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -47003,6 +47547,24 @@ export class UpdateMJEntityDocumentInput {
 
     @Field({ nullable: true })
     Configuration?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    EnableLLMReasoning?: boolean;
+
+    @Field({ nullable: true })
+    ReasoningMode?: string;
+
+    @Field(() => Float, { nullable: true })
+    ReasoningThreshold?: number | null;
+
+    @Field({ nullable: true })
+    ReasoningPromptID?: string | null;
+
+    @Field({ nullable: true })
+    ReasoningAgentID?: string | null;
+
+    @Field({ nullable: true })
+    AutomationLevel?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -50494,6 +51056,682 @@ export class MJErrorLogResolver extends ResolverBase {
 }
 
 //****************************************************************************
+// ENTITY CLASS for MJ: Experiment Session Iterations
+//****************************************************************************
+@ObjectType({ description: `A GENERIC single attempt within an ExperimentSession — the polymorphic anchor and the leaderboard unit. Owns the cross-cutting "attempt" accounting every experiment type shares: sequence, status, the normalized Score, compute/token cost, the agent reasoning for trying it, and (optionally) the AI Agent Run that executed it. Consumer-specific detail hangs off this row: Predictive Studio attaches an MLTrainingRun; a future prompt-optimization consumer would attach its own leaf run table the same way.` })
+export class MJExperimentSessionIteration_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `Foreign key to the ExperimentSession this iteration belongs to`}) 
+    @MaxLength(36)
+    ExperimentSessionID: string;
+        
+    @Field(() => Int, {description: `Order of this iteration within its session`}) 
+    Sequence: number;
+        
+    @Field({nullable: true, description: `Optional human-readable label for the attempt (e.g., "XGBoost + engagement features")`}) 
+    @MaxLength(255)
+    Label?: string;
+        
+    @Field({description: `Iteration status: Pending, Running, Completed, Failed, or Pruned`}) 
+    @MaxLength(20)
+    Status: string;
+        
+    @Field(() => Float, {nullable: true, description: `The normalized metric value this iteration achieved (the parent Experiment's TargetMetric) — used to rank the leaderboard`}) 
+    Score?: number;
+        
+    @Field(() => Float, {nullable: true, description: `Compute cost attributed to this iteration, for budget enforcement`}) 
+    ComputeCost?: number;
+        
+    @Field(() => Int, {nullable: true, description: `LLM tokens used by this iteration (e.g., agent internal choice prompts), for budget enforcement`}) 
+    TokensUsed?: number;
+        
+    @Field({nullable: true, description: `Why this iteration was tried (agent rationale) and any observations`}) 
+    Rationale?: string;
+        
+    @Field({nullable: true, description: `Optional foreign key to the MJ: AI Agent Run that executed this iteration (NULL when executed by deterministic code with no dedicated agent run)`}) 
+    @MaxLength(36)
+    AIAgentRunID?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(255)
+    ExperimentSession: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    AIAgentRun?: string;
+        
+    @Field(() => [MJMLTrainingRun_])
+    MJMLTrainingRuns_ExperimentSessionIterationIDArray: MJMLTrainingRun_[]; // Link to MJMLTrainingRuns
+    
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Experiment Session Iterations
+//****************************************************************************
+@InputType()
+export class CreateMJExperimentSessionIterationInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    ExperimentSessionID?: string;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field({ nullable: true })
+    Label: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => Float, { nullable: true })
+    Score: number | null;
+
+    @Field(() => Float, { nullable: true })
+    ComputeCost: number | null;
+
+    @Field(() => Int, { nullable: true })
+    TokensUsed: number | null;
+
+    @Field({ nullable: true })
+    Rationale: string | null;
+
+    @Field({ nullable: true })
+    AIAgentRunID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Experiment Session Iterations
+//****************************************************************************
+@InputType()
+export class UpdateMJExperimentSessionIterationInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    ExperimentSessionID?: string;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field({ nullable: true })
+    Label?: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => Float, { nullable: true })
+    Score?: number | null;
+
+    @Field(() => Float, { nullable: true })
+    ComputeCost?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    TokensUsed?: number | null;
+
+    @Field({ nullable: true })
+    Rationale?: string | null;
+
+    @Field({ nullable: true })
+    AIAgentRunID?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Experiment Session Iterations
+//****************************************************************************
+@ObjectType()
+export class RunMJExperimentSessionIterationViewResult {
+    @Field(() => [MJExperimentSessionIteration_])
+    Results: MJExperimentSessionIteration_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJExperimentSessionIteration_)
+export class MJExperimentSessionIterationResolver extends ResolverBase {
+    @Query(() => RunMJExperimentSessionIterationViewResult)
+    async RunMJExperimentSessionIterationViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJExperimentSessionIterationViewResult)
+    async RunMJExperimentSessionIterationViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJExperimentSessionIterationViewResult)
+    async RunMJExperimentSessionIterationDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Experiment Session Iterations';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJExperimentSessionIteration_, { nullable: true })
+    async MJExperimentSessionIteration(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJExperimentSessionIteration_ | null> {
+        this.CheckUserReadPermissions('MJ: Experiment Session Iterations', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwExperimentSessionIterations')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Experiment Session Iterations', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Experiment Session Iterations', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @FieldResolver(() => [MJMLTrainingRun_])
+    async MJMLTrainingRuns_ExperimentSessionIterationIDArray(@Root() mjexperimentsessioniteration_: MJExperimentSessionIteration_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: ML Training Runs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMLTrainingRuns')} WHERE ${provider.QuoteIdentifier('ExperimentSessionIterationID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: ML Training Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjexperimentsessioniteration_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: ML Training Runs', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @Mutation(() => MJExperimentSessionIteration_)
+    async CreateMJExperimentSessionIteration(
+        @Arg('input', () => CreateMJExperimentSessionIterationInput) input: CreateMJExperimentSessionIterationInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Experiment Session Iterations', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJExperimentSessionIteration_)
+    async UpdateMJExperimentSessionIteration(
+        @Arg('input', () => UpdateMJExperimentSessionIterationInput) input: UpdateMJExperimentSessionIterationInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Experiment Session Iterations', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJExperimentSessionIteration_)
+    async DeleteMJExperimentSessionIteration(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Experiment Session Iterations', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Experiment Sessions
+//****************************************************************************
+@ObjectType({ description: `A GENERIC single execution of an Experiment: a budgeted, plan-then-execute-then-refine search that groups N iterations, maintains a leaderboard, and is driven by an owning agent run with a human approval gate. ML-agnostic — the ML-specific work hangs off ExperimentSessionIteration via MLTrainingRun. The execution phase runs iterations in WAVES through Record Set Processing (bounded concurrency, budget, pause/resume, audit), with the adaptive prune/what-next logic above it.` })
+export class MJExperimentSession_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `Foreign key to the Experiment definition this session executes`}) 
+    @MaxLength(36)
+    ExperimentID: string;
+        
+    @Field({description: `Human-readable name of this session/execution`}) 
+    @MaxLength(255)
+    Name: string;
+        
+    @Field({nullable: true, description: `Optional per-session objective override (defaults to the parent Experiment's Goal)`}) 
+    Goal?: string;
+        
+    @Field({nullable: true, description: `JSON budget bounding autonomy for this session: max compute-cost / max iterations / max wallclock`}) 
+    Budget?: string;
+        
+    @Field({description: `Lifecycle status: Planning, AwaitingApproval, Running, Paused, Completed, or Cancelled`}) 
+    @MaxLength(20)
+    Status: string;
+        
+    @Field({nullable: true, description: `JSON of the approved plan the deterministic orchestrator executes for this session (consumer-specific shape; for Predictive Studio this is the ModelingPlanSpec). Opaque to the generic substrate.`}) 
+    PlanSpec?: string;
+        
+    @Field({nullable: true, description: `JSON snapshot of the best iterations so far (also derivable from ExperimentSessionIteration scores)`}) 
+    Leaderboard?: string;
+        
+    @Field({nullable: true, description: `Foreign key to the MJ: AI Agent Run that owns/drives this session`}) 
+    @MaxLength(36)
+    AgentRunID?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(255)
+    Experiment: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    AgentRun?: string;
+        
+    @Field(() => [MJExperimentSessionIteration_])
+    MJExperimentSessionIterations_ExperimentSessionIDArray: MJExperimentSessionIteration_[]; // Link to MJExperimentSessionIterations
+    
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Experiment Sessions
+//****************************************************************************
+@InputType()
+export class CreateMJExperimentSessionInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    ExperimentID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Goal: string | null;
+
+    @Field({ nullable: true })
+    Budget: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    PlanSpec: string | null;
+
+    @Field({ nullable: true })
+    Leaderboard: string | null;
+
+    @Field({ nullable: true })
+    AgentRunID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Experiment Sessions
+//****************************************************************************
+@InputType()
+export class UpdateMJExperimentSessionInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    ExperimentID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Goal?: string | null;
+
+    @Field({ nullable: true })
+    Budget?: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    PlanSpec?: string | null;
+
+    @Field({ nullable: true })
+    Leaderboard?: string | null;
+
+    @Field({ nullable: true })
+    AgentRunID?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Experiment Sessions
+//****************************************************************************
+@ObjectType()
+export class RunMJExperimentSessionViewResult {
+    @Field(() => [MJExperimentSession_])
+    Results: MJExperimentSession_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJExperimentSession_)
+export class MJExperimentSessionResolver extends ResolverBase {
+    @Query(() => RunMJExperimentSessionViewResult)
+    async RunMJExperimentSessionViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJExperimentSessionViewResult)
+    async RunMJExperimentSessionViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJExperimentSessionViewResult)
+    async RunMJExperimentSessionDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Experiment Sessions';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJExperimentSession_, { nullable: true })
+    async MJExperimentSession(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJExperimentSession_ | null> {
+        this.CheckUserReadPermissions('MJ: Experiment Sessions', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwExperimentSessions')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Experiment Sessions', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Experiment Sessions', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @FieldResolver(() => [MJExperimentSessionIteration_])
+    async MJExperimentSessionIterations_ExperimentSessionIDArray(@Root() mjexperimentsession_: MJExperimentSession_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Experiment Session Iterations', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwExperimentSessionIterations')} WHERE ${provider.QuoteIdentifier('ExperimentSessionID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Experiment Session Iterations', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjexperimentsession_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Experiment Session Iterations', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @Mutation(() => MJExperimentSession_)
+    async CreateMJExperimentSession(
+        @Arg('input', () => CreateMJExperimentSessionInput) input: CreateMJExperimentSessionInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Experiment Sessions', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJExperimentSession_)
+    async UpdateMJExperimentSession(
+        @Arg('input', () => UpdateMJExperimentSessionInput) input: UpdateMJExperimentSessionInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Experiment Sessions', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJExperimentSession_)
+    async DeleteMJExperimentSession(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Experiment Sessions', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Experiments
+//****************************************************************************
+@ObjectType({ description: `A GENERIC, reusable definition of an experiment — the durable "what we are trying to optimize," independent of any single execution. Each kick-off of the experiment creates an ExperimentSession under it (so retraining/re-optimizing monthly = new sessions under the same Experiment, enabling comparison over time). Deliberately NOT ML-specific: ExperimentType discriminates the consumer (MLModelSearch, PromptOptimization, AgentConfigSearch, ...) so prompt-optimization, agent-config search, and eval sweeps reuse the same Experiment/Session/Iteration substrate. Predictive Studio is the first consumer.` })
+export class MJExperiment_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `Human-readable name of the experiment`}) 
+    @MaxLength(255)
+    Name: string;
+        
+    @Field({nullable: true, description: `Optional description of the experiment`}) 
+    Description?: string;
+        
+    @Field({description: `Discriminator naming the kind of experiment / consuming subsystem (e.g., "MLModelSearch", "PromptOptimization", "AgentConfigSearch"). Intentionally an open NVARCHAR (no CHECK constraint) so new consumers can introduce types without a schema migration.`}) 
+    @MaxLength(50)
+    ExperimentType: string;
+        
+    @Field({nullable: true, description: `Natural-language objective of the experiment (e.g., "maximize holdout AUC for renewal prediction")`}) 
+    Goal?: string;
+        
+    @Field({nullable: true, description: `The metric the experiment optimizes (e.g., "AUC", "F1", "RMSE") — the normalized number iterations are scored and ranked by`}) 
+    @MaxLength(100)
+    TargetMetric?: string;
+        
+    @Field({nullable: true, description: `Optional JSON reusable plan template that seeds new sessions' PlanSpec (consumer-specific shape; opaque to the generic substrate)`}) 
+    PlanSpecTemplate?: string;
+        
+    @Field({description: `Lifecycle status: Active or Archived`}) 
+    @MaxLength(20)
+    Status: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field(() => [MJExperimentSession_])
+    MJExperimentSessions_ExperimentIDArray: MJExperimentSession_[]; // Link to MJExperimentSessions
+    
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Experiments
+//****************************************************************************
+@InputType()
+export class CreateMJExperimentInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    ExperimentType?: string;
+
+    @Field({ nullable: true })
+    Goal: string | null;
+
+    @Field({ nullable: true })
+    TargetMetric: string | null;
+
+    @Field({ nullable: true })
+    PlanSpecTemplate: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Experiments
+//****************************************************************************
+@InputType()
+export class UpdateMJExperimentInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    ExperimentType?: string;
+
+    @Field({ nullable: true })
+    Goal?: string | null;
+
+    @Field({ nullable: true })
+    TargetMetric?: string | null;
+
+    @Field({ nullable: true })
+    PlanSpecTemplate?: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Experiments
+//****************************************************************************
+@ObjectType()
+export class RunMJExperimentViewResult {
+    @Field(() => [MJExperiment_])
+    Results: MJExperiment_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJExperiment_)
+export class MJExperimentResolver extends ResolverBase {
+    @Query(() => RunMJExperimentViewResult)
+    async RunMJExperimentViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJExperimentViewResult)
+    async RunMJExperimentViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJExperimentViewResult)
+    async RunMJExperimentDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Experiments';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJExperiment_, { nullable: true })
+    async MJExperiment(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJExperiment_ | null> {
+        this.CheckUserReadPermissions('MJ: Experiments', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwExperiments')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Experiments', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Experiments', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @FieldResolver(() => [MJExperimentSession_])
+    async MJExperimentSessions_ExperimentIDArray(@Root() mjexperiment_: MJExperiment_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Experiment Sessions', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwExperimentSessions')} WHERE ${provider.QuoteIdentifier('ExperimentID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Experiment Sessions', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjexperiment_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Experiment Sessions', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @Mutation(() => MJExperiment_)
+    async CreateMJExperiment(
+        @Arg('input', () => CreateMJExperimentInput) input: CreateMJExperimentInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Experiments', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJExperiment_)
+    async UpdateMJExperiment(
+        @Arg('input', () => UpdateMJExperimentInput) input: UpdateMJExperimentInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Experiments', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJExperiment_)
+    async DeleteMJExperiment(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Experiments', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
 // ENTITY CLASS for MJ: Explorer Navigation Items
 //****************************************************************************
 @ObjectType({ description: `Table to store navigation items for MemberJunction Explorer` })
@@ -51588,6 +52826,9 @@ export class MJFileStorageProvider_ {
     @Field(() => [MJFileStorageAccount_])
     MJFileStorageAccounts_ProviderIDArray: MJFileStorageAccount_[]; // Link to MJFileStorageAccounts
     
+    @Field(() => [MJAIAgent_])
+    MJAIAgents_RecordingStorageProviderIDArray: MJAIAgent_[]; // Link to MJAIAgents
+    
     @Field(() => [MJAIConfiguration_])
     MJAIConfigurations_DefaultStorageProviderIDArray: MJAIConfiguration_[]; // Link to MJAIConfigurations
     
@@ -51755,6 +52996,16 @@ export class MJFileStorageProviderResolver extends ResolverBase {
         return result;
     }
         
+    @FieldResolver(() => [MJAIAgent_])
+    async MJAIAgents_RecordingStorageProviderIDArray(@Root() mjfilestorageprovider_: MJFileStorageProvider_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Agents', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIAgents')} WHERE ${provider.QuoteIdentifier('RecordingStorageProviderID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agents', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjfilestorageprovider_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Agents', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
     @FieldResolver(() => [MJAIConfiguration_])
     async MJAIConfigurations_DefaultStorageProviderIDArray(@Root() mjfilestorageprovider_: MJFileStorageProvider_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Configurations', userPayload);
@@ -51868,6 +53119,15 @@ export class MJFile_ {
     
     @Field(() => [MJArtifactVersion_])
     MJArtifactVersions_FileIDArray: MJArtifactVersion_[]; // Link to MJArtifactVersions
+    
+    @Field(() => [MJAIAgentSession_])
+    MJAIAgentSessions_RecordingFileIDArray: MJAIAgentSession_[]; // Link to MJAIAgentSessions
+    
+    @Field(() => [MJConversation_])
+    MJConversations_RecordingFileIDArray: MJConversation_[]; // Link to MJConversations
+    
+    @Field(() => [MJMLModel_])
+    MJMLModels_ArtifactFileIDArray: MJMLModel_[]; // Link to MJMLModels
     
 }
 
@@ -52045,6 +53305,36 @@ export class MJFileResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwArtifactVersions')} WHERE ${provider.QuoteIdentifier('FileID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Artifact Versions', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, [mjfile_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Artifact Versions', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJAIAgentSession_])
+    async MJAIAgentSessions_RecordingFileIDArray(@Root() mjfile_: MJFile_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Agent Sessions', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIAgentSessions')} WHERE ${provider.QuoteIdentifier('RecordingFileID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Sessions', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjfile_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Sessions', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJConversation_])
+    async MJConversations_RecordingFileIDArray(@Root() mjfile_: MJFile_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Conversations', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwConversations')} WHERE ${provider.QuoteIdentifier('RecordingFileID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Conversations', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjfile_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Conversations', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJMLModel_])
+    async MJMLModels_ArtifactFileIDArray(@Root() mjfile_: MJFile_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: ML Models', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMLModels')} WHERE ${provider.QuoteIdentifier('ArtifactFileID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: ML Models', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjfile_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: ML Models', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -55734,6 +57024,9 @@ export class MJList_ {
     @Field(() => [MJListShare_])
     MJListShares_ListIDArray: MJListShare_[]; // Link to MJListShares
     
+    @Field(() => [MJRecordProcess_])
+    MJRecordProcesses_ScopeListIDArray: MJRecordProcess_[]; // Link to MJRecordProcesses
+    
 }
 
 //****************************************************************************
@@ -55936,6 +57229,16 @@ export class MJListResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwListShares')} WHERE ${provider.QuoteIdentifier('ListID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: List Shares', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, [mjlist_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: List Shares', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJRecordProcess_])
+    async MJRecordProcesses_ScopeListIDArray(@Root() mjlist_: MJList_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Record Processes', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwRecordProcesses')} WHERE ${provider.QuoteIdentifier('ScopeListID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Record Processes', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjlist_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Record Processes', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -58984,6 +60287,1741 @@ export class MJMCPToolFavoriteResolver extends ResolverBase {
 }
 
 //****************************************************************************
+// ENTITY CLASS for MJ: ML Algorithm Use Case Rankings
+//****************************************************************************
+@ObjectType({ description: `Codifies how well each algorithm fits each use-case scenario, so both the model-development agent and a non-expert human get guided, rationale-bearing defaults instead of guessing. One row per (algorithm, use case) pair.` })
+export class MJMLAlgorithmUseCaseRanking_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `Foreign key to the algorithm being ranked`}) 
+    @MaxLength(36)
+    MLAlgorithmID: string;
+        
+    @Field({description: `Foreign key to the use-case scenario the algorithm is ranked for`}) 
+    @MaxLength(36)
+    MLAlgorithmUseCaseID: string;
+        
+    @Field(() => Int, {description: `Numeric suitability for sorting/ranking, 1 (worst) to 5 (best)`}) 
+    SuitabilityScore: number;
+        
+    @Field({description: `Categorical recommendation: Primary, Strong, Viable, Weak, or NotRecommended`}) 
+    @MaxLength(20)
+    RecommendationLevel: string;
+        
+    @Field({nullable: true, description: `Plain-language explanation of the ranking, readable by both agents and humans (e.g., "Gives feature importances but not simple coefficients — if a stakeholder needs to see exactly why each prediction was made, prefer Logistic/Ridge.")`}) 
+    Rationale?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(255)
+    MLAlgorithm: string;
+        
+    @Field() 
+    @MaxLength(255)
+    MLAlgorithmUseCase: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: ML Algorithm Use Case Rankings
+//****************************************************************************
+@InputType()
+export class CreateMJMLAlgorithmUseCaseRankingInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    MLAlgorithmID?: string;
+
+    @Field({ nullable: true })
+    MLAlgorithmUseCaseID?: string;
+
+    @Field(() => Int, { nullable: true })
+    SuitabilityScore?: number;
+
+    @Field({ nullable: true })
+    RecommendationLevel?: string;
+
+    @Field({ nullable: true })
+    Rationale: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: ML Algorithm Use Case Rankings
+//****************************************************************************
+@InputType()
+export class UpdateMJMLAlgorithmUseCaseRankingInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    MLAlgorithmID?: string;
+
+    @Field({ nullable: true })
+    MLAlgorithmUseCaseID?: string;
+
+    @Field(() => Int, { nullable: true })
+    SuitabilityScore?: number;
+
+    @Field({ nullable: true })
+    RecommendationLevel?: string;
+
+    @Field({ nullable: true })
+    Rationale?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: ML Algorithm Use Case Rankings
+//****************************************************************************
+@ObjectType()
+export class RunMJMLAlgorithmUseCaseRankingViewResult {
+    @Field(() => [MJMLAlgorithmUseCaseRanking_])
+    Results: MJMLAlgorithmUseCaseRanking_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJMLAlgorithmUseCaseRanking_)
+export class MJMLAlgorithmUseCaseRankingResolver extends ResolverBase {
+    @Query(() => RunMJMLAlgorithmUseCaseRankingViewResult)
+    async RunMJMLAlgorithmUseCaseRankingViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJMLAlgorithmUseCaseRankingViewResult)
+    async RunMJMLAlgorithmUseCaseRankingViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJMLAlgorithmUseCaseRankingViewResult)
+    async RunMJMLAlgorithmUseCaseRankingDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: ML Algorithm Use Case Rankings';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJMLAlgorithmUseCaseRanking_, { nullable: true })
+    async MJMLAlgorithmUseCaseRanking(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJMLAlgorithmUseCaseRanking_ | null> {
+        this.CheckUserReadPermissions('MJ: ML Algorithm Use Case Rankings', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMLAlgorithmUseCaseRankings')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: ML Algorithm Use Case Rankings', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: ML Algorithm Use Case Rankings', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJMLAlgorithmUseCaseRanking_)
+    async CreateMJMLAlgorithmUseCaseRanking(
+        @Arg('input', () => CreateMJMLAlgorithmUseCaseRankingInput) input: CreateMJMLAlgorithmUseCaseRankingInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: ML Algorithm Use Case Rankings', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJMLAlgorithmUseCaseRanking_)
+    async UpdateMJMLAlgorithmUseCaseRanking(
+        @Arg('input', () => UpdateMJMLAlgorithmUseCaseRankingInput) input: UpdateMJMLAlgorithmUseCaseRankingInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: ML Algorithm Use Case Rankings', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJMLAlgorithmUseCaseRanking_)
+    async DeleteMJMLAlgorithmUseCaseRanking(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: ML Algorithm Use Case Rankings', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: ML Algorithm Use Cases
+//****************************************************************************
+@ObjectType({ description: `A curated, decision-relevant scenario used to guide algorithm choice — NOT a business label (churn/renewal/attendee-return are all the same "binary classification" shape, so they do not differentiate algorithms). Joined to MLAlgorithm via MLAlgorithmUseCaseRanking. EXAMPLES: "Binary classification (yes/no)", "Regression (predict a number)", "Interpretability required", "Minimal tuning (business-user)", "Large/wide dataset (speed)", "Embedding/LLM-feature-heavy", "Small dataset".` })
+export class MJMLAlgorithmUseCase_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `Display name of the scenario (e.g., "Interpretability required")`}) 
+    @MaxLength(255)
+    Name: string;
+        
+    @Field({nullable: true, description: `Optional description of the scenario`}) 
+    Description?: string;
+        
+    @Field({description: `Which problem type this scenario applies to: classification, regression, or any`}) 
+    @MaxLength(20)
+    ProblemTypeScope: string;
+        
+    @Field({nullable: true, description: `Longer agent-readable guidance on when this scenario applies and what it implies for algorithm choice`}) 
+    Guidance?: string;
+        
+    @Field(() => Int, {description: `Ordering hint for displaying scenarios in the UI`}) 
+    DisplayOrder: number;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field(() => [MJMLAlgorithmUseCaseRanking_])
+    MJMLAlgorithmUseCaseRankings_MLAlgorithmUseCaseIDArray: MJMLAlgorithmUseCaseRanking_[]; // Link to MJMLAlgorithmUseCaseRankings
+    
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: ML Algorithm Use Cases
+//****************************************************************************
+@InputType()
+export class CreateMJMLAlgorithmUseCaseInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    ProblemTypeScope?: string;
+
+    @Field({ nullable: true })
+    Guidance: string | null;
+
+    @Field(() => Int, { nullable: true })
+    DisplayOrder?: number;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: ML Algorithm Use Cases
+//****************************************************************************
+@InputType()
+export class UpdateMJMLAlgorithmUseCaseInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    ProblemTypeScope?: string;
+
+    @Field({ nullable: true })
+    Guidance?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    DisplayOrder?: number;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: ML Algorithm Use Cases
+//****************************************************************************
+@ObjectType()
+export class RunMJMLAlgorithmUseCaseViewResult {
+    @Field(() => [MJMLAlgorithmUseCase_])
+    Results: MJMLAlgorithmUseCase_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJMLAlgorithmUseCase_)
+export class MJMLAlgorithmUseCaseResolver extends ResolverBase {
+    @Query(() => RunMJMLAlgorithmUseCaseViewResult)
+    async RunMJMLAlgorithmUseCaseViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJMLAlgorithmUseCaseViewResult)
+    async RunMJMLAlgorithmUseCaseViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJMLAlgorithmUseCaseViewResult)
+    async RunMJMLAlgorithmUseCaseDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: ML Algorithm Use Cases';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJMLAlgorithmUseCase_, { nullable: true })
+    async MJMLAlgorithmUseCase(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJMLAlgorithmUseCase_ | null> {
+        this.CheckUserReadPermissions('MJ: ML Algorithm Use Cases', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMLAlgorithmUseCases')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: ML Algorithm Use Cases', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: ML Algorithm Use Cases', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @FieldResolver(() => [MJMLAlgorithmUseCaseRanking_])
+    async MJMLAlgorithmUseCaseRankings_MLAlgorithmUseCaseIDArray(@Root() mjmlalgorithmusecase_: MJMLAlgorithmUseCase_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: ML Algorithm Use Case Rankings', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMLAlgorithmUseCaseRankings')} WHERE ${provider.QuoteIdentifier('MLAlgorithmUseCaseID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: ML Algorithm Use Case Rankings', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjmlalgorithmusecase_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: ML Algorithm Use Case Rankings', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @Mutation(() => MJMLAlgorithmUseCase_)
+    async CreateMJMLAlgorithmUseCase(
+        @Arg('input', () => CreateMJMLAlgorithmUseCaseInput) input: CreateMJMLAlgorithmUseCaseInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: ML Algorithm Use Cases', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJMLAlgorithmUseCase_)
+    async UpdateMJMLAlgorithmUseCase(
+        @Arg('input', () => UpdateMJMLAlgorithmUseCaseInput) input: UpdateMJMLAlgorithmUseCaseInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: ML Algorithm Use Cases', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJMLAlgorithmUseCase_)
+    async DeleteMJMLAlgorithmUseCase(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: ML Algorithm Use Cases', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: ML Algorithms
+//****************************************************************************
+@ObjectType({ description: `Curated, fixed catalog of machine-learning algorithms a Training Pipeline can use. Opinionated by design (a small set of well-understood algorithms); the differentiation is in the data/features, not algorithm innovation. Each row declares the algorithm\'s supported problem types, its hyperparameter schema, and the Python-sidecar driver key that executes it. EXAMPLE: "Gradient Boosting (XGBoost)" with DriverClass "xgboost".` })
+export class MJMLAlgorithm_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `Display name of the algorithm (e.g., "Gradient Boosting (XGBoost)", "Logistic Regression")`}) 
+    @MaxLength(255)
+    Name: string;
+        
+    @Field({nullable: true, description: `Optional description of the algorithm and when to use it`}) 
+    Description?: string;
+        
+    @Field({description: `Comma-delimited list of supported problem types (e.g., "classification", "regression", or "classification,regression")`}) 
+    @MaxLength(100)
+    ProblemTypes: string;
+        
+    @Field({description: `Algorithm key passed to the Python training/inference sidecar (e.g., "xgboost", "lightgbm", "logistic_regression", "random_forest", "ridge", "mlp")`}) 
+    @MaxLength(255)
+    DriverClass: string;
+        
+    @Field({nullable: true, description: `JSON Schema describing the algorithm's tunable hyperparameters (drives the UI form and validation)`}) 
+    HyperparameterSchema?: string;
+        
+    @Field({nullable: true, description: `JSON object of default hyperparameter values applied when a pipeline does not override them`}) 
+    DefaultHyperparameters?: string;
+        
+    @Field(() => Boolean, {description: `When 1, the algorithm produces per-feature importance scores used for explainability and the leakage guard`}) 
+    SupportsFeatureImportance: boolean;
+        
+    @Field({description: `Lifecycle status: Active (selectable) or Deprecated`}) 
+    @MaxLength(20)
+    Status: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field(() => [MJMLTrainingRun_])
+    MJMLTrainingRuns_AlgorithmIDArray: MJMLTrainingRun_[]; // Link to MJMLTrainingRuns
+    
+    @Field(() => [MJMLTrainingPipeline_])
+    MJMLTrainingPipelines_AlgorithmIDArray: MJMLTrainingPipeline_[]; // Link to MJMLTrainingPipelines
+    
+    @Field(() => [MJMLModel_])
+    MJMLModels_AlgorithmIDArray: MJMLModel_[]; // Link to MJMLModels
+    
+    @Field(() => [MJMLAlgorithmUseCaseRanking_])
+    MJMLAlgorithmUseCaseRankings_MLAlgorithmIDArray: MJMLAlgorithmUseCaseRanking_[]; // Link to MJMLAlgorithmUseCaseRankings
+    
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: ML Algorithms
+//****************************************************************************
+@InputType()
+export class CreateMJMLAlgorithmInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    ProblemTypes?: string;
+
+    @Field({ nullable: true })
+    DriverClass?: string;
+
+    @Field({ nullable: true })
+    HyperparameterSchema: string | null;
+
+    @Field({ nullable: true })
+    DefaultHyperparameters: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    SupportsFeatureImportance?: boolean;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: ML Algorithms
+//****************************************************************************
+@InputType()
+export class UpdateMJMLAlgorithmInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    ProblemTypes?: string;
+
+    @Field({ nullable: true })
+    DriverClass?: string;
+
+    @Field({ nullable: true })
+    HyperparameterSchema?: string | null;
+
+    @Field({ nullable: true })
+    DefaultHyperparameters?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    SupportsFeatureImportance?: boolean;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: ML Algorithms
+//****************************************************************************
+@ObjectType()
+export class RunMJMLAlgorithmViewResult {
+    @Field(() => [MJMLAlgorithm_])
+    Results: MJMLAlgorithm_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJMLAlgorithm_)
+export class MJMLAlgorithmResolver extends ResolverBase {
+    @Query(() => RunMJMLAlgorithmViewResult)
+    async RunMJMLAlgorithmViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJMLAlgorithmViewResult)
+    async RunMJMLAlgorithmViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJMLAlgorithmViewResult)
+    async RunMJMLAlgorithmDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: ML Algorithms';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJMLAlgorithm_, { nullable: true })
+    async MJMLAlgorithm(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJMLAlgorithm_ | null> {
+        this.CheckUserReadPermissions('MJ: ML Algorithms', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMLAlgorithms')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: ML Algorithms', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: ML Algorithms', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @FieldResolver(() => [MJMLTrainingRun_])
+    async MJMLTrainingRuns_AlgorithmIDArray(@Root() mjmlalgorithm_: MJMLAlgorithm_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: ML Training Runs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMLTrainingRuns')} WHERE ${provider.QuoteIdentifier('AlgorithmID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: ML Training Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjmlalgorithm_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: ML Training Runs', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJMLTrainingPipeline_])
+    async MJMLTrainingPipelines_AlgorithmIDArray(@Root() mjmlalgorithm_: MJMLAlgorithm_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: ML Training Pipelines', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMLTrainingPipelines')} WHERE ${provider.QuoteIdentifier('AlgorithmID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: ML Training Pipelines', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjmlalgorithm_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: ML Training Pipelines', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJMLModel_])
+    async MJMLModels_AlgorithmIDArray(@Root() mjmlalgorithm_: MJMLAlgorithm_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: ML Models', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMLModels')} WHERE ${provider.QuoteIdentifier('AlgorithmID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: ML Models', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjmlalgorithm_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: ML Models', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJMLAlgorithmUseCaseRanking_])
+    async MJMLAlgorithmUseCaseRankings_MLAlgorithmIDArray(@Root() mjmlalgorithm_: MJMLAlgorithm_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: ML Algorithm Use Case Rankings', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMLAlgorithmUseCaseRankings')} WHERE ${provider.QuoteIdentifier('MLAlgorithmID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: ML Algorithm Use Case Rankings', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjmlalgorithm_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: ML Algorithm Use Case Rankings', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @Mutation(() => MJMLAlgorithm_)
+    async CreateMJMLAlgorithm(
+        @Arg('input', () => CreateMJMLAlgorithmInput) input: CreateMJMLAlgorithmInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: ML Algorithms', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJMLAlgorithm_)
+    async UpdateMJMLAlgorithm(
+        @Arg('input', () => UpdateMJMLAlgorithmInput) input: UpdateMJMLAlgorithmInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: ML Algorithms', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJMLAlgorithm_)
+    async DeleteMJMLAlgorithm(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: ML Algorithms', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: ML Model Scoring Bindings
+//****************************************************************************
+@ObjectType({ description: `Binds an MLModel to where it scores, so staleness can be detected and retraining driven (maintenance). The scoring itself runs as a Record Process (the new ML inference work type); the binding records the target entity/column written and the scoring mode. MaterializedResultID is a forward-compatible SOFT reference to MJ: Materialized Results (PR #2770), not yet a FK because that table is not merged.` })
+export class MJMLModelScoringBinding_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `Foreign key to the MLModel that does the scoring`}) 
+    @MaxLength(36)
+    MLModelID: string;
+        
+    @Field({nullable: true, description: `Foreign key to the Record Process that runs the ML inference work for this binding`}) 
+    @MaxLength(36)
+    RecordProcessID?: string;
+        
+    @Field({nullable: true, description: `Foreign key to the entity that receives the prediction (when scores are written back)`}) 
+    @MaxLength(36)
+    TargetEntityID?: string;
+        
+    @Field({nullable: true, description: `Name of the column that receives the prediction (when scores are written back / materialized)`}) 
+    @MaxLength(255)
+    TargetColumn?: string;
+        
+    @Field({description: `Scoring mode: OnDemand, Scheduled, or Materialized`}) 
+    @MaxLength(20)
+    Mode: string;
+        
+    @Field({nullable: true, description: `Soft reference to a MJ: Materialized Results row (PR #2770) when Mode=Materialized; not a FK until that table exists`}) 
+    @MaxLength(36)
+    MaterializedResultID?: string;
+        
+    @Field({nullable: true, description: `Timestamp of the most recent scoring run for this binding`}) 
+    LastScoredAt?: Date;
+        
+    @Field(() => Int, {nullable: true, description: `Number of records scored in the most recent scoring run`}) 
+    LastRowCount?: number;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    RecordProcess?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    TargetEntity?: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: ML Model Scoring Bindings
+//****************************************************************************
+@InputType()
+export class CreateMJMLModelScoringBindingInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    MLModelID?: string;
+
+    @Field({ nullable: true })
+    RecordProcessID: string | null;
+
+    @Field({ nullable: true })
+    TargetEntityID: string | null;
+
+    @Field({ nullable: true })
+    TargetColumn: string | null;
+
+    @Field({ nullable: true })
+    Mode?: string;
+
+    @Field({ nullable: true })
+    MaterializedResultID: string | null;
+
+    @Field({ nullable: true })
+    LastScoredAt: Date | null;
+
+    @Field(() => Int, { nullable: true })
+    LastRowCount: number | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: ML Model Scoring Bindings
+//****************************************************************************
+@InputType()
+export class UpdateMJMLModelScoringBindingInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    MLModelID?: string;
+
+    @Field({ nullable: true })
+    RecordProcessID?: string | null;
+
+    @Field({ nullable: true })
+    TargetEntityID?: string | null;
+
+    @Field({ nullable: true })
+    TargetColumn?: string | null;
+
+    @Field({ nullable: true })
+    Mode?: string;
+
+    @Field({ nullable: true })
+    MaterializedResultID?: string | null;
+
+    @Field({ nullable: true })
+    LastScoredAt?: Date | null;
+
+    @Field(() => Int, { nullable: true })
+    LastRowCount?: number | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: ML Model Scoring Bindings
+//****************************************************************************
+@ObjectType()
+export class RunMJMLModelScoringBindingViewResult {
+    @Field(() => [MJMLModelScoringBinding_])
+    Results: MJMLModelScoringBinding_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJMLModelScoringBinding_)
+export class MJMLModelScoringBindingResolver extends ResolverBase {
+    @Query(() => RunMJMLModelScoringBindingViewResult)
+    async RunMJMLModelScoringBindingViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJMLModelScoringBindingViewResult)
+    async RunMJMLModelScoringBindingViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJMLModelScoringBindingViewResult)
+    async RunMJMLModelScoringBindingDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: ML Model Scoring Bindings';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJMLModelScoringBinding_, { nullable: true })
+    async MJMLModelScoringBinding(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJMLModelScoringBinding_ | null> {
+        this.CheckUserReadPermissions('MJ: ML Model Scoring Bindings', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMLModelScoringBindings')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: ML Model Scoring Bindings', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: ML Model Scoring Bindings', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJMLModelScoringBinding_)
+    async CreateMJMLModelScoringBinding(
+        @Arg('input', () => CreateMJMLModelScoringBindingInput) input: CreateMJMLModelScoringBindingInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: ML Model Scoring Bindings', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJMLModelScoringBinding_)
+    async UpdateMJMLModelScoringBinding(
+        @Arg('input', () => UpdateMJMLModelScoringBindingInput) input: UpdateMJMLModelScoringBindingInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: ML Model Scoring Bindings', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJMLModelScoringBinding_)
+    async DeleteMJMLModelScoringBinding(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: ML Model Scoring Bindings', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: ML Models
+//****************************************************************************
+@ObjectType({ description: `An immutable, versioned trained predictive model produced by a training run — distinct from MJ: AI Models (the catalog of off-the-shelf foundation models we CALL). A model is never mutated in place; retraining produces a new MLModel. The serialized artifact lives in MJStorage (MJ: Files) and the FITTED preprocessing parameters travel WITH the model so inference applies the exact transforms learned at training time (prevents train/serve skew). Inference runs via the Python sidecar.` })
+export class MJMLModel_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `Foreign key to the ML Training Pipeline that produced this model (lineage)`}) 
+    @MaxLength(36)
+    PipelineID: string;
+        
+    @Field(() => Int, {description: `Monotonic version number of this model under its pipeline`}) 
+    Version: number;
+        
+    @Field({description: `Foreign key to the algorithm used to train this model`}) 
+    @MaxLength(36)
+    AlgorithmID: string;
+        
+    @Field({nullable: true, description: `Foreign key to the MJ: Files record holding the serialized model artifact in MJStorage`}) 
+    @MaxLength(36)
+    ArtifactFileID?: string;
+        
+    @Field({nullable: true, description: `JSON of the fitted preprocessing parameters (means/std, one-hot vocabularies, bin edges, imputation fills) learned at training time and re-applied verbatim at inference — the anti train/serve skew payload`}) 
+    FittedPreprocessing?: string;
+        
+    @Field({description: `JSON ordered list of feature names + kinds the model expects as input (the inference input contract)`}) 
+    FeatureSchema: string;
+        
+    @Field({description: `The label this model predicts`}) 
+    @MaxLength(500)
+    TargetVariable: string;
+        
+    @Field({description: `Problem type: classification or regression`}) 
+    @MaxLength(20)
+    ProblemType: string;
+        
+    @Field({nullable: true, description: `JSON of training + validation metrics (AUC, F1, accuracy, RMSE, etc.)`}) 
+    Metrics?: string;
+        
+    @Field({nullable: true, description: `JSON metrics on the locked holdout set the search never saw — scored exactly once for an honest performance number`}) 
+    HoldoutMetrics?: string;
+        
+    @Field({nullable: true, description: `JSON per-feature importance/contribution for explainability and the leakage guard`}) 
+    FeatureImportance?: string;
+        
+    @Field({nullable: true, description: `JSON lineage: data version(s), pipeline version, source bindings, as-of date, sidecar version, and any embedding/LLM model versions used to build features`}) 
+    Lineage?: string;
+        
+    @Field({nullable: true, description: `Timestamp when training completed`}) 
+    TrainedAt?: Date;
+        
+    @Field(() => Int, {nullable: true, description: `Wall-clock training duration in seconds`}) 
+    TrainingDurationSec?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Number of rows used to train the model`}) 
+    TrainingRowCount?: number;
+        
+    @Field({description: `Lifecycle status: Draft, Validated, Published, or Archived`}) 
+    @MaxLength(20)
+    Status: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(255)
+    Pipeline: string;
+        
+    @Field() 
+    @MaxLength(255)
+    Algorithm: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(500)
+    ArtifactFile?: string;
+        
+    @Field(() => [MJMLTrainingRun_])
+    MJMLTrainingRuns_ResultingModelIDArray: MJMLTrainingRun_[]; // Link to MJMLTrainingRuns
+    
+    @Field(() => [MJMLModelScoringBinding_])
+    MJMLModelScoringBindings_MLModelIDArray: MJMLModelScoringBinding_[]; // Link to MJMLModelScoringBindings
+    
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: ML Models
+//****************************************************************************
+@InputType()
+export class CreateMJMLModelInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    PipelineID?: string;
+
+    @Field(() => Int, { nullable: true })
+    Version?: number;
+
+    @Field({ nullable: true })
+    AlgorithmID?: string;
+
+    @Field({ nullable: true })
+    ArtifactFileID: string | null;
+
+    @Field({ nullable: true })
+    FittedPreprocessing: string | null;
+
+    @Field({ nullable: true })
+    FeatureSchema?: string;
+
+    @Field({ nullable: true })
+    TargetVariable?: string;
+
+    @Field({ nullable: true })
+    ProblemType?: string;
+
+    @Field({ nullable: true })
+    Metrics: string | null;
+
+    @Field({ nullable: true })
+    HoldoutMetrics: string | null;
+
+    @Field({ nullable: true })
+    FeatureImportance: string | null;
+
+    @Field({ nullable: true })
+    Lineage: string | null;
+
+    @Field({ nullable: true })
+    TrainedAt: Date | null;
+
+    @Field(() => Int, { nullable: true })
+    TrainingDurationSec: number | null;
+
+    @Field(() => Int, { nullable: true })
+    TrainingRowCount: number | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: ML Models
+//****************************************************************************
+@InputType()
+export class UpdateMJMLModelInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    PipelineID?: string;
+
+    @Field(() => Int, { nullable: true })
+    Version?: number;
+
+    @Field({ nullable: true })
+    AlgorithmID?: string;
+
+    @Field({ nullable: true })
+    ArtifactFileID?: string | null;
+
+    @Field({ nullable: true })
+    FittedPreprocessing?: string | null;
+
+    @Field({ nullable: true })
+    FeatureSchema?: string;
+
+    @Field({ nullable: true })
+    TargetVariable?: string;
+
+    @Field({ nullable: true })
+    ProblemType?: string;
+
+    @Field({ nullable: true })
+    Metrics?: string | null;
+
+    @Field({ nullable: true })
+    HoldoutMetrics?: string | null;
+
+    @Field({ nullable: true })
+    FeatureImportance?: string | null;
+
+    @Field({ nullable: true })
+    Lineage?: string | null;
+
+    @Field({ nullable: true })
+    TrainedAt?: Date | null;
+
+    @Field(() => Int, { nullable: true })
+    TrainingDurationSec?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    TrainingRowCount?: number | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: ML Models
+//****************************************************************************
+@ObjectType()
+export class RunMJMLModelViewResult {
+    @Field(() => [MJMLModel_])
+    Results: MJMLModel_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJMLModel_)
+export class MJMLModelResolver extends ResolverBase {
+    @Query(() => RunMJMLModelViewResult)
+    async RunMJMLModelViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJMLModelViewResult)
+    async RunMJMLModelViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJMLModelViewResult)
+    async RunMJMLModelDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: ML Models';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJMLModel_, { nullable: true })
+    async MJMLModel(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJMLModel_ | null> {
+        this.CheckUserReadPermissions('MJ: ML Models', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMLModels')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: ML Models', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: ML Models', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @FieldResolver(() => [MJMLTrainingRun_])
+    async MJMLTrainingRuns_ResultingModelIDArray(@Root() mjmlmodel_: MJMLModel_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: ML Training Runs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMLTrainingRuns')} WHERE ${provider.QuoteIdentifier('ResultingModelID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: ML Training Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjmlmodel_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: ML Training Runs', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJMLModelScoringBinding_])
+    async MJMLModelScoringBindings_MLModelIDArray(@Root() mjmlmodel_: MJMLModel_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: ML Model Scoring Bindings', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMLModelScoringBindings')} WHERE ${provider.QuoteIdentifier('MLModelID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: ML Model Scoring Bindings', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjmlmodel_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: ML Model Scoring Bindings', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @Mutation(() => MJMLModel_)
+    async CreateMJMLModel(
+        @Arg('input', () => CreateMJMLModelInput) input: CreateMJMLModelInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: ML Models', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJMLModel_)
+    async UpdateMJMLModel(
+        @Arg('input', () => UpdateMJMLModelInput) input: UpdateMJMLModelInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: ML Models', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJMLModel_)
+    async DeleteMJMLModel(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: ML Models', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: ML Training Pipelines
+//****************************************************************************
+@ObjectType({ description: `A declarative definition of how to build a predictive model: what to predict (target), over which entity\'s records, using which algorithm, assembled from which sources via which feature steps, validated how. Saving a pipeline saves intent, not results — each successful training run of it produces an immutable MLModel. EXAMPLE: "Member Renewal Predictor" predicts Member.Renewed using XGBoost from tenure/engagement features plus a member-summary embedding, with a point-in-time as-of strategy and a locked holdout.` })
+export class MJMLTrainingPipeline_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `Human-readable name of the pipeline`}) 
+    @MaxLength(255)
+    Name: string;
+        
+    @Field({nullable: true, description: `Optional description of what this pipeline predicts and how`}) 
+    Description?: string;
+        
+    @Field(() => Int, {description: `Monotonic version number of the pipeline definition`}) 
+    Version: number;
+        
+    @Field({description: `Lifecycle status: Draft, Published, or Archived`}) 
+    @MaxLength(20)
+    Status: string;
+        
+    @Field({description: `Foreign key to the entity whose records are the training units (e.g., Members)`}) 
+    @MaxLength(36)
+    TargetEntityID: string;
+        
+    @Field({description: `The label being predicted — a column or expression on the target entity (e.g., "Renewed")`}) 
+    @MaxLength(500)
+    TargetVariable: string;
+        
+    @Field({description: `Problem type: classification or regression`}) 
+    @MaxLength(20)
+    ProblemType: string;
+        
+    @Field({description: `Foreign key to the chosen algorithm in the catalog`}) 
+    @MaxLength(36)
+    AlgorithmID: string;
+        
+    @Field({nullable: true, description: `JSON hyperparameter overrides for the chosen algorithm`}) 
+    Hyperparameters?: string;
+        
+    @Field({nullable: true, description: `JSON ordered references to source entities / queries / external entities / vector sets the features are drawn from`}) 
+    SourceBindings?: string;
+        
+    @Field({nullable: true, description: `JSON ordered DAG of FeatureAssembly steps (selection, null-handling, encoding, scaling, embedding/LLM featurization) executed by the single FeatureAssembly executor`}) 
+    FeatureSteps?: string;
+        
+    @Field({nullable: true, description: `JSON point-in-time configuration: { Mode: none|column|offset, Column?, OffsetDays? } — assembles features as of the decision point to prevent future leakage`}) 
+    AsOfStrategy?: string;
+        
+    @Field({nullable: true, description: `JSON leakage guard: deny-list of fields/sources that must not enter features, plus the single-feature-dominance threshold that flags suspicious runs`}) 
+    LeakageGuard?: string;
+        
+    @Field({nullable: true, description: `JSON validation strategy: { Strategy: train_test_split|kfold|holdout, TestSize?, K?, LockedHoldoutFraction }`}) 
+    ValidationStrategy?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(255)
+    TargetEntity: string;
+        
+    @Field() 
+    @MaxLength(255)
+    Algorithm: string;
+        
+    @Field(() => [MJMLTrainingRun_])
+    MJMLTrainingRuns_PipelineIDArray: MJMLTrainingRun_[]; // Link to MJMLTrainingRuns
+    
+    @Field(() => [MJMLModel_])
+    MJMLModels_PipelineIDArray: MJMLModel_[]; // Link to MJMLModels
+    
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: ML Training Pipelines
+//****************************************************************************
+@InputType()
+export class CreateMJMLTrainingPipelineInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field(() => Int, { nullable: true })
+    Version?: number;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    TargetEntityID?: string;
+
+    @Field({ nullable: true })
+    TargetVariable?: string;
+
+    @Field({ nullable: true })
+    ProblemType?: string;
+
+    @Field({ nullable: true })
+    AlgorithmID?: string;
+
+    @Field({ nullable: true })
+    Hyperparameters: string | null;
+
+    @Field({ nullable: true })
+    SourceBindings: string | null;
+
+    @Field({ nullable: true })
+    FeatureSteps: string | null;
+
+    @Field({ nullable: true })
+    AsOfStrategy: string | null;
+
+    @Field({ nullable: true })
+    LeakageGuard: string | null;
+
+    @Field({ nullable: true })
+    ValidationStrategy: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: ML Training Pipelines
+//****************************************************************************
+@InputType()
+export class UpdateMJMLTrainingPipelineInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    Version?: number;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    TargetEntityID?: string;
+
+    @Field({ nullable: true })
+    TargetVariable?: string;
+
+    @Field({ nullable: true })
+    ProblemType?: string;
+
+    @Field({ nullable: true })
+    AlgorithmID?: string;
+
+    @Field({ nullable: true })
+    Hyperparameters?: string | null;
+
+    @Field({ nullable: true })
+    SourceBindings?: string | null;
+
+    @Field({ nullable: true })
+    FeatureSteps?: string | null;
+
+    @Field({ nullable: true })
+    AsOfStrategy?: string | null;
+
+    @Field({ nullable: true })
+    LeakageGuard?: string | null;
+
+    @Field({ nullable: true })
+    ValidationStrategy?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: ML Training Pipelines
+//****************************************************************************
+@ObjectType()
+export class RunMJMLTrainingPipelineViewResult {
+    @Field(() => [MJMLTrainingPipeline_])
+    Results: MJMLTrainingPipeline_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJMLTrainingPipeline_)
+export class MJMLTrainingPipelineResolver extends ResolverBase {
+    @Query(() => RunMJMLTrainingPipelineViewResult)
+    async RunMJMLTrainingPipelineViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJMLTrainingPipelineViewResult)
+    async RunMJMLTrainingPipelineViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJMLTrainingPipelineViewResult)
+    async RunMJMLTrainingPipelineDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: ML Training Pipelines';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJMLTrainingPipeline_, { nullable: true })
+    async MJMLTrainingPipeline(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJMLTrainingPipeline_ | null> {
+        this.CheckUserReadPermissions('MJ: ML Training Pipelines', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMLTrainingPipelines')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: ML Training Pipelines', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: ML Training Pipelines', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @FieldResolver(() => [MJMLTrainingRun_])
+    async MJMLTrainingRuns_PipelineIDArray(@Root() mjmltrainingpipeline_: MJMLTrainingPipeline_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: ML Training Runs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMLTrainingRuns')} WHERE ${provider.QuoteIdentifier('PipelineID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: ML Training Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjmltrainingpipeline_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: ML Training Runs', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJMLModel_])
+    async MJMLModels_PipelineIDArray(@Root() mjmltrainingpipeline_: MJMLTrainingPipeline_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: ML Models', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMLModels')} WHERE ${provider.QuoteIdentifier('PipelineID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: ML Models', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjmltrainingpipeline_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: ML Models', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @Mutation(() => MJMLTrainingPipeline_)
+    async CreateMJMLTrainingPipeline(
+        @Arg('input', () => CreateMJMLTrainingPipelineInput) input: CreateMJMLTrainingPipelineInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: ML Training Pipelines', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJMLTrainingPipeline_)
+    async UpdateMJMLTrainingPipeline(
+        @Arg('input', () => UpdateMJMLTrainingPipelineInput) input: UpdateMJMLTrainingPipelineInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: ML Training Pipelines', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJMLTrainingPipeline_)
+    async DeleteMJMLTrainingPipeline(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: ML Training Pipelines', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: ML Training Runs
+//****************************************************************************
+@ObjectType({ description: `The ML-specific detail of a training attempt — the leaf that hangs off a generic ExperimentSessionIteration when part of an agent-driven search, OR stands alone (ExperimentSessionIterationID NULL) for a one-off manual train. Captures the exact feature set, algorithm, hyperparameters, validation results, and the model produced (ResultingModelID is nullable: a run may be pruned/failed and produce no model). The generic search-level accounting (leaderboard Score, rationale, the driving agent run) lives on the parent iteration; this row keeps the ML execution detail.` })
+export class MJMLTrainingRun_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `Foreign key to the ML Training Pipeline this run executed`}) 
+    @MaxLength(36)
+    PipelineID: string;
+        
+    @Field({nullable: true, description: `Foreign key to the MLModel this run produced, when it produced one (NULL for pruned/failed runs)`}) 
+    @MaxLength(36)
+    ResultingModelID?: string;
+        
+    @Field({nullable: true, description: `Optional foreign key to the generic ExperimentSessionIteration that owns this run (NULL for standalone/manual training outside a session)`}) 
+    @MaxLength(36)
+    ExperimentSessionIterationID?: string;
+        
+    @Field({nullable: true, description: `JSON of the exact feature set used for this run`}) 
+    FeaturesUsed?: string;
+        
+    @Field({description: `Foreign key to the algorithm used for this run`}) 
+    @MaxLength(36)
+    AlgorithmID: string;
+        
+    @Field({nullable: true, description: `JSON hyperparameters used for this run`}) 
+    Hyperparameters?: string;
+        
+    @Field({nullable: true, description: `JSON of all validation metrics, per-fold where applicable (the full metric blob; the parent iteration's Score is the single normalized leaderboard number)`}) 
+    ValidationResults?: string;
+        
+    @Field({description: `Run status: Pending, Running, Completed, Failed, or Pruned`}) 
+    @MaxLength(20)
+    Status: string;
+        
+    @Field({nullable: true, description: `Timestamp the run started`}) 
+    StartedAt?: Date;
+        
+    @Field({nullable: true, description: `Timestamp the run completed`}) 
+    CompletedAt?: Date;
+        
+    @Field(() => Float, {nullable: true, description: `Compute cost attributed to this run, for budget enforcement`}) 
+    ComputeCost?: number;
+        
+    @Field(() => Int, {nullable: true, description: `LLM tokens used by this run, for budget enforcement`}) 
+    TokensUsed?: number;
+        
+    @Field({nullable: true, description: `Notes / observations about this run`}) 
+    Notes?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(255)
+    Pipeline: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    ExperimentSessionIteration?: string;
+        
+    @Field() 
+    @MaxLength(255)
+    Algorithm: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: ML Training Runs
+//****************************************************************************
+@InputType()
+export class CreateMJMLTrainingRunInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    PipelineID?: string;
+
+    @Field({ nullable: true })
+    ResultingModelID: string | null;
+
+    @Field({ nullable: true })
+    ExperimentSessionIterationID: string | null;
+
+    @Field({ nullable: true })
+    FeaturesUsed: string | null;
+
+    @Field({ nullable: true })
+    AlgorithmID?: string;
+
+    @Field({ nullable: true })
+    Hyperparameters: string | null;
+
+    @Field({ nullable: true })
+    ValidationResults: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    StartedAt: Date | null;
+
+    @Field({ nullable: true })
+    CompletedAt: Date | null;
+
+    @Field(() => Float, { nullable: true })
+    ComputeCost: number | null;
+
+    @Field(() => Int, { nullable: true })
+    TokensUsed: number | null;
+
+    @Field({ nullable: true })
+    Notes: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: ML Training Runs
+//****************************************************************************
+@InputType()
+export class UpdateMJMLTrainingRunInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    PipelineID?: string;
+
+    @Field({ nullable: true })
+    ResultingModelID?: string | null;
+
+    @Field({ nullable: true })
+    ExperimentSessionIterationID?: string | null;
+
+    @Field({ nullable: true })
+    FeaturesUsed?: string | null;
+
+    @Field({ nullable: true })
+    AlgorithmID?: string;
+
+    @Field({ nullable: true })
+    Hyperparameters?: string | null;
+
+    @Field({ nullable: true })
+    ValidationResults?: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    StartedAt?: Date | null;
+
+    @Field({ nullable: true })
+    CompletedAt?: Date | null;
+
+    @Field(() => Float, { nullable: true })
+    ComputeCost?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    TokensUsed?: number | null;
+
+    @Field({ nullable: true })
+    Notes?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: ML Training Runs
+//****************************************************************************
+@ObjectType()
+export class RunMJMLTrainingRunViewResult {
+    @Field(() => [MJMLTrainingRun_])
+    Results: MJMLTrainingRun_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJMLTrainingRun_)
+export class MJMLTrainingRunResolver extends ResolverBase {
+    @Query(() => RunMJMLTrainingRunViewResult)
+    async RunMJMLTrainingRunViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJMLTrainingRunViewResult)
+    async RunMJMLTrainingRunViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJMLTrainingRunViewResult)
+    async RunMJMLTrainingRunDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: ML Training Runs';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJMLTrainingRun_, { nullable: true })
+    async MJMLTrainingRun(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJMLTrainingRun_ | null> {
+        this.CheckUserReadPermissions('MJ: ML Training Runs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMLTrainingRuns')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: ML Training Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: ML Training Runs', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJMLTrainingRun_)
+    async CreateMJMLTrainingRun(
+        @Arg('input', () => CreateMJMLTrainingRunInput) input: CreateMJMLTrainingRunInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: ML Training Runs', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJMLTrainingRun_)
+    async UpdateMJMLTrainingRun(
+        @Arg('input', () => UpdateMJMLTrainingRunInput) input: UpdateMJMLTrainingRunInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: ML Training Runs', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJMLTrainingRun_)
+    async DeleteMJMLTrainingRun(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: ML Training Runs', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
 // ENTITY CLASS for MJ: O Auth Auth Server Metadata Caches
 //****************************************************************************
 @ObjectType({ description: `Caches OAuth 2.0 Authorization Server Metadata (RFC 8414) to reduce discovery requests.` })
@@ -60568,6 +63606,10 @@ export class MJOpenApp_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `In-repo subdirectory the app was installed from for multi-app repositories (e.g. 'CRM/HubSpot'). NULL when the app's mj-app.json is at the repository root.`}) 
+    @MaxLength(500)
+    Subpath?: string;
+        
     @Field() 
     @MaxLength(100)
     InstalledByUser: string;
@@ -60642,6 +63684,9 @@ export class CreateMJOpenAppInput {
     @Field({ nullable: true })
     Status?: string;
 
+    @Field({ nullable: true })
+    Subpath: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -60705,6 +63750,9 @@ export class UpdateMJOpenAppInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field({ nullable: true })
+    Subpath?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -61558,6 +64606,639 @@ export class MJPermissionDomainResolver extends ResolverBase {
         const provider = GetReadWriteProvider(providers);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('MJ: Permission Domains', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Process Run Details
+//****************************************************************************
+@ObjectType({ description: `Per-record result within a Process Run: powers audit, resume (skip already-done records), and the run-viewer UX. One row per processed record. EXAMPLE: customer CUST-00417 -> Succeeded with ResultPayload {"satisfaction":"High","sentiment":0.82} and a link to its AI Agent Run; customer CUST-00418 -> Failed with ErrorMessage "Model timeout".` })
+export class MJProcessRunDetail_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `Foreign key to the parent Process Run`}) 
+    @MaxLength(36)
+    ProcessRunID: string;
+        
+    @Field({description: `Foreign key to the entity of the processed record. Stored (not inherited) because a single run may span entities for ad-hoc / engine-driven runs.`}) 
+    @MaxLength(36)
+    EntityID: string;
+        
+    @Field({description: `Primary key of the processed record, stored as text to remain composite-key safe`}) 
+    @MaxLength(450)
+    RecordID: string;
+        
+    @Field({description: `Per-record status: Pending, Succeeded, Failed, or Skipped`}) 
+    @MaxLength(20)
+    Status: string;
+        
+    @Field({nullable: true, description: `When processing of this record started`}) 
+    StartedAt?: Date;
+        
+    @Field({nullable: true, description: `When processing of this record completed`}) 
+    CompletedAt?: Date;
+        
+    @Field(() => Int, {nullable: true, description: `Processing duration for this record in milliseconds`}) 
+    DurationMs?: number;
+        
+    @Field(() => Int, {description: `Number of processing attempts for this record (supports retry)`}) 
+    AttemptCount: number;
+        
+    @Field({nullable: true, description: `Structured output payload (JSON) produced for this record`}) 
+    ResultPayload?: string;
+        
+    @Field({nullable: true, description: `Per-record error message when Status=Failed`}) 
+    ErrorMessage?: string;
+        
+    @Field({nullable: true, description: `Foreign key to the Action Execution Log for deep tracing, when the work was an Action`}) 
+    @MaxLength(36)
+    ActionExecutionLogID?: string;
+        
+    @Field({nullable: true, description: `Foreign key to the AI Agent Run for deep tracing, when the work was an Agent`}) 
+    @MaxLength(36)
+    AIAgentRunID?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(255)
+    Entity: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(425)
+    ActionExecutionLog?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    AIAgentRun?: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Process Run Details
+//****************************************************************************
+@InputType()
+export class CreateMJProcessRunDetailInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    ProcessRunID?: string;
+
+    @Field({ nullable: true })
+    EntityID?: string;
+
+    @Field({ nullable: true })
+    RecordID?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    StartedAt: Date | null;
+
+    @Field({ nullable: true })
+    CompletedAt: Date | null;
+
+    @Field(() => Int, { nullable: true })
+    DurationMs: number | null;
+
+    @Field(() => Int, { nullable: true })
+    AttemptCount?: number;
+
+    @Field({ nullable: true })
+    ResultPayload: string | null;
+
+    @Field({ nullable: true })
+    ErrorMessage: string | null;
+
+    @Field({ nullable: true })
+    ActionExecutionLogID: string | null;
+
+    @Field({ nullable: true })
+    AIAgentRunID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Process Run Details
+//****************************************************************************
+@InputType()
+export class UpdateMJProcessRunDetailInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    ProcessRunID?: string;
+
+    @Field({ nullable: true })
+    EntityID?: string;
+
+    @Field({ nullable: true })
+    RecordID?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    StartedAt?: Date | null;
+
+    @Field({ nullable: true })
+    CompletedAt?: Date | null;
+
+    @Field(() => Int, { nullable: true })
+    DurationMs?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    AttemptCount?: number;
+
+    @Field({ nullable: true })
+    ResultPayload?: string | null;
+
+    @Field({ nullable: true })
+    ErrorMessage?: string | null;
+
+    @Field({ nullable: true })
+    ActionExecutionLogID?: string | null;
+
+    @Field({ nullable: true })
+    AIAgentRunID?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Process Run Details
+//****************************************************************************
+@ObjectType()
+export class RunMJProcessRunDetailViewResult {
+    @Field(() => [MJProcessRunDetail_])
+    Results: MJProcessRunDetail_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJProcessRunDetail_)
+export class MJProcessRunDetailResolver extends ResolverBase {
+    @Query(() => RunMJProcessRunDetailViewResult)
+    async RunMJProcessRunDetailViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJProcessRunDetailViewResult)
+    async RunMJProcessRunDetailViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJProcessRunDetailViewResult)
+    async RunMJProcessRunDetailDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Process Run Details';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJProcessRunDetail_, { nullable: true })
+    async MJProcessRunDetail(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJProcessRunDetail_ | null> {
+        this.CheckUserReadPermissions('MJ: Process Run Details', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwProcessRunDetails')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Process Run Details', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Process Run Details', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJProcessRunDetail_)
+    async CreateMJProcessRunDetail(
+        @Arg('input', () => CreateMJProcessRunDetailInput) input: CreateMJProcessRunDetailInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Process Run Details', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJProcessRunDetail_)
+    async UpdateMJProcessRunDetail(
+        @Arg('input', () => UpdateMJProcessRunDetailInput) input: UpdateMJProcessRunDetailInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Process Run Details', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJProcessRunDetail_)
+    async DeleteMJProcessRunDetail(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Process Run Details', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Process Runs
+//****************************************************************************
+@ObjectType({ description: `Source-agnostic header for one execution of any set-processing job. Deliberately generic: a Record Process run sets RecordProcessID, but legacy/engine-driven jobs (e.g., a geocoding sweep or vector sync) keep their own source tables and still record a run here with RecordProcessID = NULL, giving every batch a uniform audit + resume trail. EXAMPLE: the Saturday 2am run of "Weekly Customer Health Summary" over 1,284 active customers (RecordProcessID set, TriggeredBy=Schedule); or a nightly geocoding sweep (RecordProcessID NULL).` })
+export class MJProcessRun_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({nullable: true, description: `Foreign key to the Record Process that spawned this run; NULL for ad-hoc / engine-driven runs not tied to a saved definition`}) 
+    @MaxLength(36)
+    RecordProcessID?: string;
+        
+    @Field({nullable: true, description: `Foreign key to the entity processed by this run, when the run is entity-scoped`}) 
+    @MaxLength(36)
+    EntityID?: string;
+        
+    @Field({description: `What triggered this run: OnChange, Schedule, OnDemand, or Manual`}) 
+    @MaxLength(20)
+    TriggeredBy: string;
+        
+    @Field({description: `The kind of record-set source resolved for this run: View, List, Filter, Array, Keyset, or SingleRecord`}) 
+    @MaxLength(20)
+    SourceType: string;
+        
+    @Field({nullable: true, description: `Polymorphic source identifier (e.g., ViewID or ListID) when applicable; no FK because it spans entities`}) 
+    @MaxLength(36)
+    SourceID?: string;
+        
+    @Field({nullable: true, description: `Resolved filter snapshot used to materialize the record set for this run`}) 
+    SourceFilter?: string;
+        
+    @Field({nullable: true, description: `Foreign key to the Scheduled Job Run that launched this run, when scheduler-launched`}) 
+    @MaxLength(36)
+    ScheduledJobRunID?: string;
+        
+    @Field({description: `Run status: Pending, Running, Paused, Completed, Failed, or Cancelled`}) 
+    @MaxLength(20)
+    Status: string;
+        
+    @Field({nullable: true, description: `When the run started`}) 
+    StartTime?: Date;
+        
+    @Field({nullable: true, description: `When the run ended`}) 
+    EndTime?: Date;
+        
+    @Field(() => Int, {nullable: true, description: `Estimated or known total number of records to process`}) 
+    TotalItemCount?: number;
+        
+    @Field(() => Int, {description: `Count of records processed so far`}) 
+    ProcessedItems: number;
+        
+    @Field(() => Int, {description: `Count of records processed successfully`}) 
+    SuccessCount: number;
+        
+    @Field(() => Int, {description: `Count of records that failed processing`}) 
+    ErrorCount: number;
+        
+    @Field(() => Int, {description: `Count of records skipped (e.g., unchanged per watermark)`}) 
+    SkippedCount: number;
+        
+    @Field(() => Int, {nullable: true, description: `Offset-based resume cursor (StartRow) for sources that paginate by offset`}) 
+    LastProcessedOffset?: number;
+        
+    @Field({nullable: true, description: `Keyset-based resume cursor (AfterKey) for sources that paginate by seek`}) 
+    @MaxLength(450)
+    LastProcessedKey?: string;
+        
+    @Field(() => Int, {nullable: true, description: `Effective batch size for this run`}) 
+    BatchSize?: number;
+        
+    @Field(() => Boolean, {description: `Pause/cancel handshake flag honored by the processor between batches`}) 
+    CancellationRequested: boolean;
+        
+    @Field({nullable: true, description: `JSON snapshot of the effective configuration for this run`}) 
+    Configuration?: string;
+        
+    @Field({nullable: true, description: `Run-level error message when Status=Failed`}) 
+    ErrorMessage?: string;
+        
+    @Field({nullable: true, description: `Foreign key to the user who started the run`}) 
+    @MaxLength(36)
+    StartedByUserID?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field(() => Boolean, {description: `When 1, this run was a dry-run (compute-only) preview: the per-record diffs were computed and persisted as Process Run Details, but no changes were written back to the target records. When 0, the run applied its changes.`}) 
+    DryRun: boolean;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    RecordProcess?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    Entity?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    ScheduledJobRun?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    StartedByUser?: string;
+        
+    @Field(() => [MJProcessRunDetail_])
+    MJProcessRunDetails_ProcessRunIDArray: MJProcessRunDetail_[]; // Link to MJProcessRunDetails
+    
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Process Runs
+//****************************************************************************
+@InputType()
+export class CreateMJProcessRunInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    RecordProcessID: string | null;
+
+    @Field({ nullable: true })
+    EntityID: string | null;
+
+    @Field({ nullable: true })
+    TriggeredBy?: string;
+
+    @Field({ nullable: true })
+    SourceType?: string;
+
+    @Field({ nullable: true })
+    SourceID: string | null;
+
+    @Field({ nullable: true })
+    SourceFilter: string | null;
+
+    @Field({ nullable: true })
+    ScheduledJobRunID: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    StartTime: Date | null;
+
+    @Field({ nullable: true })
+    EndTime: Date | null;
+
+    @Field(() => Int, { nullable: true })
+    TotalItemCount: number | null;
+
+    @Field(() => Int, { nullable: true })
+    ProcessedItems?: number;
+
+    @Field(() => Int, { nullable: true })
+    SuccessCount?: number;
+
+    @Field(() => Int, { nullable: true })
+    ErrorCount?: number;
+
+    @Field(() => Int, { nullable: true })
+    SkippedCount?: number;
+
+    @Field(() => Int, { nullable: true })
+    LastProcessedOffset: number | null;
+
+    @Field({ nullable: true })
+    LastProcessedKey: string | null;
+
+    @Field(() => Int, { nullable: true })
+    BatchSize: number | null;
+
+    @Field(() => Boolean, { nullable: true })
+    CancellationRequested?: boolean;
+
+    @Field({ nullable: true })
+    Configuration: string | null;
+
+    @Field({ nullable: true })
+    ErrorMessage: string | null;
+
+    @Field({ nullable: true })
+    StartedByUserID: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    DryRun?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Process Runs
+//****************************************************************************
+@InputType()
+export class UpdateMJProcessRunInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    RecordProcessID?: string | null;
+
+    @Field({ nullable: true })
+    EntityID?: string | null;
+
+    @Field({ nullable: true })
+    TriggeredBy?: string;
+
+    @Field({ nullable: true })
+    SourceType?: string;
+
+    @Field({ nullable: true })
+    SourceID?: string | null;
+
+    @Field({ nullable: true })
+    SourceFilter?: string | null;
+
+    @Field({ nullable: true })
+    ScheduledJobRunID?: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    StartTime?: Date | null;
+
+    @Field({ nullable: true })
+    EndTime?: Date | null;
+
+    @Field(() => Int, { nullable: true })
+    TotalItemCount?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    ProcessedItems?: number;
+
+    @Field(() => Int, { nullable: true })
+    SuccessCount?: number;
+
+    @Field(() => Int, { nullable: true })
+    ErrorCount?: number;
+
+    @Field(() => Int, { nullable: true })
+    SkippedCount?: number;
+
+    @Field(() => Int, { nullable: true })
+    LastProcessedOffset?: number | null;
+
+    @Field({ nullable: true })
+    LastProcessedKey?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    BatchSize?: number | null;
+
+    @Field(() => Boolean, { nullable: true })
+    CancellationRequested?: boolean;
+
+    @Field({ nullable: true })
+    Configuration?: string | null;
+
+    @Field({ nullable: true })
+    ErrorMessage?: string | null;
+
+    @Field({ nullable: true })
+    StartedByUserID?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    DryRun?: boolean;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Process Runs
+//****************************************************************************
+@ObjectType()
+export class RunMJProcessRunViewResult {
+    @Field(() => [MJProcessRun_])
+    Results: MJProcessRun_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJProcessRun_)
+export class MJProcessRunResolver extends ResolverBase {
+    @Query(() => RunMJProcessRunViewResult)
+    async RunMJProcessRunViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJProcessRunViewResult)
+    async RunMJProcessRunViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJProcessRunViewResult)
+    async RunMJProcessRunDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Process Runs';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJProcessRun_, { nullable: true })
+    async MJProcessRun(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJProcessRun_ | null> {
+        this.CheckUserReadPermissions('MJ: Process Runs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwProcessRuns')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Process Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Process Runs', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @FieldResolver(() => [MJProcessRunDetail_])
+    async MJProcessRunDetails_ProcessRunIDArray(@Root() mjprocessrun_: MJProcessRun_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Process Run Details', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwProcessRunDetails')} WHERE ${provider.QuoteIdentifier('ProcessRunID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Process Run Details', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjprocessrun_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Process Run Details', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @Mutation(() => MJProcessRun_)
+    async CreateMJProcessRun(
+        @Arg('input', () => CreateMJProcessRunInput) input: CreateMJProcessRunInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Process Runs', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJProcessRun_)
+    async UpdateMJProcessRun(
+        @Arg('input', () => UpdateMJProcessRunInput) input: UpdateMJProcessRunInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Process Runs', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJProcessRun_)
+    async DeleteMJProcessRun(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Process Runs', key, options, provider, userPayload, pubSub);
     }
     
 }
@@ -66811,6 +70492,1423 @@ export class MJRecordMergeLogResolver extends ResolverBase {
 }
 
 //****************************************************************************
+// ENTITY CLASS for MJ: Record Process Categories
+//****************************************************************************
+@ObjectType({ description: `Hierarchical folder for organizing Record Processes in the UI. Example: "Customer Lifecycle" with a child category "Retention".` })
+export class MJRecordProcessCategory_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `Display name of the category`}) 
+    @MaxLength(255)
+    Name: string;
+        
+    @Field({nullable: true, description: `Optional description of what belongs in this category`}) 
+    Description?: string;
+        
+    @Field({nullable: true, description: `Self-referencing foreign key to the parent category, enabling a nested folder hierarchy (NULL for a top-level category)`}) 
+    @MaxLength(36)
+    ParentID?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    Parent?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    RootParentID?: string;
+        
+    @Field(() => [MJRecordProcessCategory_])
+    MJRecordProcessCategories_ParentIDArray: MJRecordProcessCategory_[]; // Link to MJRecordProcessCategories
+    
+    @Field(() => [MJRecordProcess_])
+    MJRecordProcesses_CategoryIDArray: MJRecordProcess_[]; // Link to MJRecordProcesses
+    
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Record Process Categories
+//****************************************************************************
+@InputType()
+export class CreateMJRecordProcessCategoryInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    ParentID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Record Process Categories
+//****************************************************************************
+@InputType()
+export class UpdateMJRecordProcessCategoryInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    ParentID?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Record Process Categories
+//****************************************************************************
+@ObjectType()
+export class RunMJRecordProcessCategoryViewResult {
+    @Field(() => [MJRecordProcessCategory_])
+    Results: MJRecordProcessCategory_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJRecordProcessCategory_)
+export class MJRecordProcessCategoryResolver extends ResolverBase {
+    @Query(() => RunMJRecordProcessCategoryViewResult)
+    async RunMJRecordProcessCategoryViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJRecordProcessCategoryViewResult)
+    async RunMJRecordProcessCategoryViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJRecordProcessCategoryViewResult)
+    async RunMJRecordProcessCategoryDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Record Process Categories';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJRecordProcessCategory_, { nullable: true })
+    async MJRecordProcessCategory(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJRecordProcessCategory_ | null> {
+        this.CheckUserReadPermissions('MJ: Record Process Categories', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwRecordProcessCategories')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Record Process Categories', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Record Process Categories', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @FieldResolver(() => [MJRecordProcessCategory_])
+    async MJRecordProcessCategories_ParentIDArray(@Root() mjrecordprocesscategory_: MJRecordProcessCategory_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Record Process Categories', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwRecordProcessCategories')} WHERE ${provider.QuoteIdentifier('ParentID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Record Process Categories', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjrecordprocesscategory_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Record Process Categories', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJRecordProcess_])
+    async MJRecordProcesses_CategoryIDArray(@Root() mjrecordprocesscategory_: MJRecordProcessCategory_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Record Processes', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwRecordProcesses')} WHERE ${provider.QuoteIdentifier('CategoryID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Record Processes', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjrecordprocesscategory_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Record Processes', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @Mutation(() => MJRecordProcessCategory_)
+    async CreateMJRecordProcessCategory(
+        @Arg('input', () => CreateMJRecordProcessCategoryInput) input: CreateMJRecordProcessCategoryInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Record Process Categories', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJRecordProcessCategory_)
+    async UpdateMJRecordProcessCategory(
+        @Arg('input', () => UpdateMJRecordProcessCategoryInput) input: UpdateMJRecordProcessCategoryInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Record Process Categories', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJRecordProcessCategory_)
+    async DeleteMJRecordProcessCategory(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Record Process Categories', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Record Process Watermarks
+//****************************************************************************
+@ObjectType({ description: `Per-record change-detection watermark backing WatermarkStrategy=Checksum. Stores the last content hash a Record Process processed for a given record so unchanged records are skipped on the next run. Only used by Checksum mode; UpdatedAt mode compares __mj_UpdatedAt and stores nothing here.` })
+export class MJRecordProcessWatermark_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `Foreign key to the Record Process this watermark belongs to`}) 
+    @MaxLength(36)
+    RecordProcessID: string;
+        
+    @Field({description: `Foreign key to the entity of the watermarked record`}) 
+    @MaxLength(36)
+    EntityID: string;
+        
+    @Field({description: `Primary key of the watermarked record, stored as text to remain composite-key safe`}) 
+    @MaxLength(450)
+    RecordID: string;
+        
+    @Field({description: `Content hash of the record as of the last time it was processed by this Record Process`}) 
+    @MaxLength(128)
+    Hash: string;
+        
+    @Field({description: `When this record was last processed by this Record Process`}) 
+    LastProcessedAt: Date;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(255)
+    RecordProcess: string;
+        
+    @Field() 
+    @MaxLength(255)
+    Entity: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Record Process Watermarks
+//****************************************************************************
+@InputType()
+export class CreateMJRecordProcessWatermarkInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    RecordProcessID?: string;
+
+    @Field({ nullable: true })
+    EntityID?: string;
+
+    @Field({ nullable: true })
+    RecordID?: string;
+
+    @Field({ nullable: true })
+    Hash?: string;
+
+    @Field({ nullable: true })
+    LastProcessedAt?: Date;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Record Process Watermarks
+//****************************************************************************
+@InputType()
+export class UpdateMJRecordProcessWatermarkInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    RecordProcessID?: string;
+
+    @Field({ nullable: true })
+    EntityID?: string;
+
+    @Field({ nullable: true })
+    RecordID?: string;
+
+    @Field({ nullable: true })
+    Hash?: string;
+
+    @Field({ nullable: true })
+    LastProcessedAt?: Date;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Record Process Watermarks
+//****************************************************************************
+@ObjectType()
+export class RunMJRecordProcessWatermarkViewResult {
+    @Field(() => [MJRecordProcessWatermark_])
+    Results: MJRecordProcessWatermark_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJRecordProcessWatermark_)
+export class MJRecordProcessWatermarkResolver extends ResolverBase {
+    @Query(() => RunMJRecordProcessWatermarkViewResult)
+    async RunMJRecordProcessWatermarkViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJRecordProcessWatermarkViewResult)
+    async RunMJRecordProcessWatermarkViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJRecordProcessWatermarkViewResult)
+    async RunMJRecordProcessWatermarkDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Record Process Watermarks';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJRecordProcessWatermark_, { nullable: true })
+    async MJRecordProcessWatermark(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJRecordProcessWatermark_ | null> {
+        this.CheckUserReadPermissions('MJ: Record Process Watermarks', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwRecordProcessWatermarks')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Record Process Watermarks', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Record Process Watermarks', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJRecordProcessWatermark_)
+    async CreateMJRecordProcessWatermark(
+        @Arg('input', () => CreateMJRecordProcessWatermarkInput) input: CreateMJRecordProcessWatermarkInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Record Process Watermarks', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJRecordProcessWatermark_)
+    async UpdateMJRecordProcessWatermark(
+        @Arg('input', () => UpdateMJRecordProcessWatermarkInput) input: UpdateMJRecordProcessWatermarkInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Record Process Watermarks', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJRecordProcessWatermark_)
+    async DeleteMJRecordProcessWatermark(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Record Process Watermarks', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Record Processes
+//****************************************************************************
+@ObjectType({ description: `A declarative, reusable job definition that binds three axes of a business process: WORK (an Action or an Agent) x SCOPE (a single record, a User View, a List, or an ad-hoc Filter) x TRIGGER (on-change save hooks, a cron schedule, and/or on demand). One row is one configured process; each execution of it produces a Process Run with per-record Process Run Details. EXAMPLE: a "Weekly Customer Health Summary" row runs the "Customer Summarizer" agent over the "Active Customers" view every Saturday 2am, also whenever a customer\'s NPS/support fields change, and on demand; for each customer it infers {satisfaction, sentiment, personalityStyle, summary} and writes satisfaction/sentiment back onto the Customer plus a summary into a Customer Insights child row, skipping customers unchanged since the last run.` })
+export class MJRecordProcess_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `Human-readable name of the process definition (e.g., "Weekly Customer Health Summary")`}) 
+    @MaxLength(255)
+    Name: string;
+        
+    @Field({nullable: true, description: `Optional description of what this process does`}) 
+    Description?: string;
+        
+    @Field({nullable: true, description: `Optional hierarchical category for organizing this process in the UI`}) 
+    @MaxLength(36)
+    CategoryID?: string;
+        
+    @Field({description: `Foreign key to the target entity whose records this process operates on`}) 
+    @MaxLength(36)
+    EntityID: string;
+        
+    @Field({description: `Lifecycle status: Draft (not yet wired), Active (triggers live), or Disabled`}) 
+    @MaxLength(20)
+    Status: string;
+        
+    @Field({description: `Whether the work is an Action, an Agent, or an Infer (per-record AI Prompt). Agents are dispatched through the Execute Agent action and must be top-level + ExposeAsAction; Infer runs the AI Prompt named by PromptID for each record and writes its structured output back via OutputMapping.`}) 
+    @MaxLength(20)
+    WorkType: string;
+        
+    @Field({nullable: true, description: `Foreign key to the Action to run, when WorkType=Action`}) 
+    @MaxLength(36)
+    ActionID?: string;
+        
+    @Field({nullable: true, description: `Foreign key to the AI Agent to run, when WorkType=Agent`}) 
+    @MaxLength(36)
+    AgentID?: string;
+        
+    @Field({nullable: true, description: `Foreign key to the AI Prompt to run for each record, when WorkType=Infer. The prompt's structured output is written back to the data model via OutputMapping.`}) 
+    @MaxLength(36)
+    PromptID?: string;
+        
+    @Field({description: `How the record set is scoped for the Schedule and On-Demand triggers: SingleRecord, View, List, or Filter. The On-Change trigger is always single-record and ignores this.`}) 
+    @MaxLength(20)
+    ScopeType: string;
+        
+    @Field({nullable: true, description: `Foreign key to the User View defining the scope, when ScopeType=View`}) 
+    @MaxLength(36)
+    ScopeViewID?: string;
+        
+    @Field({nullable: true, description: `Foreign key to the List defining the scope, when ScopeType=List`}) 
+    @MaxLength(36)
+    ScopeListID?: string;
+        
+    @Field({nullable: true, description: `Ad-hoc WHERE clause used to resolve the record set, when ScopeType=Filter`}) 
+    ScopeFilter?: string;
+        
+    @Field(() => Boolean, {description: `When 1, the process runs per-record on save via an owned Entity Action`}) 
+    OnChangeEnabled: boolean;
+        
+    @Field({nullable: true, description: `Which save event fires the on-change trigger: AfterCreate, AfterUpdate, AfterDelete, or Validate`}) 
+    @MaxLength(30)
+    OnChangeInvocationType?: string;
+        
+    @Field({nullable: true, description: `Gating expression evaluated against the changed record (with changed-fields context) that compiles into the owned Entity Action Filter; only when it passes does the on-change trigger fire`}) 
+    OnChangeFilter?: string;
+        
+    @Field(() => Boolean, {description: `When 1, the process runs on a cron schedule via an owned Scheduled Job`}) 
+    ScheduleEnabled: boolean;
+        
+    @Field({nullable: true, description: `Cron expression for the schedule trigger, when ScheduleEnabled=1`}) 
+    @MaxLength(120)
+    CronExpression?: string;
+        
+    @Field({nullable: true, description: `IANA timezone for evaluating the cron expression (default UTC)`}) 
+    @MaxLength(100)
+    Timezone?: string;
+        
+    @Field(() => Boolean, {description: `When 1, the process can be run on demand (button / resolver)`}) 
+    OnDemandEnabled: boolean;
+        
+    @Field({nullable: true, description: `JSON mapping describing how a record maps to the work inputs (optionally including an EntityDocumentID for render-to-text)`}) 
+    InputMapping?: string;
+        
+    @Field({nullable: true, description: `JSON mapping describing how the structured output payload writes back (to fields, a child record, or tags)`}) 
+    OutputMapping?: string;
+        
+    @Field(() => Boolean, {description: `When 1, records whose watermark indicates no change since the last run are skipped`}) 
+    SkipUnchanged: boolean;
+        
+    @Field({nullable: true, description: `How unchanged records are detected for SkipUnchanged: Checksum (per-record content hash, stored in RecordProcessWatermark), UpdatedAt (compares __mj_UpdatedAt, stores nothing), or None`}) 
+    @MaxLength(20)
+    WatermarkStrategy?: string;
+        
+    @Field(() => Int, {nullable: true, description: `Number of records processed per batch (default 100)`}) 
+    BatchSize?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Maximum number of records processed concurrently within a batch (default 1)`}) 
+    MaxConcurrency?: number;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true, description: `JSON configuration for the process's work, used by work types that need structured config beyond Input/Output mappings. For WorkType='FieldRules' this holds the serialized FieldRuleSet (the rules applied to each record). NULL for work types that do not use it.`}) 
+    Configuration?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    Category?: string;
+        
+    @Field() 
+    @MaxLength(255)
+    Entity: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(425)
+    Action?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    Agent?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    Prompt?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    ScopeView?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    ScopeList?: string;
+        
+    @Field(() => [MJRecordProcessWatermark_])
+    MJRecordProcessWatermarks_RecordProcessIDArray: MJRecordProcessWatermark_[]; // Link to MJRecordProcessWatermarks
+    
+    @Field(() => [MJProcessRun_])
+    MJProcessRuns_RecordProcessIDArray: MJProcessRun_[]; // Link to MJProcessRuns
+    
+    @Field(() => [MJMLModelScoringBinding_])
+    MJMLModelScoringBindings_RecordProcessIDArray: MJMLModelScoringBinding_[]; // Link to MJMLModelScoringBindings
+    
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Record Processes
+//****************************************************************************
+@InputType()
+export class CreateMJRecordProcessInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    CategoryID: string | null;
+
+    @Field({ nullable: true })
+    EntityID?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    WorkType?: string;
+
+    @Field({ nullable: true })
+    ActionID: string | null;
+
+    @Field({ nullable: true })
+    AgentID: string | null;
+
+    @Field({ nullable: true })
+    PromptID: string | null;
+
+    @Field({ nullable: true })
+    ScopeType?: string;
+
+    @Field({ nullable: true })
+    ScopeViewID: string | null;
+
+    @Field({ nullable: true })
+    ScopeListID: string | null;
+
+    @Field({ nullable: true })
+    ScopeFilter: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    OnChangeEnabled?: boolean;
+
+    @Field({ nullable: true })
+    OnChangeInvocationType: string | null;
+
+    @Field({ nullable: true })
+    OnChangeFilter: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    ScheduleEnabled?: boolean;
+
+    @Field({ nullable: true })
+    CronExpression: string | null;
+
+    @Field({ nullable: true })
+    Timezone?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    OnDemandEnabled?: boolean;
+
+    @Field({ nullable: true })
+    InputMapping: string | null;
+
+    @Field({ nullable: true })
+    OutputMapping: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    SkipUnchanged?: boolean;
+
+    @Field({ nullable: true })
+    WatermarkStrategy: string | null;
+
+    @Field(() => Int, { nullable: true })
+    BatchSize?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    MaxConcurrency?: number | null;
+
+    @Field({ nullable: true })
+    Configuration: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Record Processes
+//****************************************************************************
+@InputType()
+export class UpdateMJRecordProcessInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    CategoryID?: string | null;
+
+    @Field({ nullable: true })
+    EntityID?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    WorkType?: string;
+
+    @Field({ nullable: true })
+    ActionID?: string | null;
+
+    @Field({ nullable: true })
+    AgentID?: string | null;
+
+    @Field({ nullable: true })
+    PromptID?: string | null;
+
+    @Field({ nullable: true })
+    ScopeType?: string;
+
+    @Field({ nullable: true })
+    ScopeViewID?: string | null;
+
+    @Field({ nullable: true })
+    ScopeListID?: string | null;
+
+    @Field({ nullable: true })
+    ScopeFilter?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    OnChangeEnabled?: boolean;
+
+    @Field({ nullable: true })
+    OnChangeInvocationType?: string | null;
+
+    @Field({ nullable: true })
+    OnChangeFilter?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    ScheduleEnabled?: boolean;
+
+    @Field({ nullable: true })
+    CronExpression?: string | null;
+
+    @Field({ nullable: true })
+    Timezone?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    OnDemandEnabled?: boolean;
+
+    @Field({ nullable: true })
+    InputMapping?: string | null;
+
+    @Field({ nullable: true })
+    OutputMapping?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    SkipUnchanged?: boolean;
+
+    @Field({ nullable: true })
+    WatermarkStrategy?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    BatchSize?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    MaxConcurrency?: number | null;
+
+    @Field({ nullable: true })
+    Configuration?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Record Processes
+//****************************************************************************
+@ObjectType()
+export class RunMJRecordProcessViewResult {
+    @Field(() => [MJRecordProcess_])
+    Results: MJRecordProcess_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJRecordProcess_)
+export class MJRecordProcessResolver extends ResolverBase {
+    @Query(() => RunMJRecordProcessViewResult)
+    async RunMJRecordProcessViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJRecordProcessViewResult)
+    async RunMJRecordProcessViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJRecordProcessViewResult)
+    async RunMJRecordProcessDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Record Processes';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJRecordProcess_, { nullable: true })
+    async MJRecordProcess(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJRecordProcess_ | null> {
+        this.CheckUserReadPermissions('MJ: Record Processes', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwRecordProcesses')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Record Processes', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Record Processes', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @FieldResolver(() => [MJRecordProcessWatermark_])
+    async MJRecordProcessWatermarks_RecordProcessIDArray(@Root() mjrecordprocess_: MJRecordProcess_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Record Process Watermarks', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwRecordProcessWatermarks')} WHERE ${provider.QuoteIdentifier('RecordProcessID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Record Process Watermarks', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjrecordprocess_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Record Process Watermarks', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJProcessRun_])
+    async MJProcessRuns_RecordProcessIDArray(@Root() mjrecordprocess_: MJRecordProcess_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Process Runs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwProcessRuns')} WHERE ${provider.QuoteIdentifier('RecordProcessID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Process Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjrecordprocess_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Process Runs', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJMLModelScoringBinding_])
+    async MJMLModelScoringBindings_RecordProcessIDArray(@Root() mjrecordprocess_: MJRecordProcess_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: ML Model Scoring Bindings', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMLModelScoringBindings')} WHERE ${provider.QuoteIdentifier('RecordProcessID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: ML Model Scoring Bindings', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjrecordprocess_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: ML Model Scoring Bindings', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @Mutation(() => MJRecordProcess_)
+    async CreateMJRecordProcess(
+        @Arg('input', () => CreateMJRecordProcessInput) input: CreateMJRecordProcessInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Record Processes', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJRecordProcess_)
+    async UpdateMJRecordProcess(
+        @Arg('input', () => UpdateMJRecordProcessInput) input: UpdateMJRecordProcessInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Record Processes', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJRecordProcess_)
+    async DeleteMJRecordProcess(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Record Processes', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Remote Operation Categories
+//****************************************************************************
+@ObjectType({ description: `Hierarchical folder for organizing Remote Operations in the UI. Example: "Record Processes" with a child category "Control" holding RunNow / Pause / Cancel.` })
+export class MJRemoteOperationCategory_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `Display name of the category`}) 
+    @MaxLength(255)
+    Name: string;
+        
+    @Field({nullable: true, description: `Optional description of what belongs in this category`}) 
+    Description?: string;
+        
+    @Field({nullable: true, description: `Self-referencing foreign key to the parent category, enabling a nested folder hierarchy (NULL for a top-level category)`}) 
+    @MaxLength(36)
+    ParentID?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    Parent?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    RootParentID?: string;
+        
+    @Field(() => [MJRemoteOperationCategory_])
+    MJRemoteOperationCategories_ParentIDArray: MJRemoteOperationCategory_[]; // Link to MJRemoteOperationCategories
+    
+    @Field(() => [MJRemoteOperation_])
+    MJRemoteOperations_CategoryIDArray: MJRemoteOperation_[]; // Link to MJRemoteOperations
+    
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Remote Operation Categories
+//****************************************************************************
+@InputType()
+export class CreateMJRemoteOperationCategoryInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    ParentID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Remote Operation Categories
+//****************************************************************************
+@InputType()
+export class UpdateMJRemoteOperationCategoryInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    ParentID?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Remote Operation Categories
+//****************************************************************************
+@ObjectType()
+export class RunMJRemoteOperationCategoryViewResult {
+    @Field(() => [MJRemoteOperationCategory_])
+    Results: MJRemoteOperationCategory_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJRemoteOperationCategory_)
+export class MJRemoteOperationCategoryResolver extends ResolverBase {
+    @Query(() => RunMJRemoteOperationCategoryViewResult)
+    async RunMJRemoteOperationCategoryViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJRemoteOperationCategoryViewResult)
+    async RunMJRemoteOperationCategoryViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJRemoteOperationCategoryViewResult)
+    async RunMJRemoteOperationCategoryDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Remote Operation Categories';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJRemoteOperationCategory_, { nullable: true })
+    async MJRemoteOperationCategory(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJRemoteOperationCategory_ | null> {
+        this.CheckUserReadPermissions('MJ: Remote Operation Categories', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwRemoteOperationCategories')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Remote Operation Categories', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Remote Operation Categories', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @FieldResolver(() => [MJRemoteOperationCategory_])
+    async MJRemoteOperationCategories_ParentIDArray(@Root() mjremoteoperationcategory_: MJRemoteOperationCategory_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Remote Operation Categories', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwRemoteOperationCategories')} WHERE ${provider.QuoteIdentifier('ParentID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Remote Operation Categories', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjremoteoperationcategory_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Remote Operation Categories', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJRemoteOperation_])
+    async MJRemoteOperations_CategoryIDArray(@Root() mjremoteoperationcategory_: MJRemoteOperationCategory_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Remote Operations', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwRemoteOperations')} WHERE ${provider.QuoteIdentifier('CategoryID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Remote Operations', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjremoteoperationcategory_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Remote Operations', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @Mutation(() => MJRemoteOperationCategory_)
+    async CreateMJRemoteOperationCategory(
+        @Arg('input', () => CreateMJRemoteOperationCategoryInput) input: CreateMJRemoteOperationCategoryInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Remote Operation Categories', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJRemoteOperationCategory_)
+    async UpdateMJRemoteOperationCategory(
+        @Arg('input', () => UpdateMJRemoteOperationCategoryInput) input: UpdateMJRemoteOperationCategoryInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Remote Operation Categories', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJRemoteOperationCategory_)
+    async DeleteMJRemoteOperationCategory(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Remote Operation Categories', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Remote Operations
+//****************************************************************************
+@ObjectType({ description: `Definition of a typed, provider-routed server operation invoked identically from the client (marshalled over GraphQL) and the server (dispatched in-process) - the typed peer of BaseEntity (CRUD) and RunView (set reads) for arbitrary capabilities. Input/output types are declared here and emitted by CodeGen into a typed base class; the body may be hand-written or AI-authored from Description. EXAMPLE: "RecordProcess.RunNow" (ExecutionMode=LongRunning) takes {recordProcessID} and returns {processRunID}, authorized by the recordprocess:execute scope plus the caller\'s entity permissions.` })
+export class MJRemoteOperation_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `Human-readable name of the operation`}) 
+    @MaxLength(255)
+    Name: string;
+        
+    @Field({description: `Stable, unique registry key and wire token used to dispatch the operation (e.g., "RecordProcess.RunNow"). Namespaced by convention.`}) 
+    @MaxLength(255)
+    OperationKey: string;
+        
+    @Field({nullable: true, description: `Optional hierarchical category for organizing this operation in the UI`}) 
+    @MaxLength(36)
+    CategoryID?: string;
+        
+    @Field({nullable: true, description: `Human description of the operation; also the seed for AI-generated implementation code when GenerationType=AI`}) 
+    Description?: string;
+        
+    @Field({nullable: true, description: `TypeScript type name for the operation input (emitted by CodeGen as the TInput interface)`}) 
+    @MaxLength(255)
+    InputTypeName?: string;
+        
+    @Field({nullable: true, description: `Raw TypeScript interface/type source defining the input shape (same mechanism as EntityField JSON-type definitions)`}) 
+    InputTypeDefinition?: string;
+        
+    @Field(() => Boolean, {description: `When 1, the input type is emitted as an array (TInput[])`}) 
+    InputTypeIsArray: boolean;
+        
+    @Field({nullable: true, description: `TypeScript type name for the operation output (emitted by CodeGen as the TOutput interface)`}) 
+    @MaxLength(255)
+    OutputTypeName?: string;
+        
+    @Field({nullable: true, description: `Raw TypeScript interface/type source defining the output shape`}) 
+    OutputTypeDefinition?: string;
+        
+    @Field(() => Boolean, {description: `When 1, the output type is emitted as an array (TOutput[])`}) 
+    OutputTypeIsArray: boolean;
+        
+    @Field({description: `Sync (request/response) or LongRunning (returns a handle; supports detached and attached consumption)`}) 
+    @MaxLength(20)
+    ExecutionMode: string;
+        
+    @Field({nullable: true, description: `Optional API-key scope string (e.g., recordprocess:execute) enforced for API-key/MCP callers; NULL means no scope gate (interactive users are still bounded by their entity permissions)`}) 
+    @MaxLength(255)
+    RequiredScope?: string;
+        
+    @Field(() => Boolean, {description: `When 1, only the system user may invoke this operation`}) 
+    RequiresSystemUser: boolean;
+        
+    @Field({description: `How the server implementation is provided: Manual (hand-written subclass), AI (generated from Description), or Default (standard generated plumbing)`}) 
+    @MaxLength(20)
+    GenerationType: string;
+        
+    @Field({nullable: true, description: `The AI-generated implementation body (when GenerationType=AI); regenerated only when Description changes`}) 
+    Code?: string;
+        
+    @Field({description: `Human approval gate for AI-generated code: Pending, Approved, or Rejected. Only Approved AI code is emitted and routable.`}) 
+    @MaxLength(20)
+    CodeApprovalStatus: string;
+        
+    @Field({nullable: true, description: `Foreign key to the user who approved the generated code`}) 
+    @MaxLength(36)
+    CodeApprovedByUserID?: string;
+        
+    @Field({nullable: true, description: `When the generated code was approved`}) 
+    CodeApprovedAt?: Date;
+        
+    @Field({nullable: true, description: `Fingerprint of the input/output contract; carried in the wire envelope so the server can reject a stale client loudly instead of mis-deserializing`}) 
+    @MaxLength(100)
+    ContractFingerprint?: string;
+        
+    @Field({description: `Lifecycle status: Active (routable), Disabled, or Pending. Only Active operations can be invoked.`}) 
+    @MaxLength(20)
+    Status: string;
+        
+    @Field(() => Int, {nullable: true, description: `Optional result cache TTL in seconds (NULL = no caching)`}) 
+    CacheTTLSeconds?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Optional execution timeout in milliseconds`}) 
+    TimeoutMS?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Optional cap on concurrent executions of this operation`}) 
+    MaxConcurrency?: number;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field(() => Boolean, {description: `When 1, the AI-generated Code is frozen and Save() will not regenerate it even if Description changes (the Generated-Actions CodeLocked analog). Default 0.`}) 
+    CodeLocked: boolean;
+        
+    @Field({nullable: true, description: `The model's explanation / comments for the AI-generated Code (populated alongside Code when GenerationType=AI). Human-facing review aid.`}) 
+    CodeComments?: string;
+        
+    @Field({nullable: true, description: `JSON array of the libraries the generated body imports: [{ "Library": "@memberjunction/ai-prompts", "ItemsUsed": ["AIPromptRunner"] }, ...]. Bound to the RemoteOperationLibrary JSONType via metadata sync so CodeGen emits a typed LibrariesObject accessor; CodeGen uses it to emit the imports at the top of the generated remote_operations.ts. NULL/empty = only the default always-available libraries are imported.`}) 
+    Libraries?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    Category?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    CodeApprovedByUser?: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Remote Operations
+//****************************************************************************
+@InputType()
+export class CreateMJRemoteOperationInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    OperationKey?: string;
+
+    @Field({ nullable: true })
+    CategoryID: string | null;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    InputTypeName: string | null;
+
+    @Field({ nullable: true })
+    InputTypeDefinition: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    InputTypeIsArray?: boolean;
+
+    @Field({ nullable: true })
+    OutputTypeName: string | null;
+
+    @Field({ nullable: true })
+    OutputTypeDefinition: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    OutputTypeIsArray?: boolean;
+
+    @Field({ nullable: true })
+    ExecutionMode?: string;
+
+    @Field({ nullable: true })
+    RequiredScope: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    RequiresSystemUser?: boolean;
+
+    @Field({ nullable: true })
+    GenerationType?: string;
+
+    @Field({ nullable: true })
+    Code: string | null;
+
+    @Field({ nullable: true })
+    CodeApprovalStatus?: string;
+
+    @Field({ nullable: true })
+    CodeApprovedByUserID: string | null;
+
+    @Field({ nullable: true })
+    CodeApprovedAt: Date | null;
+
+    @Field({ nullable: true })
+    ContractFingerprint: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => Int, { nullable: true })
+    CacheTTLSeconds: number | null;
+
+    @Field(() => Int, { nullable: true })
+    TimeoutMS: number | null;
+
+    @Field(() => Int, { nullable: true })
+    MaxConcurrency: number | null;
+
+    @Field(() => Boolean, { nullable: true })
+    CodeLocked?: boolean;
+
+    @Field({ nullable: true })
+    CodeComments: string | null;
+
+    @Field({ nullable: true })
+    Libraries: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Remote Operations
+//****************************************************************************
+@InputType()
+export class UpdateMJRemoteOperationInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    OperationKey?: string;
+
+    @Field({ nullable: true })
+    CategoryID?: string | null;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    InputTypeName?: string | null;
+
+    @Field({ nullable: true })
+    InputTypeDefinition?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    InputTypeIsArray?: boolean;
+
+    @Field({ nullable: true })
+    OutputTypeName?: string | null;
+
+    @Field({ nullable: true })
+    OutputTypeDefinition?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    OutputTypeIsArray?: boolean;
+
+    @Field({ nullable: true })
+    ExecutionMode?: string;
+
+    @Field({ nullable: true })
+    RequiredScope?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    RequiresSystemUser?: boolean;
+
+    @Field({ nullable: true })
+    GenerationType?: string;
+
+    @Field({ nullable: true })
+    Code?: string | null;
+
+    @Field({ nullable: true })
+    CodeApprovalStatus?: string;
+
+    @Field({ nullable: true })
+    CodeApprovedByUserID?: string | null;
+
+    @Field({ nullable: true })
+    CodeApprovedAt?: Date | null;
+
+    @Field({ nullable: true })
+    ContractFingerprint?: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => Int, { nullable: true })
+    CacheTTLSeconds?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    TimeoutMS?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    MaxConcurrency?: number | null;
+
+    @Field(() => Boolean, { nullable: true })
+    CodeLocked?: boolean;
+
+    @Field({ nullable: true })
+    CodeComments?: string | null;
+
+    @Field({ nullable: true })
+    Libraries?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Remote Operations
+//****************************************************************************
+@ObjectType()
+export class RunMJRemoteOperationViewResult {
+    @Field(() => [MJRemoteOperation_])
+    Results: MJRemoteOperation_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJRemoteOperation_)
+export class MJRemoteOperationResolver extends ResolverBase {
+    @Query(() => RunMJRemoteOperationViewResult)
+    async RunMJRemoteOperationViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJRemoteOperationViewResult)
+    async RunMJRemoteOperationViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJRemoteOperationViewResult)
+    async RunMJRemoteOperationDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Remote Operations';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJRemoteOperation_, { nullable: true })
+    async MJRemoteOperation(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJRemoteOperation_ | null> {
+        this.CheckUserReadPermissions('MJ: Remote Operations', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwRemoteOperations')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Remote Operations', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Remote Operations', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJRemoteOperation_)
+    async CreateMJRemoteOperation(
+        @Arg('input', () => CreateMJRemoteOperationInput) input: CreateMJRemoteOperationInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Remote Operations', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJRemoteOperation_)
+    async UpdateMJRemoteOperation(
+        @Arg('input', () => UpdateMJRemoteOperationInput) input: UpdateMJRemoteOperationInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Remote Operations', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJRemoteOperation_)
+    async DeleteMJRemoteOperation(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Remote Operations', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
 // ENTITY CLASS for MJ: Report Categories
 //****************************************************************************
 @ObjectType({ description: `Organizes reports into logical groupings for navigation, access control, and discovery within the reporting system.` })
@@ -69734,6 +74832,9 @@ export class MJScheduledJobRun_ {
     @MaxLength(100)
     ExecutedByUser?: string;
         
+    @Field(() => [MJProcessRun_])
+    MJProcessRuns_ScheduledJobRunIDArray: MJProcessRun_[]; // Link to MJProcessRuns
+    
     @Field(() => [MJAIAgentRun_])
     MJAIAgentRuns_ScheduledJobRunIDArray: MJAIAgentRun_[]; // Link to MJAIAgentRuns
     
@@ -69881,6 +74982,16 @@ export class MJScheduledJobRunResolver extends ResolverBase {
         return result;
     }
     
+    @FieldResolver(() => [MJProcessRun_])
+    async MJProcessRuns_ScheduledJobRunIDArray(@Root() mjscheduledjobrun_: MJScheduledJobRun_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Process Runs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwProcessRuns')} WHERE ${provider.QuoteIdentifier('ScheduledJobRunID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Process Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjscheduledjobrun_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Process Runs', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
     @FieldResolver(() => [MJAIAgentRun_])
     async MJAIAgentRuns_ScheduledJobRunIDArray(@Root() mjscheduledjobrun_: MJScheduledJobRun_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Runs', userPayload);
@@ -83320,6 +88431,9 @@ export class MJUserView_ {
     @Field(() => [MJList_])
     MJLists_SourceViewIDArray: MJList_[]; // Link to MJLists
     
+    @Field(() => [MJRecordProcess_])
+    MJRecordProcesses_ScopeViewIDArray: MJRecordProcess_[]; // Link to MJRecordProcesses
+    
 }
 
 //****************************************************************************
@@ -83580,6 +88694,16 @@ export class MJUserViewResolverBase extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwLists')} WHERE ${provider.QuoteIdentifier('SourceViewID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Lists', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, [mjuserview_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Lists', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJRecordProcess_])
+    async MJRecordProcesses_ScopeViewIDArray(@Root() mjuserview_: MJUserView_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Record Processes', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwRecordProcesses')} WHERE ${provider.QuoteIdentifier('ScopeViewID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Record Processes', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjuserview_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Record Processes', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -84009,6 +89133,12 @@ export class MJUser_ {
     
     @Field(() => [MJAIAgentSessionBridgeParticipant_])
     MJAIAgentSessionBridgeParticipants_UserIDArray: MJAIAgentSessionBridgeParticipant_[]; // Link to MJAIAgentSessionBridgeParticipants
+    
+    @Field(() => [MJRemoteOperation_])
+    MJRemoteOperations_CodeApprovedByUserIDArray: MJRemoteOperation_[]; // Link to MJRemoteOperations
+    
+    @Field(() => [MJProcessRun_])
+    MJProcessRuns_StartedByUserIDArray: MJProcessRun_[]; // Link to MJProcessRuns
     
 }
 
@@ -85212,6 +90342,26 @@ export class MJUserResolverBase extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIAgentSessionBridgeParticipants')} WHERE ${provider.QuoteIdentifier('UserID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Session Bridge Participants', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, [mjuser_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Session Bridge Participants', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJRemoteOperation_])
+    async MJRemoteOperations_CodeApprovedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Remote Operations', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwRemoteOperations')} WHERE ${provider.QuoteIdentifier('CodeApprovedByUserID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Remote Operations', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjuser_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Remote Operations', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJProcessRun_])
+    async MJProcessRuns_StartedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Process Runs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwProcessRuns')} WHERE ${provider.QuoteIdentifier('StartedByUserID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Process Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjuser_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Process Runs', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         

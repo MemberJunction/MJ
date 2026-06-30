@@ -109,14 +109,6 @@
   padding: 0 20px 12px 20px;
 }
 
-.empty-section {
-  padding: 12px 0;
-  text-align: center;
-  color: var(--mj-text-disabled);
-  font-size: 13px;
-  font-style: italic;
-}
-
 .relationships-loading {
   padding: 20px 0;
   display: flex;

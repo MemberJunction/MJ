@@ -162,14 +162,12 @@
                   Loading template...
                 </div>
               } @else if (!record.TemplateID) {
-                <div class="no-template-state" style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px; color: var(--mj-text-muted);">
-                  <i class="fa-solid fa-code" style="font-size: 64px; margin-bottom: 20px; opacity: 0.3;"></i>
-                  <h5 style="margin-bottom: 12px; color: var(--mj-text-secondary);">No Template Associated</h5>
-                  <p style="margin-bottom: 24px; text-align: center; max-width: 400px;">
-                    This AI prompt needs a template to define its structure and parameters.
-                    Create a new template or link to an existing one.
-                  </p>
-                  <div style="display: flex; gap: 12px;">
+                <mj-empty-state class="no-template-state"
+                  Size="large"
+                  Icon="fa-solid fa-code"
+                  Title="No Template Associated"
+                  Message="This AI prompt needs a template to define its structure and parameters. Create a new template or link to an existing one.">
+                  <div ngProjectAs="[actions]" style="display: flex; gap: 12px;">
                     @if (UserCanCreateTemplates) {
                       <button mjButton variant="primary" (click)="createNewTemplate()">
                         <i class="fa-solid fa-plus"></i> Create New Template
@@ -181,17 +179,15 @@
                       </button>
                     }
                   </div>
-                </div>
+                </mj-empty-state>
               } @else if (templateNotFoundInDatabase) {
-                <div class="invalid-template-state" style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px; color: #dc3545;">
-                  <i class="fa-solid fa-exclamation-triangle" style="font-size: 64px; margin-bottom: 20px; opacity: 0.7;"></i>
-                  <h5 style="margin-bottom: 12px;">Template Not Found</h5>
-                  <p style="margin-bottom: 24px; text-align: center; max-width: 400px;">
-                    The referenced template could not be loaded. It may have been deleted or moved.
-                  </p>
-                  <div style="display: flex; gap: 12px;">
+                <mj-empty-state class="invalid-template-state"
+                  Variant="warning"
+                  Title="Template Not Found"
+                  Message="The referenced template could not be loaded. It may have been deleted or moved.">
+                  <div ngProjectAs="[actions]" style="display: flex; gap: 12px;">
                     <button mjButton variant="outline" (click)="loadTemplate()">
-                      <i class="fa-solid fa-refresh"></i> Retry Loading
+                      <i class="fa-solid fa-arrows-rotate"></i> Retry Loading
                     </button>
                     @if (UserCanCreateTemplates) {
                       <button mjButton variant="primary" (click)="createNewTemplate()">
@@ -199,7 +195,7 @@
                       </button>
                     }
                   </div>
-                </div>
+                </mj-empty-state>
               } @else {
                 <!-- Active Template Editor -->
                 <div class="template-editor-container" style="flex: 1; display: flex; flex-direction: column; min-height: 350px;">
@@ -271,17 +267,17 @@
                     </div>
                   } @else {
                     @if (promptModels.length === 0) {
-                      <div class="empty-state" style="padding: 20px; text-align: center; color: var(--mj-text-muted);">
-                        <i class="fa-solid fa-info-circle"></i> No models configured
+                      <mj-empty-state
+                        Size="compact"
+                        Icon="fa-solid fa-circle-info"
+                        Title="No models configured">
                         @if (EditMode && UserCanCreatePromptModels) {
-                          <div style="margin-top: 10px;">
-                            <button mjButton variant="outline" size="sm"
-                              (click)="addNewModel()">
-                              <i class="fa-solid fa-plus"></i> Add Model
-                            </button>
-                          </div>
+                          <button ngProjectAs="[actions]" mjButton variant="outline" size="sm"
+                            (click)="addNewModel()">
+                            <i class="fa-solid fa-plus"></i> Add Model
+                          </button>
                         }
-                      </div>
+                      </mj-empty-state>
                     } @else {
                       <!-- Priority explanation for multiple models -->
                       @if (promptModels.length > 1) {
@@ -710,9 +706,10 @@
                     <i class="fa-solid fa-spinner fa-spin"></i> Loading template parameters...
                   </div>
                 } @else if (templateParams.length === 0) {
-                  <div class="empty-state" style="padding: 20px; text-align: center; color: var(--mj-text-muted);">
-                    <i class="fa-solid fa-info-circle"></i> This template has no parameters defined
-                  </div>
+                  <mj-empty-state
+                    Size="compact"
+                    Icon="fa-solid fa-circle-info"
+                    Title="This template has no parameters defined" />
                 } @else {
                   <!-- Parameters Grid -->
                   <div style="display: grid; gap: 12px;">
@@ -843,9 +840,7 @@
                 } @else if (record.OutputExample) {
                   <div style="background: var(--mj-bg-surface-sunken); border: 1px solid var(--mj-border-default); border-radius: 4px; padding: 12px; font-family: 'Courier New', monospace; font-size: 0.9em; white-space: pre-wrap; overflow: auto; max-height: 250px;">{{ record.OutputExample }}</div>
                 } @else {
-                  <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 4px; padding: 12px; color: #856404; text-align: center;">
-                    <i class="fa-solid fa-exclamation-triangle"></i> Output example is required when output type is 'object'
-                  </div>
+                  <mj-alert Variant="warning">Output example is required when output type is 'object'</mj-alert>
                 }
               </div>
             </mj-accordion-panel>
@@ -872,11 +867,11 @@
                     <p>Loading execution history...</p>
                   </div>
                 } @else if (executionHistory.length === 0) {
-                  <div style="text-align: center; padding: 40px; color: var(--mj-text-muted);">
-                    <i class="fa-solid fa-history" style="font-size: 3em; margin-bottom: 12px; opacity: 0.3;"></i>
-                    <p>No execution history yet</p>
-                    <p style="font-size: 0.9em;">Run this prompt to see execution history here</p>
-                  </div>
+                  <mj-empty-state
+                    Size="compact"
+                    Icon="fa-solid fa-clock-rotate-left"
+                    Title="No execution history yet"
+                    Message="Run this prompt to see execution history here" />
                 } @else {
                   <!-- Sort Controls -->
                   <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">

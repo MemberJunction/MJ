@@ -32,6 +32,13 @@ import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-da
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { WordCloudItem } from '@memberjunction/ng-word-cloud';
+import {
+    buildTagsAgentContext,
+    isValidTagsTab,
+    resolveTaxNode,
+    TaxNodeCandidate,
+} from './tags-agent-context';
+import { validateStringParam } from '../../../shared/agent-tool-validation';
 
 // ── Tab type ──
 
@@ -1130,34 +1137,67 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
         this.destroy$.complete();
     }
 
-    /** Report current classify dashboard state to the agent */
+    /** Report current Tags dashboard state to the agent (deep, bounded). */
     private emitAgentContext(): void {
-        this.navigationService.SetAgentContext(this, {
+        const selected = this.TaxSelectedNode;
+        this.navigationService.SetAgentContext(this, buildTagsAgentContext({
             ActiveTab: this.ActiveTab,
             SourceCount: this.contentSourcesRaw.length,
             ContentItemCount: this.contentItemsRaw.length,
-            TagCount: this.contentTagsRaw.length,
-            PipelineStatus: this.IsRunning ? 'running' : 'idle',
+            ContentTagCount: this.contentTagsRaw.length,
+            TagLibraryCount: this.TagRows.length,
+            FilteredTagCount: this.FilteredTagRows.length,
+            TagSearchQuery: this.TagSearchQuery,
+            TaxonomyNodeCount: this.TaxFlatNodes.length,
+            SelectedTaxNodeID: selected?.ID ?? null,
+            SelectedTaxNodeName: selected ? (selected.DisplayName || selected.Name) : null,
+            SuggestionCount: this.SuggestionRows.length,
+            IsRunning: this.IsRunning,
             PipelineProgress: this.RunProgress,
             ShowPipelineConfig: this.ShowPipelineConfig,
-        });
+            TagLibraryNames: this.TagRows.map(t => t.Tag),
+            TaxonomyNodeNames: this.TaxFlatNodes.map(n => n.DisplayName || n.Name),
+        }));
     }
 
-    /** Register client tools the agent can invoke on the Classify dashboard */
+    /** Build the resolver candidate list from the flattened taxonomy tree. */
+    private getTaxNodeCandidates(): TaxNodeCandidate[] {
+        return this.TaxFlatNodes.map(n => ({ ID: n.ID, Name: n.Name, DisplayName: n.DisplayName }));
+    }
+
+    /**
+     * 🚨 SAFETY BOUNDARY 🚨
+     * Register client tools the agent can invoke on the Tags dashboard. Exposed:
+     *  - SwitchClassifyTab (read-only tab navigation; tolerant tab validation)
+     *  - SearchClassifyTags (filters the tag library — read-only)
+     *  - RunClassificationPipeline (the documented "run autotagging" happy path — parallels
+     *    RunDuplicateDetection)
+     *  - SelectTaxonomyTag (id/name resolution → selects a taxonomy node, read-only)
+     *  - OpenTagRecord (id/name resolution → opens the tag entity record for VIEWING)
+     *  - RefreshTags / RefreshTaxonomy (read-only reloads)
+     *
+     * INTENTIONALLY NOT EXPOSED (gated): create / rename / edit / delete / move / merge tag,
+     * promote-to-global, synonym add/remove, scope edits, and suggestion approve/merge/reject —
+     * all destructive taxonomy mutations the user owns via the governance UI.
+     */
     private registerAgentTools(): void {
         this.navigationService.SetAgentClientTools(this, [
             {
                 Name: 'SwitchClassifyTab',
-                Description: 'Switch to a specific tab in the Classify dashboard',
+                Description: 'Switch to a specific tab in the Tags dashboard (tags, taxonomy, suggestions, health, etc.)',
                 ParameterSchema: {
                     type: 'object',
                     properties: {
-                        tab: { type: 'string', enum: ['pipeline', 'sources', 'types', 'tags', 'taxonomy', 'history'], description: 'The tab to switch to' },
+                        tab: { type: 'string', enum: ['pipeline', 'sources', 'types', 'tags', 'taxonomy', 'history', 'suggestions', 'health'], description: 'The tab to switch to' },
                     },
                     required: ['tab'],
                 },
                 Handler: async (params: Record<string, unknown>) => {
-                    await this.SwitchTab(params['tab'] as TabName);
+                    const tab = params['tab'];
+                    if (!isValidTagsTab(tab)) {
+                        return { Success: false, ErrorMessage: `Invalid tab "${String(tab)}". Expected one of: pipeline, sources, types, tags, taxonomy, history, suggestions, health.` };
+                    }
+                    await this.SwitchTab(tab as TabName);
                     return { Success: true, Data: { ActiveTab: this.ActiveTab } };
                 },
             },
@@ -1187,9 +1227,76 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
                     required: ['query'],
                 },
                 Handler: async (params: Record<string, unknown>) => {
-                    this.TagSearchQuery = String(params['query'] ?? '');
+                    const v = validateStringParam(params['query'], 'query');
+                    if (!v.ok) return v.result;
+                    this.TagSearchQuery = v.value;
                     this.FilterTags();
                     return { Success: true, Data: { MatchCount: this.FilteredTagRows.length } };
+                },
+            },
+            {
+                Name: 'SelectTaxonomyTag',
+                Description: 'Select a tag in the taxonomy tree by its ID or name (switches to the Taxonomy tab if needed).',
+                ParameterSchema: {
+                    type: 'object',
+                    properties: { tag: { type: 'string', description: 'Tag ID or name' } },
+                    required: ['tag'],
+                },
+                Handler: async (params: Record<string, unknown>) => {
+                    const v = validateStringParam(params['tag'], 'tag');
+                    if (!v.ok) return v.result;
+                    if (this.ActiveTab !== 'taxonomy') {
+                        await this.SwitchTab('taxonomy');
+                        this.cdr.detectChanges();
+                    }
+                    const resolved = resolveTaxNode(v.value, this.getTaxNodeCandidates());
+                    if (!resolved.ok) return { Success: false, ErrorMessage: resolved.error };
+                    const node = this.TaxFlatNodes.find(n => UUIDsEqual(n.ID, resolved.value.ID));
+                    if (!node) return { Success: false, ErrorMessage: 'Resolved tag is no longer loaded.' };
+                    this.SelectTaxNode(node);
+                    this.emitAgentContext();
+                    return { Success: true, Data: { SelectedTaxNodeID: node.ID, SelectedTaxNodeName: node.DisplayName || node.Name } };
+                },
+            },
+            {
+                Name: 'OpenTagRecord',
+                Description: 'Open the entity record for a tag (for viewing) by its ID or name.',
+                ParameterSchema: {
+                    type: 'object',
+                    properties: { tag: { type: 'string', description: 'Tag ID or name' } },
+                    required: ['tag'],
+                },
+                Handler: async (params: Record<string, unknown>) => {
+                    const v = validateStringParam(params['tag'], 'tag');
+                    if (!v.ok) return v.result;
+                    const resolved = resolveTaxNode(v.value, this.getTaxNodeCandidates());
+                    if (!resolved.ok) return { Success: false, ErrorMessage: resolved.error };
+                    this.navigationService.OpenEntityRecord(
+                        'MJ: Tags',
+                        CompositeKey.FromID(resolved.value.ID),
+                    );
+                    return { Success: true, Data: { TagID: resolved.value.ID, TagName: resolved.value.DisplayName || resolved.value.Name } };
+                },
+            },
+            {
+                Name: 'RefreshTags',
+                Description: 'Reload the tag library and pipeline base data from the server.',
+                ParameterSchema: { type: 'object', properties: {} },
+                Handler: async () => {
+                    await this.LoadPipelineData();
+                    await this.loadTagLibraryData();
+                    this.emitAgentContext();
+                    return { Success: true, Data: { TagLibraryCount: this.TagRows.length } };
+                },
+            },
+            {
+                Name: 'RefreshTaxonomy',
+                Description: 'Reload the taxonomy tree from the server.',
+                ParameterSchema: { type: 'object', properties: {} },
+                Handler: async () => {
+                    await this.RefreshTaxonomyData();
+                    this.emitAgentContext();
+                    return { Success: true, Data: { TaxonomyNodeCount: this.TaxFlatNodes.length } };
                 },
             },
         ]);

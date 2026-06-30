@@ -17,12 +17,13 @@
  * @author MemberJunction.com
  */
 
-import { IRealtimeSession, ChatMessage } from '@memberjunction/ai';
+import { IRealtimeSession, ChatMessage, BaseRealtimeModel, RealtimeVoiceOption, GetAIAPIKey } from '@memberjunction/ai';
 import { IMetadataProvider, Metadata, UserInfo } from '@memberjunction/core';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
 import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { BaseAgent } from '../base-agent';
+import { RealtimeClientSessionService } from './realtime-client-session-service';
 
 /**
  * The context a bridge passes to {@link CreateBridgeRealtimeSession}. Structurally compatible with the
@@ -34,12 +35,42 @@ export interface BridgeRealtimeSessionContext {
     AgentID?: string;
     /** The agent to voice, by name (fallback when no id). */
     AgentName?: string;
+    /**
+     * The TARGET agent the co-agent voices — the one the user is actually "calling". The Realtime
+     * Co-Agent is a voice front-end that delegates to this agent via `invoke-target-agent`; without a
+     * target it has nobody to speak for and stays idle. Flows to `params.data.targetAgentID`.
+     */
+    TargetAgentID?: string;
     /** The transport endpoint being joined (room/meeting/number) — informational here; not required. */
     RoomName?: string;
+    /**
+     * Optional per-session Realtime MODEL override (an `MJ: AI Models` Name or ID) — a dev choosing a
+     * specific realtime model for THIS agent in the room. Wins over the co-agent config's modelPreference.
+     */
+    RealtimeModelID?: string;
+    /**
+     * Optional per-session VOICE override (a provider-native voice id, e.g. OpenAI `echo`/`shimmer`) — how
+     * two agents in the same room are given distinct voices. Replaces the config's per-provider voice.
+     */
+    RealtimeVoice?: string;
     /** The user the session runs as (scopes memory + DB ops). */
     ContextUser?: UserInfo;
     /** The request-scoped metadata provider (multi-provider safe). Falls back to the global default. */
     MetadataProvider?: IMetadataProvider;
+    /**
+     * The `MJ: AI Agent Sessions` id this bridge belongs to. Threaded into the co-agent observability run so
+     * the voice session's runs (and the target-agent runs delegated under it) group under the same session —
+     * **identically to the native-chat surface**. Without it the co-agent run can't record its session.
+     */
+    AgentSessionID?: string;
+    /**
+     * **Multi-agent meeting mode.** Set `true` when the agent joins a room that already has other agents,
+     * so it disables blind auto-response and speaks only when addressed (the room coordinator decides this).
+     * Flows to `params.data.realtimeMeetingMode`. See `plans/realtime/multi-agent-meeting-turn-taking.md`.
+     */
+    MeetingMode?: boolean;
+    /** The names the agent answers to (display name + aliases) — phrasing for the meeting prompt only. */
+    SelfNames?: string[];
 }
 
 /**
@@ -81,7 +112,121 @@ export async function CreateBridgeRealtimeSession(ctx: BridgeRealtimeSessionCont
         provider,
         // A fresh bridge session starts with no prior turns; memory context degrades gracefully to empty.
         conversationMessages: [] as ChatMessage[],
+        // Realtime extras ride params.data: the TARGET agent the co-agent voices via `invoke-target-agent`
+        // (without it the co-agent stays idle), plus optional per-session dev overrides for the model/voice
+        // so two agents in the same room can sound distinct. Omitted keys are simply absent.
+        data: buildRealtimeData(ctx),
     });
+}
+
+/**
+ * Builds the `params.data` bag from the bridge context — the realtime extras BaseAgent reads at session
+ * start. Returns `undefined` when nothing is set so the param stays cleanly absent.
+ */
+function buildRealtimeData(ctx: BridgeRealtimeSessionContext): Record<string, unknown> | undefined {
+    const data: Record<string, unknown> = {};
+    if (ctx.TargetAgentID) {
+        data.targetAgentID = ctx.TargetAgentID;
+    }
+    if (ctx.AgentSessionID && ctx.AgentSessionID.trim().length > 0) {
+        // Drives the co-agent observability run's session grouping (see WireBridgeRealtimeSession).
+        data.agentSessionId = ctx.AgentSessionID.trim();
+    }
+    if (ctx.RealtimeModelID && ctx.RealtimeModelID.trim().length > 0) {
+        data.realtimeModelID = ctx.RealtimeModelID.trim();
+    }
+    if (ctx.RealtimeVoice && ctx.RealtimeVoice.trim().length > 0) {
+        data.realtimeVoice = ctx.RealtimeVoice.trim();
+    }
+    if (ctx.MeetingMode === true) {
+        data.realtimeMeetingMode = true;
+    }
+    if (ctx.SelfNames && ctx.SelfNames.length > 0) {
+        data.realtimeSelfNames = ctx.SelfNames;
+    }
+    return Object.keys(data).length > 0 ? data : undefined;
+}
+
+/**
+ * The bridge-engine session-run finalizer (matches `BridgeSessionRunFinalizer` in
+ * `@memberjunction/ai-bridge-server`). Bind this onto `AIBridgeEngine.SetSessionRunFinalizer(...)` at
+ * startup so a bridge reaped WITHOUT a live session (a prior-boot orphan, a cross-host teardown) still
+ * finalizes its co-agent observability run — the only path where the `Close()`-wrapped finalizer can't run.
+ * Lives here (in ai-agents, which owns the realtime runtime) so the engine stays decoupled from it.
+ *
+ * @param agentSessionID The reaped session's id.
+ * @param success Whether to mark the run(s) `Completed` (true) or `Failed` (false).
+ * @param contextUser The user the writes run as (required — skipped without it).
+ * @param provider The metadata provider (required — skipped without it).
+ */
+export async function FinalizeBridgeCoAgentRuns(
+    agentSessionID: string,
+    success: boolean,
+    contextUser?: UserInfo,
+    provider?: IMetadataProvider,
+): Promise<void> {
+    if (!contextUser || !provider) {
+        return; // a server-side finalize needs a user + provider; a later reap with context catches it
+    }
+    await new RealtimeClientSessionService().FinalizeCoAgentRunsBySession(agentSessionID, success, contextUser, provider);
+}
+
+/** An active Realtime model paired with the voices its driver supports — for the dev model/voice picker. */
+export interface RealtimeModelVoices {
+    /** The `MJ: AI Models` row id. */
+    ModelID: string;
+    /** The model's display name. */
+    ModelName: string;
+    /** The provider-native voices the model's driver declares (empty when it declares none). */
+    Voices: RealtimeVoiceOption[];
+}
+
+/**
+ * Enumerates the active Realtime models with each driver's supported voices — the source for the dev
+ * model/voice picker. Only models with an Active vendor + resolvable API key + ClassFactory driver are
+ * returned (a model you can't actually run isn't worth offering). Voices come from the driver
+ * ({@link BaseRealtimeModel.SupportedVoices}) — the near-term, driver-owned source of truth.
+ *
+ * @param contextUser The user the engine config runs as (server-side).
+ * @param provider The request-scoped metadata provider (multi-provider safe).
+ * @returns Active realtime models, each with its driver's voices.
+ */
+export async function GetRealtimeModelVoices(
+    contextUser?: UserInfo,
+    provider?: IMetadataProvider,
+): Promise<RealtimeModelVoices[]> {
+    await AIEngine.Instance.Config(false, contextUser, provider);
+    const isRealtime = (t: string | null | undefined): boolean =>
+        typeof t === 'string' && t.trim().toLowerCase() === 'realtime';
+    const models = AIEngine.Instance.Models
+        .filter((m) => m.IsActive && isRealtime(m.AIModelType))
+        .sort((a, b) => (b.PowerRank ?? 0) - (a.PowerRank ?? 0));
+
+    const out: RealtimeModelVoices[] = [];
+    for (const model of models) {
+        const driverClass = resolveRealtimeDriverClass(model.ID);
+        if (!driverClass) {
+            continue; // no active vendor with a resolvable key — not runnable, so omit
+        }
+        const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseRealtimeModel>(
+            BaseRealtimeModel, driverClass, GetAIAPIKey(driverClass),
+        );
+        out.push({ ModelID: model.ID, ModelName: model.Name ?? '', Voices: instance?.SupportedVoices ?? [] });
+    }
+    return out;
+}
+
+/** The DriverClass of the highest-priority Active vendor (with a resolvable API key) for a model, or null. */
+function resolveRealtimeDriverClass(modelID: string): string | null {
+    const vendors = AIEngine.Instance.ModelVendors
+        .filter((mv) => UUIDsEqual(mv.ModelID, modelID) && mv.Status === 'Active' && mv.DriverClass != null)
+        .sort((a, b) => (b.Priority ?? 0) - (a.Priority ?? 0));
+    for (const v of vendors) {
+        if (GetAIAPIKey(v.DriverClass!)) {
+            return v.DriverClass!;
+        }
+    }
+    return null;
 }
 
 /** Resolves the agent entity from the engine cache by id (preferred), then by case-insensitive name. */

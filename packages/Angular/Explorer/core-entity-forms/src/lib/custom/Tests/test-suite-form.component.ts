@@ -2087,6 +2087,11 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
   // Suite Membership: Add / Remove / Reorder Tests
   // ==========================================
 
+  /** Empty-state message shown when the add-tests search matches nothing. */
+  public get AddTestsNoMatchMessage(): string {
+    return `No tests match "${this.addTestsSearch}".`;
+  }
+
   /** Open the picker dialog and load tests not yet in this suite. */
   async openAddTestsDialog(): Promise<void> {
     this.showAddTestsDialog = true;

@@ -442,7 +442,9 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
         ? { bg: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)', border: 'rgba(240, 147, 251, 0.4)' }
         : suggestion.type === 'entity'
           ? { bg: 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)', border: 'rgba(17, 153, 142, 0.4)' }
-          : { bg: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', border: 'rgba(102, 126, 234, 0.4)' };
+          : suggestion.type === 'query'
+            ? { bg: 'linear-gradient(135deg, #FF6A00 0%, #FF9E2C 100%)', border: 'rgba(255, 106, 0, 0.4)' }
+            : { bg: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', border: 'rgba(102, 126, 234, 0.4)' };
     chip.style.cssText = `
       display: inline-flex;
       align-items: center;
@@ -488,6 +490,8 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
         icon.className = 'fa-solid fa-user';
       } else if (suggestion.type === 'entity') {
         icon.className = this.getIconClasses(suggestion.icon || 'fa-solid fa-table');
+      } else if (suggestion.type === 'query') {
+        icon.className = this.getIconClasses(suggestion.icon || 'fa-solid fa-database');
       } else {
         icon.className = 'fa-solid fa-robot';
       }
@@ -800,7 +804,8 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
 
         if (element.classList.contains('mention-chip')) {
           const name = element.getAttribute('data-mention-name') || '';
-          const prefix = element.getAttribute('data-mention-type') === 'entity' ? '#' : '@';
+          const mentionType = element.getAttribute('data-mention-type');
+          const prefix = mentionType === 'entity' || mentionType === 'query' ? '#' : '@';
           // Use quoted format if name has spaces
           text += name.includes(' ') ? `${prefix}"${name}"` : `${prefix}${name}`;
         } else if (element.tagName === 'BR') {
@@ -835,7 +840,8 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
 
         if (element.classList.contains('mention-chip')) {
           const name = element.getAttribute('data-mention-name') || '';
-          const prefix = element.getAttribute('data-mention-type') === 'entity' ? '#' : '@';
+          const mentionType = element.getAttribute('data-mention-type');
+          const prefix = mentionType === 'entity' || mentionType === 'query' ? '#' : '@';
           text += name.includes(' ') ? `${prefix}"${name}"` : `${prefix}${name}`;
         } else {
           text += this.getNodeText(element);

@@ -89,17 +89,10 @@
     padding: 0 15px;
 }
 
-.loading-state,
-.empty-state {
+.loading-state {
     text-align: center;
     padding: 40px;
     color: var(--mj-text-secondary);
-}
-
-.empty-state i {
-    font-size: 48px;
-    margin-bottom: 15px;
-    color: var(--mj-text-muted);
 }
 
 .create-section {
@@ -289,21 +282,18 @@
     font-size: 14px;
 }
 
-.info-state,
-.empty-state {
+.info-state {
     padding: 15px;
     text-align: center;
     color: var(--mj-text-secondary);
 }
 
-.info-state i,
-.empty-state i {
+.info-state i {
     margin-bottom: 10px;
     font-size: 24px;
 }
 
-.info-state p,
-.empty-state p {
+.info-state p {
     margin: 5px 0;
 }
 

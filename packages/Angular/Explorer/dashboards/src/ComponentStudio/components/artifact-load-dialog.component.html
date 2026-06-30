@@ -101,10 +101,8 @@
                 </div>
               }
               @else if (artifacts.length === 0) {
-                <div class="empty-state">
-                  <i class="fa-solid fa-inbox"></i>
-                  <p>No artifacts found</p>
-                </div>
+                <mj-empty-state Size="compact" Icon="fa-solid fa-inbox"
+                  Title="No artifacts found" />
               }
               @else {
                 @for (artifact of artifacts; track artifact.ID) {
@@ -145,10 +143,8 @@
                 </div>
               }
               @else if (collections.length === 0) {
-                <div class="empty-state">
-                  <i class="fa-solid fa-folder-open"></i>
-                  <p>No collections found</p>
-                </div>
+                <mj-empty-state Size="compact" Icon="fa-solid fa-folder-open"
+                  Title="No collections found" />
               }
               @else {
                 @for (collection of collections; track collection.ID) {
@@ -176,10 +172,8 @@
                   Artifacts in "{{ selectedCollection.Name }}"
                 </div>
                 @if (collectionArtifacts.length === 0) {
-                  <div class="empty-state">
-                    <i class="fa-solid fa-inbox"></i>
-                    <p>No artifacts in this collection</p>
-                  </div>
+                  <mj-empty-state Size="compact" Icon="fa-solid fa-inbox"
+                    Title="No artifacts in this collection" />
                 }
                 @else {
                   @for (artifact of collectionArtifacts; track artifact.ID) {
@@ -223,10 +217,8 @@
             </div>
           }
           @else if (artifactVersions.length === 0) {
-            <div class="empty-state">
-              <i class="fa-solid fa-info-circle"></i>
-              <p>No versions available</p>
-            </div>
+            <mj-empty-state Size="compact" Icon="fa-solid fa-circle-info"
+              Title="No versions available" />
           }
           @else {
             <div class="version-list">

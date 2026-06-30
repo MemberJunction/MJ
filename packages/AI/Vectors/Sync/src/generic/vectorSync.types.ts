@@ -70,6 +70,14 @@ export type VectorizeEntityResponse = {
     success: boolean;
     status: string;
     errorMessage: string;
+    /** Total source records fed into the pipeline for this entity. */
+    totalRecords?: number;
+    /** Records that completed the pipeline (rendered, embedded, and upserted). */
+    processedRecords?: number;
+    /** Count of records that failed template rendering or vector upsert. */
+    errorCount?: number;
+    /** Wall-clock duration of this entity's vectorization, in milliseconds. */
+    elapsedMs?: number;
 }
 
 export type EmbeddingData = {

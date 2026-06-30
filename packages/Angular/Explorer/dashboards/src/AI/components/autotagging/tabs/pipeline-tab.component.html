@@ -166,14 +166,10 @@
                     </div>
                     <div class="at-card-body at-feed-scroll-body">
                         @if (FilteredFeedItems.length === 0) {
-                            <div class="at-empty-state">
-                                <i class="fa-solid fa-inbox"></i>
-                                @if (FeedSearchQuery) {
-                                    <p>No items match "{{ FeedSearchQuery }}"</p>
-                                } @else {
-                                    <p>No processed items yet.</p>
-                                }
-                            </div>
+                            <mj-empty-state Size="compact"
+                                [Variant]="FeedSearchQuery ? 'no-results' : 'empty'"
+                                Icon="fa-solid fa-inbox"
+                                [Title]="FeedEmptyTitle" />
                         }
                         @for (item of PaginatedFeedItems; track item.Name + item.SourceName + item.TimeAgo) {
                             <div class="at-feed-item at-feed-item-clickable" (click)="onFeedItemClick(GetFeedItemOriginalIndex(item))">

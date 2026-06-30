@@ -1,0 +1,18 @@
+# Predictive Studio ML sidecar — pinned for Python 3.9+ (3.11 in Docker).
+# These versions are mutually compatible and provide manylinux/macos wheels so
+# no source builds are needed (xgboost/lightgbm still need an OpenMP runtime:
+# libomp on macOS, libgomp1 on Linux — see README / Dockerfile).
+
+fastapi==0.111.0
+uvicorn[standard]==0.30.1
+pydantic==2.7.4
+xgboost==2.0.3
+lightgbm==4.3.0
+scikit-learn==1.4.2
+numpy==1.26.4
+pandas==2.2.2
+joblib==1.4.2
+
+# Test + smoke deps
+pytest==8.2.2
+httpx==0.27.0

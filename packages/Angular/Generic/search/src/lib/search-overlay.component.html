@@ -86,17 +86,17 @@
 
             @if (HasSearched && AllResults.length === 0 && !IsSearching) {
                 <!-- No results -->
-                <div class="search-empty-state">
-                    <i class="fa-solid fa-search search-empty-icon"></i>
-                    <p class="search-empty-title">No results found</p>
-                    <p class="search-empty-text">Try different keywords or remove some filters</p>
+                <mj-empty-state
+                    Variant="no-results"
+                    Title="No results found"
+                    Message="Try different keywords or remove some filters">
                     @if (ShowAgentCta) {
-                        <button class="agent-cta-btn" (click)="OnAgentCtaClick()">
+                        <button ngProjectAs="[actions]" class="agent-cta-btn" (click)="OnAgentCtaClick()">
                             <i class="fa-solid fa-robot"></i>
                             {{ AgentCtaText }}
                         </button>
                     }
-                </div>
+                </mj-empty-state>
             }
 
             @if (!HasSearched && !IsSearching) {
@@ -116,10 +116,10 @@
                             }
                         }
                     } @else {
-                        <div class="search-empty-state search-empty-state-compact">
-                            <i class="fa-solid fa-magnifying-glass search-empty-icon"></i>
-                            <p class="search-empty-text">Start typing to search across all your knowledge</p>
-                        </div>
+                        <mj-empty-state
+                            Variant="no-results"
+                            Title="Start typing to search across all your knowledge"
+                            Size="compact" />
                     }
                 </div>
             }

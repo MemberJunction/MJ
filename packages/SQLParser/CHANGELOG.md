@@ -1,5 +1,18 @@
 # @memberjunction/sql-parser
 
+## 5.43.0
+
+### Patch Changes
+
+- Updated dependencies [b98366b]
+  - @memberjunction/sql-dialect@5.43.0
+
+## 5.42.0
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.42.0
+
 ## 5.41.0
 
 ### Patch Changes

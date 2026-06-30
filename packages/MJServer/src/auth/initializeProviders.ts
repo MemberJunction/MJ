@@ -1,7 +1,6 @@
 import { configInfo } from '../config.js';
-import { AuthProviderConfig, LogError, LogStatus } from '@memberjunction/core';
+import { AuthProviderConfig, LogError } from '@memberjunction/core';
 import { AuthProviderFactory } from '@memberjunction/auth-providers';
-import { StartupLogger } from '../logging/StartupLogger.js';
 
 /**
  * Initialize authentication providers from configuration
@@ -17,12 +16,10 @@ export function initializeAuthProviders(): void {
     for (const providerConfig of configInfo.authProviders) {
       try {
         const provider = AuthProviderFactory.createProvider(providerConfig as AuthProviderConfig);
+        // register() emits the verbose-only "Registered auth provider: … with issuer: …" line
+        // (gated by the global verbose flag). Provider NAMES are surfaced compactly in the
+        // startup summary `Auth` line at `standard`.
         factory.register(provider);
-        // Per-provider registration detail — verbose-only. The provider NAMES are
-        // surfaced compactly in the startup summary `Auth` line at `standard`.
-        if (new StartupLogger().IsAtLeast('verbose')) {
-          LogStatus(`Registered auth provider: ${provider.name} (type: ${providerConfig.type})`);
-        }
       } catch (error) {
         LogError(`Failed to initialize auth provider ${providerConfig.name}: ${error}`);
       }

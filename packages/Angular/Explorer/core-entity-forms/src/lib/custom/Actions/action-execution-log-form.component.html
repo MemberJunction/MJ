@@ -224,13 +224,15 @@
                             } @else {
                                 <!-- Rich param list -->
                                 @if (filteredParameters.length === 0) {
-                                    <div class="empty-filter">
-                                        <i class="fas fa-filter-circle-xmark"></i>
-                                        <p>No parameters match the current filter.</p>
-                                        <button type="button" class="btn-link" (click)="clearFilters()">
-                                            Clear filters
-                                        </button>
-                                    </div>
+                                    <mj-empty-state
+                                        Variant="no-results"
+                                        Size="compact"
+                                        Icon="fa-solid fa-filter-circle-xmark"
+                                        Title="No parameters match the current filter."
+                                        ActionText="Clear filters"
+                                        ActionIcon="fa-solid fa-rotate-left"
+                                        ActionVariant="flat"
+                                        (Action)="clearFilters()" />
                                 } @else {
                                     <ul class="params-list">
                                         @for (p of filteredParameters; track trackParam($index, p)) {
@@ -317,10 +319,10 @@
                         <ng-template mjAccordionTitle>
                           <i class="fas fa-database"></i> Execution Data
                         </ng-template>
-                            <div class="empty-state">
-                                <i class="fas fa-inbox"></i>
-                                <p>No execution data recorded</p>
-                            </div>
+                            <mj-empty-state
+                                Size="compact"
+                                Icon="fa-solid fa-inbox"
+                                Title="No execution data recorded" />
                     </mj-accordion-panel>
                 }
             </div>

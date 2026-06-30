@@ -626,4 +626,39 @@ describe('postProcess', () => {
       expect(result).toContain('=TRUE');
     });
   });
+
+  // ============================================================
+  // schema.PascalCase quoting must NOT reach into string literals
+  // (regression: TypeScript stored in GeneratedCode.Code / Action.Code
+  //  INSERT VALUES had `this.GranteeType` rewritten to `this."GranteeType"`,
+  //  producing invalid TS that broke the build on a fresh PostgreSQL DB)
+  // ============================================================
+  describe('schema.PascalCase quoting skips string literals', () => {
+    it('still quotes a real schema.Table reference in code', () => {
+      expect(postProcess('SELECT * FROM __mj.OpenApp')).toContain('__mj."OpenApp"');
+    });
+
+    it('still quotes a quoted-schema.PascalCase reference in code', () => {
+      expect(postProcess('SELECT * FROM "app".MyTable')).toContain('"app"."MyTable"');
+    });
+
+    it('does NOT quote TypeScript member access inside a single-quoted string literal', () => {
+      const input = `INSERT INTO __mj.GeneratedCode ("Code") VALUES ('if (!allowedValues.includes(this.GranteeType)) { result.Errors.push(ValidationErrorType.Failure); }');`;
+      const result = postProcess(input);
+      expect(result).toContain('this.GranteeType');
+      expect(result).toContain('result.Errors');
+      expect(result).toContain('ValidationErrorType.Failure');
+      expect(result).not.toContain('this."GranteeType"');
+      expect(result).not.toContain('result."Errors"');
+    });
+
+    it('does NOT quote arbitrary accessors (params., p.) inside a string literal', () => {
+      const input = `INSERT INTO __mj.Action ("Code") VALUES ('const name = params.Params.find(p => p.Name === ''x'')?.Value;');`;
+      const result = postProcess(input);
+      expect(result).toContain('params.Params');
+      expect(result).toContain('p.Name');
+      expect(result).not.toContain('params."Params"');
+      expect(result).not.toContain('p."Name"');
+    });
+  });
 });

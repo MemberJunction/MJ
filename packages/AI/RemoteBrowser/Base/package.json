@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/remote-browser-base",
   "type": "module",
-  "version": "5.41.0",
+  "version": "5.43.0",
   "description": "MemberJunction: Universal (client+server) base layer for the Remote Browser channel — the provider registry cache, the capability-gated BaseRemoteBrowserProvider driver contract, the CDP-backed live-session interface, and the control mode/strategy helpers that the server engine and backend drivers build on.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -17,9 +17,9 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/core": "5.41.0",
-    "@memberjunction/global": "5.41.0",
-    "@memberjunction/core-entities": "5.41.0",
+    "@memberjunction/core": "5.43.0",
+    "@memberjunction/global": "5.43.0",
+    "@memberjunction/core-entities": "5.43.0",
     "rxjs": "^7.8.2"
   },
   "devDependencies": {

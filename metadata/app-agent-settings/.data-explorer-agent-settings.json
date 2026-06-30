@@ -1,0 +1,42 @@
+[
+  {
+    "_comments": [
+      "Demo Application.AgentSettings for the Data Explorer app — exercises the app-level default-agent",
+      "resolution (DefaultAgentID) and the realtime co-agent's multi-agent delegation + disclosure",
+      "(RelevantAgents). Sage is the benign conversation-manager lead; it can delegate to Research Agent",
+      "(narrated handoff) and Database Research Agent (silent absorb). Only updates the AgentSettings field",
+      "on the existing Data Explorer Application row — nothing else."
+    ],
+    "fields": {
+      "AgentSettings": {
+        "DefaultAgentID": "@lookup:MJ: AI Agents.Name=Sage",
+        "RelevantAgents": [
+          {
+            "AgentID": "@lookup:MJ: AI Agents.Name=Research Agent",
+            "Label": "Research Agent",
+            "Disclosure": "mention"
+          },
+          {
+            "AgentID": "@lookup:MJ: AI Agents.Name=Database Research Agent",
+            "Label": "Database Research Agent",
+            "Disclosure": "silent"
+          }
+        ],
+        "Realtime": {
+          "Disclosure": "mention",
+          "Persona": {
+            "Tone": "warm and helpful",
+            "SpeakingStyle": "concise, plain language"
+          }
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Applications.Name=Data Explorer"
+    },
+    "sync": {
+      "lastModified": "2026-06-27T19:54:02.321Z",
+      "checksum": "dc3dcd179e2bd69289b2cba77aed1cf4dfcff8bbe4c69551d3993e62984059e8"
+    }
+  }
+]

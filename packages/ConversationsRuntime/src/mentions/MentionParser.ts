@@ -17,7 +17,7 @@ import { UserInfo } from '@memberjunction/core';
 
 /** A single parsed mention. */
 export interface Mention {
-    type: 'agent' | 'user' | 'entity';
+    type: 'agent' | 'user' | 'entity' | 'query';
     id: string;
     name: string;
     /** Configuration preset ID — agent mentions only. */

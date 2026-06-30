@@ -347,16 +347,13 @@
         }
         <!-- Empty State -->
         @if (testsLoaded && !loadingTests && suiteTests.length === 0) {
-          <div class="empty-state">
-            <div class="empty-icon">
-              <i class="fas fa-flask"></i>
-            </div>
-            <h4>No Tests in Suite</h4>
-            <p>Add tests to this suite to start running them together.</p>
-            <button mjButton variant="primary" (click)="openAddTestsDialog()">
-              <i class="fas fa-plus"></i> Add tests
-            </button>
-          </div>
+          <mj-empty-state
+            Icon="fa-solid fa-flask"
+            Title="No Tests in Suite"
+            Message="Add tests to this suite to start running them together."
+            ActionText="Add tests"
+            ActionIcon="fa-solid fa-plus"
+            (Action)="openAddTestsDialog()" />
         }
       </div>
     }
@@ -455,16 +452,13 @@
         }
         <!-- Empty State -->
         @if (runsLoaded && !loadingRuns && suiteRuns.length === 0) {
-          <div class="empty-state">
-            <div class="empty-icon">
-              <i class="fas fa-play-circle"></i>
-            </div>
-            <h4>No Suite Runs Yet</h4>
-            <p>Run this suite to see execution history and results here.</p>
-            <button mjButton (click)="runSuite()" variant="primary">
-              <i class="fas fa-play"></i> Run Suite Now
-            </button>
-          </div>
+          <mj-empty-state
+            Icon="fa-solid fa-circle-play"
+            Title="No Suite Runs Yet"
+            Message="Run this suite to see execution history and results here."
+            ActionText="Run Suite Now"
+            ActionIcon="fa-solid fa-play"
+            (Action)="runSuite()" />
         }
       </div>
     }
@@ -642,9 +636,10 @@
                 </table>
               </div>
               @if (getFilteredAnalyticsData().length === 0) {
-                <div class="empty-state small">
-                  <p>No runs match the current filters.</p>
-                </div>
+                <mj-empty-state
+                  Variant="no-results"
+                  Size="compact"
+                  Title="No runs match the current filters." />
               }
             </div>
           }
@@ -845,13 +840,11 @@
             }
             <!-- Empty Matrix State -->
             @if (!loadingMatrix && matrixLoaded && matrixData.length === 0) {
-              <div class="empty-state">
-                <div class="empty-icon">
-                  <i class="fas fa-th"></i>
-                </div>
-                <h4>No Matrix Data</h4>
-                <p>No suite runs match the current filters.</p>
-              </div>
+              <mj-empty-state
+                Variant="no-results"
+                Icon="fa-solid fa-table-cells"
+                Title="No Matrix Data"
+                Message="No suite runs match the current filters." />
             }
           }
           <!-- Chart View -->
@@ -886,28 +879,23 @@
             }
             <!-- Empty Chart State -->
             @if (!loadingMatrix && matrixLoaded && matrixData.length === 0) {
-              <div class="empty-state">
-                <div class="empty-icon">
-                  <i class="fas fa-project-diagram"></i>
-                </div>
-                <h4>No Chart Data</h4>
-                <p>No suite runs match the current filters.</p>
-              </div>
+              <mj-empty-state
+                Variant="no-results"
+                Icon="fa-solid fa-diagram-project"
+                Title="No Chart Data"
+                Message="No suite runs match the current filters." />
             }
           }
         }
         <!-- Empty State -->
         @if (!loadingAnalytics && analyticsLoaded && analyticsData.length === 0) {
-          <div class="empty-state">
-            <div class="empty-icon">
-              <i class="fas fa-chart-line"></i>
-            </div>
-            <h4>No Analytics Data</h4>
-            <p>Run this suite to start collecting analytics data.</p>
-            <button mjButton (click)="runSuite()" variant="primary">
-              <i class="fas fa-play"></i> Run Suite Now
-            </button>
-          </div>
+          <mj-empty-state
+            Icon="fa-solid fa-chart-line"
+            Title="No Analytics Data"
+            Message="Run this suite to start collecting analytics data."
+            ActionText="Run Suite Now"
+            ActionIcon="fa-solid fa-play"
+            (Action)="runSuite()" />
         }
       </div>
     }
@@ -1110,26 +1098,20 @@
         }
         <!-- Empty State -->
         @if (!compareRunA || !compareRunB) {
-          <div class="compare-empty">
-            <div class="compare-empty-icon">
-              <i class="fas fa-balance-scale"></i>
-            </div>
-            <h4>Select Two Runs to Compare</h4>
-            <p>Choose a baseline run (A) and a comparison run (B) from the lists above to see a detailed side-by-side comparison.</p>
-          </div>
+          <mj-empty-state
+            Icon="fa-solid fa-scale-balanced"
+            Title="Select Two Runs to Compare"
+            Message="Choose a baseline run (A) and a comparison run (B) from the lists above to see a detailed side-by-side comparison." />
         }
         <!-- No Runs State -->
         @if (runsLoaded && suiteRuns.length < 2) {
-          <div class="empty-state">
-            <div class="empty-icon">
-              <i class="fas fa-balance-scale"></i>
-            </div>
-            <h4>Not Enough Runs to Compare</h4>
-            <p>You need at least 2 suite runs to use the comparison feature.</p>
-            <button mjButton (click)="runSuite()" variant="primary">
-              <i class="fas fa-play"></i> Run Suite Now
-            </button>
-          </div>
+          <mj-empty-state
+            Icon="fa-solid fa-scale-balanced"
+            Title="Not Enough Runs to Compare"
+            Message="You need at least 2 suite runs to use the comparison feature."
+            ActionText="Run Suite Now"
+            ActionIcon="fa-solid fa-play"
+            (Action)="runSuite()" />
         }
       </div>
     }
@@ -1242,17 +1224,19 @@
             <mj-loading text="Loading tests..."></mj-loading>
           </div>
         } @else if (filteredAvailableTests.length === 0) {
-          <div class="picker-empty">
-            @if (availableTests.length === 0) {
-              <i class="fas fa-check-circle"></i>
-              <h4>Everything's already in the suite</h4>
-              <p>This suite contains every available test. Create a new test first to add more.</p>
-            } @else {
-              <i class="fas fa-search"></i>
-              <h4>No matches</h4>
-              <p>No tests match "{{ addTestsSearch }}".</p>
-            }
-          </div>
+          @if (availableTests.length === 0) {
+            <mj-empty-state
+              Variant="success"
+              Size="compact"
+              Title="Everything's already in the suite"
+              Message="This suite contains every available test. Create a new test first to add more." />
+          } @else {
+            <mj-empty-state
+              Variant="no-results"
+              Size="compact"
+              Title="No matches"
+              [Message]="AddTestsNoMatchMessage" />
+          }
         } @else {
           <ul class="picker-list">
             @for (t of filteredAvailableTests; track t.ID) {

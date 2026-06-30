@@ -44,7 +44,9 @@ export class AgentScheduledJobDriver extends BaseScheduledJob {
         // Load the agent entity
         const agent = await this.loadAgent(config.AgentID, context.ContextUser);
 
-        this.log(`Executing agent: ${agent.Name}`);
+        // Verbose-only: the engine's always-on "▶️ Starting / ✅ Completed" pair already frames this
+        // run. This per-agent detail is redundant noise on routine (often no-op) scheduled runs.
+        this.log(`Executing agent: ${agent.Name}`, true);
 
         // Execute the agent
         const runner = new AgentRunner();

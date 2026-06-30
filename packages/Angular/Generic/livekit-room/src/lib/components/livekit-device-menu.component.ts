@@ -15,7 +15,7 @@ import type { LiveKitDeviceLists, LiveKitDeviceSelection } from '../models';
     <div class="lk-devices">
       <header class="lk-devices__head">
         <span><i class="fa-solid fa-gear"></i> Devices</span>
-        <button type="button" class="lk-devices__close" (click)="Close.emit()"><i class="fa-solid fa-xmark"></i></button>
+        <button type="button" class="lk-devices__close" aria-label="Close devices menu" title="Close devices menu" (click)="Close.emit()"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
       </header>
       <label class="lk-devices__field">
         <span><i class="fa-solid fa-microphone"></i> Microphone</span>

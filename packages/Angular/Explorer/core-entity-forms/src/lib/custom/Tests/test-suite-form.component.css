@@ -546,48 +546,6 @@
   transform: translateX(2px);
 }
 
-/* Empty States */
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 60px 24px;
-  text-align: center;
-  background: var(--test-surface);
-  border-radius: var(--test-radius-lg);
-}
-
-.empty-icon {
-  width: 80px;
-  height: 80px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--test-bg);
-  border-radius: 50%;
-  margin-bottom: 20px;
-}
-
-.empty-icon i {
-  font-size: 36px;
-  color: var(--test-text-muted);
-}
-
-.empty-state h4 {
-  margin: 0 0 8px 0;
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--test-text);
-}
-
-.empty-state p {
-  margin: 0 0 20px 0;
-  font-size: 14px;
-  color: var(--test-text-secondary);
-  max-width: 300px;
-}
-
 /* Keyboard Shortcuts */
 /* Keyboard shortcuts toggle button - visible when shortcuts are hidden */
 .shortcuts-toggle {
@@ -2273,55 +2231,6 @@
   color: var(--test-text-muted);
 }
 
-/* Compare Empty State */
-.compare-empty {
-  text-align: center;
-  padding: 60px 24px;
-  background: var(--test-surface);
-  border-radius: var(--test-radius-lg);
-  margin-top: 24px;
-}
-
-.compare-empty-icon {
-  width: 80px;
-  height: 80px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--test-bg);
-  border-radius: 50%;
-  margin: 0 auto 20px;
-}
-
-.compare-empty-icon i {
-  font-size: 32px;
-  color: var(--test-text-muted);
-}
-
-.compare-empty h4 {
-  margin: 0 0 8px 0;
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--test-text);
-}
-
-.compare-empty p {
-  margin: 0;
-  font-size: 14px;
-  color: var(--test-text-secondary);
-  max-width: 400px;
-  margin: 0 auto;
-}
-
-/* Small empty state variant */
-.empty-state.small {
-  padding: 32px 16px;
-}
-
-.empty-state.small p {
-  margin: 0;
-}
-
 /* ===========================
    Responsive Analytics/Compare
    =========================== */
@@ -2934,7 +2843,7 @@
   background: var(--mj-bg-surface-elevated, var(--test-surface));
   border: 1px solid color-mix(in srgb, var(--mj-status-warning) 25%, var(--test-border));
   border-radius: 14px;
-  box-shadow: 0 12px 32px color-mix(in srgb, var(--mj-status-warning) 10%, rgba(15, 23, 42, 0.18));
+  box-shadow: 0 12px 32px color-mix(in srgb, var(--mj-status-warning) 10%, rgba(0, 0, 0, 0.18));
   backdrop-filter: blur(8px);
   /* Hidden / off-screen state by default. The .save-bar--visible class
      animates it up into view. Using `transition` (not `animation`)
@@ -3276,7 +3185,7 @@
 
 /* CDK drag-drop visuals */
 .cdk-drag-preview {
-  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.25);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
   border-radius: var(--test-radius-md);
   background: var(--test-surface);
   opacity: 0.95;
@@ -3308,7 +3217,7 @@
 .picker-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.45);
+  background: rgba(0, 0, 0, 0.45);
   z-index: 200;
   animation: pickerFadeIn 180ms ease-out;
   backdrop-filter: blur(2px);
@@ -3331,7 +3240,7 @@
   flex-direction: column;
   background: var(--test-surface);
   border-radius: var(--test-radius-lg);
-  box-shadow: 0 24px 64px rgba(15, 23, 42, 0.28);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.28);
   animation: pickerSlideUp 220ms cubic-bezier(0.16, 1, 0.3, 1);
   overflow: hidden;
 }
@@ -3502,33 +3411,6 @@
   align-items: center;
   justify-content: center;
   padding: 40px;
-}
-
-.picker-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  padding: 40px 20px;
-  color: var(--test-text-muted);
-}
-
-.picker-empty i {
-  font-size: 32px;
-  margin-bottom: 14px;
-  color: var(--test-text-muted);
-}
-
-.picker-empty h4 {
-  margin: 0 0 6px 0;
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--test-text);
-}
-
-.picker-empty p {
-  margin: 0;
-  font-size: 13px;
 }
 
 .picker-list {

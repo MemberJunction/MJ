@@ -126,13 +126,11 @@
 
       <!-- Status Warning Banner for Non-Approved Queries -->
       @if (record.Status && record.Status !== 'Approved' && !EditMode) {
-        <div class="status-warning-banner" [style.border-left-color]="getStatusBadgeColor()">
-          <i class="fa-solid" [class]="getStatusBannerIcon()"
-            [style.color]="getStatusBadgeColor()"></i>
+        <mj-alert Variant="warning">
           <span>
             This query has status <strong>{{ record.Status }}</strong>. {{ getStatusBannerMessage() }}
           </span>
-        </div>
+        </mj-alert>
       }
 
       <!-- Main Content Area with Expansion Panels -->
@@ -273,18 +271,12 @@
                 </div>
               } @else {
                 @if (queryParameters.length === 0) {
-                  <div class="empty-state">
-                    <i class="fa-solid fa-sliders empty-state-icon"></i>
-                    <div class="empty-state-title">No Parameters Defined</div>
-                    <div class="empty-state-text">
-                      Add parameters to make your query dynamic and reusable.
-                    </div>
-                    @if (EditMode) {
-                      <button type="button" class="add-item-btn" (click)="addParameter()">
-                        <i class="fa-solid fa-plus"></i> Add First Parameter
-                      </button>
-                    }
-                  </div>
+                  <mj-empty-state Icon="fa-solid fa-sliders"
+                    Title="No Parameters Defined"
+                    Message="Add parameters to make your query dynamic and reusable."
+                    [ActionText]="EditMode ? 'Add First Parameter' : ''"
+                    ActionIcon="fa-solid fa-plus"
+                    (Action)="addParameter()" />
                 } @else {
                   @if (EditMode) {
                     <div class="panel-toolbar">
@@ -364,18 +356,12 @@
                 </div>
               } @else {
                 @if (queryFields.length === 0) {
-                  <div class="empty-state">
-                    <i class="fa-solid fa-table empty-state-icon"></i>
-                    <div class="empty-state-title">No Fields Defined</div>
-                    <div class="empty-state-text">
-                      Define output fields for your query results.
-                    </div>
-                    @if (EditMode) {
-                      <button type="button" class="add-item-btn" (click)="addField()">
-                        <i class="fa-solid fa-plus"></i> Add First Field
-                      </button>
-                    }
-                  </div>
+                  <mj-empty-state Icon="fa-solid fa-table"
+                    Title="No Fields Defined"
+                    Message="Define output fields for your query results."
+                    [ActionText]="EditMode ? 'Add First Field' : ''"
+                    ActionIcon="fa-solid fa-plus"
+                    (Action)="addField()" />
                 } @else {
                   @if (EditMode) {
                     <div class="panel-toolbar">
@@ -501,18 +487,12 @@
                 </div>
               } @else {
                 @if (queryEntities.length === 0) {
-                  <div class="empty-state">
-                    <i class="fa-solid fa-database empty-state-icon"></i>
-                    <div class="empty-state-title">No Entities Tracked</div>
-                    <div class="empty-state-text">
-                      Track which entities this query uses for documentation.
-                    </div>
-                    @if (EditMode) {
-                      <button type="button" class="add-item-btn" (click)="addEntity()">
-                        <i class="fa-solid fa-plus"></i> Add First Entity
-                      </button>
-                    }
-                  </div>
+                  <mj-empty-state Icon="fa-solid fa-database"
+                    Title="No Entities Tracked"
+                    Message="Track which entities this query uses for documentation."
+                    [ActionText]="EditMode ? 'Add First Entity' : ''"
+                    ActionIcon="fa-solid fa-plus"
+                    (Action)="addEntity()" />
                 } @else {
                   @if (EditMode) {
                     <div class="panel-toolbar">
@@ -725,13 +705,9 @@
                 </div>
               } @else {
                 @if (queryPermissions.length === 0 && !EditMode) {
-                  <div class="empty-state">
-                    <i class="fa-solid fa-shield-alt empty-state-icon"></i>
-                    <div class="empty-state-title">No Permissions Set</div>
-                    <div class="empty-state-text">
-                      This query uses default permissions.
-                    </div>
-                  </div>
+                  <mj-empty-state Icon="fa-solid fa-shield-halved"
+                    Title="No Permissions Set"
+                    Message="This query uses default permissions." />
                 } @else {
                   @if (EditMode) {
                     <mj-explorer-entity-data-grid

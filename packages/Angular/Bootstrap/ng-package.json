@@ -22,6 +22,7 @@
     "@memberjunction/ng-core-entity-forms",
     "@memberjunction/ng-dashboard-viewer",
     "@memberjunction/ng-dashboards",
+    "@memberjunction/ng-entity-action-ux",
     "@memberjunction/ng-entity-viewer",
     "@memberjunction/ng-explorer-core",
     "@memberjunction/ng-explorer-settings",

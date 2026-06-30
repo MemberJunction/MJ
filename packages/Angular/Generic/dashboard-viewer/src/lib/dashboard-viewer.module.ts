@@ -17,6 +17,9 @@ import { QueryViewerModule } from '@memberjunction/ng-query-viewer';
 // MJ Artifacts for displaying conversation artifacts
 import { ArtifactsModule } from '@memberjunction/ng-artifacts';
 
+// MJ UI Components for the canonical empty-state placeholder
+import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
+
 // Main Component
 import { DashboardViewerComponent } from './dashboard-viewer/dashboard-viewer.component';
 
@@ -82,7 +85,8 @@ import { DashboardBreadcrumbComponent } from './breadcrumb/dashboard-breadcrumb.
         NgTreesModule,
         EntityViewerModule,
         QueryViewerModule,
-        ArtifactsModule
+        ArtifactsModule,
+        MJEmptyStateComponent
     ],
     exports: [
         // Main Component

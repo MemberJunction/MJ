@@ -200,6 +200,17 @@ export abstract class SQLDialect implements SQLParserDialect {
     abstract QuoteColumnAlias(aliasName: string): string;
 
     /**
+     * Canonicalizes a SCHEMA name to the form the platform actually stores when
+     * the name appears UNQUOTED in DDL. PostgreSQL folds unquoted identifiers to
+     * lowercase, so `__mj_BizAppsCommon` physically becomes `__mj_bizappscommon`;
+     * SQL Server is case-insensitive and stores the name as-given. Routing every
+     * schema CREATE/DROP/USE through this keeps the engine's (quoted) operations
+     * aligned with what unquoted migration DDL produces — so a mixed-case schema
+     * name can't split into two physical schemas (one quoted-mixed, one folded-lowercase).
+     */
+    abstract CanonicalSchemaName(name: string): string;
+
+    /**
      * Quotes a value as a SQL string literal. Both SQL Server and PostgreSQL
      * use single quotes with `''` doubling to escape internal apostrophes —
      * this is concrete in the base class so callers don't reinvent the
@@ -308,6 +319,35 @@ export abstract class SQLDialect implements SQLParserDialect {
      */
     get MaxKeyStringLength(): number {
         return Number.MAX_SAFE_INTEGER;
+    }
+
+    /**
+     * Maximum bytes that can be stored in-row for a single row, or `null` when the dialect has no
+     * in-row size limit. SQL Server enforces a hard ~8060-byte in-row limit; PostgreSQL has none
+     * (TOAST stores oversized variable-length values out-of-line). Consumed by schema materialization
+     * to avoid emitting a table whose minimum in-row footprint can never satisfy an INSERT.
+     * Default: `null` (no in-row size limit).
+     */
+    get MaxInRowSizeBytes(): number | null {
+        return null;
+    }
+
+    /**
+     * Hard maximum number of columns per table, or `null` when effectively unbounded for our purposes.
+     * SQL Server: 1024. PostgreSQL: 1600. Default: `null`.
+     */
+    get MaxColumnCount(): number | null {
+        return null;
+    }
+
+    /**
+     * Minimum in-row byte footprint of a column of the given raw SQL type. Off-row-capable
+     * variable-length / LOB types contribute only their in-row pointer; fixed-length types contribute
+     * their full size. Only meaningful for dialects that report a {@link MaxInRowSizeBytes}.
+     * Default: 24 (a conservative off-row-pointer floor).
+     */
+    EstimateInRowBytes(_rawSqlType: string): number {
+        return 24;
     }
 
     /** SQL type names this dialect uses for date / time / timestamp columns. */

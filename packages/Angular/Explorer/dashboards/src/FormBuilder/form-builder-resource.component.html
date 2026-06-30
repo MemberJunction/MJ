@@ -188,14 +188,13 @@
           @if (IsLoading) {
             <div class="fb-rail-empty">Loading…</div>
           } @else if (filteredForms.length === 0) {
-            <div class="fb-rail-empty">
-              <i class="fa-solid fa-table-list"></i>
-              @if (LeftRailFilter || FormsEntityFilter || FormsStatusFilter.size < 3) {
-                <p>No forms match the current filters.</p>
-              } @else {
-                <p>No forms yet. Click <strong>New</strong> to start.</p>
-              }
-            </div>
+            @if (LeftRailFilter || FormsEntityFilter || FormsStatusFilter.size < 3) {
+              <mj-empty-state class="fb-rail-empty" Size="compact" Variant="no-results"
+                Icon="fa-solid fa-table-list" Title="No forms match the current filters" />
+            } @else {
+              <mj-empty-state class="fb-rail-empty" Size="compact" Icon="fa-solid fa-table-list"
+                Title="No forms yet" Message="Click New to start." />
+            }
           } @else if (FormsViewMode === 'tree') {
             <!-- Tree view: Schema → Entity → Forms -->
             @for (g of treeGroups; track g.schema) {
@@ -289,7 +288,7 @@
             @if (VersionsLoading) {
               <div class="fb-rail-empty">Loading…</div>
             } @else if (Versions.length === 0) {
-              <div class="fb-rail-empty"><p>No version history yet.</p></div>
+              <mj-empty-state class="fb-rail-empty" Size="compact" Icon="fa-solid fa-clock-rotate-left" Title="No version history yet" />
             } @else {
               @for (v of Versions; track v.ID) {
                 <div class="fb-version-row"
@@ -542,10 +541,9 @@
       @if (!SelectedFormID && !IsNewForm) {
         <!-- No form picked or being created — invite the user to pick or
              create one. Lists recently-edited forms for quick access. -->
-        <div class="fb-empty fb-empty--landing">
-          <i class="fa-solid fa-pen-ruler"></i>
-          <h3>Form Builder</h3>
-          <p>Pick a form on the left or click <strong>+ New</strong> above the list to start a new one. The Form Builder agent on the right will help you author and refine via natural language.</p>
+        <mj-empty-state class="fb-empty fb-empty--landing" Size="large" Icon="fa-solid fa-pen-ruler"
+          Title="Form Builder"
+          Message="Pick a form on the left or click + New above the list to start a new one. The Form Builder agent on the right will help you author and refine via natural language.">
           @if (ExistingForms.length > 0) {
             <div class="fb-empty-recent">
               <div class="fb-empty-recent-label">Recently edited</div>
@@ -562,13 +560,11 @@
               </div>
             </div>
           }
-        </div>
+        </mj-empty-state>
       } @else if (!TargetEntityName) {
-        <div class="fb-empty">
-          <i class="fa-solid fa-table-list"></i>
-          <h3>Pick an entity to start</h3>
-          <p>Choose the target entity above, then refine the form via code, preview, or drag-drop layout.</p>
-        </div>
+        <mj-empty-state class="fb-empty" Icon="fa-solid fa-table-list"
+          Title="Pick an entity to start"
+          Message="Choose the target entity above, then refine the form via code, preview, or drag-drop layout." />
       } @else {
         <!-- Preview pane: live render via mj-interactive-form when we have
              a usable spec + can resolve the entity. For an unsaved canvas,
@@ -639,11 +635,9 @@
                   <p>Loading preview…</p>
                 </div>
               } @else if (!PreviewSpec) {
-                <div class="fb-preview-empty">
-                  <i class="fa-solid fa-eye"></i>
-                  <h4>Live preview</h4>
-                  <p>Code is empty — switch to <strong>Code</strong> or <strong>Layout</strong> to start.</p>
-                </div>
+                <mj-empty-state class="fb-preview-empty" Icon="fa-solid fa-eye"
+                  Title="Live preview"
+                  Message="Code is empty — switch to Code or Layout to start." />
               } @else if (PreviewRecord) {
                 <!--
                   Retrospective fix #10: subscribe to LoadErrorChanged so
@@ -662,10 +656,9 @@
                   (LoadErrorChanged)="OnPreviewLoadError($event)">
                 </mj-interactive-form>
               } @else {
-                <div class="fb-preview-empty">
-                  <i class="fa-solid fa-triangle-exclamation"></i>
-                  <p>{{ PreviewError || 'Could not bind a record for preview.' }}</p>
-                </div>
+                <mj-empty-state class="fb-preview-empty" Variant="error"
+                  Icon="fa-solid fa-triangle-exclamation"
+                  [Title]="PreviewError || 'Could not bind a record for preview.'" />
               }
             </div>
           </div>

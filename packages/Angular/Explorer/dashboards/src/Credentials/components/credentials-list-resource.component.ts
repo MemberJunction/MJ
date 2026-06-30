@@ -459,6 +459,20 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
         this.applyFilters();
     }
 
+    /** True when search and/or any filter narrow the list. */
+    public get IsListNarrowed(): boolean {
+        return !!(this.searchText || this.selectedTypeFilter || this.selectedStatusFilter);
+    }
+
+    /** Empty-state CTA: reset filters when narrowed, otherwise create. */
+    public onEmptyStateAction(): void {
+        if (this.IsListNarrowed) {
+            this.clearFilters();
+        } else {
+            this.createNewCredential();
+        }
+    }
+
     public get hasActiveFilters(): boolean {
         return this.searchText !== '' ||
             this.selectedTypeFilter !== '' ||

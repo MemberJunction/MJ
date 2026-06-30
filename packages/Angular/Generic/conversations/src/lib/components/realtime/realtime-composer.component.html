@@ -1,4 +1,54 @@
-@if (StripMode) {
+@if (StripMode && Compact) {
+  <!-- COMPACT (Calm Orb · overlay): the lean dock — Mute + End + a "•••" that blooms a
+       small sheet with the secondary actions (Captions / Details / Type). No 5-button bar,
+       no "press T" hint overlapping End. Round controls, red End — matches the mockup. -->
+  <div class="dock-lean" role="group" aria-label="Call controls">
+    <div class="lean-more" [class.lean-more--open]="MoreOpen">
+      <div class="lean-sheet" (click)="$event.stopPropagation()" role="menu" aria-label="More call controls">
+        <button type="button" class="lean-sheet__btn" [class.lean-sheet__btn--on]="CaptionsOn"
+                (click)="ToggleCaptions(); MoreOpen = false"
+                [title]="CaptionsOn ? 'Voice-first — back to the orb' : 'Show the conversation as text'"
+                [attr.aria-pressed]="CaptionsOn">
+          <i class="fa-solid fa-closed-captioning" aria-hidden="true"></i>
+          <small>Captions</small>
+        </button>
+        @if (ShowDetails) {
+          <button type="button" class="lean-sheet__btn" [class.lean-sheet__btn--on]="DetailsOn"
+                  (click)="DetailsToggled.emit(); MoreOpen = false"
+                  [title]="DetailsOn ? 'Hide the session panels' : 'Peek at the session panels'"
+                  [attr.aria-pressed]="DetailsOn">
+            <i class="fa-solid fa-table-columns" aria-hidden="true"></i>
+            <small>Details</small>
+          </button>
+        }
+        <button type="button" class="lean-sheet__btn"
+                (click)="OpenChanged.emit(true); MoreOpen = false"
+                title="Type into the live session" aria-label="Open the typed-input composer">
+          <i class="fa-regular fa-keyboard" aria-hidden="true"></i>
+          <small>Type</small>
+        </button>
+      </div>
+      <button type="button" class="lean-ctrl lean-ctrl--more" [class.lean-ctrl--on]="MoreOpen"
+              (click)="ToggleMore($event)"
+              title="More controls" aria-label="More call controls"
+              [attr.aria-expanded]="MoreOpen">
+        <i class="fa-solid fa-ellipsis" aria-hidden="true"></i>
+      </button>
+    </div>
+
+    <button type="button" class="lean-ctrl lean-ctrl--lg" [class.lean-ctrl--muted]="IsMuted"
+            (click)="ToggleMute()"
+            [title]="IsMuted ? 'Unmute microphone' : 'Mute microphone'"
+            [attr.aria-pressed]="IsMuted">
+      <i class="fa-solid" [ngClass]="IsMuted ? 'fa-microphone-slash' : 'fa-microphone'" aria-hidden="true"></i>
+    </button>
+
+    <button type="button" class="lean-ctrl lean-ctrl--lg lean-ctrl--end" (click)="EndRequested.emit()"
+            title="End call" aria-label="End call">
+      <i class="fa-solid fa-phone-slash" aria-hidden="true"></i>
+    </button>
+  </div>
+} @else if (StripMode) {
   <!-- Levels 0–1: phone-call strip — big round controls, nothing to configure.
        Captions arrives at level 1 WITH the text it controls; Details peeks at the
        surface panels on demand; End stays the deliberate rightmost action. -->

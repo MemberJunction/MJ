@@ -34,23 +34,6 @@
   padding: 48px;
 }
 
-.empty-state {
-  text-align: center;
-  padding: 48px;
-  color: var(--mj-text-disabled);
-}
-
-.empty-state i {
-  font-size: 32px;
-  margin-bottom: 12px;
-  display: block;
-}
-
-.empty-state p {
-  margin: 0;
-  font-size: 14px;
-}
-
 /* ── Split View ───────────────────────────────────────────── */
 
 .split-view {
@@ -208,6 +191,7 @@
   text-align: center;
   color: var(--mj-text-disabled);
   font-size: 12px;
+  width: 100%;
 }
 
 .expanded-empty i {
@@ -442,6 +426,7 @@
   padding: 24px;
   text-align: center;
   color: var(--mj-text-disabled);
+  width: 100%;
 }
 
 .detail-empty i {

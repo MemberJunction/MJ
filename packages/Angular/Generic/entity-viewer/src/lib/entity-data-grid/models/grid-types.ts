@@ -509,7 +509,14 @@ export interface EntityActionConfig {
   maxSelectedRecords?: number;
   /** Invocation type (e.g., 'View', 'SingleRecord', 'MultiRecord') */
   invocationType?: string;
-  /** Additional action metadata */
+  /**
+   * Optional runtime-UX driver key (the entity action invocation's `RuntimeUXDriverClass`). When present,
+   * the host should mount that interactive driver (e.g. the Record Process bulk-update runner in
+   * `@memberjunction/ng-entity-action-ux`) on `EntityActionRequested` instead of invoking the action
+   * blind. The grid stays generic — it only carries the key and emits the request; the parent mounts.
+   */
+  runtimeUXDriverClass?: string;
+  /** Additional action metadata (e.g. the `RecordProcessID` a runtime-UX driver should run). */
   metadata?: Record<string, unknown>;
 }
 

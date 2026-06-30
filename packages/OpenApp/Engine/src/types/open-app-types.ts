@@ -56,6 +56,13 @@ export interface InstallOptions {
     Source: string;
     /** Specific version to install (default: latest) */
     Version?: string;
+    /**
+     * Path within the repository to the app's `mj-app.json` (and its `migrations`/`metadata`
+     * directories). Defaults to the repo root. Enables multiple apps per repository
+     * (e.g. `CRM/HubSpot`). When omitted, falls back to any subpath embedded in `Source`.
+     * Per-app identity (like `Source`/`Version`) — NOT a passthrough option.
+     */
+    Subpath?: string;
     /** Enable verbose output */
     Verbose?: boolean;
     /** Allow schema names starting with '__'. Dangerous; MJ-internal apps only. */
@@ -166,6 +173,8 @@ export interface InstalledAppInfo {
     PublisherURL: string | null;
     /** GitHub repository URL */
     RepositoryURL: string;
+    /** In-repo subpath to the app (for multi-app repos); null/undefined = repo root */
+    Subpath?: string | null;
     /** Database schema name (if the app uses one) */
     SchemaName: string | null;
     /** Semver range of compatible MJ versions */
@@ -196,6 +205,8 @@ export interface ResolvedDependency {
     VersionRange: string;
     /** GitHub repository URL */
     Repository: string;
+    /** In-repo subpath to the dependency app (for multi-app repos); undefined = repo root */
+    Subpath?: string;
     /** Whether this dependency is already installed */
     AlreadyInstalled: boolean;
     /** Currently installed version (if installed) */

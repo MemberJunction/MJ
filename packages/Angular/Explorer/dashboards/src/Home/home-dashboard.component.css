@@ -269,53 +269,6 @@
   transform: translateY(-50%) translateX(0);
 }
 
-/* Empty State */
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 64px 24px;
-  background: var(--mj-bg-surface);
-  border-radius: var(--mj-radius-xl);
-  border: 2px dashed var(--mj-border-default);
-  text-align: center;
-}
-
-.empty-icon {
-  width: 80px;
-  height: 80px;
-  border-radius: var(--mj-radius-full);
-  background: var(--mj-bg-surface-card);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 24px;
-}
-
-.empty-icon i {
-  font-size: var(--mj-text-4xl);
-  color: var(--mj-text-disabled);
-}
-
-.empty-state h3 {
-  margin: 0 0 8px 0;
-  font-size: var(--mj-text-xl);
-  font-weight: var(--mj-font-semibold);
-  color: var(--mj-text-secondary);
-}
-
-.empty-state p {
-  margin: 0 0 20px 0;
-  font-size: var(--mj-text-sm);
-  color: var(--mj-text-muted);
-  max-width: 400px;
-}
-
-.empty-state button i {
-  margin-right: 8px;
-}
-
 /* ========================================
    RIGHT SIDEBAR
    ======================================== */
@@ -644,14 +597,9 @@
 /* Pin Empty State */
 .pin-empty-state {
   position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 40px 20px;
   background: var(--mj-bg-surface);
   border-radius: var(--mj-radius-xl);
   border: 2px dashed var(--mj-border-default);
-  text-align: center;
 }
 
 .pin-empty-close {
@@ -674,41 +622,6 @@
 .pin-empty-close:hover {
   color: var(--mj-text-primary);
   background: var(--mj-bg-surface-hover);
-}
-
-.pin-empty-state > i {
-  font-size: 40px;
-  color: var(--mj-text-disabled);
-  margin-bottom: 16px;
-}
-
-.pin-empty-state h3 {
-  font-size: var(--mj-text-base);
-  font-weight: var(--mj-font-semibold);
-  color: var(--mj-text-secondary);
-  margin: 0 0 6px 0;
-}
-
-.pin-empty-state p {
-  font-size: var(--mj-text-sm);
-  color: var(--mj-text-muted);
-  max-width: 360px;
-  margin: 0 0 16px 0;
-}
-
-.pin-empty-dismiss {
-  margin-top: 12px;
-  background: transparent;
-  border: none;
-  padding: 4px 8px;
-  font-size: var(--mj-text-xs);
-  color: var(--mj-text-muted);
-  text-decoration: underline;
-  cursor: pointer;
-}
-
-.pin-empty-dismiss:hover {
-  color: var(--mj-text-secondary);
 }
 
 /* Pin Grid */

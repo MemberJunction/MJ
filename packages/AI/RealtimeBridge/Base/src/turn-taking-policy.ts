@@ -148,6 +148,20 @@ export class RegexAddressedMatcher implements IAddressedMatcher {
 }
 
 /**
+ * An addressed-matcher that treats EVERY human segment as addressing the agent (agent-spoken segments
+ * are still excluded, to avoid self-trigger loops). Use it for a DIRECT one-on-one call — a "phone an
+ * agent" room — where the user expects the agent to respond to whatever they say, without having to
+ * name it each turn. (Name-based {@link RegexAddressedMatcher} is the right choice for multi-party rooms
+ * where several agents must not all answer at once.)
+ */
+export class AlwaysAddressedMatcher implements IAddressedMatcher {
+    /** @inheritdoc */
+    public IsAddressed(segment: TurnTranscriptSegment): boolean {
+        return segment.IsAgent !== true;
+    }
+}
+
+/**
  * Configuration for a {@link TurnTakingPolicy} instance.
  */
 export interface TurnTakingPolicyConfig {

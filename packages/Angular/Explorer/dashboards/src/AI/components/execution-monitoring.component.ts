@@ -277,10 +277,8 @@ export interface ExecutionMonitoringState {
                             }
                           </div>
                         } @else {
-                          <div class="no-data">
-                            <i class="fa-solid fa-inbox"></i>
-                            <p>No executions found for this time period</p>
-                          </div>
+                          <mj-empty-state Size="compact" Icon="fa-solid fa-inbox"
+                            Title="No executions found for this time period" />
                         }
                       </div>
                     }
@@ -1456,26 +1454,6 @@ export interface ExecutionMonitoringState {
     .type-badge--agent {
       background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
       color: var(--mj-status-success);
-    }
-
-    .no-data {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 60px 20px;
-      color: var(--mj-text-disabled);
-      gap: 16px;
-    }
-
-    .no-data i {
-      font-size: 48px;
-      color: var(--mj-border-default);
-    }
-
-    .no-data p {
-      margin: 0;
-      font-size: 14px;
     }
 
     /* Model detail styles */

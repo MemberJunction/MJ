@@ -200,18 +200,31 @@ export function BuildRealtimeModelOptions(models: ReadonlyArray<VoiceModelCandid
 
 /**
  * Builds the `configOverridesJson` payload for the `StartRealtimeClientSession` mint from
- * what the (authorization-gated) pickers chose. Currently the only override is the
- * explicit realtime model preference; the envelope shape —
- * `{"realtime":{"modelPreference":"<id>"}}` — is the pinned server contract and is
- * structured so future overrides ride alongside without reshaping.
+ * what the (authorization-gated) pickers chose — an explicit realtime model preference and/or a
+ * per-provider voice. The envelope (`{"realtime":{"modelPreference":"<id>","voice":{"providers":
+ * {"openai":{"voice":"<v>"}}}}}`) is the pinned server contract, merged into the effective config
+ * server-side (highest precedence).
  *
- * @returns The JSON string, or `null` when nothing was overridden (the common case —
- *   `null` keeps the mint identical to today's behavior).
+ * @param preferredModelId The explicit `MJ: AI Models` id, or null/empty for none.
+ * @param preferredVoice The provider-native voice id (e.g. `echo`), or null/empty for none.
+ * @returns The JSON string, or `null` when nothing was overridden (keeps the mint identical to default).
  */
-export function BuildRealtimeConfigOverridesJson(preferredModelId: string | null | undefined): string | null {
+export function BuildRealtimeConfigOverridesJson(
+  preferredModelId: string | null | undefined,
+  preferredVoice?: string | null | undefined,
+): string | null {
   const modelId = preferredModelId?.trim() ?? '';
-  if (modelId.length === 0) {
+  const voice = preferredVoice?.trim() ?? '';
+  if (modelId.length === 0 && voice.length === 0) {
     return null;
   }
-  return JSON.stringify({ realtime: { modelPreference: modelId } });
+  const realtime: { modelPreference?: string; voice?: { providers: Record<string, { voice: string }> } } = {};
+  if (modelId.length > 0) {
+    realtime.modelPreference = modelId;
+  }
+  if (voice.length > 0) {
+    // Per-provider voice shape matches GetProviderVoiceSettings; `openai` is the realtime provider today.
+    realtime.voice = { providers: { openai: { voice } } };
+  }
+  return JSON.stringify({ realtime });
 }

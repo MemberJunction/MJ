@@ -36,10 +36,9 @@
                 Loading…
             </div>
         } @else if (SharedWithMe.length === 0) {
-            <div class="empty">
-                <i class="fa-solid fa-inbox"></i>
-                Nothing has been shared directly with you yet.
-            </div>
+            <mj-empty-state class="empty" Size="compact"
+                Icon="fa-solid fa-inbox"
+                Title="Nothing has been shared directly with you yet." />
         } @else {
             @for (group of SharedWithMe; track TrackByDomain($index, group)) {
                 <div class="group">
@@ -73,10 +72,9 @@
                 Loading…
             </div>
         } @else if (SharedByMe.length === 0) {
-            <div class="empty">
-                <i class="fa-solid fa-paper-plane"></i>
-                You haven't shared anything with others yet.
-            </div>
+            <mj-empty-state class="empty" Size="compact"
+                Icon="fa-solid fa-paper-plane"
+                Title="You haven't shared anything with others yet." />
         } @else {
             @for (group of SharedByMe; track TrackByDomain($index, group)) {
                 <div class="group">

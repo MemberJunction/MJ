@@ -42,10 +42,16 @@ export interface LiveKitClientTokenResult {
 
 /** Input for {@link GraphQLLiveKitClient.StartAgentRoomSession}. */
 export interface StartLiveKitAgentRoomSessionInput {
-  /** The agent to voice in the room. */
+  /** The agent to voice in the room (the Realtime Co-Agent / voice front-end). */
   AgentID?: string;
   /** The agent's display name (bot name + addressing). */
   AgentName?: string;
+  /** The TARGET agent the co-agent voices — the one being "called". Without it the agent stays idle. */
+  TargetAgentID?: string;
+  /** Optional per-session Realtime MODEL override (an `MJ: AI Models` Name or ID) — dev model picker. */
+  RealtimeModelID?: string;
+  /** Optional per-session VOICE override (provider-native voice id, e.g. OpenAI `echo`) — dev voice picker. */
+  RealtimeVoice?: string;
   /** The room to use. When omitted, the server generates one. */
   RoomName?: string;
   /** The MJ agent-session id. When omitted, the server generates one. */
@@ -72,6 +78,24 @@ export interface LiveKitAgentRoomSessionResult {
   Identity: string;
 }
 
+/** A selectable provider-native voice (dev voice picker). */
+export interface RealtimeVoiceOption {
+  /** The provider-native voice id sent to the model (e.g. `echo`). */
+  ID: string;
+  /** The human label shown in the picker (e.g. `Echo`). */
+  Name: string;
+}
+
+/** An active Realtime model with the voices its driver supports (dev model/voice picker). */
+export interface RealtimeModelVoices {
+  /** The `MJ: AI Models` row id. */
+  ModelID: string;
+  /** The model's display name. */
+  ModelName: string;
+  /** The provider-native voices the model supports (empty when the driver declares none). */
+  Voices: RealtimeVoiceOption[];
+}
+
 /** Result of a recording (egress) operation. */
 export interface LiveKitRecordingResult {
   /** Whether the operation succeeded. */
@@ -82,6 +106,12 @@ export interface LiveKitRecordingResult {
   EgressID: string;
   /** The raw egress status. */
   Status: string;
+  /**
+   * The `MJ: Files` row id of the registered recording — present on a successful **stop** once the egress
+   * MP4 has been registered against the Meeting-Room Conversation. Absent while recording, or when the
+   * meeting-recording storage provider isn't configured.
+   */
+  RecordingFileID?: string;
 }
 
 /** Typed wrapper over the LiveKit room GraphQL mutations. */
@@ -160,6 +190,100 @@ export class GraphQLLiveKitClient {
   }
 
   /**
+   * Removes one agent from a room (the bot leaves) — identified by the `SessionBridgeID` from
+   * {@link StartAgentRoomSession}. Returns `true` when stopped. Best-effort: any failure resolves `false`.
+   *
+   * @param sessionBridgeID The agent's bridge row id.
+   */
+  public async StopAgentRoomSession(sessionBridgeID: string): Promise<boolean> {
+    try {
+      const mutation = gql`
+        mutation StopLiveKitAgentRoomSession($sessionBridgeID: String!) {
+          StopLiveKitAgentRoomSession(sessionBridgeID: $sessionBridgeID)
+        }
+      `;
+      const result = await this._dataProvider.ExecuteGQL(mutation, { sessionBridgeID });
+      return result?.StopLiveKitAgentRoomSession === true;
+    } catch (e: any) {
+      LogError('GraphQLLiveKitClient.StopAgentRoomSession failed', undefined, e);
+      return false;
+    }
+  }
+
+  /**
+   * Ends the meeting for EVERYONE: stops every agent bot bridged into a room (by room name, via the
+   * server roster). Works even for a participant who only *joined* and never tracked bridge ids locally.
+   * Returns `true` when the teardown ran. Best-effort: any failure resolves `false`.
+   *
+   * @param roomName The room to end.
+   */
+  public async EndRoom(roomName: string): Promise<boolean> {
+    try {
+      const mutation = gql`
+        mutation EndLiveKitRoom($roomName: String!) {
+          EndLiveKitRoom(roomName: $roomName)
+        }
+      `;
+      const result = await this._dataProvider.ExecuteGQL(mutation, { roomName });
+      return result?.EndLiveKitRoom === true;
+    } catch (e: any) {
+      LogError('GraphQLLiveKitClient.EndRoom failed', undefined, e);
+      return false;
+    }
+  }
+
+  /**
+   * Invites MJ users to a room — the server sends each a "Live Room Invite" notification (in-app +
+   * MJ Comms when configured) whose in-app entry joins the room when clicked. Best-effort.
+   *
+   * @param roomName The room to invite into.
+   * @param userIDs The `MJ: Users` ids to invite.
+   * @returns `true` when at least one invite was delivered.
+   */
+  public async InviteUsers(roomName: string, userIDs: string[]): Promise<boolean> {
+    try {
+      const mutation = gql`
+        mutation InviteUsersToLiveKitRoom($roomName: String!, $userIDs: [String!]!) {
+          InviteUsersToLiveKitRoom(roomName: $roomName, userIDs: $userIDs)
+        }
+      `;
+      const result = await this._dataProvider.ExecuteGQL(mutation, { roomName, userIDs });
+      return result?.InviteUsersToLiveKitRoom === true;
+    } catch (e: any) {
+      LogError('GraphQLLiveKitClient.InviteUsers failed', undefined, e);
+      return false;
+    }
+  }
+
+  /**
+   * Fetches active Realtime models with each driver's supported voices — populates the dev model/voice
+   * picker. Best-effort: any failure resolves to `[]` so the picker simply offers no overrides.
+   *
+   * @returns The active realtime models + their voices.
+   */
+  public async GetRealtimeModelVoices(): Promise<RealtimeModelVoices[]> {
+    try {
+      const query = gql`
+        query GetRealtimeModelVoices {
+          GetRealtimeModelVoices {
+            ModelID
+            ModelName
+            Voices {
+              ID
+              Name
+            }
+          }
+        }
+      `;
+      const result = await this._dataProvider.ExecuteGQL(query, {});
+      return (result?.GetRealtimeModelVoices as RealtimeModelVoices[] | undefined) ?? [];
+    } catch (e: any) {
+      LogError('GraphQLLiveKitClient.GetRealtimeModelVoices failed', undefined, e);
+      return [];
+    }
+  }
+
+  /**
    * Starts recording a room (server-authorized composite egress).
    *
    * @param roomName The room to record.
@@ -199,6 +323,7 @@ export class GraphQLLiveKitClient {
             ErrorMessage
             EgressID
             Status
+            RecordingFileID
           }
         }
       `,

@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dupe v2 · B — Recommendation board</title>
+<link rel="stylesheet" href="../shared.css">
+<style>
+    :root { --llm: var(--mj-brand-primary); --vec: var(--vector-accent); }
+    .page { padding:16px 20px; }
+
+    /* page header chrome like the real dashboard */
+    .dash-head { display:flex; align-items:center; gap:13px; margin-bottom:14px; }
+    .dash-head .eicon { width:36px; height:36px; border-radius:9px; background:var(--mj-brand-soft); color:var(--mj-text-link); display:flex; align-items:center; justify-content:center; font-size:17px; }
+    .dash-head h1 { font-size:17px; margin:0; }
+    .dash-head .sub { font-size:12.5px; color:var(--mj-text-muted); }
+    .dash-head .spacer { flex:1; }
+
+    /* NEW toolbar with reasoning-driven controls */
+    .toolbar { display:flex; align-items:center; gap:14px; flex-wrap:wrap; padding:11px 14px; margin-bottom:12px; }
+    .seg { display:inline-flex; border:1px solid var(--mj-border-default); border-radius:7px; overflow:hidden; }
+    .seg button { border:none; background:var(--mj-bg-surface); color:var(--mj-text-secondary); font-size:12px; font-weight:600; padding:7px 12px; cursor:pointer; }
+    .seg button.active { background:var(--mj-brand-primary); color:#fff; }
+    .ctl { display:flex; align-items:center; gap:8px; font-size:12px; color:var(--mj-text-muted); }
+    .ctl b { color:var(--mj-text-primary); }
+    .toolbar .spacer { flex:1; }
+    .switch { width:34px; height:19px; border-radius:999px; background:var(--mj-border-strong); position:relative; cursor:pointer; }
+    .switch.on { background:var(--mj-brand-primary); }
+    .switch::after { content:""; position:absolute; width:15px; height:15px; border-radius:50%; background:#fff; top:2px; left:2px; transition:.15s; }
+    .switch.on::after { left:17px; }
+
+    /* attention callout */
+    .attention { display:flex; align-items:center; gap:14px; padding:13px 16px; border-radius:var(--mj-radius); margin-bottom:14px;
+        background:color-mix(in srgb,var(--mj-status-warning) 9%,var(--mj-bg-surface)); border:1px solid var(--mj-status-warning-border); }
+    .attention .big { font-size:22px; font-weight:800; color:var(--mj-status-warning-text); }
+    .attention .spacer{flex:1}
+
+    /* board */
+    .board { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
+    .lane { background:var(--mj-bg-surface-card); border:1px solid var(--mj-border-default); border-radius:var(--mj-radius); display:flex; flex-direction:column; min-height:200px; }
+    .lane-hd { display:flex; align-items:center; gap:9px; padding:11px 14px; border-bottom:1px solid var(--mj-border-default); font-weight:700; font-size:13.5px; border-radius:var(--mj-radius) var(--mj-radius) 0 0; }
+    .lane.merge .lane-hd   { background:var(--mj-status-success-bg); color:var(--mj-status-success-text); }
+    .lane.uncertain .lane-hd { background:var(--mj-status-warning-bg); color:var(--mj-status-warning-text); }
+    .lane.notdupe .lane-hd { background:var(--mj-status-error-bg); color:var(--mj-status-error-text); }
+    .lane-hd .count { margin-left:auto; background:var(--mj-bg-surface); color:var(--mj-text-secondary); font-size:12px; padding:1px 9px; border-radius:999px; }
+    .lane-body { padding:11px; display:flex; flex-direction:column; gap:11px; }
+
+    /* card — faithful to the real kanban card + LLM additions */
+    .card2 { background:var(--mj-bg-surface); border:1px solid var(--mj-border-default); border-radius:9px; overflow:hidden; }
+    .card2:hover { box-shadow:var(--mj-shadow-md); }
+    .c-head { display:flex; align-items:center; gap:10px; padding:11px 12px 8px; }
+    .c-icon { width:30px; height:30px; border-radius:7px; background:var(--mj-bg-surface-sunken); display:flex; align-items:center; justify-content:center; color:var(--mj-text-muted); font-size:14px; flex:0 0 auto; }
+    .c-name { font-weight:700; font-size:13.5px; flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .c-entity { font-size:10px; color:var(--mj-text-muted); font-weight:600; }
+    /* the score pair replaces the single score indicator */
+    .scorepill { display:flex; align-items:center; gap:5px; font-size:11px; font-weight:700; padding:3px 8px; border-radius:6px; background:var(--mj-bg-surface-sunken); }
+    .scorepill .v{color:var(--vec)} .scorepill .a{color:var(--mj-text-disabled)} .scorepill .l{color:var(--llm)}
+    .scorepill.flag { background:var(--mj-status-warning-bg); }
+
+    .c-body { padding:0 12px 9px; }
+    .reason-line { font-size:12px; color:var(--mj-text-secondary); margin:4px 0 8px; display:flex; gap:7px; }
+    .reason-line .ic { color:var(--llm); flex:0 0 auto; }
+    .matchlist { font-size:11.5px; color:var(--mj-text-muted); }
+    .matchlist .mr { display:flex; gap:8px; padding:2px 0; }
+    .matchlist .mr .pct { width:34px; color:var(--mj-text-secondary); font-weight:700; }
+    .c-meta { display:flex; gap:14px; padding:7px 12px; border-top:1px solid var(--mj-border-subtle); font-size:11px; color:var(--mj-text-muted); }
+    .c-actions { display:flex; gap:8px; padding:9px 12px 11px; }
+    .disagree-flag { display:inline-flex; align-items:center; gap:5px; font-size:10px; font-weight:800; color:var(--mj-status-warning-text); background:var(--mj-status-warning-bg); border:1px solid var(--mj-status-warning-border); padding:2px 7px; border-radius:5px; }
+    .reco-check { color:var(--mj-status-success); }
+</style>
+</head>
+<body>
+
+<div class="mock-nav">
+    <div class="brand"><span class="dot"></span> Dupe Detection <small>· v2 mockups</small></div>
+    <div class="links">
+        <a href="index.html">v2 Overview</a>
+        <a href="a-augment-in-place.html">A · Augment</a>
+        <a href="b-recommendation-board.html" class="active">B · Reco Board</a>
+        <a href="c-reasoning-copilot.html">C · Copilot</a>
+        <a href="../index.html">↩ v1</a>
+    </div>
+    <div class="spacer"></div>
+    <span class="pattern-tag">v2-B — reshape the EXISTING Kanban to triage by LLM verdict</span>
+    <button class="theme-toggle" onclick="toggleTheme()">🌓 <span id="tlabel">Dark</span></button>
+</div>
+
+<div class="page">
+    <div class="dash-head">
+        <div class="eicon"><i>⧉</i></div>
+        <div>
+            <h1>Record Duplicates — Accounts</h1>
+            <div class="sub">Run #1842 · 184 match-sets reasoned · solo prompt · gemini-3-flash</div>
+        </div>
+        <div class="spacer"></div>
+        <button class="btn">⟳ Run detection</button>
+    </div>
+
+    <!-- reasoning-driven toolbar (the divergence) -->
+    <div class="toolbar card">
+        <div class="ctl"><span>Group by</span>
+            <div class="seg"><button>Approval status</button><button class="active">LLM recommendation</button></div>
+        </div>
+        <div class="ctl"><span>Min LLM confidence</span> <input type="range" min="0" max="1" step="0.01" value="0.50" style="accent-color:var(--llm)"> <b>0.50</b></div>
+        <div class="ctl"><span class="switch on"></span> Conflicts only</div>
+        <div class="spacer"></div>
+        <div class="ctl"><span>Sort</span>
+            <select class="btn sm" style="font-weight:600"><option>Disagreement (vector vs LLM)</option><option>LLM confidence</option><option>Dependencies</option></select>
+        </div>
+    </div>
+
+    <!-- attention strip -->
+    <div class="attention">
+        <span class="big">12</span>
+        <div>
+            <div style="font-weight:700;color:var(--mj-text-primary)">Disagreements need a human</div>
+            <div class="tiny muted">Vectors say duplicate, the LLM doesn't (or vice-versa) — the highest-value review queue.</div>
+        </div>
+        <div class="spacer"></div>
+        <button class="btn">Review disagreements →</button>
+        <button class="btn primary">⚡ Auto-merge 23 high-confidence (≥0.95 &amp; agree)</button>
+    </div>
+
+    <!-- board grouped by LLM recommendation -->
+    <div class="board">
+        <!-- MERGE lane -->
+        <div class="lane merge">
+            <div class="lane-hd">✓ Recommend merge <span class="count">98</span></div>
+            <div class="lane-body">
+                <div class="card2">
+                    <div class="c-head">
+                        <div class="c-icon">⚇</div>
+                        <div style="flex:1"><div class="c-name">Acme Corporation <span class="reco-check">✓</span></div><div class="c-entity">Accounts · keep highest-dep</div></div>
+                        <div class="scorepill"><span class="v">.96</span><span class="a">→</span><span class="l">.98</span></div>
+                    </div>
+                    <div class="c-body">
+                        <div class="reason-line"><span class="ic">✦</span><span>Same domain + address; legal-suffix variants. Adopt SF phone/address.</span></div>
+                        <div class="matchlist"><div class="mr"><span class="pct">96%</span><span>Acme Corp (SF)</span></div><div class="mr"><span class="pct">94%</span><span>Acme Corporation LLC</span></div></div>
+                    </div>
+                    <div class="c-meta"><span>▦ 3 matches</span><span>📅 Jun 19</span><span>🔗 47 deps</span></div>
+                    <div class="c-actions"><button class="btn sm success" style="flex:1">Approve merge</button><button class="btn sm">Open</button></div>
+                </div>
+                <div class="card2">
+                    <div class="c-head"><div class="c-icon">⚇</div><div style="flex:1"><div class="c-name">Stark Industries <span class="reco-check">✓</span></div><div class="c-entity">Accounts</div></div><div class="scorepill"><span class="v">.99</span><span class="a">→</span><span class="l">.99</span></div></div>
+                    <div class="c-body"><div class="reason-line"><span class="ic">✦</span><span>Exact name + domain + EIN match. Trivial merge.</span></div></div>
+                    <div class="c-meta"><span>▦ 2 matches</span><span>🔗 31 deps</span></div>
+                    <div class="c-actions"><button class="btn sm success" style="flex:1">Approve merge</button><button class="btn sm">Open</button></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- UNCERTAIN lane -->
+        <div class="lane uncertain">
+            <div class="lane-hd">? Uncertain <span class="count">27</span></div>
+            <div class="lane-body">
+                <div class="card2">
+                    <div class="c-head"><div class="c-icon">⚇</div><div style="flex:1"><div class="c-name">Initech LLC</div><div class="c-entity">Accounts</div></div><div class="scorepill flag"><span class="v">.91</span><span class="a">→</span><span class="l">.58</span></div></div>
+                    <div class="c-body"><div class="reason-line"><span class="ic">✦</span><span>Same name but different state &amp; domain — could be regional subsidiaries.</span></div></div>
+                    <div class="c-meta"><span>▦ 2 matches</span><span class="disagree-flag">⚠ needs human</span></div>
+                    <div class="c-actions"><button class="btn sm" style="flex:1">Open &amp; decide</button></div>
+                </div>
+                <div class="card2">
+                    <div class="c-head"><div class="c-icon">⚇</div><div style="flex:1"><div class="c-name">Umbrella Corp</div><div class="c-entity">Accounts</div></div><div class="scorepill flag"><span class="v">.90</span><span class="a">→</span><span class="l">.61</span></div></div>
+                    <div class="c-body"><div class="reason-line"><span class="ic">✦</span><span>5 candidates; 2 look like test records. Mixed signal.</span></div></div>
+                    <div class="c-meta"><span>▦ 5 matches</span><span class="disagree-flag">⚠ needs human</span></div>
+                    <div class="c-actions"><button class="btn sm" style="flex:1">Open &amp; decide</button></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- NOT DUPLICATE lane -->
+        <div class="lane notdupe">
+            <div class="lane-hd">✕ Not duplicate <span class="count">59</span></div>
+            <div class="lane-body">
+                <div class="card2" style="border-color:var(--mj-status-warning-border)">
+                    <div class="c-head"><div class="c-icon">⚇</div><div style="flex:1"><div class="c-name">Northwind Traders</div><div class="c-entity">Accounts</div></div><div class="scorepill flag"><span class="v">.97</span><span class="a">→</span><span class="l">.19</span></div></div>
+                    <div class="c-body"><div class="reason-line"><span class="ic">✦</span><span>High vector score but different EIN, address &amp; leadership — distinct entities sharing a brand word.</span></div></div>
+                    <div class="c-meta"><span class="disagree-flag">⚠ vectors disagree</span></div>
+                    <div class="c-actions"><button class="btn sm" style="flex:1">Confirm not-dup</button><button class="btn sm">Override</button></div>
+                </div>
+                <div class="card2">
+                    <div class="c-head"><div class="c-icon">⚇</div><div style="flex:1"><div class="c-name">Soylent Corp</div><div class="c-entity">Accounts</div></div><div class="scorepill flag"><span class="v">.92</span><span class="a">→</span><span class="l">.08</span></div></div>
+                    <div class="c-body"><div class="reason-line"><span class="ic">✦</span><span>Sandbox/test record vs. production. Suppressed from review.</span></div></div>
+                    <div class="c-meta"><span class="disagree-flag">⚠ vectors disagree</span></div>
+                    <div class="c-actions"><button class="btn sm" style="flex:1">Confirm not-dup</button></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function toggleTheme(){ const d=document.documentElement.classList.toggle('dark'); document.getElementById('tlabel').textContent=d?'Light':'Dark'; }
+if (matchMedia('(prefers-color-scheme: dark)').matches){ toggleTheme(); }
+document.querySelectorAll('.switch').forEach(s=>s.onclick=()=>s.classList.toggle('on'));
+document.querySelectorAll('input[type=range]').forEach(r=>r.addEventListener('input',e=>{const b=e.target.parentElement.querySelector('b'); if(b)b.textContent=parseFloat(e.target.value).toFixed(2);}));
+</script>
+</body>
+</html>

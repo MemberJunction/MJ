@@ -16,29 +16,6 @@
   padding: var(--mj-space-6);
 }
 
-/* Messages */
-.message {
-  padding: 10px 14px;
-  border-radius: 6px;
-  margin-bottom: 16px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 14px;
-}
-
-.error-message {
-  background: var(--mj-status-error-bg);
-  color: var(--mj-status-error-text);
-  border: 1px solid var(--mj-status-error-border);
-}
-
-.success-message {
-  background: var(--mj-status-success-bg);
-  color: var(--mj-status-success-text);
-  border: 1px solid var(--mj-status-success-border);
-}
-
 /* Description */
 .description {
   color: var(--mj-text-secondary);

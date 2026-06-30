@@ -6,7 +6,7 @@ import { RecordChangesComponent } from './ng-record-changes.component';
 import { RestorePreviewPanelComponent } from './restore-preview-panel/restore-preview-panel.component';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { VersionsModule } from '@memberjunction/ng-versions';
-import { MjSlidePanelComponent } from '@memberjunction/ng-ui-components';
+import { MjSlidePanelComponent, MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 
 @NgModule({
   declarations: [
@@ -18,7 +18,8 @@ import { MjSlidePanelComponent } from '@memberjunction/ng-ui-components';
     FormsModule,
     SharedGenericModule,
     VersionsModule,
-    MjSlidePanelComponent
+    MjSlidePanelComponent,
+    MJEmptyStateComponent
   ],
   exports: [
     RecordChangesComponent,

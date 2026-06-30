@@ -12,10 +12,9 @@
 
   <div class="pins-body">
     @if (pinnedMessages.length === 0) {
-      <div class="pins-empty">
-        <i class="fas fa-thumbtack"></i>
-        <p>No pinned messages</p>
-      </div>
+      <mj-empty-state class="pins-empty" Size="compact"
+        Icon="fa-solid fa-thumbtack"
+        Title="No pinned messages" />
     }
 
     @for (message of pinnedMessages; track message.ID) {

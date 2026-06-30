@@ -11,7 +11,7 @@ import {
   HostListener
 } from '@angular/core';
 import { Observable, Subject, BehaviorSubject, combineLatest } from 'rxjs';
-import { takeUntil, map } from 'rxjs/operators';
+import { takeUntil, map, tap } from 'rxjs/operators';
 import { CompositeKey } from '@memberjunction/core';
 import { SharedService } from '@memberjunction/ng-shared';
 import { TestingDialogService } from '@memberjunction/ng-testing';
@@ -166,11 +166,9 @@ interface FilteredStats {
             <mj-loading text="Loading test runs..."></mj-loading>
           </div>
         } @else if ((FilteredRuns$ | async)?.length === 0) {
-          <div class="table-empty">
-            <i class="fa-solid fa-inbox"></i>
-            <p>No test runs found</p>
-            <span class="empty-hint">Try adjusting your filters or run a new test.</span>
-          </div>
+          <mj-empty-state Variant="no-results" Icon="fa-solid fa-inbox"
+            Title="No test runs found"
+            Message="Try adjusting your filters or run a new test." />
         } @else {
           @for (run of FilteredRuns$ | async; track TrackByRunId($index, run)) {
             <div
@@ -782,28 +780,6 @@ interface FilteredStats {
       padding: 80px 40px;
     }
 
-    .table-empty {
-      padding: 80px 40px;
-      text-align: center;
-    }
-
-    .table-empty i {
-      font-size: 48px;
-      color: var(--mj-border-strong);
-      margin-bottom: 16px;
-    }
-
-    .table-empty p {
-      font-size: 16px;
-      color: var(--mj-text-muted);
-      margin: 0 0 8px 0;
-    }
-
-    .empty-hint {
-      font-size: 13px;
-      color: var(--mj-text-disabled);
-    }
-
     /* Detail Panel Overlay */
     .detail-overlay {
       position: fixed;
@@ -1151,6 +1127,9 @@ export class TestingRunsComponent implements OnInit, OnDestroy {
 
   SelectedRun: TestRunWithFeedbackSummary | null = null;
 
+  /** Latest filtered/visible runs, cached for state reporting (agent context). */
+  private latestVisibleRuns: TestRunWithFeedbackSummary[] = [];
+
   EvalPreferences: EvaluationPreferences = { ...DEFAULT_EVALUATION_PREFERENCES, showAuto: true };
 
   // Observables
@@ -1179,6 +1158,70 @@ export class TestingRunsComponent implements OnInit, OnDestroy {
     this.applyInitialState();
     this.updateServiceDateRange();
     this.setupObservables();
+    this.subscribeToAgentFilterIntents();
+    this.subscribeToAgentSelectionIntents();
+  }
+
+  /**
+   * Apply agent-driven run-SELECTION intents published on the shared
+   * instrumentation service (from the dashboard's `SelectTestRun` / open-run
+   * client tools). The dashboard owns no `SelectedRun` UI state — it publishes a
+   * target run id (+ open flag + monotonic nonce) here, and this surface resolves
+   * it against the currently-loaded runs. Read-only navigational affordance:
+   * selecting opens the detail panel; `open` additionally opens the run's record
+   * in the entity workspace. Neither executes a test.
+   */
+  private subscribeToAgentSelectionIntents(): void {
+    let lastNonce = -1;
+    combineLatest([
+      this.instrumentationService.runSelectionIntent$,
+      this.instrumentationService.testRunsWithFeedback$,
+    ]).pipe(
+      takeUntil(this.destroy$)
+    ).subscribe(([intent, runs]) => {
+      if (!intent || intent.nonce === lastNonce) {
+        return;
+      }
+      const run = runs.find(r => r.id.toLowerCase() === intent.runId.toLowerCase());
+      if (!run) {
+        return; // Run not in the loaded set yet; a later testRunsWithFeedback$ tick may carry it.
+      }
+      lastNonce = intent.nonce;
+      this.SelectRun(run);
+      if (intent.open) {
+        SharedService.Instance.OpenEntityRecord('MJ: Test Runs', CompositeKey.FromID(run.id));
+      }
+      this.emitStateChange();
+      this.cdr.markForCheck();
+    });
+  }
+
+  /**
+   * Apply agent-driven filter intents published on the shared instrumentation
+   * service (from the Testing dashboard's `FilterTestsByStatus` / `SearchTests`
+   * client tools). Decouples those tools from this component's lifetime — the
+   * intent is replayed via BehaviorSubject when this surface mounts.
+   */
+  private subscribeToAgentFilterIntents(): void {
+    this.instrumentationService.runsFilterIntent$.pipe(
+      takeUntil(this.destroy$)
+    ).subscribe(intent => {
+      if (!intent) return;
+      let changed = false;
+      if (intent.status && intent.status !== this.filterState.status) {
+        this.filterState.status = intent.status;
+        changed = true;
+      }
+      if (intent.searchText != null && intent.searchText !== this.filterState.searchText) {
+        this.filterState.searchText = intent.searchText;
+        changed = true;
+      }
+      if (changed) {
+        this.filterTrigger$.next();
+        this.emitStateChange();
+        this.cdr.markForCheck();
+      }
+    });
   }
 
   ngOnDestroy(): void {
@@ -1243,11 +1286,13 @@ export class TestingRunsComponent implements OnInit, OnDestroy {
   SelectRun(run: TestRunWithFeedbackSummary): void {
     this.SelectedRun = run;
     this.resetFeedbackForm();
+    this.emitStateChange();
     this.cdr.markForCheck();
   }
 
   CloseDetailPanel(): void {
     this.SelectedRun = null;
+    this.emitStateChange();
     this.cdr.markForCheck();
   }
 
@@ -1352,6 +1397,11 @@ export class TestingRunsComponent implements OnInit, OnDestroy {
 
     this.FilteredRuns$ = combineLatest([data$, this.filterTrigger$]).pipe(
       map(([runs]) => this.applyClientFilters(runs)),
+      tap(runs => {
+        this.latestVisibleRuns = runs;
+        // Re-report so the dashboard's agent context reflects the visible set.
+        this.emitStateChange();
+      }),
       takeUntil(this.destroy$)
     );
 
@@ -1466,7 +1516,15 @@ export class TestingRunsComponent implements OnInit, OnDestroy {
     this.stateChange.emit({
       status: this.filterState.status,
       timeRange: this.filterState.timeRange,
-      searchText: this.filterState.searchText
+      searchText: this.filterState.searchText,
+      // Richer state for the dashboard's agent context (selected run id+NAME,
+      // visible run names + count, detail-panel state). Read-only — the dashboard
+      // does not mutate this; it only publishes it to the agent.
+      visibleRunCount: this.latestVisibleRuns.length,
+      visibleRunNames: this.latestVisibleRuns.map(r => r.testName),
+      selectedRunId: this.SelectedRun?.id ?? null,
+      selectedRunName: this.SelectedRun?.testName ?? null,
+      detailPanelOpen: this.SelectedRun != null
     });
   }
 

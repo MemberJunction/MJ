@@ -9,25 +9,28 @@
  *
  * 1. **Explicit `explicitAgentId`** on the call (matches the widget's `[DefaultAgentId]`
  *    `@Input` — already works today, preserved here for layering).
- * 2. **App-scoped `MJ: Application Settings`** row (`ApplicationID = <current app>`,
- *    `Name = 'Conversations.DefaultAgentID'`, `Value = <agent ID>`).
- * 3. **Global `MJ: Application Settings`** row (`ApplicationID IS NULL`, same name).
+ * 2. **`Application.AgentSettings.DefaultAgentID`** — the app's own agent config bag
+ *    (`MJApplicationEntity.AgentSettingsObject.DefaultAgentID`). The first-class place an
+ *    app declares its default/lead agent; wins over the legacy Application Setting key.
+ * 3. **App-scoped `MJ: Application Settings`** row (`ApplicationID = <current app>`,
+ *    `Name = 'Conversations.DefaultAgentID'`, `Value = <agent ID>`) — legacy fallback.
+ * 4. **Global `MJ: Application Settings`** row (`ApplicationID IS NULL`, same name).
  *    Ships as a metadata seed pointing at Sage on a fresh install.
- * 4. **Code-const fallback** — `Agents.find(a => a.Name === 'Sage')`. Safety net for
+ * 5. **Code-const fallback** — `Agents.find(a => a.Name === 'Sage')`. Safety net for
  *    installs where the seed was skipped; preserves today's behavior so the system never
  *    silently fails to route a turn.
  *
- * Steps 2 and 3 are handled by `ApplicationSettingEngine.GetSetting` in one call — that API
+ * Steps 3 and 4 are handled by `ApplicationSettingEngine.GetSetting` in one call — that API
  * already does app-scoped-first / global-fallback resolution internally.
  *
  * @module @memberjunction/conversations-runtime
  */
 
-import { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, IRunViewProvider, UserInfo, RunView } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
-import { ApplicationSettingEngine } from '@memberjunction/core-entities';
+import { ApplicationSettingEngine, MJApplicationEntity } from '@memberjunction/core-entities';
 
 /**
  * Options accepted by {@link DefaultAgentResolver.resolve}. Every field is optional;
@@ -107,7 +110,19 @@ export class DefaultAgentResolver {
             );
         }
 
-        // Steps 2 + 3: Application Setting resolution. `GetSetting` already does
+        // Step 2: the app's own AgentSettings.DefaultAgentID (first-class app config).
+        if (applicationId) {
+            const fromAppSettings = await this.getAppDefaultAgentId(applicationId, contextUser, provider);
+            if (fromAppSettings) {
+                const resolved = this.findAgentById(fromAppSettings);
+                if (resolved) return resolved;
+                console.warn(
+                    `DefaultAgentResolver: Application.AgentSettings.DefaultAgentID = "${fromAppSettings}" but no matching agent was found — falling through to the settings chain.`
+                );
+            }
+        }
+
+        // Steps 3 + 4: Application Setting resolution. `GetSetting` already does
         // app-scoped-first / global-fallback in one call.
         const settingValue = ApplicationSettingEngine.Instance.GetSetting(
             DefaultAgentResolver.SETTING_NAME,
@@ -121,7 +136,7 @@ export class DefaultAgentResolver {
             );
         }
 
-        // Step 4: code-const fallback. Find the agent named `Sage` and return it.
+        // Step 5: code-const fallback. Find the agent named `Sage` and return it.
         const fallback = AIEngineBase.Instance.Agents.find(
             (a) => a.Name === DefaultAgentResolver.FALLBACK_AGENT_NAME
         );
@@ -131,10 +146,65 @@ export class DefaultAgentResolver {
         throw new Error(
             `DefaultAgentResolver: could not resolve a default conversation manager agent. ` +
                 `Tried (1) explicitAgentId=${explicitAgentId ?? 'null'}, ` +
-                `(2)+(3) Application Setting "${DefaultAgentResolver.SETTING_NAME}" (applicationId=${applicationId ?? 'null'}) = "${settingValue ?? 'undefined'}", ` +
-                `(4) code-const fallback agent name = "${DefaultAgentResolver.FALLBACK_AGENT_NAME}". ` +
-                `Configure the Application Setting or seed the fallback agent.`
+                `(2) Application.AgentSettings.DefaultAgentID (applicationId=${applicationId ?? 'null'}), ` +
+                `(3)+(4) Application Setting "${DefaultAgentResolver.SETTING_NAME}" = "${settingValue ?? 'undefined'}", ` +
+                `(5) code-const fallback agent name = "${DefaultAgentResolver.FALLBACK_AGENT_NAME}". ` +
+                `Configure Application.AgentSettings, the Application Setting, or seed the fallback agent.`
         );
+    }
+
+    /**
+     * Read `Application.AgentSettings.DefaultAgentID` for the given app via a targeted
+     * `RunView` (single row by ID, `entity_object` so the typed `AgentSettingsObject`
+     * accessor is available). Returns `undefined` when the app, the column, or the field
+     * is absent.
+     *
+     * Kept query-light: one tiny by-ID read, served from the provider's RunView cache on
+     * repeat calls (server trusts its cache; the client caches too), and only reached when
+     * no explicit agent was supplied — i.e. at most once per conversation-turn start.
+     */
+    private async getAppDefaultAgentId(
+        applicationId: string,
+        contextUser?: UserInfo,
+        provider?: IMetadataProvider
+    ): Promise<string | undefined> {
+        try {
+            // Concrete MJ data providers implement both IMetadataProvider and IRunViewProvider.
+            // Use the threaded provider when it does (multi-provider correctness); otherwise let
+            // RunView fall back to the global default provider.
+            const rvProvider = DefaultAgentResolver.asRunViewProvider(provider);
+            const rv = new RunView(rvProvider);
+            const result = await rv.RunView<MJApplicationEntity>(
+                {
+                    EntityName: 'MJ: Applications',
+                    ExtraFilter: `ID = '${applicationId}'`,
+                    MaxRows: 1,
+                    ResultType: 'entity_object',
+                },
+                contextUser
+            );
+            if (!result.Success || !result.Results || result.Results.length === 0) {
+                return undefined;
+            }
+            return result.Results[0].AgentSettingsObject?.DefaultAgentID ?? undefined;
+        } catch (e) {
+            console.warn(
+                `DefaultAgentResolver: failed to read Application.AgentSettings for applicationId="${applicationId}": ${e instanceof Error ? e.message : String(e)}`
+            );
+            return undefined;
+        }
+    }
+
+    /**
+     * Narrow an {@link IMetadataProvider} to an {@link IRunViewProvider} when the concrete
+     * instance implements RunView (all MJ data providers do). Returns `undefined` otherwise
+     * so {@link RunView} falls back to the global default provider.
+     */
+    private static asRunViewProvider(provider?: IMetadataProvider): IRunViewProvider | undefined {
+        const candidate = provider as Partial<IRunViewProvider> | undefined;
+        return candidate && typeof candidate.RunView === 'function'
+            ? (provider as IMetadataProvider & IRunViewProvider)
+            : undefined;
     }
 
     /**

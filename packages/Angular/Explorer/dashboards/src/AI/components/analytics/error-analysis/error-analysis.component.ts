@@ -102,11 +102,9 @@ const FIELDS = [
 
             <!-- Error Groups -->
             @if (ErrorGroups.length === 0) {
-                <div class="empty-state">
-                    <i class="fa-solid fa-check-circle empty-state__icon"></i>
-                    <div class="empty-state__title">No Errors Found</div>
-                    <div class="empty-state__subtitle">No errors detected in the selected time range.</div>
-                </div>
+                <mj-empty-state Variant="success"
+                    Title="No Errors Found"
+                    Message="No errors detected in the selected time range." />
             }
 
             @for (group of ErrorGroups; track group.Source) {
@@ -238,31 +236,6 @@ const FIELDS = [
             overflow: hidden;
             text-overflow: ellipsis;
             max-width: 220px;
-        }
-
-        /* ── Empty State ── */
-        .empty-state {
-            text-align: center;
-            padding: 48px 24px;
-            color: var(--mj-text-muted);
-        }
-
-        .empty-state__icon {
-            font-size: 40px;
-            color: var(--mj-status-success);
-            margin-bottom: 12px;
-        }
-
-        .empty-state__title {
-            font-size: 16px;
-            font-weight: 600;
-            color: var(--mj-text-primary);
-            margin-bottom: 4px;
-        }
-
-        .empty-state__subtitle {
-            font-size: 13px;
-            color: var(--mj-text-muted);
         }
 
         /* ── Error Groups ── */

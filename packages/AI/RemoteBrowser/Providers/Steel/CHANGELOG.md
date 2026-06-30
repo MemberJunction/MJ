@@ -1,5 +1,33 @@
 # @memberjunction/remote-browser-steel
 
+## 5.43.0
+
+### Patch Changes
+
+- Updated dependencies [40eb4e0]
+- Updated dependencies [9f6aa87]
+- Updated dependencies [ad8d8f1]
+- Updated dependencies [a4cdfb0]
+  - @memberjunction/core@5.43.0
+  - @memberjunction/global@5.43.0
+  - @memberjunction/remote-browser-base@5.43.0
+  - @memberjunction/remote-browser-cdp@5.43.0
+
+## 5.42.0
+
+### Patch Changes
+
+- Updated dependencies [9b9b484]
+- Updated dependencies [3080b58]
+- Updated dependencies [e7c2437]
+- Updated dependencies [2f225e4]
+- Updated dependencies [0fa3cbc]
+- Updated dependencies [e4235fd]
+  - @memberjunction/core@5.42.0
+  - @memberjunction/remote-browser-cdp@5.42.0
+  - @memberjunction/remote-browser-base@5.42.0
+  - @memberjunction/global@5.42.0
+
 ## 5.41.0
 
 ### Minor Changes

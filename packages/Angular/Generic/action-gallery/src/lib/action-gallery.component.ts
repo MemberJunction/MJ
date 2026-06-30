@@ -387,8 +387,12 @@ export class ActionGalleryComponent implements OnInit, OnDestroy {
     this.actionTestRequested.emit(action);
   }
   
+  // Backs the no-results empty-state "Clear Filters" CTA: resets every dimension
+  // the list narrows on — search AND the selected category — so the CTA actually
+  // returns results instead of appearing to do nothing.
   clearSearch() {
     this.searchControl.reset();
+    this.selectedCategory$.next('all');
     if (this.searchInput) {
       this.searchInput.nativeElement.focus();
     }

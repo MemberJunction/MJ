@@ -9,7 +9,9 @@
   align-items: flex-start;
   justify-content: center;
   gap: 22px;
-  padding: 16px 22px 20px;
+  /* Top padding reserves a row for the centered "press T to type" hint so it never
+     overlaps the End control/label sitting at the bottom-right. */
+  padding: 30px 22px 20px;
   border-top: 1px solid var(--mj-border-subtle);
 }
 
@@ -70,17 +72,21 @@
   color: var(--mj-status-error);
 }
 
-/* The whispered type-to-text hint (level 1: typing exists, no visible composer yet). */
+/* The whispered type-to-text hint (level 1: typing exists, no visible composer yet).
+   Centered ABOVE the controls — never overlapping the rightmost End control/label. The
+   strip reserves top room for it so the round controls never collide with it. */
 .thint {
   position: absolute;
-  right: 22px;
-  bottom: 20px;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
   display: inline-flex;
   align-items: center;
   gap: 7px;
   font-size: 11px;
   font-weight: 600;
   color: var(--mj-text-disabled);
+  white-space: nowrap;
 }
 .thint i {
   font-size: 12px;
@@ -211,4 +217,123 @@ kbd {
 }
 .dock__hide:hover {
   color: var(--mj-text-primary);
+}
+
+/* ============================================================= COMPACT (Calm Orb · overlay)
+   The lean dock — Mute + End + a "•••" that blooms a small sheet (Captions / Details / Type).
+   Round controls, red End — matches the mockup. No 5-button bar, no overlapping hint. */
+.dock-lean {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 16px 18px 20px;
+  background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--mj-bg-page) 35%, transparent));
+}
+
+.lean-ctrl {
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid var(--mj-border-strong);
+  background: var(--mj-bg-surface-card);
+  color: var(--mj-text-primary);
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+.lean-ctrl:hover {
+  background: var(--mj-bg-surface-hover);
+  transform: translateY(-1px);
+}
+.lean-ctrl--lg {
+  width: 58px;
+  height: 58px;
+  font-size: 19px;
+}
+.lean-ctrl--more {
+  width: 46px;
+  height: 46px;
+  font-size: 16px;
+}
+.lean-ctrl--on {
+  background: var(--mj-brand-primary);
+  border-color: var(--mj-brand-primary);
+  color: var(--mj-text-inverse, #fff);
+}
+.lean-ctrl--muted {
+  background: var(--mj-status-warning-bg);
+  border-color: var(--mj-status-warning);
+  color: var(--mj-status-warning);
+}
+.lean-ctrl--end {
+  background: var(--mj-status-error);
+  border-color: var(--mj-status-error);
+  color: var(--mj-text-inverse, #fff);
+  font-size: 20px;
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--mj-status-error) 40%, transparent);
+}
+.lean-ctrl--end:hover {
+  background: var(--mj-status-error);
+  filter: brightness(0.94);
+}
+
+/* The "•••" overflow + its blooming sheet. */
+.lean-more {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.lean-sheet {
+  position: absolute;
+  bottom: calc(100% + 12px);
+  left: 50%;
+  transform: translateX(-50%) translateY(8px);
+  display: flex;
+  gap: 10px;
+  padding: 10px;
+  border-radius: var(--mj-radius-lg, 16px);
+  background: var(--mj-bg-surface-elevated);
+  border: 1px solid var(--mj-border-default);
+  box-shadow: 0 18px 50px -22px rgba(0, 0, 0, 0.6);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 200ms ease, transform 200ms ease;
+  z-index: 5;
+}
+.lean-more--open .lean-sheet {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(-50%) translateY(0);
+}
+.lean-sheet__btn {
+  display: grid;
+  place-items: center;
+  gap: 3px;
+  width: 56px;
+  padding: 8px 4px;
+  border-radius: var(--mj-radius-md, 10px);
+  border: 1px solid transparent;
+  background: var(--mj-bg-surface-card);
+  color: var(--mj-text-secondary);
+  cursor: pointer;
+  font-size: 16px;
+  transition: all 140ms ease;
+}
+.lean-sheet__btn:hover {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+}
+.lean-sheet__btn--on {
+  background: color-mix(in srgb, var(--mj-brand-primary) 16%, transparent);
+  border-color: var(--mj-brand-primary);
+  color: var(--mj-brand-accent, var(--mj-brand-primary));
+}
+.lean-sheet__btn small {
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--mj-text-muted);
+}
+.lean-sheet__btn--on small {
+  color: var(--mj-brand-accent, var(--mj-brand-primary));
 }

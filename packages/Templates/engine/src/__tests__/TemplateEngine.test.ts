@@ -74,14 +74,24 @@ vi.mock('@memberjunction/global', () => ({
     },
     RegisterClass: () => (target: Function) => target,
     UUIDsEqual: (a: string, b: string) => a?.toLowerCase() === b?.toLowerCase(),
+    // TemplateEngineServer now composes the base via BaseSingleton instead of extending it.
+    BaseSingleton: class BaseSingletonMock<T> {
+        protected constructor() {}
+        protected static getInstance<U>(this: new () => U): U {
+            return new this();
+        }
+    },
 }));
 
 vi.mock('@memberjunction/templates-base-types', () => ({
     TemplateRenderResult: class { Success = false; Output: string | null = null; Message?: string = undefined; },
     TemplateEngineBase: class {
-        static getInstance<T>(): T { return new (this as never)() as T; }
-        protected ContextUser = { ID: 'test-user', Name: 'Test' };
-        protected Loaded = true;
+        // TemplateEngineServer now composes this via `TemplateEngineBase.Instance` (cached singleton).
+        private static _inst: unknown;
+        static get Instance() { return (this._inst ??= new (this as never)()); }
+        static getInstance<T>(): T { return (this as unknown as { Instance: T }).Instance; }
+        public ContextUser = { ID: 'test-user', Name: 'Test' };
+        public Loaded = true;
         async Config() {}
         async Load() {}
         protected async AdditionalLoading() {}

@@ -131,10 +131,8 @@ interface HourlyBucket {
                   </div>
                 }
                 @if (recentLogs.length === 0) {
-                  <div class="empty-state">
-                    <i class="fa-solid fa-inbox"></i>
-                    <p>No recent activity</p>
-                  </div>
+                  <mj-empty-state Size="compact" Icon="fa-solid fa-inbox"
+                    Title="No recent activity" />
                 }
               </div>
             </div>
@@ -166,10 +164,8 @@ interface HourlyBucket {
                   </div>
                 }
                 @if (providerHealth.length === 0) {
-                  <div class="empty-state">
-                    <i class="fa-solid fa-server"></i>
-                    <p>No providers configured</p>
-                  </div>
+                  <mj-empty-state Size="compact" Icon="fa-solid fa-server"
+                    Title="No providers configured" />
                 }
               </div>
             </div>
@@ -197,10 +193,8 @@ interface HourlyBucket {
                   </div>
                 }
                 @if (channelBreakdown.length === 0) {
-                  <div class="empty-state">
-                    <i class="fa-solid fa-layer-group"></i>
-                    <p>No channel data available</p>
-                  </div>
+                  <mj-empty-state Size="compact" Icon="fa-solid fa-layer-group"
+                    Title="No channel data available" />
                 }
               </div>
             </div>
@@ -503,13 +497,6 @@ interface HourlyBucket {
     }
 
     /* EMPTY STATE */
-    .empty-state {
-        display: flex; flex-direction: column;
-        align-items: center; justify-content: center;
-        padding: 40px 0; color: var(--mj-text-muted);
-    }
-    .empty-state i { font-size: 2rem; margin-bottom: 12px; opacity: 0.5; }
-    .empty-state p { margin: 0; font-size: 13px; }
 
     @media (max-width: 1200px) {
         .kpi-strip { grid-template-columns: repeat(2, 1fr); }

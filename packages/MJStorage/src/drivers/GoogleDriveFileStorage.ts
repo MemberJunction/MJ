@@ -2,7 +2,9 @@ import { google, drive_v3 } from 'googleapis';
 import { RegisterClass } from '@memberjunction/global';
 import env from 'env-var';
 import mime from 'mime-types';
+import { Readable } from 'stream';
 import {
+  BuildHttpRangeHeader,
   CreatePreAuthUploadUrlPayload,
   FileStorageBase,
   FileSearchOptions,
@@ -10,6 +12,8 @@ import {
   FileSearchResultSet,
   GetObjectParams,
   GetObjectMetadataParams,
+  GetObjectStreamParams,
+  ObjectStreamResult,
   StorageListResult,
   StorageObjectMetadata,
 } from '../generic/FileStorageBase';
@@ -1036,6 +1040,97 @@ export class GoogleDriveFileStorage extends FileStorageBase {
     } catch (error) {
       console.error('Error getting object', { params, error });
       throw new Error(`Failed to get object: ${params.objectId || params.fullPath}`);
+    }
+  }
+
+  /**
+   * Google Drive supports ranged streaming of regular (non-Workspace) files via the
+   * `files.get({ alt: 'media' })` endpoint with a `Range` header.
+   */
+  public override get SupportsStreaming(): boolean {
+    return true;
+  }
+
+  /**
+   * Streams a file's content from Google Drive, optionally honoring a byte range.
+   *
+   * Uses `files.get({ fileId, alt: 'media' }, { responseType: 'stream', headers: { Range } })`,
+   * which returns a Node.js readable stream — the file is never buffered fully in memory. The
+   * Drive media endpoint honors the HTTP `Range` header, so the inclusive `Range` is encoded via
+   * the shared {@link BuildHttpRangeHeader}. The streamed response doesn't reliably surface the
+   * total object size, so this method resolves size/content-type via {@link GetObjectMetadata}
+   * (mirroring the Box driver) and clamps the range to the object size.
+   *
+   * **Google Workspace files** (Docs/Sheets/Slides/Drawings) are not directly downloadable — they
+   * must be exported to a concrete format, which has no Range semantics — so streaming throws for
+   * those types. Callers should fall back to {@link GetObject} (which performs the export).
+   *
+   * @param params - Object identifier (prefer objectId) plus optional Range.
+   * @returns A Promise resolving to an {@link ObjectStreamResult}.
+   * @throws Error if the file doesn't exist, is a Google Workspace file, or cannot be streamed.
+   */
+  public override async GetObjectStream(params: GetObjectStreamParams): Promise<ObjectStreamResult> {
+    try {
+      // Validate params
+      if (!params.objectId && !params.fullPath) {
+        throw new Error('Either objectId or fullPath must be provided');
+      }
+
+      // Resolve to a file ID + mimeType (fast path via objectId, slow path via fullPath).
+      let fileId: string;
+      let mimeType: string | undefined;
+      if (params.objectId) {
+        fileId = params.objectId;
+        const fileInfo = await this._drive.files.get({ fileId, fields: 'mimeType' });
+        mimeType = fileInfo.data.mimeType || undefined;
+      } else {
+        const file = await this._getItemByPath(params.fullPath!);
+        if (!file.id) {
+          throw new Error(`File not found: ${params.fullPath}`);
+        }
+        fileId = file.id;
+        mimeType = file.mimeType || undefined;
+      }
+
+      // Google Workspace files can't be range-downloaded; they require export (no Range semantics).
+      if (mimeType?.startsWith('application/vnd.google-apps.')) {
+        throw new Error(`Cannot stream Google Workspace file of type: ${mimeType}. Use GetObject (which exports it) instead.`);
+      }
+
+      // The media stream doesn't reliably surface size/content-type, so fetch metadata to
+      // populate ContentLength / ContentType / ContentRange.
+      const metadata = await this.GetObjectMetadata({ objectId: fileId });
+      const total = metadata.size;
+
+      const headers = params.Range ? { Range: BuildHttpRangeHeader(params.Range) } : undefined;
+      const response = await this._drive.files.get(
+        { fileId, alt: 'media' },
+        { responseType: 'stream', headers },
+      );
+
+      // In Node, response.data for a stream responseType is a Node Readable.
+      const body = response.data as unknown;
+      const stream = body instanceof Readable ? body : Readable.from(body as AsyncIterable<Buffer>);
+
+      const result: ObjectStreamResult = {
+        Stream: stream,
+        ContentType: metadata.contentType,
+      };
+
+      if (params.Range) {
+        // Clamp the inclusive range to the object size.
+        const start = Math.min(params.Range.Start, Math.max(total - 1, 0));
+        const end = params.Range.End != null ? Math.min(params.Range.End, total - 1) : total - 1;
+        result.ContentRange = { Start: start, End: end, Total: total };
+        result.ContentLength = end - start + 1;
+      } else {
+        result.ContentLength = total;
+      }
+
+      return result;
+    } catch (error) {
+      console.error('Error streaming object', { params, error });
+      throw new Error(`Failed to stream object: ${params.objectId || params.fullPath}`);
     }
   }
 

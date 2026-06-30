@@ -159,4 +159,68 @@ describe('CacheManager', () => {
       expect(cache.getStats().size).toBe(0);
     });
   });
+
+  describe('timer cancellation on overwrite', () => {
+    it('should cancel the old TTL timer when a key is overwritten', () => {
+      // Store a value with a short TTL so its timer fires at +5s
+      cache.set('key1', 'originalValue', 5000);
+
+      // Advance 3 seconds — timer not yet fired
+      vi.advanceTimersByTime(3000);
+      expect(cache.get('key1')).toBe('originalValue');
+
+      // Overwrite the key with a fresh 10s TTL
+      cache.set('key1', 'updatedValue', 10000);
+
+      // Advance another 3 seconds — original timer would have fired at +5s (2s into overwrite)
+      // but since it was cancelled, the key should still be present
+      vi.advanceTimersByTime(3000);
+      expect(cache.get('key1')).toBe('updatedValue');
+    });
+
+    it('should not delete new value when the old TTL would have expired', () => {
+      cache.set('key1', 'first', 2000); // expires in 2s
+
+      vi.advanceTimersByTime(1000); // advance 1s
+
+      cache.set('key1', 'second', 10000); // overwrite with 10s TTL
+
+      // Advance 2 more seconds — original timer (now cancelled) would have fired here
+      vi.advanceTimersByTime(2000);
+
+      // Value should still be 'second', not deleted by the cancelled original timer
+      expect(cache.get('key1')).toBe('second');
+    });
+  });
+
+  describe('timer cancellation on delete', () => {
+    it('should cancel TTL timer when entry is explicitly deleted', () => {
+      cache.set('key1', 'value1', 5000);
+      cache.delete('key1');
+
+      // Advance past original TTL — timer fires should be no-ops
+      vi.advanceTimersByTime(6000);
+
+      // Nothing should blow up and the entry stays deleted
+      expect(cache.has('key1')).toBe(false);
+      expect(cache.getStats().size).toBe(0);
+    });
+  });
+
+  describe('timer cancellation on clear', () => {
+    it('should cancel all pending TTL timers when clear() is called', () => {
+      cache.set('key1', 'value1', 2000);
+      cache.set('key2', 'value2', 3000);
+      cache.set('key3', 'value3', 4000);
+
+      cache.clear();
+
+      // Advance past all TTLs — pending timer callbacks should be no-ops
+      vi.advanceTimersByTime(5000);
+
+      // Cache remains empty and memory usage is 0
+      expect(cache.getStats().size).toBe(0);
+      expect(cache.getStats().memoryUsage).toBe(0);
+    });
+  });
 });

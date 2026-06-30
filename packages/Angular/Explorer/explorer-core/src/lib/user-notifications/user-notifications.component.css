@@ -413,50 +413,6 @@
 }
 
 /* ===================================
-   EMPTY STATE
-   =================================== */
-
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 80px 32px;
-  text-align: center;
-}
-
-.empty-icon {
-  width: 96px;
-  height: 96px;
-  background: var(--mj-bg-surface-sunken);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 24px;
-}
-
-.empty-icon i {
-  font-size: 40px;
-  color: var(--mj-text-muted);
-}
-
-.empty-state h3 {
-  font-size: 20px;
-  font-weight: 700;
-  color: var(--mj-text-primary);
-  margin: 0 0 8px;
-}
-
-.empty-state p {
-  font-size: 15px;
-  color: var(--mj-text-secondary);
-  margin: 0;
-  max-width: 320px;
-  line-height: 1.5;
-}
-
-/* ===================================
    NOTIFICATIONS LIST
    =================================== */
 
@@ -914,26 +870,6 @@ select:focus-visible {
     justify-content: center;
   }
 
-  .empty-state {
-    padding: 60px 20px;
-  }
-
-  .empty-icon {
-    width: 80px;
-    height: 80px;
-  }
-
-  .empty-icon i {
-    font-size: 32px;
-  }
-
-  .empty-state h3 {
-    font-size: 18px;
-  }
-
-  .empty-state p {
-    font-size: 14px;
-  }
 }
 
 /* iPhone 12/13/14 Pro Max and similar */

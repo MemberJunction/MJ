@@ -46,6 +46,18 @@ describe('RunViewParams', () => {
             expect(RunViewParams.Equals(null, params)).toBe(false);
         });
 
+        it('ignores the Telemetry hint so it does not fragment coalescing/dedup', () => {
+            // Telemetry.Exempt is an advisory hint, NOT part of query identity — two otherwise
+            // identical views (one exempt, one not) must still compare equal.
+            const a: RunViewParams = { EntityName: 'MJ: Scheduled Jobs', ExtraFilter: 'A=1' };
+            const b: RunViewParams = {
+                EntityName: 'MJ: Scheduled Jobs',
+                ExtraFilter: 'A=1',
+                Telemetry: { Exempt: true, Reason: 'live read' },
+            };
+            expect(RunViewParams.Equals(a, b)).toBe(true);
+        });
+
         it('should return true for equivalent params', () => {
             const a: RunViewParams = {
                 EntityName: 'MJ: Users',
@@ -182,6 +194,19 @@ describe('RunView', () => {
             await rv.RunView(params, contextUser);
 
             expect(mockRunViewFn).toHaveBeenCalledWith(params, contextUser);
+        });
+
+        it('passes the Telemetry options through to the provider untouched', async () => {
+            const rv = new RunView();
+            const params: RunViewParams = {
+                EntityName: 'MJ: Scheduled Jobs',
+                Telemetry: { Exempt: true, Reason: 'live lock-state read' },
+            };
+
+            await rv.RunView(params);
+
+            const handed = mockRunViewFn.mock.calls[0][0] as RunViewParams;
+            expect(handed.Telemetry).toEqual({ Exempt: true, Reason: 'live lock-state read' });
         });
     });
 

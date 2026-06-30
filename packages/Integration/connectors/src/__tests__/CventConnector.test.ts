@@ -396,7 +396,8 @@ describe('CventConnector', () => {
                 obj({ SupportsIncrementalSync: true, IncrementalWatermarkField: 'lastModified' }),
                 1, 0, undefined, 100
             );
-            expect(url).toContain('lastModified=2026-01-15T00%3A00%3A00Z');
+            // Cvent emits the watermark via its `filter` DSL param (`<field> ge '<value>'`), not a bare query key.
+            expect(url).toContain("filter=lastModified+ge+%272026-01-15T00%3A00%3A00Z%27");
             c.setWatermark(undefined);
         });
 
@@ -592,7 +593,7 @@ describe('CventConnector', () => {
                 Headers: {},
             }];
             const result = await c.FetchChanges(ctx('2026-03-01T00:00:00Z'));
-            expect(c.CapturedURLs[0]).toContain('lastModified=2026-03-01T00%3A00%3A00Z');
+            expect(c.CapturedURLs[0]).toContain("filter=lastModified+ge+%272026-03-01T00%3A00%3A00Z%27");
             expect(result.NewWatermarkValue).toBe(new Date('2026-03-10T00:00:00Z').toISOString());
         });
 

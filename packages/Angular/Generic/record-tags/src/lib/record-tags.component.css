@@ -93,22 +93,7 @@
     background: color-mix(in srgb, var(--mj-status-error) 10%, transparent);
 }
 
-.mj-record-tags-empty {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 40px 24px;
-    text-align: center;
-    color: var(--mj-text-secondary);
-}
-
-.mj-record-tags-empty-icon {
-    font-size: 2.5rem;
-    color: var(--mj-text-muted);
-    margin-bottom: 16px;
-}
-
+/* Hint projected into <mj-empty-state> default slot */
 .mj-record-tags-hint {
     font-size: 0.85rem;
     color: var(--mj-text-muted);

@@ -83,4 +83,72 @@ describe('AgentRunStepSaveQueue', () => {
         await q.Flush();
         expect(step.Save).toHaveBeenCalledTimes(3); // insert + 2 updates, all flushed
     });
+
+    it('QueueUpdate(applyMutation) applies the mutation AFTER the INSERT, so an in-flight INSERT reload cannot revert it (race fix)', async () => {
+        const q = new AgentRunStepSaveQueue();
+        const persisted: string[] = [];
+        let releaseInsert!: () => void;
+        const insertGate = new Promise<void>((resolve) => { releaseInsert = resolve; });
+
+        // Models the real BaseEntity behavior: the INSERT's post-save finalizeSave (init()+SetMany) reverts
+        // any field mutated while the INSERT was in flight back to the inserted value. A forced UPDATE
+        // (IgnoreDirtyState) records whatever the field holds when IT runs.
+        const step = {
+            ID: 'step-1',
+            Status: 'Running',
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            Save: vi.fn(async (saveOptions?: any) => {
+                if (!saveOptions?.IgnoreDirtyState) {
+                    await insertGate;            // hold the INSERT "in flight"
+                    (step as { Status: string }).Status = 'Running'; // reload reverts the in-flight mutation
+                }
+                persisted.push((step as { Status: string }).Status);
+                return true;
+            }),
+        } as unknown as MJAIAgentRunStepEntity & { Status: string };
+
+        q.Insert(step);
+        // Caller mutates the shared entity while the INSERT is still in flight — this in-memory change is
+        // what the INSERT's reload clobbers.
+        step.Status = 'Completed';
+        // ...but the SAME terminal state is queued as a post-INSERT mutation, so it is re-asserted after the
+        // reload and before the UPDATE save.
+        q.QueueUpdate(step, (s) => { (s as unknown as { Status: string }).Status = 'Completed'; });
+
+        releaseInsert();
+        await q.Flush();
+
+        // INSERT persisted the reverted value; the UPDATE persisted the re-applied terminal value.
+        expect(persisted).toEqual(['Running', 'Completed']);
+        expect(step.Status).toBe('Completed');
+    });
+
+    it('without applyMutation, an in-flight INSERT reload clobbers the caller mutation (documents the bug the param fixes)', async () => {
+        const q = new AgentRunStepSaveQueue();
+        const persisted: string[] = [];
+        let releaseInsert!: () => void;
+        const insertGate = new Promise<void>((resolve) => { releaseInsert = resolve; });
+        const step = {
+            ID: 'step-1',
+            Status: 'Running',
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            Save: vi.fn(async (saveOptions?: any) => {
+                if (!saveOptions?.IgnoreDirtyState) {
+                    await insertGate;
+                    (step as { Status: string }).Status = 'Running';
+                }
+                persisted.push((step as { Status: string }).Status);
+                return true;
+            }),
+        } as unknown as MJAIAgentRunStepEntity & { Status: string };
+
+        q.Insert(step);
+        step.Status = 'Completed';
+        q.QueueUpdate(step); // legacy path: mutate-then-queue, no re-apply
+        releaseInsert();
+        await q.Flush();
+
+        // The UPDATE force-persists the reverted 'Running' — the exact "stuck at Running" symptom.
+        expect(persisted).toEqual(['Running', 'Running']);
+    });
 });

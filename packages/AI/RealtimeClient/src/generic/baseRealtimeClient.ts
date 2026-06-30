@@ -208,6 +208,7 @@ export abstract class BaseRealtimeClient {
     private errorHandler?: (error: RealtimeClientError) => void;
     private interruptionHandler?: () => void;
     private usageHandler?: (usage: RealtimeClientUsage) => void;
+    private remoteVideoHandler?: (stream: MediaStream) => void;
 
     // ── Audio-activity metering (capability surface — see driver obligation #9) ─
     /** Meter over the USER's microphone, when the driver attached one. */
@@ -262,8 +263,34 @@ export abstract class BaseRealtimeClient {
      * @param micStream The user's microphone capture stream. The caller acquires it (so IT owns
      *   the permission prompt UX); the client attaches it to the transport and stops its tracks
      *   on {@link Disconnect}.
+     * @param cameraStream OPTIONAL camera capture stream for a VIDEO session (the model "sees" the
+     *   user). Only attached by video-capable drivers; audio-only drivers ignore it (back-compatible —
+     *   existing callers and drivers need not pass or read it). The model/avatar's video comes BACK via
+     *   {@link OnRemoteVideo}.
      */
-    public abstract Connect(config: ClientRealtimeSessionConfig, micStream: MediaStream): Promise<void>;
+    public abstract Connect(config: ClientRealtimeSessionConfig, micStream: MediaStream, cameraStream?: MediaStream): Promise<void>;
+
+    /**
+     * Returns the AGENT's remote-audio {@link MediaStream} when this driver owns a tappable
+     * remote-audio plane (e.g. a WebRTC peer-connection driver routes the model's audio track
+     * here), or `null` otherwise. Hosts use it to MIX the agent's voice into a browser-side
+     * recording alongside the mic; a `null` return (the default, and what every non-WebRTC
+     * driver gives) degrades gracefully to mic-only capture.
+     *
+     * **Optional capability:** the method itself is optional — call sites must use
+     * `client.GetRemoteMediaStream?.() ?? null`. Drivers that can't expose a remote stream
+     * simply don't implement it (or return `null`).
+     */
+    public GetRemoteMediaStream?(): MediaStream | null;
+
+    /**
+     * **Optional capability:** registers a handler invoked when the agent's remote-audio stream
+     * becomes available — immediately if it has already landed, otherwise when the WebRTC track
+     * arrives (typically AFTER {@link Connect} resolves). Lets a host attach the agent voice to a
+     * recording that began before the track landed. Call as `client.OnRemoteMediaStream?.(cb)`;
+     * drivers without a remote stream simply don't implement it.
+     */
+    public OnRemoteMediaStream?(handler: (stream: MediaStream) => void): void;
 
     /**
      * Injects typed text into the live session as a USER turn and asks the model to respond.
@@ -430,6 +457,21 @@ export abstract class BaseRealtimeClient {
         this.usageHandler = handler;
     }
 
+    /**
+     * Registers the (single) remote-VIDEO handler — the model/avatar's video track for a VIDEO session
+     * (a talking-head the host renders, e.g. as the agent's tile). Invoked once the provider publishes
+     * its video track.
+     *
+     * **Optional capability:** audio-only drivers (the default) never emit — registering is always safe,
+     * but hosts must not assume a video track arrives. Video-capable drivers
+     * ({@link BaseRealtimeModel.SupportsVideo}) call {@link emitRemoteVideo} when the track is live.
+     *
+     * @param handler Invoked with the remote video `MediaStream` when it becomes available.
+     */
+    public OnRemoteVideo(handler: (stream: MediaStream) => void): void {
+        this.remoteVideoHandler = handler;
+    }
+
     // ── Protected emit helpers for concrete drivers ───────────────────────────
 
     /** Emits a transcript event to the registered handler (if any). */
@@ -460,5 +502,10 @@ export abstract class BaseRealtimeClient {
     /** Emits a usage update (token deltas for a completed response/turn) to the registered handler (if any). */
     protected emitUsage(usage: RealtimeClientUsage): void {
         this.usageHandler?.(usage);
+    }
+
+    /** Emits the model/avatar's remote video stream to the registered handler (video drivers only). */
+    protected emitRemoteVideo(stream: MediaStream): void {
+        this.remoteVideoHandler?.(stream);
     }
 }

@@ -183,6 +183,28 @@ export class PotentialDuplicateResult {
     RecordCompositeKey: CompositeKey;
     Duplicates: PotentialDuplicate[];
     DuplicateRunDetailMatchRecordIDs: string[];
+
+    /**
+     * Optional LLM recommendation for this source record's matched set, populated only
+     * when the entity has LLM reasoning enabled and the set cleared the reasoning gate.
+     * Consulted by the auto-merge step (e.g. AutoMergeAboveAbsolute additionally requires
+     * 'Merge'). Undefined means reasoning did not run for this set — the vector-only path
+     * applies, byte-for-byte unchanged.
+     */
+    ReasoningRecommendation?: 'Merge' | 'NotDuplicate' | 'Uncertain';
+    /**
+     * Optional resolved per-field survivor overrides (literal {FieldName, Value} entries)
+     * the LLM proposed for this set, ready to pass straight to Metadata.MergeRecords()'s
+     * FieldMap. Populated alongside {@link ReasoningRecommendation}.
+     */
+    ReasoningFieldMap?: { FieldName: string; Value: unknown }[];
+    /**
+     * Optional human-readable explanation from the LLM for this set's recommendation — the
+     * overall summary verdict (per-candidate rationales are persisted on each match row's
+     * LLM* columns). Populated alongside {@link ReasoningRecommendation} so API consumers can
+     * surface *why* without re-querying. Undefined when reasoning did not run for this set.
+     */
+    ReasoningText?: string;
 }
 
 /**
@@ -1455,6 +1477,105 @@ export interface IRunQueryProvider {
      * @returns Query results including data rows and execution metadata
      */
     ExecuteQueryFromSpec(spec: QueryExecutionSpec, contextUser?: UserInfo): Promise<RunQueryResult>
+}
+
+/**
+ * Execution mode of a Remote Operation.
+ * - `Sync` — plain request/response; the result is returned when the operation completes.
+ * - `LongRunning` — the operation is backed by a tracked run (e.g. a `ProcessRun`); the caller
+ *   chooses how to consume it via {@link RemoteOpInvokeMode}.
+ */
+export type RemoteOpExecMode = 'Sync' | 'LongRunning';
+
+/**
+ * How a caller consumes a `LongRunning` Remote Operation (ignored for `Sync` operations).
+ * - `attached` — the returned promise stays pending until completion and streaming progress is
+ *   delivered to {@link RemoteOpInvokeOptions.onProgress}.
+ * - `detached` — the call returns a handle immediately; completion is delivered out-of-band
+ *   (notification) and status is pollable via a sibling status operation.
+ */
+export type RemoteOpInvokeMode = 'attached' | 'detached';
+
+/**
+ * A single progress update emitted by a `LongRunning` Remote Operation while it executes.
+ * The shape is intentionally generic so any operation can stream meaningful progress.
+ */
+export interface RemoteOpProgress {
+    /** Stable key of the operation emitting the progress (e.g. `RecordProcess.RunNow`). */
+    OperationKey: string;
+    /** Opaque handle for the run this progress belongs to (e.g. a `ProcessRunID`). */
+    Handle?: string;
+    /** Coarse status label (e.g. `Running`, `Paused`). Operation-defined. */
+    Status?: string;
+    /** Items processed so far, when the operation reports countable progress. */
+    Processed?: number;
+    /** Total items to process, when known. */
+    Total?: number;
+    /** Human-readable progress message. */
+    Message?: string;
+    /** Arbitrary structured progress payload for richer UIs. */
+    Payload?: unknown;
+}
+
+/**
+ * Options controlling how a Remote Operation is invoked. All fields are optional; the defaults
+ * produce a simple request/response call on the active provider.
+ */
+export interface RemoteOpInvokeOptions {
+    /** For `LongRunning` operations, how the caller wants to consume the run (default `attached`). */
+    mode?: RemoteOpInvokeMode;
+    /** Callback receiving streaming {@link RemoteOpProgress} updates when invoked `attached`. */
+    onProgress?: (progress: RemoteOpProgress) => void;
+    /**
+     * Explicit provider to route through. When omitted, the active default provider is used.
+     * The resolved provider also implements {@link IRemoteOperationProvider} (it is a `ProviderBase`).
+     */
+    provider?: IMetadataProvider;
+    /** Server-side acting user. Supplied on the server; ignored on the client (set per session). */
+    user?: UserInfo;
+    /**
+     * Optional contract fingerprint carried in the wire envelope so the server can reject a stale
+     * client loudly instead of mis-deserializing. Usually derived from the operation definition.
+     */
+    contractFingerprint?: string;
+}
+
+/**
+ * Result of invoking a Remote Operation. Like other MJ result objects, it carries `Success` +
+ * `ErrorMessage` rather than throwing for logical failures.
+ */
+export interface RemoteOpResult<TOutput = unknown> {
+    /** True when the operation executed (or was accepted, for detached long-running) successfully. */
+    Success: boolean;
+    /** The typed output payload — present for `Sync` results and `attached` long-running completion. */
+    Output?: TOutput;
+    /** Opaque handle (e.g. a `ProcessRunID`) returned immediately for `detached` long-running runs. */
+    Handle?: string;
+    /** Machine-readable outcome code (e.g. `SUCCESS`, `UNKNOWN_OPERATION`, `FORBIDDEN`, `NOT_SUPPORTED`). */
+    ResultCode?: string;
+    /** Human-readable error detail when `Success` is false. */
+    ErrorMessage?: string;
+}
+
+/**
+ * Provider capability for routing typed Remote Operations. Implemented once by `ProviderBase`, so
+ * every provider inherits it: server providers execute the operation in-process; the client
+ * provider marshals it over the wire. This is deliberately a **separate** interface from
+ * {@link IMetadataProvider} (whose surface is data retrieval / bounded mutation) — a generic
+ * code-execution entry point does not belong there.
+ *
+ * Prefer the typed `BaseRemotableOperation.Execute()` entry point over calling `RouteOperation`
+ * directly; `RouteOperation` is the stringly-typed power-tool seam for dynamic dispatch / tooling.
+ */
+export interface IRemoteOperationProvider {
+    /**
+     * Routes a single Remote Operation by key to its implementation and returns the result.
+     * @param operationKey - Stable registry key of the operation (e.g. `RecordProcess.RunNow`).
+     * @param input - The operation's typed input payload.
+     * @param options - Optional invocation options (mode, progress callback, user, provider, fingerprint).
+     * @returns The operation result, including typed `Output` (sync) or a `Handle` (detached long-running).
+     */
+    RouteOperation<TInput = unknown, TOutput = unknown>(operationKey: string, input: TInput, options?: RemoteOpInvokeOptions): Promise<RemoteOpResult<TOutput>>;
 }
 
 /**

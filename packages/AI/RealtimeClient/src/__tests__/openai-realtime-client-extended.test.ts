@@ -447,6 +447,91 @@ describe('OpenAIRealtimeClient (extended)', () => {
         });
     });
 
+    // ── OnRemoteMediaStream (recording regression fix) ─────────────────────────
+
+    describe('OnRemoteMediaStream', () => {
+        /** Fires the peer connection's `ontrack` with `stream`, mirroring a landed remote track. */
+        function fireTrack(connectClient: OpenAIConnectTestClient, stream: MediaStream): void {
+            const trackEvent = Object.assign(new Event('track'), {
+                streams: [stream] as ReadonlyArray<MediaStream>,
+            }) as RTCTrackEvent;
+            connectClient.Pc.ontrack?.(trackEvent);
+        }
+
+        it('invokes the handler IMMEDIATELY when the remote stream has already landed', async () => {
+            const connectClient = new OpenAIConnectTestClient();
+            await connectClient.Connect(makeOpenAIConfig(), new FakeMediaStream([new FakeTrack()]));
+            const remoteStream = new FakeMediaStream([new FakeTrack()]);
+            fireTrack(connectClient, remoteStream); // track lands BEFORE the host registers
+
+            const received: MediaStream[] = [];
+            connectClient.OnRemoteMediaStream((s) => received.push(s));
+            // Registered after the track — must fire synchronously with the already-captured stream.
+            expect(received).toEqual([remoteStream]);
+        });
+
+        it('does NOT fire on registration when no remote stream has landed yet, then fires on the later ontrack', async () => {
+            const connectClient = new OpenAIConnectTestClient();
+            await connectClient.Connect(makeOpenAIConfig(), new FakeMediaStream([new FakeTrack()]));
+
+            const received: MediaStream[] = [];
+            connectClient.OnRemoteMediaStream((s) => received.push(s));
+            expect(received).toEqual([]); // nothing landed yet — deferred
+
+            const remoteStream = new FakeMediaStream([new FakeTrack()]);
+            fireTrack(connectClient, remoteStream);
+            expect(received).toEqual([remoteStream]); // delivered when the track arrives
+        });
+
+        it('fans a freshly-landed stream out to MULTIPLE registered handlers', async () => {
+            const connectClient = new OpenAIConnectTestClient();
+            await connectClient.Connect(makeOpenAIConfig(), new FakeMediaStream([new FakeTrack()]));
+
+            const a: MediaStream[] = [];
+            const b: MediaStream[] = [];
+            connectClient.OnRemoteMediaStream((s) => a.push(s));
+            connectClient.OnRemoteMediaStream((s) => b.push(s));
+
+            const remoteStream = new FakeMediaStream([new FakeTrack()]);
+            fireTrack(connectClient, remoteStream);
+            expect(a).toEqual([remoteStream]);
+            expect(b).toEqual([remoteStream]);
+        });
+
+        it('isolates a throwing handler so siblings still fire (and never disturbs the call)', async () => {
+            const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+            const connectClient = new OpenAIConnectTestClient();
+            await connectClient.Connect(makeOpenAIConfig(), new FakeMediaStream([new FakeTrack()]));
+
+            const sibling: MediaStream[] = [];
+            connectClient.OnRemoteMediaStream(() => {
+                throw new Error('host handler blew up');
+            });
+            connectClient.OnRemoteMediaStream((s) => sibling.push(s));
+
+            const remoteStream = new FakeMediaStream([new FakeTrack()]);
+            expect(() => fireTrack(connectClient, remoteStream)).not.toThrow();
+            expect(sibling).toEqual([remoteStream]); // sibling unaffected by the thrower
+            expect(warn).toHaveBeenCalled();
+            warn.mockRestore();
+        });
+
+        it('isolates a handler that throws on IMMEDIATE (already-landed) invocation', async () => {
+            const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+            const connectClient = new OpenAIConnectTestClient();
+            await connectClient.Connect(makeOpenAIConfig(), new FakeMediaStream([new FakeTrack()]));
+            fireTrack(connectClient, new FakeMediaStream([new FakeTrack()]));
+
+            expect(() =>
+                connectClient.OnRemoteMediaStream(() => {
+                    throw new Error('boom on immediate');
+                }),
+            ).not.toThrow();
+            expect(warn).toHaveBeenCalled();
+            warn.mockRestore();
+        });
+    });
+
     // ── Production seam implementations ────────────────────────────────────────
 
     describe('production seams (stubbed globals)', () => {

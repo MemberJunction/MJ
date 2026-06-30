@@ -1,6 +1,6 @@
 import { Component, EventEmitter, HostListener, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { VoiceConnectionState } from '../../services/realtime-session.service';
+import { RealtimeConnectionState } from '../../services/realtime-session.service';
 import { RealtimeUxDensity } from './realtime-disclosure';
 
 /**
@@ -30,7 +30,17 @@ import { RealtimeUxDensity } from './realtime-disclosure';
 })
 export class RealtimeAgentBannerComponent {
   /** Current connection / turn state — drives the orb animation + state label. */
-  @Input({ required: true }) State!: VoiceConnectionState;
+  @Input({ required: true }) State!: RealtimeConnectionState;
+
+  /**
+   * COMPACT (orb/overlay) presentation: collapse the app-bar to a minimal identity + state
+   * row. The duplicate orb, the redundant state pill, and the headphones / gear / expand
+   * controls are dropped — the body already shows the big orb + name + state, and the lean
+   * bottom dock (Mute / End / •••) owns the session actions. Minimize stays reachable so the
+   * user can hide the call without ending it. Fed from the overlay's resolved `Ui.compact`.
+   * Default `false` (the full console banner is unchanged).
+   */
+  @Input() Compact = false;
 
   /** Display name of the agent the voice session fronts (e.g. "Sage"). */
   @Input() AgentName = 'the agent';
@@ -73,6 +83,14 @@ export class RealtimeAgentBannerComponent {
 
   /** Whether the gear (density escape hatch + dev toggle) renders (disclosure level 2+). */
   @Input() ShowGear = false;
+
+  /**
+   * Whether the interface-density segmented control renders inside the gear popover.
+   * Default `true` (historical behaviour); a host may hide it via the overlay's
+   * `[ShowDensityPicker]` input. The gear itself (and its developer-links toggle) still
+   * renders when {@link ShowGear} is true even if the density picker is hidden.
+   */
+  @Input() ShowDensityPicker = true;
 
   /** Whether the End-call pill renders here (level 2+; the strip's big End owns it below). */
   @Input() ShowEnd = false;
@@ -200,7 +218,7 @@ export class RealtimeAgentBannerComponent {
   }
 
   /** Maps the realtime state to the orb's `data-state` (the orb only models active turn-states). */
-  public OrbState(state: VoiceConnectionState): 'speaking' | 'listening' | 'thinking' {
+  public OrbState(state: RealtimeConnectionState): 'speaking' | 'listening' | 'thinking' {
     switch (state) {
       case 'speaking': return 'speaking';
       case 'thinking': return 'thinking';
@@ -209,7 +227,7 @@ export class RealtimeAgentBannerComponent {
   }
 
   /** Human-readable state label, agent-aware where it reads better. */
-  public StateLabel(state: VoiceConnectionState): string {
+  public StateLabel(state: RealtimeConnectionState): string {
     switch (state) {
       case 'connecting': return 'Connecting…';
       case 'listening': return 'Listening';
@@ -222,7 +240,7 @@ export class RealtimeAgentBannerComponent {
   }
 
   /** True while the state pill should show a spinner instead of the waveform. */
-  public IsBusy(state: VoiceConnectionState): boolean {
+  public IsBusy(state: RealtimeConnectionState): boolean {
     return state === 'connecting' || state === 'thinking';
   }
 }

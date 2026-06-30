@@ -102,6 +102,70 @@ export async function resolvePermissionsUser(
 }
 
 /**
+ * Normalized, validated string filter values for the Audit Log timeline query,
+ * derived from raw (untrusted) AI-agent tool params. All fields are the same
+ * string shape the component's filter inputs bind to (date fields are
+ * `YYYY-MM-DD` strings; empty string means "no filter on this field").
+ */
+export interface AuditFilterParams {
+    DomainName: string;
+    ChangedByUserID: string;
+    StartDate: string;
+    EndDate: string;
+}
+
+/**
+ * Pure, framework-agnostic parser for the `RunAuditTimelineQuery` agent tool.
+ *
+ * 🚨 READ-ONLY: this only PARSES and VALIDATES filter input for a read-only
+ * timeline query — it performs no mutation and has no side effects.
+ *
+ * Validates that any supplied date is a real, parseable `YYYY-MM-DD` value and
+ * that `StartDate <= EndDate` when both are present. Unknown/empty fields collapse
+ * to empty strings (no filter). Returns the normalized filter on success, or a
+ * human-readable error string on invalid input. Never throws.
+ *
+ * @param raw the untrusted tool params object (may have missing/non-string fields)
+ */
+export function parseAuditFilterParams(
+    raw: Record<string, unknown> | null | undefined
+): { ok: true; value: AuditFilterParams } | { ok: false; error: string } {
+    const asString = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
+
+    const domainName = asString(raw?.['domainName']);
+    const changedByUserID = asString(raw?.['userId']);
+    const startDate = asString(raw?.['startDate']);
+    const endDate = asString(raw?.['endDate']);
+
+    const startMs = validateAuditDate(startDate);
+    if (startDate && startMs === null) {
+        return { ok: false, error: `Invalid startDate "${startDate}". Expected a YYYY-MM-DD date.` };
+    }
+    const endMs = validateAuditDate(endDate);
+    if (endDate && endMs === null) {
+        return { ok: false, error: `Invalid endDate "${endDate}". Expected a YYYY-MM-DD date.` };
+    }
+    if (startMs !== null && endMs !== null && startMs > endMs) {
+        return { ok: false, error: 'startDate must be on or before endDate.' };
+    }
+
+    return {
+        ok: true,
+        value: { DomainName: domainName, ChangedByUserID: changedByUserID, StartDate: startDate, EndDate: endDate },
+    };
+}
+
+/**
+ * Returns the epoch-ms for a `YYYY-MM-DD` string, or `null` if the string is
+ * empty or not a valid calendar date. Used by {@link parseAuditFilterParams}.
+ */
+function validateAuditDate(value: string): number | null {
+    if (!value) return null;
+    const ms = Date.parse(value);
+    return Number.isFinite(ms) ? ms : null;
+}
+
+/**
  * Bucket a flat list of {@link NormalizedPermission} into {@link PermissionsDomainGroup}s,
  * sorted by each domain's catalog DisplayOrder (falling back to alpha when the
  * engine's domain catalog doesn't know the domain).

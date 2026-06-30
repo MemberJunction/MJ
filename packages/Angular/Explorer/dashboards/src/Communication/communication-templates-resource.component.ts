@@ -87,10 +87,8 @@ interface TemplateCardData {
               </div>
             }
             @if (filteredTemplates.length === 0) {
-              <div class="empty-state">
-                <i class="fa-solid fa-file-lines"></i>
-                <p>No templates found matching your criteria</p>
-              </div>
+              <mj-empty-state Variant="no-results" Icon="fa-solid fa-file-lines"
+                Title="No templates found matching your criteria" />
             }
           </div>
         }
@@ -189,14 +187,8 @@ interface TemplateCardData {
     }
 
     /* EMPTY STATE */
-    .empty-state {
-        grid-column: 1 / -1;
-        display: flex; flex-direction: column;
-        align-items: center; justify-content: center;
-        padding: 64px 0; color: var(--mj-text-muted);
-    }
-    .empty-state i { font-size: 2rem; margin-bottom: 12px; opacity: 0.5; }
-    .empty-state p { margin: 0; font-size: 13px; }
+    /* Span the full template grid so the placeholder centers. */
+    mj-empty-state { grid-column: 1 / -1; }
   `]
 })
 export class CommunicationTemplatesResourceComponent extends BaseResourceComponent implements OnInit, OnDestroy {
@@ -206,6 +198,11 @@ export class CommunicationTemplatesResourceComponent extends BaseResourceCompone
     public categoryFilter = '';
     public isLoading = false;
     private searchTerm = '';
+
+    /** The current free-text search applied to the template list (read-only, for agent context). */
+    public get SearchText(): string {
+        return this.searchTerm;
+    }
 
     constructor(private cdr: ChangeDetectorRef, private navService: NavigationService) {
         super();

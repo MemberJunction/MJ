@@ -199,7 +199,7 @@ export class SummarizeContentAction extends BaseAction {
             runParams.SkipActionLog = true;
 
             // Execute the action
-            const engine = new ActionEngineServer();
+            const engine = ActionEngineServer.Instance;
             const result = await engine.RunAction(runParams);
 
             if (!result.Success) {

@@ -11,6 +11,7 @@ import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
 import { TimelineComponent } from './component/timeline.component';
+import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 
 /**
  * Angular module that provides the MJ Timeline component.
@@ -30,7 +31,8 @@ import { TimelineComponent } from './component/timeline.component';
     TimelineComponent
   ],
   imports: [
-    CommonModule
+    CommonModule,
+    MJEmptyStateComponent
   ],
   exports: [
     TimelineComponent

@@ -29,8 +29,10 @@ import {
     RealtimeUsage,
     RealtimeToolDefinition,
     RealtimeSessionError,
+    RealtimeMediaKind,
     JSONObject
 } from '@memberjunction/ai';
+import { RealtimeRecordingController } from './realtime-recording-capture';
 import {
     RealtimeToolBroker,
     INVOKE_TARGET_AGENT_TOOL_NAME,
@@ -122,10 +124,31 @@ export interface RealtimeSessionRunnerDeps {
     ExecuteTool: (call: RealtimeToolCall) => Promise<ToolExecutionResult>;
 
     /**
-     * Persists a transcript turn as a `ConversationDetail` stamped with the session ID. In
+     * Persists a transcript turn as a `ConversationDetail` stamped with the session ID. Drives the
+     * create-on-start / update-on-complete lifecycle: returns the **new** detail row's ID when a turn
+     * is first created (interim delta, or final with no prior interim) and `null` when an existing
+     * in-flight row is merely updated. The runner uses that to count distinct turns (not events). In
      * production this writes the durable transcript; in tests, a spy.
      */
-    PersistTranscript: (transcript: RealtimeTranscript) => Promise<void>;
+    PersistTranscript: (transcript: RealtimeTranscript) => Promise<string | null>;
+
+    /**
+     * Optional audio recording controller for the session. When present, the runner stamps its `t0`
+     * at session start, taps the model's **output** audio ({@link IRealtimeSession.OnOutput}) and the
+     * **inbound** media frames (by wrapping {@link IRealtimeSession.SendInput}), accumulating both into
+     * one mixed recording. Absent ⇒ no recording. NOTE: server-side capture applies to the
+     * server-bridged topology (where audio frames cross the server session); client-direct browser
+     * sessions capture audio in the browser.
+     */
+    Recording?: RealtimeRecordingController;
+
+    /**
+     * Finalizes the recording after the session closes: encode → store to MJStorage → stamp the
+     * `AIAgentSession` recording fields. Invoked once during {@link RealtimeSessionRunner.Stop}, after
+     * the underlying session is closed. Must never throw (errors are logged, not propagated — a
+     * recording failure must not fail the session). Optional (absent ⇒ recording disabled).
+     */
+    FinalizeRecording?: () => Promise<void>;
 
     /**
      * Checkpoints the *accumulated* usage onto the single long-lived `AIPromptRun`. The runner
@@ -346,11 +369,38 @@ export class RealtimeSessionRunner {
         // runner does not make that redundant call.
         this.session = await this.deps.Model.StartSession(params);
         this.wireHandlers(this.session);
+        this.attachRecording(this.session);
 
         this.deps.LogStatus?.(
             `🎙️ Realtime session started with ${tools.length} tool(s) (target-independent set).`,
             true
         );
+    }
+
+    /**
+     * Attaches the optional audio {@link RealtimeSessionRunnerDeps.Recording} controller to the live
+     * session: stamps the recording `t0`, taps the model's **output** audio via
+     * {@link IRealtimeSession.OnOutput} (otherwise unused on this path), and captures **inbound** media
+     * by wrapping {@link IRealtimeSession.SendInput} so a server-bridged host's room audio is recorded
+     * too. Video frames are passed through untapped (audio-only recording in v1). No-op when no
+     * recording controller is injected.
+     *
+     * @param session The active session to attach recording to.
+     */
+    private attachRecording(session: IRealtimeSession): void {
+        const recording = this.deps.Recording;
+        if (!recording) {
+            return;
+        }
+        recording.Start();
+        session.OnOutput((chunk) => recording.AppendOutbound(chunk));
+        const originalSendInput = session.SendInput.bind(session);
+        session.SendInput = (chunk: ArrayBuffer, kind?: RealtimeMediaKind): void => {
+            if (kind !== 'video') {
+                recording.AppendInbound(chunk);
+            }
+            originalSendInput(chunk, kind);
+        };
     }
 
     /**
@@ -393,8 +443,13 @@ export class RealtimeSessionRunner {
      */
     private async handleTranscript(transcript: RealtimeTranscript): Promise<void> {
         try {
-            await this.deps.PersistTranscript(transcript);
-            this.transcriptTurnCount++;
+            // The persistence collaborator drives the create-on-start/update-on-complete lifecycle and
+            // returns the new row id only when a DISTINCT turn is first created — so the count reflects
+            // turns, not the many interim+final events a single turn produces.
+            const createdId = await this.deps.PersistTranscript(transcript);
+            if (createdId) {
+                this.transcriptTurnCount++;
+            }
         } catch (error) {
             this.logError(error, 'persisting transcript');
         }
@@ -679,6 +734,18 @@ export class RealtimeSessionRunner {
             this.logError(error, 'closing session');
         } finally {
             this.session = null;
+        }
+
+        // Finalize the recording AFTER the socket is closed: stop accumulating, then encode → store →
+        // stamp the session. A recording failure is logged inside FinalizeRecording and must never fail
+        // the session, but we still guard here defensively.
+        if (this.deps.Recording) {
+            this.deps.Recording.Stop();
+            try {
+                await this.deps.FinalizeRecording?.();
+            } catch (error) {
+                this.logError(error, 'finalizing recording');
+            }
         }
 
         this.deps.LogStatus?.('🛑 Realtime session finalized.', true);

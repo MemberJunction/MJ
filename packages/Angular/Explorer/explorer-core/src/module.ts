@@ -12,7 +12,7 @@ import { MJProgressBarComponent } from '@memberjunction/ng-ui-components';
 import { DragDropModule } from '@angular/cdk/drag-drop';
 
 // MJ
-import { MJButtonDirective, MJDialogComponent, MJDialogTitlebarComponent, MJDialogActionsComponent, MJDropdownComponent, MJWindowComponent, MJWindowTitlebarComponent } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJDialogComponent, MJDialogTitlebarComponent, MJDialogActionsComponent, MJDropdownComponent, MJWindowComponent, MJWindowTitlebarComponent, MJEmptyStateComponent, MJAlertComponent } from '@memberjunction/ng-ui-components';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { FileStorageModule } from '@memberjunction/ng-file-storage';
 import { QueryViewerModule } from '@memberjunction/ng-query-viewer';
@@ -136,7 +136,9 @@ import { MJLiveKitRoomComponent } from '@memberjunction/ng-mj-livekit-room';
     MJWindowComponent,
     MJWindowTitlebarComponent,
     PaginationComponent,
-    MJLiveKitRoomComponent
+    MJLiveKitRoomComponent,
+    MJEmptyStateComponent,
+    MJAlertComponent
   ],
   exports: [
     ResourceContainerComponent,

@@ -17,7 +17,7 @@ import {
     PermissionAction,
 } from '@memberjunction/core';
 import { PermissionEngine } from '@memberjunction/core-entities';
-import { MJDialogAction, MJDialogService } from '@memberjunction/ng-ui-components';
+import { MJDialogAction, MJDialogService, MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 /** Which tab the Sharing Center is currently displaying. */
@@ -87,7 +87,7 @@ export const DefaultSharingEntityResolver = (domainName: string): string | null 
 @Component({
     standalone: true,
     selector: 'mj-user-sharing-center',
-    imports: [CommonModule],
+    imports: [CommonModule, MJEmptyStateComponent],
     changeDetection: ChangeDetectionStrategy.OnPush,
     templateUrl: './user-sharing-center.component.html',
     styleUrls: ['./user-sharing-center.component.css'],

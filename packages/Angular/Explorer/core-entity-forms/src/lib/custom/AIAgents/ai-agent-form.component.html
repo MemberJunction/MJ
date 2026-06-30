@@ -171,11 +171,11 @@
                     @if (loadingSessions) {
                       <mj-loading text="Loading sessions..." size="medium"></mj-loading>
                     } @else if (agentSessions.length === 0) {
-                      <div class="empty-state">
-                        <i class="fa-solid fa-tower-broadcast"></i>
-                        <h4>No Voice Sessions</h4>
-                        <p>This agent hasn't participated in any realtime voice sessions yet — neither as the co-agent nor as a delegation target.</p>
-                      </div>
+                      <mj-empty-state
+                        Icon="fa-solid fa-tower-broadcast"
+                        Title="No Voice Sessions"
+                        Message="This agent hasn't participated in any realtime voice sessions yet — neither as the co-agent nor as a delegation target."
+                        Size="compact" />
                     } @else {
                       <div class="execution-history-list">
                         @for (item of agentSessions; track item.row.ID) {
@@ -248,11 +248,11 @@
                   @if (loadingStates.executionHistory) {
                     <mj-loading text="Loading execution history..." size="medium"></mj-loading>
                   } @else if (executionHistoryCount === 0) {
-                    <div class="empty-state">
-                      <i class="fa-solid fa-history"></i>
-                      <h4>No Execution History</h4>
-                      <p>This agent hasn't been executed yet. Use the Test Agent button to run the agent and see execution history here.</p>
-                    </div>
+                    <mj-empty-state
+                      Icon="fa-solid fa-clock-rotate-left"
+                      Title="No Execution History"
+                      Message="This agent hasn't been executed yet. Use the Test Agent button to run the agent and see execution history here."
+                      Size="compact" />
                   } @else {
                     <!-- Search Bar -->
                     <div class="execution-search-bar">
@@ -267,11 +267,11 @@
                     </div>
                     <div class="execution-history-list">
                       @if (filteredExecutions.length === 0) {
-                        <div class="empty-state">
-                          <i class="fa-solid fa-search"></i>
-                          <h4>No Matching Results</h4>
-                          <p>No execution history found matching "{{ executionSearchText }}"</p>
-                        </div>
+                        <mj-empty-state
+                          Variant="no-results"
+                          Title="No Matching Results"
+                          [Message]="ExecutionSearchEmptyMessage"
+                          Size="compact" />
                       }
                       @for (execution of filteredExecutions; track execution.ID) {
                         <div class="execution-card" [class.expanded]="expandedExecutions[execution.ID]">
@@ -496,16 +496,14 @@
                       </div>
                     </div>
                     @if (actionCount === 0) {
-                      <div class="empty-state">
-                        <i class="fa-solid fa-bolt"></i>
-                        <h4>No Actions Configured</h4>
-                        <p>Add actions to enable this agent to perform specific tasks and operations.</p>
-                        @if (EditMode && UserCanCreateActions) {
-                          <button mjButton variant="primary" (click)="configureActions()">
-                            <i class="fa-solid fa-plus"></i> Configure First Action
-                          </button>
-                        }
-                      </div>
+                      <mj-empty-state
+                        Icon="fa-solid fa-bolt"
+                        Title="No Actions Configured"
+                        Message="Add actions to enable this agent to perform specific tasks and operations."
+                        [ActionText]="(EditMode && UserCanCreateActions) ? 'Configure First Action' : ''"
+                        ActionIcon="fa-solid fa-plus"
+                        (Action)="configureActions()"
+                        Size="compact" />
                     } @else {
                       <div class="entity-list">
                         @for (action of agentActions; track action.ID) {
@@ -617,10 +615,11 @@
                   </div>
                   <!-- Empty State -->
                   @if (totalSubAgentCount === 0) {
-                    <div class="empty-state">
-                      <i class="fa-solid fa-sitemap"></i>
-                      <h4>No Sub-Agents</h4>
-                      <p>Sub-agents help build complex workflows through hierarchical orchestration.</p>
+                    <mj-empty-state
+                      Icon="fa-solid fa-sitemap"
+                      Title="No Sub-Agents"
+                      Message="Sub-agents help build complex workflows through hierarchical orchestration."
+                      Size="compact">
                       <div class="empty-state-info">
                         <div class="info-card">
                           <i class="fa-solid fa-link" style="color: var(--mj-status-info);"></i>
@@ -633,7 +632,7 @@
                           <p>Reusable agents with payload mapping</p>
                         </div>
                       </div>
-                    </div>
+                    </mj-empty-state>
                   } @else {
                     <!-- Unified Sub-Agent List -->
                     <div class="entity-list">
@@ -773,16 +772,14 @@
                     </div>
                   </div>
                   @if (promptCount === 0) {
-                    <div class="empty-state">
-                      <i class="fa-solid fa-comments"></i>
-                      <h4>No Prompts Configured</h4>
-                      <p>Add prompts to define how this agent processes requests and generates responses.</p>
-                      @if (EditMode && UserCanCreateNewPrompts) {
-                        <button mjButton variant="primary" (click)="addPrompt()">
-                          <i class="fa-solid fa-plus"></i> Create First Prompt
-                        </button>
-                      }
-                    </div>
+                    <mj-empty-state
+                      Icon="fa-solid fa-comments"
+                      Title="No Prompts Configured"
+                      Message="Add prompts to define how this agent processes requests and generates responses."
+                      [ActionText]="(EditMode && UserCanCreateNewPrompts) ? 'Create First Prompt' : ''"
+                      ActionIcon="fa-solid fa-plus"
+                      (Action)="addPrompt()"
+                      Size="compact" />
                   } @else {
                     <div class="entity-list">
                       @for (prompt of agentPrompts; track prompt.ID) {
@@ -855,11 +852,11 @@
                     </div>
                   </div>
                   @if (learningCycleCount === 0) {
-                    <div class="empty-state">
-                      <i class="fa-solid fa-brain"></i>
-                      <h4>No Learning Cycles</h4>
-                      <p>Learning cycles will appear here as the agent processes requests and improves over time.</p>
-                    </div>
+                    <mj-empty-state
+                      Icon="fa-solid fa-brain"
+                      Title="No Learning Cycles"
+                      Message="Learning cycles will appear here as the agent processes requests and improves over time."
+                      Size="compact" />
                   } @else {
                     <div class="entity-list">
                       @for (cycle of learningCycles; track cycle.ID) {
@@ -923,16 +920,14 @@
                     </div>
                   </div>
                   @if (noteCount === 0) {
-                    <div class="empty-state">
-                      <i class="fa-solid fa-sticky-note"></i>
-                      <h4>No Notes</h4>
-                      <p>Add notes to document important information, observations, or instructions for this agent.</p>
-                      @if (EditMode && UserCanCreateNotes) {
-                        <button mjButton variant="primary" (click)="addNote()">
-                          <i class="fa-solid fa-plus"></i> Create First Note
-                        </button>
-                      }
-                    </div>
+                    <mj-empty-state
+                      Icon="fa-solid fa-sticky-note"
+                      Title="No Notes"
+                      Message="Add notes to document important information, observations, or instructions for this agent."
+                      [ActionText]="(EditMode && UserCanCreateNotes) ? 'Create First Note' : ''"
+                      ActionIcon="fa-solid fa-plus"
+                      (Action)="addNote()"
+                      Size="compact" />
                   } @else {
                     <div class="entity-list">
                       @for (note of agentNotes; track note.ID) {

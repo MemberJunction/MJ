@@ -1,5 +1,132 @@
 # @memberjunction/integration-connectors
 
+## 5.43.0
+
+### Patch Changes
+
+- Updated dependencies [40eb4e0]
+- Updated dependencies [9f6aa87]
+- Updated dependencies [b98366b]
+- Updated dependencies [9200b13]
+- Updated dependencies [ad8d8f1]
+- Updated dependencies [a4cdfb0]
+  - @memberjunction/core@5.43.0
+  - @memberjunction/global@5.43.0
+  - @memberjunction/integration-engine@5.43.0
+  - @memberjunction/core-entities@5.43.0
+  - @memberjunction/integration-engine-base@5.43.0
+
+## 5.42.0
+
+### Minor Changes
+
+- 03aa04d: Make `mj sync push` idempotent for six connectors (SharePoint, Neon CRM, Fonteva, MemberSuite, PheedLoop, Rhythm) by filling their null `BatchMaxRequestCount` / `BatchRequestWaitTime`.
+
+  Those columns are NOT NULL but carry a default. `BaseEntity.Validate()` (the client-side check `mj sync push` runs before saving) permits a null on a **new** record — the column default applies — but rejects it on an **existing** record, because a prior non-null value is present (`<field> cannot be null`). So a fresh-DB create silently absorbs the null while any re-push that _updates_ an existing connector row fails — i.e. the push is not idempotent for these files.
+
+  This surfaced after PR #2916 added SharePoint's baseline `primaryKey`, which flips SharePoint's push from insert to update and tripped the latent null on the very next deploy. Set the unspecified fields to the `-1` "no-batching" sentinel already used by NetForum/Path LMS/PropFuel; SharePoint keeps its baked `BatchRequestWaitTime=250` so its update is a no-op. `NavigationBaseURL` nulls elsewhere (iMIS/NetForum/Nimble) are unaffected — that column is nullable. An audit of all NOT-NULL-with-default columns across every connector confirms these batch fields were the only such nulls.
+
+- 6a3288b: feat(connectors): add the SharePoint (Microsoft Graph) and Microsoft Dynamics 365 (Dataverse) connectors
+
+  Two connectors added to the v2 unified set, each extending `BaseRESTIntegrationConnector` with the per-operation CRUD + incremental-watermark contract:
+  - **SharePoint** — Microsoft Graph v1.0; sites / drives / lists / listItems with soft PKs proven from the Graph schema, delta-token incremental sync (the deltaLink token as the watermark, not a timestamp), and an FK graph via push-time `@lookup` (`&IntegrationID=@parent:IntegrationID`).
+  - **Microsoft Dynamics 365 (Dataverse)** — Dataverse Web API (OData) with entity discovery, pagination, and change-tracking incremental sync.
+
+- 6ac8ca4: feat(integration): v2 integration framework + unified connector set (GrowthZone, OpenWater, ORCID, PropFuel, Path LMS)
+
+  Consolidated integration-v2 work — framework hardening + five connectors — proven end-to-end via the
+  GraphQL stand-up path (clean DB, CreateConnection → ApplyAll → StartSync) on SQL Server.
+
+  **Integration core (`integration-engine`, `integration-engine-base`, `integration-schema-builder`):**
+  - Deterministic §4 content-hash identity stamp for keyless rows (stable storage key + idempotent re-sync).
+  - Door-before-child dependency ordering derived from soft-FK `parentObjectName`/`ReferencedType` — children
+    land in one pass (no ZERO_PARENTS, no second-sync self-heal).
+  - Adaptive rate-limit hooks (`RateLimitAcquire`/`Report`/`MaxConcurrency`) on `FetchContext`.
+  - Shared `auth-helpers` (`OAuth2TokenManager`); `KeySerialization`/`RecordFlatten` committed (were
+    imported-but-untracked — fresh clones could not build); `IntegrationEngineBase.SeedForTesting` for
+    offline replay harnesses.
+
+  **Schema correctness + sizing (`integration-engine`, `integration-schema-builder`):**
+  - `json`/`text`/`array`/`object` and unsized strings map to `NVARCHAR(MAX)`/unbounded text instead of
+    being collapsed to `nvarchar(255)` — a nested-array JSON or long field routinely exceeds 255 and was
+    dropped at sync time (OpenWater `Program.rounds` went from **0** rows to all of them). Bounded scalar
+    strings keep a small, space-efficient size (255 floor; declared length + headroom when the source
+    reports one; PK strings capped at the dialect index-key limit). Soft-PK columns are emitted nullable.
+  - String-overflow is **skip-and-surface** (`STRING_OVERFLOW_SKIPPED` SyncWarning via the new
+    `StringOverflowError`), not truncate or fail-the-batch.
+  - **Active-only materialization (phantom-skip):** `buildSourceSchemaFromPersistedRows` materializes only
+    `Status='Active'` objects/fields — no empty phantom tables, no wasted per-entity CodeGen/advancedGen cost.
+
+  **StartSync honesty (`server`):**
+  - `IntegrationStartSync` no longer returns optimistic `{Success:true, RunID:null}` for fast/no-op syncs;
+    it resolves the run by recency over a bounded poll (real `RunID`), and returns `Success:false` with a
+    message when no run record appears.
+
+  **Soft-PK config cache (`codegen-lib`):**
+  - `RunInProcess` invalidates `ManageMetadataBase`'s soft-PK/FK config cache per in-process run — the
+    path-keyed cache went stale in the long-lived MJAPI RSU CodeGen path ("No primary key found" → entity
+    never created → 0 rows synced until restart). Deterministic; the CLI `Run()` path is unchanged.
+
+  **Unified connector set (`integration-connectors`):**
+  - **GrowthZone** — OAuth2, 38 objects, idempotency + probe-amended pagination metadata.
+  - **OpenWater** — 25 objects, OpenAPI-complete.
+  - **ORCID** — 12 per-record objects, public-API live-verified.
+  - **PropFuel** — file-feed slice (rich REST API documented out-of-scope).
+  - **Path LMS (Blue Sky eLearn)** — GraphQL Reporting API, pull-only; GraphQL over `/graphql`, two-step
+    app-credential → bearer auth; credential-free discovery from the public SpectaQL schema (84 record
+    types / 1175 fields); per-object `AccessPath` walks the 16 GraphQL query doors to leaf records;
+    content-hash idempotency.
+  - All five validated under the v2 architecture (RealityProbe / completeness-diff / T12 idempotency).
+
+  **Migration + metadata (additive schema → minor):** ships forward migration(s) + integration metadata
+  seeds; additive only — no column drops, narrowing, renames, or new required params — backward-compatible
+  **minor** per the publish-then-no-breaking-changes policy.
+
+- 6520bea: Add MemberSuite (AMS) integration connector — REST API v2, 196 objects / ~6,000 fields extracted credential-free from MemberSuite's public module swaggers (CRM/membership/events/fundraising/financial). Signed-request auth via auth-helpers, narrow Activity/Certification write surface, runtime custom-field/saved-search discovery, full-record pass-through. Adds the `MemberSuite API` credential type. Also adds the additive `OAuth2TokenRequest.ExtraParams` field required by the existing RhythmConnector (engine patch).
+- 675b8b8: Clean-deploy metadata for the NetForum and SharePoint connectors. Add the baseline Integration `primaryKey` to each per-folder connector (so `mj sync push` updates the surviving baked Integration instead of inserting a duplicate — avoids the `UQ_Integration_Name` collision), add delete-seeds that `deleteRecord` the old baked IOs (18 NetForum + 13 SharePoint, keyed on their deterministic baseline IDs), and remove the leftover flat-file duplicates (`.netforum.json` / `.sharepoint.json` — per-folder is canonical). Mirrors the existing GrowthZone/iMIS/Nimble/PropFuel/Salesforce clean-deploy pattern so a fresh install deploys these two connectors without collisions or orphaned objects.
+- 5ebf0e9: Add the netFORUM Enterprise (Community Brands AMS) connector — xWeb SOAP/XML route.
+  - **`NetForumConnector`** (`@memberjunction/integration-connectors`): integrates netFORUM Enterprise via the xWeb SOAP/XML web service (`netForumXML.asmx`), implemented as SOAP-over-HTTP on `BaseRESTIntegrationConnector`. Two-step `Authenticate` token auth; `GetQuery`/`GetQueryDefinition`/`ExecuteMethod` reads; per-facade `*_last_updated_dt` incremental watermarks; facade CRUD where the xWeb docs establish it. The standard Enterprise object model (34 Integration Objects) is Declared from the public xWeb WSDL; customer-specific queries/views/custom columns are runtime-discovered via `GetQueryDefinition` (`DiscoveryIsAuthoritative=false`), never baked into the connector.
+  - **`@memberjunction/integration-engine`**: adds the optional `OAuth2TokenRequest.ExtraParams` field (extra `application/x-www-form-urlencoded` grant-body params, e.g. Auth0 `audience`), forwarded by `OAuth2TokenManager` with standard params taking precedence. This is the engine half of the OAuth2 change `RhythmConnector` already depends on.
+
+  > **Note:** netFORUM's denormalized facades (e.g. `Individual`, `FundraisingGift`) can exceed SQL Server's hard 1024-column-per-table limit when fully flattened; those objects need column-overflow handling at the framework level before they can materialize as single tables.
+
+- 4027e6f: Add the **Novi AMS** connector — a read+write integration for the Novi association-management system's public REST API.
+  - **`NoviConnector`** (`@RegisterClass(BaseIntegrationConnector, 'NoviConnector')`, `IntegrationName` = `"Novi AMS"`) extends `BaseRESTIntegrationConnector` and rides the generic per-operation CRUD path. Novi-specific overrides: `BuildHeaders` (`Authorization: Basic <rawApiKey>` — the raw key after `Basic `, not base64 user:pass), per-tenant `GetBaseURL` resolved from `CompanyIntegration.Configuration` (Novi has no shared host — each org is `https://www.<assoc>.org/api/`), `NormalizeResponse` for both envelopes (`{TotalCount, Results}` lists, `{data}` details), offset `ExtractPaginationInfo`/`BuildPaginatedURL` (`pageSize` + `offset`), `RateLimitPolicy`/`ExtractRetryAfterMs` (20/s · 600/min · 100k/day), a `FetchChanges` that emits each object's `IncrementalWatermarkField` and advances only on full-batch success, and a GET-then-merge-then-PUT `UpdateRecord` (Novi PUT is full-object replacement, no PATCH). `ExtractIDFromResponse` reads Novi's `UniqueID`/`<Object>UniqueId` keys and still routes creates through `BuildCreatedResult`.
+  - **Metadata** (`metadata/integrations/novi/.novi.integration.json`): 32 Integration Objects / 387 fields covering members, member types, activities, groups, committees (+roles/members), events, tickets, registrations, attendees, orders (+items), products (+purchases), subscriptions, custom fields (definitions + per-customer values), credit types, webhooks, articles, static pages, NPS surveys, and lookups — with per-operation CRUD columns, offset pagination, incremental watermarks, and FK relationships. Passes the bijection, dag-completeness, and fk-lookup-qualifier floor graders.
+  - 20 vitest unit tests (`NoviConnector.test.ts`).
+
+  Built and verified credential-free via the connector workshop. **Ceiling: sync-verified** — beyond matching Novi's published API (api-docs.noviams.com + the official Postman collection), the connector passes the full credential-free verification surface on SQL Server (real MJ engine, mock Novi vendor, real DB):
+  - **Verification ladder T0–T6 all green** (T0 tsc, T1 structural invariants, T2 cross-pass consistency, T3 doc self-check over 32 objects, T4 vitest 20/20, T5 mock-HTTP 32 objects/61 records, T6 SQLite create/update/delete/ordering). T7 (OpenAPI) and T8 (live) are N/A — Novi publishes no OpenAPI spec and live testing needs a customer API key.
+  - **Read sync over ALL 32 objects**: `ApplyAll` builds 32 tables + entity maps; forward sync 100% complete and rowcount-asserted per object; idempotent re-run with content-hash incremental narrowing; child-path objects (GroupMember/CommitteeMember via parent chain) and derived line-items (OrderItem/ProductPurchase) all sync.
+  - **Write paths**: delta create/update/delete (5/5) and a full bidirectional create→update→delete round-trip (7/7) through the connector's CRUD.
+  - DAG: 32 objects / 26 FK `@lookup` edges / **0 cycles**.
+
+  Not yet live/production-verified: a round-trip against a real Novi tenant needs a customer API key (the credential boundary). Tenant-specific behavior (API-key field/group exposure, custom fields, QuickBooks/SSO setup, real rate-limit/error shapes) is deferred to runtime discovery. OAuth2/OIDC SSO and the QuickBooks-direct/Zapier routes are intentionally out of scope (recorded in the Integration `Configuration`).
+
+- e8be085: Add the Rhythm Software (Rhythm AMS) connector — REST + OAuth2/OIDC via Auth0. The catalog is spec-derived from Rhythm's 15 public OpenAPI specs across all 14 modules: **377 Integration Objects / 14,515 fields** (no invention; tenant-specific custom fields / saved queries / event streams / SSO deferred to runtime).
+  - Per-object **read-style classification** (list / POST-search / fk-child / by-id) derived from each module's spec
+  - **POST-search listing**, **fk-child parent-traversal**, generic per-operation **CRUD**, DynamoDB-style **cursor pagination**, **content-hash idempotency**
+  - **Single-origin `BaseURL`/token override** (a proxying gateway or the credential-free e2e mock; real tenants leave it unset)
+  - New `Rhythm OAuth2` credential type
+
+  Verified credential-free (mock vendor through the real MJ engine on SQL Server): contract ladder T0–T5/T7/T12 (T7 1,446/1,446 declared paths match the specs), all 273 bulk objects ApplyAll'd + synced (284 tables, 571/571 cells, 0 failures), and the 17-cell behavioral matrix REAL (forward / idempotent / delta / pagination / DAG 377-108-4-0 / merkle / rate-limit / retry / concurrency / bidirectional write round-trip). Ceiling is contract/mock-verified — not live-vendor or Postgres. Requires `@memberjunction/integration-engine` auth-helpers `OAuth2TokenRequest.ExtraParams` (Auth0 audience).
+
+### Patch Changes
+
+- Updated dependencies [9b9b484]
+- Updated dependencies [6ac8ca4]
+- Updated dependencies [6520bea]
+- Updated dependencies [5ebf0e9]
+- Updated dependencies [2f225e4]
+- Updated dependencies [6d970cd]
+- Updated dependencies [0fa3cbc]
+- Updated dependencies [da5a3dd]
+  - @memberjunction/core@5.42.0
+  - @memberjunction/integration-engine@5.42.0
+  - @memberjunction/integration-engine-base@5.42.0
+  - @memberjunction/core-entities@5.42.0
+  - @memberjunction/global@5.42.0
+
 ## 5.41.0
 
 ### Patch Changes
