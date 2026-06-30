@@ -373,14 +373,12 @@
             <!-- ============================================================= -->
             <!-- FIELD MAPPINGS SECTION (collapsible)                          -->
             <!-- ============================================================= -->
-            <div class="ve-section" [class.collapsed]="!FieldMapsExpanded">
-              <div class="ve-section-header" (click)="ToggleFieldMaps()">
-                <i class="fa-solid"
-                   [class.fa-chevron-down]="FieldMapsExpanded"
-                   [class.fa-chevron-right]="!FieldMapsExpanded"></i>
+            <mj-accordion-panel class="ve-accordion" Size="sm" [Fill]="true" [FlushBody]="true"
+              [Expanded]="FieldMapsExpanded" (ExpandedChange)="ToggleFieldMaps()">
+              <ng-template mjAccordionTitle>
                 <span class="ve-section-title">Field Mappings</span>
-                <span class="ve-section-badge">{{ EditorMappedCount }} mapped</span>
-              </div>
+                <span class="mj-accordion-badge mj-accordion-badge--right">{{ EditorMappedCount }} mapped</span>
+              </ng-template>
 
               @if (FieldMapsExpanded) {
                 <div class="ve-section-body">
@@ -508,18 +506,16 @@
                   </div>
                 </div>
               }
-            </div>
+            </mj-accordion-panel>
 
             <!-- ============================================================= -->
             <!-- INFO PANEL SECTION (collapsible)                              -->
             <!-- ============================================================= -->
-            <div class="ve-section" [class.collapsed]="!InfoPanelExpanded">
-              <div class="ve-section-header" (click)="ToggleInfoPanel()">
-                <i class="fa-solid"
-                   [class.fa-chevron-down]="InfoPanelExpanded"
-                   [class.fa-chevron-right]="!InfoPanelExpanded"></i>
+            <mj-accordion-panel class="ve-accordion" Size="sm" [FlushBody]="true"
+              [Expanded]="InfoPanelExpanded" (ExpandedChange)="ToggleInfoPanel()">
+              <ng-template mjAccordionTitle>
                 <span class="ve-section-title">Sync Info</span>
-              </div>
+              </ng-template>
 
               @if (InfoPanelExpanded) {
                 <div class="ve-section-body ve-info-body">
@@ -605,7 +601,7 @@
                   }
                 </div>
               }
-            </div>
+            </mj-accordion-panel>
           </div>
 
           <!-- Transform editor panel (right side, appears when connection selected) -->
