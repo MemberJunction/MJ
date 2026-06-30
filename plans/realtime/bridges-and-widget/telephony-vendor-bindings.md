@@ -6,6 +6,20 @@
 
 ---
 
+## Status (audited 2026-06-28)
+
+| Phase | Status | Notes |
+|---|---|---|
+| T0 — media-plane spike | ✅ **Done** | G.711 + resample + loopback test in `ai-bridge-base`. Codec landed in `BaseTelephonyBridge`, not the native SDK (minor deviation from the T0 note's stated split — works fine). |
+| T1 — Twilio end-to-end | ✅ **Done + live-proven** | Real SDK, ingress (webhook + media WSS), `PlaceTwilioCall`, config, 76 unit tests + 1 gated integration test. Inbound + outbound verified live against Sage `+18669016546` (see TESTING.md). |
+| T2 — Vonage | 🟡 **Code-complete, not live-verified** | Real bindings + ingress + `PlaceVonageCall` + 82 unit tests. **Blocker:** needs one Vonage account to run a live call; no integration test file yet. |
+| T3 — RingCentral | 🟡 **Code-complete, not live-verified** | Real bindings + ingress + `PlaceRingCentralCall` + 75 unit tests. **Blocker:** needs one RingCentral account to run a live call; no integration test file yet. |
+| T4 — shared hardening | 🟡 **Partial** | Per-vendor signature verification ✅ + media-upgrade dispatcher ✅. **Not built:** webhook idempotency on carrier retries, max-concurrent-calls-per-identity, SessionJanitor reuse for stuck calls. |
+
+**Net:** the proving track (Twilio) is live. Vonage/RingCentral are one vendor account each away from the same. T4 abuse/cost guardrails are the only genuine code gap and are tracked below.
+
+---
+
 ## 0. The one-paragraph thesis
 
 The drivers are **done**. Each `*Bridge` extends `BaseTelephonyBridge`, declares its capabilities, and already ships a **native SDK wrapper** (`*NativeCallSdk` + `Bind*NativeCall()` + auto-registration in `BridgeNativeSdkRegistry`). The native wrapper lazy-loads a **native module specifier** — so the remaining work is: (1) implement the real REST + media layer the native loader resolves to, (2) stand up the **inbound webhook + Media-Streams WebSocket endpoint** in MJAPI so carriers can reach us, (3) wire credentials via MJ config, (4) write integration tests. No driver rewrites.
@@ -108,49 +122,49 @@ Three real deliverables per provider: **(A)** the native SDK implementation, **(
 
 ## 3. Phased task breakdown
 
-### Phase T0 — Media-plane spike (do once, shared) (1 day)
-- [ ] Decide the **audio format contract** end-to-end: carriers deliver μ-law/8kHz (Twilio Media Streams) or L16; the realtime models expect PCM16 at 16/24kHz. Define where resampling/transcoding happens (recommend: in the native SDK, so the bridge seam always speaks PCM16 as `ArrayBuffer`, matching `ITelephonyCallSdk`). Document the chosen sample rates per model (see realtime client driver notes: Gemini 16k up/24k down).
-- [ ] Confirm whether server-bridged media plane (program README §6 / "P5") is required, or whether the native SDK owning the carrier WS is sufficient on its own. For telephony the **native SDK owns the carrier socket directly**, so P5 is NOT a hard blocker — but the bridge still needs the realtime session's `SendInput/OnOutput` wired (verify `AIBridgeEngine` does this for an attached telephony bridge).
-- [ ] **Acceptance:** a written audio-format/data-flow note checked into this folder; a passing loopback test that pipes synthetic μ-law in → PCM16 out → back, asserting round-trip fidelity.
+### Phase T0 — Media-plane spike (do once, shared) (1 day) ✅
+- [x] Decide the **audio format contract** end-to-end: carriers deliver μ-law/8kHz (Twilio Media Streams) or L16; the realtime models expect PCM16 at 16/24kHz. Define where resampling/transcoding happens (recommend: in the native SDK, so the bridge seam always speaks PCM16 as `ArrayBuffer`, matching `ITelephonyCallSdk`). Document the chosen sample rates per model (see realtime client driver notes: Gemini 16k up/24k down). — _Done; see `spikes/T0-audio-format-note.md`. Resample landed in `BaseTelephonyBridge` (both legs) rather than each native SDK — a deviation from the note's stated split; functionally equivalent, the note is now slightly stale._
+- [x] Confirm whether server-bridged media plane (program README §6 / "P5") is required, or whether the native SDK owning the carrier WS is sufficient on its own. For telephony the **native SDK owns the carrier socket directly**, so P5 is NOT a hard blocker — but the bridge still needs the realtime session's `SendInput/OnOutput` wired (verify `AIBridgeEngine` does this for an attached telephony bridge). — _Confirmed: native SDK owns the carrier socket; transport seam wired by `AIBridgeEngine`._
+- [x] **Acceptance:** a written audio-format/data-flow note checked into this folder; a passing loopback test that pipes synthetic μ-law in → PCM16 out → back, asserting round-trip fidelity. — _`ai-bridge-base/__tests__/g711.test.ts` passes._
 
-### Phase T1 — Twilio end-to-end (the proving track)
+### Phase T1 — Twilio end-to-end (the proving track) ✅ live-proven
 **(A) Native SDK** — implement `ITwilioClientBindings` over the real `twilio` npm SDK + Media Streams:
-- [ ] Add `twilio` to `optionalDependencies` of `@memberjunction/ai-bridge-twilio`; run `npm install` at repo root.
-- [ ] Implement a `RealTwilioBindings` class behind `BindTwilioNativeCall`'s module loader (or wire `twilio-native-call-sdk.ts`'s `NativeModuleSpecifier` to a real module). Map each `ITwilioClientBindings` method to REST/Media-Streams per §2.
-- [ ] Outbound: `createCall` → REST `POST /Calls` with a TwiML `<Connect><Stream url="wss://<MJAPI>/telephony/twilio/media">`.
-- [ ] Inbound: `acceptInbound` returns TwiML connecting the stream; `onStreamAudio`/`pushStreamAudio` bridge the WS.
-- [ ] DTMF: `onDigits` from `<Gather>`/stream events; `playDigits` via REST. Transfer: `redirectCall` → REST update.
+- [x] Add `twilio` to `optionalDependencies` of `@memberjunction/ai-bridge-twilio`; run `npm install` at repo root.
+- [x] Implement a `RealTwilioBindings` class behind `BindTwilioNativeCall`'s module loader (or wire `twilio-native-call-sdk.ts`'s `NativeModuleSpecifier` to a real module). Map each `ITwilioClientBindings` method to REST/Media-Streams per §2. — _`real-twilio-bindings.ts` + `twilio-rest-client.ts`._
+- [x] Outbound: `createCall` → REST `POST /Calls` with a TwiML `<Connect><Stream url="wss://<MJAPI>/telephony/twilio/media">`.
+- [x] Inbound: `acceptInbound` returns TwiML connecting the stream; `onStreamAudio`/`pushStreamAudio` bridge the WS.
+- [x] DTMF: `onDigits` from `<Gather>`/stream events; `playDigits` via REST. Transfer: `redirectCall` → REST update.
 
 **(B) MJAPI ingress** — new router(s):
-- [ ] `POST /telephony/twilio/voice` (inbound webhook) — carrier hits this on incoming call; resolves the dialed DID → `MJ: AI Bridge Agent Identities` (IdentityType `PhoneNumber`) → starts a session via `AIBridgeEngine.StartBridgeSession` with `Direction=Inbound`, `InboundCallId=<CallSid>`; returns TwiML.
-- [ ] `WSS /telephony/twilio/media` — Media Streams socket; pumps frames into the active call's `onStreamAudio` callback and accepts `pushStreamAudio`. Mount as a public route (carrier can't send an MJ JWT) but **verify Twilio signatures** (`X-Twilio-Signature`) and a shared secret.
-- [ ] Outbound trigger: a GraphQL mutation / Remote Operation `Telephony.PlaceCall(agentIdentityId, toNumber)` that calls `StartBridgeSession` with `Direction=Outbound`.
+- [x] `POST /telephony/twilio/voice` (inbound webhook) — carrier hits this on incoming call; resolves the dialed DID → `MJ: AI Bridge Agent Identities` (IdentityType `PhoneNumber`) → starts a session via `AIBridgeEngine.StartBridgeSession` with `Direction=Inbound`, `InboundCallId=<CallSid>`; returns TwiML.
+- [x] `WSS /telephony/twilio/media` — Media Streams socket; pumps frames into the active call's `onStreamAudio` callback and accepts `pushStreamAudio`. Mount as a public route (carrier can't send an MJ JWT) but **verify Twilio signatures** (`X-Twilio-Signature`) and a shared secret.
+- [x] Outbound trigger: a GraphQL mutation / Remote Operation `Telephony.PlaceCall(agentIdentityId, toNumber)` that calls `StartBridgeSession` with `Direction=Outbound`. — _Shipped as `PlaceTwilioCall`._
 
 **(C) Config & credentials:**
-- [ ] `mj.config.cjs` block: `telephony.twilio { accountSid, authToken | apiKeySid+apiKeySecret, streamPublicUrl, webhookSigningSecret }`. Resolve via MJ config/credential system — **never inline**. The native SDK reads these from session `Configuration` / provider config, not from the driver.
+- [x] `mj.config.cjs` block: `telephony.twilio { accountSid, authToken | apiKeySid+apiKeySecret, streamPublicUrl, webhookSigningSecret }`. Resolve via MJ config/credential system — **never inline**. The native SDK reads these from session `Configuration` / provider config, not from the driver. — _Schema in `config.ts`; no inline secrets._
 
 **(D) Tests:**
-- [ ] **Unit (CI, no network):** extend `twilio-bridge.test.ts` style — `FakeTwilioCallSdk` already exists; add tests for the new `RealTwilioBindings` mapping logic using a mocked `twilio` client (assert REST payloads + WS frame mapping + signature verification). Keep network out.
-- [ ] **Integration (credential-gated, `describe.skipIf(!env)`):** with real Twilio test credentials + a test DID, place an outbound call to a test number that auto-answers and echoes; assert the agent connected, exchanged audio, and the call ended cleanly. Document required env vars in the package README. These are **not** run in CI.
-- [ ] **Manual runbook:** step-by-step to dial in to the DID and talk to the agent; mirror `../gemini-meeting-live-test-runbook.md` format.
+- [x] **Unit (CI, no network):** extend `twilio-bridge.test.ts` style — `FakeTwilioCallSdk` already exists; add tests for the new `RealTwilioBindings` mapping logic using a mocked `twilio` client (assert REST payloads + WS frame mapping + signature verification). Keep network out. — _76 unit tests pass._
+- [x] **Integration (credential-gated, `describe.skipIf(!env)`):** with real Twilio test credentials + a test DID, place an outbound call to a test number that auto-answers and echoes; assert the agent connected, exchanged audio, and the call ended cleanly. Document required env vars in the package README. These are **not** run in CI. — _`real-twilio-bindings.integration.test.ts` (self-skips without creds)._
+- [x] **Manual runbook:** step-by-step to dial in to the DID and talk to the agent; mirror `../gemini-meeting-live-test-runbook.md` format. — _Captured in `TESTING.md` (Tier 1) rather than a separate runbook file._
 
-**Acceptance (T1):** a real inbound call to the test DID reaches the pinned agent and holds a two-way voice conversation; an outbound `PlaceCall` mutation rings a real phone and connects the agent; unit tests pass in CI; integration tests pass locally with credentials.
+**Acceptance (T1):** a real inbound call to the test DID reaches the pinned agent and holds a two-way voice conversation; an outbound `PlaceCall` mutation rings a real phone and connects the agent; unit tests pass in CI; integration tests pass locally with credentials. — ✅ **MET.** Inbound + outbound both verified live against Sage `+18669016546`.
 
-### Phase T2 — Vonage (repeat with deltas)
-- [ ] Same A/B/C/D as T1 against `IVonageClientBindings`. Deltas: Vonage uses **NCCO** (not TwiML), a **WebSocket `connect`** action for media, and the **Voice API** for `createCall`/`transferCall`. Endpoints: `POST /telephony/vonage/event` + `POST /telephony/vonage/answer` (returns NCCO) + `WSS /telephony/vonage/media`. Signature/JWT verification per Vonage.
-- [ ] `optionalDependencies`: `@vonage/server-sdk`.
-- [ ] **Acceptance:** same as T1 for Vonage.
+### Phase T2 — Vonage (repeat with deltas) 🟡 code-complete, not live-verified
+- [x] Same A/B/C/D as T1 against `IVonageClientBindings`. Deltas: Vonage uses **NCCO** (not TwiML), a **WebSocket `connect`** action for media, and the **Voice API** for `createCall`/`transferCall`. Endpoints: `POST /telephony/vonage/event` + `POST /telephony/vonage/answer` (returns NCCO) + `WSS /telephony/vonage/media`. Signature/JWT verification per Vonage. — _`real-vonage-bindings.ts` + service/router/registry + `PlaceVonageCall` + 82 unit tests._
+- [x] `optionalDependencies`: `@vonage/server-sdk`.
+- [ ] **Acceptance:** same as T1 for Vonage. — ⚠️ **BLOCKED on a Vonage account.** Code path mirrors live-proven Twilio; no live call placed and no integration test file yet. Live-verify per `TESTING.md` Tier 2.
 
-### Phase T3 — RingCentral (repeat with deltas)
-- [ ] Same pattern against `IRingCentralClientBindings`. Deltas: RingCentral **Call Control API** + its media stream; OAuth (JWT/3-legged) for auth; session-based vocabulary (`createSession/answerSession/dropSession/transferSession`). Endpoints under `/telephony/ringcentral/*`. Webhook validation via RingCentral validation token.
-- [ ] `optionalDependencies`: `@ringcentral/sdk`.
-- [ ] **Acceptance:** same as T1 for RingCentral.
+### Phase T3 — RingCentral (repeat with deltas) 🟡 code-complete, not live-verified
+- [x] Same pattern against `IRingCentralClientBindings`. Deltas: RingCentral **Call Control API** + its media stream; OAuth (JWT/3-legged) for auth; session-based vocabulary (`createSession/answerSession/dropSession/transferSession`). Endpoints under `/telephony/ringcentral/*`. Webhook validation via RingCentral validation token. — _`real-ringcentral-bindings.ts` + service/router/registry + `PlaceRingCentralCall` + 75 unit tests._
+- [x] `optionalDependencies`: `@ringcentral/sdk`.
+- [ ] **Acceptance:** same as T1 for RingCentral. — ⚠️ **BLOCKED on a RingCentral account.** Code path mirrors live-proven Twilio; no live call placed and no integration test file yet. Live-verify per `TESTING.md` Tier 2.
 
-### Phase T4 — Shared hardening
-- [ ] Common ingress middleware: signature verification, idempotency on retried webhooks, structured logging of call lifecycle.
-- [ ] Concurrency + cost guardrails (max concurrent calls per agent identity; reuse `SessionJanitor` for stuck calls).
-- [ ] Observability: confirm each call produces an `AIAgentSession` + bridge + participant rows and a co-agent run (the engine already does this — verify with a real call).
-- [ ] Update `metadata/ai-bridge-providers/` rows if any `Configuration` schema is added.
+### Phase T4 — Shared hardening 🟡 partial
+- [ ] Common ingress middleware: signature verification, idempotency on retried webhooks, structured logging of call lifecycle. — _Signature verification ✅ (per-vendor) + structured lifecycle logging ✅. **Webhook idempotency on carrier retries: NOT built** — genuine gap._
+- [ ] Concurrency + cost guardrails (max concurrent calls per agent identity; reuse `SessionJanitor` for stuck calls). — ⚠️ **NOT built.** No per-identity concurrency cap; no SessionJanitor reuse for stuck telephony calls. Genuine gap before high-volume production.
+- [x] Observability: confirm each call produces an `AIAgentSession` + bridge + participant rows and a co-agent run (the engine already does this — verify with a real call). — _Verified for Twilio (live); Vonage/RingCentral inherit the same engine path, unverified live._
+- [x] Update `metadata/ai-bridge-providers/` rows if any `Configuration` schema is added. — _Rows seeded; Twilio/Vonage/RingCentral Active._
 
 ---
 
@@ -179,8 +193,8 @@ Three real deliverables per provider: **(A)** the native SDK implementation, **(
 
 ## 6. Definition of done
 
-- [ ] Twilio, Vonage, RingCentral each: real inbound call reaches the agent; outbound `PlaceCall` connects the agent; DTMF + transfer work.
-- [ ] Native-binding + ingress unit tests pass in CI; integration tests pass locally with credentials; manual runbooks written.
-- [ ] Credentials resolve via MJ config; vendor SDKs in `optionalDependencies`; no secrets in code.
-- [ ] Each call yields the expected session/bridge/participant/run records.
-- [ ] Touched packages build (`npm run build`) and unit tests pass (`npm run test`).
+- [ ] Twilio, Vonage, RingCentral each: real inbound call reaches the agent; outbound `PlaceCall` connects the agent; DTMF + transfer work. — _Twilio ✅; Vonage/RingCentral blocked on a vendor account each._
+- [ ] Native-binding + ingress unit tests pass in CI; integration tests pass locally with credentials; manual runbooks written. — _Unit tests ✅ all three; Twilio integration test present (gated); Vonage/RingCentral integration tests not yet written; runbook lives in `TESTING.md`._
+- [x] Credentials resolve via MJ config; vendor SDKs in `optionalDependencies`; no secrets in code.
+- [ ] Each call yields the expected session/bridge/participant/run records. — _Verified for Twilio; others inherit the path, unverified live._
+- [x] Touched packages build (`npm run build`) and unit tests pass (`npm run test`).

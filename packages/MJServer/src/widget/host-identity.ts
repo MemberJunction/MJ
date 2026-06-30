@@ -13,7 +13,10 @@
  * @module @memberjunction/server/widget
  */
 
-import jwt from 'jsonwebtoken';
+import type jwt from 'jsonwebtoken';
+import { HostIdentityProvider, type HostAssertionError } from '@memberjunction/auth-providers';
+
+export type { HostAssertionError };
 
 /** The visitor identity a host asserts. Standard OIDC-ish claims so synthesis is uniform. */
 export interface HostAssertedIdentity {
@@ -24,9 +27,6 @@ export interface HostAssertedIdentity {
     hostUserId?: string;
 }
 
-/** Why a host-assertion verification failed. */
-export type HostAssertionError = 'missing' | 'bad_signature' | 'expired' | 'no_email' | 'no_key';
-
 /** Result of verifying a host assertion. `identity` is present iff `ok` is true. */
 export interface HostAssertionResult {
     ok: boolean;
@@ -35,46 +35,50 @@ export interface HostAssertionResult {
 }
 
 /**
- * Verifies a host-signed RS256 assertion JWT against the host's registered public key
- * (PEM) and extracts the asserted visitor identity. The assertion's `aud` should be the
- * widget key (bound at the host) and it must carry an `email`. Never throws — returns a
- * structured result.
+ * The single shared {@link HostIdentityProvider} instance the mint path verifies through. The base
+ * `BaseAuthProvider` constructor builds a (never-contacted) JWKS client; host-identity verifies against
+ * static per-widget PEM keys, so we pass a placeholder `jwksUri`. Built once — verification is stateless.
+ */
+const hostIdentityProvider = new HostIdentityProvider({
+    name: 'host-identity',
+    type: 'host-identity',
+    issuer: 'host-identity',
+    audience: 'host-identity',
+    jwksUri: 'https://host-identity.local/unused',
+});
+
+/**
+ * Verifies a host-signed RS256 assertion against the host's registered public key (PEM) and extracts the
+ * asserted visitor identity. Thin adapter over {@link HostIdentityProvider.VerifyHostAssertion} (the single
+ * implementation, registered in the AuthProviderFactory) preserving this module's result shape. Never throws.
  */
 export function verifyHostAssertion(
     assertion: string | undefined,
     hostPublicKeyPem: string | undefined,
     expectedAudience: string,
 ): HostAssertionResult {
-    if (!assertion) {
-        return { ok: false, errorCode: 'missing' };
+    const result = hostIdentityProvider.VerifyHostAssertion(assertion, hostPublicKeyPem, expectedAudience);
+    if (!result.ok || !result.userInfo?.email) {
+        return { ok: false, errorCode: result.errorCode };
     }
-    if (!hostPublicKeyPem) {
-        return { ok: false, errorCode: 'no_key' };
-    }
-    let payload: jwt.JwtPayload;
-    try {
-        payload = jwt.verify(assertion, hostPublicKeyPem, {
-            algorithms: ['RS256'],
-            audience: expectedAudience,
-        }) as jwt.JwtPayload;
-    } catch (e) {
-        // jsonwebtoken throws TokenExpiredError for expiry; everything else is a signature/format fault.
-        return { ok: false, errorCode: e instanceof jwt.TokenExpiredError ? 'expired' : 'bad_signature' };
-    }
-    const identity = extractHostIdentity(payload);
-    if (!identity.email) {
-        return { ok: false, errorCode: 'no_email' };
-    }
-    return { ok: true, identity };
+    return {
+        ok: true,
+        identity: {
+            email: result.userInfo.email,
+            firstName: result.userInfo.firstName,
+            lastName: result.userInfo.lastName,
+            hostUserId: result.hostUserId,
+        },
+    };
 }
 
-/** Pulls the visitor identity from a verified host-assertion payload (standard claim names). */
+/** Pulls the visitor identity from a verified host-assertion payload (delegates to the provider). */
 export function extractHostIdentity(payload: jwt.JwtPayload): HostAssertedIdentity {
-    const str = (v: unknown): string | undefined => (typeof v === 'string' && v ? v : undefined);
+    const info = hostIdentityProvider.extractUserInfo(payload);
     return {
-        email: str(payload.email) ?? '',
-        firstName: str(payload.given_name) ?? str(payload['firstName']),
-        lastName: str(payload.family_name) ?? str(payload['lastName']),
-        hostUserId: str(payload.sub),
+        email: info.email ?? '',
+        firstName: info.firstName,
+        lastName: info.lastName,
+        hostUserId: typeof payload.sub === 'string' ? payload.sub : undefined,
     };
 }

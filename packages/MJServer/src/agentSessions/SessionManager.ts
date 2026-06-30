@@ -328,18 +328,19 @@ export class SessionManager {
         }
 
         // Returning-visitor memory (RV1/RV2/RV4) for the VOICE path: the widget guest token carries the
-        // resolved VisitorKey / prior-conversation / resolved identity (surfaced on WidgetVisitorContext),
+        // resolved VisitorKey / prior-conversation / linked identity (surfaced on WidgetVisitorContext),
         // so a server-created voice conversation gets the same anchor the text path stamps client-side.
+        // The resolved counterparty reuses the existing polymorphic LinkedEntityID/LinkedRecordID pair.
         // Absent for non-widget sessions and widgets with returning-visitor memory off — a no-op default.
         const visitor = contextUser.WidgetVisitorContext;
         if (visitor?.VisitorKey) {
             conversation.VisitorKey = visitor.VisitorKey;
-            if (visitor.PreviousConversationID) {
-                conversation.PreviousConversationID = visitor.PreviousConversationID;
+            if (visitor.LastConversationID) {
+                conversation.LastConversationID = visitor.LastConversationID;
             }
-            if (visitor.ResolvedEntityID && visitor.ResolvedRecordID) {
-                conversation.ResolvedEntityID = visitor.ResolvedEntityID;
-                conversation.ResolvedRecordID = visitor.ResolvedRecordID;
+            if (visitor.LinkedEntityID && visitor.LinkedRecordID) {
+                conversation.LinkedEntityID = visitor.LinkedEntityID;
+                conversation.LinkedRecordID = visitor.LinkedRecordID;
             }
         }
 
@@ -369,6 +370,14 @@ export class SessionManager {
         session.HostInstanceID = GetHostInstanceID();
         session.Config_ = input.config ?? null;
         session.LastActiveAt = new Date();
+        // Mirror the conversation's resolved counterparty onto the session's own polymorphic pair, so a
+        // session carries its linked identity directly (parallels Conversation.LinkedEntityID/RecordID).
+        // Sourced from the same widget visitor context; a no-op for non-widget / anonymous sessions.
+        const visitor = contextUser.WidgetVisitorContext;
+        if (visitor?.LinkedEntityID && visitor.LinkedRecordID) {
+            session.LinkedEntityID = visitor.LinkedEntityID;
+            session.LinkedRecordID = visitor.LinkedRecordID;
+        }
 
         const saved = await session.Save();
         if (!saved) {

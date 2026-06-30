@@ -83,6 +83,13 @@ export const WIDGET_SHADOW_STYLES = `
 .mj-widget-progress { align-self: flex-start; color: var(--mj-text-secondary); font-size: 0.85em; font-style: italic; }
 .mj-widget-progress[hidden] { display: none; }
 
+/* Interactive-channel demonstration surface (Phase 2 — e.g. the Whiteboard the agent draws on during voice). */
+.mj-widget-surface { display: flex; flex-direction: column; border-bottom: 1px solid var(--mj-border-default); background: var(--mj-bg-surface); }
+.mj-widget-surface[hidden] { display: none; }
+.mj-widget-surface-title { padding: 6px 12px; font-size: 0.8em; font-weight: 600; color: var(--mj-text-secondary); background: var(--mj-bg-surface-card); }
+.mj-widget-surface-host { height: 200px; width: 100%; background: var(--mj-bg-surface); overflow: hidden; }
+.mj-widget-surface-host svg { display: block; width: 100%; height: 100%; }
+
 .mj-widget-composer {
     display: flex; gap: 8px; padding: 10px; border-top: 1px solid var(--mj-chat-composer-border);
     background: var(--mj-chat-composer-bg);

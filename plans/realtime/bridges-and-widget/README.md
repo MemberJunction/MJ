@@ -58,6 +58,7 @@ These were decided up front. Alternatives are recorded so a future owner can rev
 | [`public-web-widget.md`](./public-web-widget.md) | Droppable text+voice support widget; pluggable public auth; abuse/rate-limit hardening; embed packaging | Medium (public attack surface, new bundle target) | Large |
 | [`telephony-vendor-bindings.md`](./telephony-vendor-bindings.md) | Real Twilio/Vonage/RingCentral clients behind native loaders; inbound webhook + Media-Streams endpoint in MJAPI; integration tests | Medium (real-money calls, media plane) | Medium |
 | [`meeting-vendor-bindings-teams-slack.md`](./meeting-vendor-bindings-teams-slack.md) | Real Teams (ACS+Graph) binding; Slack huddle binding **gated on media-API verification**; calendar + identity provisioner bindings | High (entitlements; Slack media API may not exist) | Medium |
+| [`returning-visitor-memory.md`](./returning-visitor-memory.md) | Cross-session continuity: durable visitor cookie anchor, polymorphic resolved identity (`EntityID`+`RecordID`) on the conversation, recap-as-agent-memory, per-widget opt-in toggle | Medium (privacy/consent surface, memory-scoping ripple) | Medium |
 
 **Operational docs** (how to turn this on / verify it on a real instance):
 
@@ -111,11 +112,13 @@ Reference: [`../realtime-session-lifecycle-and-followups.md`](../realtime-sessio
 
 ## 8. Definition of done (program level)
 
-- [ ] Public widget renders on a blank third-party HTML page via a single `<script>` tag and a mount element, isolated in shadow DOM (no CSS bleed).
-- [ ] A guest visitor can hold a text **and** voice support conversation with a pinned agent, with no MJ login.
-- [ ] A guest can optionally upgrade to a magic-link-verified session that resolves their account.
-- [ ] Twilio, Vonage, RingCentral place/receive a real call end-to-end through the agent, with passing integration tests (credential-gated).
-- [ ] Teams bridge joins a real meeting with two-way audio + roster (entitlement permitting).
-- [ ] Slack: either bound (if media access verified) or formally parked with the blocker documented.
-- [ ] Every touched package builds and its unit tests pass.
-- [ ] No secrets in code; all credentials resolve via MJ config/credential system.
+> **Status (2026-06-28):** Telephony (Twilio live-proven) + widget (localhost) are the demoable core. Vonage/RingCentral, Teams, and calendar auto-join are code-complete + unit-tested but gated on a vendor account / entitled tenant to verify live. Slack is formally parked. Per-work-stream detail: each doc's **Status** banner.
+
+- [x] Public widget renders on a blank third-party HTML page via a single `<script>` tag and a mount element, isolated in shadow DOM (no CSS bleed).
+- [x] A guest visitor can hold a text **and** voice support conversation with a pinned agent, with no MJ login. — _Demo-grade; not public-safe until the guest run-entity grants are scoped (see widget doc Status)._
+- [x] A guest can optionally upgrade to a magic-link-verified session that resolves their account.
+- [ ] Twilio, Vonage, RingCentral place/receive a real call end-to-end through the agent, with passing integration tests (credential-gated). — _Twilio ✅ live-proven; Vonage/RingCentral code-complete + unit-tested, blocked on a vendor account each._
+- [ ] Teams bridge joins a real meeting with two-way audio + roster (entitlement permitting). — _Blocked on a live ACS media-socket adapter (code) **and** an entitled Azure tenant (procurement). Control plane + ingress + unit tests done._
+- [x] Slack: either bound (if media access verified) or formally parked with the blocker documented. — _Formally parked (NO-GO); row `Disabled`._
+- [x] Every touched package builds and its unit tests pass.
+- [x] No secrets in code; all credentials resolve via MJ config/credential system.

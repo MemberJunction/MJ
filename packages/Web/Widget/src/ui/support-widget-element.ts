@@ -134,6 +134,7 @@ export class SupportWidgetElement extends HTMLElement {
         panel.append(
             this.buildHeader(),
             this.buildBanner(),
+            this.buildDemonstrationSurface(),
             this.buildTranscriptContainer(),
             this.buildProgress(),
             this.buildComposer(),
@@ -234,6 +235,44 @@ export class SupportWidgetElement extends HTMLElement {
         transcript.setAttribute('role', 'log');
         transcript.setAttribute('aria-live', 'polite');
         return transcript;
+    }
+
+    /**
+     * The interactive-channel demonstration surface (Phase 2): a titled stage an MJ channel (e.g. the
+     * Whiteboard) renders into while voice is active. Hidden until a channel's first tool call reveals it
+     * via {@link RevealChannelSurface}; a widget with no enabled channels never shows it.
+     */
+    private buildDemonstrationSurface(): HTMLElement {
+        const surface = document.createElement('div');
+        surface.className = 'mj-widget-surface';
+        surface.setAttribute('hidden', '');
+        const title = document.createElement('div');
+        title.className = 'mj-widget-surface-title';
+        const host = document.createElement('div');
+        host.className = 'mj-widget-surface-host';
+        surface.append(title, host);
+        return surface;
+    }
+
+    /**
+     * Reveals the demonstration surface for an interactive channel and returns the inner host element the
+     * channel renders into. Called (via the voice callbacks) the first time the agent engages a channel.
+     */
+    public RevealChannelSurface(_channelName: string, title: string): HTMLElement {
+        const surface = this.query('.mj-widget-surface');
+        const titleEl = this.query('.mj-widget-surface-title');
+        const host = this.query('.mj-widget-surface-host');
+        if (titleEl) titleEl.textContent = title;
+        surface?.removeAttribute('hidden');
+        return (host as HTMLElement) ?? document.createElement('div');
+    }
+
+    /** Hides + clears the demonstration surface (on voice end). */
+    private hideChannelSurface(): void {
+        const surface = this.query('.mj-widget-surface');
+        surface?.setAttribute('hidden', '');
+        const host = this.query('.mj-widget-surface-host');
+        if (host) host.innerHTML = '';
     }
 
     private buildProgress(): HTMLElement {
@@ -436,6 +475,8 @@ export class SupportWidgetElement extends HTMLElement {
                     if (t.isFinal && t.text.trim()) this.appendMessage(t.role, t.text);
                 },
                 onEnded: (reason) => this.onVoiceEnded(reason),
+                // Phase 2: an MJ interactive channel reveals its surface here on first use.
+                getChannelSurface: (name, title) => this.RevealChannelSurface(name, title),
             });
         } catch (err) {
             this.appendMessage('system', err instanceof Error ? err.message : 'Could not start voice.');
@@ -455,6 +496,7 @@ export class SupportWidgetElement extends HTMLElement {
         this.voiceActive = false;
         this.refreshVoiceButton();
         this.hideProgress();
+        this.hideChannelSurface();
         if (reason) this.appendMessage('system', reason);
     }
 

@@ -70,6 +70,26 @@ function normalizeOrigin(origin: string): string {
 }
 
 /**
+ * Parses the widget's `EnabledChannels` column into a clean list of channel names (Phase 2). Accepts a
+ * JSON array (preferred, e.g. `["Whiteboard"]`) or a comma-separated string (tolerated). Returns an
+ * empty array for null/blank/garbage — the backwards-compatible default (no channels attached).
+ */
+export function parseEnabledChannels(enabledChannels: string | null | undefined): string[] {
+  const raw = enabledChannels?.trim();
+  if (!raw) {
+    return [];
+  }
+  const clean = (list: unknown[]): string[] =>
+    list.filter((s): s is string => typeof s === 'string').map((s) => s.trim()).filter((s) => s.length > 0);
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? clean(parsed) : [];
+  } catch {
+    return clean(raw.split(','));
+  }
+}
+
+/**
  * FAIL-CLOSED origin check. The request's `Origin` header must exactly match one of
  * the widget's allowed origins (after normalization). A missing request origin, or
  * an empty allowlist, is rejected — a public mint endpoint must never accept "*".
@@ -111,6 +131,32 @@ export function evaluateWidgetMint(
 }
 
 /**
+ * Known automated-client User-Agent substrings (lowercased). A public mint endpoint is a cheap
+ * target for crawlers and scripted abuse; this catches the obvious non-browser callers. It is a
+ * coarse FIRST line of defense (W6 "basic behavioural and user-agent checks"), NOT a CAPTCHA — the
+ * real boundaries remain the origin allowlist, rate limits, the restricted guest role, and short
+ * token TTLs. Legitimate headless integrations should embed via host-identity, not the public mint.
+ */
+const BOT_USER_AGENT_MARKERS = [
+  'bot', 'crawler', 'spider', 'scrape', 'curl', 'wget', 'python-requests',
+  'httpclient', 'okhttp', 'java/', 'go-http-client', 'libwww', 'headlesschrome', 'phantomjs',
+];
+
+/**
+ * Coarse bot heuristic for the public mint route. Returns `true` when the request should be treated as
+ * an automated client: a missing/blank User-Agent (real browsers always send one) or a UA containing a
+ * known automation marker. Deliberately conservative to avoid false positives on real browsers; pair
+ * with the origin allowlist + rate limits, which are the hard controls.
+ */
+export function looksLikeBot(userAgent: string | null | undefined): boolean {
+  const ua = (userAgent ?? '').trim().toLowerCase();
+  if (!ua) {
+    return true;
+  }
+  return BOT_USER_AGENT_MARKERS.some((marker) => ua.includes(marker));
+}
+
+/**
  * Builds the guest-session JWT claims for a widget visitor. Reuses magic-link's
  * `buildSessionClaims` (anonymous mode → the shared Anonymous principal + claims-based
  * role synthesis) and layers on the additive `mj_widget_id` claim so the synthesized
@@ -134,15 +180,15 @@ export function buildWidgetGuestClaims(args: {
    */
   hostIdentity?: { email: string; firstName?: string; lastName?: string };
   /**
-   * Returning-visitor anchor + resolved identity (RV1/RV2/RV4) carried as claims so the VOICE path
+   * Returning-visitor anchor + linked identity (RV1/RV2/RV4) carried as claims so the VOICE path
    * (server-created conversation) stamps the same fields the text path stamps client-side. Set only
    * when the widget remembers returning visitors. Omitted ⇒ no returning-visitor claims (default off).
    */
   returningVisitor?: {
     visitorKey?: string;
-    previousConversationId?: string;
-    resolvedEntityId?: string;
-    resolvedRecordId?: string;
+    lastConversationId?: string;
+    linkedEntityId?: string;
+    linkedRecordId?: string;
   };
 }): MagicLinkJWTClaims {
   const claims = buildSessionClaims({
@@ -177,9 +223,9 @@ export function buildWidgetGuestClaims(args: {
   }
   if (args.returningVisitor) {
     claims.mj_visitor_key = args.returningVisitor.visitorKey;
-    claims.mj_previous_conversation_id = args.returningVisitor.previousConversationId;
-    claims.mj_resolved_entity_id = args.returningVisitor.resolvedEntityId;
-    claims.mj_resolved_record_id = args.returningVisitor.resolvedRecordId;
+    claims.mj_last_conversation_id = args.returningVisitor.lastConversationId;
+    claims.mj_linked_entity_id = args.returningVisitor.linkedEntityId;
+    claims.mj_linked_record_id = args.returningVisitor.linkedRecordId;
   }
   return claims;
 }

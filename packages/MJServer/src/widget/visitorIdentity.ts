@@ -9,7 +9,7 @@
  *   1. resolve the verified email → a polymorphic `(entityId, recordId)` pair (NOT assumed to be a
  *      User — {@link resolveIdentityByEmail} honors the per-deployment `widget.identityResolution`
  *      target so a CRM `Persons` row works as well as the core `Users` row),
- *   2. stamp `ResolvedEntityID/ResolvedRecordID` on every conversation that shares the visitor's key
+ *   2. stamp the existing `LinkedEntityID/LinkedRecordID` on every conversation that shares the visitor's key
  *      in this application (back-fill), and
  *   3. re-key the visitor's anonymous recap notes onto the resolved pair (merge), so the existing
  *      memory injector (which already filters by the PrimaryScope pair) now pulls the prior context
@@ -135,11 +135,11 @@ export async function mergeVisitorIdentity(args: {
 
     let stamped = 0;
     for (const convo of conversations) {
-      if (convo.ResolvedEntityID === args.identity.entityId && convo.ResolvedRecordID === args.identity.recordId) {
+      if (convo.LinkedEntityID === args.identity.entityId && convo.LinkedRecordID === args.identity.recordId) {
         continue; // already resolved to this identity
       }
-      convo.ResolvedEntityID = args.identity.entityId;
-      convo.ResolvedRecordID = args.identity.recordId;
+      convo.LinkedEntityID = args.identity.entityId;
+      convo.LinkedRecordID = args.identity.recordId;
       if (await convo.Save()) {
         stamped++;
       } else {

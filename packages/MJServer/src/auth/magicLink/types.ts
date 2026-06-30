@@ -78,12 +78,12 @@ export interface MagicLinkJWTClaims {
    * path stamps client-side. Present only when the widget remembers returning visitors.
    */
   mj_visitor_key?: string;
-  /** The prior conversation this visit chains from (RV2), for the voice path to stamp PreviousConversationID. */
-  mj_previous_conversation_id?: string;
-  /** Resolved polymorphic identity entity id (RV4), for the voice path to stamp Conversation.ResolvedEntityID. */
-  mj_resolved_entity_id?: string;
-  /** Resolved polymorphic identity record id (RV4), for the voice path to stamp Conversation.ResolvedRecordID. */
-  mj_resolved_record_id?: string;
+  /** The prior conversation this visit chains from (RV2), for the voice path to stamp Conversation.LastConversationID. */
+  mj_last_conversation_id?: string;
+  /** Resolved polymorphic identity entity id (RV4), for the voice path to stamp the existing Conversation.LinkedEntityID / AIAgentSession.LinkedEntityID. */
+  mj_linked_entity_id?: string;
+  /** Resolved polymorphic identity record id (RV4), for the voice path to stamp the existing Conversation.LinkedRecordID / AIAgentSession.LinkedRecordID. */
+  mj_linked_record_id?: string;
   /** Marks the session as magic-link so the Explorer can confine the UI. */
   mj_magic_link: true;
 }

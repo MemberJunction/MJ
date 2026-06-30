@@ -7,6 +7,7 @@ import {
   isModalityEnabled,
   evaluateWidgetMint,
   buildWidgetGuestClaims,
+  looksLikeBot,
 } from '../widget/widgetCore.js';
 import { MagicLinkKeyManager } from '../auth/magicLink/MagicLinkKeys.js';
 
@@ -178,5 +179,26 @@ describe('widget core — RS256 sign + verify roundtrip (reuses MagicLinkKeyMana
     const publicKey = createPublicKey({ key: km.GetJWKS().keys[0] as object, format: 'jwk' });
     const tampered = token.slice(0, -3) + 'AAA';
     expect(() => jwt.verify(tampered, publicKey, { algorithms: ['RS256'] })).toThrow();
+  });
+});
+
+describe('widget core — looksLikeBot (W6 mint heuristic)', () => {
+  it('flags a missing / blank user-agent as a bot', () => {
+    expect(looksLikeBot(undefined)).toBe(true);
+    expect(looksLikeBot(null)).toBe(true);
+    expect(looksLikeBot('   ')).toBe(true);
+  });
+
+  it('flags known automation user-agents', () => {
+    expect(looksLikeBot('curl/8.4.0')).toBe(true);
+    expect(looksLikeBot('python-requests/2.31')).toBe(true);
+    expect(looksLikeBot('Googlebot/2.1 (+http://www.google.com/bot.html)')).toBe(true);
+    expect(looksLikeBot('Mozilla/5.0 (compatible; bingbot/2.0)')).toBe(true);
+    expect(looksLikeBot('HeadlessChrome/120.0.0.0')).toBe(true);
+  });
+
+  it('allows real browser user-agents', () => {
+    expect(looksLikeBot('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36')).toBe(false);
+    expect(looksLikeBot('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Version/17.0 Mobile/15E148 Safari/604.1')).toBe(false);
   });
 });

@@ -58,19 +58,32 @@ export interface MagicLinkScope {
 /**
  * Returning-visitor context carried on {@link UserInfo} for a public web-widget guest session,
  * sourced from the verified session token's claims. Lets a server-created conversation (the voice
- * path, which mints its conversation server-side) stamp the same returning-visitor anchor + resolved
+ * path, which mints its conversation server-side) stamp the same returning-visitor anchor + linked
  * identity the text path stamps client-side, so cross-session memory works uniformly across modalities.
  * Not a database/GraphQL field — an in-memory, per-session carrier.
  */
 export interface WidgetVisitorContext {
     /** Durable, opaque returning-visitor anchor (stamped on Conversation.VisitorKey). */
     VisitorKey?: string;
-    /** The prior conversation this visit chains from (stamped on Conversation.PreviousConversationID). */
-    PreviousConversationID?: string;
-    /** Resolved polymorphic identity entity id (stamped on Conversation.ResolvedEntityID when set). */
-    ResolvedEntityID?: string;
-    /** Resolved polymorphic identity record id (stamped on Conversation.ResolvedRecordID when set). */
-    ResolvedRecordID?: string;
+    /** The prior conversation this visit chains from (stamped on Conversation.LastConversationID). */
+    LastConversationID?: string;
+    /** Resolved polymorphic identity entity id (stamped on the existing Conversation.LinkedEntityID when set; also on AIAgentSession.LinkedEntityID). */
+    LinkedEntityID?: string;
+    /** Resolved polymorphic identity record id (stamped on the existing Conversation.LinkedRecordID when set; also on AIAgentSession.LinkedRecordID). */
+    LinkedRecordID?: string;
+}
+
+/**
+ * Identity of the public web-widget instance a guest session was minted for, carried on
+ * {@link UserInfo} and sourced from the verified session token's `mj_widget_id` claim. Lets a
+ * privileged server-side dispatch resolve the AUTHORITATIVE pinned support agent (and other
+ * per-widget configuration) from the trusted token rather than from client-supplied arguments —
+ * the backstop that lets a widget guest run only its widget's pinned agent. In-memory, per-session;
+ * not a database/GraphQL field.
+ */
+export interface WidgetGuestContext {
+    /** The MJ: Conversation Widget Instances row id this guest session is bound to. */
+    WidgetID: string;
 }
 
 /**
@@ -229,6 +242,21 @@ export class UserInfo extends BaseInfo {
     }
     public set WidgetVisitorContext(value: WidgetVisitorContext | undefined) {
         this._WidgetVisitorContext = value;
+    }
+
+    private _WidgetGuestContext?: WidgetGuestContext = undefined;
+
+    /**
+     * Widget-instance identity for a public web-widget guest session. Set at request time from the
+     * verified session token's `mj_widget_id` claim. Read by the privileged agent-dispatch path to
+     * resolve the authoritative pinned agent for this guest (never trusting a client-supplied agent
+     * id). Same getter/setter (non-enumerable) rationale as MagicLinkScope — not a DB/GraphQL field.
+     */
+    public get WidgetGuestContext(): WidgetGuestContext | undefined {
+        return this._WidgetGuestContext;
+    }
+    public set WidgetGuestContext(value: WidgetGuestContext | undefined) {
+        this._WidgetGuestContext = value;
     }
 
     private _IsMagicLinkAnonymous: boolean = false;

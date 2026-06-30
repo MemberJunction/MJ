@@ -112,7 +112,7 @@ export class RuntimeWidgetTransport implements IWidgetTransport {
         }
         // Scope the conversation to the widget's Application. The returning-visitor lookup at mint
         // resolves the prior conversation by (VisitorKey AND ApplicationID), so without this the chain
-        // never forms (PreviousConversationID stays null → no recap, no cross-session memory).
+        // never forms (LastConversationID stays null → no recap, no cross-session memory).
         // ApplicationScope must be 'Application' for ApplicationID to be set (CK_Conversation_ScopeAppBinding).
         if (this.session?.applicationId) {
             convo.ApplicationScope = 'Application';
@@ -132,14 +132,14 @@ export class RuntimeWidgetTransport implements IWidgetTransport {
             if (this.session.visitorKey) {
                 convo.VisitorKey = this.session.visitorKey;
             }
-            if (this.session.previousConversationId) {
-                convo.PreviousConversationID = this.session.previousConversationId;
+            if (this.session.lastConversationId) {
+                convo.LastConversationID = this.session.lastConversationId;
             }
             // RV4 (host-identity path): when the mint resolved a polymorphic identity, stamp it so memory
             // injection keys off the resolved record rather than the anonymous cookie chain.
-            if (this.session.resolvedEntityId && this.session.resolvedRecordId) {
-                convo.ResolvedEntityID = this.session.resolvedEntityId;
-                convo.ResolvedRecordID = this.session.resolvedRecordId;
+            if (this.session.linkedEntityId && this.session.linkedRecordId) {
+                convo.LinkedEntityID = this.session.linkedEntityId;
+                convo.LinkedRecordID = this.session.linkedRecordId;
             }
         }
         const saved = await convo.Save();

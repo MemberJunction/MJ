@@ -36,17 +36,22 @@ export interface WidgetSessionResponse {
     visitorKey?: string;
     /**
      * The visitor's most-recent prior conversation for this VisitorKey within the widget's application
-     * (RV2 chain). Present only on a returning visit; the client stamps it on Conversation.PreviousConversationID.
+     * (RV2 chain). Present only on a returning visit; the client stamps it on Conversation.LastConversationID.
      */
-    previousConversationId?: string;
+    lastConversationId?: string;
     /**
      * Resolved polymorphic identity (RV4), present only when a host-identity widget asserted a
-     * resolvable identity at mint. The client stamps `(resolvedEntityId, resolvedRecordId)` on the new
+     * resolvable identity at mint. The client stamps `(linkedEntityId, linkedRecordId)` on the new
      * conversation so memory injection keys off the resolved record rather than the cookie chain.
      */
-    resolvedEntityId?: string;
-    /** Resolved polymorphic identity record id (RV4); paired with resolvedEntityId. */
-    resolvedRecordId?: string;
+    linkedEntityId?: string;
+    /** Resolved polymorphic identity record id (RV4); paired with linkedEntityId. */
+    linkedRecordId?: string;
+    /**
+     * MJ interactive channels (by name, e.g. `["Whiteboard"]`) this widget may attach when voice is
+     * active (mirrors WidgetInstance.EnabledChannels). Empty/absent (the default) = no channels.
+     */
+    enabledChannels?: string[];
     error?: string;
     errorCode?: string;
 }
@@ -67,12 +72,17 @@ export interface WidgetSession {
     rememberReturningVisitors: boolean;
     /** Durable visitor anchor when remembering is on (persisted as a cookie, stamped on Conversation.VisitorKey). */
     visitorKey?: string;
-    /** The prior conversation this visit chains from (stamped on Conversation.PreviousConversationID). */
-    previousConversationId?: string;
-    /** Resolved polymorphic identity entity id (RV4), stamped on Conversation.ResolvedEntityID when set. */
-    resolvedEntityId?: string;
-    /** Resolved polymorphic identity record id (RV4), stamped on Conversation.ResolvedRecordID when set. */
-    resolvedRecordId?: string;
+    /** The prior conversation this visit chains from (stamped on Conversation.LastConversationID). */
+    lastConversationId?: string;
+    /** Resolved polymorphic identity entity id (RV4), stamped on Conversation.LinkedEntityID when set. */
+    linkedEntityId?: string;
+    /** Resolved polymorphic identity record id (RV4), stamped on Conversation.LinkedRecordID when set. */
+    linkedRecordId?: string;
+    /**
+     * MJ interactive channels this widget may attach during a voice session (by name, e.g. `['Whiteboard']`).
+     * Resolved to framework-free channel clients via `MJGlobal.ClassFactory`; empty = no channels (default).
+     */
+    enabledChannels: string[];
 }
 
 /** Options the host page supplies (via data-attributes or the programmatic API). */

@@ -157,9 +157,10 @@ export class WidgetSessionClient {
             voiceMaxSessionMinutes: body.voiceMaxSessionMinutes,
             rememberReturningVisitors: body.rememberReturningVisitors ?? false,
             visitorKey: body.visitorKey,
-            previousConversationId: body.previousConversationId,
-            resolvedEntityId: body.resolvedEntityId,
-            resolvedRecordId: body.resolvedRecordId,
+            lastConversationId: body.lastConversationId,
+            linkedEntityId: body.linkedEntityId,
+            linkedRecordId: body.linkedRecordId,
+            enabledChannels: Array.isArray(body.enabledChannels) ? body.enabledChannels : [],
         };
     }
 

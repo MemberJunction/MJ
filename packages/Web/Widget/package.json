@@ -10,8 +10,8 @@
   ],
   "scripts": {
     "build": "tsc && tsc-alias -f",
-    "bundle": "esbuild dist/index.js --bundle --format=esm --platform=browser --outfile=dist/mj-widget.js",
-    "bundle:min": "esbuild dist/index.js --bundle --format=esm --platform=browser --minify --outfile=dist/mj-widget.min.js",
+    "bundle": "esbuild dist/embed.js --bundle --splitting --format=esm --platform=browser --outdir=dist/embed --entry-names=mj-widget --chunk-names=chunks/[name]-[hash]",
+    "bundle:min": "esbuild dist/embed.js --bundle --splitting --minify --format=esm --platform=browser --outdir=dist/embed-min --entry-names=mj-widget --chunk-names=chunks/[name]-[hash]",
     "test": "vitest run",
     "test:watch": "vitest"
   },

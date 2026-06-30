@@ -74,8 +74,14 @@ export function buildCalendarSourceResolver(teamsConfig: TeamsMeetingsConfig): C
         if (driver === TEAMS_PROVIDER_DRIVER && teamsConfig.botAccessToken) {
             return new GraphCalendarSource(new GraphCalendarClient({ Credentials: { AccessToken: teamsConfig.botAccessToken } }));
         }
-        // Other providers (e.g. Google Meet) need their own auth client wired before calendar polling
-        // activates; until then they are skipped rather than erroring the whole sweep.
+        // Google Calendar is a deliberate, CLOSED seam — intentionally not bound here. The
+        // GoogleCalendarClient is built + unit-tested, but binding it would be dead code today:
+        //   1. there is no Google Meet *join* path for a detected invite to trigger (the scheduled-join
+        //      factory is Teams-only), and
+        //   2. Google's Meet Media API is Developer-Preview + allowlist-gated regardless (every meeting
+        //      participant must be enrolled), so it isn't a shippable target.
+        // To activate: define a Google auth client from config AND wire a Google Meet join. Until then
+        // Google identities are skipped rather than erroring the sweep.
         return null;
     };
 }

@@ -4,11 +4,11 @@
  * prior context. The recap is written through the EXISTING agent-notes system (MJ: AI Agent Notes) and
  * is scoped via the existing polymorphic note scope (PrimaryScopeEntityID + PrimaryScopeRecordID):
  *
- *   - resolved visitor  → scope = (Conversation.ResolvedEntityID, Conversation.ResolvedRecordID)
+ *   - resolved visitor  → scope = (Conversation.LinkedEntityID, Conversation.LinkedRecordID)
  *   - anonymous visitor → scope = (the "MJ: Conversations" entity, this conversation's ID)
  *
  * The anonymous scope lets the return-side injector (RV3) resolve the recap by following the
- * VisitorKey chain (the next conversation's PreviousConversationID points back here). Either way the
+ * VisitorKey chain (the next conversation's LastConversationID points back here). Either way the
  * Memory Manager's existing hardening / consolidation / decay maintains the note from here on, and the
  * existing memory injection (which already filters by the PrimaryScope pair) pulls it in — no parallel
  * store and no new injection path (per AN-BC's "reuse the memory system" guidance).
@@ -113,8 +113,8 @@ interface RecapScope {
  * is filed against the conversation itself so the VisitorKey chain resolves it on the next visit.
  */
 function resolveRecapScope(conversation: MJConversationEntity, provider: IMetadataProvider): RecapScope | undefined {
-  if (conversation.ResolvedEntityID && conversation.ResolvedRecordID) {
-    return { entityId: conversation.ResolvedEntityID, recordId: conversation.ResolvedRecordID };
+  if (conversation.LinkedEntityID && conversation.LinkedRecordID) {
+    return { entityId: conversation.LinkedEntityID, recordId: conversation.LinkedRecordID };
   }
   if (conversation.VisitorKey) {
     const conversationsEntityId = provider.Entities.find((e) => e.Name === CONVERSATIONS_ENTITY)?.ID;

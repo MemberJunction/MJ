@@ -23,6 +23,12 @@ export interface VoiceControllerCallbacks {
     onTranscript: (transcript: WidgetVoiceTranscript) => void;
     /** Called when the session ends (incl. an abuse-ceiling abort), with an optional reason. */
     onEnded: (reason?: string) => void;
+    /**
+     * Reveals (and returns) the demonstration-surface host element for an interactive channel the agent
+     * just engaged, so the channel can render into it inside the widget's shadow DOM. Called the first
+     * time a channel's tool fires. Omitted when the widget exposes no channel surface.
+     */
+    getChannelSurface?: (channelName: string, title: string) => HTMLElement;
 }
 
 /** Starts/stops a client-direct voice session with the pinned agent. */

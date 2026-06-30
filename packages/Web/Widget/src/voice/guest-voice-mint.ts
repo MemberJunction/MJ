@@ -16,10 +16,12 @@ import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import type { ClientRealtimeSessionConfig } from '@memberjunction/ai';
 import type { WidgetSession } from '../types.js';
 import type { VoiceMintFn, VoiceMintResult } from './realtime-voice-controller.js';
+import type { WidgetChannelToolDefinition } from './channels/base-widget-channel.js';
 
 /** The subset of StartRealtimeClientSessionResult the widget needs. */
 interface StartRealtimeSessionGQLResult {
     StartRealtimeClientSession: {
+        AgentSessionId: string;
         Provider: string;
         Model: string;
         EphemeralToken: string;
@@ -29,8 +31,9 @@ interface StartRealtimeSessionGQLResult {
 }
 
 const START_REALTIME_MUTATION = `
-mutation StartWidgetVoiceSession($targetAgentId: String) {
-  StartRealtimeClientSession(targetAgentId: $targetAgentId) {
+mutation StartWidgetVoiceSession($targetAgentId: String, $clientToolsJson: String) {
+  StartRealtimeClientSession(targetAgentId: $targetAgentId, clientToolsJson: $clientToolsJson) {
+    AgentSessionId
     Provider
     Model
     EphemeralToken
@@ -39,11 +42,17 @@ mutation StartWidgetVoiceSession($targetAgentId: String) {
   }
 }`;
 
-/** Builds a VoiceMintFn that mints a realtime session for the widget's pinned agent. */
+/**
+ * Builds a VoiceMintFn that mints a realtime session for the widget's pinned agent. The controller
+ * passes the enabled channels' client-tool definitions, which are declared to the model at session
+ * start (so it can call e.g. `Whiteboard_*`); `RealtimeToolDefinition` is structurally identical to
+ * {@link WidgetChannelToolDefinition} (Name / Description / ParametersSchema), so they serialize as-is.
+ */
 export function createGuestVoiceMint(session: WidgetSession): VoiceMintFn {
-    return async (): Promise<VoiceMintResult> => {
+    return async (clientTools: WidgetChannelToolDefinition[]): Promise<VoiceMintResult> => {
         const data = (await GraphQLDataProvider.Instance.ExecuteGQL(START_REALTIME_MUTATION, {
             targetAgentId: session.pinnedAgentId,
+            clientToolsJson: clientTools.length > 0 ? JSON.stringify(clientTools) : undefined,
         })) as StartRealtimeSessionGQLResult;
         const r = data.StartRealtimeClientSession;
         const sessionConfig: ClientRealtimeSessionConfig = {
@@ -53,7 +62,7 @@ export function createGuestVoiceMint(session: WidgetSession): VoiceMintFn {
             ExpiresAt: r.ExpiresAt,
             SessionConfig: parseSessionConfig(r.SessionConfigJson),
         };
-        return { provider: r.Provider, sessionConfig };
+        return { provider: r.Provider, sessionConfig, agentSessionId: r.AgentSessionId };
     };
 }
 

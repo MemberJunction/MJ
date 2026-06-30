@@ -15,7 +15,7 @@ import { GetReadOnlyDataSource, GetReadWriteDataSource } from './util.js';
 import { v4 as uuidv4 } from 'uuid';
 import e from 'express';
 import type { RequestHandler, Request, Response, NextFunction } from 'express';
-import { DatabaseProviderBase, UserInfo, type MagicLinkScope, type WidgetVisitorContext } from '@memberjunction/core';
+import { DatabaseProviderBase, UserInfo, type MagicLinkScope, type WidgetVisitorContext, type WidgetGuestContext } from '@memberjunction/core';
 import { SQLServerDataProvider, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { Metadata } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
@@ -246,8 +246,13 @@ function buildMagicLinkSessionUser(userRecord: UserInfo, payload: jwt.JwtPayload
   // (server-created conversation) stamps the same returning-visitor anchor + resolved identity.
   const visitorContext = extractWidgetVisitorContext(payload);
 
-  // Named session with no resource scope and no visitor context → no per-request state needed.
-  if (!isAnon && !scope && !visitorContext) {
+  // Widget-instance identity (mj_widget_id): present on every public web-widget guest token. The
+  // privileged agent-dispatch path reads it to resolve the AUTHORITATIVE pinned agent for the guest
+  // (so a guest can never run an arbitrary agent under the elevated server principal).
+  const widgetGuestContext = extractWidgetGuestContext(payload);
+
+  // Named session with no resource scope and no widget/visitor context → no per-request state needed.
+  if (!isAnon && !scope && !visitorContext && !widgetGuestContext) {
     return userRecord;
   }
 
@@ -261,6 +266,9 @@ function buildMagicLinkSessionUser(userRecord: UserInfo, payload: jwt.JwtPayload
   }
   if (visitorContext) {
     sessionUser.WidgetVisitorContext = visitorContext;
+  }
+  if (widgetGuestContext) {
+    sessionUser.WidgetGuestContext = widgetGuestContext;
   }
   if (isAnon) {
     // Mark the session so the CurrentUser field resolver serves these synthesized roles
@@ -283,10 +291,23 @@ function extractWidgetVisitorContext(payload: jwt.JwtPayload): WidgetVisitorCont
   const str = (v: unknown): string | undefined => (typeof v === 'string' && v ? v : undefined);
   return {
     VisitorKey: visitorKey,
-    PreviousConversationID: str(payload['mj_previous_conversation_id']),
-    ResolvedEntityID: str(payload['mj_resolved_entity_id']),
-    ResolvedRecordID: str(payload['mj_resolved_record_id']),
+    LastConversationID: str(payload['mj_last_conversation_id']),
+    LinkedEntityID: str(payload['mj_linked_entity_id']),
+    LinkedRecordID: str(payload['mj_linked_record_id']),
   };
+}
+
+/**
+ * Extracts the widget-instance identity (`mj_widget_id`) from a public web-widget guest token, or
+ * undefined when the token carries none (every non-widget session). Carried so the privileged
+ * agent-dispatch path can resolve the authoritative pinned agent for the guest from the trusted token.
+ */
+function extractWidgetGuestContext(payload: jwt.JwtPayload): WidgetGuestContext | undefined {
+  const widgetId = payload['mj_widget_id'];
+  if (typeof widgetId !== 'string' || !widgetId) {
+    return undefined;
+  }
+  return { WidgetID: widgetId };
 }
 
 const verifyAsync = async (issuer: string, token: string): Promise<jwt.JwtPayload> =>

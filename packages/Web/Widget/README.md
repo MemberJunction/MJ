@@ -33,6 +33,34 @@ import { mountWidget } from '@memberjunction/web-widget';
 await mountWidget({ widgetKey: 'pk_live_xxx', apiUrl: 'https://api.yourco.com', mountTarget: '#support' });
 ```
 
+## Content Security Policy (host sites)
+
+If your site sends a `Content-Security-Policy` header (it should), the widget needs four allowances:
+the script bundle, the API origin (GraphQL over HTTPS **and** the realtime WebSocket for voice), and —
+because the UI renders inside a shadow DOM with inlined token styles — `style-src 'unsafe-inline'`.
+Replace `https://api.yourco.com` with your MJAPI origin and `https://cdn.yourco.com` with wherever you
+host `mj-widget.js`:
+
+```
+Content-Security-Policy:
+  script-src 'self' https://cdn.yourco.com;
+  connect-src 'self' https://api.yourco.com wss://api.yourco.com;
+  style-src 'self' 'unsafe-inline';
+  img-src 'self' data:;
+  frame-ancestors 'self';
+```
+
+Notes:
+- **`connect-src`** must include BOTH `https://` (the GraphQL mint + agent calls) and `wss://` (the
+  realtime voice socket). Voice silently fails to connect if the `wss:` origin is omitted.
+- **`style-src 'unsafe-inline'`** is required because the shadow-DOM component injects its
+  design-token stylesheet inline. The shadow root keeps it isolated from your page's styles; it does
+  **not** widen your page's own CSP exposure to inline `<style>` you didn't author.
+- **`img-src data:`** covers the inline SVG/emoji affordances.
+- Voice also needs the browser mic permission; on a strict `Permissions-Policy`, allow
+  `microphone=(self "https://cdn.yourco.com")` (or your embed origin) or the mic toggle is hidden and
+  the widget falls back to text.
+
 ## Architecture
 
 ```

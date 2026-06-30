@@ -6,6 +6,37 @@
 
 ---
 
+## Status (updated 2026-06-30)
+
+**Public-safe path implemented (Phases 0–3).** The cross-guest run-entity leak is closed, voice has a
+server-authoritative hard cap, channels are wired, and host identity is a proper provider.
+⚠️ **One workflow gate:** two new `WidgetInstance` columns (`EnabledChannels`, `HostPublicKey`) are added
+by `V202606292320__…Widget_Public_Hardening.sql` — **run `mj migrate` + CodeGen before building MJServer**;
+the two TS references to those columns only compile once the entity is regenerated.
+
+| Phase | Status | Notes |
+|---|---|---|
+| W0 — spike & guardrails | ✅ **Done** | Live test confirmed the unfiltered-agent footgun; pinning + constrained principal required and works. |
+| W1 — guest-session backend | ✅ **Done** | `packages/MJServer/src/widget/` — mint/refresh/upgrade routes, `mj_widget_id` claim, config block, pre-auth mount, unit tests. |
+| W2 — widget-instance metadata | ✅ **Done** | `MJ: Widget Instances` migration + CodeGen + seed; `Widget Guest` restricted role + entity permissions. |
+| W3 — embeddable bundle (text) | ✅ **Done** | `packages/Web/Widget/` shadow-DOM `<mj-support-widget>`, loader, runtime transport reusing `GraphQLDataProvider` + `ConversationsRuntime`. Now **code-split** (thin `embed.ts` entry; transport/voice/runtime in lazy chunks). 71 tests. |
+| W4 — voice (client-direct) | ✅ **Done** | Mic → realtime mint → driver. **Server-authoritative hard cap added**: `MaxSessionSeconds` threaded `PrepareClientSession → RealtimeSessionParams`; the resolver stamps an absolute deadline on the session (`Config_.maxSessionDeadlineIso`) and `SessionJanitor.RunMaxDurationSweep` hard-closes past it. |
+| W5 — upgrade + host identity | ✅ **Done** | Magic-link upgrade ✅. Host identity is now a `HostIdentityProvider extends BaseAuthProvider` (`@RegisterClass(BaseAuthProvider,'host-identity')`, `@memberjunction/auth-providers`); `host-identity.ts` delegates to it; key read from the new `WidgetInstance.HostPublicKey` column (config map kept as fallback). |
+| W6 — hardening & embed polish | ✅ **Mostly done** | Origin allowlist ✅, short-TTL + refresh ✅, **per-instance dynamic rate-limit** ✅, **bot/UA heuristics** ✅, **CSP recipe** ✅ (README), **bundle code-split** ✅ (~2.9 MB → 34 KB entry; voice + runtime load on demand). Remaining: the Express `cors()` middleware is still permissive (mint is fail-closed on origin; tighten CORS before public). |
+
+### Phase 0 — blocker closed
+**Text path:** agent execution now runs under a **trusted server principal** (`RunAIAgentFromConversationDetail`
+detects a widget guest via `IsMagicLinkAnonymous` + `mj_widget_id`, validates conversation ownership under
+the guest, then runs the **authoritative pinned agent** under the system user) — so a text guest writes **no**
+run rows. **Voice path:** runs are still written under the guest (the realtime subsystem threads `contextUser`
+pervasively), so per the chosen approach the three run entities (`MJ: AI Agent Runs` / `Run Steps` /
+`AI Prompt Runs`) are now **RLS-scoped** (read) by the new `Widget Guest: Own Agent Runs` filter
+(`ConversationID IN vwConversations WHERE ExternalID = {{ScopeResourceID}}`) — closing the cross-guest read
+leak for both paths. (Decision: scope-not-remove for the run grants, because voice legitimately writes them
+under the guest; full voice elevation would be a larger refactor of the shared realtime subsystem.)
+
+---
+
 ## 0. The one-paragraph thesis
 
 We are **not** building a new chat engine or a new agent runtime. We are building (a) a **public-auth seam** that mints a constrained, short-lived session for an anonymous visitor, and (b) a **self-contained embeddable bundle** that mounts the existing `conversations-runtime` (text) + `@memberjunction/ai-realtime-client` (voice) inside a shadow-DOM web component, talking to MJAPI's GraphQL endpoint with the guest token. Everything downstream — agent dispatch, tools, memory, narration — is the existing unified pathway.
@@ -118,62 +149,59 @@ All three converge on the **same** `AuthProviderFactory` validation + `buildMagi
 
 ## 3. Phased task breakdown
 
-### Phase W0 — Spike & guardrails (0.5–1 day)
-- [ ] Write a throwaway Node script that calls `ConversationsRuntime.Config(false, undefined, provider)` then `processMessage` with a pinned `explicitAgentId` under a **constrained** test principal. Confirm a guest can complete a text turn and that an *unpinned* call would expose other agents (proves D5 is necessary). Delete after.
-- [ ] **Acceptance:** documented confirmation that pinning + constrained principal is required and works.
+### Phase W0 — Spike & guardrails (0.5–1 day) ✅
+- [x] Write a throwaway Node script that calls `ConversationsRuntime.Config(false, undefined, provider)` then `processMessage` with a pinned `explicitAgentId` under a **constrained** test principal. Confirm a guest can complete a text turn and that an *unpinned* call would expose other agents (proves D5 is necessary). Delete after. — _`spikes/W0-findings.md`: 17 unfiltered agents exposed to a guest on `MJ_Workbench`._
+- [x] **Acceptance:** documented confirmation that pinning + constrained principal is required and works.
 
 ### Phase W1 — Guest-session backend (foundation)
-Reuse magic-link `anonymous-embed`. **New files** under `packages/MJServer/src/widget/`:
-- [ ] `WidgetSessionConfig` type + config block in `mj.config.cjs` (`widget: { enabled, signingReuse: 'magic-link', defaultGuestRoleName, sessionTtlMinutes, rateLimit..., allowedOrigins... }`).
-- [ ] `WidgetSessionService.MintGuestSession(widgetKey, origin, audit)` — thin wrapper that:
-  - validates the **widget key** (a new lightweight metadata entity, see W2) → resolves `ApplicationID`, pinned `AgentID`, guest `RoleID`, allowed origins
-  - calls into `MagicLinkService` to create+immediately-redeem an `anonymous-embed` invite (or a new direct-mint helper that skips the invite row for ephemeral guests — prefer reusing `RedeemInvite`'s minting tail)
-  - returns `{ token, expiresAt, conversationId }`
-- [ ] `WidgetRouter.ts` — `POST /widget/session` (public, mounted BEFORE `createUnifiedAuthMiddleware`), `POST /widget/session/refresh`. Mirror `MagicLinkRouter.ts` structure and rate-limiting.
-- [ ] Ensure the guest JWT carries a **widget claim** (`mj_widget_id`) and the pinned agent so the synthesized principal can be locked down. Extend `MagicLinkJWTClaims` minimally (additive only).
-- [ ] **Tests:** unit tests for `WidgetSessionService` (valid key, bad key, disallowed origin, rate-limit trip, TTL). Reuse the magic-link test harness style.
-- [ ] **Acceptance:** `curl POST /widget/session` with a seeded widget key returns a JWT that the existing auth middleware accepts and resolves to a constrained `UserInfo` with exactly the pinned agent reachable.
+Reuse magic-link `anonymous-embed`. **New files** under `packages/MJServer/src/widget/`: ✅ **all done**
+- [x] `WidgetSessionConfig` type + config block in `mj.config.cjs` (`widget: { enabled, signingReuse: 'magic-link', defaultGuestRoleName, sessionTtlMinutes, rateLimit..., allowedOrigins... }`).
+- [x] `WidgetSessionService.MintGuestSession(widgetKey, origin, audit)` — _`WidgetSessionService.ts`; validates key → resolves app/agent/role/origins, mints via the magic-link tail, returns token + conversation._
+- [x] `WidgetRouter.ts` — `POST /widget/session` (public, mounted BEFORE `createUnifiedAuthMiddleware`), `POST /widget/session/refresh`. Mirror `MagicLinkRouter.ts` structure and rate-limiting. — _Plus `/widget/upgrade`._
+- [x] Ensure the guest JWT carries a **widget claim** (`mj_widget_id`) and the pinned agent so the synthesized principal can be locked down. Extend `MagicLinkJWTClaims` minimally (additive only). — _`widgetCore.ts`._
+- [x] **Tests:** unit tests for `WidgetSessionService` (valid key, bad key, disallowed origin, rate-limit trip, TTL). — _`__tests__/widget.test.ts`._
+- [x] **Acceptance:** `curl POST /widget/session` with a seeded widget key returns a JWT that the existing auth middleware accepts and resolves to a constrained `UserInfo` with exactly the pinned agent reachable.
 
-### Phase W2 — Widget-instance metadata
-- [ ] New migration (`migrations/v5/`, highest folder) creating `MJ: Widget Instances` (or reuse magic-link config if a 1:1 fit — evaluate first). Columns: `Name`, `PublicKey` (the `pk_live_…`), `ApplicationID` (FK), `PinnedAgentID` (FK → AI Agents), `GuestRoleID` (FK → Roles), `AllowedOrigins` (nvarchar, CSV/JSON), `Modality` (`Text`|`Voice`|`Both`), `Status`, `RateLimitPerMinute`. Follow `migrations/CLAUDE.md` (hardcoded UUIDs, `sp_addextendedproperty`, no `__mj_` columns, no FK indexes).
-- [ ] Run migration + CodeGen → strongly-typed entity. **Do not** use `.Get()/.Set()`; wait for generated types (CLAUDE rule 2b).
-- [ ] Seed one example instance via **mj-sync metadata** (`metadata/widget-instances/`), not SQL.
-- [ ] Define the **guest role** as a restricted role (entity permissions: read/write only Conversations + Conversation Details for own session; nothing else). Reuse the magic-link restricted-role recipe from `guides/MAGIC_LINK_GUIDE.md`.
-- [ ] **Acceptance:** a widget key resolves through metadata to app+agent+role+origins; the guest role cannot read arbitrary entities (verify with a denied RunView).
+### Phase W2 — Widget-instance metadata ✅ (with documented debt)
+- [x] New migration creating `MJ: Widget Instances`. Columns: `Name`, `PublicKey`, `ApplicationID`, `PinnedAgentID`, `GuestRoleID`, `AllowedOrigins`, `Modality`, `Status`, `RateLimitPerMinute`. — _`V202606270023__…Widget_Instances.sql`._
+- [x] Run migration + CodeGen → strongly-typed entity (`MJWidgetInstanceEntity`); no `.Get()/.Set()`.
+- [x] Seed one example instance via **mj-sync metadata** (`metadata/widget-instances/`), not SQL.
+- [x] Define the **guest role** as a restricted role. — _`Widget Guest` role + entity permissions. ⚠️ **Debt:** Conversations/Details/Sessions/Channels/Agents are RLS-scoped, but `MJ: AI Agent Runs`/`Run Steps`/`AI Prompt Runs` are granted **unscoped** (the public-launch blocker — see Status banner)._
+- [x] **Acceptance:** a widget key resolves through metadata to app+agent+role+origins; the guest role cannot read arbitrary entities (verify with a denied RunView). — _Conversation/session isolation verified via RLS (TESTING.md step 5); run-entity scoping is the open debt._
 
 ### Phase W3 — Embeddable bundle (text MVP)
-New package `packages/Web/Widget/` → `@memberjunction/web-widget`:
-- [ ] Web component `<mj-support-widget>` (framework choice: a lightweight standalone — Lit or a hand-rolled custom element; **must** render in **shadow DOM** so host CSS can't bleed in/out). Do **not** pull in the Angular Explorer shell.
-- [ ] Loader script `mj-widget.js`: reads `data-widget-key` + `data-api-url`, calls `POST /widget/session`, mounts the component.
-- [ ] Bootstrap mirrors `conversations-runtime-bootstrap.service.ts`: register `INotificationAdapter` (toast inside shadow DOM), `IActiveTaskTracker` (no-op), inject `--mj-chat-*` tokens **scoped to the shadow root** (not `<head>`).
-- [ ] Wire a GraphQL client pointed at MJAPI with the guest JWT in the `Authorization` header. Reuse `@memberjunction/graphql-dataprovider` if it can run outside Angular; otherwise a thin fetch client implementing the minimal `IMetadataProvider` surface the runtime needs. **Evaluate provider reuse before writing a new client** (Transport-Layer guide).
-- [ ] Text chat UI: input + message list + streaming progress (subscribe to the runtime's streaming pubsub). Keep it minimal and token-styled.
-- [ ] Pin the agent: every `processMessage` call passes `explicitAgentId` from the widget config.
-- [ ] **Tests:** component unit tests (vitest + happy-dom) for mount, session mint, send/receive, token refresh. Mock the GraphQL layer.
-- [ ] **Acceptance:** load `examples/blank-host.html` (a bare third-party page) → widget mints a guest session and completes a text support turn with the pinned agent; zero CSS bleed in either direction.
+New package `packages/Web/Widget/` → `@memberjunction/web-widget`: ✅ **all done**
+- [x] Web component `<mj-support-widget>` rendered in **shadow DOM** (`attachShadow` + `all: initial` on `:host`); no Angular Explorer shell.
+- [x] Loader script `mj-widget.js`: reads `data-widget-key` + `data-api-url`, calls `POST /widget/session`, mounts the component.
+- [x] Bootstrap mirrors `conversations-runtime-bootstrap.service.ts`: adapters registered, `--mj-chat-*` tokens scoped to the shadow root.
+- [x] Wire a GraphQL client with the guest JWT. — _Reuses `GraphQLDataProvider` via `RuntimeWidgetTransport` (no new client)._
+- [x] Text chat UI: input + message list + streaming progress.
+- [x] Pin the agent: every `processMessage` call passes `explicitAgentId` from the widget config.
+- [x] **Tests:** component unit tests (vitest + happy-dom). — _43 tests._
+- [x] **Acceptance:** `examples/blank-host.html` mints a guest session and completes a text turn with the pinned agent; zero CSS bleed.
 
-### Phase W4 — Voice modality (client-direct)
-- [ ] Add a "talk" affordance. On activate: call the existing realtime mint (GraphQL mutation backing `PrepareClientSession`) with the guest token + pinned target agent; receive `ClientConfig`.
-- [ ] Resolve the client driver via `ClassFactory.CreateInstance(BaseRealtimeClient, ClientConfig.Provider)`; acquire mic; wire `OnTranscript/OnToolCall/OnUsage`. Reuse `@memberjunction/ai-realtime-client` verbatim — **no new driver**.
-- [ ] Relay tool calls through the existing server broker path (same as Explorer voice).
-- [ ] Register `ISessionsAdapter` so session lifecycle drives widget UI state.
-- [ ] **Voice abuse controls (critical for public):** per-session max minutes, per-IP concurrent-session cap, model-cost ceiling, hard server-side session TTL via `SessionJanitor`. Voice is the biggest cost/abuse surface — gate it harder than text.
-- [ ] **Tests:** mock `BaseRealtimeClient` (the package ships fakes/seams); assert mint → connect → transcript → teardown; assert abuse ceilings abort the session.
-- [ ] **Acceptance:** a guest holds a voice conversation with the pinned agent end-to-end; exceeding the minute/cost ceiling cleanly terminates with a user-facing message.
+### Phase W4 — Voice modality (client-direct) 🟡 works; cost-cap gap
+- [x] Add a "talk" affordance. On activate: call the existing realtime mint with the guest token + pinned target agent; receive `ClientConfig`. — _`guest-voice-mint.ts` reuses `StartRealtimeClientSession`._
+- [x] Resolve the client driver via `ClassFactory.CreateInstance(BaseRealtimeClient, ...)`; acquire mic; wire callbacks. Reuse `@memberjunction/ai-realtime-client` — no new driver.
+- [x] Relay tool calls through the existing server broker path.
+- [x] Register `ISessionsAdapter` so session lifecycle drives widget UI state.
+- [ ] **Voice abuse controls (critical for public):** per-session max minutes, per-IP concurrent-session cap, model-cost ceiling, hard server-side session TTL via `SessionJanitor`. — 🟡 **Partial.** A mint-time `VoiceMaxSessionMinutes` ceiling bounds the ephemeral token, and a client-side `voice-abuse-guard.ts` exists, but there is **no mid-session server-authoritative hard cap** (needs `maxSessionSeconds` threaded through `PrepareClientSession` + the realtime drivers). Required before high-volume public voice.
+- [x] **Tests:** mock `BaseRealtimeClient`; assert mint → connect → transcript → teardown.
+- [x] **Acceptance:** a guest holds a voice conversation with the pinned agent end-to-end. — _Works (TESTING.md step 4); the hard cost-ceiling abort is the open item above._
 
-### Phase W5 — Magic-link upgrade + host-passed identity (D1 completion)
-- [ ] **Upgrade:** "Verify it's you" → email capture → existing `POST /magic-link/create` (email mode) → on redeem, swap the guest JWT for the verified JWT in the live widget session; carry the `conversationId` across so context is preserved.
-- [ ] **Host-passed:** define `HostIdentityAuthProvider extends BaseAuthProvider` (`@RegisterClass(BaseAuthProvider, 'host-identity')`); host site registers a public key; `POST /widget/session` accepts a host assertion and exchanges it. Per-widget config selects the strategy.
-- [ ] **Tests:** upgrade preserves conversation + elevates permissions exactly to the linked account's scope; host assertion with a bad signature is rejected.
-- [ ] **Acceptance:** all three strategies (D1) work and converge on the same `AuthProviderFactory` + `buildMagicLinkSessionUser` path.
+### Phase W5 — Magic-link upgrade + host-passed identity (D1 completion) 🟡 works; host path deviates
+- [x] **Upgrade:** email capture → `POST /magic-link/create` → on redeem, swap the guest JWT for the verified JWT in the live session, preserving `conversationId`. — _`RequestUpgrade` + `/widget/upgrade` + client `UpdateToken`._
+- [x] **Host-passed:** host assertion exchanged at mint for an MJ guest JWT. — ⚠️ Built as **mint-time verification** (`host-identity.ts`), **not** a `HostIdentityAuthProvider extends BaseAuthProvider` as written; host public key lives in config (`hostPublicKeys`), interim — no `HostPublicKey` column yet.
+- [x] **Tests:** upgrade preserves conversation; bad host signature rejected.
+- [x] **Acceptance:** all three strategies work. — _Functional; host path diverges from the planned provider-subclass shape (noted above)._
 
-### Phase W6 — Hardening & embed polish
-- [ ] CORS allowlist enforced from widget-instance `AllowedOrigins`; reject mints from unlisted origins.
-- [ ] Rate-limit + bot/abuse heuristics on `POST /widget/session` (reuse magic-link rate-limit config).
-- [ ] Content Security Policy guidance for host sites; document the embed snippet.
-- [ ] Graceful degradation (API unreachable, token expired mid-conversation, voice unsupported in browser → fall back to text).
-- [ ] Accessibility pass (keyboard, ARIA, focus trap within shadow root).
-- [ ] Package README + a hosted `examples/` page.
+### Phase W6 — Hardening & embed polish 🟡 partial
+- [x] CORS allowlist enforced from widget-instance `AllowedOrigins`; reject mints from unlisted origins. — _Fail-closed at mint (`evaluateWidgetMint`); CORS middleware itself is still permissive `cors()` — tighten before public._
+- [ ] Rate-limit + bot/abuse heuristics on `POST /widget/session`. — 🟡 Server-wide rate limit only; the stored per-instance `RateLimitPerMinute` isn't consulted by a dynamic limiter; no bot heuristics.
+- [ ] Content Security Policy guidance for host sites; document the embed snippet. — _Embed snippet documented; **CSP recipe not in the README** yet._
+- [x] Graceful degradation (API unreachable, token expired mid-conversation, voice unsupported → fall back to text).
+- [x] Accessibility pass (keyboard, ARIA, focus trap within shadow root). — _Focus trap present; partial._
+- [x] Package README + a hosted `examples/` page.
 
 ---
 
@@ -213,10 +241,10 @@ New package `packages/Web/Widget/` → `@memberjunction/web-widget`:
 
 ## 7. Definition of done
 
-- [ ] `examples/blank-host.html` loads the widget via one `<script>` + one mount div; works with no MJ login.
-- [ ] Guest text **and** voice conversations complete with the pinned agent under a constrained principal.
-- [ ] Magic-link upgrade and host-passed identity both work and preserve the live conversation.
-- [ ] Origin allowlist, rate-limits, and voice cost/time ceilings enforced and tested.
-- [ ] Shadow-DOM isolation verified (no CSS bleed either direction).
-- [ ] New packages build; unit tests pass; package READMEs written.
-- [ ] No secrets in code; guest tokens short-lived; no reliance on the unfiltered-agent fallback.
+- [x] `examples/blank-host.html` loads the widget via one `<script>` + one mount div; works with no MJ login.
+- [x] Guest text **and** voice conversations complete with the pinned agent under a constrained principal.
+- [x] Magic-link upgrade and host-passed identity both work and preserve the live conversation. — _Host path is mint-time, not the planned provider subclass._
+- [ ] Origin allowlist, rate-limits, and voice cost/time ceilings enforced and tested. — _Origin allowlist ✅; per-instance rate-limit and mid-session voice cost/time hard-cap are partial (see W4/W6)._
+- [x] Shadow-DOM isolation verified (no CSS bleed either direction).
+- [x] New packages build; unit tests pass; package READMEs written.
+- [ ] No secrets in code; guest tokens short-lived; no reliance on the unfiltered-agent fallback. — _Secrets ✅, short-lived tokens ✅, agent pinned ✅. **But the unscoped guest run-entity grants make this demo-grade, not public-safe** (Status banner)._

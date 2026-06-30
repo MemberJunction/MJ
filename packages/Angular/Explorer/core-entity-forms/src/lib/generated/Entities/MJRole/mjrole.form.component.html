@@ -434,25 +434,25 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Widget Instances Section -->
+    <!-- Conversation Widget Instances Section -->
     <mj-collapsible-panel
-        SectionKey="mJWidgetInstances"
-        SectionName="Widget Instances"
-        Icon="fa fa-window-maximize"
+        SectionKey="mJConversationWidgetInstances"
+        SectionName="Conversation Widget Instances"
+        Icon="fa fa-table"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJWidgetInstances')"
+        [BadgeCount]="GetSectionRowCount('mJConversationWidgetInstances')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Widget Instances','GuestRoleID')"
-                [NewRecordValues]="NewRecordValues('MJ: Widget Instances')"
-                [AllowLoad]="IsSectionExpanded('mJWidgetInstances')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Conversation Widget Instances','GuestRoleID')"
+                [NewRecordValues]="NewRecordValues('MJ: Conversation Widget Instances')"
+                [AllowLoad]="IsSectionExpanded('mJConversationWidgetInstances')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJWidgetInstances', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJConversationWidgetInstances', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

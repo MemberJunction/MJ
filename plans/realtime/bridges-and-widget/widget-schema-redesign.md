@@ -32,8 +32,9 @@ for every column decision is `packages/MJCoreEntities/src/generated/entity_subcl
      visitor's conversations). It is **not** redundant with `ExternalID`: `ExternalID` is a fresh
      *per-session* value already used as the per-session RLS scope discriminator, so it cannot also carry
      a durable cross-session anchor.
-   - `PreviousConversationID` — the self-FK conversation chain the anonymous-visitor memory injection
-     relies on (analogous to how `AIAgentSession.LastSessionID` is persisted rather than derived).
+   - `LastConversationID` — the self-FK conversation chain the anonymous-visitor memory injection
+     relies on. Named to mirror the existing `AIAgentSession.LastSessionID` convention (shorter,
+     consistent) rather than the original `PreviousConversationID`.
 
 3. **AIAgentSession** — **add** `LinkedEntityID` + `LinkedRecordID` (+ FK to `Entity` +
    `CK_AIAgentSession_LinkBinding` both-or-neither check), mirroring the polymorphic pair on `Conversation`
@@ -51,8 +52,8 @@ for every column decision is `packages/MJCoreEntities/src/generated/entity_subcl
 - `CREATE TABLE ConversationWidgetInstance` (renamed) with all current columns **plus**
   `EnabledChannels NVARCHAR(MAX) NULL` and `HostPublicKey NVARCHAR(MAX) NULL`; rename all
   `*_WidgetInstance` constraints → `*_ConversationWidgetInstance`.
-- `ALTER TABLE Conversation ADD VisitorKey NVARCHAR(255) NULL, PreviousConversationID UNIQUEIDENTIFIER NULL`
-  (+ `FK_Conversation_PreviousConversation`). **No** `ResolvedEntityID` / `ResolvedRecordID`. The resolved
+- `ALTER TABLE Conversation ADD VisitorKey NVARCHAR(255) NULL, LastConversationID UNIQUEIDENTIFIER NULL`
+  (+ `FK_Conversation_LastConversation`). **No** `ResolvedEntityID` / `ResolvedRecordID`. The resolved
   identity reuses the existing `LinkedEntityID` / `LinkedRecordID` (already present from baseline).
 - `ALTER TABLE AIAgentSession ADD LinkedEntityID UNIQUEIDENTIFIER NULL, LinkedRecordID NVARCHAR(500) NULL`
   (+ `FK_AIAgentSession_LinkedEntity` + `CK_AIAgentSession_LinkBinding`).
@@ -98,7 +99,7 @@ renamed entity):
 - Affected packages build clean; the Web/Widget and MJServer widget/elevation/host-identity/session test
   suites pass.
 - Schema sanity: `ConversationWidgetInstance` table + view exist; `Conversation` has `VisitorKey` +
-  `PreviousConversationID` and **no** `ResolvedEntityID/RecordID`; `AIAgentSession` has
+  `LastConversationID` and **no** `ResolvedEntityID/RecordID`; `AIAgentSession` has
   `LinkedEntityID/LinkedRecordID`; the `Widget Guest: Own Agent Runs` RLS filter is present.
 - Generated-code diff is scoped to the widget / session / conversation changes only (no unrelated churn).
 - Exactly one migration file for this work; no stray CodeGen-run file left checked in.

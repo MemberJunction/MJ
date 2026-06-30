@@ -59,9 +59,9 @@ describe('WidgetSessionClient.Mint (returning-visitor, RV1/RV2/RV4)', () => {
             ...goodBody,
             rememberReturningVisitors: true,
             visitorKey: 'vk_abc123',
-            previousConversationId: 'conv-prior',
-            resolvedEntityId: 'ent-users',
-            resolvedRecordId: 'rec-42',
+            lastConversationId: 'conv-prior',
+            linkedEntityId: 'ent-users',
+            linkedRecordId: 'rec-42',
         });
         const client = new WidgetSessionClient('https://api.test', 'pk_test_1', fn);
         const session = await client.Mint('vk_abc123');
@@ -69,9 +69,9 @@ describe('WidgetSessionClient.Mint (returning-visitor, RV1/RV2/RV4)', () => {
         expect(JSON.parse(calls[0].init?.body as string)).toEqual({ widgetKey: 'pk_test_1', visitorKey: 'vk_abc123' });
         expect(session.rememberReturningVisitors).toBe(true);
         expect(session.visitorKey).toBe('vk_abc123');
-        expect(session.previousConversationId).toBe('conv-prior');
-        expect(session.resolvedEntityId).toBe('ent-users');
-        expect(session.resolvedRecordId).toBe('rec-42');
+        expect(session.lastConversationId).toBe('conv-prior');
+        expect(session.linkedEntityId).toBe('ent-users');
+        expect(session.linkedRecordId).toBe('rec-42');
     });
 
     it('defaults rememberReturningVisitors to false when the server omits it', async () => {

@@ -1558,8 +1558,8 @@ export class AgentRunner {
      * Returning-visitor memory scope (RV3, text/conversation path). Derives the agent's primary memory
      * scope from a conversation's returning-visitor fields when the caller supplied none:
      *
-     *   - resolved visitor  → `(ResolvedEntityID's entity name, ResolvedRecordID)`
-     *   - linked anonymous  → `("MJ: Conversations", PreviousConversationID)`
+     *   - linked visitor    → `(LinkedEntityID's entity name, LinkedRecordID)`
+     *   - linked anonymous  → `("MJ: Conversations", LastConversationID)`
      *   - ordinary chat     → leaves scope unset (no behavior change)
      *
      * Mutates `params.PrimaryScopeEntityName` / `params.PrimaryScopeRecordID`, which `BaseAgent` already
@@ -1583,12 +1583,12 @@ export class AgentRunner {
             }
             let entityName: string | undefined;
             let recordId: string | undefined;
-            if (convo.ResolvedEntityID && convo.ResolvedRecordID) {
-                entityName = md.Entities.find((e) => UUIDsEqual(e.ID, convo.ResolvedEntityID!))?.Name;
-                recordId = convo.ResolvedRecordID;
-            } else if (convo.PreviousConversationID) {
+            if (convo.LinkedEntityID && convo.LinkedRecordID) {
+                entityName = md.Entities.find((e) => UUIDsEqual(e.ID, convo.LinkedEntityID!))?.Name;
+                recordId = convo.LinkedRecordID;
+            } else if (convo.LastConversationID) {
                 entityName = 'MJ: Conversations';
-                recordId = convo.PreviousConversationID;
+                recordId = convo.LastConversationID;
             }
             if (entityName && recordId) {
                 params.PrimaryScopeEntityName = entityName;

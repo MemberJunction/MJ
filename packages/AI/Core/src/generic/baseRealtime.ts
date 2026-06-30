@@ -549,6 +549,17 @@ export interface RealtimeSessionParams {
      * so it stays serializable and inspectable.
      */
     Config?: JSONObject;
+
+    /**
+     * Optional server-authoritative hard ceiling on the session's wall-clock duration, in seconds.
+     * Set for abuse-sensitive deployments (e.g. a public web-widget guest's `VoiceMaxSessionMinutes`).
+     * Drivers that support a provider-side session-duration / token-expiry bound SHOULD apply
+     * `min(providerDefault, MaxSessionSeconds)` so the provider drops the connection at the cap;
+     * drivers that don't simply ignore it. Independently, the server stamps the absolute deadline on
+     * the session and the session janitor hard-closes (finalizing runs) at the cap regardless of
+     * driver support, so this is enforced server-side even when the provider can't be told.
+     */
+    MaxSessionSeconds?: number;
 }
 
 /**

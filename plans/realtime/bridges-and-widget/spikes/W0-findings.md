@@ -1,6 +1,6 @@
 # W0 — Guest guardrails: findings (D5 confirmation)
 
-**Status:** DONE. Spike script: [`w0-guest-guardrails-spike.ts`](./w0-guest-guardrails-spike.ts) (throwaway — safe to delete after review).
+**Status:** DONE.
 **Date:** 2026-06-24
 **Acceptance criterion:** _"documented confirmation that pinning + constrained principal is required and works."_ ✅ met.
 

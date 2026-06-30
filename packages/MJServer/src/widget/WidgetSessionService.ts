@@ -16,18 +16,18 @@
 
 import { Metadata, RunView, UserInfo, LogError, LogStatus } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
-import type { MJWidgetInstanceEntity, MJConversationEntity } from '@memberjunction/core-entities';
+import type { MJConversationWidgetInstanceEntity, MJConversationEntity } from '@memberjunction/core-entities';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { MagicLinkKeyManager } from '../auth/magicLink/MagicLinkKeys.js';
 import { generateSessionId } from '../auth/magicLink/magicLinkCore.js';
 import { MagicLinkService } from '../auth/magicLink/MagicLinkService.js';
 import { configInfo, type WidgetConfig } from '../config.js';
-import { buildWidgetGuestClaims, evaluateWidgetMint, type WidgetMintErrorCode } from './widgetCore.js';
+import { buildWidgetGuestClaims, evaluateWidgetMint, parseEnabledChannels, type WidgetMintErrorCode } from './widgetCore.js';
 import { verifyHostAssertion, type HostAssertedIdentity } from './host-identity.js';
 import { writeReturningVisitorRecap } from '../agentSessions/ReturningVisitorRecap.js';
 import { resolveIdentityByEmail, mergeVisitorIdentity, forgetVisitor, type ResolvedVisitorIdentity } from './visitorIdentity.js';
 
-const WIDGET_ENTITY = 'MJ: Widget Instances';
+const WIDGET_ENTITY = 'MJ: Conversation Widget Instances';
 const CONVERSATIONS_ENTITY = 'MJ: Conversations';
 
 /** Shape of the durable visitor anchor key (opaque base64url, same alphabet as generateSessionId). */
@@ -38,7 +38,7 @@ interface ReturningVisitorResolution {
   /** The durable VisitorKey to persist as a cookie (validated-presented or freshly minted). */
   visitorKey: string;
   /** The most-recent prior conversation for this anchor in the widget's app, when this is a returning visit. */
-  previousConversationId?: string;
+  lastConversationId?: string;
 }
 
 /** Per-request forensic context captured for audit (sourced from the HTTP request). */
@@ -103,15 +103,20 @@ export interface MintGuestSessionResult {
    */
   visitorKey?: string;
   /** The visitor's prior conversation for this anchor (RV2 chain); set only on a returning visit. */
-  previousConversationId?: string;
+  lastConversationId?: string;
   /**
    * The resolved polymorphic identity entity id (RV4), set only when a host-identity widget asserted a
-   * resolvable identity at mint. The client stamps it (with {@link MintGuestSessionResult.resolvedRecordId})
+   * resolvable identity at mint. The client stamps it (with {@link MintGuestSessionResult.linkedRecordId})
    * onto the new conversation so memory injection (RV3) keys off the resolved record, not the cookie.
    */
-  resolvedEntityId?: string;
-  /** The resolved polymorphic identity record id (RV4); paired with {@link MintGuestSessionResult.resolvedEntityId}. */
-  resolvedRecordId?: string;
+  linkedEntityId?: string;
+  /** The resolved polymorphic identity record id (RV4); paired with {@link MintGuestSessionResult.linkedEntityId}. */
+  linkedRecordId?: string;
+  /**
+   * Interactive channels (by name, e.g. `["Whiteboard"]`) this widget may attach when voice is active
+   * (Phase 2). Mirrors the widget instance's `EnabledChannels`; empty (the default) = no channels.
+   */
+  enabledChannels?: string[];
   error?: string;
   errorCode?: WidgetMintErrorCode;
 }
@@ -156,7 +161,7 @@ export interface ForgetVisitorInput {
  */
 interface VisitorPrivacyGateResult {
   ok: boolean;
-  widget?: MJWidgetInstanceEntity;
+  widget?: MJConversationWidgetInstanceEntity;
   contextUser?: UserInfo;
   errorCode?: WidgetMintErrorCode;
   error?: string;
@@ -278,6 +283,43 @@ export class WidgetSessionService {
     return this.MintGuestSession(input);
   }
 
+  /** Short-TTL cache of resolved per-instance rate limits, so the limiter doesn't hit the DB per request. */
+  private readonly rateLimitCache = new Map<string, { limit: number; expiresAtMs: number }>();
+  private static readonly RATE_LIMIT_CACHE_TTL_MS = 60_000;
+
+  /**
+   * Resolves the per-instance `RateLimitPerMinute` for a widget key (W6 hardening), falling back to the
+   * deployment-wide `defaultRateLimitPerMinute` for an unknown/invalid key (so an enumeration probe is
+   * still bounded by the coarse default). Cached for a short TTL so the dynamic limiter — which runs on
+   * EVERY mint request — does not issue a DB read per request. Never throws.
+   */
+  public async ResolvePerInstanceRateLimit(widgetKey: string): Promise<number> {
+    const key = (widgetKey ?? '').trim();
+    const fallback = this.config.defaultRateLimitPerMinute;
+    if (!key) {
+      return fallback;
+    }
+    const cached = this.rateLimitCache.get(key);
+    const now = Date.now();
+    if (cached && cached.expiresAtMs > now) {
+      return cached.limit;
+    }
+    let limit = fallback;
+    try {
+      const contextUser = this.resolveLookupUser();
+      if (contextUser) {
+        const widget = await this.loadWidgetByKey(key, contextUser);
+        if (widget && widget.RateLimitPerMinute > 0) {
+          limit = widget.RateLimitPerMinute;
+        }
+      }
+    } catch (e) {
+      LogError(e);
+    }
+    this.rateLimitCache.set(key, { limit, expiresAtMs: now + WidgetSessionService.RATE_LIMIT_CACHE_TTL_MS });
+    return limit;
+  }
+
   /**
    * W5 magic-link upgrade — "Verify it's you". For a widget whose AuthStrategy is `MagicLinkUpgrade`,
    * a guest supplies their email and we issue a single-use **email-mode** magic-link invite scoped to
@@ -335,8 +377,10 @@ export class WidgetSessionService {
    * registered public key (config interim store, keyed by widget PublicKey). Fails closed
    * when the key is absent or the assertion is missing/invalid.
    */
-  private verifyHost(widget: MJWidgetInstanceEntity, assertion: string | undefined): HostAssertedIdentity | null {
-    const hostKey = this.config.hostPublicKeys?.[widget.PublicKey];
+  private verifyHost(widget: MJConversationWidgetInstanceEntity, assertion: string | undefined): HostAssertedIdentity | null {
+    // Prefer the per-instance HostPublicKey column (Phase 3 — no config-resident keys); fall back to the
+    // interim config map (keyed by PublicKey) for deployments that haven't migrated their key yet.
+    const hostKey = widget.HostPublicKey ?? this.config.hostPublicKeys?.[widget.PublicKey];
     const result = verifyHostAssertion(assertion, hostKey, widget.PublicKey);
     if (result.ok && result.identity) {
       return result.identity;
@@ -347,7 +391,7 @@ export class WidgetSessionService {
 
   /** Builds + signs the guest JWT for an eligible widget instance. */
   private mintToken(
-    widget: MJWidgetInstanceEntity,
+    widget: MJConversationWidgetInstanceEntity,
     guestRoleName: string,
     hostIdentity?: HostAssertedIdentity,
     returningVisitor?: ReturningVisitorResolution,
@@ -374,9 +418,9 @@ export class WidgetSessionService {
       returningVisitor: returningVisitor
         ? {
             visitorKey: returningVisitor.visitorKey,
-            previousConversationId: returningVisitor.previousConversationId,
-            resolvedEntityId: resolvedIdentity?.entityId,
-            resolvedRecordId: resolvedIdentity?.recordId,
+            lastConversationId: returningVisitor.lastConversationId,
+            linkedEntityId: resolvedIdentity?.entityId,
+            linkedRecordId: resolvedIdentity?.recordId,
           }
         : undefined,
     });
@@ -390,12 +434,15 @@ export class WidgetSessionService {
       pinnedAgentId: widget.PinnedAgentID,
       modality: widget.Modality,
       sessionId,
+      // Phase 2: which interactive channels this widget may attach during a voice session. Read from the
+      // per-instance EnabledChannels column (added by the Widget_Public_Hardening migration + CodeGen).
+      enabledChannels: parseEnabledChannels(widget.EnabledChannels),
       voiceMaxSessionMinutes: widget.VoiceMaxSessionMinutes ?? undefined,
       rememberReturningVisitors: !!returningVisitor,
       visitorKey: returningVisitor?.visitorKey,
-      previousConversationId: returningVisitor?.previousConversationId,
-      resolvedEntityId: resolvedIdentity?.entityId,
-      resolvedRecordId: resolvedIdentity?.recordId,
+      lastConversationId: returningVisitor?.lastConversationId,
+      linkedEntityId: resolvedIdentity?.entityId,
+      linkedRecordId: resolvedIdentity?.recordId,
     };
   }
 
@@ -406,7 +453,7 @@ export class WidgetSessionService {
    * when not applicable or no record matched. Best-effort — never blocks the mint.
    */
   private async resolveHostIdentityIfApplicable(
-    widget: MJWidgetInstanceEntity,
+    widget: MJConversationWidgetInstanceEntity,
     hostIdentity: HostAssertedIdentity | undefined,
     returningVisitor: ReturningVisitorResolution | undefined,
     contextUser: UserInfo,
@@ -526,7 +573,7 @@ export class WidgetSessionService {
    * a lookup failure degrades to "no prior conversation" rather than blocking the session.
    */
   private async resolveReturningVisitor(
-    widget: MJWidgetInstanceEntity,
+    widget: MJConversationWidgetInstanceEntity,
     presentedKey: string | undefined,
     contextUser: UserInfo,
   ): Promise<ReturningVisitorResolution | undefined> {
@@ -536,26 +583,26 @@ export class WidgetSessionService {
     const presented = (presentedKey ?? '').trim();
     const isReturning = VISITOR_KEY_PATTERN.test(presented);
     const visitorKey = isReturning ? presented : generateSessionId();
-    const previousConversationId = isReturning
+    const lastConversationId = isReturning
       ? await this.findPreviousConversationByVisitorKey(visitorKey, widget.ApplicationID, contextUser)
       : undefined;
-    return { visitorKey, previousConversationId };
+    return { visitorKey, lastConversationId };
   }
 
   /**
    * Recaps the visitor's prior conversation when they return (RV2, text path). No-op unless this is a
-   * returning visit (a resolved `previousConversationId`). Delegates to the shared, idempotent,
+   * returning visit (a resolved `lastConversationId`). Delegates to the shared, idempotent,
    * best-effort {@link writeReturningVisitorRecap}, attributing the recap to the widget's pinned agent
    * and stamping the widget's `VisitorMemoryRetentionDays` as the note's expiry. Awaited so the recap
    * note exists before the new session's memory injection (RV3) runs; the recap's own idempotency
    * bounds the LLM cost to the first return after each prior conversation.
    */
   private async recapPriorConversationIfNeeded(
-    widget: MJWidgetInstanceEntity,
+    widget: MJConversationWidgetInstanceEntity,
     returningVisitor: ReturningVisitorResolution | undefined,
     contextUser: UserInfo,
   ): Promise<void> {
-    const priorConversationId = returningVisitor?.previousConversationId;
+    const priorConversationId = returningVisitor?.lastConversationId;
     if (!priorConversationId) {
       return;
     }
@@ -601,13 +648,13 @@ export class WidgetSessionService {
   }
 
   /** Loads a single widget instance by its public key (read-only, simple result). */
-  private async loadWidgetByKey(widgetKey: string, contextUser: UserInfo): Promise<MJWidgetInstanceEntity | null> {
+  private async loadWidgetByKey(widgetKey: string, contextUser: UserInfo): Promise<MJConversationWidgetInstanceEntity | null> {
     const key = (widgetKey ?? '').trim();
     if (!key) {
       return null;
     }
     const rv = new RunView();
-    const result = await rv.RunView<MJWidgetInstanceEntity>(
+    const result = await rv.RunView<MJConversationWidgetInstanceEntity>(
       {
         EntityName: WIDGET_ENTITY,
         ExtraFilter: `PublicKey = '${key.replace(/'/g, "''")}'`,
@@ -653,7 +700,7 @@ export class WidgetSessionService {
    * (A dedicated `MJ: Widget Session` audit entity is a follow-on; for now this is a
    * structured log line carrying the same forensics as the magic-link redemption row.)
    */
-  private audited(result: MintGuestSessionResult, input: MintGuestSessionInput, widget: MJWidgetInstanceEntity | null): MintGuestSessionResult {
+  private audited(result: MintGuestSessionResult, input: MintGuestSessionInput, widget: MJConversationWidgetInstanceEntity | null): MintGuestSessionResult {
     try {
       LogStatus(
         `[Widget][audit] mint outcome=${result.success ? 'success' : result.errorCode} ` +

@@ -8,15 +8,11 @@
  * @module @memberjunction/web-widget
  */
 
-import { ConversationsRuntime } from '@memberjunction/conversations-runtime';
 import type { WidgetMountOptions, WidgetSession } from './types.js';
 import { WidgetSessionClient } from './session/widget-session-client.js';
 import { readVisitorKey, writeVisitorKey, clearVisitorKey } from './session/visitor-key-cookie.js';
 import type { IWidgetTransport } from './transport/widget-transport.js';
-import { RuntimeWidgetTransport } from './transport/runtime-widget-transport.js';
 import type { IVoiceController } from './voice/voice-controller.js';
-import { RealtimeVoiceController } from './voice/realtime-voice-controller.js';
-import { createGuestVoiceMint } from './voice/guest-voice-mint.js';
 import { DEFAULT_VOICE_LIMITS, type VoiceAbuseLimits } from './voice/voice-abuse-guard.js';
 import { SupportWidgetElement, defineSupportWidgetElement, WIDGET_TAG_NAME } from './ui/support-widget-element.js';
 
@@ -24,10 +20,10 @@ import { SupportWidgetElement, defineSupportWidgetElement, WIDGET_TAG_NAME } fro
 export interface WidgetMountDeps {
     /** Builds the session client (defaults to the real fetch-based one). */
     sessionClientFactory?: (apiUrl: string, widgetKey: string) => WidgetSessionClient;
-    /** Builds the transport (defaults to RuntimeWidgetTransport; tests inject a mock). */
-    transportFactory?: (apiUrl: string) => IWidgetTransport;
-    /** Builds the voice controller for voice-enabled instances (defaults to RealtimeVoiceController). */
-    voiceControllerFactory?: (session: WidgetSession) => IVoiceController;
+    /** Builds the transport (defaults to RuntimeWidgetTransport; tests inject a mock). May be async (the default lazy-loads). */
+    transportFactory?: (apiUrl: string) => IWidgetTransport | Promise<IWidgetTransport>;
+    /** Builds the voice controller for voice-enabled instances (defaults to RealtimeVoiceController). May be async (the default lazy-loads). */
+    voiceControllerFactory?: (session: WidgetSession) => IVoiceController | Promise<IVoiceController>;
     /** Schedules refresh (defaults to setTimeout); tests can stub. */
     scheduler?: (cb: () => void, delayMs: number) => void;
 }
@@ -49,7 +45,7 @@ export async function mountWidget(options: WidgetMountOptions, deps: WidgetMount
         writeVisitorKey(options.widgetKey, session.visitorKey);
     }
 
-    const transport = (deps.transportFactory ?? defaultTransport)(options.apiUrl);
+    const transport = await (deps.transportFactory ?? defaultTransport)(options.apiUrl);
     await transport.Initialize(session);
 
     const element = document.createElement(WIDGET_TAG_NAME) as SupportWidgetElement;
@@ -58,7 +54,7 @@ export async function mountWidget(options: WidgetMountOptions, deps: WidgetMount
     element.SetTransport(transport);
 
     if (session.modality === 'Voice' || session.modality === 'Both') {
-        element.SetVoiceController((deps.voiceControllerFactory ?? defaultVoiceController)(session));
+        element.SetVoiceController(await (deps.voiceControllerFactory ?? defaultVoiceController)(session));
     }
 
     // RV5 "forget me": only wired when the widget remembers returning visitors and a durable key exists.
@@ -102,13 +98,36 @@ function defaultSessionClient(apiUrl: string, widgetKey: string): WidgetSessionC
     return new WidgetSessionClient(apiUrl, widgetKey);
 }
 
-function defaultTransport(apiUrl: string): IWidgetTransport {
+/**
+ * Default transport. DYNAMIC import (CLAUDE rule 8, category 3 — bundle-size deferral): the runtime
+ * transport pulls in `@memberjunction/graphql-dataprovider` + `@memberjunction/conversations-runtime`
+ * (the heaviest dependency in the bundle). Loading it on demand keeps it OUT of the embed entry chunk
+ * so the launcher button paints before the runtime is fetched. Declared in `dependencies`.
+ */
+async function defaultTransport(apiUrl: string): Promise<IWidgetTransport> {
+    const { RuntimeWidgetTransport } = await import('./transport/runtime-widget-transport.js');
     return new RuntimeWidgetTransport(apiUrl);
 }
 
-/** Default voice controller: reuses the realtime client + the guest realtime mint. */
-function defaultVoiceController(session: WidgetSession): IVoiceController {
-    return new RealtimeVoiceController(createGuestVoiceMint(session), voiceLimitsForSession(session));
+/**
+ * Default voice controller. DYNAMIC import (CLAUDE rule 8, category 3): the realtime controller pulls
+ * in `@memberjunction/ai-realtime-client` + provider drivers, needed ONLY for Voice/Both widgets — so
+ * a text-only widget never pays for the voice chunk. Declared in `dependencies`.
+ */
+async function defaultVoiceController(session: WidgetSession): Promise<IVoiceController> {
+    const [{ RealtimeVoiceController }, { createGuestVoiceMint }, { createGuestToolRelay }] = await Promise.all([
+        import('./voice/realtime-voice-controller.js'),
+        import('./voice/guest-voice-mint.js'),
+        import('./voice/guest-tool-relay.js'),
+    ]);
+    return new RealtimeVoiceController(
+        createGuestVoiceMint(session),
+        voiceLimitsForSession(session),
+        // Phase 2: the interactive channels this widget may attach (Whiteboard, …) + the live relay for
+        // non-channel tool calls. Empty enabledChannels (the default) leaves voice behavior unchanged.
+        session.enabledChannels,
+        createGuestToolRelay(),
+    );
 }
 
 /**
@@ -139,14 +158,21 @@ function resolveMountTarget(target: WidgetMountOptions['mountTarget']): HTMLElem
     return document.body;
 }
 
-/** Routes runtime warnings/errors into the widget transcript as system lines. */
+/**
+ * Routes runtime warnings/errors into the widget transcript as system lines. DYNAMIC import
+ * (CLAUDE rule 8, category 3): `ConversationsRuntime` is part of the heavy runtime chunk; importing
+ * it here (rather than statically at module top) keeps it out of the embed entry chunk. Fire-and-forget
+ * — adapter registration is best-effort and must not block the mount. Declared in `dependencies`.
+ */
 function registerNotificationAdapter(element: SupportWidgetElement): void {
-    ConversationsRuntime.Instance.UseNotificationAdapter({
-        Notify: (level, message) => {
-            if (level === 'error' || level === 'warning') {
-                element.ShowSystemMessage(message);
-            }
-        },
+    void import('@memberjunction/conversations-runtime').then(({ ConversationsRuntime }) => {
+        ConversationsRuntime.Instance.UseNotificationAdapter({
+            Notify: (level, message) => {
+                if (level === 'error' || level === 'warning') {
+                    element.ShowSystemMessage(message);
+                }
+            },
+        });
     });
 }
 

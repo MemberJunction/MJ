@@ -17,6 +17,7 @@ import { configInfo, type WidgetConfig } from '../config.js';
 import { MagicLinkKeyManager } from '../auth/magicLink/MagicLinkKeys.js';
 import { registerMagicLinkAuthProvider } from '../auth/magicLink/MagicLinkRouter.js';
 import { WidgetSessionService, type MintGuestSessionResult } from './WidgetSessionService.js';
+import { looksLikeBot } from './widgetCore.js';
 
 /** The mount path for the widget public router (`/widget`). */
 export const WIDGET_MOUNT_PATH = '/widget';
@@ -55,47 +56,56 @@ export function createWidgetHandler(publicUrl: string, config: WidgetConfig): { 
 
   const service = new WidgetSessionService(publicUrl, config);
 
-  // Public mint surface: a DB lookup + token mint, keyed by IP. The per-instance
-  // RateLimitPerMinute is stored on the widget and enforced in hardening (W6); this
-  // is the coarse server-wide guard against enumeration/exhaustion.
+  // Per-instance DYNAMIC mint limiter (W6 hardening): keyed by (widgetKey + IP) so each widget
+  // deployment gets its own bucket and one abusive IP can't exhaust a shared instance's budget for
+  // everyone. The per-request `limit` is the widget instance's stored `RateLimitPerMinute` (cached,
+  // resolved from the parsed body), falling back to the deployment-wide default for an unknown key.
+  // `json()` runs FIRST so the key generator + limit can read `req.body.widgetKey`.
   const mintLimiter = rateLimit({
     windowMs: config.rateLimitWindowMs,
-    limit: config.defaultRateLimitPerMinute,
     standardHeaders: 'draft-7',
     legacyHeaders: false,
+    keyGenerator: (req: Request) => `${readWidgetKey(req)}:${req.ip ?? 'noip'}`,
+    limit: async (req: Request) => service.ResolvePerInstanceRateLimit(readWidgetKey(req)),
     message: { success: false, errorCode: 'rate_limited', error: 'Too many widget session requests. Try again later.' },
   });
 
   const publicRouter = Router();
 
-  publicRouter.post('/session', mintLimiter, json(), async (req: Request, res: Response) => {
+  publicRouter.post('/session', json(), mintLimiter, async (req: Request, res: Response) => {
     await handleMint(service, req, res, false);
   });
 
-  publicRouter.post('/session/refresh', mintLimiter, json(), async (req: Request, res: Response) => {
+  publicRouter.post('/session/refresh', json(), mintLimiter, async (req: Request, res: Response) => {
     await handleMint(service, req, res, true);
   });
 
   // W5 magic-link upgrade ("Verify it's you"): emails a verification link scoped to the widget's app.
-  // Same rate limiter as mint — it issues an email invite, a comparable cost/abuse surface.
-  publicRouter.post('/upgrade', mintLimiter, json(), async (req: Request, res: Response) => {
+  // Same dynamic limiter as mint — it issues an email invite, a comparable cost/abuse surface.
+  publicRouter.post('/upgrade', json(), mintLimiter, async (req: Request, res: Response) => {
     await handleUpgrade(service, req, res);
   });
 
   // RV5 "forget me": archive the visitor's memory + clear the VisitorKey linkage. Public — the visitor
-  // proves possession of the durable key (not an identity). Same coarse limiter as mint.
-  publicRouter.post('/forget', mintLimiter, json(), async (req: Request, res: Response) => {
+  // proves possession of the durable key (not an identity). Same dynamic limiter as mint.
+  publicRouter.post('/forget', json(), mintLimiter, async (req: Request, res: Response) => {
     await handleForget(service, req, res);
   });
 
   // RV4 resolve-identity: promote the visitor's anonymous trail to the verified record. AUTHENTICATED —
   // it reads the verified principal's email from req.userPayload, so it mounts after the auth middleware.
   const authenticatedRouter = Router();
-  authenticatedRouter.post('/resolve-identity', mintLimiter, json(), async (req: Request, res: Response) => {
+  authenticatedRouter.post('/resolve-identity', json(), mintLimiter, async (req: Request, res: Response) => {
     await handleResolveIdentity(service, req, res);
   });
 
   return { publicRouter, authenticatedRouter };
+}
+
+/** Reads the `widgetKey` from a parsed JSON body, or '' when absent (used to key the dynamic limiter). */
+function readWidgetKey(req: Request): string {
+  const body = (req.body ?? {}) as { widgetKey?: string };
+  return typeof body.widgetKey === 'string' ? body.widgetKey.trim() : '';
 }
 
 /** Handles "forget me" (RV5) — parses the body, calls the service, maps the status. */
@@ -158,6 +168,13 @@ async function handleMint(service: WidgetSessionService, req: Request, res: Resp
   const widgetKey = typeof body.widgetKey === 'string' ? body.widgetKey : '';
   if (!widgetKey) {
     res.status(400).json({ success: false, errorCode: 'not_found', error: 'widgetKey is required.' });
+    return;
+  }
+
+  // W6 hardening: coarse bot/automation rejection before any DB lookup or token mint. Returns the same
+  // 403 as a policy rejection so a probe can't distinguish "bot-blocked" from "bad key/origin".
+  if (looksLikeBot(req.get('user-agent'))) {
+    res.status(403).json({ success: false, errorCode: 'origin_not_allowed', error: 'Widget mint rejected.' });
     return;
   }
 

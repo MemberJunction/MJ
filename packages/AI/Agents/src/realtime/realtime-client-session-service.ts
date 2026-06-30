@@ -144,6 +144,14 @@ export interface PrepareClientSessionInput {
      * addressing GATE is the bridge's `RegexAddressedMatcher`. Ignored unless {@link DisableAutoResponse}.
      */
     SelfNames?: string[];
+    /**
+     * Optional server-authoritative hard ceiling on the session's wall-clock duration, in seconds.
+     * Threaded into {@link RealtimeSessionParams.MaxSessionSeconds} so a driver can bound the
+     * provider session/token, and surfaced so the transport layer (the MJServer resolver) can stamp
+     * the absolute deadline on the session for the janitor to enforce. Set for abuse-sensitive
+     * deployments (a public web-widget guest's `VoiceMaxSessionMinutes`); omitted otherwise.
+     */
+    MaxSessionSeconds?: number;
 }
 
 /**
@@ -1570,7 +1578,11 @@ export class RealtimeClientSessionService {
             SystemPrompt: systemPrompt,
             Tools: tools,
             InitialContext: memoryContext || undefined,
-            Config: this.buildSessionConfigBag(input, effectiveConfig, driverClass)
+            Config: this.buildSessionConfigBag(input, effectiveConfig, driverClass),
+            // Server-authoritative duration ceiling (public web-widget voice cap). Drivers that can
+            // bound the provider session/token apply min(default, this); the janitor enforces it
+            // regardless of driver support via the session deadline stamped by the transport layer.
+            MaxSessionSeconds: input.MaxSessionSeconds,
         };
     }
 
@@ -1855,8 +1867,8 @@ export class RealtimeClientSessionService {
      * Resolves the primary-scope pair a returning visitor's memory is filed under, mirroring the
      * recap side ({@link writeReturningVisitorRecap}'s `resolveRecapScope`):
      *
-     *   - resolved visitor  → `(Conversation.ResolvedEntityID, Conversation.ResolvedRecordID)`
-     *   - linked anonymous  → `(the "MJ: Conversations" entity, Conversation.PreviousConversationID)`
+     *   - linked visitor    → `(Conversation.LinkedEntityID, Conversation.LinkedRecordID)`
+     *   - linked anonymous  → `(the "MJ: Conversations" entity, Conversation.LastConversationID)`
      *   - brand-new visitor → `undefined` (no scoped memory)
      *
      * Best-effort: any failure (no conversation id, load failure, entity not found) resolves to
@@ -1880,13 +1892,13 @@ export class RealtimeClientSessionService {
             if (!conversation || !(await conversation.Load(conversationId))) {
                 return undefined;
             }
-            if (conversation.ResolvedEntityID && conversation.ResolvedRecordID) {
-                return { entityId: conversation.ResolvedEntityID, recordId: conversation.ResolvedRecordID };
+            if (conversation.LinkedEntityID && conversation.LinkedRecordID) {
+                return { entityId: conversation.LinkedEntityID, recordId: conversation.LinkedRecordID };
             }
-            if (conversation.PreviousConversationID) {
+            if (conversation.LastConversationID) {
                 const conversationsEntityId = provider.EntityByName('MJ: Conversations')?.ID;
                 if (conversationsEntityId) {
-                    return { entityId: conversationsEntityId, recordId: conversation.PreviousConversationID };
+                    return { entityId: conversationsEntityId, recordId: conversation.LastConversationID };
                 }
             }
             return undefined;

@@ -29,7 +29,7 @@ export class MJApplicationFormComponent extends BaseFormComponent {
             { sectionKey: 'mJConversations', sectionName: 'Conversations', isExpanded: false },
             { sectionKey: 'mJMagicLinkInviteApplications', sectionName: 'Magic Link Invite Applications', isExpanded: false },
             { sectionKey: 'mJMagicLinkInvites', sectionName: 'Magic Link Invites', isExpanded: false },
-            { sectionKey: 'mJWidgetInstances', sectionName: 'Widget Instances', isExpanded: false }
+            { sectionKey: 'mJConversationWidgetInstances', sectionName: 'Conversation Widget Instances', isExpanded: false }
         ]);
     }
 }

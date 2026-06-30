@@ -280,31 +280,34 @@ and a manual browser/audio pass against a running MJAPI.
 
 ---
 
-## 7b. ⚠️ Demo-grade guest agent execution — HARDENING DEBT
+## 7b. Guest agent execution — cross-guest leak CLOSED (2026-06-30)
 
-To make a guest get a live **agent reply** (text + voice) on localhost, the Widget Guest role was
-granted, beyond the conversation/session isolation above:
+To make a guest get a live **agent reply** (text + voice), the Widget Guest role is granted, beyond the
+conversation/session isolation above:
 
 | Entity | Grant | Scoped? |
 |---|---|---|
 | `MJ: AI Agents` | Read | ✅ RLS-scoped to **widget-pinned agents only** (`Widget Guest: Widget-Pinned Agents`) — guests never see your internal roster |
-| `MJ: AI Agent Runs` | Create/Read/Update | ❌ **unscoped** |
-| `MJ: AI Agent Run Steps` | Create/Read/Update | ❌ **unscoped** |
-| `MJ: AI Prompt Runs` | Create/Read/Update | ❌ **unscoped** |
+| `MJ: AI Agent Runs` | Create/Read/Update | ✅ Read **RLS-scoped** (`Widget Guest: Own Agent Runs`) — a guest reads only its own session's runs |
+| `MJ: AI Agent Run Steps` | Create/Read/Update | ✅ Read **RLS-scoped** (same filter, via `ConversationID`) |
+| `MJ: AI Prompt Runs` | Create/Read/Update | ✅ Read **RLS-scoped** (same filter, via `ConversationID`) |
 
-**Why this exists:** the widget's client-side `ConversationsRuntime` resolves the pinned agent from
-`AIEngineBase` (needs AI Agents read), and the server-side agent run writes its run records under the
-guest principal (needs the three run-entity grants).
+**Text path** — agent execution now runs under a **privileged server-side dispatch**:
+`RunAIAgentFromConversationDetail` detects a widget guest (`IsMagicLinkAnonymous` + the signed
+`mj_widget_id` claim), validates conversation ownership **under the guest** (RLS), then runs the
+**authoritative pinned agent** (resolved from the widget instance, never the client arg) under the
+**system principal**. So a text guest writes **no** run rows.
 
-**Why it's debt, NOT production-ready:** the three run entities are granted **unscoped** — a guest could
-read other users' agent/prompt run rows (which can contain conversation content). Acceptable on a
-single-tester localhost; a **data leak on a public deployment.**
+**Voice path** — the realtime subsystem threads `contextUser` pervasively, so the co-agent observability
++ delegated target-agent runs are still written under the guest. To close the cross-guest leak there, the
+three run entities are **read-RLS-scoped** by `Widget Guest: Own Agent Runs`
+(`ConversationID IN (SELECT ID FROM vwConversations WHERE ExternalID = '{{ScopeResourceID}}')`), so a guest
+can only read its own session's run rows. (Update is left unscoped: a voice-delegated run may be created
+with a null `ConversationID`, which an update filter would hide and break server-side finalize; the stated
+blocker was the read leak, and reads being scoped prevents discovering another guest's unguessable run ids.)
 
-**The proper fix (do before any public launch):** move widget agent execution to a **privileged
-server-side dispatch** — the guest owns only the Conversation + Details (display), and an elevated
-server context resolves + runs the pinned agent and writes the reply back as a Conversation Detail the
-guest reads via the existing RLS. Then the guest needs **none** of the AI-Agents/run grants above.
-Until then, treat the widget as **demo/localhost only**.
+**Migration:** `V202606292320__…Widget_Public_Hardening.sql` seeds the RLS filter; the
+`metadata/entity-permissions` rows attach it as `ReadRLSFilterID`. **No longer demo/localhost-only.**
 
 ## 8. Gotchas (the non-obvious stuff)
 
