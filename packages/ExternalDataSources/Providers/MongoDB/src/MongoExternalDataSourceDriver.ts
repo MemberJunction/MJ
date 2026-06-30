@@ -60,7 +60,10 @@ interface MongoNativeQuery {
  */
 @RegisterClass(BaseExternalDataSourceDriver, 'MongoExternalDriver')
 export class MongoExternalDataSourceDriver extends BaseExternalDataSourceDriver<Db> {
-  private clients = new Map<string, MongoClient>();
+  // Cache the in-flight client CREATION promise (not the resolved client) so concurrent first-requests
+  // share one connect instead of each opening a client and leaking all but the last (cold-start race).
+  // Mongo keeps its own cache (not the base's) because getConnection returns a Db, not the cached client.
+  private clients = new Map<string, Promise<MongoClient>>();
 
   protected async getConnection(dataSource: MJExternalDataSourceEntity, contextUser?: UserInfo): Promise<Db> {
     const dbName = dataSource.DefaultDatabase;
@@ -68,9 +71,21 @@ export class MongoExternalDataSourceDriver extends BaseExternalDataSourceDriver<
       throw new Error(`ExternalDataSource '${dataSource.Name}' has no DefaultDatabase (MongoDB dbName).`);
     }
     const existing = this.clients.get(dataSource.ID);
-    if (existing) {
-      return existing.db(dbName);
+    const client = existing ?? this.startClient(dataSource, contextUser);
+    if (!existing) {
+      this.clients.set(dataSource.ID, client);
+      // Never cache a failed connect — evict so the next call retries (the rejection still propagates).
+      client.catch(() => {
+        if (this.clients.get(dataSource.ID) === client) {
+          this.clients.delete(dataSource.ID);
+        }
+      });
     }
+    return (await client).db(dbName);
+  }
+
+  /** Open a new MongoClient for the data source — invoked once per source by the race-safe cache. */
+  private async startClient(dataSource: MJExternalDataSourceEntity, contextUser?: UserInfo): Promise<MongoClient> {
     const config = this.parseConnectionConfig<MongoConnectionConfig>(dataSource);
     const cred = await this.resolveCredential<MongoCredentialValues>(dataSource, contextUser);
     // Use the configured URI (e.g. Atlas 'mongodb+srv://...') or build a host/port URL.
@@ -95,15 +110,14 @@ export class MongoExternalDataSourceDriver extends BaseExternalDataSourceDriver<
     }
     const client = new MongoClient(url, options);
     await client.connect();
-    this.clients.set(dataSource.ID, client);
-    return client.db(dbName);
+    return client;
   }
 
   protected async invalidateConnection(dataSourceId: string): Promise<void> {
-    const client = this.clients.get(dataSourceId);
-    if (client) {
+    const existing = this.clients.get(dataSourceId);
+    if (existing) {
       this.clients.delete(dataSourceId);
-      try { await client.close(); } catch { /* best-effort close on the failure path */ }
+      try { await (await existing).close(); } catch { /* best-effort close on the failure path */ }
     }
   }
 
@@ -202,10 +216,17 @@ export class MongoExternalDataSourceDriver extends BaseExternalDataSourceDriver<
 
   /** Close all cached MongoClients (graceful shutdown / connection cleanup). */
   public async Close(): Promise<void> {
-    for (const client of this.clients.values()) {
-      await client.close();
-    }
+    const inFlight = Array.from(this.clients.values());
     this.clients.clear();
+    await Promise.all(
+      inFlight.map(async (p) => {
+        try {
+          await (await p).close();
+        } catch {
+          /* best-effort close */
+        }
+      }),
+    );
   }
 
   // ---- helpers -------------------------------------------------------------

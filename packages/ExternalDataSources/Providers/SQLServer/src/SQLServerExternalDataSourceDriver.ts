@@ -63,13 +63,28 @@ interface SQLServerCredentialValues extends Record<string, string> {
  */
 @RegisterClass(BaseExternalDataSourceDriver, 'SQLServerExternalDriver')
 export class SQLServerExternalDataSourceDriver extends BaseSqlExternalDataSourceDriver<sql.ConnectionPool> {
-  private pools = new Map<string, sql.ConnectionPool>();
+  // Cache the in-flight CREATION promise (not the resolved pool) so concurrent first-requests share
+  // one pool instead of each building one and leaking all but the last (the cold-start race).
+  private pools = new Map<string, Promise<sql.ConnectionPool>>();
 
   protected async getConnection(dataSource: MJExternalDataSourceEntity, contextUser?: UserInfo): Promise<sql.ConnectionPool> {
     const existing = this.pools.get(dataSource.ID);
     if (existing) {
       return existing;
     }
+    const creating = this.createPool(dataSource, contextUser);
+    this.pools.set(dataSource.ID, creating);
+    // Never cache a failed creation — evict so the next call retries (the rejection still propagates).
+    creating.catch(() => {
+      if (this.pools.get(dataSource.ID) === creating) {
+        this.pools.delete(dataSource.ID);
+      }
+    });
+    return creating;
+  }
+
+  /** Build a fresh pool for the data source — invoked once per source by the race-safe cache. */
+  private async createPool(dataSource: MJExternalDataSourceEntity, contextUser?: UserInfo): Promise<sql.ConnectionPool> {
     const config = this.parseConnectionConfig<SQLServerConnectionConfig>(dataSource);
     // Secure-by-default: refuse plaintext to a non-local host unless explicitly opted in.
     this.assertSecureTransport({ host: config.server ?? config.host, tlsEnabled: !!config.ssl, allowInsecure: config.allowInsecureTransport, dataSourceName: dataSource.Name });
@@ -88,15 +103,14 @@ export class SQLServerExternalDataSourceDriver extends BaseSqlExternalDataSource
       },
       pool: { max: config.maxPoolSize ?? 5 },
     }).connect();
-    this.pools.set(dataSource.ID, pool);
     return pool;
   }
 
   protected async invalidateConnection(dataSourceId: string): Promise<void> {
-    const pool = this.pools.get(dataSourceId);
-    if (pool) {
+    const existing = this.pools.get(dataSourceId);
+    if (existing) {
       this.pools.delete(dataSourceId);
-      try { await pool.close(); } catch { /* best-effort close on the failure path */ }
+      try { await (await existing).close(); } catch { /* best-effort close on the failure path */ }
     }
   }
 

@@ -33,8 +33,8 @@ class CachingTestDriver extends PostgresExternalDataSourceDriver {
     return (this as unknown as { pools: Map<string, unknown> }).pools.size;
   }
   public async endAll() {
-    for (const p of (this as unknown as { pools: Map<string, { end: () => Promise<void> }> }).pools.values()) {
-      await p.end().catch(() => {});
+    for (const p of (this as unknown as { pools: Map<string, Promise<{ end: () => Promise<void> }>> }).pools.values()) {
+      await (await p).end().catch(() => {});
     }
   }
 }
@@ -118,6 +118,20 @@ describe('PostgresExternalDataSourceDriver — connection caching', () => {
     expect(a1).not.toBe(b1); // distinct sources -> distinct pools (independent credentials/host)
     expect(a1).toBe(a2);     // same source -> cached pool reused
     expect(driver.poolCount()).toBe(2);
+    await driver.endAll();
+  });
+
+  it('memoizes the in-flight creation — concurrent first-requests for one source share ONE pool', async () => {
+    // The cold-start race: two requests arriving before the first pool is cached. With the in-flight
+    // promise memoized, both share one creation; without it, each builds its own pool and all but the
+    // last leak. The fix is observable here as both concurrent calls resolving to the SAME pool.
+    const driver = new CachingTestDriver();
+    const [a1, a2] = await Promise.all([
+      driver.getConn(localSource('A')),
+      driver.getConn(localSource('A')),
+    ]);
+    expect(a1).toBe(a2);               // same pool — not two pools racing
+    expect(driver.poolCount()).toBe(1); // exactly one cached, none leaked
     await driver.endAll();
   });
 });

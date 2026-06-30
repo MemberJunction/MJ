@@ -32,8 +32,8 @@ class CachingTestDriver extends MySQLExternalDataSourceDriver {
     return (this as unknown as { pools: Map<string, unknown> }).pools.size;
   }
   public async endAll() {
-    for (const p of (this as unknown as { pools: Map<string, { end: () => Promise<void> }> }).pools.values()) {
-      await p.end().catch(() => {});
+    for (const p of (this as unknown as { pools: Map<string, Promise<{ end: () => Promise<void> }>> }).pools.values()) {
+      await (await p).end().catch(() => {});
     }
   }
 }

@@ -78,13 +78,28 @@ interface SnowflakeCredentialValues extends Record<string, string> {
  */
 @RegisterClass(BaseExternalDataSourceDriver, 'SnowflakeExternalDriver')
 export class SnowflakeExternalDataSourceDriver extends BaseSqlExternalDataSourceDriver<SnowflakePool> {
-  private pools = new Map<string, SnowflakePool>();
+  // Cache the in-flight CREATION promise (not the resolved pool) so concurrent first-requests share
+  // one pool instead of each building one and leaking all but the last (the cold-start race).
+  private pools = new Map<string, Promise<SnowflakePool>>();
 
   protected async getConnection(dataSource: MJExternalDataSourceEntity, contextUser?: UserInfo): Promise<SnowflakePool> {
     const existing = this.pools.get(dataSource.ID);
     if (existing) {
       return existing;
     }
+    const creating = this.createPool(dataSource, contextUser);
+    this.pools.set(dataSource.ID, creating);
+    // Never cache a failed creation — evict so the next call retries (the rejection still propagates).
+    creating.catch(() => {
+      if (this.pools.get(dataSource.ID) === creating) {
+        this.pools.delete(dataSource.ID);
+      }
+    });
+    return creating;
+  }
+
+  /** Build a fresh pool for the data source — invoked once per source by the race-safe cache. */
+  private async createPool(dataSource: MJExternalDataSourceEntity, contextUser?: UserInfo): Promise<SnowflakePool> {
     const config = this.parseConnectionConfig<SnowflakeConnectionConfig>(dataSource);
     if (!config.account) {
       throw new Error(`ExternalDataSource '${dataSource.Name}' ConnectionConfig must include 'account'.`);
@@ -122,15 +137,14 @@ export class SnowflakeExternalDataSourceDriver extends BaseSqlExternalDataSource
     // generic-pool: connections are created lazily on first use and reused across concurrent queries,
     // so distinct concurrent reads no longer serialize behind a single cached connection.
     const pool = sdk.createPool(options, { max: config.maxPoolSize ?? 5, min: 0 });
-    this.pools.set(dataSource.ID, pool);
     return pool;
   }
 
   protected async invalidateConnection(dataSourceId: string): Promise<void> {
-    const pool = this.pools.get(dataSourceId);
-    if (pool) {
+    const existing = this.pools.get(dataSourceId);
+    if (existing) {
       this.pools.delete(dataSourceId);
-      try { await pool.drain(); await pool.clear(); } catch { /* best-effort close on the failure path */ }
+      try { const pool = await existing; await pool.drain(); await pool.clear(); } catch { /* best-effort close on the failure path */ }
     }
   }
 
@@ -232,10 +246,13 @@ export class SnowflakeExternalDataSourceDriver extends BaseSqlExternalDataSource
 
   /** Drain + clear all cached pools (graceful shutdown). */
   public async Close(): Promise<void> {
-    for (const pool of this.pools.values()) {
-      try { await pool.drain(); await pool.clear(); } catch { /* best-effort close */ }
-    }
+    const inFlight = Array.from(this.pools.values());
     this.pools.clear();
+    await Promise.all(
+      inFlight.map(async (p) => {
+        try { const pool = await p; await pool.drain(); await pool.clear(); } catch { /* best-effort close */ }
+      }),
+    );
   }
 
   // ---- helpers (mirror the proven PostgreSQL driver) -----------------------
