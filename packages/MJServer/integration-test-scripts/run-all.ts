@@ -34,6 +34,7 @@ const SCRIPTS = [
     'ps-inproc-scored-query.ts',
     'ps-inproc-scheduled-scoring.ts',
     'ps-inproc-operate-flow.ts',
+    'ps-inproc-agent-builder.ts',
     'ps-live-recordprocess-scoring.ts',
     'ps-live-modelaction-generation.ts',
     'ps-live-renewal-lifecycle.ts',
