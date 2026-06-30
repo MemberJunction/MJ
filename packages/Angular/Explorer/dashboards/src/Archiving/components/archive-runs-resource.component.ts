@@ -22,7 +22,7 @@
 
 import { Component, AfterViewInit, OnDestroy, ViewChild } from '@angular/core';
 import { ResourceData } from '@memberjunction/core-entities';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ArchiveRunViewerComponent } from '@memberjunction/ng-archive-manager';
 import { AgentToolResult } from '../../shared/agent-tool-validation';
@@ -217,7 +217,7 @@ export class ArchiveRunsResourceComponent extends BaseResourceComponent implemen
         }
         // OpenRunDrawer wants the viewer's own run object; the resolved snapshot
         // shares the same ID, so re-find by ID to hand back the live reference.
-        const run = this.runViewer.Runs.find((r) => r.ID === resolution.run.ID);
+        const run = this.runViewer.Runs.find((r) => UUIDsEqual(r.ID, resolution.run.ID));
         if (!run) {
             return { Success: false, ErrorMessage: `No archive run found with ID "${resolution.run.ID}".` };
         }
