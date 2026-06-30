@@ -11,6 +11,7 @@
       "ArtifactCreationMode": "Always",
       "DefaultArtifactTypeID": "@lookup:MJ: Artifact Types.Name=ML Experiment Results",
       "ExposeAsAction": true,
+      "DriverClass": "PredictiveStudioModelDevAgent",
       "IconClass": "fa-solid fa-flask-vial",
       "InjectNotes": true,
       "MaxNotesToInject": 10,
@@ -338,6 +339,35 @@
             "lastModified": "2026-06-27T15:16:02.665Z",
             "checksum": "5ff947d921704866d0a4cdc44cfd962916a64a24655d8236dde54b8808a28f3d"
           }
+        },
+        {
+          "fields": {
+            "ParentID": "@parent:ID",
+            "Name": "Pipeline Builder",
+            "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Research and Analysis",
+            "Description": "Code-based agent (no LLM) that deterministically turns the approved ModelingPlanSpec into a real MJ: ML Training Pipeline, trains the model, and publishes it ONLY if the trust verdict clears the bar (publish gated on trust). Mirrors the Database Designer schema builder. The orchestrator forces this sub-agent once the user approves the plan.",
+            "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+            "Status": "Active",
+            "ExecutionOrder": 4,
+            "ExposeAsAction": false,
+            "InvocationMode": "Sub-Agent",
+            "DriverClass": "PredictiveStudioPipelineBuilderAgent",
+            "IconClass": "fa-solid fa-hammer",
+            "PayloadDownstreamPaths": [
+              "*"
+            ],
+            "PayloadUpstreamPaths": [
+              "BuildResult",
+              "BuildResult.*"
+            ]
+          },
+          "primaryKey": {
+            "ID": "3EF80176-DEEF-492B-97BF-B889DD404B64"
+          },
+          "sync": {
+            "lastModified": "2026-06-30T17:55:44.301Z",
+            "checksum": "f12f183d8a2905018ac31dba530f7f7d582c94420d37dc5ad137578f1015579c"
+          }
         }
       ]
     },
@@ -345,8 +375,8 @@
       "ID": "12F06453-2DAE-402A-91EE-ED851C4739D6"
     },
     "sync": {
-      "lastModified": "2026-06-27T15:16:02.482Z",
-      "checksum": "2c7b85ff2d606712d411daacc305236b5d36f7591285a4340e699b13cc062753"
+      "lastModified": "2026-06-30T17:55:44.204Z",
+      "checksum": "f0bc20e01c7308f32db6d9b2673c457d3f308161aab6600baeddcdada1aca74d"
     }
   }
 ]
