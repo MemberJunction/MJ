@@ -568,11 +568,7 @@
 
                                 <!-- Approval actions (Runtime-specific labels) -->
                                 @if (EditMode && record.CodeApprovalStatus === 'Pending') {
-                                    <div style="margin-top: 16px; padding: 12px; background: color-mix(in srgb, var(--mj-status-warning) 8%, var(--mj-bg-surface)); border-radius: 6px;">
-                                        <div style="font-weight: 600; margin-bottom: 8px;">
-                                            <i class="fa-solid fa-circle-exclamation" style="color: var(--mj-status-warning); margin-right: 6px;"></i>
-                                            Approval required before this Runtime action can execute.
-                                        </div>
+                                    <mj-alert Variant="warning" Title="Approval required before this Runtime action can execute." class="approval-required-alert">
                                         <div style="color: var(--mj-text-secondary); font-size: 0.9em; margin-bottom: 12px;">
                                             Approving grants this action the permissions listed above on behalf of any user who invokes it. Review the code and permissions carefully before approving.
                                         </div>
@@ -584,7 +580,7 @@
                                                 <i class="fa-solid fa-ban"></i> Reject
                                             </button>
                                         </div>
-                                    </div>
+                                    </mj-alert>
                                 }
                             </div>
                         </mj-accordion-panel>
