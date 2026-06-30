@@ -46,7 +46,7 @@ function review(overrides: Partial<RealtimeSessionReview> = {}): RealtimeSession
 }
 
 interface HarnessStubs {
-  voiceSession: { IsActive: boolean };
+  realtimeSession: { IsActive: boolean };
   loadSessionReview: ReturnType<typeof vi.fn>;
   detectChanges: ReturnType<typeof vi.fn>;
 }
@@ -55,7 +55,7 @@ interface HarnessStubs {
 function createHarness(): { component: ConversationChatAreaComponent; stubs: HarnessStubs } {
   const component = Object.create(ConversationChatAreaComponent.prototype) as ConversationChatAreaComponent;
   const stubs: HarnessStubs = {
-    voiceSession: { IsActive: false },
+    realtimeSession: { IsActive: false },
     loadSessionReview: vi.fn(),
     detectChanges: vi.fn()
   };
@@ -64,7 +64,7 @@ function createHarness(): { component: ConversationChatAreaComponent; stubs: Har
   open['_conversationId'] = null;
   open['isInitialized'] = false; // keep the setter from invoking the heavy load path
   open['Provider'] = {}; // ProviderToUse resolves to this stub, never the global Metadata.Provider
-  open['RealtimeSession'] = stubs.voiceSession;
+  open['RealtimeSession'] = stubs.realtimeSession;
   open['realtimeReviewService'] = { LoadSessionReview: stubs.loadSessionReview };
   open['cdr'] = { detectChanges: stubs.detectChanges };
   return { component, stubs };
@@ -135,7 +135,7 @@ describe('OpenRealtimeSessionReview — hosting and staleness guards', () => {
 
   it('refuses while a LIVE call is active (never fights the live overlay) and does not even load', async () => {
     const { component, stubs } = createHarness();
-    stubs.voiceSession.IsActive = true;
+    stubs.realtimeSession.IsActive = true;
 
     const opened = await component.OpenRealtimeSessionReview('SESSION-1');
 
@@ -157,7 +157,7 @@ describe('OpenRealtimeSessionReview — hosting and staleness guards', () => {
   it('discards a load that resolves AFTER a live call started (the call wins)', async () => {
     const { component, stubs } = createHarness();
     stubs.loadSessionReview.mockImplementation(async () => {
-      stubs.voiceSession.IsActive = true; // call starts while the review loads
+      stubs.realtimeSession.IsActive = true; // call starts while the review loads
       return review();
     });
 

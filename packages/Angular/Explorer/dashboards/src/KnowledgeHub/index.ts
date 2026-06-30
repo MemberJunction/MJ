@@ -7,3 +7,5 @@ export * from './components/visualize/tag-cloud/tag-cloud.component';
 export * from './components/visualize/record-drilldown/record-drilldown.component';
 export * from './components/scheduling/scheduling-resource.component';
 export * from './components/analytics/analytics-resource.component';
+export * from './components/feature-pipelines/feature-pipeline.engine';
+export * from './components/feature-pipelines/feature-pipelines-resource.component';

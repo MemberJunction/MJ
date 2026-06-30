@@ -1247,6 +1247,7 @@ export class TestingReviewComponent implements OnInit, OnDestroy {
       .subscribe(items => {
         this.PendingItems = items;
         this.PendingCount = items.length;
+        this.emitState();
         this.cdr.markForCheck();
       });
 
@@ -1254,6 +1255,7 @@ export class TestingReviewComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe(metrics => {
         this.Metrics = metrics;
+        this.emitState();
         this.cdr.markForCheck();
       });
 
@@ -1356,6 +1358,7 @@ export class TestingReviewComponent implements OnInit, OnDestroy {
     const target = event.target as HTMLInputElement;
     this.HistorySearchText = target.value;
     this.applyHistoryFilters();
+    this.emitState();
     this.cdr.markForCheck();
   }
 
@@ -1452,6 +1455,15 @@ export class TestingReviewComponent implements OnInit, OnDestroy {
   }
 
   private emitState(): void {
-    this.stateChange.emit({ viewMode: this.CurrentView });
+    this.stateChange.emit({
+      viewMode: this.CurrentView,
+      // Richer state for the dashboard's agent context (queue depth, reviewed
+      // count, avg human rating, agreement rate, history search).
+      pendingCount: this.PendingCount,
+      reviewedCount: this.Metrics?.humanReviewedCount ?? 0,
+      averageHumanRating: this.Metrics?.humanAvgRating ?? 0,
+      agreementRate: this.Metrics?.agreementRate ?? 0,
+      historySearchText: this.HistorySearchText
+    });
   }
 }

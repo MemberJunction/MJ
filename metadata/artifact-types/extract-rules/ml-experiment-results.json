@@ -1,0 +1,35 @@
+[
+    {
+        "name": "name",
+        "description": "Extracts the experiment session name/title",
+        "type": "string",
+        "standardProperty": "name",
+        "extractor": "@file:ml-experiment-results/ml-experiment-results-name.js"
+    },
+    {
+        "name": "description",
+        "description": "Extracts a short summary/description of the experiment results",
+        "type": "string",
+        "standardProperty": "description",
+        "extractor": "@file:ml-experiment-results/ml-experiment-results-description.js"
+    },
+    {
+        "name": "displayMarkdown",
+        "description": "Extracts the full experiment results report in markdown (goal, leaderboard, metrics, feature importance)",
+        "type": "string",
+        "standardProperty": "displayMarkdown",
+        "extractor": "@file:ml-experiment-results/ml-experiment-results-markdown.js"
+    },
+    {
+        "name": "bestModelId",
+        "description": "The ID of the winning ML Model for drill-through",
+        "type": "string",
+        "extractor": "@file:ml-experiment-results/ml-experiment-results-best-model-id.js"
+    },
+    {
+        "name": "leaderboardSize",
+        "description": "Number of iterations on the leaderboard",
+        "type": "number",
+        "extractor": "@file:ml-experiment-results/ml-experiment-results-leaderboard-size.js"
+    }
+]

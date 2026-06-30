@@ -2603,3 +2603,72 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — runtime-o
         expect(result.EffectiveConfigJson).toBeUndefined();
     });
 });
+
+describe('RealtimeClientSessionResolver — app awareness (applicationId / appContext / allowedAgents)', () => {
+    it('forwards applicationId + parsed appContext to PrepareClientSession and persists the allowed union', async () => {
+        hasPermissionMock.mockResolvedValue(true);
+        currentProvider = makeProvider(() => makeSessionEntity());
+        const createdSession = makeSessionEntity({ ID: 'session-app', ConversationID: 'conv-1' });
+        createSessionMock.mockResolvedValue(createdSession);
+        prepareClientSessionMock.mockResolvedValue({
+            Success: true,
+            ClientConfig: { Provider: 'openai', Model: 'm', EphemeralToken: 'ek', ExpiresAt: '2099-01-01T00:00:00Z', SessionConfig: {} },
+            // Effective config carries the union-accumulated allowed agents (from the app's RelevantAgents).
+            EffectiveConfig: { realtime: { allowedAgents: [{ agentId: 'skip-1', label: 'Skip' }] } },
+        });
+        const resolver = makeResolver();
+        const appContext = { App: { Name: 'Data Explorer', Description: '' }, ActiveNavItem: { Name: 'Queries' }, OtherNavItems: [], User: { Name: 'A', Roles: [] } };
+
+        await resolver.StartRealtimeClientSession(
+            'target-1', makeCtx(),
+            undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined,
+            'app-9', JSON.stringify(appContext),
+        );
+
+        // App context reached the prepare service.
+        const prepArg = prepareClientSessionMock.mock.calls[0][0] as { ApplicationID?: string; AppContext?: { App?: { Name?: string } } };
+        expect(prepArg.ApplicationID).toBe('app-9');
+        expect(prepArg.AppContext?.App?.Name).toBe('Data Explorer');
+
+        // The allowed union + applicationID were persisted onto the session config for relayed-call validation.
+        const persisted = JSON.parse(createdSession.Config_ as string) as { applicationID?: string; allowedAgents?: Array<{ agentId: string }> };
+        expect(persisted.applicationID).toBe('app-9');
+        expect(persisted.allowedAgents?.map(a => a.agentId)).toEqual(['skip-1']);
+    });
+
+    it('tolerates a malformed appContextJson (no app context, never fails the start)', async () => {
+        hasPermissionMock.mockResolvedValue(true);
+        currentProvider = makeProvider(() => makeSessionEntity());
+        createSessionMock.mockResolvedValue(makeSessionEntity({ ID: 'session-bad' }));
+        prepareClientSessionMock.mockResolvedValue({
+            Success: true, ClientConfig: { Provider: 'o', Model: 'm', EphemeralToken: 'ek', ExpiresAt: '2099-01-01T00:00:00Z', SessionConfig: {} },
+        });
+        const resolver = makeResolver();
+
+        await resolver.StartRealtimeClientSession(
+            'target-1', makeCtx(),
+            undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined,
+            'app-9', 'not-json',
+        );
+        const prepArg = prepareClientSessionMock.mock.calls[0][0] as { ApplicationID?: string; AppContext?: unknown };
+        expect(prepArg.ApplicationID).toBe('app-9');
+        expect(prepArg.AppContext).toBeUndefined();
+    });
+
+    it('passes the persisted allowedAgents from the session config into ExecuteRelayedTool', async () => {
+        currentProvider = makeProvider(() =>
+            makeSessionEntity({
+                Config_: JSON.stringify({ targetAgentID: 'lead-1', allowedAgents: [{ agentId: 'skip-1', label: 'Skip' }] }),
+            }),
+        );
+        executeRelayedToolMock.mockResolvedValue({ ResultJson: '{"ok":true}', Success: true });
+        const resolver = makeResolver();
+
+        await resolver.ExecuteRealtimeSessionTool(
+            'session-1', 'call-1', 'invoke-target-agent', '{"agent":"Skip","request":"x"}', makeCtx(), makePubSub(),
+        );
+
+        const relayArg = executeRelayedToolMock.mock.calls[0][0] as { AllowedAgents?: Array<{ agentId: string }> };
+        expect(relayArg.AllowedAgents?.map(a => a.agentId)).toEqual(['skip-1']);
+    });
+});

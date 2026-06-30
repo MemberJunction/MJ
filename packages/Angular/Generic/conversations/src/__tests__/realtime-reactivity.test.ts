@@ -75,7 +75,7 @@ describe('BUG 1 — server-created conversation folds into the engine cache on s
   it('folds the new conversation into the engine cache when the session created one', () => {
     h.sessionCreatedConversationId.value = 'CONV-NEW';
 
-    invokePrivate(h.component, 'onVoiceSessionStarted');
+    invokePrivate(h.component, 'onRealtimeSessionStarted');
 
     expect(h.engine.EnsureConversationLoaded).toHaveBeenCalledWith('CONV-NEW', { ID: 'USER-1' });
     expect(h.realtimeConversationReadyEmit).toHaveBeenCalledWith({ conversationId: 'CONV-NEW', select: false });
@@ -84,7 +84,7 @@ describe('BUG 1 — server-created conversation folds into the engine cache on s
   it('does nothing when the session joined an EXISTING conversation (no server-created one)', () => {
     h.sessionCreatedConversationId.value = null;
 
-    invokePrivate(h.component, 'onVoiceSessionStarted');
+    invokePrivate(h.component, 'onRealtimeSessionStarted');
 
     expect(h.engine.EnsureConversationLoaded).not.toHaveBeenCalled();
     expect(h.realtimeConversationReadyEmit).not.toHaveBeenCalled();
@@ -130,7 +130,7 @@ describe('BUG 2 — session end reloads the active conversation timeline', () =>
     expect(h.loadPeripheralData).not.toHaveBeenCalled();
   });
 
-  it('onVoiceSessionEnded reloads the timeline AND emits ready for a session-created conversation', () => {
+  it('onRealtimeSessionEnded reloads the timeline AND emits ready for a session-created conversation', () => {
     Object.defineProperty(h.component, 'conversationId', {
       get() {
         return 'CONV-ACTIVE';
@@ -139,7 +139,7 @@ describe('BUG 2 — session end reloads the active conversation timeline', () =>
     });
     h.sessionCreatedConversationId.value = 'CONV-ACTIVE';
 
-    invokePrivate(h.component, 'onVoiceSessionEnded');
+    invokePrivate(h.component, 'onRealtimeSessionEnded');
 
     // Timeline refresh fired (BUG 2) ...
     expect(h.engine.RefreshConversationDetails).toHaveBeenCalledWith('CONV-ACTIVE', { ID: 'USER-1' });
@@ -147,7 +147,7 @@ describe('BUG 2 — session end reloads the active conversation timeline', () =>
     expect(h.realtimeConversationReadyEmit).toHaveBeenCalledWith({ conversationId: 'CONV-ACTIVE', select: true });
   });
 
-  it('onVoiceSessionEnded still refreshes the timeline when NO conversation was created (existing-conversation call)', () => {
+  it('onRealtimeSessionEnded still refreshes the timeline when NO conversation was created (existing-conversation call)', () => {
     Object.defineProperty(h.component, 'conversationId', {
       get() {
         return 'CONV-ACTIVE';
@@ -156,7 +156,7 @@ describe('BUG 2 — session end reloads the active conversation timeline', () =>
     });
     h.sessionCreatedConversationId.value = null; // joined an existing conversation
 
-    invokePrivate(h.component, 'onVoiceSessionEnded');
+    invokePrivate(h.component, 'onRealtimeSessionEnded');
 
     expect(h.engine.RefreshConversationDetails).toHaveBeenCalledWith('CONV-ACTIVE', { ID: 'USER-1' });
     expect(h.realtimeConversationReadyEmit).not.toHaveBeenCalled();

@@ -88,6 +88,11 @@ import { MJAIBridgeAgentIdentityFormComponentExtended, LoadMJAIBridgeAgentIdenti
 // AI Agent "Realtime" panel (Pattern 1 — BaseFormPanel slot). Imported so the
 // @RegisterClassEx decorator runs at module load (Angular tree-shaking guard).
 import { AgentRealtimePanel, LoadAgentRealtimePanel } from "../panels/ai-agents/agent-realtime.panel";
+// Model Predictions — an ENTITY-AGNOSTIC BaseFormPanel (Pattern 1) registered
+// against the '*' wildcard entity, so it mounts on every entity form and
+// self-hides unless that entity has an active MJ: ML Model Scoring Binding.
+// Imported here so the @RegisterClassEx decorator runs at module load.
+import { ModelPredictionPanel } from "../panels/model-predictions/model-prediction.panel";
 
 @NgModule({
     declarations: [
@@ -136,6 +141,8 @@ import { AgentRealtimePanel, LoadAgentRealtimePanel } from "../panels/ai-agents/
         // ContentSource-specific BaseFormPanel slot components (no custom form override).
         TagPipelineConfigurationPanel,
         WebsiteCrawlerSettingsPanel,
+        // Entity-agnostic ('*') Model Predictions panel — mounts on every form, self-hides when N/A.
+        ModelPredictionPanel,
         MJSearchScopeFormComponentExtended,
         MJSearchScopeProviderFormComponentExtended,
         MJAIAgentSessionFormComponentExtended,
@@ -218,6 +225,7 @@ import { AgentRealtimePanel, LoadAgentRealtimePanel } from "../panels/ai-agents/
         MJListFormComponentExtended,
         TagPipelineConfigurationPanel,
         WebsiteCrawlerSettingsPanel,
+        ModelPredictionPanel,
         MJSearchScopeFormComponentExtended,
         MJSearchScopeProviderFormComponentExtended,
         MJAIAgentSessionFormComponentExtended,

@@ -1,0 +1,214 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Predictive Studio — Model Dev Agent</title>
+<link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  .thread { max-width: 880px; margin: 0 auto; }
+  .msg { max-width: 100%; }
+  .msg.agent .bubble { max-width: 720px; }
+  .role { display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; padding:2px 9px; border-radius:999px; margin-bottom:7px; }
+  .role.analyst { background:#eef0ff; color:#3a3fa6; }
+  .role.scout   { background:#e6f6ee; color:#137a41; }
+  .role.designer{ background:#fcf1e1; color:#9a5a07; }
+  .role.loop    { background:#f0e9fd; color:#6a2fb0; }
+  .role i { font-size:10px; }
+  .bubble p { margin:0 0 8px; } .bubble p:last-child { margin-bottom:0; }
+  .src-list { list-style:none; padding:0; margin:6px 0 0; display:flex; flex-direction:column; gap:6px; }
+  .src-list li { display:flex; align-items:flex-start; gap:9px; font-size:12.5px; }
+  .src-list li i { width:16px; text-align:center; color:var(--mj-text-muted); margin-top:2px; }
+  .src-list li .nm { font-weight:600; }
+  .expgrid { display:grid; grid-template-columns:1fr; gap:8px; margin-top:8px; }
+  .exprow { display:grid; grid-template-columns:26px 1fr auto; gap:10px; align-items:center; padding:8px 10px; border:1px solid var(--mj-border-default); border-radius:8px; background:var(--mj-bg-surface-card); }
+  .exprow .meta { font-size:12px; color:var(--mj-text-muted); }
+  .plan { margin-top:0; box-shadow:var(--shadow); }
+  .plan .ph.lead { background:linear-gradient(90deg,#eef0ff,#f0e9fd); color:#3a3fa6; font-size:13px; padding:11px 14px; }
+  .plan .pr .v .tag { margin:0 4px 4px 0; }
+  .plan-foot { display:flex; gap:10px; align-items:center; padding:12px 14px; border-top:1px solid var(--mj-border-subtle); background:var(--mj-bg-surface-card); }
+  .running { display:flex; align-items:center; gap:10px; }
+  .running .bar { flex:1; }
+  .artifact { border:1px solid var(--mj-border-strong); border-radius:12px; box-shadow:var(--shadow); overflow:hidden; background:var(--mj-bg-surface); }
+  .artifact .ah { display:flex; align-items:center; gap:11px; padding:14px 16px; background:linear-gradient(135deg,#10204a,#241257); color:#fff; }
+  .artifact .ah .ai { width:34px; height:34px; border-radius:9px; background:rgba(255,255,255,.14); display:grid; place-items:center; font-size:15px; }
+  .artifact .ah h3 { font-size:15px; } .artifact .ah .sub { font-size:11.5px; color:#b9c6e8; }
+  .artifact .ab { padding:16px; }
+  .winner { display:flex; align-items:center; gap:14px; padding:14px; border:1px solid #cdeede; background:#f1faf5; border-radius:10px; }
+  .winner .crown { width:44px; height:44px; border-radius:10px; background:#1f9d57; color:#fff; display:grid; place-items:center; font-size:18px; flex:0 0 auto; }
+  .winner .auc { margin-left:auto; text-align:right; }
+  .winner .auc .v { font-size:28px; font-weight:760; letter-spacing:-.02em; color:#137a41; }
+  .two { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:14px; }
+  @media (max-width:760px){ .two { grid-template-columns:1fr; } }
+  .composer { position:sticky; bottom:0; margin-top:18px; display:flex; gap:10px; align-items:center; background:var(--mj-bg-surface); border:1px solid var(--mj-border-strong); border-radius:12px; padding:10px 12px; box-shadow:var(--shadow); }
+  .composer input { flex:1; border:0; outline:0; font-size:14px; background:transparent; color:var(--mj-text-primary); }
+</style></head>
+<body><div class="ps-app">
+<aside class="ps-sidebar">
+ <div class="ps-brand"><div class="logo"><i class="fa-solid fa-wand-magic-sparkles"></i></div><div><div class="name">Predictive Studio</div><div class="sub">MemberJunction</div></div></div>
+ <nav class="ps-nav">
+  <div class="group">Build</div>
+  <a><i class="fa-solid fa-gauge-high"></i> Home</a>
+  <a><i class="fa-solid fa-diagram-project"></i> Training Pipelines</a>
+  <a><i class="fa-solid fa-shapes"></i> Algorithm Catalog</a>
+  <div class="group">Run</div>
+  <a><i class="fa-solid fa-flask"></i> Experiments</a>
+  <a><i class="fa-solid fa-cubes"></i> Model Registry</a>
+  <a><i class="fa-solid fa-chart-column"></i> Compare Runs</a>
+  <div class="group">Assist</div>
+  <a class="active"><i class="fa-solid fa-robot"></i> Model Dev Agent</a>
+ </nav>
+ <div class="me"><div class="ps-avatar">AN</div><div class="small"><div style="color:#fff;font-weight:600">Amith N.</div><div style="color:#7e8ca5">Data Studio</div></div></div>
+</aside>
+<main class="ps-main"><div class="ps-topbar">
+  <div><h1>Model Dev Agent</h1><div class="crumb">Conversation · Renewal prediction · Loop agent</div></div>
+  <div class="spacer"></div>
+  <span class="badge green"><span class="dot" style="background:var(--mj-success)"></span> ModelingPlanSpec approved</span>
+  <button class="btn ghost sm"><i class="fa-solid fa-clock-rotate-left"></i> History</button>
+  <button class="btn sm"><i class="fa-solid fa-plus"></i> New thread</button>
+</div><div class="ps-content">
+
+<div class="thread chat">
+
+  <!-- 1. user -->
+  <div class="msg user"><div class="ava">AN</div><div class="bubble">
+    <p>Help me predict which members won't renew this year.</p>
+  </div></div>
+
+  <!-- 2. Goal Analyst -->
+  <div class="msg agent"><div class="ava"><i class="fa-solid fa-bullseye"></i></div><div class="bubble">
+    <span class="role analyst"><i class="fa-solid fa-bullseye"></i> Goal Analyst</span>
+    <p>Framing this as a <strong>binary classification</strong> problem. The target is <span class="tag">Renewed</span> — a member either renews (1) or lapses (0) within their renewal window.</p>
+    <p>To avoid peeking at the future, I'll build features <strong>as-of 90 days before each member's renewal date</strong> and optimize for <strong>Holdout AUC</strong> as the success metric.</p>
+  </div></div>
+
+  <!-- 3. Data Scout -->
+  <div class="msg agent"><div class="ava"><i class="fa-solid fa-magnifying-glass"></i></div><div class="bubble">
+    <span class="role scout"><i class="fa-solid fa-magnifying-glass"></i> Data Scout</span>
+    <p>I searched approved <strong>MJ: Queries</strong>, DBAutoDoc table descriptions, and prior Agent Notes from your last renewal model. Proposed sources:</p>
+    <ul class="src-list">
+      <li><i class="fa-solid fa-table"></i><span><span class="nm">Members</span> — tenure, membership type, join channel, region <span class="muted">(entity, approved)</span></span></li>
+      <li><i class="fa-solid fa-database"></i><span><span class="nm">Event Attendance (12 mo)</span> — query <span class="mono">qry_member_event_attend</span> <span class="badge green" style="margin-left:4px">Approved</span></span></li>
+      <li><i class="fa-solid fa-vector-square"></i><span><span class="nm">Member-summary embedding</span> — semantic signal from profile + activity notes</span></li>
+    </ul>
+    <p style="margin-top:10px"><i class="fa-solid fa-triangle-exclamation" style="color:var(--mj-warning)"></i> <strong>Leakage flag:</strong> <span class="mono">RenewalPaymentDate</span> is populated <em>after</em> the outcome is known — I've excluded it from the candidate set.</p>
+    <p>I also drafted a new query, <span class="mono">qry_member_engagement_decay</span>, to capture activity drop-off. It's left as <span class="badge amber">Status = Pending</span> for human approval before any run can use it.</p>
+  </div></div>
+
+  <!-- 4. Experiment Designer -->
+  <div class="msg agent"><div class="ava"><i class="fa-solid fa-flask"></i></div><div class="bubble">
+    <span class="role designer"><i class="fa-solid fa-flask"></i> Experiment Designer</span>
+    <p>Ranked candidate experiments, balancing expected lift against interpretability:</p>
+    <div class="expgrid">
+      <div class="exprow"><span class="rank gold">1</span><div><div><strong>XGBoost</strong> · engagement-focused features</div><div class="meta">Best expected AUC · handles non-linear interactions</div></div><span class="badge green">Primary</span></div>
+      <div class="exprow"><span class="rank">2</span><div><div><strong>LightGBM</strong> · full feature set</div><div class="meta">Fast sweep across all sources</div></div><span class="badge blue">Strong</span></div>
+      <div class="exprow"><span class="rank">3</span><div><div><strong>Logistic Regression</strong> · interpretable</div><div class="meta">Coefficient explainability for stakeholders</div></div><span class="badge gray">Viable</span></div>
+    </div>
+    <p style="margin-top:10px"><strong>Validation:</strong> stratified 5-fold CV + a time-based holdout (FY25). <strong>Budget:</strong> max <strong>25 runs / 90 min</strong> — I'll stop early if the leaderboard plateaus.</p>
+  </div></div>
+
+  <!-- 5. Plan approval gate -->
+  <div class="msg agent"><div class="ava"><i class="fa-solid fa-clipboard-check"></i></div><div class="bubble" style="max-width:760px">
+    <span class="role loop"><i class="fa-solid fa-arrows-rotate"></i> Loop Agent · Approval Gate</span>
+    <p>Here is the proposed <strong>ModelingPlanSpec</strong>. Review and approve to start deterministic execution.</p>
+    <div class="plan">
+      <div class="ph lead"><i class="fa-solid fa-file-contract"></i> ModelingPlanSpec · Renewal Propensity FY25</div>
+      <div class="pr"><div class="k">Goal</div><div class="v">Predict members at risk of not renewing this fiscal year</div></div>
+      <div class="pr"><div class="k">Target</div><div class="v"><span class="tag">Renewed</span> · binary classification</div></div>
+      <div class="pr"><div class="k">Sources</div><div class="v"><span class="tag">Members</span><span class="tag">Event Attendance</span><span class="tag">Summary Embedding</span></div></div>
+      <div class="pr"><div class="k">Candidate Features</div><div class="v">Tenure · Membership type · Event attendance (12 mo) · Engagement decay · Region · Embedding (384-d)</div></div>
+      <div class="pr"><div class="k">Leakage Exclusions</div><div class="v"><span class="tag" style="background:var(--mj-warning-bg);color:var(--mj-warning-text)">RenewalPaymentDate</span><span class="tag" style="background:var(--mj-warning-bg);color:var(--mj-warning-text)">RenewedFlag_raw</span></div></div>
+      <div class="pr"><div class="k">Proposed Experiments</div><div class="v">XGBoost · LightGBM · Logistic Regression</div></div>
+      <div class="pr"><div class="k">Validation</div><div class="v">Stratified 5-fold CV + FY25 time-based holdout · metric = Holdout AUC</div></div>
+      <div class="pr"><div class="k">Budget</div><div class="v">≤ 25 runs · ≤ 90 min · early-stop on plateau</div></div>
+      <div class="plan-foot">
+        <button class="btn primary"><i class="fa-solid fa-check"></i> Approve &amp; run</button>
+        <button class="btn"><i class="fa-solid fa-pen"></i> Edit plan</button>
+        <span class="muted small" style="margin-left:auto">2 pending items need human approval</span>
+      </div>
+    </div>
+  </div></div>
+
+  <!-- user approves -->
+  <div class="msg user"><div class="ava">AN</div><div class="bubble"><p>Approved — go ahead and run it.</p></div></div>
+
+  <!-- experiments running -->
+  <div class="msg agent"><div class="ava"><i class="fa-solid fa-gears"></i></div><div class="bubble" style="max-width:560px">
+    <span class="role loop"><i class="fa-solid fa-arrows-rotate"></i> Loop Agent · Executing</span>
+    <p>Running experiments deterministically…</p>
+    <div class="running"><div class="bar"><span style="width:100%"></span></div><span class="muted small mono">18 / 25 runs · 41 min</span></div>
+    <p class="muted small" style="margin-top:8px">CV folds complete · holdout scoring · feature importance computed.</p>
+  </div></div>
+
+  <!-- leakage warning callout -->
+  <div class="msg agent"><div class="ava"><i class="fa-solid fa-triangle-exclamation"></i></div><div class="bubble" style="max-width:720px">
+    <span class="role loop"><i class="fa-solid fa-shield-halved"></i> Loop Agent · Sign-off Required</span>
+    <div class="callout warn">
+      <i class="fa-solid fa-triangle-exclamation"></i>
+      <div>
+        <strong>Possible data leakage detected — your sign-off is needed.</strong>
+        <p style="margin:6px 0 0">One feature, <span class="mono">days_since_last_invoice</span>, is doing almost all the predicting (74% of the model's decision). That usually means it quietly reveals the answer — for many members it only gets a value <em>because</em> they already renewed. I paused before publishing.</p>
+        <p style="margin:6px 0 0"><strong>Recommendation:</strong> drop this feature and re-score. AUC will dip slightly but the model will be trustworthy in production.</p>
+        <div style="margin-top:10px;display:flex;gap:8px">
+          <button class="btn sm primary"><i class="fa-solid fa-scissors"></i> Drop &amp; re-score</button>
+          <button class="btn sm"><i class="fa-solid fa-circle-info"></i> Keep &amp; explain risk</button>
+        </div>
+      </div>
+    </div>
+  </div></div>
+
+  <!-- final results artifact -->
+  <div class="msg agent" style="max-width:100%"><div class="ava"><i class="fa-solid fa-trophy"></i></div>
+    <div class="artifact" style="flex:1">
+      <div class="ah">
+        <div class="ai"><i class="fa-solid fa-flask-vial"></i></div>
+        <div><h3>ML Experiment Results — Renewal Propensity FY25</h3><div class="sub">Artifact · 22 runs · leakage feature removed · ready to publish</div></div>
+        <button class="btn sm" style="margin-left:auto;background:rgba(255,255,255,.16);border-color:transparent;color:#fff"><i class="fa-solid fa-arrow-up-right-from-square"></i> Open ML Model</button>
+      </div>
+      <div class="ab">
+        <div class="winner">
+          <div class="crown"><i class="fa-solid fa-crown"></i></div>
+          <div><div style="font-weight:700;font-size:15px">XGBoost — engagement-focused</div><div class="muted small">Winner · stratified 5-fold + FY25 holdout · trustworthy after leakage fix</div></div>
+          <div class="auc"><div class="v">0.864</div><div class="muted small">Holdout AUC</div></div>
+        </div>
+
+        <div class="two">
+          <div>
+            <div class="section-title">Leaderboard</div>
+            <table class="table">
+              <thead><tr><th>#</th><th>Algorithm</th><th class="num">Holdout AUC</th><th class="num">CV AUC</th></tr></thead>
+              <tbody>
+                <tr><td><span class="rank gold">1</span></td><td><strong>XGBoost</strong></td><td class="num"><strong>0.864</strong></td><td class="num">0.871</td></tr>
+                <tr><td><span class="rank">2</span></td><td>LightGBM</td><td class="num">0.861</td><td class="num">0.869</td></tr>
+                <tr><td><span class="rank">3</span></td><td>Logistic Regression</td><td class="num">0.831</td><td class="num">0.836</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div>
+            <div class="section-title">Feature Importance</div>
+            <div class="fbar"><div>Event attendance (12 mo)</div><div class="track"><span style="width:88%"></span></div><div class="num small">.31</div></div>
+            <div class="fbar"><div>Engagement decay</div><div class="track"><span style="width:71%"></span></div><div class="num small">.25</div></div>
+            <div class="fbar"><div>Tenure (years)</div><div class="track"><span style="width:54%"></span></div><div class="num small">.18</div></div>
+            <div class="fbar"><div>Membership type</div><div class="track"><span style="width:38%"></span></div><div class="num small">.13</div></div>
+            <div class="fbar"><div>Summary embedding</div><div class="track"><span style="width:28%"></span></div><div class="num small">.09</div></div>
+            <div class="fbar"><div>Region</div><div class="track"><span style="width:12%"></span></div><div class="num small">.04</div></div>
+          </div>
+        </div>
+
+        <div class="callout info" style="margin-top:14px">
+          <i class="fa-solid fa-circle-check"></i>
+          <div><strong>Ready to publish.</strong> The winning model now relies on genuine behavioral signal, not leakage. Drill into the <strong>ML Model</strong> record to review the run lineage, calibration curve, and deploy as the renewal champion.</div>
+        </div>
+        <div style="margin-top:12px;display:flex;gap:10px">
+          <button class="btn primary"><i class="fa-solid fa-cube"></i> Open ML Model</button>
+          <button class="btn"><i class="fa-solid fa-chart-column"></i> Compare all runs</button>
+          <button class="btn ghost"><i class="fa-solid fa-download"></i> Export report</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="composer">
+    <i class="fa-solid fa-robot muted"></i>
+    <input placeholder="Ask the Model Dev Agent to refine, re-run, or explain…" />
+    <button class="btn primary sm"><i class="fa-solid fa-paper-plane"></i> Send</button>
+  </div>
+
+</div>
+</div></main>
+</div></body></html>

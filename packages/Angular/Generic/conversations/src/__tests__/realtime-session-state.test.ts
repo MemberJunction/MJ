@@ -2,24 +2,24 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { Subject } from 'rxjs';
 import { RealtimeSessionState, RealtimeSessionStreams } from '../lib/components/realtime/realtime-session-state';
 import type {
-  VoiceCaption,
-  VoiceDelegationNarration,
-  VoiceDelegationProgress,
-  VoiceDelegationResult
+  RealtimeCaption,
+  RealtimeDelegationNarration,
+  RealtimeDelegationProgress,
+  RealtimeDelegationResult
 } from '../lib/services/realtime-session.service';
 
 /** Test harness: drives the four session streams the state merges. */
 function buildStreams(): {
   streams: RealtimeSessionStreams;
-  captions$: Subject<VoiceCaption[]>;
-  progress$: Subject<VoiceDelegationProgress>;
-  result$: Subject<VoiceDelegationResult>;
-  narration$: Subject<VoiceDelegationNarration>;
+  captions$: Subject<RealtimeCaption[]>;
+  progress$: Subject<RealtimeDelegationProgress>;
+  result$: Subject<RealtimeDelegationResult>;
+  narration$: Subject<RealtimeDelegationNarration>;
 } {
-  const captions$ = new Subject<VoiceCaption[]>();
-  const progress$ = new Subject<VoiceDelegationProgress>();
-  const result$ = new Subject<VoiceDelegationResult>();
-  const narration$ = new Subject<VoiceDelegationNarration>();
+  const captions$ = new Subject<RealtimeCaption[]>();
+  const progress$ = new Subject<RealtimeDelegationProgress>();
+  const result$ = new Subject<RealtimeDelegationResult>();
+  const narration$ = new Subject<RealtimeDelegationNarration>();
   const streams: RealtimeSessionStreams = {
     Captions$: captions$.asObservable(),
     DelegationProgress$: progress$.asObservable(),
