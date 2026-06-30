@@ -24,11 +24,16 @@ const DEFAULT_EXTERNAL_CACHE_TTL_SECONDS = 300;
 const DEFAULT_EXTERNAL_MAX_ROWS = 1000;
 
 /**
- * Hard ceiling on the effective row count of an external read, applied EVEN to an explicit caller
- * MaxRows so a `RunView({ MaxRows: 100_000_000 })` can't stream/meter an entire remote table
- * (egress cost, remote load). Unlike the MJ-DB path, the blast radius here is a remote/metered
- * source, so this fails closed. Overridable per source via ConnectionConfig `{ "maxRowLimit": N }`;
- * the effective cap is `min(requested, perSourceLimit ?? HARD_MAX_EXTERNAL_ROWS)`.
+ * Hard ceiling on the effective row count of a *structured* external read (the RunView path), applied
+ * EVEN to an explicit caller MaxRows so a `RunView({ MaxRows: 100_000_000 })` can't stream/meter an
+ * entire remote table (egress cost, remote load). Unlike the MJ-DB path, the blast radius here is a
+ * remote/metered source, so this fails closed. Overridable per source via ConnectionConfig
+ * `{ "maxRowLimit": N }`; the effective cap is `min(requested, perSourceLimit ?? HARD_MAX_EXTERNAL_ROWS)`.
+ *
+ * Scope: governs the RunView path ({@link ExternalDataSourceReadRouterImpl.resolveMaxRows}) only. The
+ * native-query path (`RunQueryExternal` → driver `RunNativeQuery`) executes an admin-authored stored
+ * Query's fully-rendered SQL verbatim — like a stored procedure, its row count is bounded by the
+ * Query definition and the source's (ideally least-privilege) credential, not by this runtime cap.
  */
 const HARD_MAX_EXTERNAL_ROWS = 50_000;
 
