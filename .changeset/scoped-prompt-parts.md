@@ -4,6 +4,7 @@
 "@memberjunction/aiengine": minor
 "@memberjunction/ai-agents": minor
 "@memberjunction/server": minor
+"@memberjunction/ng-core-entity-forms": minor
 ---
 
 feat(prompt-parts): scope-aware, pluggable prompt construction (ScopedPromptPart + PromptComponentResolver)
