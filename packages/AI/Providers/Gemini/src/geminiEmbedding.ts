@@ -15,7 +15,7 @@ import { GoogleGenAI, Content } from '@google/genai';
 import { GeminiLLM } from '.';
 
 /**
- * Gemini Embedding 2 provider for MemberJunction.
+ * Gemini embedding provider for MemberJunction.
  *
  * A `BaseEmbeddings` implementation backed by Google's `gemini-embedding-2` — a natively
  * MULTIMODAL embedding model (text, image, video, audio, and documents share one vector space).
@@ -24,7 +24,7 @@ import { GeminiLLM } from '.';
  * enabling cross-modal retrieval (a text query matching an image, audio, or video).
 
  *
- * Resolved via `ClassFactory.CreateInstance(BaseEmbeddings, "GeminiEmbedding2", apiKey)`.
+ * Resolved via `ClassFactory.CreateInstance(BaseEmbeddings, "GeminiEmbedding", apiKey)`.
  *
  * Note: `gemini-embedding-2` has no `task_type` parameter — the retrieval instruction (e.g.
  * `"task: search result | query: …"` for queries vs `"title: … | text: …"` for documents) is
@@ -32,17 +32,21 @@ import { GeminiLLM } from '.';
  */
 
 const DEFAULT_MODEL = 'gemini-embedding-2';
+// The class name is deliberately model-agnostic (renamed from GeminiEmbedding2) — it outlives any single model version.
 
 /**
- * Maximum number of in-flight `embedContent` requests issued by {@link GeminiEmbedding2.EmbedTexts}.
+ * Maximum number of in-flight `embedContent` requests issued by {@link GeminiEmbedding.EmbedTexts}.
  * `gemini-embedding-2` has no synchronous batch endpoint, so EmbedTexts fans out one request per
  * text; this bounds concurrency to stay under Gemini's embedding rate limits on large batches
  * while keeping throughput reasonable.
  */
 const EMBED_TEXTS_MAX_CONCURRENCY = 4;
 
-@RegisterClass(BaseEmbeddings, 'GeminiEmbedding2')
-export class GeminiEmbedding2 extends BaseEmbeddings {
+/** Sleep helper for exponential backoff between per-text embed retries. */
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+@RegisterClass(BaseEmbeddings, 'GeminiEmbedding')
+export class GeminiEmbedding extends BaseEmbeddings {
     private _gemini: GoogleGenAI;
 
     constructor(apiKey: string) {
@@ -52,6 +56,16 @@ export class GeminiEmbedding2 extends BaseEmbeddings {
 
     public get GeminiClient(): GoogleGenAI {
         return this._gemini;
+    }
+
+    /** Extra retry attempts per text on a transient failure, on top of the initial call. `0` disables retry. */
+    protected get maxEmbedTextsRetries(): number {
+        return 2;
+    }
+
+    /** Base delay (ms) for exponential backoff between per-text retries: delay = base * 2^(n-1). */
+    protected get embedRetryBaseDelayMs(): number {
+        return 250;
     }
 
     public override GetFileCapabilities(): FileCapabilities | null {
@@ -131,7 +145,7 @@ export class GeminiEmbedding2 extends BaseEmbeddings {
         // fail loud here so it can never silently corrupt downstream vector storage again.
         if (vectors.length !== texts.length) {
             throw new Error(
-                `GeminiEmbedding2.EmbedTexts produced ${vectors.length} vector(s) for ${texts.length} ` +
+                `GeminiEmbedding.EmbedTexts produced ${vectors.length} vector(s) for ${texts.length} ` +
                     `input text(s); expected a 1:1 match. Refusing to return a misaligned embedding batch.`,
             );
         }
@@ -151,12 +165,20 @@ export class GeminiEmbedding2 extends BaseEmbeddings {
     private async embedTextsConcurrently(texts: string[], model: string, maxConcurrency: number): Promise<number[][]> {
         const vectors: number[][] = new Array<number[]>(texts.length);
         let nextIndex = 0;
+        let failed = false;
 
         const worker = async (): Promise<void> => {
             // `nextIndex++` runs to completion between awaits (JS is single-threaded), so each
             // index is claimed by exactly one worker — no two workers embed the same text.
-            for (let index = nextIndex++; index < texts.length; index = nextIndex++) {
-                vectors[index] = await this.embedSingleText(texts[index], model);
+            // Stop claiming new texts once any worker has thrown, so we don't keep issuing (paid)
+            // embedContent calls after the batch is already doomed to reject.
+            for (let index = nextIndex++; !failed && index < texts.length; index = nextIndex++) {
+                try {
+                    vectors[index] = await this.embedSingleText(texts[index], model);
+                } catch (error) {
+                    failed = true;
+                    throw error;
+                }
             }
         };
 
@@ -166,17 +188,35 @@ export class GeminiEmbedding2 extends BaseEmbeddings {
     }
 
     /**
-     * Embeds a single text and returns its vector. Throws on API error or an empty/missing
-     * embedding; {@link EmbedTexts} catches that to apply the batch-level empty-result contract,
-     * so a batch never ends up with a silently-corrupt (empty or blended) vector for one text.
+     * Embeds a single text and returns its vector, with bounded exponential-backoff retry so a lone
+     * transient failure (a 429/500, or an empty/missing embedding) doesn't sink the whole batch —
+     * its failure rate otherwise scales with the text count. Retries {@link maxEmbedTextsRetries}
+     * times, then throws; {@link EmbedTexts} catches that to apply the batch-level empty-result
+     * contract, so a batch never ends up with a silently-corrupt (empty or blended) vector for one text.
      */
     private async embedSingleText(text: string, model: string): Promise<number[]> {
-        const response = await this._gemini.models.embedContent({ model, contents: text });
-        const vector = response.embeddings?.[0]?.values;
-        if (!vector || vector.length === 0) {
-            throw new Error('Gemini returned no embedding for one of the batch texts.');
+        let lastError: unknown;
+        for (let n = 0; n <= this.maxEmbedTextsRetries; n++) {
+            if (n > 0) {
+                await sleep(this.embedRetryBaseDelayMs * 2 ** (n - 1));
+            }
+            try {
+                const response = await this._gemini.models.embedContent({ model, contents: text });
+                const vector = response.embeddings?.[0]?.values;
+                if (!vector || vector.length === 0) {
+                    throw new Error('Gemini returned no embedding for one of the batch texts.');
+                }
+                return vector;
+            } catch (error) {
+                lastError = error;
+                if (n >= this.maxEmbedTextsRetries) {
+                    throw error; // out of retries — let EmbedTexts apply the empty-batch contract
+                }
+                // else: back off and retry
+            }
         }
-        return vector;
+        // Unreachable: the loop always returns or throws. Present to satisfy the type checker.
+        throw lastError instanceof Error ? lastError : new Error('Gemini embedding failed after retries.');
     }
 
     /**
@@ -223,7 +263,7 @@ export class GeminiEmbedding2 extends BaseEmbeddings {
     }
 }
 
-/** Describes an embedding model returned by {@link GeminiEmbedding2.GetEmbeddingModels}. */
+/** Describes an embedding model returned by {@link GeminiEmbedding.GetEmbeddingModels}. */
 export interface EmbeddingModelInfo {
     Model: string;
     Description: string;
