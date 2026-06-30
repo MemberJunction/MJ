@@ -22,7 +22,7 @@
       "ID": "6A1A0EDC-6DFE-4546-AB4D-1137396B90D2"
     },
     "sync": {
-      "lastModified": "2026-06-23T00:52:03.382Z",
+      "lastModified": "2026-06-26T21:32:07.787Z",
       "checksum": "4d33e22c7eb1e58138b827b53153d5bf05a0868ee098b2fbb0f75affaf956a89"
     }
   },
@@ -49,7 +49,7 @@
       "ID": "89AB32DB-1ED8-43A3-8A01-26B91AD1C2C9"
     },
     "sync": {
-      "lastModified": "2026-06-23T00:52:03.345Z",
+      "lastModified": "2026-06-26T21:32:07.807Z",
       "checksum": "e9447982add6061ba565b8ce696462182f432595629df97fadbe2a97ac06c5b4"
     }
   },
@@ -76,7 +76,7 @@
       "ID": "AE35B63D-EF67-42C1-859F-7FBE39630B97"
     },
     "sync": {
-      "lastModified": "2026-06-23T00:52:03.364Z",
+      "lastModified": "2026-06-26T21:32:07.870Z",
       "checksum": "f866ef6f001cb7c6cb526ffdf1b3bd59ce79dcaf2d0f817d3e5e73222e028066"
     }
   },
@@ -103,7 +103,7 @@
       "ID": "ACC34496-77BB-40F7-9034-53164C6F28BF"
     },
     "sync": {
-      "lastModified": "2026-06-23T00:52:03.425Z",
+      "lastModified": "2026-06-26T21:32:07.840Z",
       "checksum": "2bda942f853b2fb6f95c9bbd7c35c5e23a8fd6999f0c0df4560246c2e1e496e5"
     }
   },
@@ -130,7 +130,7 @@
       "ID": "E5C6116D-62F6-4CC3-8800-C11206660643"
     },
     "sync": {
-      "lastModified": "2026-06-23T00:52:03.442Z",
+      "lastModified": "2026-06-26T21:32:07.823Z",
       "checksum": "549d28e09ddf4ecd509904b9efbf6cd036ff3925129afa35057c70cc4aa7b0d5"
     }
   },
@@ -157,8 +157,223 @@
       "ID": "97BCDF1F-07EB-41FE-9C9D-2AEEA8CAF27B"
     },
     "sync": {
-      "lastModified": "2026-06-23T00:52:03.457Z",
+      "lastModified": "2026-06-26T21:32:07.856Z",
       "checksum": "00ea4641477d4911f2005e708dd38b367e967dd9ab1fb41b9dc01ade2cd0c1ac"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Compare Records",
+      "OperationKey": "RecordComparison.Compare",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Record Comparison",
+      "Description": "Load a set of an entity's records (by composite key, column 0 = survivor/reference) and compute the field-level delta matrix between them. Read-only. Returns the loaded records + per-field deltas. Implemented by RecordComparisonCompareServerOperation in @memberjunction/record-comparison.",
+      "InputTypeName": "RecordComparisonCompareInput",
+      "InputTypeDefinition": "@file:types/record-comparison-compare.input.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "RecordComparisonCompareOutput",
+      "OutputTypeDefinition": "@file:types/record-comparison-compare.output.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "D0CD834E-E785-4680-8F4A-F32FD6BB445E"
+    },
+    "sync": {
+      "lastModified": "2026-06-27T20:45:43.389Z",
+      "checksum": "5efb711afa196d9b0dfcad8e63e45b0ec16fa98f7b47bb8dfb049dc6ee307735"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Train ML Model",
+      "OperationKey": "PredictiveStudio.TrainModel",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Predictive Studio",
+      "Description": "Train a predictive model from an MJ: ML Training Pipelines definition. Carves a locked holdout (point-in-time/as-of aware), trains via the sidecar, persists an immutable Draft MJ: ML Models row, and flags single-feature dominance (possible target leakage). Returns the new model id, its honest holdout metrics, the leakage flag, and the model version. Delegates to TrainingEngine.trainModel in @memberjunction/predictive-studio-engine.",
+      "InputTypeName": "PredictiveStudioTrainModelInput",
+      "InputTypeDefinition": "@file:types/predictive-studio-train-model.input.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "PredictiveStudioTrainModelOutput",
+      "OutputTypeDefinition": "@file:types/predictive-studio-train-model.output.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "LongRunning",
+      "RequiredScope": "predictive:execute",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "C6216E4B-9D7E-4514-AE78-B3431C9A823F"
+    },
+    "sync": {
+      "lastModified": "2026-06-27T17:36:19.822Z",
+      "checksum": "7a14f6b8da15bc25953cd7904486fbfddb9148670ceea3c06eaa30cc7abc3c6d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Score Record Set",
+      "OperationKey": "PredictiveStudio.ScoreRecordSet",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Predictive Studio",
+      "Description": "Score a set of records with a trained MJ: ML Models row. The scope selects records (explicit ids / a saved view / a list / an entity+filter / a single record). Optionally a dry-run preview, or a write-back to the target. Returns scored/failed/skipped counts plus either the ephemeral predictions or write-back confirmation. Delegates to the MLModelInferenceProcessor scoring work type in @memberjunction/predictive-studio-engine.",
+      "InputTypeName": "PredictiveStudioScoreRecordSetInput",
+      "InputTypeDefinition": "@file:types/predictive-studio-score-record-set.input.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "PredictiveStudioScoreRecordSetOutput",
+      "OutputTypeDefinition": "@file:types/predictive-studio-score-record-set.output.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "LongRunning",
+      "RequiredScope": "predictive:execute",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "64762D07-7750-495D-A25A-3DEEF541A2F7"
+    },
+    "sync": {
+      "lastModified": "2026-06-27T17:36:19.843Z",
+      "checksum": "e397f111810cbcfc267bd4978543d6f4d15daad35716911faa3184c071201664"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Run Feature Pipeline",
+      "OperationKey": "PredictiveStudio.RunFeaturePipeline",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Predictive Studio",
+      "Description": "Run a Feature Pipeline — a categorized MJ: Record Processes row — over an optional runtime scope (selected records / view / list / filter), optionally as a dry-run preview that computes feature values without writing. Returns processed/written/skipped/error counts plus the MJ: Process Runs id. Runs the underlying Record Process (no dedicated entity); delegates to the Record Process substrate.",
+      "InputTypeName": "PredictiveStudioRunFeaturePipelineInput",
+      "InputTypeDefinition": "@file:types/predictive-studio-run-feature-pipeline.input.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "PredictiveStudioRunFeaturePipelineOutput",
+      "OutputTypeDefinition": "@file:types/predictive-studio-run-feature-pipeline.output.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "LongRunning",
+      "RequiredScope": "predictive:execute",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "C38266DA-FCC3-4F46-9539-123A1C205ABE"
+    },
+    "sync": {
+      "lastModified": "2026-06-27T17:36:19.879Z",
+      "checksum": "179ce5cec28ba782448a39541cc76a459417eb265951c006a2e7d950155c2088"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Start Experiment Session",
+      "OperationKey": "PredictiveStudio.StartExperimentSession",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Predictive Studio",
+      "Description": "Start an experiment session from an approved ModelingPlanSpec — running its proposed experiments in waves under a Budget, maintaining a leaderboard. Optionally attaches to an existing MJ: Experiments definition or creates a new one. Returns the session id, experiment id, and initial status. Delegates to ExperimentOrchestrator.runSession in @memberjunction/predictive-studio-engine.",
+      "InputTypeName": "PredictiveStudioStartExperimentSessionInput",
+      "InputTypeDefinition": "@file:types/predictive-studio-start-experiment-session.input.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "PredictiveStudioStartExperimentSessionOutput",
+      "OutputTypeDefinition": "@file:types/predictive-studio-start-experiment-session.output.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "LongRunning",
+      "RequiredScope": "predictive:execute",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "5287084A-A59B-4CA5-AA56-E9D62C055CF3"
+    },
+    "sync": {
+      "lastModified": "2026-06-27T17:36:19.863Z",
+      "checksum": "dd4a4f9f0bd90988c41f03f51db01817e6d30702ddeca079227160b75d4a325a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Control Experiment Session",
+      "OperationKey": "PredictiveStudio.ControlExperimentSession",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Predictive Studio",
+      "Description": "Pause, resume, or cancel an MJ: Experiment Sessions run (honored at the next wave checkpoint). Returns the session's status after the control action. A quick lifecycle transition over the experiment orchestrator's session state.",
+      "InputTypeName": "PredictiveStudioControlExperimentSessionInput",
+      "InputTypeDefinition": "@file:types/predictive-studio-control-experiment-session.input.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "PredictiveStudioControlExperimentSessionOutput",
+      "OutputTypeDefinition": "@file:types/predictive-studio-control-experiment-session.output.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiredScope": "predictive:execute",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "2B3C7377-426A-42D3-88F3-C86CC49E09DC"
+    },
+    "sync": {
+      "lastModified": "2026-06-27T17:36:19.910Z",
+      "checksum": "b20711e5b21815d12b94538297742a8b0ee60e6b8697b96a6d2b5d1462087f43"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Promote ML Model",
+      "OperationKey": "PredictiveStudio.PromoteModel",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Predictive Studio",
+      "Description": "Transition an MJ: ML Models row through its lifecycle (Validated / Published / Archived). Enforces the leakage sign-off gate — a model flagged for possible target leakage cannot be promoted unless signOff=true. Lifecycle-only: never edits metrics or artifact, only Status. Returns whether the model was promoted and its new status. Delegates to the ProductionModelPromotionGate in @memberjunction/predictive-studio-engine.",
+      "InputTypeName": "PredictiveStudioPromoteModelInput",
+      "InputTypeDefinition": "@file:types/predictive-studio-promote-model.input.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "PredictiveStudioPromoteModelOutput",
+      "OutputTypeDefinition": "@file:types/predictive-studio-promote-model.output.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiredScope": "predictive:execute",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "F82C30A4-46BC-4206-9CE8-3B1F9D359700"
+    },
+    "sync": {
+      "lastModified": "2026-06-27T17:36:19.927Z",
+      "checksum": "120b6d6d76a06bebad5f99db4d89e9b3c28047f3452f2d3167b50f4c30a4ac97"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Create Scoring Process",
+      "OperationKey": "PredictiveStudio.CreateScoringProcess",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Predictive Studio",
+      "Description": "Create an on-demand WorkType='ML Model' MJ: Record Processes row that scores a target entity's records with a trained MJ: ML Models (no schedule). The scope selects records (a saved view / a list / an entity filter / the whole entity). When outputField is supplied, the run writes the prediction into that column and a MJ: ML Model Scoring Bindings lineage row (Mode='OnDemand') is created; when omitted, output is generic (run history only) with no binding. Returns the new Record Process id, whether a write-back column was configured, and the scoring binding id (when created). The created row is then run-now via the Run Record Process operation or scheduled via the generic scheduling dialog. Delegates to createScoringProcess in @memberjunction/predictive-studio-engine.",
+      "InputTypeName": "PredictiveStudioCreateScoringProcessInput",
+      "InputTypeDefinition": "@file:types/predictive-studio-create-scoring-process.input.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "PredictiveStudioCreateScoringProcessOutput",
+      "OutputTypeDefinition": "@file:types/predictive-studio-create-scoring-process.output.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiredScope": "predictive:execute",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "837AF41A-DB89-4B3E-853D-499FFCDAA7E7"
+    },
+    "sync": {
+      "lastModified": "2026-06-30T00:25:07.963Z",
+      "checksum": "a7ef74f971f0454a747c60c45b55f4a85df04401951c0474aad48fd0358eab13"
     }
   }
 ]

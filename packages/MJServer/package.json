@@ -86,6 +86,7 @@
     "@memberjunction/livekit-room-server": "5.43.0",
     "@memberjunction/postgresql-dataprovider": "5.43.0",
     "@memberjunction/queue": "5.43.0",
+    "@memberjunction/record-comparison": "5.43.0",
     "@memberjunction/redis-provider": "5.43.0",
     "@memberjunction/remote-browser-base": "5.43.0",
     "@memberjunction/remote-browser-cdp": "5.43.0",

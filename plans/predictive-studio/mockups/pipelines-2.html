@@ -1,0 +1,320 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Predictive Studio — Step-List Builder</title>
+<link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  .builder3 { display: grid; grid-template-columns: 318px 1fr 322px; gap: 16px; align-items: start; }
+  .col-min { min-width: 0; }
+
+  /* ---- step list ---- */
+  .steplist { display: flex; flex-direction: column; }
+  .sl-group { font-size: 10.5px; text-transform: uppercase; letter-spacing: .07em; color: var(--mj-text-muted); font-weight: 700; padding: 14px 16px 6px; display: flex; align-items: center; gap: 7px; }
+  .sl-group .ct { margin-left: auto; background: var(--mj-bg-surface-sunken); color: var(--mj-text-secondary); border-radius: 999px; padding: 0 7px; font-size: 10.5px; }
+  .step-item { display: flex; align-items: center; gap: 10px; padding: 9px 14px; border-bottom: 1px solid var(--mj-border-subtle); cursor: pointer; position: relative; }
+  .step-item:hover { background: var(--mj-bg-surface-hover); }
+  .step-item.sel { background: var(--mj-brand-soft); box-shadow: inset 3px 0 0 var(--mj-brand-primary); }
+  .step-item .grip { color: var(--mj-text-disabled); cursor: grab; font-size: 12px; }
+  .step-item .si-ic { width: 28px; height: 28px; border-radius: 7px; display: grid; place-items: center; color: #fff; font-size: 12px; flex: 0 0 auto; }
+  .si-ic.s { background: #6b7280; } .si-ic.f { background: #2050c8; } .si-ic.e { background: #7b3ff0; } .si-ic.t { background: #1f9d57; } .si-ic.a { background: #d98213; }
+  .step-item .si-main { min-width: 0; flex: 1; }
+  .step-item .si-name { font-size: 13px; font-weight: 650; display: flex; align-items: center; gap: 7px; }
+  .step-item .si-sub { font-size: 11.5px; color: var(--mj-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .step-item .si-out { font-size: 11px; color: var(--mj-text-disabled); font-variant-numeric: tabular-nums; }
+  .num-chip { background: var(--mj-bg-surface-sunken); color: var(--mj-text-secondary); border-radius: 5px; font-size: 10.5px; font-weight: 700; padding: 1px 6px; }
+  .add-step { display: flex; align-items: center; gap: 8px; padding: 11px 16px; color: var(--mj-brand-primary); font-weight: 650; font-size: 12.5px; cursor: pointer; border-top: 1px dashed var(--mj-border-strong); }
+  .add-step:hover { background: var(--mj-bg-surface-hover); }
+  .drop-line { height: 2px; background: var(--mj-brand-primary); margin: 0 14px; position: relative; }
+  .drop-line::before { content: ""; position: absolute; left: -4px; top: -3px; width: 8px; height: 8px; border-radius: 50%; background: var(--mj-brand-primary); }
+
+  /* ---- feature matrix ---- */
+  .matrix-wrap { overflow: auto; border-top: 1px solid var(--mj-border-subtle); }
+  .mtx { border-collapse: collapse; font-size: 12px; white-space: nowrap; }
+  .mtx th, .mtx td { padding: 7px 11px; border-bottom: 1px solid var(--mj-border-subtle); border-right: 1px solid var(--mj-border-subtle); text-align: right; font-variant-numeric: tabular-nums; }
+  .mtx th { position: sticky; top: 0; background: var(--mj-bg-surface-card); z-index: 2; font-size: 10.5px; text-transform: none; letter-spacing: 0; color: var(--mj-text-secondary); font-weight: 700; }
+  .mtx th .ttype { display: block; font-size: 9.5px; font-weight: 600; color: var(--mj-text-muted); letter-spacing: .02em; }
+  .mtx th.thid, .mtx td.tid { text-align: left; position: sticky; left: 0; background: var(--mj-bg-surface); z-index: 3; box-shadow: 1px 0 0 var(--mj-border-default); }
+  .mtx th.thid { z-index: 4; background: var(--mj-bg-surface-card); }
+  .mtx td.tid { color: var(--mj-text-secondary); font-weight: 600; }
+  .mtx tr:hover td { background: var(--mj-bg-surface-hover); }
+  .mtx th.emb, .mtx td.emb { color: var(--mj-text-disabled); background: color-mix(in srgb, #7b3ff0 5%, transparent); }
+  .mtx th.tgt, .mtx td.tgt { background: color-mix(in srgb, #1f9d57 8%, transparent); }
+  .mtx td.tgt { font-weight: 700; color: var(--mj-success-text); }
+  .mtx th.asof { color: #2050c8; }
+  .mtx td.imp { color: var(--mj-text-disabled); font-style: italic; }
+  .mtx .ohcol { color: var(--mj-text-muted); }
+  .mtx-foot { display: flex; align-items: center; gap: 14px; padding: 9px 14px; font-size: 11.5px; color: var(--mj-text-muted); border-top: 1px solid var(--mj-border-subtle); }
+  .mtx-foot .mleg { display: inline-flex; align-items: center; gap: 6px; }
+  .mtx-foot .sw { width: 12px; height: 12px; border-radius: 3px; display: inline-block; border: 1px solid var(--mj-border-default); }
+
+  /* ---- right config ---- */
+  .cfg { position: sticky; top: 86px; align-self: start; }
+  .field { margin-bottom: 13px; } .field:last-child { margin-bottom: 0; }
+  .field label { display: block; font-size: 11.5px; font-weight: 700; color: var(--mj-text-secondary); margin-bottom: 5px; text-transform: uppercase; letter-spacing: .04em; }
+  .field .hint { font-size: 11.5px; color: var(--mj-text-muted); margin-top: 5px; font-weight: 400; text-transform: none; letter-spacing: 0; }
+  .ctrl { width: 100%; padding: 7px 10px; border: 1px solid var(--mj-border-default); border-radius: 8px; font-size: 13px; background: var(--mj-bg-surface); color: var(--mj-text-primary); }
+  .seg { display: inline-flex; border: 1px solid var(--mj-border-default); border-radius: 8px; overflow: hidden; }
+  .seg button { border: none; background: var(--mj-bg-surface); padding: 6px 11px; font-size: 12px; font-weight: 600; cursor: pointer; color: var(--mj-text-secondary); }
+  .seg button.on { background: var(--mj-brand-primary); color: #fff; }
+  .cfg-tabs { display: flex; gap: 4px; padding: 10px 12px 0; border-bottom: 1px solid var(--mj-border-subtle); }
+  .cfg-tab { padding: 7px 11px; font-size: 12px; font-weight: 650; color: var(--mj-text-muted); border-bottom: 2px solid transparent; cursor: pointer; display: flex; align-items: center; gap: 6px; }
+  .cfg-tab.on { color: var(--mj-brand-primary); border-bottom-color: var(--mj-brand-primary); }
+  .kv { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .switch { width: 34px; height: 19px; border-radius: 999px; background: var(--mj-brand-primary); position: relative; flex: 0 0 auto; }
+  .switch::after { content: ""; position: absolute; top: 2px; left: 17px; width: 15px; height: 15px; border-radius: 50%; background: #fff; }
+  .switch.off { background: var(--mj-border-strong); } .switch.off::after { left: 2px; }
+  .hp-grid { display: grid; grid-template-columns: 1fr 86px; gap: 8px 10px; align-items: center; }
+  .hp-grid label { font-size: 12px; font-weight: 600; color: var(--mj-text-secondary); }
+  .hp-grid input { text-align: right; }
+</style></head>
+<body><div class="ps-app">
+<aside class="ps-sidebar">
+ <div class="ps-brand"><div class="logo"><i class="fa-solid fa-wand-magic-sparkles"></i></div><div><div class="name">Predictive Studio</div><div class="sub">MemberJunction</div></div></div>
+ <nav class="ps-nav"><div class="group">Build</div>
+  <a><i class="fa-solid fa-gauge-high"></i> Home</a>
+  <a class="active"><i class="fa-solid fa-diagram-project"></i> Training Pipelines</a>
+  <a><i class="fa-solid fa-shapes"></i> Algorithm Catalog</a>
+  <div class="group">Run</div><a><i class="fa-solid fa-flask"></i> Experiments</a><a><i class="fa-solid fa-cubes"></i> Model Registry</a><a><i class="fa-solid fa-chart-column"></i> Compare Runs</a>
+  <div class="group">Assist</div><a><i class="fa-solid fa-robot"></i> Model Dev Agent</a>
+ </nav>
+ <div class="me"><div class="ps-avatar">AN</div><div class="small"><div style="color:#fff;font-weight:600">Amith N.</div><div style="color:#7e8ca5">Data Studio</div></div></div>
+</aside>
+<main class="ps-main">
+ <div class="ps-topbar">
+   <h1>Member Renewal Predictor</h1>
+   <span class="badge gray"><i class="fa-solid fa-list-ol"></i> Step list</span>
+   <span class="crumb">Training Pipelines / Member Renewal Predictor / <b style="color:var(--mj-text-secondary)">v4 draft</b></span>
+   <div class="spacer"></div>
+   <span class="small muted"><i class="fa-regular fa-clock"></i> autosaved 2m ago</span>
+   <button class="btn"><i class="fa-solid fa-code-branch"></i> Versions</button>
+   <button class="btn"><i class="fa-regular fa-circle-check"></i> Validate</button>
+   <button class="btn primary"><i class="fa-solid fa-play"></i> Train</button>
+ </div>
+ <div class="ps-content">
+  <div class="builder3">
+
+   <!-- ============ LEFT: ORDERED STEP LIST ============ -->
+   <div class="card steplist">
+     <div class="card-head" style="padding:13px 16px">
+       <i class="fa-solid fa-list-ol" style="color:var(--mj-brand-primary)"></i>
+       <h3>Pipeline steps</h3>
+       <span class="spacer"></span>
+       <span class="badge blue">11 steps</span>
+     </div>
+
+     <div class="sl-group"><i class="fa-solid fa-database"></i> Sources <span class="ct">3</span></div>
+     <div class="step-item">
+       <i class="fa-solid fa-grip-vertical grip"></i>
+       <div class="si-ic s"><i class="fa-solid fa-table"></i></div>
+       <div class="si-main"><div class="si-name">Members</div><div class="si-sub">entity · 48,210 rows</div></div>
+       <span class="si-out">base</span>
+     </div>
+     <div class="step-item">
+       <i class="fa-solid fa-grip-vertical grip"></i>
+       <div class="si-ic s"><i class="fa-solid fa-magnifying-glass-chart"></i></div>
+       <div class="si-main"><div class="si-name">Event Attendance</div><div class="si-sub">query · join MemberID · count, last</div></div>
+       <span class="si-out">+2</span>
+     </div>
+     <div class="step-item">
+       <i class="fa-solid fa-grip-vertical grip"></i>
+       <div class="si-ic s"><i class="fa-solid fa-arrows-turn-to-dots"></i></div>
+       <div class="si-main"><div class="si-name">External CRM <span class="num-chip">#2449</span></div><div class="si-sub">external entity · link CRM_ContactID</div></div>
+       <span class="si-out">+4</span>
+     </div>
+
+     <div class="sl-group"><i class="fa-solid fa-sliders"></i> Feature steps <span class="ct">5</span></div>
+     <div class="step-item">
+       <i class="fa-solid fa-grip-vertical grip"></i>
+       <div class="si-ic f"><i class="fa-solid fa-list-check"></i></div>
+       <div class="si-main"><div class="si-name">Select numeric</div><div class="si-sub">tenure, events_at_signup</div></div>
+       <span class="si-out">2 cols</span>
+     </div>
+     <div class="step-item">
+       <i class="fa-solid fa-grip-vertical grip"></i>
+       <div class="si-ic f"><i class="fa-solid fa-fill-drip"></i></div>
+       <div class="si-main"><div class="si-name">Impute</div><div class="si-sub">age → mean (34.2)</div></div>
+       <span class="si-out">in-place</span>
+     </div>
+     <div class="step-item">
+       <i class="fa-solid fa-grip-vertical grip"></i>
+       <div class="si-ic f"><i class="fa-solid fa-table-cells"></i></div>
+       <div class="si-main"><div class="si-name">One-hot encode</div><div class="si-sub">city → 18 columns</div></div>
+       <span class="si-out">+18</span>
+     </div>
+     <div class="step-item sel">
+       <i class="fa-solid fa-grip-vertical grip"></i>
+       <div class="si-ic f"><i class="fa-solid fa-clock-rotate-left"></i></div>
+       <div class="si-main"><div class="si-name">Recency <span class="badge amber" style="padding:1px 7px"><i class="fa-solid fa-clock"></i> as-of</span></div><div class="si-sub">days_since_last_activity_asof</div></div>
+       <span class="si-out">+1</span>
+     </div>
+     <div class="drop-line"></div>
+     <div class="step-item">
+       <i class="fa-solid fa-grip-vertical grip"></i>
+       <div class="si-ic f"><i class="fa-solid fa-ruler-combined"></i></div>
+       <div class="si-main"><div class="si-name">Standardize</div><div class="si-sub">z-score · numeric features</div></div>
+       <span class="si-out">scale</span>
+     </div>
+
+     <div class="sl-group"><i class="fa-solid fa-vector-square"></i> Embedding <span class="ct">1</span></div>
+     <div class="step-item">
+       <i class="fa-solid fa-grip-vertical grip"></i>
+       <div class="si-ic e"><i class="fa-solid fa-vector-square"></i></div>
+       <div class="si-main"><div class="si-name">Member summary embedding</div><div class="si-sub">384-dim · persisted · version-pinned</div></div>
+       <span class="si-out">+384</span>
+     </div>
+
+     <div class="sl-group"><i class="fa-solid fa-bullseye"></i> Target <span class="ct">1</span></div>
+     <div class="step-item">
+       <i class="fa-solid fa-grip-vertical grip"></i>
+       <div class="si-ic t"><i class="fa-solid fa-bullseye"></i></div>
+       <div class="si-main"><div class="si-name">Renewed</div><div class="si-sub">binary · positive rate 0.71</div></div>
+       <span class="si-out">label</span>
+     </div>
+
+     <div class="sl-group"><i class="fa-solid fa-shapes"></i> Algorithm <span class="ct">1</span></div>
+     <div class="step-item">
+       <i class="fa-solid fa-grip-vertical grip"></i>
+       <div class="si-ic a"><i class="fa-solid fa-shapes"></i></div>
+       <div class="si-main"><div class="si-name">XGBoost</div><div class="si-sub">300 trees · depth 6 · lr 0.1</div></div>
+       <span class="si-out">est.</span>
+     </div>
+
+     <div class="add-step"><i class="fa-solid fa-circle-plus"></i> Add step</div>
+   </div>
+
+   <!-- ============ CENTER: FEATURE MATRIX PREVIEW ============ -->
+   <div class="col col-min" style="gap:16px;display:flex;flex-direction:column">
+     <div class="callout warn">
+       <i class="fa-solid fa-triangle-exclamation"></i>
+       <div class="small"><b>Recency computed as-of the decision date.</b> <code>days_since_last_activity_asof</code> uses each member's snapshot 90 days before the renewal decision — never current activity — so the model can't peek at signals that only exist after renewal. Columns past the as-of line are masked in preview.</div>
+     </div>
+
+     <div class="card col-min">
+       <div class="card-head">
+         <i class="fa-solid fa-table-cells-large" style="color:var(--mj-brand-primary)"></i>
+         <h3>Feature matrix preview</h3>
+         <span class="spacer"></span>
+         <span class="badge gray">411 features</span>
+         <span class="badge blue"><i class="fa-solid fa-cube"></i> + 384 embedding</span>
+         <button class="btn sm ghost"><i class="fa-solid fa-rotate"></i> Refresh sample</button>
+       </div>
+       <div class="matrix-wrap">
+         <table class="mtx">
+           <thead><tr>
+             <th class="thid">member_id</th>
+             <th>tenure_yrs<span class="ttype">numeric</span></th>
+             <th>events_at_signup<span class="ttype">numeric</span></th>
+             <th>age<span class="ttype">imputed</span></th>
+             <th class="asof">days_since_last_activity_asof<span class="ttype" style="color:#2050c8">as-of · 90d</span></th>
+             <th class="ohcol">city_AUS<span class="ttype">one-hot</span></th>
+             <th class="ohcol">city_CHI<span class="ttype">one-hot</span></th>
+             <th class="ohcol">city_NYC<span class="ttype">one-hot</span></th>
+             <th class="ohcol">…city ×15<span class="ttype">one-hot</span></th>
+             <th class="emb">emb_0<span class="ttype">embedding</span></th>
+             <th class="emb">emb_1<span class="ttype">embedding</span></th>
+             <th class="emb">emb_2<span class="ttype">embedding</span></th>
+             <th class="emb">… emb_383<span class="ttype">embedding</span></th>
+             <th class="tgt">Renewed<span class="ttype" style="color:var(--mj-success-text)">target</span></th>
+           </tr></thead>
+           <tbody>
+             <tr><td class="tid">M-100482</td><td>4.2</td><td>3</td><td>41</td><td class="asof">312</td><td>0</td><td>0</td><td>1</td><td>0</td><td class="emb">-0.071</td><td class="emb">0.214</td><td class="emb">0.038</td><td class="emb">…</td><td class="tgt">1</td></tr>
+             <tr><td class="tid">M-100517</td><td>1.0</td><td>0</td><td class="imp">34.2</td><td class="asof">28</td><td>1</td><td>0</td><td>0</td><td>0</td><td class="emb">0.142</td><td class="emb">-0.090</td><td class="emb">0.117</td><td class="emb">…</td><td class="tgt">1</td></tr>
+             <tr><td class="tid">M-100533</td><td>6.8</td><td>5</td><td>57</td><td class="asof">540</td><td>0</td><td>1</td><td>0</td><td>0</td><td class="emb">-0.205</td><td class="emb">0.061</td><td class="emb">-0.144</td><td class="emb">…</td><td class="tgt">0</td></tr>
+             <tr><td class="tid">M-100574</td><td>2.5</td><td>2</td><td>29</td><td class="asof">73</td><td>0</td><td>0</td><td>0</td><td>1</td><td class="emb">0.018</td><td class="emb">0.187</td><td class="emb">0.092</td><td class="emb">…</td><td class="tgt">1</td></tr>
+             <tr><td class="tid">M-100619</td><td>0.4</td><td>1</td><td class="imp">34.2</td><td class="asof">9</td><td>0</td><td>0</td><td>1</td><td>0</td><td class="emb">0.231</td><td class="emb">-0.044</td><td class="emb">0.005</td><td class="emb">…</td><td class="tgt">0</td></tr>
+             <tr><td class="tid">M-100660</td><td>3.1</td><td>4</td><td>45</td><td class="asof">198</td><td>0</td><td>1</td><td>0</td><td>0</td><td class="emb">-0.112</td><td class="emb">0.073</td><td class="emb">0.160</td><td class="emb">…</td><td class="tgt">1</td></tr>
+             <tr><td class="tid">M-100702</td><td>5.6</td><td>6</td><td>52</td><td class="asof">421</td><td>1</td><td>0</td><td>0</td><td>0</td><td class="emb">0.044</td><td class="emb">-0.133</td><td class="emb">-0.081</td><td class="emb">…</td><td class="tgt">0</td></tr>
+           </tbody>
+         </table>
+       </div>
+       <div class="mtx-foot">
+         <span><i class="fa-solid fa-table-list"></i> Sampled 7 of 48,210 rows</span>
+         <span class="mleg"><span class="sw" style="background:color-mix(in srgb,#2050c8 14%,transparent)"></span> as-of feature</span>
+         <span class="mleg"><span class="sw" style="background:color-mix(in srgb,#7b3ff0 14%,transparent)"></span> embedding (384 abbreviated)</span>
+         <span class="mleg"><span class="sw" style="background:color-mix(in srgb,#1f9d57 18%,transparent)"></span> target</span>
+         <span style="margin-left:auto;color:var(--mj-text-disabled);font-style:italic">italic = imputed value</span>
+       </div>
+     </div>
+
+     <div class="row" style="gap:16px">
+       <div class="kpi" style="flex:1"><span class="ic"><i class="fa-solid fa-layer-group"></i></span><div class="label">Total feature width</div><div class="val">411</div><div class="delta up">27 explicit + 384 embedding</div></div>
+       <div class="kpi" style="flex:1"><span class="ic" style="background:var(--mj-success-bg);color:var(--mj-success-text)"><i class="fa-solid fa-shield-halved"></i></span><div class="label">Leakage checks</div><div class="val">3 / 3</div><div class="delta up"><i class="fa-solid fa-check"></i> all passing</div></div>
+       <div class="kpi" style="flex:1"><span class="ic" style="background:var(--mj-warning-bg);color:var(--mj-warning-text)"><i class="fa-solid fa-percent"></i></span><div class="label">Null rate (post-impute)</div><div class="val">0.0%</div><div class="delta">age: 11.4% → 0%</div></div>
+     </div>
+   </div>
+
+   <!-- ============ RIGHT: CONFIG PANEL ============ -->
+   <div class="card cfg">
+     <div class="cfg-tabs">
+       <div class="cfg-tab on"><i class="fa-solid fa-clock-rotate-left"></i> As-of</div>
+       <div class="cfg-tab"><i class="fa-solid fa-shield-halved"></i> Leakage</div>
+       <div class="cfg-tab"><i class="fa-solid fa-scissors"></i> Validation</div>
+       <div class="cfg-tab"><i class="fa-solid fa-shapes"></i> Algorithm</div>
+     </div>
+     <div class="card-body">
+
+       <!-- AS-OF -->
+       <div class="section-title" style="margin-top:0">As-of decision window</div>
+       <div class="field">
+         <label>Strategy</label>
+         <div class="seg"><button class="on">Offset</button><button>Snapshot</button><button>Event time</button></div>
+       </div>
+       <div class="field">
+         <label>Offset before decision</label>
+         <div class="row" style="gap:8px"><input class="ctrl" value="90" style="width:80px"><select class="ctrl"><option>days</option><option>weeks</option></select></div>
+         <div class="hint">Features are evaluated at <code>renewal_date − 90d</code> for every member.</div>
+       </div>
+
+       <div class="divider"></div>
+
+       <!-- LEAKAGE -->
+       <div class="section-title">Leakage guard</div>
+       <div class="field">
+         <label>Deny-list columns <span class="badge gray" style="margin-left:4px">3</span></label>
+         <div class="row wrap" style="gap:6px"><span class="tag">renewal_date</span><span class="tag">paid_at</span><span class="tag">status_post</span></div>
+       </div>
+       <div class="field">
+         <label>Single-feature dominance threshold</label>
+         <div class="row" style="align-items:center;gap:10px">
+           <div class="bar" style="flex:1"><span style="width:60%;background:var(--mj-warning)"></span></div>
+           <span class="mono">0.60</span>
+         </div>
+         <div class="hint">Block training if any one feature exceeds this share of total importance.</div>
+       </div>
+       <div class="field kv"><span class="small" style="font-weight:600">Drop post-decision joins</span><span class="switch"></span></div>
+
+       <div class="divider"></div>
+
+       <!-- VALIDATION -->
+       <div class="section-title">Validation</div>
+       <div class="field">
+         <label>Train / test split</label>
+         <div class="row" style="gap:8px"><input class="ctrl" value="0.20" style="width:80px"><span class="small muted" style="align-self:center">test fraction</span></div>
+       </div>
+       <div class="field">
+         <label>Locked holdout</label>
+         <div class="row" style="gap:8px"><input class="ctrl" value="0.15" style="width:80px"><span class="small muted" style="align-self:center">never touched until release</span></div>
+       </div>
+       <div class="field kv"><span class="small" style="font-weight:600">Stratify on <span class="tag">Renewed</span></span><span class="switch"></span></div>
+       <div class="bar" style="margin-top:2px"><span style="width:65%;background:linear-gradient(90deg,#3a6df0,#6f9bff)"></span></div>
+       <div class="hint" style="margin-top:6px">65% train · 20% test · <span style="color:var(--mj-text-secondary)">15% locked holdout</span></div>
+
+       <div class="divider"></div>
+
+       <!-- ALGORITHM -->
+       <div class="section-title">XGBoost hyperparameters</div>
+       <div class="hp-grid">
+         <label>n_estimators</label><input class="ctrl" value="300">
+         <label>max_depth</label><input class="ctrl" value="6">
+         <label>learning_rate</label><input class="ctrl" value="0.1">
+         <label>subsample</label><input class="ctrl" value="0.8">
+         <label>colsample_bytree</label><input class="ctrl" value="0.9">
+       </div>
+
+       <div class="divider"></div>
+       <button class="btn primary" style="width:100%;justify-content:center"><i class="fa-solid fa-play"></i> Train pipeline</button>
+       <button class="btn" style="width:100%;justify-content:center;margin-top:8px"><i class="fa-regular fa-circle-check"></i> Validate only</button>
+     </div>
+   </div>
+
+  </div>
+ </div>
+</main>
+</div></body></html>

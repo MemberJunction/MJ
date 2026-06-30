@@ -106,6 +106,12 @@ export interface LiveKitRecordingResult {
   EgressID: string;
   /** The raw egress status. */
   Status: string;
+  /**
+   * The `MJ: Files` row id of the registered recording — present on a successful **stop** once the egress
+   * MP4 has been registered against the Meeting-Room Conversation. Absent while recording, or when the
+   * meeting-recording storage provider isn't configured.
+   */
+  RecordingFileID?: string;
 }
 
 /** Typed wrapper over the LiveKit room GraphQL mutations. */
@@ -317,6 +323,7 @@ export class GraphQLLiveKitClient {
             ErrorMessage
             EgressID
             Status
+            RecordingFileID
           }
         }
       `,

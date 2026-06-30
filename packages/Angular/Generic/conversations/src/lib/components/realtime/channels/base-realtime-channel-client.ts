@@ -1,5 +1,8 @@
 import type { Type } from '@angular/core';
+import type { Observable } from 'rxjs';
+import { IMetadataProvider } from '@memberjunction/core';
 import { JSONValue, RealtimeToolDefinition } from '@memberjunction/ai';
+import type { AppContextSnapshot } from '@memberjunction/ai-core-plus';
 
 /**
  * Host services handed to a {@link BaseRealtimeChannelClient} at {@link BaseRealtimeChannelClient.Initialize}.
@@ -18,6 +21,16 @@ import { JSONValue, RealtimeToolDefinition } from '@memberjunction/ai';
 export interface RealtimeChannelContext {
   /** Display name of the agent the live session fronts (e.g. `"Sage"`), fixed at session start. */
   AgentName: string;
+
+  /**
+   * The MJ metadata provider the live session runs on — the SAME `IMetadataProvider` instance that
+   * authenticates the session (NOT necessarily the global default). A channel whose surface renders
+   * MemberJunction-backed data (e.g. the Media channel streaming an `MJ: Files` record through
+   * `mj-storage-media-player`) threads THIS provider into its surface / GraphQL calls so it stays
+   * multi-provider safe. `null` only in degenerate/early states; channels fall back to the global
+   * default when absent.
+   */
+  Provider: IMetadataProvider | null;
 
   /**
    * Feeds a background context note into the live realtime model (no spoken reply is
@@ -91,6 +104,32 @@ export interface RealtimeChannelContext {
    * @returns The operation's `data` payload, or `null` on any failure / when no session is live.
    */
   ExecuteServerAction<TResult>(query: string, variables: Record<string, JSONValue>): Promise<TResult | null>;
+
+  /**
+   * OPTIONAL — the live app-context stream (where the user is, what they see, and the available
+   * client-tool + agent manifest), pushed by the host (Explorer) at session start and on subsequent
+   * changes. The headless `ClientContextChannel` subscribes to this and streams deltas to the model
+   * via {@link SendContextNote}. Absent on hosts that don't supply app context (e.g. custom apps);
+   * channels must read it null-safely.
+   */
+  AppContext$?: Observable<AppContextSnapshot | null>;
+
+  /**
+   * OPTIONAL — executes a host-registered surface CLIENT TOOL by name (the handlers the host wired
+   * from the active surface's `SetAgentClientTools`). The headless `ClientContextChannel`'s
+   * `ContextTool` proxy routes the model's `{ action, params }` here so a surface tool runs in the
+   * browser with no server round-trip. Best-effort and tolerant — resolves to a structured result
+   * (never throws); `Success: false` for an unknown tool or a thrown handler. Absent on hosts that
+   * register no client tools.
+   *
+   * @param name The client-tool name (the model's `action`).
+   * @param params The tool parameters (the model's `params`).
+   * @returns A structured result the channel serializes back to the model.
+   */
+  ExecuteClientTool?(
+    name: string,
+    params: Record<string, unknown>
+  ): Promise<{ Success: boolean; Result?: unknown; ErrorMessage?: string }>;
 }
 
 /**
@@ -182,6 +221,17 @@ export abstract class BaseRealtimeChannelClient<TSurface extends object = object
 
   /** Font Awesome icon class for the channel's tab (e.g. `'fa-solid fa-chalkboard'`). */
   public abstract get TabIcon(): string;
+
+  /**
+   * OPTIONAL accent color for the channel's tab (a CSS color string, e.g. an `hsl()` /
+   * token). When a plugin supplies one, the overlay paints the tab's dot + active underline
+   * with it; when omitted (the default `null`), the overlay derives a stable, deterministic
+   * color from the {@link ChannelName} so every channel still reads as a distinct, colored
+   * surface. A channel only overrides this to enforce a specific brand accent.
+   */
+  public get TabColor(): string | null {
+    return null;
+  }
 
   /**
    * The channel's CLIENT-EXECUTED tool declarations, aggregated by the session service

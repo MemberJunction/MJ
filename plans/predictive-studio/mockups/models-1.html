@@ -1,0 +1,154 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Predictive Studio — Model Registry</title>
+<link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  .reg-layout { display: grid; grid-template-columns: 1fr 392px; gap: 18px; align-items: start; }
+  @media (max-width: 1180px){ .reg-layout { grid-template-columns: 1fr; } }
+  .table td .mname { font-weight: 650; color: var(--mj-text-primary); }
+  .table tr.sel td { background: var(--mj-brand-soft); box-shadow: inset 3px 0 0 var(--mj-brand-primary); }
+  .table tr { cursor: pointer; }
+  .auc { font-variant-numeric: tabular-nums; font-weight: 700; }
+  .auc .hint { font-weight: 500; color: var(--mj-text-muted); font-size: 11px; display:block; }
+  .drawer { position: sticky; top: 86px; }
+  .drawer .card-head { background: linear-gradient(180deg, var(--mj-bg-surface), var(--mj-bg-surface-card)); }
+  .metric-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .mtile { border: 1px solid var(--mj-border-default); border-radius: var(--radius-sm); padding: 11px 13px; }
+  .mtile .lbl { font-size: 11px; color: var(--mj-text-muted); font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+  .mtile .v { font-size: 22px; font-weight: 720; letter-spacing: -.02em; margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .mtile.honest { border-color: var(--mj-brand-primary); background: var(--mj-brand-soft); }
+  .mtile.honest .v { color: var(--mj-brand-primary); }
+  .lineage { display:flex; align-items:center; gap:0; flex-wrap:wrap; }
+  .ln-card { border:1px solid var(--mj-border-default); border-radius:8px; padding:8px 10px; background:var(--mj-bg-surface); min-width:0; }
+  .ln-card .t { font-size:10px; text-transform:uppercase; letter-spacing:.04em; color:var(--mj-text-muted); font-weight:700; }
+  .ln-card .n { font-size:12px; font-weight:650; margin-top:1px; }
+  .ln-card.cur { border-color:var(--mj-brand-primary); background:var(--mj-brand-soft); }
+  .ln-arrow { color: var(--mj-text-disabled); padding: 0 6px; font-size: 12px; }
+  .stat-bar { display:flex; gap:8px; }
+  .stat-bar .b { flex:1; text-align:center; padding:9px 6px; border:1px solid var(--mj-border-default); border-radius:var(--radius-sm); }
+  .stat-bar .b .v { font-weight:720; font-size:16px; } .stat-bar .b .l { font-size:10.5px; color:var(--mj-text-muted); font-weight:600; }
+</style></head>
+<body><div class="ps-app">
+<aside class="ps-sidebar">
+ <div class="ps-brand"><div class="logo"><i class="fa-solid fa-wand-magic-sparkles"></i></div><div><div class="name">Predictive Studio</div><div class="sub">MemberJunction</div></div></div>
+ <nav class="ps-nav"><div class="group">Build</div>
+  <a><i class="fa-solid fa-gauge-high"></i> Home</a><a><i class="fa-solid fa-diagram-project"></i> Training Pipelines</a><a><i class="fa-solid fa-shapes"></i> Algorithm Catalog</a>
+  <div class="group">Run</div><a><i class="fa-solid fa-flask"></i> Experiments</a>
+  <a class="active"><i class="fa-solid fa-cubes"></i> Model Registry</a>
+  <a><i class="fa-solid fa-chart-column"></i> Compare Runs</a>
+  <div class="group">Assist</div><a><i class="fa-solid fa-robot"></i> Model Dev Agent</a>
+ </nav>
+ <div class="me"><div class="ps-avatar">AN</div><div class="small"><div style="color:#fff;font-weight:600">Amith N.</div><div style="color:#7e8ca5">Data Studio</div></div></div>
+</aside>
+<main class="ps-main"><div class="ps-topbar">
+  <div><h1>Model Registry</h1><div class="crumb">5 models · 3 algorithms · immutable + versioned</div></div>
+  <div class="spacer"></div>
+  <button class="btn ghost sm"><i class="fa-solid fa-filter"></i> Filter</button>
+  <button class="btn ghost sm"><i class="fa-solid fa-arrow-down-wide-short"></i> Holdout AUC</button>
+  <button class="btn primary"><i class="fa-solid fa-cube"></i> Register Model</button>
+</div><div class="ps-content">
+ <div class="reg-layout">
+  <!-- LEFT: model list -->
+  <div class="card">
+   <div class="card-head"><h3>ML Models</h3><span class="badge gray">5 records</span><div class="spacer"></div>
+     <span class="small muted">Holdout AUC = honest, out-of-sample</span></div>
+   <table class="table">
+    <thead><tr><th>Model</th><th>Algo</th><th class="num">Holdout AUC</th><th>Status</th><th>Updated</th></tr></thead>
+    <tbody>
+     <tr class="sel"><td><div class="mname">Member Renewal Predictor</div><span class="tag mono">v4</span> <span class="small muted">renewal probability</span></td>
+       <td><span class="badge blue">XGBoost</span></td>
+       <td class="num"><span class="auc">0.864<span class="hint">train 0.901</span></span></td>
+       <td><span class="badge green"><i class="fa-solid fa-circle-check"></i> Published</span></td>
+       <td class="small muted">2h ago</td></tr>
+     <tr><td><div class="mname">Member Renewal Predictor</div><span class="tag mono">v3</span> <span class="small muted">superseded</span></td>
+       <td><span class="badge blue">XGBoost</span></td>
+       <td class="num"><span class="auc">0.851<span class="hint">train 0.889</span></span></td>
+       <td><span class="badge gray"><i class="fa-solid fa-box-archive"></i> Archived</span></td>
+       <td class="small muted">9d ago</td></tr>
+     <tr><td><div class="mname">Lapse Risk Scorer</div><span class="tag mono">v2</span> <span class="small muted">churn risk</span></td>
+       <td><span class="badge amber">LightGBM</span></td>
+       <td class="num"><span class="auc">0.830<span class="hint">train 0.858</span></span></td>
+       <td><span class="badge blue"><i class="fa-solid fa-vial-circle-check"></i> Validated</span></td>
+       <td class="small muted">1d ago</td></tr>
+     <tr><td><div class="mname">Event Return Predictor</div><span class="tag mono">v1</span> <span class="small muted">re-attendance</span></td>
+       <td><span class="badge blue">XGBoost</span></td>
+       <td class="num"><span class="auc">0.880<span class="hint">train 0.905</span></span></td>
+       <td><span class="badge blue"><i class="fa-solid fa-vial-circle-check"></i> Validated</span></td>
+       <td class="small muted">3d ago</td></tr>
+     <tr><td><div class="mname">Lead Score Model</div><span class="tag mono">v1</span> <span class="small muted">conversion</span></td>
+       <td><span class="badge gray">Random Forest</span></td>
+       <td class="num"><span class="auc">0.790<span class="hint">train 0.842</span></span></td>
+       <td><span class="badge gray"><i class="fa-regular fa-pen-to-square"></i> Draft</span></td>
+       <td class="small muted">5d ago</td></tr>
+    </tbody>
+   </table>
+  </div>
+
+  <!-- RIGHT: detail drawer -->
+  <div class="drawer card">
+   <div class="card-head">
+     <div><h3>Member Renewal Predictor</h3><div class="small muted">v4 · XGBoost · model #MR-4f2a</div></div>
+     <div class="spacer"></div><span class="badge green"><i class="fa-solid fa-circle-check"></i> Published</span>
+   </div>
+   <div class="card-body col" style="gap:18px">
+    <!-- lifecycle -->
+    <div>
+     <div class="section-title">Lifecycle</div>
+     <div class="stepper">
+       <div class="step done"><span class="pip"><i class="fa-solid fa-check"></i></span>Draft</div><span class="ln"></span>
+       <div class="step done"><span class="pip"><i class="fa-solid fa-check"></i></span>Validated</div><span class="ln"></span>
+       <div class="step curr"><span class="pip"><i class="fa-solid fa-circle"></i></span>Published</div><span class="ln"></span>
+       <div class="step"><span class="pip"></span>Archived</div>
+     </div>
+    </div>
+    <div class="divider"></div>
+    <!-- metrics -->
+    <div>
+     <div class="section-title">Metrics</div>
+     <div class="metric-pair">
+       <div class="mtile"><div class="lbl">Train AUC</div><div class="v">0.901</div></div>
+       <div class="mtile honest"><div class="lbl">Holdout AUC</div><div class="v">0.864</div></div>
+     </div>
+     <div class="stat-bar" style="margin-top:10px">
+       <div class="b"><div class="v">0.79</div><div class="l">Precision</div></div>
+       <div class="b"><div class="v">0.71</div><div class="l">Recall</div></div>
+       <div class="b"><div class="v">0.247</div><div class="l">Log Loss</div></div>
+     </div>
+     <p class="small muted" style="margin:8px 0 0">Train–holdout gap of <b>0.037</b> is within tolerance — no overfitting flag.</p>
+    </div>
+    <div class="divider"></div>
+    <!-- feature importance -->
+    <div>
+     <div class="section-title">Feature Importance</div>
+     <div class="fbar"><span class="small">tenure</span><div class="track"><span style="width:88%"></span></div><span class="mono">0.22</span></div>
+     <div class="fbar"><span class="small">days_since_last_activity</span><div class="track"><span style="width:76%"></span></div><span class="mono">0.19</span></div>
+     <div class="fbar"><span class="small">emb_dims (agg)</span><div class="track"><span style="width:72%"></span></div><span class="mono">0.18</span></div>
+     <div class="fbar"><span class="small">events_at_signup</span><div class="track"><span style="width:60%"></span></div><span class="mono">0.15</span></div>
+     <div class="fbar"><span class="small">engagement_score</span><div class="track"><span style="width:48%"></span></div><span class="mono">0.12</span></div>
+     <div class="fbar"><span class="small">city</span><div class="track"><span style="width:20%"></span></div><span class="mono">0.05</span></div>
+    </div>
+    <div class="callout info"><i class="fa-solid fa-circle-info"></i><div class="small"><b>No leakage detected.</b> Top feature (tenure 0.22) is well below the 0.6 dominance threshold. Promotion gate is clear.</div></div>
+    <div class="divider"></div>
+    <!-- lineage -->
+    <div>
+     <div class="section-title">Lineage</div>
+     <div class="lineage">
+       <div class="ln-card"><div class="t"><i class="fa-solid fa-diagram-project"></i> Pipeline</div><div class="n">Renewal Train v4</div></div>
+       <span class="ln-arrow"><i class="fa-solid fa-arrow-right"></i></span>
+       <div class="ln-card"><div class="t"><i class="fa-solid fa-flask"></i> Training Run</div><div class="n">run-8821</div></div>
+       <span class="ln-arrow"><i class="fa-solid fa-arrow-right"></i></span>
+       <div class="ln-card cur"><div class="t"><i class="fa-solid fa-cube"></i> ML Model</div><div class="n">v4 · this</div></div>
+       <span class="ln-arrow"><i class="fa-solid fa-arrow-right"></i></span>
+       <div class="ln-card"><div class="t"><i class="fa-solid fa-link"></i> Scoring</div><div class="n">2 bindings</div></div>
+     </div>
+    </div>
+    <div class="divider"></div>
+    <!-- promote -->
+    <div class="row" style="gap:8px">
+      <button class="btn primary" style="flex:1"><i class="fa-solid fa-arrow-up-right-dots"></i> Already Published</button>
+      <button class="btn"><i class="fa-solid fa-box-archive"></i> Archive</button>
+      <button class="btn ghost"><i class="fa-solid fa-code-compare"></i></button>
+    </div>
+   </div>
+  </div>
+ </div>
+</div></main>
+</div></body></html>

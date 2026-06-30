@@ -124,6 +124,42 @@ export class YourFeatureModule {}
 
 That's the entire authoring contract. Once the module is imported by an app, the panel is discoverable.
 
+## Entity-agnostic panels (the `'*'` wildcard)
+
+Register with `entity: '*'` to make a panel mount on **every** entity's form,
+regardless of which entity it is. This is for cross-cutting concerns that aren't
+tied to one entity — e.g. a panel that surfaces an ML model's predictions on any
+record that has a scoring binding, governance widgets that apply fleet-wide, etc.
+
+```typescript
+@RegisterClassEx(BaseFormPanel, {
+    key: 'model-predictions:model-prediction',
+    skipNullKeyWarning: true,
+    metadata: { entity: '*', slot: 'after-fields', sortKey: 40 },
+})
+@Component({ standalone: false, selector: '...', templateUrl: '...' })
+export class ModelPredictionPanel extends BaseFormPanel { /* ... */ }
+```
+
+**Wildcard panels MUST self-hide.** Because the panel mounts on *every* form, it
+has to render nothing on the forms it doesn't apply to — otherwise it clutters
+the 99% of forms it has no business on. Do the applicability check in the panel
+(typically one cached `RunView` keyed on `Record.EntityInfo.ID`) and gate the
+whole template behind it:
+
+```html
+@if (HasPredictions) {
+  <mj-collapsible-panel SectionName="Model Predictions" ...>
+    <!-- ... -->
+  </mj-collapsible-panel>
+}
+```
+
+Keep that check cheap — a single cached RunView, skipped once resolved per
+entity. The reference implementation is `ModelPredictionPanel`
+(`core-entity-forms/src/lib/panels/model-predictions/`), which only renders when
+the record's entity has an active `MJ: ML Model Scoring Bindings` row.
+
 ## Multiple panels in the same slot
 
 Slot host sorts by `metadata.sortKey` (desc), then `Priority` (desc), then registration order. Use ranges (100, 50, 10) so future panels can wedge in without renumbering every neighbor.

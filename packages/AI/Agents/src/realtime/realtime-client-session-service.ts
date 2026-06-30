@@ -31,7 +31,7 @@
  */
 
 import { UserInfo, IMetadataProvider, LogError, LogStatus, RunView } from '@memberjunction/core';
-import { MJAIAgentRunStepEntity, MJAIPromptRunEntity, MJArtifactEntity } from '@memberjunction/core-entities';
+import { MJAIAgentRunStepEntity, MJAIPromptRunEntity, MJArtifactEntity, MJApplicationEntity } from '@memberjunction/core-entities';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import {
     BaseRealtimeModel,
@@ -44,7 +44,7 @@ import {
     RealtimeToolCall,
     RealtimeToolDefinition
 } from '@memberjunction/ai';
-import { MJAIAgentEntityExtended, MJAIModelEntityExtended, MJAIAgentRunEntityExtended, AgentExecutionProgressCallback, ExecuteAgentResult } from '@memberjunction/ai-core-plus';
+import { MJAIAgentEntityExtended, MJAIModelEntityExtended, MJAIAgentRunEntityExtended, AgentExecutionProgressCallback, ExecuteAgentResult, AppContextSnapshot, FormatAppContextNote } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 
 import { AgentMemoryContextBuilder } from '../agent-memory-context-builder';
@@ -54,6 +54,7 @@ import {
     RealtimeToolBrokerDeps,
     INVOKE_TARGET_AGENT_TOOL_NAME,
     BuildRealtimeAgentFraming,
+    RealtimeColleague,
     DelegateToTargetRequest,
     DelegatedResult,
     DelegatedRunArtifact,
@@ -66,10 +67,13 @@ import {
 } from './realtime-narration';
 import {
     BuildVoiceMannerSection,
+    BuildAppRealtimeOverridesJson,
     DeepMergeConfigs,
+    GetDisclosureForTarget,
     GetNarrationPaceMs,
     GetProviderVoiceSettings,
     JSONObjectLike,
+    RealtimeAllowedAgent,
     RealtimeCoAgentConfig,
     ResolveEffectiveRealtimeConfig
 } from './realtime-coagent-config';
@@ -92,6 +96,20 @@ export interface PrepareClientSessionInput {
     AgentSessionID: string;
     /** Optional conversation id the session is attached to — stamped on the co-agent observability run. */
     ConversationID?: string;
+    /**
+     * Optional application id the realtime session runs in. Sources the **app cascade layer** of the
+     * effective config: `Application.AgentSettings.Realtime` (persona/disclosure/model overrides) +
+     * `RelevantAgents` (union-accumulated into the co-agent's allowed delegation set). Absent ⇒ no
+     * app layer (the cascade rests on type/co-agent/target/override only).
+     */
+    ApplicationID?: string;
+    /**
+     * Optional app-context snapshot — where the user is, what they see, and the live capability
+     * manifest — injected into the companion system prompt at mint (the session-start half of the
+     * client-context delivery; the {@link import('@memberjunction/ai-core-plus').AppContextSnapshot}
+     * shape). The streaming half rides the ClientContextChannel. Absent ⇒ no app-context section.
+     */
+    AppContext?: AppContextSnapshot;
     /** Prior conversation history to seed the model's context. Optional. */
     ConversationMessages?: ChatMessage[];
     /**
@@ -235,8 +253,15 @@ export interface ExecuteRelayedToolInput {
     AgentSessionID: string;
     /** The id of the (co-agent) run that owns this session, used as the delegated run's parent. Optional. */
     ParentRunID?: string;
-    /** The top-level target agent id for `invoke-target-agent` delegation. */
+    /** The top-level (lead) target agent id for `invoke-target-agent` delegation. */
     TargetAgentID: string;
+    /**
+     * The session's effective allowed delegation targets (the union-accumulated set from the config
+     * cascade; Move 4). When the model names a colleague in the call arguments (`agent`), it must
+     * resolve to one of these (or the lead); an unknown name yields a structured "not available"
+     * result. Absent/empty ⇒ classic single-target behavior (every call routes to {@link TargetAgentID}).
+     */
+    AllowedAgents?: RealtimeAllowedAgent[];
     /** The tool call the browser relayed from the provider. */
     Call: RealtimeToolCall;
     /**
@@ -524,7 +549,13 @@ export class RealtimeClientSessionService {
         session.OnToolCall(async (call) => {
             try {
                 const result = await this.ExecuteRelayedTool(
-                    { AgentSessionID: input.AgentSessionID, ParentRunID: obs?.CoAgentRunID, TargetAgentID: input.TargetAgentID, Call: call },
+                    {
+                        AgentSessionID: input.AgentSessionID,
+                        ParentRunID: obs?.CoAgentRunID,
+                        TargetAgentID: input.TargetAgentID,
+                        AllowedAgents: prep.EffectiveConfig?.realtime?.allowedAgents,
+                        Call: call,
+                    },
                     contextUser, provider,
                 );
                 await session.SendToolResult(call.CallID, result.ResultJson);
@@ -595,10 +626,11 @@ export class RealtimeClientSessionService {
         }
 
         // Effective config via the surface-agnostic cascade: type DefaultConfiguration < co-agent
-        // TypeConfiguration < TARGET agent TypeConfiguration < runtime overrides (authorization-gated
-        // upstream). This is the identical precedence on every host.
+        // TypeConfiguration < TARGET agent TypeConfiguration < APP (Application.AgentSettings.Realtime) <
+        // runtime overrides (authorization-gated upstream). This is the identical precedence on every host.
         const targetAgent = this.resolveTargetAgent(input.TargetAgentID);
-        const effectiveConfig = this.resolveEffectiveConfig(coAgent, input.ConfigOverridesJson, targetAgent);
+        const appSettingsJson = await this.resolveAppRealtimeOverrides(input.ApplicationID, contextUser, provider);
+        const effectiveConfig = this.resolveEffectiveConfig(coAgent, input.ConfigOverridesJson, targetAgent, appSettingsJson);
 
         const outcome = await this.resolveModelForSession(input, coAgent, effectiveConfig);
         if (!outcome.Resolution) {
@@ -630,14 +662,71 @@ export class RealtimeClientSessionService {
     protected resolveEffectiveConfig(
         coAgent: MJAIAgentEntityExtended,
         overridesJson?: string,
-        targetAgent?: MJAIAgentEntityExtended | null
+        targetAgent?: MJAIAgentEntityExtended | null,
+        appSettingsJson?: string | null
     ): RealtimeCoAgentConfig {
         return ResolveEffectiveRealtimeConfig(
             this.getAgentTypeDefaultConfiguration(coAgent),
             coAgent.TypeConfiguration ?? null,
             overridesJson ?? null,
-            targetAgent?.TypeConfiguration ?? null
+            targetAgent?.TypeConfiguration ?? null,
+            appSettingsJson ?? null
         );
+    }
+
+    /**
+     * Resolves the APP cascade layer JSON from `Application.AgentSettings`: the `Realtime` overrides
+     * (persona/disclosure/model) plus `RelevantAgents` mapped to the union-accumulated allowed-agent
+     * set, all translated into the canonical `{"realtime":{…}}` shape via {@link BuildAppRealtimeOverridesJson}.
+     *
+     * One tiny by-ID read (served from the provider's RunView cache on repeat). Tolerant — any failure,
+     * a missing app, or an app with no `AgentSettings` returns `null` (no app layer), never throws.
+     *
+     * @param applicationId The app the session runs in, or absent/blank for no app layer.
+     * @param contextUser The calling user (RunView scope).
+     * @param provider The request-scoped metadata provider (reserved; RunView uses the default).
+     * @returns The canonical app-layer JSON string, or `null`.
+     */
+    protected async resolveAppRealtimeOverrides(
+        applicationId: string | undefined,
+        contextUser: UserInfo,
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        provider: IMetadataProvider
+    ): Promise<string | null> {
+        const appId = applicationId?.trim();
+        if (!appId) {
+            return null;
+        }
+        try {
+            const rv = new RunView();
+            const result = await rv.RunView<MJApplicationEntity>({
+                EntityName: 'MJ: Applications',
+                ExtraFilter: `ID='${this.escapeSqlLiteral(appId)}'`,
+                MaxRows: 1,
+                ResultType: 'entity_object',
+            }, contextUser);
+            if (!result.Success || !result.Results || result.Results.length === 0) {
+                return null;
+            }
+            const settings = result.Results[0].AgentSettingsObject;
+            if (!settings) {
+                return null;
+            }
+            const relevantAgents: RealtimeAllowedAgent[] = (settings.RelevantAgents ?? []).map(r => {
+                const entry: RealtimeAllowedAgent = { agentId: r.AgentID };
+                if (r.Label) {
+                    entry.label = r.Label;
+                }
+                if (r.Disclosure === 'silent' || r.Disclosure === 'mention' || r.Disclosure === 'hand-voice') {
+                    entry.disclosure = r.Disclosure;
+                }
+                return entry;
+            });
+            return BuildAppRealtimeOverridesJson(settings.Realtime ?? null, relevantAgents);
+        } catch (error) {
+            LogError(`RealtimeClientSessionService.resolveAppRealtimeOverrides failed for app '${appId}': ${error instanceof Error ? error.message : String(error)}`);
+            return null;
+        }
     }
 
     /**
@@ -1635,20 +1724,84 @@ export class RealtimeClientSessionService {
 
         // Identity framing comes from the ONE shared producer (see BuildRealtimeAgentFraming) so the agent
         // is the same agent on every host. The interactive-surface clause is host-specific (native chat's
-        // browser/whiteboard); bridges pass none.
-        const framing = BuildRealtimeAgentFraming(targetName, this.buildInteractiveSurfaceFraming(input.ExtraTools));
+        // browser/whiteboard); bridges pass none. Colleagues come from the effective allowed-agent union
+        // (Move 4) so the lead knows who it can delegate to and how to narrate each handoff.
+        const colleagues = this.buildColleaguesFromConfig(effectiveConfig, input.TargetAgentID);
+        const framing = BuildRealtimeAgentFraming(targetName, this.buildInteractiveSurfaceFraming(input.ExtraTools), colleagues);
 
         const meetingFraming = this.buildMeetingFraming(input);
         const coAgentPrompt = this.getCoAgentSystemPromptText(coAgent);
         const voiceManner = BuildVoiceMannerSection(effectiveConfig);
         const targetIdentity = this.formatTargetIdentity(target);
+        const appContextSection = this.buildAppContextSection(input.AppContext);
         const priorTranscript = this.formatPriorTranscript(input.PriorTranscript);
         const history = this.formatConversationHistory(input.ConversationMessages);
         const memoryContext = await this.assembleMemoryContext(input, coAgent, contextUser);
 
-        return [framing, meetingFraming, coAgentPrompt, voiceManner, targetIdentity, priorTranscript, history, memoryContext]
+        return [framing, meetingFraming, coAgentPrompt, voiceManner, targetIdentity, appContextSection, priorTranscript, history, memoryContext]
             .filter(part => part && part.trim().length > 0)
             .join('\n\n');
+    }
+
+    /**
+     * Maps the effective config's union-accumulated `allowedAgents` into {@link RealtimeColleague}
+     * entries for the framing — resolving each target's display name + description from the agent cache
+     * and its effective per-target disclosure ({@link GetDisclosureForTarget}). The LEAD (the voiced
+     * target) is excluded so the co-agent never lists itself as a colleague. Empty when none configured.
+     *
+     * @param effectiveConfig The resolved effective configuration.
+     * @param excludeAgentId The lead/target agent id to exclude from the colleague list.
+     * @returns The colleague set (possibly empty).
+     */
+    protected buildColleaguesFromConfig(
+        effectiveConfig: RealtimeCoAgentConfig | undefined,
+        excludeAgentId?: string
+    ): RealtimeColleague[] {
+        const allowed = effectiveConfig?.realtime?.allowedAgents ?? [];
+        if (allowed.length === 0) {
+            return [];
+        }
+        const colleagues: RealtimeColleague[] = [];
+        for (const entry of allowed) {
+            if (excludeAgentId && UUIDsEqual(entry.agentId, excludeAgentId)) {
+                continue;
+            }
+            const agent = (AIEngine.Instance.Agents ?? []).find(a => UUIDsEqual(a.ID, entry.agentId));
+            const colleague: RealtimeColleague = {
+                name: entry.label ?? agent?.Name ?? entry.agentId,
+                disclosure: GetDisclosureForTarget(effectiveConfig, entry.agentId),
+            };
+            if (agent?.Description) {
+                colleague.description = agent.Description;
+            }
+            colleagues.push(colleague);
+        }
+        return colleagues;
+    }
+
+    /**
+     * Builds the session-start app-context section from the {@link AppContextSnapshot}: where the user
+     * is, what they see, and the live capability manifest, rendered via the shared
+     * {@link FormatAppContextNote} (one wording for mint-time and streaming notes) under a clear heading.
+     * Returns `''` when no snapshot was supplied or nothing salient survives.
+     *
+     * @param appContext The app-context snapshot, or undefined.
+     * @returns The prompt section, or `''`.
+     */
+    protected buildAppContextSection(appContext?: AppContextSnapshot): string {
+        if (!appContext) {
+            return '';
+        }
+        const note = FormatAppContextNote(appContext);
+        if (!note) {
+            return '';
+        }
+        return (
+            `CURRENT APP CONTEXT — the user's live situation in the application. THIS IS YOUR SOURCE OF TRUTH for ` +
+            `where the user is and what they see — use it directly to answer "where am I" and to act in context; do ` +
+            `NOT ask the user to capture a snapshot just to learn their location. When it lists available actions, ` +
+            `those are the actions you can run here via 'ContextTool':\n${note}`
+        );
     }
 
     /**
@@ -1696,13 +1849,34 @@ export class RealtimeClientSessionService {
         if (!extraTools || extraTools.length === 0) {
             return '';
         }
-        return ` ONE EXCEPTION: besides '${INVOKE_TARGET_AGENT_TOOL_NAME}' you have been given ` +
-            `interactive-surface tools (for example 'browser_*' to drive a LIVE web browser the user can ` +
-            `watch, or 'Whiteboard_*' to draw on a shared board). Those surfaces are operated by YOU, ` +
-            `directly — when the user asks to use one (e.g. "open/show a browser", "go to a site", "add ` +
-            `to the whiteboard"), call the matching tool yourself immediately and narrate what you're ` +
-            `doing. NEVER route an interactive-surface request through '${INVOKE_TARGET_AGENT_TOOL_NAME}', ` +
-            `and never claim you lack a session — calling the tool is all that's needed.`;
+        const hasContextTool = extraTools.some(t => t.Name === 'ContextTool');
+        const otherSurfaces = extraTools.filter(t => t.Name !== 'ContextTool');
+        let clause = '';
+
+        if (otherSurfaces.length > 0) {
+            clause += ` ONE EXCEPTION: besides '${INVOKE_TARGET_AGENT_TOOL_NAME}' you have been given ` +
+                `interactive-surface tools (for example 'browser_*' to drive a LIVE web browser the user can ` +
+                `watch, or 'Whiteboard_*' to draw on a shared board). Those surfaces are operated by YOU, ` +
+                `directly — when the user asks to use one (e.g. "open/show a browser", "go to a site", "add ` +
+                `to the whiteboard"), call the matching tool yourself immediately and narrate what you're ` +
+                `doing. NEVER route an interactive-surface request through '${INVOKE_TARGET_AGENT_TOOL_NAME}', ` +
+                `and never claim you lack a session — calling the tool is all that's needed.`;
+        }
+
+        if (hasContextTool) {
+            clause += ` You ALSO have a 'ContextTool' that lets you ACT IN THE APPLICATION the user is currently ` +
+                `in — navigate to apps and records, switch tabs/views, and run the actions available on the ` +
+                `current screen. The set of actions available RIGHT NOW (their names + what they do) is given to you ` +
+                `in your CURRENT APP CONTEXT and updated as the user moves around. To use one, call 'ContextTool' ` +
+                `with { "action": "<action name>", "params": { ... } } — it runs in the user's browser IMMEDIATELY. ` +
+                `Use 'ContextTool' YOURSELF for anything that navigates or acts in the app (e.g. "take me to ` +
+                `Knowledge Hub" → ContextTool with action 'NavigateToApp'; "open this record"; "switch to the X tab"). ` +
+                `Do NOT route in-app navigation/actions through '${INVOKE_TARGET_AGENT_TOOL_NAME}', and NEVER say you ` +
+                `need an active session id or a screen snapshot to do them — calling 'ContextTool' is all that's ` +
+                `needed. Reserve '${INVOKE_TARGET_AGENT_TOOL_NAME}' for actual analysis / data work, not navigation.`;
+        }
+
+        return clause;
     }
 
     /**
@@ -1865,6 +2039,12 @@ export class RealtimeClientSessionService {
                     request: {
                         type: 'string',
                         description: 'The natural-language request to hand to the target agent.'
+                    },
+                    agent: {
+                        type: 'string',
+                        description:
+                            'Optional: the name of a specific colleague to hand this to (one of the colleagues ' +
+                            'named in your instructions). Omit to use your own/the lead agent.'
                     }
                 },
                 required: ['request']
@@ -1915,23 +2095,102 @@ export class RealtimeClientSessionService {
         contextUser: UserInfo,
         provider: IMetadataProvider
     ): Promise<DelegatedResult> {
-        const target = this.resolveTargetAgent(input.TargetAgentID);
-        if (!target) {
-            return {
-                CallID: request.CallID,
-                Success: false,
-                Output: 'No target agent is configured for this voice session, so the request could not be performed.'
-            };
+        // Multi-target (Move 4): the model may name a specific colleague in the call arguments. Resolve
+        // it against the session's allowed union; an unknown name yields a structured "not available"
+        // result the model narrates. No name ⇒ route to the lead TargetAgentID (classic behavior).
+        const requestedAgent = this.parseDelegateAgentName(request.Arguments);
+        const resolution = this.resolveDelegationTarget(requestedAgent, input);
+        if (!resolution.Agent) {
+            return { CallID: request.CallID, Success: false, Output: resolution.Error };
         }
 
         try {
-            const result = await this.runDelegatedAgent(input, request, target, contextUser, provider);
+            const result = await this.runDelegatedAgent(input, request, resolution.Agent, contextUser, provider);
             const artifacts = await this.createDelegatedRunArtifacts(result, contextUser, provider);
             return this.buildDelegatedResult(request.CallID, result, artifacts);
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             return { CallID: request.CallID, Success: false, Output: `Delegation failed: ${message}` };
         }
+    }
+
+    /**
+     * Resolves which agent a delegation should run, given an optional colleague name the model passed.
+     *
+     * - **No name** → the lead {@link ExecuteRelayedToolInput.TargetAgentID} (classic single-target).
+     * - **A name matching an allowed colleague** (by label, resolved agent Name, or id — case/whitespace
+     *   insensitive) OR the lead's own name → that agent.
+     * - **A name matching nothing in the union/lead** → an error result naming the available colleagues,
+     *   so the model self-corrects conversationally rather than silently delegating to the wrong agent.
+     *
+     * The allowed union is an affordance/UX filter; `CanRun` on the resolved agent (inside the agent run)
+     * remains the security boundary — both apply.
+     *
+     * @param requestedAgent The colleague name the model named, or undefined.
+     * @param input The relayed tool input (lead id + allowed union).
+     * @returns `{ Agent }` on success, or `{ Error }` describing why no agent resolved.
+     */
+    protected resolveDelegationTarget(
+        requestedAgent: string | undefined,
+        input: ExecuteRelayedToolInput
+    ): { Agent?: MJAIAgentEntityExtended; Error: string } {
+        const lead = this.resolveTargetAgent(input.TargetAgentID);
+        const name = requestedAgent?.trim().toLowerCase();
+
+        if (!name) {
+            return lead
+                ? { Agent: lead, Error: '' }
+                : { Error: 'No target agent is configured for this voice session, so the request could not be performed.' };
+        }
+
+        // Allow naming the lead itself.
+        if (lead && (lead.Name ?? '').trim().toLowerCase() === name) {
+            return { Agent: lead, Error: '' };
+        }
+
+        const allowed = input.AllowedAgents ?? [];
+        const match = allowed.find(a => {
+            if ((a.label ?? '').trim().toLowerCase() === name) {
+                return true;
+            }
+            if (a.agentId.trim().toLowerCase() === name) {
+                return true;
+            }
+            const resolvedName = this.resolveTargetAgent(a.agentId)?.Name ?? '';
+            return resolvedName.trim().toLowerCase() === name;
+        });
+        if (match) {
+            const agent = this.resolveTargetAgent(match.agentId);
+            if (agent) {
+                return { Agent: agent, Error: '' };
+            }
+        }
+
+        return {
+            Error:
+                `"${requestedAgent}" isn't a colleague available in this session. ` +
+                `Available: ${this.describeAvailableColleagues(input) || '(none — handle it yourself or via the lead agent)'}.`,
+        };
+    }
+
+    /** Comma-joined display names of the session's allowed colleagues (labels preferred), for error guidance. */
+    protected describeAvailableColleagues(input: ExecuteRelayedToolInput): string {
+        return (input.AllowedAgents ?? [])
+            .map(a => a.label ?? this.resolveTargetAgent(a.agentId)?.Name ?? a.agentId)
+            .join(', ');
+    }
+
+    /** Parses the optional `agent` (colleague name) from an `invoke-target-agent` call's arguments JSON. */
+    private parseDelegateAgentName(argumentsJson: string): string | undefined {
+        try {
+            const parsed = JSON.parse(argumentsJson) as { agent?: unknown };
+            if (typeof parsed.agent === 'string' && parsed.agent.trim().length > 0) {
+                return parsed.agent.trim();
+            }
+        } catch {
+            /* not JSON — no named agent */
+        }
+        return undefined;
     }
 
     /**

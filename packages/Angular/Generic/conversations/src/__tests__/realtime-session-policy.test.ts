@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { IMetadataProvider } from '@memberjunction/core';
 import { JSONObject } from '@memberjunction/ai';
-import { RealtimeSessionService, VoiceCaption, VoiceConnectionState } from '../lib/services/realtime-session.service';
+import { RealtimeSessionService, RealtimeCaption, RealtimeConnectionState } from '../lib/services/realtime-session.service';
 
 /**
  * Provider-agnostic POLICY surfaces of the voice session service that no other suite
@@ -50,8 +50,8 @@ function internals(service: RealtimeSessionService): RealtimeSessionPolicyIntern
   return service as unknown as RealtimeSessionPolicyInternals;
 }
 
-function latestState(service: RealtimeSessionService): VoiceConnectionState {
-  let state: VoiceConnectionState = 'closed';
+function latestState(service: RealtimeSessionService): RealtimeConnectionState {
+  let state: RealtimeConnectionState = 'closed';
   service.ConnectionState$.subscribe(s => (state = s)).unsubscribe();
   return state;
 }
@@ -77,7 +77,7 @@ describe('RealtimeSessionService — SendText (typed turn injection)', () => {
     await vi.waitFor(() => expect(executeGQL).toHaveBeenCalled());
 
     expect(client.TextsSent).toEqual(['hello there']);
-    let captions: VoiceCaption[] = [];
+    let captions: RealtimeCaption[] = [];
     service.Captions$.subscribe(c => (captions = c)).unsubscribe();
     expect(captions).toEqual([{ Role: 'User', Text: 'hello there' }]);
     expect(executeGQL).toHaveBeenCalledWith(
@@ -120,7 +120,7 @@ describe('RealtimeSessionService — SendText (typed turn injection)', () => {
     await Promise.resolve(); // let the relay microtask settle
 
     expect(client.TextsSent).toEqual(['typed while minting']);
-    let captions: VoiceCaption[] = [];
+    let captions: RealtimeCaption[] = [];
     service.Captions$.subscribe(c => (captions = c)).unsubscribe();
     expect(captions).toEqual([{ Role: 'User', Text: 'typed while minting' }]);
     expect(executeGQL).not.toHaveBeenCalled();
@@ -224,7 +224,7 @@ describe('RealtimeSessionService — parseSessionConfig resilience', () => {
   });
 });
 
-describe('RealtimeSessionService — EndVoiceSession / teardown lifecycle', () => {
+describe('RealtimeSessionService — EndRealtimeSession / teardown lifecycle', () => {
   let service: RealtimeSessionService;
   let client: FakeRealtimeClient;
   let executeGQL: ReturnType<typeof vi.fn>;
@@ -237,7 +237,7 @@ describe('RealtimeSessionService — EndVoiceSession / teardown lifecycle', () =
   });
 
   it('is a safe no-op when no session is active and none was minted', async () => {
-    await service.EndVoiceSession();
+    await service.EndRealtimeSession();
     expect(executeGQL).not.toHaveBeenCalled();
     expect(latestState(service)).toBe('closed');
   });
@@ -251,7 +251,7 @@ describe('RealtimeSessionService — EndVoiceSession / teardown lifecycle', () =
     internals(service).onClientStateChange('listening');
     service.SetMinimized(true);
 
-    await service.EndVoiceSession();
+    await service.EndRealtimeSession();
 
     expect(executeGQL).toHaveBeenCalledWith(expect.stringContaining('CloseAgentSession'), { agentSessionId: 'sess-9' });
     expect(disconnect).toHaveBeenCalledTimes(1);
@@ -267,7 +267,7 @@ describe('RealtimeSessionService — EndVoiceSession / teardown lifecycle', () =
     const handler = vi.fn(() => '{"success":true}');
     service.RegisterClientToolHandler('Whiteboard_', handler);
 
-    await service.EndVoiceSession();
+    await service.EndRealtimeSession();
 
     // After teardown the prefix no longer routes locally — the registry was cleared.
     internals(service).client = client;
@@ -282,7 +282,7 @@ describe('RealtimeSessionService — EndVoiceSession / teardown lifecycle', () =
     executeGQL.mockRejectedValueOnce(new Error('server gone'));
     internals(service).agentSessionId = 'sess-9';
 
-    await service.EndVoiceSession();
+    await service.EndRealtimeSession();
 
     expect(service.CurrentAgentSessionId).toBeNull();
     expect(error).toHaveBeenCalledWith(expect.stringContaining('Failed to close server session'), expect.any(Error));
@@ -292,7 +292,7 @@ describe('RealtimeSessionService — EndVoiceSession / teardown lifecycle', () =
     internals(service).agentSessionId = 'sess-9';
     internals(service).onClientStateChange('error');
 
-    await service.EndVoiceSession();
+    await service.EndRealtimeSession();
 
     expect(latestState(service)).toBe('error');
   });
@@ -361,8 +361,8 @@ describe('RealtimeSessionService — transcript correction (ReplacesPrevious)', 
     return s as unknown as TranscriptInternals;
   }
 
-  function captionsOf(s: RealtimeSessionService): VoiceCaption[] {
-    let captions: VoiceCaption[] = [];
+  function captionsOf(s: RealtimeSessionService): RealtimeCaption[] {
+    let captions: RealtimeCaption[] = [];
     s.Captions$.subscribe(c => (captions = c)).unsubscribe();
     return captions;
   }
@@ -413,5 +413,106 @@ describe('RealtimeSessionService — transcript correction (ReplacesPrevious)', 
       expect.stringContaining('RelayRealtimeTranscript'),
       expect.objectContaining({ replacesPrevious: false })
     );
+  });
+});
+
+describe('RealtimeSessionService — per-turn recording timing across a tool-call gap', () => {
+  let service: RealtimeSessionService;
+  let executeGQL: ReturnType<typeof vi.fn>;
+  let now: number; // the fake recorder's current recording-relative offset (ms), advanced by tests
+
+  /** The transcript entry point + the recorder seam the timing logic reads. */
+  interface TimingInternals {
+    onClientTranscript(t: {
+      Role: 'User' | 'Assistant'; Text: string; IsFinal: boolean;
+      Kind: 'normal' | 'narration'; ReplacesPrevious?: boolean;
+    }): Promise<void>;
+    recorder: { NowOffsetMs(): number } | null;
+    currentTurnStartMs: number | null;
+    turnAudioStartCaptured: boolean;
+  }
+
+  function timing(s: RealtimeSessionService): TimingInternals {
+    return s as unknown as TimingInternals;
+  }
+
+  /** The {utteranceStartMs, utteranceEndMs} the LAST RelayRealtimeTranscript carried. */
+  function lastTiming(): { utteranceStartMs: number | null; utteranceEndMs: number | null } {
+    const calls = executeGQL.mock.calls;
+    for (let i = calls.length - 1; i >= 0; i--) {
+      if (typeof calls[i][0] === 'string' && (calls[i][0] as string).includes('RelayRealtimeTranscript')) {
+        const vars = calls[i][1] as { utteranceStartMs: number | null; utteranceEndMs: number | null };
+        return { utteranceStartMs: vars.utteranceStartMs, utteranceEndMs: vars.utteranceEndMs };
+      }
+    }
+    throw new Error('no RelayRealtimeTranscript call recorded');
+  }
+
+  beforeEach(() => {
+    service = new RealtimeSessionService();
+    executeGQL = vi.fn(async () => ({}));
+    service.Provider = { ExecuteGQL: executeGQL } as unknown as IMetadataProvider;
+    internals(service).agentSessionId = 'sess-1';
+    now = 0;
+    // Inject a fake recorder whose offset is whatever the test set `now` to, mirroring how the
+    // real RealtimeAudioRecorder reports wall-clock-relative offsets during a live recording.
+    timing(service).recorder = { NowOffsetMs: () => now };
+    // Seed as the live recorder path does: first turn starts at ~0, guard not yet captured.
+    timing(service).currentTurnStartMs = 0;
+    timing(service).turnAudioStartCaptured = false;
+  });
+
+  it('stamps a post-gap assistant answer at the offset its AUDIO begins, not the prior turn end', async () => {
+    const t = timing(service);
+
+    // 0:28 — agent says "checking the latest price now". Its audio started flowing at ~0:25
+    // (first interim), finalized at 0:28.
+    now = 25000; await t.onClientTranscript({ Role: 'Assistant', Text: 'checking', IsFinal: false, Kind: 'normal' });
+    now = 28000; await t.onClientTranscript({ Role: 'Assistant', Text: 'checking the latest price now', IsFinal: true, Kind: 'normal' });
+    expect(lastTiming()).toEqual({ utteranceStartMs: 25000, utteranceEndMs: 28000 });
+
+    // ~40s web-search tool call runs (no transcript events during the gap).
+    // 1:08–1:18 — the ANSWER turn: its audio begins at 1:08 (first interim), finalized at 1:18.
+    now = 68000; await t.onClientTranscript({ Role: 'Assistant', Text: 'I found it', IsFinal: false, Kind: 'normal' });
+    now = 78000; await t.onClientTranscript({ Role: 'Assistant', Text: 'I found it, SPCX is $153.23', IsFinal: true, Kind: 'normal' });
+
+    // The fix: start reflects where the answer audio actually is (68000), NOT the prior turn's
+    // end (28000) that the old inherit-previous-end model would have stamped.
+    expect(lastTiming()).toEqual({ utteranceStartMs: 68000, utteranceEndMs: 78000 });
+  });
+
+  it('only the FIRST interim of a turn sets the start (mid-turn deltas do not move it)', async () => {
+    const t = timing(service);
+    now = 10000; await t.onClientTranscript({ Role: 'Assistant', Text: 'one', IsFinal: false, Kind: 'normal' });
+    now = 12000; await t.onClientTranscript({ Role: 'Assistant', Text: 'two', IsFinal: false, Kind: 'normal' });
+    now = 15000; await t.onClientTranscript({ Role: 'Assistant', Text: 'one two three', IsFinal: true, Kind: 'normal' });
+    expect(lastTiming()).toEqual({ utteranceStartMs: 10000, utteranceEndMs: 15000 });
+  });
+
+  it('narration interims never claim the next real turn start slot', async () => {
+    const t = timing(service);
+    // An ephemeral progress narration speaks during the gap — its interim must NOT stamp the start.
+    now = 40000; await t.onClientTranscript({ Role: 'Assistant', Text: 'still working', IsFinal: false, Kind: 'narration' });
+    expect(t.currentTurnStartMs).toBe(0); // unchanged by narration
+    // The real answer turn then starts at 68000 and must own the start.
+    now = 68000; await t.onClientTranscript({ Role: 'Assistant', Text: 'done', IsFinal: false, Kind: 'normal' });
+    now = 70000; await t.onClientTranscript({ Role: 'Assistant', Text: 'done, here it is', IsFinal: true, Kind: 'normal' });
+    expect(lastTiming()).toEqual({ utteranceStartMs: 68000, utteranceEndMs: 70000 });
+  });
+
+  it('a correction (replacesPrevious) carries no start and does not open a new turn', async () => {
+    const t = timing(service);
+    now = 5000; await t.onClientTranscript({ Role: 'Assistant', Text: 'hi', IsFinal: false, Kind: 'normal' });
+    now = 8000; await t.onClientTranscript({ Role: 'Assistant', Text: 'hi there friend', IsFinal: true, Kind: 'normal' });
+    now = 9000; await t.onClientTranscript({ Role: 'Assistant', Text: 'hi there', IsFinal: true, Kind: 'normal', ReplacesPrevious: true });
+    // The correction relays start=null (it doesn't reopen a turn) while end tracks finalization.
+    expect(lastTiming()).toEqual({ utteranceStartMs: null, utteranceEndMs: 9000 });
+  });
+
+  it('omits timing entirely when the session is not being recorded', async () => {
+    const t = timing(service);
+    t.recorder = null;
+    await t.onClientTranscript({ Role: 'Assistant', Text: 'no recording', IsFinal: true, Kind: 'normal' });
+    expect(lastTiming()).toEqual({ utteranceStartMs: null, utteranceEndMs: null });
   });
 });

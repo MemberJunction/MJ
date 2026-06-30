@@ -795,6 +795,11 @@ export class TestingAnalyticsComponent implements OnInit, OnDestroy {
   VersionRows: VersionRow[] = [];
   IsLoadingVersions = false;
 
+  // Cached breakdown name lists for the dashboard's agent context.
+  private topFailingNames: string[] = [];
+  private slowestNames: string[] = [];
+  private mostExpensiveNames: string[] = [];
+
   // ------- Observables -------
   DisplayTrends$!: Observable<TestTrendData[]>;
   PassRateTrendDirection$!: Observable<'up' | 'down' | 'stable'>;
@@ -950,6 +955,15 @@ export class TestingAnalyticsComponent implements OnInit, OnDestroy {
       shareReplay(1)
     );
 
+    // Cache the breakdown name lists so the dashboard's agent context can publish
+    // them (top failing / slowest / most expensive tests).
+    analytics$.pipe(takeUntil(this.destroy$)).subscribe(a => {
+      this.topFailingNames = a.topFailingTests.slice(0, 5).map(t => t.testName);
+      this.slowestNames = a.slowestTests.slice(0, 5).map(t => t.testName);
+      this.mostExpensiveNames = a.mostExpensiveTests.slice(0, 5).map(t => t.testName);
+      this.emitState();
+    });
+
     this.ScoreDistribution$ = this.instrumentationService.testRuns$.pipe(
       map(runs => this.buildScoreDistribution(runs)),
       shareReplay(1)
@@ -1009,6 +1023,7 @@ export class TestingAnalyticsComponent implements OnInit, OnDestroy {
       this.VersionRows = [];
     } finally {
       this.IsLoadingVersions = false;
+      this.emitState();
       this.cdr.markForCheck();
     }
   }
@@ -1044,7 +1059,12 @@ export class TestingAnalyticsComponent implements OnInit, OnDestroy {
 
   private emitState(): void {
     this.stateChange.emit({
-      selectedDays: this.SelectedDays
+      selectedDays: this.SelectedDays,
+      // Breakdown name lists + version count for the dashboard's agent context.
+      topFailingTests: this.topFailingNames,
+      slowestTests: this.slowestNames,
+      mostExpensiveTests: this.mostExpensiveNames,
+      versionCount: this.VersionRows.length
     });
   }
 }

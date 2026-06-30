@@ -19,7 +19,7 @@ function featureLoader(importFn: () => Promise<unknown>): () => Promise<void> {
 // --- @memberjunction/ng-dashboards → ./actions-dashboards.module (7 entries) ---
 const loadActionsDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/actions-dashboards.module'));
 
-// --- @memberjunction/ng-dashboards → ./ai-dashboards.module (16 entries) ---
+// --- @memberjunction/ng-dashboards → ./ai-dashboards.module (17 entries) ---
 const loadAiDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/ai-dashboards.module'));
 
 // --- @memberjunction/ng-dashboards → ./communication-dashboards.module (7 entries) ---
@@ -28,7 +28,7 @@ const loadCommunicationDashboardsModule = featureLoader(() => import('@memberjun
 // --- @memberjunction/ng-dashboards → ./component-studio-dashboards.module (3 entries) ---
 const loadComponentStudioDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/component-studio-dashboards.module'));
 
-// --- @memberjunction/ng-dashboards → ./core-dashboards.module (29 entries) ---
+// --- @memberjunction/ng-dashboards → ./core-dashboards.module (30 entries) ---
 const loadCoreDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/core-dashboards.module'));
 
 // --- @memberjunction/ng-dashboards → ./credentials-dashboards.module (6 entries) ---
@@ -48,6 +48,9 @@ const loadMcpModule = featureLoader(() => import('@memberjunction/ng-dashboards/
 
 // --- @memberjunction/ng-dashboards → ./module (3 entries) ---
 const loadModule = featureLoader(() => import('@memberjunction/ng-dashboards/module'));
+
+// --- @memberjunction/ng-dashboards → ./predictive-studio-dashboards.module (9 entries) ---
+const loadPredictiveStudioDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/predictive-studio-dashboards.module'));
 
 // --- @memberjunction/ng-dashboards → ./scheduling-dashboards.module (4 entries) ---
 const loadSchedulingDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/scheduling-dashboards.module'));
@@ -90,6 +93,7 @@ export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {
   'BaseResourceComponent::AutotaggingPipelineResource': loadAiDashboardsModule,
   'BaseResourceComponent::ClusterVisualizationResource': loadAiDashboardsModule,
   'BaseResourceComponent::DuplicateDetectionResource': loadAiDashboardsModule,
+  'BaseResourceComponent::FeaturePipelinesResource': loadAiDashboardsModule,
   'BaseResourceComponent::KnowledgeConfigResource': loadAiDashboardsModule,
   'BaseResourceComponent::SchedulingResource': loadAiDashboardsModule,
   'BaseResourceComponent::Tags': loadAiDashboardsModule,
@@ -134,6 +138,7 @@ export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {
   'BaseResourceComponent::PermissionsResourceAccessResource': loadCoreDashboardsModule,
   'BaseResourceComponent::PermissionsUserAccessResource': loadCoreDashboardsModule,
   'BaseResourceComponent::QueryBrowserResource': loadCoreDashboardsModule,
+  'BaseResourceComponent::RealtimeRecordingsDashboard': loadCoreDashboardsModule,
   'BaseResourceComponent::SettingsExplorerInspector': loadCoreDashboardsModule,
   'BaseResourceComponent::SystemDiagnosticsResource': loadCoreDashboardsModule,
   'BaseResourceComponent::VersionHistoryDiffResource': loadCoreDashboardsModule,
@@ -177,6 +182,17 @@ export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {
   'BaseResourceComponent::ArchiveRunsResource': loadModule,
   'BaseResourceComponent::DatabaseDesignerDashboard': loadModule,
 
+  // @memberjunction/ng-dashboards → ./predictive-studio-dashboards.module
+  'BaseDashboard::PredictiveStudioDashboard': loadPredictiveStudioDashboardsModule,
+  'BaseResourceComponent::PredictiveStudioCatalogResource': loadPredictiveStudioDashboardsModule,
+  'BaseResourceComponent::PredictiveStudioCompareResource': loadPredictiveStudioDashboardsModule,
+  'BaseResourceComponent::PredictiveStudioDashboard': loadPredictiveStudioDashboardsModule,
+  'BaseResourceComponent::PredictiveStudioExperimentsResource': loadPredictiveStudioDashboardsModule,
+  'BaseResourceComponent::PredictiveStudioHomeResource': loadPredictiveStudioDashboardsModule,
+  'BaseResourceComponent::PredictiveStudioPipelinesResource': loadPredictiveStudioDashboardsModule,
+  'BaseResourceComponent::PredictiveStudioProductionResource': loadPredictiveStudioDashboardsModule,
+  'BaseResourceComponent::PredictiveStudioRegistryResource': loadPredictiveStudioDashboardsModule,
+
   // @memberjunction/ng-dashboards → ./scheduling-dashboards.module
   'BaseDashboard::SchedulingDashboard': loadSchedulingDashboardsModule,
   'BaseResourceComponent::SchedulingActivityResource': loadSchedulingDashboardsModule,
@@ -207,4 +223,4 @@ export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {
 
 };
 
-export const LAZY_FEATURE_CONFIG_COUNT = 104;
+export const LAZY_FEATURE_CONFIG_COUNT = 115;

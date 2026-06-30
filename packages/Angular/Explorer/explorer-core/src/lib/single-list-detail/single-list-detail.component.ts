@@ -1,4 +1,4 @@
-import { Component, Input, OnInit, ViewChild, ChangeDetectorRef, HostListener, ElementRef } from '@angular/core';
+import { Component, Input, OnInit, OnDestroy, ViewChild, ChangeDetectorRef, HostListener, ElementRef } from '@angular/core';
 import { BaseEntity, CompositeKey, LogError, LogErrorEx, LogStatus, Metadata, RunView, RunViewResult } from '@memberjunction/core';
 import { MJListDetailEntity, MJListDetailEntityExtended, MJListEntity, MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import { SharedService } from '@memberjunction/ng-shared';
@@ -8,7 +8,7 @@ import { GraphQLDataProvider, GraphQLListsClient } from '@memberjunction/graphql
 import { CapabilitiesForLevel, type ListCapabilities, type ListDelta, type ListRefreshMode, type SharePermissionLevel } from '@memberjunction/lists-base';
 import { ListSharingService } from '@memberjunction/ng-list-management';
 import { ExportService } from '@memberjunction/ng-export-service';
-import { Subject, debounceTime } from 'rxjs';
+import { Subject, debounceTime, takeUntil } from 'rxjs';
 import { NewItemOption } from '../../generic/Item.types';
 import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 
@@ -29,7 +29,7 @@ interface AddableRecord {
   templateUrl: './single-list-detail.component.html',
   styleUrls: ['./single-list-detail.component.css', '../../shared/first-tab-styles.css']
 })
-export class SingleListDetailComponent extends BaseAngularComponent implements OnInit {
+export class SingleListDetailComponent extends BaseAngularComponent implements OnInit, OnDestroy {
 
   @Input() public ListID: string = "";
 
@@ -138,6 +138,7 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
   public addProgress: number = 0;
   public addTotal: number = 0;
   private searchSubject: Subject<string> = new Subject();
+  private destroy$ = new Subject<void>();
 
   // Add from view dialog (existing)
   public showAddFromViewDialog: boolean = false;
@@ -202,8 +203,13 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
     super();
     // Debounce search input
     this.searchSubject
-      .pipe(debounceTime(300))
+      .pipe(debounceTime(300), takeUntil(this.destroy$))
       .subscribe((searchText) => this.searchRecords(searchText));
+  }
+
+  public ngOnDestroy(): void {
+    this.destroy$.next();
+    this.destroy$.complete();
   }
 
   public ngOnInit(): void {

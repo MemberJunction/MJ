@@ -251,6 +251,23 @@ export class GridViewRendererComponent extends BaseAngularComponent implements I
    */
   @ViewChild('grid') protected grid?: EntityDataGridComponent;
 
+  /**
+   * IMPERATIVE export entry point ({@link IViewRenderer.exportRecords}). Lets the host trigger
+   * an export programmatically (ultimately for the AI agent) by delegating to the hosted grid's
+   * self-contained {@link EntityDataGridComponent.Export} (which downloads the file). The grid's
+   * toolbar export button remains the interactive path; this is the no-UI equivalent.
+   *
+   * @param format optional output format; the grid defaults to 'excel' when omitted.
+   * @returns true when the export succeeded, false when the grid isn't ready or the export failed.
+   */
+  async exportRecords(format?: 'csv' | 'excel' | 'json'): Promise<boolean> {
+    if (!this.grid) {
+      return false;
+    }
+    const result = await this.grid.Export(format ? { format } : undefined, true);
+    return !!result?.success;
+  }
+
   // ================================================================
   // Self-contained dialog state (never surfaced to the host)
   // ================================================================
