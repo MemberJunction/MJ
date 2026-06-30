@@ -136,7 +136,12 @@ export class MyCustomViewerComponent extends BaseArtifactViewerComponent {
 | `MarkdownArtifactViewerComponent` | Markdown | Rendered markdown content |
 | `HtmlArtifactViewerComponent` | HTML | Sandboxed HTML rendering |
 | `SvgArtifactViewerComponent` | SVG | SVG image rendering |
+| `AudioArtifactViewerComponent` | Audio | Audio playback via `mj-media-player` (transport, waveform scrubber, playback speed) |
+| `VideoArtifactViewerComponent` | Video | Video playback via `mj-media-player` (transport, fullscreen, playback speed) |
 | `ComponentArtifactViewerComponent` | Component | Dynamic React/Angular component rendering |
+
+> Audio and video artifacts (both the full viewer and the inline conversation **preview**) embed the
+> generic `mj-media-player` from [@memberjunction/ng-media-player](../media-player/README.md).
 
 ## Services
 
@@ -165,6 +170,7 @@ getIcon() {
 | `@memberjunction/interactive-component-types` | Interactive component interfaces |
 | `@memberjunction/ng-base-types` | Base Angular component types |
 | `@memberjunction/ng-code-editor` | Code editor for code artifacts |
+| `@memberjunction/ng-media-player` | Audio/video playback (`mj-media-player`) for audio & video artifacts |
 | `@memberjunction/ng-notifications` | Notification system |
 | `@memberjunction/ng-react` | React component bridge |
 | `@memberjunction/ng-shared-generic` | Shared generic components |
@@ -177,6 +183,37 @@ getIcon() {
 - `@angular/common` ^21.x
 - `@angular/core` ^21.x
 - `@angular/platform-browser` ^21.x
+
+## Form-aware artifact viewer (interactive forms)
+
+When an artifact's spec declares `componentRole: 'form'`, the
+`ComponentArtifactViewerComponent` switches to its form-aware branch:
+
+- Resolves the entity from `spec.entityName` (or `spec.dataRequirements.entities[0].name`)
+- Loads `TOP 1` record (ordered by `NameField` then `__mj_CreatedAt`) and
+  mounts via `<mj-interactive-form>` bound to that real record
+- Falls back to a fresh `NewRecord()` when the entity has no rows
+- Exposes a search-as-you-type record picker so users can swap the bound record
+- Bubbles a top-level **`applyFormRequested`** `@Output` carrying
+  `{ spec, entityName }` when the user clicks "Apply to my form"
+
+The `InteractiveFormApplyService` (exported from this package) consumes
+that event end-to-end: confirms with the user via `MJDialogService`,
+calls `Get Active Form For Entity` to detect existing state, then
+routes to `Create Interactive Form` (net-new) or
+`Modify Interactive Form` (refinement → new Pending version).
+
+Consumers wire one line in their template:
+```html
+<mj-artifact-viewer-panel
+  ...
+  (applyFormRequested)="onApplyFormRequested($event)">
+</mj-artifact-viewer-panel>
+```
+…and inject `InteractiveFormApplyService` in the handler.
+
+Wired in `ConversationChatAreaComponent` (live chat) and `ArtifactResource`
+(standalone artifact viewing in Explorer).
 
 ## Build
 

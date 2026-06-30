@@ -7,7 +7,8 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { QueryCompositionEngine } from '../queryCompositionEngine';
-import { QueryInfo, Metadata, UserInfo } from '@memberjunction/core';
+import { UserInfo } from '@memberjunction/core';
+import { MJQueryEntityExtended, QueryEngine } from '@memberjunction/core-entities';
 import {
     ORDER_BY_EDGE_CASES,
     CTE_HOISTING_EDGE_CASES,
@@ -22,23 +23,30 @@ import {
 
 // ── Helpers ──
 
-function makeQueryInfo(dep: CompositionDependency, platform: string): QueryInfo {
-    const q = new QueryInfo();
-    q.ID = `dep-${dep.name.replace(/\s+/g, '-').toLowerCase()}`;
-    q.Name = dep.name;
-    q.SQL = dep.sql;
-    q.Reusable = true;
-    q.Status = 'Approved' as QueryInfo['Status'];
-    q.UsesTemplate = dep.sql.includes('{{') || dep.sql.includes('{%');
+function makeQueryInfo(dep: CompositionDependency, platform: string): MJQueryEntityExtended {
+    const normalizedPath = dep.categoryPath || '';
 
-    const fullPath = dep.categoryPath ? `/${dep.categoryPath}/` : '/';
-    Object.defineProperty(q, 'CategoryPath', { get: () => fullPath, configurable: true });
-    q.UserCanRun = vi.fn().mockReturnValue(true);
+    const q: Record<string, unknown> = {
+        ID: `dep-${dep.name.replace(/\s+/g, '-').toLowerCase()}`,
+        Name: dep.name,
+        SQL: dep.sql,
+        Reusable: true,
+        Status: 'Approved',
+        UsesTemplate: dep.sql.includes('{{') || dep.sql.includes('{%'),
+        UserCanRun: vi.fn().mockReturnValue({ canRun: true, deniedEntities: [] }),
+        GetPlatformSQL: vi.fn().mockReturnValue(dep.sql),
+    };
 
-    // GetPlatformSQL should return the SQL for the requested platform
-    q.GetPlatformSQL = vi.fn().mockReturnValue(q.SQL);
+    Object.defineProperty(q, 'CategoryPath', { get: () => normalizedPath, configurable: true });
+    Object.defineProperty(q, 'IsApproved', { get: () => true, configurable: true });
 
-    return q;
+    return q as unknown as MJQueryEntityExtended;
+}
+
+function mockQueryEngineQueries(queries: MJQueryEntityExtended[]): void {
+    vi.spyOn(QueryEngine, 'Instance', 'get').mockReturnValue({
+        Queries: queries,
+    } as unknown as QueryEngine);
 }
 
 function setupAndResolve(
@@ -47,10 +55,7 @@ function setupAndResolve(
     const queries = edgeCase.dependencies.map(d => makeQueryInfo(d, edgeCase.dialect));
     const mockUser = { UserRoles: [{ Role: 'Admin' }] } as unknown as UserInfo;
 
-    vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue({
-        Queries: queries,
-        QueryDependencies: [],
-    } as ReturnType<typeof Metadata.Provider>);
+    mockQueryEngineQueries(queries);
 
     const engine = new QueryCompositionEngine();
     const platform = edgeCase.dialect === 'PostgreSQL' ? 'postgresql' : 'sqlserver';
@@ -523,10 +528,7 @@ describe('Composition Engine Edge Cases', () => {
             queries.push(rawScoresQuery);
             const mockUser = { UserRoles: [{ Role: 'Admin' }] } as unknown as UserInfo;
 
-            vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue({
-                Queries: queries,
-                QueryDependencies: [],
-            } as ReturnType<typeof Metadata.Provider>);
+            mockQueryEngineQueries(queries);
 
             const engine = new QueryCompositionEngine();
             const result = engine.ResolveComposition(ec.outerSQL, 'sqlserver', mockUser);
@@ -682,10 +684,7 @@ describe('Composition Engine Edge Cases', () => {
             queries.push(queryD);
             const mockUser = { UserRoles: [{ Role: 'Admin' }] } as unknown as UserInfo;
 
-            vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue({
-                Queries: queries,
-                QueryDependencies: [],
-            } as ReturnType<typeof Metadata.Provider>);
+            mockQueryEngineQueries(queries);
 
             const engine = new QueryCompositionEngine();
             const result = engine.ResolveComposition(ec.outerSQL, 'sqlserver', mockUser);
@@ -723,10 +722,7 @@ describe('Composition Engine Edge Cases', () => {
             queries.push(queryB, queryC);
             const mockUser = { UserRoles: [{ Role: 'Admin' }] } as unknown as UserInfo;
 
-            vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue({
-                Queries: queries,
-                QueryDependencies: [],
-            } as ReturnType<typeof Metadata.Provider>);
+            mockQueryEngineQueries(queries);
 
             const engine = new QueryCompositionEngine();
             const result = engine.ResolveComposition(ec.outerSQL, 'sqlserver', mockUser);

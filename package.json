@@ -9,6 +9,10 @@
     "packages/Actions/BizApps/*",
     "packages/AI/*",
     "packages/AI/Providers/*",
+    "packages/AI/RealtimeBridge/*",
+    "packages/AI/RealtimeBridge/Providers/*",
+    "packages/AI/RemoteBrowser/*",
+    "packages/AI/RemoteBrowser/Providers/*",
     "packages/AI/Recommendations/*",
     "packages/AI/Vectors/*",
     "packages/AI/Vectors/Providers/*",
@@ -16,6 +20,8 @@
     "packages/AI/Knowledge/*",
     "packages/AI/AgentManager/*",
     "packages/AI/DatabaseDesigner/*",
+    "packages/AI/FormBuilder/*",
+    "packages/AI/PredictiveStudio/*",
     "packages/AI/AICLI",
     "packages/Communication/*",
     "packages/Communication/providers/*",
@@ -32,11 +38,14 @@
     "packages/OpenApp/*",
     "packages/Integration/*",
     "packages/Archiving/*",
-    "packages/geo/*"
-
+    "packages/geo/*",
+    "packages/Lists/*",
+    "packages/RecordSetProcessor/*",
+    "packages/eSignature/*",
+    "packages/eSignature/Providers/*"
   ],
   "scripts": {
-    "prebuild": "node -e \"try { require.resolve('turbo') } catch (e) { console.error('\\n❌ Dependencies not installed. Run: npm install\\n'); process.exit(1); }\"",
+    "prebuild": "node -e \"try { require.resolve('turbo') } catch (e) { console.error('\\n\u274c Dependencies not installed. Run: npm install\\n'); process.exit(1); }\"",
     "build": "npm run build:stream",
     "postbuild": "npm run mj:manifest && turbo --log-order=stream build --filter=@memberjunction/server-bootstrap-lite --filter=@memberjunction/server-bootstrap --filter=@memberjunction/ng-bootstrap --filter=@memberjunction/ng-bootstrap-lite --filter=@memberjunction/a2aserver --filter=@memberjunction/ai-mcp-server --filter=mj_codegen_api --filter=mj_api",
     "build:stream": "turbo --log-order=stream build --filter=\"@memberjunction*\"",
@@ -64,6 +73,7 @@
     "mj:manifest:server-bootstrap-lite": "mj codegen manifest --appDir ./packages/ServerBootstrapLite --exclude-packages @memberjunction/communication --exclude-packages @memberjunction/content-autotagging --exclude-packages @memberjunction/entity-communications --exclude-packages @memberjunction/queue --exclude-packages @memberjunction/storage --exclude-packages @memberjunction/server --output ./packages/ServerBootstrapLite/src/generated/mj-class-registrations.ts",
     "mj:manifest:ng-bootstrap-lite": "mj codegen manifest --appDir ./packages/Angular/BootstrapLite --exclude-packages @memberjunction/ng-dashboards --exclude-packages @memberjunction/ng-explorer-settings --output ./packages/Angular/BootstrapLite/src/generated/mj-class-registrations.ts --scan-dist",
     "mj:manifest": "npm run mj:manifest:server-bootstrap && npm run mj:manifest:server-bootstrap-lite && npm run mj:manifest:ng-bootstrap && npm run mj:manifest:ng-bootstrap-lite && npm run mj:manifest:api && npm run mj:manifest:explorer && npm run mj:manifest:a2a-server && npm run mj:manifest:mcp-server && npm run mj:manifest:codegen-api",
+    "claude-pack:build": "node templates/claude-pack/build-pack.mjs",
     "deps:check": "syncpack list-mismatches",
     "deps:fix": "syncpack fix-mismatches",
     "deps:update": "syncpack update",
@@ -76,6 +86,12 @@
     "deps:remove-unused:dry": "node scripts/remove-unused-dependencies.mjs --dry-run",
     "docs:fix-configs": "node scripts/fix-typedoc-configs.mjs --fix",
     "docs:fix-configs:dry": "node scripts/fix-typedoc-configs.mjs",
+    "check:ui": "npm run check:ui-tokens && npm run check:ui-buttons",
+    "check:ui-tokens": "./.github/scripts/check-css-hex-tokens.sh",
+    "check:ui-buttons": "./.github/scripts/check-mj-btn-override.sh",
+    "check:ui:all": "./.github/scripts/check-css-hex-tokens.sh --all && ./.github/scripts/check-mj-btn-override.sh --all",
+    "check:ui:adoption": "./scripts/measure-ui-adoption.sh",
+    "check:alerts": "./.github/scripts/check-alerts.sh",
     "change": "changeset",
     "version": "changeset version",
     "mergemain": "node ci/merge_main.mjs",
@@ -86,7 +102,9 @@
     "test:coverage": "vitest run --coverage",
     "test:analytics": "node unit-testing/tools/run-all-tests.js",
     "test:aggregate": "node unit-testing/tools/aggregate-results.js ",
-    "test:markdown": "node unit-testing/tools/generate-markdown.js "
+    "test:markdown": "node unit-testing/tools/generate-markdown.js ",
+    "test:integration": "tsx packages/MJServer/integration-test-scripts/run-all.ts",
+    "test:e2e": "playwright test --config e2e/playwright.config.ts"
   },
   "repository": {
     "type": "git",
@@ -95,10 +113,14 @@
   "dependencies": {
     "archiver": "~7.0.0",
     "extract-files": "~13.0.0",
-    "simple-git": "^3.30.0"
+    "simple-git": "^3.30.0",
+    "unzipper": "^0.12.3"
   },
   "devDependencies": {
+    "@analogjs/vite-plugin-angular": "^2.6.1",
+    "@angular/build": "21.1.3",
     "@changesets/cli": "^2.27.12",
+    "@playwright/test": "^1.58.1",
     "@typescript-eslint/eslint-plugin": "7.12.0",
     "@typescript-eslint/parser": "7.12.0",
     "@vitest/coverage-v8": "^4.0.18",
@@ -106,12 +128,14 @@
     "browserslist": "4.28.1",
     "caniuse-lite": "^1.0.30001764",
     "cpy-cli": "^5.0.0",
+    "dotenv": "^17.2.4",
     "eslint": "8.56.0",
     "eslint-config-prettier": "9.1.0",
     "eslint-import-resolver-typescript": "~3.5.2",
     "eslint-plugin-import": "~2.26.0",
     "eslint-plugin-jsx-a11y": "~6.6.1",
     "eslint-plugin-prettier": "5.1.3",
+    "jsdom": "^26.1.0",
     "knip": "^5.71.0",
     "prettier": "^3.3.1",
     "syncpack": "^12.3.2",
@@ -137,6 +161,10 @@
     "unzipper": "^0.12.3",
     "@memberjunction/credentials": {
       "ajv": "$ajv"
-    }
+    },
+    "@angular/build": "21.1.3",
+    "@angular-devkit/build-angular": "21.1.3",
+    "@angular/platform-server": "21.1.3",
+    "@angular/ssr": "21.1.3"
   }
 }

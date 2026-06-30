@@ -1,7 +1,21 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
-import { MJButtonDirective } from '@memberjunction/ng-ui-components';
+import {
+  MJButtonDirective,
+  MJDialogComponent,
+  MJDialogActionsComponent,
+  MJPageLayoutComponent,
+  MJPageHeaderComponent,
+  MJPageBodyComponent,
+  MJPageSearchComponent,
+  MJFilterPopoverComponent,
+  MJFilterPanelComponent,
+  MJFilterFieldComponent,
+  MJViewToggleComponent,
+  MJStatBadgeComponent,
+  MJEmptyStateComponent,
+} from '@memberjunction/ng-ui-components';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { ListManagementModule } from '@memberjunction/ng-list-management';
@@ -11,12 +25,13 @@ import { ListsMyListsResource } from './Lists/components/lists-my-lists-resource
 import { ListsBrowseResource } from './Lists/components/lists-browse-resource.component';
 import { ListsCategoriesResource } from './Lists/components/lists-categories-resource.component';
 import { ListsOperationsResource } from './Lists/components/lists-operations-resource.component';
+import { ListsSharedWithMeResource } from './Lists/components/lists-shared-with-me-resource.component';
 import { VennDiagramComponent } from './Lists/components/venn-diagram/venn-diagram.component';
 import { ListSetOperationsService } from './Lists/services/list-set-operations.service';
 
 /**
  * ListsDashboardsModule — Lists feature area: my lists, browse,
- * categories, operations, and Venn diagram visualization.
+ * categories, operations, shared-with-me, and Venn diagram visualization.
  */
 @NgModule({
   declarations: [
@@ -24,6 +39,7 @@ import { ListSetOperationsService } from './Lists/services/list-set-operations.s
     ListsBrowseResource,
     ListsCategoriesResource,
     ListsOperationsResource,
+    ListsSharedWithMeResource,
     VennDiagramComponent
   ],
   imports: [
@@ -31,6 +47,18 @@ import { ListSetOperationsService } from './Lists/services/list-set-operations.s
     FormsModule,
     ReactiveFormsModule,
     MJButtonDirective,
+    MJDialogComponent,
+    MJDialogActionsComponent,
+    MJPageLayoutComponent,
+    MJPageHeaderComponent,
+    MJPageBodyComponent,
+    MJPageSearchComponent,
+    MJFilterPopoverComponent,
+    MJFilterPanelComponent,
+    MJFilterFieldComponent,
+    MJViewToggleComponent,
+    MJStatBadgeComponent,
+    MJEmptyStateComponent,
     ContainerDirectivesModule,
     SharedGenericModule,
     ListManagementModule
@@ -43,6 +71,7 @@ import { ListSetOperationsService } from './Lists/services/list-set-operations.s
     ListsBrowseResource,
     ListsCategoriesResource,
     ListsOperationsResource,
+    ListsSharedWithMeResource,
     VennDiagramComponent
   ]
 })

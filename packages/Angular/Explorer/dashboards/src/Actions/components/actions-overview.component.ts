@@ -3,8 +3,11 @@ import { CompositeKey, RunView, LogError } from '@memberjunction/core';
 import { MJActionEntity, MJActionCategoryEntity, MJActionExecutionLogEntity, ResourceData } from '@memberjunction/core-entities';
 import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
+import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
 import { Subject, BehaviorSubject, combineLatest } from 'rxjs';
 import { debounceTime, takeUntil, distinctUntilChanged } from 'rxjs/operators';
+import { validateEnumParam, boundNameList } from '../../shared/agent-tool-validation';
+import { findByIdOrError, findByIdOrNameOrError } from '../agent-tool-helpers';
 interface ActionMetrics {
   totalActions: number;
   activeActions: number;
@@ -60,9 +63,26 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
   public recentExecutions: ExecutionWithExpanded[] = [];
   public topCategories: MJActionCategoryEntity[] = [];
 
+  /** Full (un-sliced) collections retained so agent tools can resolve any id, not just the visible top-10. */
+  private allActions: MJActionEntity[] = [];
+  private allExecutions: MJActionExecutionLogEntity[] = [];
+  private allCategories: MJActionCategoryEntity[] = [];
+
+  /** Last action the agent (or user) selected/opened — surfaced in context as id + name. */
+  private selectedAction: MJActionEntity | null = null;
+
   public searchTerm$ = new BehaviorSubject<string>('');
   public selectedStatus$ = new BehaviorSubject<string>('all');
   public selectedType$ = new BehaviorSubject<string>('all');
+
+  /** Allowed status filter values (mirrors the Filter popover dropdown). */
+  private readonly statusFilterValues = ['all', 'Active', 'Pending', 'Disabled'] as const;
+  /** Allowed type filter values (mirrors the Filter popover dropdown). */
+  private readonly typeFilterValues = ['all', 'Generated', 'Custom'] as const;
+  /** Allowed sort fields for the visible-actions list. */
+  private readonly sortFieldValues = ['name', 'status', 'type', 'updated'] as const;
+  /** Allowed sort directions. */
+  private readonly sortDirectionValues = ['asc', 'desc'] as const;
 
   protected override destroy$ = new Subject<void>();
 
@@ -73,6 +93,7 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
   ngOnInit(): void {
     super.ngOnInit();
     this.setupFilters();
+    this.registerAgentTools();
     this.loadData();
   }
 
@@ -91,7 +112,165 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
       takeUntil(this.destroy$)
     ).subscribe(() => {
       this.loadFilteredData();
+      this.publishAgentContext();
     });
+  }
+
+  // ================================================================
+  // AI Agent context + client tools
+  //
+  // 🚨 SAFETY BOUNDARY: The Actions app executes actions with real side
+  // effects (data mutation, emails, integrations). Action EXECUTION is
+  // intentionally NOT exposed to the agent here — no RunAction, no execute
+  // path. The agent may only FIND / FILTER / NAVIGATE actions and view run
+  // history. Every Handler is tolerant (never throws; returns a structured
+  // failure on bad input).
+  // ================================================================
+
+  /** Publish the current overview state to the agent. Called on load and on every filter change.
+   *  Deep context: counts by status/type, success rate, all filter state, the visible
+   *  (bounded) action + category names, and the currently selected action (id + name). */
+  private publishAgentContext(): void {
+    this.navigationService.SetAgentContext(this, {
+      // Action counts by status
+      TotalActionCount: this.metrics.totalActions,
+      ActiveActionCount: this.metrics.activeActions,
+      PendingActionCount: this.metrics.pendingActions,
+      DisabledActionCount: this.metrics.disabledActions,
+      // Action counts by type
+      AIGeneratedActionCount: this.metrics.aiGeneratedActions,
+      CustomActionCount: this.metrics.customActions,
+      // Execution metrics
+      TotalExecutionCount: this.metrics.totalExecutions,
+      RecentExecutionCount: this.metrics.recentExecutions,
+      SuccessRate: this.metrics.successRate,
+      // Category metrics
+      TotalCategoryCount: this.metrics.totalCategories,
+      // Filter / search state
+      CurrentSearchTerm: this.searchTerm$.value,
+      CurrentStatusFilter: this.selectedStatus$.value,
+      CurrentTypeFilter: this.selectedType$.value,
+      // What the user is looking at — bounded name lists so the agent can pick by name
+      VisibleActionCount: this.recentActions.length,
+      VisibleActionNames: boundNameList(this.recentActions.map(a => a.Name)),
+      TopCategoryNames: boundNameList(this.topCategories.map(c => c.Name)),
+      // Current selection (id + NAME)
+      SelectedActionId: this.selectedAction?.ID ?? null,
+      SelectedActionName: this.selectedAction?.Name ?? null,
+    });
+  }
+
+  /** Register the read-only / navigational client tools the agent can invoke on this surface. */
+  private registerAgentTools(): void {
+    this.navigationService.SetAgentClientTools(this, [
+      {
+        Name: 'SearchActions',
+        Description: 'Search the actions list by a free-text term (matches name and description).',
+        ParameterSchema: { type: 'object', properties: { searchTerm: { type: 'string' } }, required: ['searchTerm'] },
+        Handler: async (params) => {
+          const term = typeof params['searchTerm'] === 'string' ? params['searchTerm'] : '';
+          this.onSearchChange(term);
+          return { Success: true };
+        },
+      },
+      {
+        Name: 'FilterActionsByStatus',
+        Description: 'Filter actions by status. Allowed: all, Active, Pending, Disabled.',
+        ParameterSchema: { type: 'object', properties: { status: { type: 'string', enum: [...this.statusFilterValues] } }, required: ['status'] },
+        Handler: async (params) => {
+          const v = validateEnumParam(params['status'], this.statusFilterValues, 'status');
+          if (!v.ok) return v.result;
+          this.onStatusFilterChange(v.value);
+          return { Success: true };
+        },
+      },
+      {
+        Name: 'FilterActionsByType',
+        Description: 'Filter actions by type. Allowed: all, Generated (AI-generated), Custom.',
+        ParameterSchema: { type: 'object', properties: { type: { type: 'string', enum: [...this.typeFilterValues] } }, required: ['type'] },
+        Handler: async (params) => {
+          const v = validateEnumParam(params['type'], this.typeFilterValues, 'type');
+          if (!v.ok) return v.result;
+          this.onTypeFilterChange(v.value);
+          return { Success: true };
+        },
+      },
+      {
+        Name: 'ClearAllFilters',
+        Description: 'Reset the status and type filters back to "all".',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => {
+          this.resetFilters();
+          return { Success: true };
+        },
+      },
+      {
+        Name: 'SortVisibleActions',
+        Description: 'Sort the visible recent-actions list. field: name, status, type, updated. direction: asc, desc (default asc).',
+        ParameterSchema: {
+          type: 'object',
+          properties: {
+            field: { type: 'string', enum: [...this.sortFieldValues] },
+            direction: { type: 'string', enum: [...this.sortDirectionValues] },
+          },
+          required: ['field'],
+        },
+        Handler: async (params) => {
+          const f = validateEnumParam(params['field'], this.sortFieldValues, 'field');
+          if (!f.ok) return f.result;
+          let direction: 'asc' | 'desc' = 'asc';
+          if (params['direction'] !== undefined) {
+            const d = validateEnumParam(params['direction'], this.sortDirectionValues, 'direction');
+            if (!d.ok) return d.result;
+            direction = d.value;
+          }
+          this.sortVisibleActions(f.value, direction);
+          return { Success: true };
+        },
+      },
+      {
+        Name: 'OpenActionDetail',
+        Description: 'Open the detail record for an action by its id OR its name (navigation only — does NOT run the action). Name matching is case-insensitive (exact then contains).',
+        ParameterSchema: { type: 'object', properties: { action: { type: 'string' } }, required: ['action'] },
+        Handler: async (params) => {
+          const found = findByIdOrNameOrError(params['action'], this.allActions, 'action');
+          if (!found.ok) return found.result;
+          this.openAction(found.value);
+          return { Success: true, Data: { Id: found.value.ID, Name: found.value.Name } };
+        },
+      },
+      {
+        Name: 'OpenCategoryDetail',
+        Description: 'Open the detail record for an action category by its id OR its name (navigation only). Name matching is case-insensitive (exact then contains).',
+        ParameterSchema: { type: 'object', properties: { category: { type: 'string' } }, required: ['category'] },
+        Handler: async (params) => {
+          const found = findByIdOrNameOrError(params['category'], this.allCategories, 'category');
+          if (!found.ok) return found.result;
+          this.openCategory(found.value.ID);
+          return { Success: true, Data: { Id: found.value.ID, Name: found.value.Name } };
+        },
+      },
+      {
+        Name: 'OpenExecutionDetail',
+        Description: 'Open the detail record for an action execution log by its id (view-only run history).',
+        ParameterSchema: { type: 'object', properties: { executionId: { type: 'string' } }, required: ['executionId'] },
+        Handler: async (params) => {
+          const found = findByIdOrError(params['executionId'], this.allExecutions, 'execution');
+          if (!found.ok) return found.result;
+          this.openExecution(found.value);
+          return { Success: true };
+        },
+      },
+      {
+        Name: 'RefreshOverviewData',
+        Description: 'Reload the actions overview data (metrics, categories, recent items).',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => {
+          await this.loadData();
+          return { Success: true };
+        },
+      },
+    ]);
   }
 
   private async loadData(): Promise<void> {
@@ -129,11 +308,15 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
       const categories = (categoriesResult.Results || []) as MJActionCategoryEntity[];
       const executions = (executionsResult.Results || []) as MJActionExecutionLogEntity[];
 
+      this.allActions = actions;
+      this.allExecutions = executions;
+      this.allCategories = categories;
       this.calculateMetrics(actions, categories, executions);
       this.calculateCategoryStats(actions, categories, executions);
       this.recentActions = actions.slice(0, 10);
       this.recentExecutions = executions.slice(0, 10).map(e => ({ ...e, isExpanded: false } as ExecutionWithExpanded));
       this.topCategories = categories.slice(0, 5);
+      this.publishAgentContext();
     } catch (error) {
       console.error('Error loading actions overview data:', error);
       LogError('Failed to load actions overview data', undefined, error);
@@ -248,9 +431,88 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
     this.selectedType$.next(type);
   }
 
+  // ───── Filter-popover plumbing for the [actions] slot ─────
+
+  public get FilterFields(): FilterFieldConfig[] {
+    return [
+      {
+        key: 'status',
+        type: 'dropdown',
+        label: 'Status',
+        icon: 'fa-solid fa-circle-info',
+        placeholder: 'All Statuses',
+        options: [
+          { text: 'All Statuses', value: 'all' },
+          { text: 'Active', value: 'Active' },
+          { text: 'Pending', value: 'Pending' },
+          { text: 'Disabled', value: 'Disabled' }
+        ]
+      },
+      {
+        key: 'type',
+        type: 'dropdown',
+        label: 'Type',
+        icon: 'fa-solid fa-shapes',
+        placeholder: 'All Types',
+        options: [
+          { text: 'All Types', value: 'all' },
+          { text: 'AI Generated', value: 'Generated' },
+          { text: 'Custom', value: 'Custom' }
+        ]
+      }
+    ];
+  }
+  public get FilterValues(): Record<string, unknown> {
+    return { status: this.selectedStatus$.value, type: this.selectedType$.value };
+  }
+  public get ActiveFilterCount(): number {
+    let n = 0;
+    if (this.selectedStatus$.value !== 'all') n++;
+    if (this.selectedType$.value !== 'all') n++;
+    return n;
+  }
+  public onFilterValuesChange(v: Record<string, unknown>): void {
+    const next = (v ?? {}) as { status?: string; type?: string };
+    if ((next.status ?? 'all') !== this.selectedStatus$.value) {
+      this.onStatusFilterChange(next.status ?? 'all');
+    }
+    if ((next.type ?? 'all') !== this.selectedType$.value) {
+      this.onTypeFilterChange(next.type ?? 'all');
+    }
+  }
+  public resetFilters(): void {
+    if (this.selectedStatus$.value !== 'all') this.onStatusFilterChange('all');
+    if (this.selectedType$.value !== 'all') this.onTypeFilterChange('all');
+  }
+
   public openAction(action: MJActionEntity): void {
+    this.selectedAction = action;
+    this.publishAgentContext();
     const key = new CompositeKey([{ FieldName: 'ID', Value: action.ID }]);
     this.navigationService.OpenEntityRecord('MJ: Actions', key);
+  }
+
+  /** Sort the visible recent-actions list in place (agent tool — view-only). */
+  private sortVisibleActions(field: 'name' | 'status' | 'type' | 'updated', direction: 'asc' | 'desc'): void {
+    const dir = direction === 'asc' ? 1 : -1;
+    const sorted = [...this.recentActions].sort((a, b) => {
+      let cmp = 0;
+      switch (field) {
+        case 'name': cmp = (a.Name || '').localeCompare(b.Name || ''); break;
+        case 'status': cmp = (a.Status || '').localeCompare(b.Status || ''); break;
+        case 'type': cmp = (a.Type || '').localeCompare(b.Type || ''); break;
+        case 'updated': {
+          const da = a.__mj_UpdatedAt ? new Date(a.__mj_UpdatedAt).getTime() : 0;
+          const db = b.__mj_UpdatedAt ? new Date(b.__mj_UpdatedAt).getTime() : 0;
+          cmp = da - db;
+          break;
+        }
+      }
+      return cmp * dir;
+    });
+    this.recentActions = sorted;
+    this.publishAgentContext();
+    this.cdr.detectChanges();
   }
 
   public openCategory(categoryId: string): void {

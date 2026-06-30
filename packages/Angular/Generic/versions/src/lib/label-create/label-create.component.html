@@ -46,9 +46,8 @@
           </div>
         }
         @if (FilteredEntities.length === 0) {
-          <div class="entity-list-empty">
-            No entities match your search.
-          </div>
+          <mj-empty-state class="entity-list-empty" Size="compact"
+            Variant="no-results" Title="No entities match your search." />
         }
       </div>
     </div>
@@ -101,9 +100,8 @@
             </div>
           }
           @if (FilteredRecords.length === 0 && !IsLoadingRecords) {
-            <div class="entity-list-empty">
-              No records found for this entity.
-            </div>
+            <mj-empty-state class="entity-list-empty" Size="compact"
+              Icon="" Title="No records found for this entity." />
           }
         </div>
         <div class="records-footer">

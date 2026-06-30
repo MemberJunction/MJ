@@ -65,35 +65,8 @@
             <span class="record-count">{{ totalRecordCount | number }} records</span>
           }
 
-          <!-- View Selector -->
-          <mj-view-selector
-            [entity]="selectedEntity"
-            [selectedViewId]="state.selectedViewId"
-            [viewModified]="state.viewModified"
-            (viewSelected)="onViewSelected($event)"
-            (saveViewRequested)="onSaveViewRequested($event)"
-            (manageViewsRequested)="onManageViewsRequested()"
-            (openInTabRequested)="onOpenInTabRequested($event)"
-            (configureViewRequested)="onConfigureViewRequested()"
-            (createNewRecordRequested)="onCreateNewRecord()"
-            (exportRequested)="onExport()"
-            (duplicateViewRequested)="onDuplicateView($event)"
-            (quickSaveRequested)="onQuickSaveRequested($event)"
-            (revertRequested)="onRevertView()">
-          </mj-view-selector>
-
-          <!-- Add to List Button -->
-          <button
-            class="header-action-btn"
-            [class.disabled]="!hasSelectedRecords"
-            [disabled]="!hasSelectedRecords"
-            (click)="onAddToListClick()"
-            [title]="hasSelectedRecords ? 'Add ' + selectedRecords.length + ' selected record(s) to a list' : 'Select records to add to a list'">
-            <i class="fa-solid fa-list-check"></i>
-            @if (hasSelectedRecords) {
-              <span class="selection-badge">{{ selectedRecords.length }}</span>
-            }
-          </button>
+          <!-- View selector + view header now live inside mj-view-workspace (below). -->
+          <!-- Add-to-List is now owned inside the grid plug-in renderer (it hosts its own dialog). -->
         } @else {
           @if (displayIcon) {
             <i [class]="displayIcon" class="entity-icon"></i>
@@ -127,97 +100,9 @@
 
       <div class="header-right">
         @if (selectedEntity) {
-          <!-- View-specific controls — positioned LEFT of the view mode toggle -->
-          <!-- These controls are contextual to the active view mode -->
-          @if (state.viewMode === 'timeline' && entityHasDateFields) {
-            <div class="view-specific-controls">
-              <!-- Date Field Selector -->
-              <div class="date-field-selector-container">
-                @if (isDateFieldDropdownOpen) {
-                  <div class="date-field-backdrop" (click)="closeDateFieldDropdown()"></div>
-                }
-                <div class="date-field-selector-wrapper">
-                  <button
-                    class="date-field-selector-button"
-                    [class.open]="isDateFieldDropdownOpen"
-                    [disabled]="availableDateFields.length <= 1"
-                    (click)="toggleDateFieldDropdown()">
-                    <i class="fa-solid fa-calendar-days date-field-icon"></i>
-                    <span class="date-field-name">{{ effectiveTimelineDateFieldDisplayName }}</span>
-                    @if (availableDateFields.length > 1) {
-                      <i class="fa-solid fa-chevron-down date-field-arrow" [class.rotated]="isDateFieldDropdownOpen"></i>
-                    }
-                  </button>
-                  @if (isDateFieldDropdownOpen && availableDateFields.length > 1) {
-                    <div class="date-field-dropdown-panel">
-                      @for (field of availableDateFields; track field.name) {
-                        <div
-                          class="date-field-dropdown-item"
-                          [class.selected]="field.name === effectiveTimelineDateField"
-                          (click)="setTimelineDateField(field.name)">
-                          <i class="fa-regular fa-calendar item-icon"></i>
-                          <span class="item-name">{{ field.displayName }}</span>
-                          @if (field.name === effectiveTimelineDateField) {
-                            <i class="fa-solid fa-check selected-check"></i>
-                          }
-                        </div>
-                      }
-                    </div>
-                  }
-                </div>
-              </div>
-              <!-- Orientation Toggle -->
-              <button
-                class="view-specific-btn"
-                (click)="toggleTimelineOrientation()"
-                [title]="state.timelineOrientation === 'vertical' ? 'Switch to Horizontal' : 'Switch to Vertical'">
-                <i [class]="state.timelineOrientation === 'vertical' ? 'fa-solid fa-ellipsis-vertical' : 'fa-solid fa-ellipsis'"></i>
-              </button>
-              <!-- Sort Order Toggle -->
-              <button
-                class="view-specific-btn"
-                (click)="toggleTimelineSortOrder()"
-                [title]="state.timelineSortOrder === 'desc' ? 'Showing Newest First (click for Oldest First)' : 'Showing Oldest First (click for Newest First)'">
-                <i [class]="state.timelineSortOrder === 'desc' ? 'fa-solid fa-arrow-down-wide-short' : 'fa-solid fa-arrow-up-wide-short'"></i>
-              </button>
-            </div>
-          }
-
-          <!-- View Mode Toggle — always rightmost in the header -->
-          <div class="view-mode-toggle">
-            <button
-              class="toggle-btn"
-              [class.active]="state.viewMode === 'grid'"
-              (click)="onViewModeChanged('grid')"
-              title="Grid View">
-              <i class="fa-solid fa-list"></i>
-            </button>
-            <button
-              class="toggle-btn"
-              [class.active]="state.viewMode === 'cards'"
-              (click)="onViewModeChanged('cards')"
-              title="Cards View">
-              <i class="fa-solid fa-grip"></i>
-            </button>
-            @if (entityHasDateFields) {
-              <button
-                class="toggle-btn"
-                [class.active]="state.viewMode === 'timeline'"
-                (click)="onViewModeChanged('timeline')"
-                title="Timeline View">
-                <i class="fa-solid fa-timeline"></i>
-              </button>
-            }
-            @if (selectedEntity.SupportsGeoCoding) {
-              <button
-                class="toggle-btn"
-                [class.active]="state.viewMode === 'map'"
-                (click)="onViewModeChanged('map')"
-                title="Map View">
-                <i class="fa-solid fa-map-location-dot"></i>
-              </button>
-            }
-          </div>
+          <!-- View-type switcher AND all view-specific controls (timeline date/orientation/sort,
+               map render mode, etc.) now live inside the plug-in renderers hosted by
+               mj-view-workspace. Nothing view-type-specific lives in this header anymore. -->
         }
         @if (!selectedEntity) {
           <!-- Quick Access panel toggle -->
@@ -371,17 +256,14 @@
 
                 <!-- No results -->
                 @if (filteredEntityCount === 0 && entities.length > 0) {
-                  <div class="home-no-results">
-                    <i class="fa-solid fa-magnifying-glass"></i>
-                    <p>No entities match "{{ entityFilterText }}"</p>
-                  </div>
+                  <mj-empty-state Variant="no-results"
+                    Title="No entities found"
+                    [Message]="NoEntityResultsMessage" />
                 }
                 @if (entities.length === 0) {
-                  <div class="empty-state">
-                    <i class="fa-solid fa-database empty-icon"></i>
-                    <h3>No Entities Available</h3>
-                    <p>There are no entities configured for this application.</p>
-                  </div>
+                  <mj-empty-state Icon="fa-solid fa-database"
+                    Title="No Entities Available"
+                    Message="There are no entities configured for this application." />
                 }
               </div>
             </div>
@@ -477,33 +359,35 @@
           }
         </div>
       } @else {
-        <mj-entity-viewer
-          #entityViewer
-          [entity]="selectedEntity"
-          [viewEntity]="selectedViewEntity"
-          [viewMode]="state.viewMode"
-          [filterText]="debouncedFilterText"
-          [selectedRecordId]="state.selectedRecordId"
-          [config]="viewerConfig"
-          [gridState]="currentGridState"
-          [timelineConfig]="currentTimelineConfig"
-          [gridSelectionMode]="'checkbox'"
-          [showGridToolbar]="false"
-          [showAddToListButton]="false"
-          (viewModeChange)="onViewModeChanged($event)"
-          (filterTextChange)="onFilterTextChanged($event)"
-          (recordSelected)="onViewerRecordSelected($event)"
-          (recordOpened)="onViewerRecordOpened($event)"
-          (dataLoaded)="onDataLoaded($event)"
-          (filteredCountChanged)="onFilteredCountChanged($event)"
-          (gridStateChanged)="onGridStateChanged($event)"
-          (selectionChanged)="onSelectionChanged($event)"
-          (addToListRequested)="onAddToListRequested($event)"
-          [mapRenderMode]="state.mapRenderMode || 'point'"
-          [mapDisplayState]="mapDisplayState"
-          (mapRenderModeChange)="onMapRenderModeChange($event)"
-          (mapDisplayStateChange)="onMapDisplayStateChange($event)">
-        </mj-entity-viewer>
+        <!--
+          mj-view-workspace owns the saved-view lifecycle (select / save / duplicate / rename /
+          delete / revert / quick-save) and the inner data renderer. Every view type is now a
+          self-contained plug-in: view-type-specific features (export / add-to-list / delete /
+          grid-state / timeline + map controls) live INSIDE the plug-in renderers and no longer
+          bubble through the workspace. The dashboard only handles navigation (open record / open
+          related record / create new record) + the generic filter/data-load/count signals + URL
+          and view-CRUD state sync. AutoSaveView=true → the workspace persists view CRUD itself.
+        -->
+        <mj-view-workspace
+          [Entity]="selectedEntity"
+          [AutoSaveView]="true"
+          [SelectedView]="selectedViewEntity"
+          [FilterText]="debouncedFilterText"
+          [SelectedRecordId]="state.selectedRecordId"
+          [ViewerConfig]="viewerConfig"
+          (SelectedViewChange)="onWorkspaceViewSelected($event)"
+          (ViewSelected)="onWorkspaceViewSelected($event)"
+          (OpenViewInTabRequested)="onOpenInTabRequested($event)"
+          (OpenRecordRequested)="onWorkspaceOpenRecord($event)"
+          (OpenRelatedRecordRequested)="onOpenRelatedRecordRequested($event)"
+          (CreateNewRecordRequested)="onCreateNewRecordRequested($event)"
+          (RecordSelected)="onViewerRecordSelected($event)"
+          (AfterViewSave)="onWorkspaceViewSaved()"
+          (AfterViewDelete)="onWorkspaceViewSaved()"
+          (FilterTextChanged)="onFilterTextChanged($event)"
+          (DataLoaded)="onDataLoaded($event)"
+          (FilteredCountChanged)="onFilteredCountChanged($event)">
+        </mj-view-workspace>
       }
     </div>
   </div>
@@ -511,16 +395,6 @@
   <!-- Detail Panel (Right - Slide In) -->
   @if (state.detailPanelOpen && selectedRecord) {
     <div class="detail-panel" [style.width.px]="state.detailPanelWidth">
-      <!-- Detail Panel Actions Bar -->
-      <div class="detail-panel-actions">
-        <button
-          class="detail-action-btn"
-          (click)="openListManagementDialog()"
-          title="Add to List">
-          <i class="fa-solid fa-list-check"></i>
-          <span>Add to List</span>
-        </button>
-      </div>
       <mj-entity-record-detail-panel
         [entity]="detailPanelEntity"
         [record]="selectedRecord"
@@ -533,80 +407,8 @@
     </div>
   }
 
-  <!-- View Configuration Panel -->
-  <mj-view-config-panel
-    [entity]="selectedEntity"
-    [viewEntity]="selectedViewEntity"
-    [isOpen]="state.viewConfigPanelOpen"
-    [currentGridState]="currentGridState"
-    [externalFilterState]="filterDialogState"
-    [isSaving]="isSavingView"
-    [DefaultSaveAsNew]="defaultSaveAsNew"
-    [PendingNewViewName]="pendingNewViewName"
-    [PendingNewViewDescription]="pendingNewViewDescription"
-    [PendingNewViewIsShared]="pendingNewViewIsShared"
-    (close)="onCloseViewConfigPanel()"
-    (save)="onSaveView($event)"
-    (saveDefaults)="onSaveDefaultViewSettings($event)"
-    (delete)="onDeleteView()"
-    (duplicate)="onDuplicateFromPanel()"
-    (openFilterDialogRequest)="onOpenFilterDialogRequest($event)">
-  </mj-view-config-panel>
-
-  <!-- Filter Dialog (rendered at dashboard level for full viewport width) -->
-  <mj-filter-dialog
-    [isOpen]="isFilterDialogOpen"
-    [fields]="filterDialogFields"
-    [filter]="filterDialogState"
-    [disabled]="filterDialogDisabled"
-    (close)="onCloseFilterDialog()"
-    (apply)="onFilterApplied($event)">
-  </mj-filter-dialog>
-
-  <!-- Export Dialog -->
-  <mj-export-dialog
-    [visible]="showExportDialog"
-    [config]="exportDialogConfig"
-    (closed)="onExportDialogClosed($event)">
-  </mj-export-dialog>
-
-  <!-- List Management Dialog -->
-  @if (showListManagementDialog && listManagementConfig) {
-    <mj-list-management-dialog
-      [config]="listManagementConfig"
-      [visible]="showListManagementDialog"
-      (complete)="onListManagementComplete($event)"
-      (cancel)="onListManagementCancel()">
-    </mj-list-management-dialog>
-  }
-
-  <!-- Quick Save Dialog (F-001) -->
-  <mj-quick-save-dialog
-    [IsOpen]="showQuickSaveDialog"
-    [ViewEntity]="selectedViewEntity"
-    [EntityName]="selectedEntity?.DisplayNameOrName ?? ''"
-    [Summary]="quickSaveSummary"
-    [IsSaving]="isSavingView"
-    [DefaultSaveAsNew]="defaultSaveAsNew"
-    (Save)="onQuickSave($event)"
-    (Close)="onQuickSaveClose()"
-    (OpenAdvanced)="onQuickSaveOpenAdvanced($event)">
-  </mj-quick-save-dialog>
-
-  <!-- Duplicate View Dialog (F-005) -->
-  <mj-duplicate-view-dialog
-    [IsOpen]="showDuplicateDialog"
-    [SourceViewName]="duplicateSourceViewName"
-    [Summary]="duplicateSummary"
-    (Duplicate)="onDuplicateConfirmed($event)"
-    (Cancel)="onDuplicateCancel()">
-  </mj-duplicate-view-dialog>
-
-  <!-- Shared View Warning Dialog (view-creation-flow Scenario 5) -->
-  <mj-shared-view-warning-dialog
-    [IsOpen]="showSharedViewWarning"
-    [ViewName]="selectedViewEntity?.Name ?? ''"
-    (Action)="onSharedViewAction($event)"
-    (Cancel)="onSharedViewWarningCancel()">
-  </mj-shared-view-warning-dialog>
+  <!-- View config panel, filter dialog, quick-save/duplicate/shared-view-warning dialogs
+       now live inside mj-view-workspace (the saved-view lifecycle moved there).
+       Export + Add-to-List dialogs now live inside the grid plug-in renderer (it hosts its own
+       Generic dialogs), so they are no longer rendered at the dashboard level. -->
 </div>

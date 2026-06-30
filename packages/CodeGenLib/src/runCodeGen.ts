@@ -10,30 +10,27 @@
 import { GraphQLServerGeneratorBase } from './Misc/graphql_server_codegen';
 import { SQLCodeGenBase } from './Database/sql_codegen';
 import { EntitySubClassGeneratorBase } from './Misc/entity_subclasses_codegen';
-import { SQLServerDataProvider, UserCache, setupSQLServerClient } from '@memberjunction/sqlserver-dataprovider';
-import { MSSQLConnection, sqlConfig } from './Config/db-connection';
 import { ManageMetadataBase } from './Database/manage-metadata';
-import { outputDir, commands, mj_core_schema, configInfo, getSettingValue, dbPlatform, getExternalEntitySchemas, initializeConfig } from './Config/config';
+import { outputDir, commands, configInfo, getSettingValue, dbPlatform, getExternalEntitySchemas, initializeConfig, CommandInfo } from './Config/config';
 import { logError, logStatus, logWarning, startSpinner, updateSpinner, succeedSpinner, failSpinner, warnSpinner } from './Misc/status_logging';
 import { CodeGenReporter } from './Misc/codegen-reporter';
 import * as MJ from '@memberjunction/core';
-import { RunCommandsBase } from './Misc/runCommand';
+import { RunCommandsBase, CommandExecutionResult } from './Misc/runCommand';
 import { DBSchemaGeneratorBase } from './Database/dbSchema';
 import { AngularClientGeneratorBase } from './Angular/angular-codegen';
-import { SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import { CreateNewUserBase } from './Misc/createNewUser';
-import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
+import { MJGlobal } from '@memberjunction/global';
 import { ActionSubClassGeneratorBase } from './Misc/action_subclasses_codegen';
+import { RemoteOperationGeneratorBase } from './Misc/remote_operations_codegen';
+import { MJRemoteOperationEntity } from '@memberjunction/core-entities';
 import { SQLLogging } from './Misc/sql_logging';
-import { SQLServerCodeGenConnection } from './Database/providers/sqlserver/SQLServerCodeGenConnection';
-import { PostgreSQLCodeGenConnection } from './Database/providers/postgresql/PostgreSQLCodeGenConnection';
-import { CodeGenConnection } from './Database/codeGenDatabaseProvider';
-import { PostgreSQLDataProvider, PostgreSQLProviderConfigData } from '@memberjunction/postgresql-dataprovider';
-import pg from 'pg';
+import { CodeGenConnection, CodeGenDatabaseProvider, DataSourceResult as ProviderDataSourceResult, resolveCodeGenDatabaseProvider } from './Database/codeGenDatabaseProvider';
 import { SystemIntegrityBase } from './Misc/system_integrity';
 import { ActionEngineBase } from '@memberjunction/actions-base';
 import { AIEngine } from '@memberjunction/aiengine';
-import { IMetadataProvider, SetProvider, UserInfo } from '@memberjunction/core';
+import { UserInfo } from '@memberjunction/core';
+// Type-only import — erased at runtime, so it adds no load cost to the heavy index.
+import type { MJCLIResult } from '@memberjunction/cli-core';
 
 // Import pre-built MJ class registrations manifest (covers all @memberjunction/* packages)
 import '@memberjunction/server-bootstrap-lite/mj-class-registrations';
@@ -41,117 +38,54 @@ import '@memberjunction/server-bootstrap-lite/mj-class-registrations';
 /** Extract core schema name from configuration */
 const { mjCoreSchema } = configInfo;
 
-/**
- * Result from setupDataSource() providing both the data provider
- * and a CodeGenConnection for database operations.
- */
-export interface DataSourceResult {
-  /** The configured data provider (SQL Server or PostgreSQL) */
-  provider: IMetadataProvider;
-  /** Database-agnostic connection for CodeGen operations */
-  connection: CodeGenConnection;
-  /** The current user loaded from the user cache */
-  currentUser: UserInfo;
-  /** Connection info string for display */
-  connectionInfo: string;
-}
+// `DataSourceResult` lives on `CodeGenDatabaseProvider` now and is re-exported
+// from the package root via `./Database/codeGenDatabaseProvider`. Importing it
+// here as `ProviderDataSourceResult` keeps the type available to the
+// orchestrator without creating a duplicate-name re-export at the index level.
+type DataSourceResult = ProviderDataSourceResult;
 
 /**
  * Main orchestrator class for the MemberJunction code generation process.
  */
 export class RunCodeGenBase {
   /**
-   * Sets up the data source based on the configured database type (SQL Server or PostgreSQL).
-   * Initializes the appropriate data provider, connection, and user cache.
+   * BEFORE/AFTER external command failures captured during a pipeline run, so the
+   * structured result can fail (success=false, non-zero exit) AND report which
+   * command failed — instead of the legacy log-only path that exited 0 regardless.
+   */
+  protected commandFailures: Array<{ context: string; message: string }> = [];
+
+  /** Record any failed entries from a BEFORE/AFTER command batch, paired by index. */
+  protected recordCommandFailures(phase: string, cmds: CommandInfo[], results: CommandExecutionResult[]): void {
+    results.forEach((r, i) => {
+      if (!r.success) {
+        const cmd = cmds[i];
+        const cmdText = cmd ? [cmd.command, ...(cmd.args ?? [])].join(' ').trim() : `command #${i + 1}`;
+        const detail = (r.error || r.output || '').trim();
+        this.commandFailures.push({
+          context: `${phase} command`,
+          message: detail ? `\`${cmdText}\` failed: ${detail}` : `\`${cmdText}\` failed`,
+        });
+      }
+    });
+  }
+
+  /**
+   * Acquire the per-platform data source for a CodeGen run.
+   *
+   * Dispatches via `MJGlobal.Instance.ClassFactory.CreateInstance(CodeGenDatabaseProvider, platform)`
+   * — the same factory pattern used elsewhere in CodeGen (see e.g.
+   * `manage-metadata.ts`'s `get dbProvider()`). The actual pool / provider /
+   * user-loading lives on the resolved subclass's `SetupDataSource()`
+   * method, so adding a new platform means registering a new provider, not
+   * touching the orchestrator.
+   *
+   * Throws when no provider is registered for `configInfo.dbPlatform` —
+   * `ClassFactory.CreateInstance` returns the abstract base on a missed
+   * lookup, so we disambiguate by constructor identity.
    */
   public async setupDataSource(): Promise<DataSourceResult> {
-    startSpinner('Initializing database connection...');
-    const platform = dbPlatform();
-
-    if (platform === 'postgresql') {
-      return this.setupPostgreSQLDataSource();
-    }
-    return this.setupSQLServerDataSource();
-  }
-
-  /**
-   * Sets up SQL Server data source (original behavior).
-   */
-  protected async setupSQLServerDataSource(): Promise<DataSourceResult> {
-    const pool = await MSSQLConnection();
-    const config = new SQLServerProviderConfigData(pool, mj_core_schema());
-    const provider: SQLServerDataProvider = await setupSQLServerClient(config);
-    const conn: CodeGenConnection = new SQLServerCodeGenConnection(pool);
-
-    let connectionInfo = sqlConfig.server;
-    if (sqlConfig.port) connectionInfo += ':' + sqlConfig.port;
-    if (sqlConfig.options?.instanceName) connectionInfo += '\\' + sqlConfig.options.instanceName;
-    connectionInfo += '/' + sqlConfig.database;
-
-    await UserCache.Instance.Refresh(pool);
-    const userMatch = UserCache.Users.find((u) => u?.Type?.trim().toLowerCase() === 'owner');
-    const currentUser = userMatch ? userMatch : UserCache.Users[0];
-
-    succeedSpinner('SQL Server connection initialized: ' + connectionInfo);
-    return { provider, connection: conn, currentUser, connectionInfo };
-  }
-
-  /**
-   * Sets up PostgreSQL data source.
-   */
-  protected async setupPostgreSQLDataSource(): Promise<DataSourceResult> {
-    const pgHost = process.env.PG_HOST ?? configInfo.dbHost;
-    const pgPort = parseInt(process.env.PG_PORT ?? String(configInfo.dbPort), 10) || 5432;
-    const pgDatabase = process.env.PG_DATABASE ?? configInfo.dbDatabase;
-    const pgUser = process.env.PG_USERNAME ?? configInfo.codeGenLogin;
-    const pgPassword = process.env.PG_PASSWORD ?? configInfo.codeGenPassword;
-    const coreSchema = mj_core_schema();
-
-    const pool = new pg.Pool({
-      host: pgHost,
-      port: pgPort,
-      database: pgDatabase,
-      user: pgUser,
-      password: pgPassword,
-      max: 20,
-    });
-
-    // Test connection
-    const client = await pool.connect();
-    client.release();
-    
-    // Configure the PostgreSQL data provider
-    const pgConfig = new PostgreSQLProviderConfigData(
-      { Host: pgHost, Port: pgPort, Database: pgDatabase, User: pgUser, Password: pgPassword },
-      coreSchema,
-      1  // checkRefreshIntervalSeconds: must be > 0 to trigger initial metadata load
-    );
-    const provider = new PostgreSQLDataProvider();
-    await provider.Config(pgConfig);
-    SetProvider(provider);
-
-    const conn = new PostgreSQLCodeGenConnection(pool);
-
-    // Load users (PostgreSQL version - query views directly)
-    const usersResult = await conn.query('SELECT * FROM "' + coreSchema + '"."vwUsers"');
-    const rolesResult = await conn.query('SELECT * FROM "' + coreSchema + '"."vwUserRoles"');
-
-    const userInfos: UserInfo[] = usersResult.recordset.map((user: Record<string, unknown>) => {
-      (user as Record<string, unknown>).UserRoles = rolesResult.recordset.filter(
-        (role: Record<string, unknown>) => UUIDsEqual(role.UserID as string, user.ID as string)
-      );
-      return new UserInfo(provider, user);
-    });
-
-    const userMatch = userInfos.find((u) => u?.Type?.trim().toLowerCase() === 'owner');
-    const currentUser = userMatch ?? userInfos[0];
-    if (!currentUser) {
-      throw new Error('No users found in PostgreSQL. Ensure vwUsers has at least one user.');
-    }
-
-    const connectionInfo = pgHost + ':' + pgPort + '/' + pgDatabase;
-    succeedSpinner('PostgreSQL connection initialized: ' + connectionInfo);
-    return { provider, connection: conn, currentUser, connectionInfo };
+    return resolveCodeGenDatabaseProvider(dbPlatform()).SetupDataSource();
   }
 
   /**
@@ -169,6 +103,12 @@ export class RunCodeGenBase {
       if (workingDirectory) {
         initializeConfig(workingDirectory);
       }
+      // Drop the process-static soft-PK/FK cache so this run re-reads additionalSchemaInfo from disk.
+      // RSU rewrites that file (WriteAdditionalSchemaInfo) immediately before invoking this in-process
+      // runner, so without this a connector's first ApplyAll reads a PRE-write cached config → its tables
+      // are seen as PK-less → entities are skipped ("No primary key found") → 0 rows sync until an MJAPI
+      // restart. In-process path only; the CLI Run() keeps load-once. Deterministic — no mtime/TOCTOU.
+      ManageMetadataBase.invalidateSoftPKFKConfigCache();
       return await this.executeCodeGenPipeline(dataSource, skipDatabaseGeneration, skipFileGeneration);
     } catch (e) {
       logError('In-process CodeGen failed: ' + e);
@@ -177,6 +117,20 @@ export class RunCodeGenBase {
   }
 
   public async Run(skipDatabaseGeneration: boolean = false, skipFileGeneration: boolean = false) {
+    // Preserve the original process-exiting behavior for callers that expect it
+    // (e.g. SchemaEngine's generated runner). The structured variant below does
+    // the actual work and never exits, so the pluggable CLI can emit a result.
+    const result = await this.RunWithResult(skipDatabaseGeneration, skipFileGeneration);
+    process.exit(result.success ? 0 : 1);
+  }
+
+  /**
+   * Run CodeGen and return a structured {@link MJCLIResult} instead of calling
+   * `process.exit()`. Used by the pluggable `mj codegen` plugin so the runtime
+   * host can render the result per `--format` before the CLI exits.
+   */
+  public async RunWithResult(skipDatabaseGeneration: boolean = false, skipFileGeneration: boolean = false): Promise<MJCLIResult> {
+    const startMs = Date.now();
     try {
       const startTime = new Date();
       const platform = dbPlatform();
@@ -184,11 +138,42 @@ export class RunCodeGenBase {
 
       const dataSource = await this.setupDataSource();
       const success = await this.executeCodeGenPipeline(dataSource, skipDatabaseGeneration, skipFileGeneration);
-      process.exit(success ? 0 : 1);
+
+      let entityCount = 0;
+      try {
+        entityCount = new MJ.Metadata().Entities.length;
+      } catch {
+        // Metadata may be unavailable on a hard failure — leave count at 0.
+      }
+
+      // Prefer specific BEFORE/AFTER command failures when present; fall back to a
+      // generic message for any other (non-command) pipeline failure.
+      const errors = success
+        ? []
+        : this.commandFailures.length > 0
+          ? this.commandFailures
+          : [{ message: 'CodeGen pipeline reported a failure — see the log output above for detail.' }];
+
+      return {
+        success,
+        command: 'codegen',
+        durationSeconds: (Date.now() - startMs) / 1000,
+        data: {
+          entityCount,
+          skippedDb: skipDatabaseGeneration || getSettingValue('skip_database_generation', false),
+          skippedFiles: skipFileGeneration || getSettingValue('skip_file_generation', false),
+        },
+        errors,
+      };
     } catch (e) {
       failSpinner('CodeGen failed: ' + e);
       logError(e as string);
-      process.exit(1);
+      return {
+        success: false,
+        command: 'codegen',
+        durationSeconds: (Date.now() - startMs) / 1000,
+        errors: [{ message: e instanceof Error ? e.message : String(e) }],
+      };
     }
   }
 
@@ -204,6 +189,7 @@ export class RunCodeGenBase {
       reporter.mark('platform', dbPlatform());
       reporter.mark('skipDB', skipDatabaseGeneration || getSettingValue('skip_database_generation', false));
       let pipelineSuccess = true;
+      this.commandFailures = [];
 
      try {
       const md = await reporter.phase('loadMetadata', async () => {
@@ -233,7 +219,10 @@ export class RunCodeGenBase {
         if (beforeCommands && beforeCommands.length > 0) {
           updateSpinner('Executing BEFORE commands...');
           const results = await runCommandsObject.runCommands(beforeCommands);
-          if (results.some((r) => !r.success)) logError('ERROR running one or more BEFORE commands');
+          if (results.some((r) => !r.success)) {
+            logError('ERROR running one or more BEFORE commands');
+            this.recordCommandFailures('BEFORE', beforeCommands, results);
+          }
         }
 
         updateSpinner('Executing before-all SQL Scripts...');
@@ -425,7 +414,10 @@ export class RunCodeGenBase {
       if (afterCommands && afterCommands.length > 0) {
         startSpinner('Executing AFTER commands...');
         const results = await runCommandsObject.runCommands(afterCommands);
-        if (results.some((r) => !r.success)) failSpinner('ERROR running one or more AFTER commands');
+        if (results.some((r) => !r.success)) {
+          failSpinner('ERROR running one or more AFTER commands');
+          this.recordCommandFailures('AFTER', afterCommands, results);
+        }
         else succeedSpinner('AFTER commands completed');
       }
 
@@ -437,8 +429,14 @@ export class RunCodeGenBase {
 
       const endTime = new Date();
       const totalSeconds = (endTime.getTime() - startTime.getTime()) / 1000;
+      // Visible final summary (succeedSpinner persists a ✔ line in both verbose and
+      // non-verbose modes). The detailed/timestamped form stays on logStatus for the
+      // verbose log + report.
+      succeedSpinner(`MJ CodeGen complete — ${md.Entities.length} entities in ${totalSeconds.toFixed(2)}s`);
       logStatus('MJ CodeGen Complete! ' + md.Entities.length + ' entities processed in ' + totalSeconds + 's @ ' + endTime.toLocaleString());
-      return true;
+      // A BEFORE/AFTER command failure fails the run (success=false, exit 1) so it
+      // isn't silently swallowed — details flow into the structured result below.
+      return this.commandFailures.length === 0;
      } catch (err) {
        pipelineSuccess = false;
        throw err;
@@ -629,6 +627,38 @@ export class RunCodeGenBase {
         } else if (isVerbose) succeedSpinner('Actions Code generated');
       } else if (isVerbose) warnSpinner('Actions output directory NOT found in config file, skipping...');
 
+      // Remote Operations — emit the typed BaseRemotableOperation subclass for each MJ: Remote Operations row.
+      // Two output targets, parallel to the entity-subclass split: `CoreRemoteOperations` (MJ core ops, shipped
+      // in @memberjunction/core-entities) and `RemoteOperations` (downstream/user ops, their GeneratedEntities).
+      // NOTE: ops have no SchemaName, so there is no automatic core/non-core PARTITION (the entity split keys on
+      // SchemaName === mjCoreSchema). Each configured target therefore receives the full op set; in practice a
+      // repo configures exactly one (this repo: CoreRemoteOperations only). A per-op core/non-core marker — the
+      // SchemaName-equivalent — is the open decision needed to let a single DB route ops to both targets.
+      const coreRemoteOpsDir = outputDir('CoreRemoteOperations', false);
+      const nonCoreRemoteOpsDir = outputDir('RemoteOperations', false);
+      if (coreRemoteOpsDir || nonCoreRemoteOpsDir) {
+        const remoteOpsResult = await new MJ.RunView().RunView<MJRemoteOperationEntity>(
+          { EntityName: 'MJ: Remote Operations', ResultType: 'entity_object' },
+          currentUser,
+        );
+        const remoteOps = remoteOpsResult.Results ?? [];
+        const remoteOpsGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<RemoteOperationGeneratorBase>(RemoteOperationGeneratorBase)!;
+        for (const target of [
+          { dir: coreRemoteOpsDir, label: 'CORE Remote Operation', phase: 'generateRemoteOperationsCore' },
+          { dir: nonCoreRemoteOpsDir, label: 'Remote Operation', phase: 'generateRemoteOperations' },
+        ]) {
+          if (!target.dir) continue;
+          if (isVerbose) startSpinner(`Generating ${target.label} typed bases...`);
+          const ok = await reporter.phase(target.phase, () =>
+            remoteOpsGenerator.generateRemoteOperations(remoteOps, target.dir!),
+          );
+          if (!ok) {
+            failSpinner(`Error generating ${target.label} code`);
+            return false;
+          } else if (isVerbose) succeedSpinner(`${target.label} typed bases generated`);
+        }
+      } else if (isVerbose) warnSpinner('Remote Operations output directory NOT found in config file, skipping...');
+
       SQLLogging.finishSQLLogging();
       if (!isVerbose) succeedSpinner('TypeScript code generation completed');
       return true;
@@ -641,4 +671,18 @@ export class RunCodeGenBase {
 export async function runMemberJunctionCodeGeneration(skipDatabaseGeneration: boolean = false, skipFileGeneration: boolean = false) {
   const runObject = MJGlobal.Instance.ClassFactory.CreateInstance<RunCodeGenBase>(RunCodeGenBase)!;
   return await runObject.Run(skipDatabaseGeneration, skipFileGeneration);
+}
+
+/**
+ * Like {@link runMemberJunctionCodeGeneration}, but returns a structured
+ * {@link MJCLIResult} instead of calling `process.exit()`. The pluggable
+ * `mj codegen` plugin uses this so the runtime host can emit the result
+ * (e.g. `--format=json`) before the CLI exits.
+ */
+export async function runMemberJunctionCodeGenerationWithResult(
+  skipDatabaseGeneration: boolean = false,
+  skipFileGeneration: boolean = false,
+): Promise<MJCLIResult> {
+  const runObject = MJGlobal.Instance.ClassFactory.CreateInstance<RunCodeGenBase>(RunCodeGenBase)!;
+  return await runObject.RunWithResult(skipDatabaseGeneration, skipFileGeneration);
 }

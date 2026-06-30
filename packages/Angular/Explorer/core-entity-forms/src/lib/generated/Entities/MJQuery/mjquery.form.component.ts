@@ -18,17 +18,17 @@ export class MJQueryFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'queryDefinition', sectionName: 'Query Definition', isExpanded: true },
             { sectionKey: 'performanceQuality', sectionName: 'Performance & Quality', isExpanded: true },
-            { sectionKey: 'cachingExecutionSettings', sectionName: 'Caching & Execution Settings', isExpanded: false },
-            { sectionKey: 'aIEmbeddings', sectionName: 'AI & Embeddings', isExpanded: false },
+            { sectionKey: 'cachingExecutionSettings', sectionName: 'Caching & Execution Settings', isExpanded: true },
+            { sectionKey: 'aIEmbeddings', sectionName: 'AI & Embeddings', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
+            { sectionKey: 'mJDataContextItems', sectionName: 'Data Context Items', isExpanded: false },
             { sectionKey: 'mJQueryFields', sectionName: 'Query Fields', isExpanded: false },
             { sectionKey: 'mJQueryPermissions', sectionName: 'Query Permissions', isExpanded: false },
-            { sectionKey: 'mJDataContextItems', sectionName: 'Data Context Items', isExpanded: false },
-            { sectionKey: 'mJQueryParameters', sectionName: 'Query Parameters', isExpanded: false },
             { sectionKey: 'mJQueryDependenciesDependsOnQueryID', sectionName: 'Query Dependencies (Depends On Query)', isExpanded: false },
+            { sectionKey: 'mJQueryParameters', sectionName: 'Query Parameters', isExpanded: false },
+            { sectionKey: 'mJQueryDependenciesQueryID', sectionName: 'Query Dependencies (Query)', isExpanded: false },
             { sectionKey: 'mJQueryEntities', sectionName: 'Query Entities', isExpanded: false },
-            { sectionKey: 'mJQuerySQLs', sectionName: 'Query SQLs', isExpanded: false },
-            { sectionKey: 'mJQueryDependenciesQueryID', sectionName: 'Query Dependencies (Query)', isExpanded: false }
+            { sectionKey: 'mJQuerySQLs', sectionName: 'Query SQLs', isExpanded: false }
         ]);
     }
 }

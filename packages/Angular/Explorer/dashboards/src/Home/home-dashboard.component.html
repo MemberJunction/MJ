@@ -43,14 +43,25 @@
         }
 
         <!-- Empty State -->
-        @if (PinnedItems.length === 0 && !EditMode) {
+        @if (PinnedItems.length === 0 && (EditMode || !HidePinEmptyState)) {
           <div class="pin-empty-state">
-            <i class="fa-solid fa-thumbtack"></i>
-            <h3>No pinned items yet</h3>
-            <p>Pin your favorite dashboards, views, queries, and reports for quick access.</p>
-            <button class="pin-action-btn primary" (click)="OpenAddPinPanel()">
-              <i class="fa-solid fa-plus"></i> Add your first pin
-            </button>
+            @if (!EditMode) {
+              <button type="button" class="pin-empty-close" (click)="DismissPinEmptyState()" title="Hide this">
+                <i class="fa-solid fa-xmark"></i>
+              </button>
+            }
+            <mj-empty-state Icon="fa-solid fa-thumbtack"
+              Title="No pinned items yet"
+              Message="Pin your favorite dashboards, views, queries, and reports for quick access.">
+              <button actions mjButton variant="primary" (click)="OpenAddPinPanel()">
+                <i class="fa-solid fa-plus"></i> Add your first pin
+              </button>
+              @if (!EditMode && !HidePinEmptyState) {
+                <button actions mjButton variant="flat" (click)="DismissPinEmptyState()">
+                  Don't show this again
+                </button>
+              }
+            </mj-empty-state>
           </div>
         }
 
@@ -76,7 +87,7 @@
                   <div class="edit-controls">
                     <div class="drag-handle"><i class="fa-solid fa-grip-vertical"></i></div>
                     <div class="edit-card-actions">
-                      <button class="edit-card-btn delete" (click)="RemovePin(pin.Id); $event.stopPropagation()">
+                      <button class="edit-card-btn delete" aria-label="Remove pin" title="Remove pin" (click)="RemovePin(pin.Id); $event.stopPropagation()">
                         <i class="fa-solid fa-xmark"></i>
                       </button>
                     </div>
@@ -126,7 +137,7 @@
                     <div class="pin-name" (click)="EditMode ? StartEditingPin(pin.Id, $event) : null">
                       {{ pin.DisplayName }}
                       @if (!EditMode) {
-                        <button class="more-btn" (click)="ShowPinMenu($event, pin)">
+                        <button class="more-btn" aria-label="Pin options" title="Pin options" (click)="ShowPinMenu($event, pin)">
                           <i class="fa-solid fa-ellipsis"></i>
                         </button>
                       }
@@ -184,7 +195,7 @@
                     <div class="edit-controls">
                       <div class="drag-handle"><i class="fa-solid fa-grip-vertical"></i></div>
                       <div class="edit-card-actions">
-                        <button class="edit-card-btn delete" (click)="RemovePin(pin.Id); $event.stopPropagation()">
+                        <button class="edit-card-btn delete" aria-label="Remove pin" title="Remove pin" (click)="RemovePin(pin.Id); $event.stopPropagation()">
                           <i class="fa-solid fa-xmark"></i>
                         </button>
                       </div>
@@ -232,7 +243,7 @@
                       <div class="pin-name" (click)="EditMode ? StartEditingPin(pin.Id, $event) : null">
                         {{ pin.DisplayName }}
                         @if (!EditMode) {
-                          <button class="more-btn" (click)="$event.stopPropagation()">
+                          <button class="more-btn" aria-label="Pin options" title="Pin options" (click)="$event.stopPropagation()">
                             <i class="fa-solid fa-ellipsis"></i>
                           </button>
                         }
@@ -548,6 +559,8 @@
           @for (appData of appsDisplayData; track trackByApp($index, appData)) {
             <div
               class="app-card"
+              [mjClickable]="appData.app.Name"
+              [testId]="'app-tile-' + appData.app.Name"
               [style.--app-color]="appData.color"
               (click)="onAppClick(appData.app)">
               <!-- App Icon -->
@@ -588,19 +601,12 @@
         </div>
         <!-- Empty State -->
         @if (apps.length === 0) {
-          <div class="empty-state">
-            <div class="empty-icon">
-              <i class="fa-solid fa-folder-open"></i>
-            </div>
-            <h3>No Applications Available</h3>
-            <p>You don't have any applications configured yet.</p>
-            <button mjButton
-              variant="primary"
-              (click)="openConfigDialog()">
-              <i class="fa-solid fa-gear"></i>
-              Configure Applications
-            </button>
-          </div>
+          <mj-empty-state Icon="fa-solid fa-folder-open"
+            Title="No Applications Available"
+            Message="You don't have any applications configured yet."
+            ActionText="Configure Applications"
+            ActionIcon="fa-solid fa-gear"
+            (Action)="openConfigDialog()" />
         }
       </div>
     }
@@ -631,6 +637,8 @@
               @for (notification of unreadNotifications; track trackByNotification($index, notification)) {
                 <div
                   class="sidebar-item notification-item"
+                  [mjClickable]="notification.Title"
+                  testId="notification-item"
                   (click)="onNotificationClick(notification)">
                   <div class="sidebar-item-info">
                     <span class="sidebar-item-title">{{ notification.Title }}</span>
@@ -653,6 +661,8 @@
                 @for (favorite of favorites; track trackByFavorite($index, favorite)) {
                   <div
                     class="sidebar-item favorite-item"
+                    [mjClickable]="getFavoriteDisplayName(favorite)"
+                    testId="favorite-item"
                     (click)="onFavoriteClick(favorite)">
                     <div class="sidebar-item-icon">
                       <i [class]="getEntityIconByName(favorite.Entity)"></i>
@@ -685,6 +695,8 @@
                 @for (item of recentItems; track trackByRecent($index, item)) {
                   <div
                     class="sidebar-item recent-item"
+                    [mjClickable]="item.recordName || item.recordId"
+                    testId="recent-item"
                     (click)="onRecentClick(item)">
                     <div class="sidebar-item-icon">
                       <i [class]="getEntityIconByName(item.entityName)"></i>
@@ -707,10 +719,9 @@
         }
         <!-- Empty sidebar state -->
         @if (!favoritesLoading && !recentsLoading && unreadNotifications.length === 0 && favorites.length === 0 && recentItems.length === 0) {
-          <div class="sidebar-empty">
-            <i class="fa-solid fa-inbox"></i>
-            <p>No quick access items</p>
-          </div>
+          <mj-empty-state class="sidebar-empty" Size="compact"
+            Icon="fa-solid fa-inbox"
+            Title="No quick access items" />
         }
       </div>
     </div>

@@ -13,8 +13,10 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import {
   MJButtonDirective,
   MJDropdownComponent,
+  MJEmptyStateComponent,
   MJWindowComponent,
-  MJWindowTitlebarComponent
+  MJWindowTitlebarComponent,
+  MJAlertComponent
 } from '@memberjunction/ng-ui-components';
 import { GenericShareDialogComponent } from './lib/resource-share-dialog.component';
 
@@ -34,8 +36,10 @@ import { GenericShareDialogComponent } from './lib/resource-share-dialog.compone
     SharedGenericModule,
     MJButtonDirective,
     MJDropdownComponent,
+    MJEmptyStateComponent,
     MJWindowComponent,
-    MJWindowTitlebarComponent
+    MJWindowTitlebarComponent,
+    MJAlertComponent
   ],
   exports: [
     ResourcePermissionsComponent,

@@ -8,102 +8,18 @@
 
 .at-dashboard {
     display: flex;
-    height: 100%;
+    flex: 1;
+    min-height: 0;
     overflow: hidden;
 }
 
-/* ══════ LEFT NAV ══════ */
-
-.at-left-nav {
-    width: 220px;
-    background: var(--mj-bg-surface);
-    border-right: 1px solid var(--mj-border-default);
-    display: flex;
-    flex-direction: column;
-    flex-shrink: 0;
-}
-
-.at-left-nav-header {
-    padding: 16px 16px 12px;
-    border-bottom: 1px solid var(--mj-border-subtle);
-}
-
-.at-left-nav-header h2 {
-    font-size: 0.95rem;
-    font-weight: 700;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin: 0;
-    color: var(--mj-text-primary);
-}
-
-.at-left-nav-header h2 i {
-    color: var(--mj-brand-primary);
-}
-
-.at-left-nav-items {
-    flex: 1;
-    padding: 8px;
-    overflow-y: auto;
-}
-
-.at-nav-item {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 12px;
-    border-radius: 8px;
-    font-size: 0.82rem;
-    font-weight: 500;
-    color: var(--mj-text-muted);
-    cursor: pointer;
-    transition: all 0.12s ease;
-    margin-bottom: 2px;
-}
-
-.at-nav-item:hover {
-    background: var(--mj-bg-surface-hover);
-    color: var(--mj-text-secondary);
-}
-
-.at-nav-item.active {
-    background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
-    color: var(--mj-brand-primary);
-    font-weight: 600;
-}
-
-.at-nav-item i {
-    width: 18px;
-    text-align: center;
-    font-size: 0.8rem;
-}
-
-.at-nav-badge {
-    margin-left: auto;
-    background: var(--mj-bg-surface-sunken);
-    padding: 1px 7px;
-    border-radius: 10px;
-    font-size: 0.65rem;
-    font-weight: 600;
-    color: var(--mj-text-muted);
-}
-
-.at-nav-item.active .at-nav-badge {
-    background: color-mix(in srgb, var(--mj-brand-primary) 18%, var(--mj-bg-surface));
-    color: var(--mj-brand-primary);
-}
-
-.at-nav-badge-live {
-    background: var(--mj-status-success-bg) !important;
-    color: var(--mj-status-success-text) !important;
-}
-
-.at-nav-divider {
-    height: 1px;
-    background: var(--mj-border-subtle);
-    margin: 8px 12px;
-}
+/*
+  Left rail now owned by <mj-left-nav> (~95 lines of bespoke .at-left-nav /
+  .at-left-nav-items / .at-nav-item / .at-nav-badge / .at-nav-divider styles
+  retired). The "Run History" item below the divider is expressed as a second
+  MJLeftNavSection in the navSections getter — the rail's natural section
+  break replaces the bespoke divider line.
+*/
 
 .at-left-nav-footer {
     padding: 12px;
@@ -152,38 +68,22 @@
     height: 100%;
 }
 
-.at-page-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 14px 20px;
-    border-bottom: 1px solid var(--mj-border-default);
-    flex-shrink: 0;
-}
-
-.at-page-title {
-    font-size: 1rem;
-    font-weight: 700;
-    color: var(--mj-text-primary);
-}
-
-.at-page-subtitle {
-    font-size: 0.72rem;
-    color: var(--mj-text-muted);
-    margin-top: 2px;
-}
-
-.at-page-actions {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-}
+/* .at-page-header / .at-page-title / .at-page-subtitle / .at-page-actions
+   retired — section identity + actions now live in <mj-page-header-interior>
+   (one shared instance at the top of <mj-left-nav-content>, with Title/Subtitle
+   driven by currentTabTitle/currentTabSubtitle getters and per-section action
+   buttons projected via an @switch into the chrome's [actions] slot). */
 
 .at-page-body {
     flex: 1;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    /* Phase 1 fix: was overflow:hidden, which clipped every tab whose content
+       grew past the viewport (Sources, Content Types, Tag Library, Taxonomy,
+       Inbox, Tag Health). Vertical auto lets the tab body scroll; tabs with
+       their own inner scrollers (pipeline feed, history table) keep working. */
+    overflow-y: auto;
+    overflow-x: hidden;
     padding: 16px 20px;
     min-height: 0;
 }
@@ -261,23 +161,11 @@
     padding: 0;
 }
 
-.at-empty-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    padding: 32px 16px;
-    color: var(--mj-text-disabled);
-}
-
-.at-empty-state i {
-    font-size: 28px;
-}
-
-.at-empty-state p {
-    margin: 0;
-    font-size: 13px;
+/* Makes a no-selection <mj-empty-state> fill its detail/reading pane (the host
+   centers its own content; this just lets it grow). */
+.at-fill {
+    flex: 1;
+    min-height: 0;
 }
 
 /* ══════ KPI STRIP ══════ */
@@ -1312,6 +1200,15 @@
 
 /* ══════ RESPONSIVE ══════ */
 
+/* <mj-left-nav> collapses to a full-width top bar at ≤700px; stack the root
+   layout vertically so the content pane sits below it instead of being
+   squeezed to zero width in the flex row. */
+@media (max-width: 700px) {
+    .at-dashboard {
+        flex-direction: column;
+    }
+}
+
 @media (max-width: 1100px) {
     .at-pipeline-layout {
         flex-direction: column;
@@ -1525,6 +1422,23 @@
     flex: 1;
     justify-content: center;
 }
+
+/* "Open advanced settings →" link below the Save/Cancel row in the slide-in.
+   Subtle by design — power users will notice; new users won't be distracted. */
+.at-form-advanced-link {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px dashed var(--mj-border-subtle);
+    font-size: 12px;
+    text-align: center;
+}
+.at-form-advanced-link a {
+    color: var(--mj-brand-primary);
+    text-decoration: none;
+    cursor: pointer;
+}
+.at-form-advanced-link a:hover { text-decoration: underline; }
+.at-form-advanced-link i { margin-right: 6px; }
 
 /* Also add empty state for Content Types (matching Sources) */
 .at-add-type-card {
@@ -2085,56 +1999,9 @@
    TAXONOMY GOVERNANCE TAB
    ════════════════════════════════════════════ */
 
-/* ── Sub-tab strip ── */
-
-.at-tax-tab-strip {
-    display: flex;
-    border-bottom: 2px solid var(--mj-border-default);
-    padding: 0 20px;
-    gap: 0;
-    flex-shrink: 0;
-}
-
-.at-tax-tab {
-    padding: 10px 20px;
-    font-size: 0.78rem;
-    font-weight: 500;
-    color: var(--mj-text-muted);
-    cursor: pointer;
-    border-bottom: 2px solid transparent;
-    margin-bottom: -2px;
-    transition: all 0.15s;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-
-.at-tax-tab:hover {
-    color: var(--mj-text-secondary);
-}
-
-.at-tax-tab.active {
-    color: var(--mj-brand-primary);
-    border-bottom-color: var(--mj-brand-primary);
-    font-weight: 600;
-}
-
-.at-tax-tab-badge {
-    font-size: 0.62rem;
-    font-weight: 600;
-    padding: 1px 7px;
-    border-radius: 10px;
-}
-
-.at-tax-badge-warning {
-    background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
-    color: var(--mj-status-warning);
-}
-
-.at-tax-badge-error {
-    background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
-    color: var(--mj-status-error);
-}
+/* Sub-tab strip + badges retired — taxonomy sub-tabs now driven by <mj-tab-nav>
+   in the [toolbar] slot of the taxonomy section, with TabConfig badges
+   (warning variant for duplicates, error variant for orphans). */
 
 /* ── Tree View: Split layout ── */
 
@@ -3876,4 +3743,129 @@
 .at-dedup-empty p {
     margin: 8px 0 0;
     font-size: 0.82rem;
+}
+
+/* "Showing X of Y" + Load more bar (Run History, etc.) */
+.at-load-more-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 14px;
+    border-top: 1px solid var(--mj-border-subtle);
+}
+
+.at-load-more-count {
+    font-size: 0.78rem;
+    color: var(--mj-text-muted);
+}
+
+/* ============================================================
+   First-run onboarding (P2)
+   ============================================================ */
+.kh-onboarding {
+    margin: 0 0 16px 0;
+    border: 1px solid var(--mj-border-default);
+    border-radius: 12px;
+    background: linear-gradient(135deg,
+        color-mix(in srgb, var(--mj-brand-primary) 6%, var(--mj-bg-surface)),
+        var(--mj-bg-surface));
+    padding: 18px 20px;
+}
+.kh-onboarding-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+.kh-onboarding-title {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+}
+.kh-onboarding-title > i {
+    font-size: 1.3rem;
+    color: var(--mj-brand-primary);
+    margin-top: 2px;
+}
+.kh-onboarding-title h3 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--mj-text-primary);
+}
+.kh-onboarding-title p {
+    margin: 2px 0 0;
+    font-size: 0.82rem;
+    color: var(--mj-text-secondary);
+}
+.kh-onboarding-dismiss {
+    background: none;
+    border: none;
+    color: var(--mj-text-muted);
+    cursor: pointer;
+    font-size: 0.9rem;
+    padding: 4px;
+    border-radius: 6px;
+}
+.kh-onboarding-dismiss:hover { color: var(--mj-text-primary); background: var(--mj-bg-surface-hover); }
+.kh-onboarding-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 16px;
+}
+.kh-step {
+    display: flex;
+    gap: 12px;
+    padding: 12px;
+    border-radius: 10px;
+    border: 1px solid transparent;
+    transition: background 0.15s, border-color 0.15s;
+}
+.kh-step-active {
+    background: var(--mj-bg-surface);
+    border-color: color-mix(in srgb, var(--mj-brand-primary) 30%, transparent);
+}
+.kh-step-marker {
+    flex: 0 0 auto;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.78rem;
+    font-weight: 700;
+    background: var(--mj-bg-surface-sunken);
+    color: var(--mj-text-muted);
+    border: 1px solid var(--mj-border-default);
+}
+.kh-step-active .kh-step-marker {
+    background: var(--mj-brand-primary);
+    color: var(--mj-text-inverse);
+    border-color: var(--mj-brand-primary);
+}
+.kh-step-done .kh-step-marker {
+    background: var(--mj-status-success);
+    color: var(--mj-text-inverse);
+    border-color: var(--mj-status-success);
+}
+.kh-step-title {
+    font-size: 0.86rem;
+    font-weight: 600;
+    color: var(--mj-text-primary);
+}
+.kh-step-done .kh-step-title { color: var(--mj-text-secondary); }
+.kh-step-desc {
+    font-size: 0.78rem;
+    color: var(--mj-text-muted);
+    margin-top: 2px;
+    line-height: 1.4;
+}
+.kh-step-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
 }

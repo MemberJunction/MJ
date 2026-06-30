@@ -723,25 +723,6 @@
     display: block;
 }
 
-.list-empty {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 60px 20px;
-    color: var(--text-muted);
-    gap: 12px;
-}
-
-.list-empty i {
-    font-size: 32px;
-    opacity: 0.5;
-}
-
-.list-empty span {
-    font-size: 14px;
-}
-
 /* ============================================================
    OVERVIEW SECTION
    ============================================================ */
@@ -1960,37 +1941,10 @@
 }
 
 /* ============================================================
-   EMPTY STATES
-   ============================================================ */
-
-.empty-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 40px;
-    text-align: center;
-    color: var(--text-muted);
-}
-
-.empty-state i {
-    font-size: 32px;
-    margin-bottom: 12px;
-    opacity: 0.5;
-}
-
-.empty-state p {
-    margin: 0;
-    font-size: 14px;
-}
-
-/* ============================================================
    LOADING / ERROR STATES
    ============================================================ */
 
-.explorer-loading,
-.explorer-error,
-.explorer-empty {
+.explorer-loading {
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -2001,19 +1955,9 @@
     color: var(--text-muted);
 }
 
-.explorer-error i,
-.explorer-empty i {
-    font-size: 48px;
-    margin-bottom: 16px;
-    opacity: 0.5;
-}
-
-.explorer-error {
-    color: var(--danger-color);
-}
-
-.explorer-error i {
-    opacity: 1;
+/* Full-pane empty/error placeholders (rule 6b flex-fill). */
+.explorer-fill {
+    height: 100%;
 }
 
 /* ============================================================
@@ -2619,32 +2563,3 @@
     font-family: 'SF Mono', 'Fira Code', monospace;
 }
 
-.empty-state-card {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 48px 24px;
-    text-align: center;
-    color: var(--mj-text-muted);
-}
-
-.empty-state-icon {
-    font-size: 48px;
-    margin-bottom: 16px;
-    opacity: 0.3;
-}
-
-.empty-state-card h3 {
-    font-size: 18px;
-    font-weight: 600;
-    color: var(--mj-text-secondary);
-    margin: 0 0 8px 0;
-}
-
-.empty-state-card p {
-    font-size: 13px;
-    line-height: 1.5;
-    max-width: 500px;
-    margin: 0;
-}

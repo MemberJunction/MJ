@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/open-app-engine",
-  "version": "5.33.0",
+  "version": "5.43.0",
   "description": "MemberJunction: MJ Open App Engine - packaging, distribution, and installation system for MJ Open Apps.",
   "type": "module",
   "main": "dist/index.js",
@@ -16,8 +16,11 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/core": "5.33.0",
-    "@memberjunction/global": "5.33.0",
+    "@memberjunction/core": "5.43.0",
+    "@memberjunction/core-entities": "5.43.0",
+    "@memberjunction/global": "5.43.0",
+    "@memberjunction/sql-dialect": "5.43.0",
+    "@octokit/rest": "^21.1.1",
     "semver": "^7.7.1",
     "simple-git": "^3.27.0",
     "zod": "^3.24.3"

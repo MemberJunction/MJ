@@ -1,0 +1,29 @@
+{
+  "name": "@memberjunction/ai-inworld",
+  "type": "module",
+  "version": "5.43.0",
+  "description": "MemberJunction Wrapper for Inworld - Realtime API speech-to-speech voice driver",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "author": "MemberJunction.com",
+  "license": "ISC",
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@memberjunction/ai": "5.43.0",
+    "@memberjunction/global": "5.43.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

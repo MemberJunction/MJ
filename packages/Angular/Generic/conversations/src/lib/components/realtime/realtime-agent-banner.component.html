@@ -1,0 +1,163 @@
+<div class="banner" [class.banner--review]="ReviewMode" [class.banner--compact]="Compact && !ReviewMode">
+  @if (ReviewMode) {
+    <!-- SESSION REVIEW: static orb · name · review badge · started→closed · close-reason chip,
+         with the review's exit actions up here in the header bar (Start live leads, Close trails). -->
+    <div class="agent-orb agent-orb--review" aria-hidden="true"></div>
+
+    <div class="banner__id">
+      <span class="banner__name">Voice for {{ AgentName }}</span>
+      <span class="pill pill--review"><i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i> Session review</span>
+      @if (ReviewRangeLabel) {
+        <span class="banner__for banner__range">{{ ReviewRangeLabel }}</span>
+      }
+      @if (ReviewCloseReasonLabel) {
+        <span class="pill pill--close-reason" [title]="'Close reason: ' + ReviewCloseReason">{{ ReviewCloseReasonLabel }}</span>
+      }
+      @if (ShowOpenSession) {
+        <button type="button" class="dev-link" (click)="OpenSession()"
+                title="Open the agent session record">
+          <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
+          <span>Open session</span>
+        </button>
+      }
+    </div>
+
+    <div class="banner__state banner__state--review">
+      <i class="fa-solid fa-box-archive" aria-hidden="true"></i>
+      <span class="banner__state-label banner__state-label--review">Reviewing past session</span>
+    </div>
+
+    <div class="bar-actions">
+      <button type="button" class="start-live-pill" (click)="StartLiveRequested.emit()"
+              title="Resume this session as a new live call">
+        <i class="fa-solid fa-phone" aria-hidden="true"></i>
+        <span>Start live session</span>
+      </button>
+      <button type="button" class="iconb" (click)="CloseRequested.emit()"
+              title="Close review" aria-label="Close session review">
+        <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+      </button>
+    </div>
+  } @else if (Compact) {
+    <!-- COMPACT (Calm Orb · overlay): a tiny identity + state row only. No duplicate orb,
+         no state pill, no headphones / gear / expand — the body shows the big orb + name +
+         state, and the lean dock owns the actions. Minimize stays reachable here. -->
+    <div class="banner__id banner__id--compact">
+      <span class="banner__avatar" aria-hidden="true">{{ AgentName.charAt(0) }}</span>
+      <span class="banner__name banner__name--compact">{{ AgentName }}</span>
+      <span class="banner__state-chip">
+        @if (IsBusy(State)) {
+          <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
+        } @else {
+          <span class="banner__state-dot" [attr.data-state]="OrbState(State)" aria-hidden="true"></span>
+        }
+        <span class="banner__state-chip-label">{{ StateLabel(State) }}</span>
+      </span>
+    </div>
+
+    @if (ShowMinimize) {
+      <button type="button" class="iconb banner__minimize--compact" (click)="MinimizeRequested.emit()"
+              title="Hide the call view — the call stays live"
+              aria-label="Minimize the call view">
+        <i class="fa-solid fa-minus" aria-hidden="true"></i>
+      </button>
+    }
+  } @else {
+    <div class="agent-orb" [attr.data-state]="OrbState(State)" aria-hidden="true"></div>
+
+    <div class="banner__id">
+      <span class="banner__name">Voice for {{ AgentName }}</span>
+      <span class="pill pill--sage"><i class="fa-solid fa-feather" aria-hidden="true"></i> Co-Agent</span>
+      <span class="banner__for">speaking as <b>{{ AgentName }}</b></span>
+      @if (ModelName) {
+        <span class="banner__model" [title]="'Realtime voice model: ' + ModelName">· {{ ModelName }}</span>
+      }
+      @if (ShowOpenSession) {
+        <button type="button" class="dev-link" (click)="OpenSession()"
+                title="Open the agent session record">
+          <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
+          <span>Open session</span>
+        </button>
+      }
+    </div>
+
+    <div class="banner__state" [class.banner__state--busy]="IsBusy(State)">
+      @if (IsBusy(State)) {
+        <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
+      } @else {
+        <div class="waveform" [class.waveform--idle]="State !== 'speaking'" aria-hidden="true">
+          <span></span><span></span><span></span><span></span>
+          <span></span><span></span><span></span><span></span>
+        </div>
+      }
+      <span class="banner__state-label">{{ StateLabel(State) }}</span>
+    </div>
+
+    <!-- Disclosure-gated app-bar action cluster (the overlay decides what renders). -->
+    <div class="bar-actions">
+      @if (ShowPureAudio) {
+        <button type="button" class="iconb" (click)="PureAudioRequested.emit()"
+                title="Pure audio — simplest view, just the orb and the voice (sticks until you change it in the gear)"
+                aria-label="Switch to the simple pure-audio view">
+          <i class="fa-solid fa-headphones" aria-hidden="true"></i>
+        </button>
+      }
+      @if (ShowCaptionsControl) {
+        <button type="button" class="iconb" [class.iconb--on]="CaptionsOn"
+                (click)="ToggleCaptions()"
+                [title]="CaptionsOn ? 'Hide captions' : 'Show captions'"
+                [attr.aria-pressed]="CaptionsOn">
+          <i class="fa-solid fa-closed-captioning" aria-hidden="true"></i>
+        </button>
+      }
+      @if (ShowGear) {
+        <button type="button" class="iconb" [class.iconb--on]="GearOpen || DevMode"
+                (click)="ToggleGear($event)"
+                title="Interface density &amp; developer links"
+                [attr.aria-expanded]="GearOpen">
+          <i class="fa-solid fa-gear" aria-hidden="true"></i>
+        </button>
+      }
+      @if (ShowMinimize) {
+        <button type="button" class="iconb" (click)="MinimizeRequested.emit()"
+                title="Hide the call view — the call stays live"
+                aria-label="Minimize the call view">
+          <i class="fa-solid fa-down-left-and-up-right-to-center" aria-hidden="true"></i>
+        </button>
+      }
+      @if (ShowEnd) {
+        <span class="bar-sep" aria-hidden="true"></span>
+        <button type="button" class="end-pill" (click)="EndRequested.emit()"
+                title="End call" aria-label="End the call">
+          <i class="fa-solid fa-phone-slash" aria-hidden="true"></i>
+          <span>End call</span>
+        </button>
+      }
+    </div>
+
+    <!-- Gear popover: interface density (the disclosure escape hatch) + developer links. -->
+    @if (GearOpen) {
+      <div class="gear-pop" (click)="$event.stopPropagation()" role="menu" aria-label="Interface settings">
+        <div class="gp-h">Interface</div>
+        @if (ShowDensityPicker) {
+          <div class="gp-row">
+            <span class="gp-l">Density</span>
+            <div class="gp-seg" role="radiogroup" aria-label="Interface density">
+              @for (d of Densities; track d.Key) {
+                <button type="button" [class.on]="Density === d.Key"
+                        (click)="SelectDensity(d.Key)"
+                        [attr.aria-checked]="Density === d.Key" role="radio">{{ d.Label }}</button>
+              }
+            </div>
+          </div>
+          <div class="gp-note">Simple returns to the pure-audio surface. Auto grows the console as you use it.</div>
+          <div class="gp-div"></div>
+        }
+        <button type="button" class="gp-link" (click)="ToggleDev()" [attr.aria-pressed]="DevMode">
+          <i class="fa-solid" [ngClass]="DevMode ? 'fa-toggle-on' : 'fa-toggle-off'" aria-hidden="true"></i>
+          Developer links {{ DevMode ? 'on' : 'off' }}
+        </button>
+      </div>
+    }
+  }
+</div>

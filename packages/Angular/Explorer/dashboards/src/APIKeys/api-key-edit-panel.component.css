@@ -193,32 +193,15 @@
     flex-shrink: 0;
 }
 
-.slideout-footer .mj-btn {
+/* Button shape/size is owned by the mjButton directive (variant/size inputs).
+   Only the layout min-width is set here, scoped to the element (not .mj-btn). */
+.slideout-footer button {
     min-width: 80px;
-    padding: 8px 16px;
-    font-weight: 500;
-    border-radius: 6px;
 }
 
-/* Messages */
-.message {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 12px 16px;
+/* Messages — positioning only; box chrome owned by <mj-alert> */
+.slideout-msg-gap {
     margin: 12px 16px;
-    border-radius: 8px;
-    font-size: 14px;
-}
-
-.message.success {
-    background: var(--mj-status-success-bg);
-    color: var(--mj-status-success-text);
-}
-
-.message.error {
-    background: var(--mj-status-error-bg);
-    color: var(--mj-status-error);
 }
 
 /* Legacy tab styles removed - now using slideout-tabs */
@@ -526,32 +509,6 @@
     cursor: not-allowed;
 }
 
-/* Revoked Notice */
-.revoked-notice {
-    display: flex;
-    gap: 12px;
-    padding: 20px;
-    background: var(--mj-bg-surface-sunken);
-    border-radius: 12px;
-}
-
-.revoked-notice i {
-    font-size: 24px;
-    color: var(--mj-text-secondary);
-}
-
-.revoked-notice strong {
-    display: block;
-    color: var(--mj-text-primary);
-    margin-bottom: 4px;
-}
-
-.revoked-notice p {
-    margin: 0;
-    font-size: 13px;
-    color: var(--mj-text-secondary);
-}
-
 /* Scopes Tab */
 .scopes-tab {
     padding: 16px;
@@ -817,33 +774,6 @@
     text-align: right;
 }
 
-/* Empty State */
-.empty-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 48px 24px;
-    color: var(--mj-text-secondary);
-    text-align: center;
-}
-
-.empty-state i {
-    font-size: 48px;
-    margin-bottom: 16px;
-    opacity: 0.5;
-}
-
-.empty-state span {
-    font-size: 16px;
-    font-weight: 500;
-    color: var(--mj-text-primary);
-}
-
-.empty-state p {
-    margin: 8px 0 0 0;
-    font-size: 13px;
-}
 
 /* Legacy kendo-window styles removed - now using slideout-panel */
 
@@ -864,71 +794,10 @@
     box-shadow: var(--mj-focus-ring);
 }
 
-/* Button styling in edit actions */
-.edit-actions .mj-btn {
+/* Button shape/size is owned by the mjButton directive (variant/size inputs).
+   Only the layout min-width is set here, scoped to the element (not .mj-btn). */
+.edit-actions button,
+.scopes-header button {
     min-width: 120px;
-    padding: 10px 20px;
-    font-weight: 600;
-    border-radius: 8px;
-    transition: all 0.2s ease;
 }
 
-.edit-actions .mj-btn--primary {
-    box-shadow: var(--mj-shadow-brand-sm);
-}
-
-.edit-actions .mj-btn--primary:hover {
-    transform: translateY(-1px);
-    box-shadow: var(--mj-shadow-brand-md);
-}
-
-/* Scopes header button styling */
-.scopes-header .mj-btn {
-    min-width: 120px;
-    padding: 10px 20px;
-    font-weight: 600;
-    border-radius: 8px;
-    transition: all 0.2s ease;
-}
-
-.scopes-header .mj-btn--primary {
-    box-shadow: var(--mj-shadow-brand-sm);
-}
-
-.scopes-header .mj-btn--primary:hover {
-    transform: translateY(-1px);
-    box-shadow: var(--mj-shadow-brand-md);
-}
-
-/* No Scopes Warning */
-.no-scopes-warning {
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-    padding: 16px;
-    background: var(--mj-status-error-bg);
-    border: 1px solid var(--mj-status-error-border);
-    border-radius: 10px;
-    margin-bottom: 16px;
-    font-size: 13px;
-    color: var(--mj-status-error-text);
-}
-
-.no-scopes-warning i {
-    font-size: 20px;
-    color: var(--mj-status-error);
-    margin-top: 2px;
-    flex-shrink: 0;
-}
-
-.no-scopes-warning strong {
-    display: block;
-    color: var(--mj-status-error-text);
-    font-size: 14px;
-    margin-bottom: 4px;
-}
-
-.no-scopes-warning p {
-    margin: 0;
-    line-height: 1.5;
-}

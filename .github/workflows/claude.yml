@@ -34,7 +34,7 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
 
-          model: claude-opus-4-0
+          model: claude-opus-4-8
 
           direct_prompt: |
             Please review this PR and provide inline feedback using the GitHub review system. Follow these steps:

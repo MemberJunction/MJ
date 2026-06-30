@@ -15,14 +15,15 @@
       "RetryStrategy": "Fixed",
       "PromptRole": "System",
       "PromptPosition": "First",
-      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System"
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
+      "EffortLevel": 1
     },
     "relatedEntities": {
       "MJ: AI Prompt Models": [
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=GPT 5-nano",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT 5.5 Instant",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
             "Priority": 1
           },
@@ -30,8 +31,8 @@
             "ID": "97EA5DA5-254D-4DFC-8C3C-3E8A21F9DFE5"
           },
           "sync": {
-            "lastModified": "2026-02-13T20:48:47.366Z",
-            "checksum": "ba1f357031e6231a56ec888c314bd1dc87585c4f2b0cca7ab72168c0f22283e7"
+            "lastModified": "2026-05-29T19:48:58.694Z",
+            "checksum": "0fbff8e055836faf4ae3e96e5e5a26f1a2665442185baa35f76e4675c832ada6"
           }
         },
         {
@@ -67,7 +68,7 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3 Flash",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
             "Priority": 25
           },
@@ -75,8 +76,23 @@
             "ID": "63F1DC37-D9B4-4C7E-BAAB-8B8978D4658F"
           },
           "sync": {
-            "lastModified": "2026-03-12T21:00:23.023Z",
-            "checksum": "afe6e28eba228132e11532a0326d1156577c35039ad1fc50748213613e5a19d5"
+            "lastModified": "2026-05-29T19:48:58.712Z",
+            "checksum": "059e6e4d6499772edda6bb2db6bed0b429a87fd7477c6e3732a18f75ad31c170"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 24
+          },
+          "primaryKey": {
+            "ID": "2B38A457-C304-4840-8199-253F9432FE8F"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:58.729Z",
+            "checksum": "33729928dc18d71c434ba27b3a610b82bfdaccd97e7a922a60933877e182688c"
           }
         }
       ]
@@ -85,8 +101,8 @@
       "ID": "00273D6C-18A3-4AC3-8691-A3FD9C2C12B1"
     },
     "sync": {
-      "lastModified": "2026-02-13T20:48:47.276Z",
-      "checksum": "4df4e9f91b4748dff9b94d97f6e610a7a999b8c5fe8c1524ef7321f74f97ebb6"
+      "lastModified": "2026-05-29T19:48:58.662Z",
+      "checksum": "df624455ab454f4a560993250558f0d7006ddb9fbb36cf858f72b56eb886a77f"
     }
   }
 ]

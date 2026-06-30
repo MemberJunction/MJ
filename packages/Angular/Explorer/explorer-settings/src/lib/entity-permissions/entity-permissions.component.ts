@@ -10,6 +10,7 @@ import {
 } from '@memberjunction/core-entities';
 import { BaseDashboard } from '@memberjunction/ng-shared';
 import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
+import { FilterFieldConfig, ViewToggleOption } from '@memberjunction/ng-ui-components';
 import { PermissionDialogData, PermissionDialogResult } from './permission-dialog/permission-dialog.component';
 
 interface PermissionsStats {
@@ -76,7 +77,13 @@ export class EntityPermissionsComponent extends BaseDashboard implements OnDestr
   // UI State
   public expandedEntityId: string | null = null;
   public viewMode: 'grid' | 'list' = 'list';
-  public showMobileFilters = false;
+
+  /** Options for the <mj-view-toggle> in the interior chrome. Icon-only;
+      title drives the tooltip + aria-label. */
+  public readonly viewToggleOptions: ViewToggleOption[] = [
+    { key: 'list', icon: 'fa-solid fa-list', title: 'List View' },
+    { key: 'grid', icon: 'fa-solid fa-th',   title: 'Grid View' }
+  ];
 
   protected override destroy$ = new Subject<void>();
   private get metadata() { return this.ProviderToUse; }
@@ -264,25 +271,104 @@ export class EntityPermissionsComponent extends BaseDashboard implements OnDestr
   }
   
   // Public methods for template
-  public onSearchChange(event: Event): void {
-    const value = (event.target as HTMLInputElement).value;
-    this.updateFilter({ entitySearch: value });
-  }
-  
   public onAccessLevelChange(level: 'all' | 'public' | 'restricted' | 'custom'): void {
     this.updateFilter({ accessLevel: level });
   }
-  
-  public onRoleFilterChange(event: Event): void {
-    const value = (event.target as HTMLSelectElement).value;
-    this.updateFilter({ roleId: value || null });
-  }
-  
+
   public updateFilter(partial: Partial<FilterOptions>): void {
     this.filters$.next({
       ...this.filters$.value,
       ...partial
     });
+    // Discrete changes (chips, popover dropdowns) apply immediately. Text search
+    // still goes through the 300ms debounce in setupFilterSubscription.
+    if (!('entitySearch' in partial)) {
+      this.applyFilters();
+      this.cdr.markForCheck();
+    }
+  }
+
+  // -- Filter panel binding (mj-filter-panel inside the one Filter popover) ---
+  // Concise chrome: Access level + Role both live behind the single Filter
+  // button; applied filters surface as removable chips below the card.
+
+  public get filterFields(): FilterFieldConfig[] {
+    return [
+      {
+        key: 'accessLevel',
+        type: 'chips',
+        label: 'Access level',
+        chipOptions: [
+          { text: 'All', value: 'all' },
+          { text: 'Public', value: 'public' },
+          { text: 'Restricted', value: 'restricted' },
+          { text: 'Custom', value: 'custom' },
+        ],
+      },
+      {
+        key: 'roleId',
+        type: 'dropdown',
+        label: 'Role',
+        icon: 'fa-solid fa-user-shield',
+        placeholder: 'All Roles',
+        filterable: this.roles.length > 10,
+        options: [
+          { text: 'All Roles', value: '' },
+          ...this.roles.map(r => ({ text: r.Name ?? '', value: r.ID }))
+        ]
+      }
+    ];
+  }
+
+  public get filterValues(): Record<string, unknown> {
+    return { accessLevel: this.filters$.value.accessLevel, roleId: this.filters$.value.roleId ?? '' };
+  }
+
+  /** Total active filters (Access level + Role) — drives the Filter button badge. */
+  public get TotalActiveFilterCount(): number {
+    const f = this.filters$.value;
+    return (f.accessLevel !== 'all' ? 1 : 0) + (f.roleId ? 1 : 0);
+  }
+
+  public onFilterPanelChange(values: Record<string, unknown>): void {
+    const partial: Partial<FilterOptions> = {};
+    if ('accessLevel' in values) {
+      partial.accessLevel = (values['accessLevel'] as FilterOptions['accessLevel']) || 'all';
+    }
+    if ('roleId' in values) {
+      partial.roleId = (values['roleId'] as string) || null;
+    }
+    this.updateFilter(partial);
+  }
+
+  /** Clear all filters (Access level + Role); search persists. */
+  public clearAllAppliedFilters(): void {
+    this.updateFilter({ accessLevel: 'all', roleId: null });
+  }
+
+  /** True when search and/or panel filters are narrowing the list — gates the
+   *  no-results empty-state "Reset filters" CTA. */
+  public get IsListNarrowed(): boolean {
+    return this.filters$.value.entitySearch !== '' || this.TotalActiveFilterCount > 0;
+  }
+
+  /** Reset everything narrowing the list (search + Access level + Role) and
+   *  refresh immediately. Wired to the no-results empty-state CTA. Unlike
+   *  clearAllAppliedFilters(), this also clears the search box. */
+  public resetAllFiltersAndSearch(): void {
+    this.filters$.next({ entitySearch: '', accessLevel: 'all', roleId: null });
+    this.applyFilters();
+    this.cdr.markForCheck();
+  }
+
+  /** Empty-state CTA handler: reset filters when the list is narrowed,
+   *  otherwise reload the data (the original "Refresh" affordance). */
+  public onEmptyStateAction(): void {
+    if (this.IsListNarrowed) {
+      this.resetAllFiltersAndSearch();
+    } else {
+      this.refreshData();
+    }
   }
   
   public toggleEntityExpansion(entityId: string): void {

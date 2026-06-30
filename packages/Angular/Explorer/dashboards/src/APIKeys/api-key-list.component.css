@@ -439,49 +439,6 @@
     color: var(--mj-text-secondary);
 }
 
-/* Empty State */
-.empty-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 64px 24px;
-    color: var(--mj-text-secondary);
-    text-align: center;
-}
-
-.empty-state i {
-    font-size: 48px;
-    margin-bottom: 16px;
-    opacity: 0.3;
-}
-
-.empty-state span {
-    font-size: 16px;
-    color: var(--mj-text-secondary);
-}
-
-.create-empty-btn {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-top: 20px;
-    padding: 12px 24px;
-    background: var(--mj-brand-primary);
-    border: none;
-    border-radius: 8px;
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--mj-text-inverse);
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.create-empty-btn:hover {
-    transform: translateY(-2px);
-    box-shadow: var(--mj-shadow-brand-md);
-}
-
 /* Pagination */
 .pagination {
     display: flex;

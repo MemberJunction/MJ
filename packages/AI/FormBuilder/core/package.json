@@ -1,0 +1,46 @@
+{
+  "name": "@memberjunction/ai-form-builder",
+  "type": "module",
+  "version": "5.43.0",
+  "description": "Form Builder agent — Designer (LLM) + Builder (deterministic code-agent) pattern for authoring runtime entity forms.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "watch": "tsc -w",
+    "clean": "rimraf dist",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "keywords": [
+    "memberjunction",
+    "form-builder",
+    "ai-agents",
+    "interactive-components"
+  ],
+  "author": "MemberJunction",
+  "license": "ISC",
+  "dependencies": {
+    "@memberjunction/actions": "5.43.0",
+    "@memberjunction/ai-agents": "5.43.0",
+    "@memberjunction/ai-core-plus": "5.43.0",
+    "@memberjunction/ai-engine-base": "5.43.0",
+    "@memberjunction/ai-prompts": "5.43.0",
+    "@memberjunction/aiengine": "5.43.0",
+    "@memberjunction/core": "5.43.0",
+    "@memberjunction/core-entities": "5.43.0",
+    "@memberjunction/global": "5.43.0",
+    "@memberjunction/interactive-component-types": "5.43.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.11",
+    "rimraf": "^6.1.2",
+    "tsc-alias": "^1.8.16",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

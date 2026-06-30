@@ -13,8 +13,16 @@ import { ResourceData, MJVectorDatabaseEntity, MJVectorIndexEntity, MJEntityDocu
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { MJLeftNavItem, MJLeftNavSection } from '@memberjunction/ng-ui-components';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { SearchScopeChildGridColumn } from '@memberjunction/ng-search';
+import {
+    buildKnowledgeConfigAgentContext,
+    resolveConfigSection,
+    resolveByIDOrName,
+    buildConfigNotFoundError,
+} from './knowledge-config-agent-context';
+import { validateStringParam } from '../../../shared/agent-tool-validation';
 
 /** Configuration section definition */
 interface ConfigSection {
@@ -211,7 +219,7 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
         { Field: 'SearchProviderID', Label: 'Provider', Type: 'lookup', LookupEntityName: 'MJ: Search Providers', LookupFilter: "Status='Active'", Width: '200px' },
         { Field: 'Enabled', Label: 'Enabled', Type: 'checkbox', Width: '80px' },
         { Field: 'MaxResults', Label: 'Max Results', Type: 'number', Placeholder: 'e.g. 20', Width: '110px' },
-        { Field: 'QueryTransformTemplateID', Label: 'Query Transform', Type: 'lookup', LookupEntityName: 'Templates', Width: '180px' },
+        { Field: 'QueryTransformTemplateID', Label: 'Query Transform', Type: 'lookup', LookupEntityName: 'MJ: Templates', Width: '180px' },
         { Field: 'ProviderConfigOverride', Label: 'Config Override', Type: 'code', Placeholder: 'JSON override (optional)' },
     ];
 
@@ -231,14 +239,14 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
 
     /** Column spec for the Entities child grid. */
     public readonly ScopeEntityColumns: SearchScopeChildGridColumn[] = [
-        { Field: 'EntityID', Label: 'Entity', Type: 'lookup', LookupEntityName: 'Entities', Width: '220px' },
+        { Field: 'EntityID', Label: 'Entity', Type: 'lookup', LookupEntityName: 'MJ: Entities', Width: '220px' },
         { Field: 'ExtraFilter', Label: 'Extra Filter (SQL + Nunjucks)', Type: 'code', Placeholder: "CategoryID = '<uuid>' AND OrganizationID = '{{ context.PrimaryScopeRecordID }}'" },
         { Field: 'UserSearchStringOverride', Label: 'Query Rewrite', Type: 'text', Placeholder: '— use raw query —' },
     ];
 
     /** Column spec for the Storage Accounts child grid. */
     public readonly ScopeStorageColumns: SearchScopeChildGridColumn[] = [
-        { Field: 'StorageAccountID', Label: 'Storage Account', Type: 'lookup', LookupEntityName: 'Storage Providers', Width: '220px' },
+        { Field: 'FileStorageAccountID', Label: 'Storage Account', Type: 'lookup', LookupEntityName: 'MJ: File Storage Accounts', Width: '220px' },
         { Field: 'FolderPath', Label: 'Folder Path (Nunjucks)', Type: 'code', Placeholder: '/tenants/{{ context.PrimaryScopeRecordID }}/hr/policies/' },
     ];
 
@@ -250,8 +258,8 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
      * lives in SearchScopePermissionResolver.
      */
     public readonly ScopePermissionColumns: SearchScopeChildGridColumn[] = [
-        { Field: 'UserID', Label: 'User', Type: 'lookup', LookupEntityName: 'Users', LookupFilter: "IsActive=1", Width: '240px' },
-        { Field: 'RoleID', Label: 'Role', Type: 'lookup', LookupEntityName: 'Roles', Width: '200px' },
+        { Field: 'UserID', Label: 'User', Type: 'lookup', LookupEntityName: 'MJ: Users', LookupFilter: "IsActive=1", Width: '240px' },
+        { Field: 'RoleID', Label: 'Role', Type: 'lookup', LookupEntityName: 'MJ: Roles', Width: '200px' },
         { Field: 'PermissionLevel', Label: 'Level', Type: 'select', Options: [
             { Label: 'None (explicit deny)', Value: 'None' },
             { Label: 'Read (view only)', Value: 'Read' },
@@ -262,10 +270,207 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
 
     ngAfterViewInit(): void {
         this.loadConfiguration();
-        this.navigationService.SetAgentContext(this, {
-            ActiveSection: this.ActiveSection,
-        });
+        this.emitAgentContext();
+        this.registerAgentTools();
         this.NotifyLoadComplete();
+    }
+
+    // ================================================================
+    // Agent context + client tools
+    // ================================================================
+
+    /**
+     * 🔒 SAFETY BOUNDARY (Config surface)
+     * ----------------------------------
+     * EXPOSED to the agent: navigation (switch section / tab), idempotent reloads
+     * (ReloadConfiguration, LoadSearchAnalytics, LoadPermissionsAudit), read-only
+     * filters (FTS filter, permissions-audit filters), selection (select scope),
+     * and opening a search scope's record/full-form for VIEWING.
+     *
+     * NEVER EXPOSED (destructive / credential-bearing — deliberate UI actions
+     * only): SaveConfiguration / persist thresholds, CreateIndex / DeleteIndex,
+     * CreateNewScope / SaveActiveScope / DeleteActiveScope, and
+     * SaveProviderCredential (changes credentials). These mutate infrastructure
+     * or write credentials and stay user-driven. The agent may *navigate to* and
+     * *open* these surfaces, never commit them.
+     */
+
+    /**
+     * Publish the current Config surface state to the AI agent. Re-emitted on
+     * every section change / scope load so the streamed context never goes stale.
+     * Deep context is shaped by the pure {@link buildKnowledgeConfigAgentContext}.
+     */
+    private emitAgentContext(): void {
+        this.navigationService.SetAgentContext(this, buildKnowledgeConfigAgentContext({
+            ActiveSection: this.ActiveSection,
+            ActiveSectionLabel: this.currentSection?.Label ?? this.ActiveSection,
+            Sections: this.Sections,
+            IsLoading: this.IsLoading,
+            HasUnsavedChanges: this.HasUnsavedChanges,
+            VectorSetupComplete: this.VectorSetupComplete,
+            SetupStepsCompleted: this.SetupStepsCompleted,
+            VectorDBProviderCount: this.VectorDBProviders.length,
+            VectorDBProviderNames: this.VectorDBProviders.map(p => p.Name),
+            VectorIndexCount: this.VectorIndexes.length,
+            VectorIndexes: this.VectorIndexes.map(i => ({ ID: i.ID, Name: i.Name })),
+            EmbeddingModelName: this.EmbeddingModelName,
+            EmbeddingModelCount: this.EmbeddingModels.length,
+            FTSEntityCount: this.FTSEntities.length,
+            EnabledFTSCount: this.EnabledFTSCount,
+            FTSFilterText: this.FTSFilterText,
+            SearchScopes: this.SearchScopes.map(s => ({ ID: s.ID, Name: s.Name })),
+            ActiveScopeID: this.ActiveScopeID,
+            ActiveScopeName: this.ActiveScope?.Name ?? null,
+            ActiveScopeTab: this.ActiveScopeTab,
+            ShowCreateIndexForm: this.ShowCreateIndexForm,
+            AnalyticsLoaded: this.AnalyticsLoaded,
+            AnalyticsTotalRuns: this.AnalyticsTotalRuns,
+            PermissionsLoaded: this.PermissionsLoaded,
+            PermissionsRowCount: this.PermissionsRows.length,
+        }));
+    }
+
+    /**
+     * Register the SAFE, agent-actionable operations for the Config surface.
+     * Navigation, idempotent reloads, read-only filters, selection, and
+     * view-only record opens. All resolve references tolerantly (id → name →
+     * contains) and never throw. See the SAFETY BOUNDARY above.
+     */
+    private registerAgentTools(): void {
+        this.navigationService.SetAgentClientTools(this, [
+            {
+                Name: 'SwitchConfigSection',
+                Description:
+                    'Switch the Knowledge Hub Configuration section (by id or label). Valid sections: ' +
+                    this.Sections.map(s => s.ID).join(', '),
+                ParameterSchema: {
+                    type: 'object',
+                    properties: { section: { type: 'string', description: 'Section id or label' } },
+                    required: ['section'],
+                },
+                Handler: async (params: Record<string, unknown>) => {
+                    const v = validateStringParam(params['section'], 'section');
+                    if (!v.ok) return v.result;
+                    const match = resolveConfigSection(v.value, this.Sections);
+                    if (!match) {
+                        return {
+                            Success: false,
+                            ErrorMessage: buildConfigNotFoundError(v.value, 'section', this.Sections.map(s => s.ID)),
+                        };
+                    }
+                    this.SelectSection(match.ID);
+                    return { Success: true, Data: { ActiveSection: match.ID } };
+                },
+            },
+            {
+                Name: 'ReloadConfiguration',
+                Description: 'Reload the Knowledge Hub configuration (vector DB, indexes, embedding models, thresholds) from the server. Idempotent.',
+                ParameterSchema: { type: 'object', properties: {} },
+                Handler: async () => {
+                    await this.loadConfiguration();
+                    this.emitAgentContext();
+                    return { Success: true };
+                },
+            },
+            {
+                Name: 'SelectSearchScope',
+                Description: 'Select a search scope by id or name (opens the Search Scopes section). Idempotent — view only.',
+                ParameterSchema: {
+                    type: 'object',
+                    properties: { scope: { type: 'string', description: 'Search scope id or name' } },
+                    required: ['scope'],
+                },
+                Handler: async (params: Record<string, unknown>) => {
+                    const v = validateStringParam(params['scope'], 'scope');
+                    if (!v.ok) return v.result;
+                    if (this.SearchScopes.length === 0) {
+                        await this.LoadSearchScopes();
+                    }
+                    const candidates = this.SearchScopes.map(s => ({ ID: s.ID, Name: s.Name }));
+                    const match = resolveByIDOrName(v.value, candidates);
+                    if (!match) {
+                        return {
+                            Success: false,
+                            ErrorMessage: buildConfigNotFoundError(v.value, 'search scope', candidates.map(c => c.Name)),
+                        };
+                    }
+                    this.SelectSection('search-scopes');
+                    this.SelectScope(match.ID);
+                    this.emitAgentContext();
+                    return { Success: true, Data: { ActiveScopeID: match.ID, ActiveScopeName: match.Name } };
+                },
+            },
+            {
+                Name: 'OpenSearchScopeRecord',
+                Description: 'Open the currently-selected search scope in its full form (a new tab) for VIEWING/editing in the UI. Selects a scope by id/name first when provided.',
+                ParameterSchema: {
+                    type: 'object',
+                    properties: { scope: { type: 'string', description: 'Optional scope id or name to select first' } },
+                },
+                Handler: async (params: Record<string, unknown>) => {
+                    const raw = params['scope'];
+                    if (typeof raw === 'string' && raw.trim()) {
+                        if (this.SearchScopes.length === 0) await this.LoadSearchScopes();
+                        const candidates = this.SearchScopes.map(s => ({ ID: s.ID, Name: s.Name }));
+                        const match = resolveByIDOrName(raw, candidates);
+                        if (!match) {
+                            return {
+                                Success: false,
+                                ErrorMessage: buildConfigNotFoundError(raw, 'search scope', candidates.map(c => c.Name)),
+                            };
+                        }
+                        this.SelectSection('search-scopes');
+                        this.SelectScope(match.ID);
+                    }
+                    if (!this.ActiveScope?.ID) {
+                        return { Success: false, ErrorMessage: 'No search scope is selected to open.' };
+                    }
+                    this.OpenActiveScopeFullForm();
+                    return { Success: true, Data: { OpenedScopeName: this.ActiveScope.Name } };
+                },
+            },
+            {
+                Name: 'LoadSearchAnalytics',
+                Description: 'Load (or reload) the per-scope search analytics rollup (query volume, latency, hit rate, reranker spend). Idempotent read-only aggregation.',
+                ParameterSchema: { type: 'object', properties: {} },
+                Handler: async () => {
+                    this.SelectSection('search-analytics');
+                    this.AnalyticsLoaded = false;
+                    await this.LoadSearchAnalytics();
+                    this.emitAgentContext();
+                    return { Success: true, Data: { AnalyticsTotalRuns: this.AnalyticsTotalRuns } };
+                },
+            },
+            {
+                Name: 'LoadPermissionsAudit',
+                Description: 'Load (or reload) the cross-scope permissions audit. Idempotent read-only aggregation.',
+                ParameterSchema: { type: 'object', properties: {} },
+                Handler: async () => {
+                    this.SelectSection('search-permissions');
+                    this.RefreshPermissionsAudit();
+                    this.emitAgentContext();
+                    return { Success: true, Data: { PermissionsRowCount: this.PermissionsRows.length } };
+                },
+            },
+            {
+                Name: 'FilterFullTextEntities',
+                Description: 'Filter the Full-Text Indexes entity list by a search term. Pass empty to clear. Read-only.',
+                ParameterSchema: {
+                    type: 'object',
+                    properties: { query: { type: 'string' } },
+                    required: ['query'],
+                },
+                Handler: async (params: Record<string, unknown>) => {
+                    const v = validateStringParam(params['query'], 'query');
+                    if (!v.ok) return v.result;
+                    this.SelectSection('fulltext');
+                    this.FTSFilterText = v.value;
+                    this.emitAgentContext();
+                    this.cdr.detectChanges();
+                    return { Success: true, Data: { MatchCount: this.FilteredFTSEntities.length } };
+                },
+            },
+        ]);
     }
 
     ngOnDestroy(): void {
@@ -278,6 +483,32 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
     // Public Methods
     // ================================================================
 
+    /** Wraps `Sections` for `<mj-left-nav>`. Single unlabeled section. */
+    public get navSections(): MJLeftNavSection[] {
+        return [{
+            items: this.Sections.map(s => ({
+                id: s.ID,
+                label: s.Label,
+                icon: s.Icon,
+                description: s.Description
+            }))
+        }];
+    }
+
+    /**
+     * Active section metadata — drives the `<mj-page-header-interior>` Title +
+     * Subtitle for the current section. Reusing the existing Sections array
+     * (already used to drive the left rail) keeps section identity DRY.
+     */
+    public get currentSection(): ConfigSection | undefined {
+        return this.Sections.find(s => UUIDsEqual(s.ID, this.ActiveSection));
+    }
+
+    /** Adapter for `<mj-left-nav>`'s `(ItemClicked)` output. */
+    public onNavItemClicked(item: MJLeftNavItem): void {
+        this.SelectSection(item.id);
+    }
+
     public SelectSection(sectionId: string): void {
         this.ActiveSection = sectionId;
         if (sectionId === 'search-scopes' && this.SearchScopes.length === 0) {
@@ -289,6 +520,7 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
         if (sectionId === 'search-permissions' && !this.PermissionsLoaded && !this.PermissionsLoading) {
             void this.LoadPermissionsAudit();
         }
+        this.emitAgentContext();
         this.cdr.detectChanges();
     }
 
@@ -583,6 +815,7 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
             }
         } finally {
             this.IsLoadingScopes = false;
+            this.emitAgentContext();
             this.cdr.detectChanges();
         }
     }
@@ -590,11 +823,13 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
     public SelectScope(scopeID: string): void {
         this.ActiveScopeID = scopeID;
         this.ActiveScopeTab = 'definition';
+        this.emitAgentContext();
         this.cdr.detectChanges();
     }
 
     public SelectScopeTab(tab: 'definition' | 'providers' | 'indexes' | 'entities' | 'storage' | 'permissions'): void {
         this.ActiveScopeTab = tab;
+        this.emitAgentContext();
         this.cdr.detectChanges();
     }
 

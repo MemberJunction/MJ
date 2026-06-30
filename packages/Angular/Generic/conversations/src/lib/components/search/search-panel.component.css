@@ -339,35 +339,7 @@
   font-weight: 600;
 }
 
-/* Empty States */
-.empty-state,
-.no-results {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 60px 20px;
-  text-align: center;
-  color: var(--mj-text-secondary);
-}
-
-.empty-icon {
-  font-size: 48px;
-  color: var(--mj-border-default);
-  margin-bottom: 16px;
-}
-
-.empty-state p,
-.no-results p {
-  margin: 8px 0;
-  font-size: 14px;
-}
-
-.no-results-hint {
-  color: var(--mj-text-muted);
-  font-size: 13px;
-}
-
+/* Search tips — projected into the initial empty state's content slot */
 .search-tips {
   margin-top: 24px;
   text-align: left;

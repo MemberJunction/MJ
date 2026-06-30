@@ -10,7 +10,7 @@ import { CommandPaletteComponent } from '../command-palette/command-palette.comp
 import { CommandPaletteService } from '../command-palette/command-palette.service';
 import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
-import { MJDropdownComponent } from '@memberjunction/ng-ui-components';
+import { MJDropdownComponent, MJClickableDirective, MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 import { SearchModule } from '@memberjunction/ng-search';
 
 @NgModule({
@@ -26,6 +26,8 @@ import { SearchModule } from '@memberjunction/ng-search';
     CommonModule,
     FormsModule,
     MJDropdownComponent,
+    MJClickableDirective,
+    MJEmptyStateComponent,
     ExplorerSettingsModule,
     SharedGenericModule,
     SearchModule

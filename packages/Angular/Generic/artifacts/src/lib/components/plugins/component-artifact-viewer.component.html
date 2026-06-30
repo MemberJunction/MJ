@@ -18,8 +18,125 @@
           </details>
         }
       </div>
+    } @else if (isFormArtifact) {
+      <!-- ════════════════════════════════════════════════
+           FORM-AWARE BRANCH
+           Spec declares componentRole: 'form'. Render via
+           <mj-interactive-form> bound to a real Top-1 record
+           (or a synthetic NewRecord fallback). Picker chip
+           lets the user swap records; Apply promotes the
+           spec to an EntityFormOverride.
+           ════════════════════════════════════════════════ -->
+      <div class="form-artifact-toolstrip">
+        <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+        <span class="form-artifact-toolstrip-label">Previewing record:</span>
+        <button
+          type="button"
+          class="form-artifact-picker-chip"
+          (click)="showRecordPicker = !showRecordPicker">
+          <i class="fa-solid fa-magnifying-glass"></i>
+          <strong>{{ formRecordLabel || 'No record' }}</strong>
+          @if (!formRecordIsReal) {
+            <span class="form-artifact-picker-chip-badge">Mock</span>
+          }
+          <i class="fa-solid fa-chevron-down"></i>
+        </button>
+        @if (formEntityInfo) {
+          <span class="form-artifact-toolstrip-entity">{{ formEntityInfo.DisplayName || formEntityInfo.Name }}</span>
+        }
+        @if (formInitError) {
+          <span class="form-artifact-toolstrip-warning" [title]="formInitError">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+          </span>
+        }
+        <span style="flex: 1;"></span>
+        @if (formEntityInfo) {
+          <button
+            type="button"
+            class="form-artifact-apply-btn"
+            (click)="onApplyClicked()">
+            <i class="fa-solid fa-circle-check"></i>
+            Apply to my form
+          </button>
+        }
+      </div>
+
+      @if (showRecordPicker && formEntityInfo) {
+        <div class="form-artifact-picker-panel" (click)="$event.stopPropagation()">
+          <input
+            type="text"
+            class="form-artifact-picker-search"
+            placeholder="Search records by name…"
+            [value]="recordSearchTerm"
+            (input)="onPickerSearchInput($any($event.target).value)" />
+          @if (recordSearchResults.length > 0) {
+            <ul class="form-artifact-picker-results">
+              @for (r of recordSearchResults; track r.ID) {
+                <li
+                  class="form-artifact-picker-row"
+                  (click)="onPickerSelect(r)">
+                  <i class="fa-solid fa-circle-dot"></i>
+                  <span>{{ r.Label }}</span>
+                </li>
+              }
+            </ul>
+          } @else if (recordSearchTerm.length > 0) {
+            <div class="form-artifact-picker-empty">No matches.</div>
+          } @else {
+            <div class="form-artifact-picker-empty">Start typing to search.</div>
+          }
+        </div>
+      }
+
+      @if (formRecord && component) {
+        <div class="form-artifact-form-host">
+          <mj-interactive-form
+            [componentSpec]="component"
+            [record]="formRecord">
+          </mj-interactive-form>
+        </div>
+      } @else {
+        <div class="error-state">
+          <i class="fa-solid fa-exclamation-circle"></i>
+          <h3>Form preview unavailable</h3>
+          <p>{{ formInitError || 'Could not bind a record to this form.' }}</p>
+        </div>
+      }
+    } @else if (isPermissionBlocked) {
+      <!-- Permission warning — user lacks access to one or more data sources -->
+      <div class="permission-warning">
+        <div class="permission-warning-icon">
+          <i class="fa-solid fa-shield-halved"></i>
+        </div>
+        <h3>Insufficient Permissions</h3>
+        <p>This component requires data access that you don't currently have:</p>
+
+        @if (permissionResult!.missingEntities.length > 0) {
+          <div class="permission-warning-section">
+            <span class="permission-warning-section-label">Entities</span>
+            <ul>
+              @for (entity of permissionResult!.missingEntities; track entity) {
+                <li><i class="fa-solid fa-table"></i> {{ entity }}</li>
+              }
+            </ul>
+          </div>
+        }
+
+        @if (permissionResult!.missingQueries.length > 0) {
+          <div class="permission-warning-section">
+            <span class="permission-warning-section-label">Queries</span>
+            <ul>
+              @for (query of permissionResult!.missingQueries; track query) {
+                <li><i class="fa-solid fa-database"></i> {{ query }}</li>
+              }
+            </ul>
+          </div>
+        }
+
+        <p class="permission-warning-hint">Contact your administrator to request access.</p>
+      </div>
     } @else {
-      <!-- Only render React component if there's code to execute -->
+      <!-- Default (non-form) interactive component path -->
       @if (component && (component.code || component.namespace)) {
         <mj-react-component
           #reactComponent
@@ -55,4 +172,3 @@
     </mj-component-feedback-panel>
   }
 </div>
-

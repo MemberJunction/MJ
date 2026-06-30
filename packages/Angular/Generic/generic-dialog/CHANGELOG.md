@@ -1,5 +1,92 @@
 # Change Log - @memberjunction/ng-generic-dialog
 
+## 5.43.0
+
+### Patch Changes
+
+- Updated dependencies [54183aa]
+  - @memberjunction/ng-ui-components@5.43.0
+
+## 5.42.0
+
+### Patch Changes
+
+- Updated dependencies [313c1c5]
+  - @memberjunction/ng-ui-components@5.42.0
+
+## 5.41.0
+
+### Patch Changes
+
+- @memberjunction/ng-ui-components@5.41.0
+
+## 5.40.2
+
+### Patch Changes
+
+- @memberjunction/ng-ui-components@5.40.2
+
+## 5.40.1
+
+### Patch Changes
+
+- @memberjunction/ng-ui-components@5.40.1
+
+## 5.40.0
+
+### Patch Changes
+
+- @memberjunction/ng-ui-components@5.40.0
+
+## 5.39.0
+
+### Patch Changes
+
+- Updated dependencies [bd95e83]
+- Updated dependencies [3b29882]
+  - @memberjunction/ng-ui-components@5.39.0
+
+## 5.38.0
+
+### Patch Changes
+
+- @memberjunction/ng-ui-components@5.38.0
+
+## 5.37.0
+
+### Patch Changes
+
+- @memberjunction/ng-ui-components@5.37.0
+
+## 5.36.0
+
+### Patch Changes
+
+- Updated dependencies [1c0fce9]
+  - @memberjunction/ng-ui-components@5.36.0
+
+## 5.35.0
+
+### Patch Changes
+
+- Updated dependencies [ee380f7]
+- Updated dependencies [ac4b9a5]
+  - @memberjunction/ng-ui-components@5.35.0
+
+## 5.34.1
+
+### Patch Changes
+
+- @memberjunction/ng-ui-components@5.34.1
+
+## 5.34.0
+
+### Patch Changes
+
+- 7d8a0f9: Bound memory leaks: ResultHistory cap, QueueBase Stop/ IShutdownable, A2AServer, TaskStore, sweep, MJLruCache for provider / issuer caches, BaseLLM streaming reset, ShutdownRegister + SIGTERM contract.
+- Updated dependencies [7d8a0f9]
+  - @memberjunction/ng-ui-components@5.34.0
+
 ## 5.33.0
 
 ### Patch Changes

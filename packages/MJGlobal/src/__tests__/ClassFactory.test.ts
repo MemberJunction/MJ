@@ -532,4 +532,204 @@ describe('ClassFactory', () => {
       expect(instance).toBeNull();
     });
   });
+
+  describe('Metadata on registrations', () => {
+    it('persists metadata on the ClassRegistration when provided to Register()', () => {
+      factory.Register(Animal, Dog, 'fido', 0, true, false, { trainer: 'alice', tags: ['indoor'] });
+      const regs = factory.GetAllRegistrations(Animal, 'fido');
+      expect(regs).toHaveLength(1);
+      expect(regs[0].Metadata).toEqual({ trainer: 'alice', tags: ['indoor'] });
+    });
+
+    it('leaves Metadata undefined when not provided (backwards compat)', () => {
+      factory.Register(Animal, Dog, 'pre-metadata');
+      const reg = factory.GetRegistration(Animal, 'pre-metadata');
+      expect(reg?.Metadata).toBeUndefined();
+    });
+  });
+
+  describe('GetAllRegistrationsByKeyPrefix', () => {
+    beforeEach(() => {
+      factory.Register(Animal, Dog, 'breed:retriever');
+      factory.Register(Animal, Dog, 'breed:poodle');
+      factory.Register(Animal, Cat, 'breed:tabby');
+      factory.Register(Animal, Cat, 'color:black');
+    });
+
+    it('returns only registrations whose key starts with the prefix', () => {
+      const breed = factory.GetAllRegistrationsByKeyPrefix(Animal, 'breed:');
+      expect(breed.map(r => r.Key).sort()).toEqual(['breed:poodle', 'breed:retriever', 'breed:tabby']);
+    });
+
+    it('is case-insensitive and trims whitespace on the prefix', () => {
+      const breed = factory.GetAllRegistrationsByKeyPrefix(Animal, '  BREED:  ');
+      expect(breed).toHaveLength(3);
+    });
+
+    it('returns empty array when nothing matches', () => {
+      expect(factory.GetAllRegistrationsByKeyPrefix(Animal, 'zzz:')).toEqual([]);
+    });
+
+    it('returns empty array when baseClass is falsy', () => {
+      expect(factory.GetAllRegistrationsByKeyPrefix(null, 'breed:')).toEqual([]);
+    });
+
+    it('scopes to the requested base class', () => {
+      factory.Register(Vehicle, Car, 'breed:something-weird');
+      const animalBreed = factory.GetAllRegistrationsByKeyPrefix(Animal, 'breed:');
+      expect(animalBreed.every(r => r.BaseClass === Animal)).toBe(true);
+    });
+  });
+
+  describe('GetAllRegistrationsByKeyPattern', () => {
+    beforeEach(() => {
+      factory.Register(Animal, Dog, 'panel-a');
+      factory.Register(Animal, Cat, 'panel-b');
+      factory.Register(Animal, GoldenRetriever, 'widget-1');
+    });
+
+    it('returns registrations whose key matches the regex', () => {
+      const panels = factory.GetAllRegistrationsByKeyPattern(Animal, /^panel-/);
+      expect(panels.map(r => r.Key).sort()).toEqual(['panel-a', 'panel-b']);
+    });
+
+    it('returns empty array when baseClass or pattern is falsy', () => {
+      expect(factory.GetAllRegistrationsByKeyPattern(null, /./)).toEqual([]);
+      // null pattern intentionally caught by truthy check
+      expect(factory.GetAllRegistrationsByKeyPattern(Animal, null as unknown as RegExp)).toEqual([]);
+    });
+  });
+
+  describe('GetAllRegistrationsByMetadata', () => {
+    beforeEach(() => {
+      factory.Register(Animal, Dog, 'fido', 0, true, false, { entity: 'X', slot: 'after-fields', sortKey: 100 });
+      factory.Register(Animal, Cat, 'whiskers', 0, true, false, { entity: 'X', slot: 'after-fields', sortKey: 50 });
+      factory.Register(Animal, GoldenRetriever, 'goldie', 0, true, false, { entity: 'Y', slot: 'after-fields' });
+      factory.Register(Animal, Dog, 'rex'); // no metadata at all
+    });
+
+    it('passes the metadata bag (or undefined) to the predicate', () => {
+      const matches = factory.GetAllRegistrationsByMetadata(Animal, (m) => m?.entity === 'X' && m?.slot === 'after-fields');
+      expect(matches.map(r => r.Key).sort()).toEqual(['fido', 'whiskers']);
+    });
+
+    it('handles registrations with no metadata (passes undefined)', () => {
+      const noMeta = factory.GetAllRegistrationsByMetadata(Animal, (m) => m === undefined);
+      expect(noMeta.map(r => r.Key)).toEqual(['rex']);
+    });
+
+    it('also exposes the full registration to the predicate', () => {
+      const highPriority = factory.GetAllRegistrationsByMetadata(Animal, (m, r) => (m?.sortKey as number ?? 0) >= 100 && r.Key === 'fido');
+      expect(highPriority).toHaveLength(1);
+    });
+
+    it('returns empty array when baseClass or predicate is missing', () => {
+      expect(factory.GetAllRegistrationsByMetadata(null, () => true)).toEqual([]);
+      expect(factory.GetAllRegistrationsByMetadata(Animal, null as unknown as () => boolean)).toEqual([]);
+    });
+  });
+
+  describe('GetRegistration memoization (hot-path perf)', () => {
+    it('returns the same registration object on repeated calls (cached)', () => {
+      factory.Register(Animal, Dog, 'pet', 0, true);
+      const first = factory.GetRegistration(Animal, 'pet');
+      const second = factory.GetRegistration(Animal, 'pet');
+      expect(first).not.toBeNull();
+      expect(first).toBe(second);
+    });
+
+    it('caches a "no registration" (null) result and still returns null', () => {
+      // Vehicle has no registration — exercises the cached-null path.
+      expect(factory.GetRegistration(Vehicle, 'anything')).toBeNull();
+      expect(factory.GetRegistration(Vehicle, 'anything')).toBeNull();
+    });
+
+    it('invalidates the cache when a new registration is added (no stale null)', () => {
+      expect(factory.GetRegistration(Animal, 'pet')).toBeNull(); // primes the null cache
+      factory.Register(Animal, Dog, 'pet', 0, true);
+      const reg = factory.GetRegistration(Animal, 'pet');
+      expect(reg).not.toBeNull();
+      expect(reg!.SubClass).toBe(Dog);
+    });
+
+    it('invalidates the cache when a higher-priority registration changes the winner', () => {
+      factory.Register(Animal, Dog, 'pet', 5, true);
+      expect(factory.GetRegistration(Animal, 'pet')!.SubClass).toBe(Dog); // primes cache
+      factory.Register(Animal, Cat, 'pet', 10, true); // higher priority wins
+      expect(factory.GetRegistration(Animal, 'pet')!.SubClass).toBe(Cat);
+    });
+
+    it('memoizes case-insensitively by key (same result for different casings)', () => {
+      factory.Register(Animal, Dog, 'canine', 0, true);
+      const lower = factory.GetRegistration(Animal, 'canine');
+      const upper = factory.GetRegistration(Animal, 'CANINE');
+      expect(lower).not.toBeNull();
+      expect(lower).toBe(upper);
+    });
+
+    it('returns null for a falsy base class', () => {
+      expect(factory.GetRegistration(null)).toBeNull();
+      expect(factory.GetRegistration(undefined)).toBeNull();
+    });
+
+    it('does NOT cache a falsy-baseClass null (only resolved lookups are memoized)', () => {
+      // GetRegistration short-circuits to null for a falsy base BEFORE touching the cache, so a
+      // later real registration under a real base is unaffected by any prior falsy call.
+      expect(factory.GetRegistration(null, 'pet')).toBeNull();
+      factory.Register(Animal, Dog, 'pet', 0, true);
+      expect(factory.GetRegistration(Animal, 'pet')!.SubClass).toBe(Dog);
+    });
+
+    it('keeps separate cache buckets per (baseClass, key) — one key does not poison another', () => {
+      factory.Register(Animal, Dog, 'canine', 0, true);
+      factory.Register(Animal, Cat, 'feline', 0, true);
+      const canine = factory.GetRegistration(Animal, 'canine');
+      const feline = factory.GetRegistration(Animal, 'feline');
+      expect(canine!.SubClass).toBe(Dog);
+      expect(feline!.SubClass).toBe(Cat);
+      // Re-read from cache — still distinct, still the same cached objects.
+      expect(factory.GetRegistration(Animal, 'canine')).toBe(canine);
+      expect(factory.GetRegistration(Animal, 'feline')).toBe(feline);
+    });
+
+    it('caches the null-key bucket distinctly from a named-key bucket', () => {
+      factory.Register(Animal, Dog, null, 0, true);
+      const noKey = factory.GetRegistration(Animal, null);
+      const nullAgain = factory.GetRegistration(Animal); // key omitted == null bucket
+      expect(noKey).not.toBeNull();
+      expect(noKey).toBe(nullAgain);
+    });
+  });
+
+  describe('GetRegistration ↔ CreateInstance ↔ GetAllRegistrations interplay', () => {
+    it('CreateInstance reflects a post-cache-prime registration change (cache invalidated on Register)', () => {
+      factory.Register(Animal, Dog, 'pet', 5, true);
+      // Prime the GetRegistration cache via CreateInstance.
+      expect(factory.CreateInstance<Animal>(Animal, 'pet')).toBeInstanceOf(Dog);
+      // A higher-priority registration must change what CreateInstance builds next.
+      factory.Register(Animal, Cat, 'pet', 10, true);
+      expect(factory.CreateInstance<Animal>(Animal, 'pet')).toBeInstanceOf(Cat);
+    });
+
+    it('GetAllRegistrations is unaffected by the GetRegistration memo (always live)', () => {
+      factory.Register(Animal, Dog, 'pet', 0, true);
+      factory.GetRegistration(Animal, 'pet'); // prime memo
+      factory.Register(Animal, Cat, 'pet', 0, true);
+      // GetAllRegistrations re-filters every call — it sees both immediately.
+      expect(factory.GetAllRegistrations(Animal, 'pet').length).toBe(2);
+      // And GetRegistration (memoized) now reflects the new winner too.
+      expect(factory.GetRegistration(Animal, 'pet')!.SubClass).toBe(Cat);
+    });
+
+    it('memoized winner survives an unrelated registration to a DIFFERENT base class', () => {
+      factory.Register(Animal, Dog, 'pet', 0, true);
+      const before = factory.GetRegistration(Animal, 'pet');
+      // Registering to Vehicle still clears the whole cache, but the resolved winner is identical,
+      // so the next read returns an equal (re-resolved) registration object for Animal/pet.
+      factory.Register(Vehicle, Car, 'sedan', 0, true);
+      const after = factory.GetRegistration(Animal, 'pet');
+      expect(after!.SubClass).toBe(before!.SubClass);
+      expect(after!.SubClass).toBe(Dog);
+    });
+  });
 });

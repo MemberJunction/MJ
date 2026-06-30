@@ -69,7 +69,7 @@ export interface PendingAttachment {
 export class MentionEditorComponent implements OnInit, AfterViewInit, ControlValueAccessor {
   @ViewChild('editor', { static: false }) editorRef!: ElementRef<HTMLDivElement>;
 
-  @Input() placeholder: string = 'Type @ to mention agents or users...';
+  @Input() placeholder: string = 'Type @ to mention agents or users, # for entities...';
   @Input() disabled: boolean = false;
   @Input() currentUser?: UserInfo;
   @Input() enableMentions: boolean = true;
@@ -99,6 +99,10 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
 
   private mentionStartIndex: number = -1;
   private mentionQuery: string = '';
+  /** Mention trigger characters: '@' for agents/users, '#' for entities */
+  private static readonly MENTION_TRIGGERS = ['@', '#'];
+  /** The trigger char that opened the current mention dropdown */
+  private activeTrigger: string = '@';
   private onChange: (value: string) => void = () => {};
   public onTouched: () => void = () => {};
 
@@ -265,27 +269,37 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
     const range = selection.getRangeAt(0);
     const textBeforeCursor = this.getTextBeforeCursor(range);
 
-    // Find the last @ before cursor
-    const lastAtIndex = textBeforeCursor.lastIndexOf('@');
+    // Find the nearest mention trigger before the cursor
+    // ('@' for agents/users, '#' for entities) — whichever is closest wins
+    let triggerIndex = -1;
+    let triggerChar = '@';
+    for (const t of MentionEditorComponent.MENTION_TRIGGERS) {
+      const idx = textBeforeCursor.lastIndexOf(t);
+      if (idx > triggerIndex) {
+        triggerIndex = idx;
+        triggerChar = t;
+      }
+    }
 
-    if (lastAtIndex === -1) {
+    if (triggerIndex === -1) {
       this.closeMentionDropdown();
       return;
     }
 
-    // Check if there's a space between @ and cursor (means mention was completed)
-    const textAfterAt = textBeforeCursor.substring(lastAtIndex + 1);
-    if (textAfterAt.includes(' ')) {
+    // Check if there's a space between the trigger and cursor (means mention was completed)
+    const textAfterTrigger = textBeforeCursor.substring(triggerIndex + 1);
+    if (textAfterTrigger.includes(' ')) {
       this.closeMentionDropdown();
       return;
     }
 
     // Extract query
-    this.mentionQuery = textAfterAt;
-    this.mentionStartIndex = lastAtIndex;
+    this.mentionQuery = textAfterTrigger;
+    this.mentionStartIndex = triggerIndex;
+    this.activeTrigger = triggerChar;
 
-    // Get suggestions
-    this.mentionSuggestions = this.mentionAutocomplete.getSuggestions(this.mentionQuery, !!this.currentUser);
+    // Get suggestions for the active trigger
+    this.mentionSuggestions = this.mentionAutocomplete.getSuggestions(this.mentionQuery, !!this.currentUser, triggerChar);
 
     if (this.mentionSuggestions.length > 0) {
       this.showMentionDropdown = true;
@@ -367,9 +381,9 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
 
     const range = selection.getRangeAt(0);
 
-    // Delete the @query text
+    // Delete the trigger + query text (use the active trigger char)
     const textBeforeCursor = this.getTextBeforeCursor(range);
-    const lastAtIndex = textBeforeCursor.lastIndexOf('@');
+    const lastAtIndex = textBeforeCursor.lastIndexOf(this.activeTrigger);
     const deleteLength = textBeforeCursor.length - lastAtIndex;
 
     range.setStart(range.startContainer, range.startOffset - deleteLength);
@@ -422,8 +436,15 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
       }
     }
 
-    // Apply inline styles directly
-    const isUser = suggestion.type === 'user';
+    // Apply inline styles directly — color by mention type
+    const palette =
+      suggestion.type === 'user'
+        ? { bg: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)', border: 'rgba(240, 147, 251, 0.4)' }
+        : suggestion.type === 'entity'
+          ? { bg: 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)', border: 'rgba(17, 153, 142, 0.4)' }
+          : suggestion.type === 'query'
+            ? { bg: 'linear-gradient(135deg, #FF6A00 0%, #FF9E2C 100%)', border: 'rgba(255, 106, 0, 0.4)' }
+            : { bg: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', border: 'rgba(102, 126, 234, 0.4)' };
     chip.style.cssText = `
       display: inline-flex;
       align-items: center;
@@ -438,9 +459,9 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
       vertical-align: middle;
       white-space: nowrap;
       pointer-events: all;
-      background: ${isUser ? 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'};
+      background: ${palette.bg};
       color: white;
-      border: 2px solid ${isUser ? 'rgba(240, 147, 251, 0.4)' : 'rgba(102, 126, 234, 0.4)'};
+      border: 2px solid ${palette.border};
       box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2), 0 1px 2px rgba(0, 0, 0, 0.1);
     `;
 
@@ -467,6 +488,10 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
         icon.className = this.getIconClasses(suggestion.icon);
       } else if (suggestion.type === 'user') {
         icon.className = 'fa-solid fa-user';
+      } else if (suggestion.type === 'entity') {
+        icon.className = this.getIconClasses(suggestion.icon || 'fa-solid fa-table');
+      } else if (suggestion.type === 'query') {
+        icon.className = this.getIconClasses(suggestion.icon || 'fa-solid fa-database');
       } else {
         icon.className = 'fa-solid fa-robot';
       }
@@ -756,6 +781,7 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
     this.mentionSuggestions = [];
     this.mentionStartIndex = -1;
     this.mentionQuery = '';
+    this.activeTrigger = '@';
   }
 
   /**
@@ -778,8 +804,10 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
 
         if (element.classList.contains('mention-chip')) {
           const name = element.getAttribute('data-mention-name') || '';
+          const mentionType = element.getAttribute('data-mention-type');
+          const prefix = mentionType === 'entity' || mentionType === 'query' ? '#' : '@';
           // Use quoted format if name has spaces
-          text += name.includes(' ') ? `@"${name}"` : `@${name}`;
+          text += name.includes(' ') ? `${prefix}"${name}"` : `${prefix}${name}`;
         } else if (element.tagName === 'BR') {
           text += '\n';
         } else if (element.tagName === 'DIV') {
@@ -812,7 +840,9 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
 
         if (element.classList.contains('mention-chip')) {
           const name = element.getAttribute('data-mention-name') || '';
-          text += name.includes(' ') ? `@"${name}"` : `@${name}`;
+          const mentionType = element.getAttribute('data-mention-type');
+          const prefix = mentionType === 'entity' || mentionType === 'query' ? '#' : '@';
+          text += name.includes(' ') ? `${prefix}"${name}"` : `${prefix}${name}`;
         } else {
           text += this.getNodeText(element);
         }
@@ -1199,7 +1229,7 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
   public AddArtifactAttachment(artifact: {
     fileID: string; fileName: string; mimeType: string;
     sizeBytes: number; artifactVersionId?: string;
-  }): void {
+  }): PendingAttachment {
     const attachment: PendingAttachment = {
       id: crypto.randomUUID(),
       file: null,
@@ -1213,6 +1243,7 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
     };
     this.pendingAttachments.push(attachment);
     this.attachmentsChanged.emit([...this.pendingAttachments]);
+    return attachment;
   }
 
   /**

@@ -10,7 +10,7 @@ import {
 } from '@angular/core';
 import { Subject } from 'rxjs';
 import { MJDashboardEntity, MJDashboardCategoryEntity, DashboardUserPermissions } from '@memberjunction/core-entities';
-import { UUIDsEqual, EscapeHTML } from '@memberjunction/global';
+import { UUIDsEqual, EscapeHTML, HighlightSearchMatches } from '@memberjunction/global';
 
 // ========================================
 // Event Types
@@ -381,6 +381,13 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
     public ClearSearch(): void {
         this.SearchText = '';
         this.applyFilters();
+    }
+
+    /**
+     * Message shown in the search no-results empty state, echoing the search term.
+     */
+    public get NoResultsMessage(): string {
+        return `No dashboards or folders match "${this.SearchText}". Try a different search term.`;
     }
 
     /**
@@ -1022,21 +1029,7 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
      * Returns HTML with <mark> tags around matches
      */
     public HighlightMatch(text: string): string {
-        if (!text) return text;
-        const safeText = EscapeHTML(text);
-        if (!this.SearchText.trim()) return safeText;
-
-        const search = this.SearchText.trim();
-        const safeSearch = EscapeHTML(search);
-        const regex = new RegExp(`(${this.escapeRegex(safeSearch)})`, 'gi');
-        return safeText.replace(regex, '<mark>$1</mark>');
-    }
-
-    /**
-     * Escape special regex characters
-     */
-    private escapeRegex(str: string): string {
-        return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        return HighlightSearchMatches(text, this.SearchText);
     }
 
     // ========================================

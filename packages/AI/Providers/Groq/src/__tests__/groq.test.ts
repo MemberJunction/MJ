@@ -17,7 +17,8 @@ vi.mock('groq-sdk', () => ({
 
 // Mock @memberjunction/global
 vi.mock('@memberjunction/global', () => ({
-    RegisterClass: () => (target: Function) => target
+    RegisterClass: () => (target: Function) => target,
+    ToJSONSafe: (v: unknown) => (v == null ? null : JSON.parse(JSON.stringify(v)))
 }));
 
 // Mock @memberjunction/ai

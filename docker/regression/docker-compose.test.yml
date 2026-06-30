@@ -1,0 +1,252 @@
+# MemberJunction Full-Stack Regression Test Environment
+#
+# Architecture:
+#   sqlserver → db-setup (migrations + AssociationDB + CodeGen) → mjapi → mjexplorer → test-runner
+#
+# Usage (from repo root, via the MJ CLI):
+#   cp docker/regression/.env.test.example docker/regression/.env.test
+#   mj test regression build
+#   mj test regression up
+#   mj test regression down
+#
+# All `regression:*` npm scripts were removed in Phase 4 — every service is
+# now profile-gated (`full`, `remote-target`, `gen-forms`). Plain
+# `docker compose up` (no profile) starts zero services; use the CLI.
+#
+# NOTE: Project name "mj-regression" and non-standard host ports (11433, 14000)
+#       avoid conflicts with existing local containers.
+
+name: mj-regression
+
+x-db-env: &db-env
+  DB_HOST: sqlserver
+  DB_PORT: "1433"
+  DB_USERNAME: sa
+  DB_PASSWORD: "${TEST_SA_PASSWORD:-TestPassword123!}"
+  DB_DATABASE: MemberJunction_Test
+  DB_TRUST_SERVER_CERTIFICATE: "true"
+  MJ_BASE_ENCRYPTION_KEY: "${MJ_BASE_ENCRYPTION_KEY:-}"
+
+# ─── Compose profiles ────────────────────────────────────────────────────────
+# - "full"          → Mode A: self-contained MJ regression stack (all services)
+# - "remote-target" → Modes B/C/D: only the test-runner; targets a remote URL
+# - "gen-forms"     → one-shot form-generator service (codegen Angular forms)
+#
+# All entry points go through `mj test regression *` (Phase 4). Services
+# without `profiles:` no longer exist — every service is profile-gated so
+# `docker compose up` (no profile arg) is a no-op and won't accidentally
+# bring up the stack without one of the documented commands.
+services:
+  sqlserver:
+    # Also active during the gen-forms profile since form-generator runs
+    # codegen against this DB. (The gen-forms profile tears the temp stack
+    # down afterward, so this doesn't conflict with a parallel `full` run.)
+    profiles: ["full", "gen-forms"]
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    platform: linux/amd64
+    user: root
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "${TEST_SA_PASSWORD:-TestPassword123!}"
+    ports:
+      - "11433:1433"
+    healthcheck:
+      test: /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$$MSSQL_SA_PASSWORD" -Q "SELECT 1" -C -No
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
+
+  db-setup:
+    profiles: ["full"]
+    build:
+      context: ../..
+      dockerfile: docker/regression/Dockerfile.db-setup
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    environment:
+      <<: *db-env
+      CODEGEN_DB_USERNAME: sa
+      CODEGEN_DB_PASSWORD: "${TEST_SA_PASSWORD:-TestPassword123!}"
+
+  # Form generator — opt-in service (profile: gen-forms) that runs codegen
+  # against a temporary DB and writes Angular entity-form components to a
+  # host bind-mount. The explorer Dockerfile picks them up at build time.
+  # See docker/regression/.docker-generated/.gitignore for why this is laid
+  # out the way it is.
+  form-generator:
+    profiles: ["gen-forms"]
+    build:
+      context: ../..
+      dockerfile: docker/regression/Dockerfile.db-setup
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    environment:
+      <<: *db-env
+      CODEGEN_DB_USERNAME: sa
+      CODEGEN_DB_PASSWORD: "${TEST_SA_PASSWORD:-TestPassword123!}"
+    entrypoint: ["/bin/bash", "/app/form-gen-entrypoint.sh"]
+    volumes:
+      - ./form-gen-entrypoint.sh:/app/form-gen-entrypoint.sh:ro
+      # Override mj.config.cjs with one that includes the full Angular output
+      # directives — the base MJAPI config strips them because production never
+      # generates forms at runtime. We need them here.
+      - ./form-gen.config.cjs:/app/mj.config.cjs:ro
+      # Make the original docker/MJAPI/docker.config.cjs require()-able from
+      # form-gen.config.cjs. The Dockerfile only COPYs it to /app/mj.config.cjs
+      # (which we just shadowed), so we expose it again at its repo-relative
+      # path inside the container.
+      - ../MJAPI/docker.config.cjs:/app/docker/MJAPI/docker.config.cjs:ro
+      - ./.docker-generated/MJExplorer-forms:/app/packages/MJExplorer/src/app/generated
+      # The Angular forms import entity classes from mj_generatedentities
+      # (packages/GeneratedEntities). CodeGen's EntitySubclasses output writes
+      # those classes — capture them on the host so the explorer build picks
+      # them up via Dockerfile.explorer's overlay COPY.
+      - ./.docker-generated/GeneratedEntities:/app/packages/GeneratedEntities/src/generated
+      # CodeGen's GraphQLServer output writes TypeGraphQL resolvers for non-core
+      # entities (e.g. AssociationDemo). MJAPI compiles these into its bundle at
+      # build time, so without them the GraphQL schema is missing types like
+      # CreateAssociationDemoMemberInput and queries against demo entities fail
+      # with 'Unknown type' / 'ID|null' errors.
+      - ./.docker-generated/MJAPI-generated:/app/packages/MJAPI/src/generated
+
+  mjapi:
+    profiles: ["full"]
+    build:
+      context: ../..
+      dockerfile: docker/regression/Dockerfile.api
+    depends_on:
+      db-setup:
+        condition: service_completed_successfully
+    environment:
+      <<: *db-env
+      AUTH0_DOMAIN: "${AUTH0_DOMAIN:-}"
+      AUTH0_CLIENT_ID: "${AUTH0_CLIENTID:-}"
+      AUTH0_CLIENT_SECRET: "${AUTH0_CLIENT_SECRET:-}"
+      GRAPHQL_PORT: "4000"
+      NODE_ENV: test
+    ports:
+      - "14000:4000"
+    # Auto-restart if MJAPI crashes (e.g. OOM under heavy regression load)
+    # so the suite can continue rather than fail every remaining test.
+    restart: on-failure:5
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4000/healthcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  mjexplorer:
+    profiles: ["full"]
+    build:
+      context: ../..
+      dockerfile: docker/regression/Dockerfile.explorer
+      args:
+        AUTH0_DOMAIN: "${AUTH0_DOMAIN:-}"
+        AUTH0_CLIENTID: "${AUTH0_CLIENTID:-}"
+    depends_on:
+      mjapi:
+        condition: service_healthy
+    ports:
+      - "4200:4200"
+
+  test-runner:
+    # In "full" → Mode A (local MJ stack). In "remote-target" → Modes B/C/D
+    # (target a remote URL; MJ services don't start, so their depends_on
+    # conditions are skipped by compose, which is exactly what we want).
+    profiles: ["full", "remote-target"]
+    build:
+      context: ../..
+      dockerfile: docker/regression/Dockerfile.test-runner
+    depends_on:
+      # `required: false` lets compose skip these deps when the targets
+      # aren't in the active profile (Modes B/C/D run remote-target with no
+      # MJ stack — the runner still works because it talks to the remote URL
+      # set via MJ_TEST_VAR_baseUrl).
+      mjapi:
+        condition: service_healthy
+        required: false
+      mjexplorer:
+        condition: service_started
+        required: false
+    # Make the host machine reachable from inside the container as
+    # `host.docker.internal` on every platform. Auto-set on Docker Desktop
+    # (Mac/Windows) but missing on Linux — declaring it here makes the
+    # `ARCHIVE_DB_HOST=host.docker.internal` archive flow portable.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      <<: *db-env
+      AUTH0_DOMAIN: "${AUTH0_DOMAIN:-}"
+      AUTH0_CLIENT_ID: "${AUTH0_CLIENTID:-}"
+      AUTH0_CLIENT_SECRET: "${AUTH0_CLIENT_SECRET:-}"
+      TEST_UID: "${TEST_UID:-}"
+      TEST_PWD: "${TEST_PWD:-}"
+      AI_VENDOR_API_KEY__GeminiLLM: "${AI_VENDOR_API_KEY__GeminiLLM:-}"
+      AI_VENDOR_API_KEY__AnthropicLLM: "${AI_VENDOR_API_KEY__AnthropicLLM:-}"
+      BASE_URL: "http://mjexplorer:4200"
+      API_URL: "http://mjapi:4000"
+      MAX_PARALLEL_WORKERS: "${MAX_PARALLEL_WORKERS:-4}"
+      # Optional archive flow — when ARCHIVE_DB_DATABASE is set, the entrypoint
+      # generates a transient mj.config.cjs from the ARCHIVE_DB_* vars below,
+      # pulls the suite run + children, and pushes them to that destination MJ
+      # instance. ARCHIVE_TAG and ARCHIVE_SOURCE flow through to
+      # scripts/tag-archive.cjs for per-source filtering in
+      # `mj test compare --tag=...`.
+      ARCHIVE_TAG: "${ARCHIVE_TAG:-}"
+      ARCHIVE_SOURCE: "${ARCHIVE_SOURCE:-}"
+      # Destination DB connection — consumed by scripts/archive-config-gen.cjs
+      # to build the push-side config at runtime.
+      ARCHIVE_DB_HOST: "${ARCHIVE_DB_HOST:-}"
+      ARCHIVE_DB_PORT: "${ARCHIVE_DB_PORT:-}"
+      ARCHIVE_DB_DATABASE: "${ARCHIVE_DB_DATABASE:-}"
+      ARCHIVE_DB_USERNAME: "${ARCHIVE_DB_USERNAME:-}"
+      ARCHIVE_DB_PASSWORD: "${ARCHIVE_DB_PASSWORD:-}"
+      ARCHIVE_DB_TRUST_CERT: "${ARCHIVE_DB_TRUST_CERT:-}"
+      ARCHIVE_USER_EMAIL: "${ARCHIVE_USER_EMAIL:-}"
+      ARCHIVE_MJ_CORE_SCHEMA: "${ARCHIVE_MJ_CORE_SCHEMA:-}"
+      # Suite selector — defaults to MJ Explorer Regression Suite in the
+      # entrypoint; overridden by `mj test regression remote` via the target
+      # profile's "suite" field. Used by the BYO overlay too.
+      TEST_SUITE_NAME: "${TEST_SUITE_NAME:-}"
+      EXTRA_METADATA_DIRS: "${EXTRA_METADATA_DIRS:-}"
+      # Variable-substitution payload for `{{baseUrl}}`, `{{authUsername}}`,
+      # etc. inside test JSONs. Mode A leaves these empty; the entrypoint
+      # defaults to localhost. Mode B/C/D populates them from the target
+      # profile via load-target-profile.cjs (consumed by the CLI).
+      MJ_TEST_VAR_baseUrl: "${MJ_TEST_VAR_baseUrl:-}"
+      MJ_TEST_VAR_allowedDomains: "${MJ_TEST_VAR_allowedDomains:-}"
+      MJ_TEST_VAR_authUsername: "${MJ_TEST_VAR_authUsername:-}"
+      MJ_TEST_VAR_authPassword: "${MJ_TEST_VAR_authPassword:-}"
+      MJ_TEST_VAR_authDomains: "${MJ_TEST_VAR_authDomains:-}"
+      # Entrypoint dispatcher — picks which script the test-runner container
+      # actually runs. Mode A keeps the default (full-stack entrypoint);
+      # `mj test regression remote` sets this to the remote variant.
+      TEST_RUNNER_ENTRYPOINT: "${TEST_RUNNER_ENTRYPOINT:-test-runner-entrypoint.sh}"
+      TEST_RUNNER_MODE: "${TEST_RUNNER_MODE:-full}"
+      TARGET_PROFILE_NAME: "${TARGET_PROFILE_NAME:-}"
+      TARGET_PROFILE_KIND: "${TARGET_PROFILE_KIND:-}"
+    shm_size: '4gb'
+    # Compose interpolates ${TEST_RUNNER_ENTRYPOINT} at parse time using the
+    # host env (defaulting to the full-stack script). Both scripts are bind-
+    # mounted below so the dispatch is purely a filename swap — no rebuild
+    # required to switch modes.
+    entrypoint: ["/bin/bash", "/app/${TEST_RUNNER_ENTRYPOINT:-test-runner-entrypoint.sh}"]
+    volumes:
+      - ./test-results:/app/test-results
+      - ./test-runner-entrypoint.sh:/app/test-runner-entrypoint.sh:ro
+      - ./test-runner-remote-entrypoint.sh:/app/test-runner-remote-entrypoint.sh:ro
+      # All of the entrypoint's Node helpers — DB ops, screenshot extraction,
+      # md/html report generators, health monitor, etc. — live under scripts/
+      - ./scripts:/app/docker/regression/scripts:ro
+      # Archive entity-cascade config templates (.mj-sync.json files). The
+      # entrypoint copies these into each run's archive dir before pulling.
+      - ./archive:/app/docker/regression/archive:ro
+      # Target profile JSONs for Modes B/C/D (read-only — the runner only
+      # consumes them, the loader runs on the host).
+      - ./targets:/app/docker/regression/targets:ro
+      - ../../metadata:/app/metadata
+      - ./test-metadata:/app/test-metadata:ro

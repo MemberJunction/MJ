@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mj-empty-state — variant gallery</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+/* ============================================================
+   DESIGN TOKENS — copied 1:1 (resolved) from
+   packages/Angular/Generic/shared/src/lib/_tokens.scss
+   so this gallery renders with the EXACT colors/spacing the
+   real <mj-empty-state> uses. Light = :root, dark = [data-theme="dark"].
+   ============================================================ */
+:root {
+  color-scheme: light;
+  --mj-font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --mj-font-semibold: 600;
+  --mj-text-sm: 0.875rem;
+  --mj-text-lg: 1.125rem;
+  --mj-space-2: 0.5rem;
+  --mj-space-3: 0.75rem;
+  --mj-space-4: 1rem;
+  --mj-space-6: 1.5rem;
+  --mj-space-8: 2rem;
+  --mj-space-10: 2.5rem;
+  --mj-space-12: 3rem;
+  --mj-space-16: 4rem;
+  --mj-radius-md: 8px;
+  /* semantic — light */
+  --mj-bg-page: #f8fafc;
+  --mj-bg-surface: #ffffff;
+  --mj-bg-surface-card: #f8fafc;
+  --mj-bg-surface-hover: #f1f5f9;
+  --mj-border-default: #e2e8f0;
+  --mj-text-primary: #1e293b;
+  --mj-text-secondary: #475569;
+  --mj-text-muted: #64748b;
+  --mj-text-disabled: #94a3b8;
+  --mj-brand-primary: #0076b6;
+  --mj-brand-primary-hover: #3395c8;
+  --mj-brand-on-primary: #ffffff;
+  --mj-status-success: #22c55e;
+  --mj-status-warning: #f59e0b;
+  --mj-status-error: #ef4444;
+}
+[data-theme="dark"] {
+  color-scheme: dark;
+  --mj-bg-page: #0f172a;
+  --mj-bg-surface: #1e293b;
+  --mj-bg-surface-card: #253347;
+  --mj-bg-surface-hover: #475569;
+  --mj-border-default: #334155;
+  --mj-text-primary: #f1f5f9;
+  --mj-text-secondary: #cbd5e1;
+  --mj-text-muted: #94a3b8;
+  --mj-text-disabled: #475569;
+  --mj-brand-primary: #2699cc;
+  --mj-brand-primary-hover: #4dabd5;
+  --mj-brand-on-primary: #ffffff;
+  --mj-status-success: #22c55e;
+  --mj-status-warning: #f59e0b;
+  --mj-status-error: #ef4444;
+}
+
+/* ============================================================
+   mjButton — relevant rules from button/button.scss (primary/outline/flat)
+   ============================================================ */
+.mj-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 10px 20px; border: 1px solid transparent; border-radius: var(--mj-radius-md);
+  font-family: var(--mj-font-family); font-size: var(--mj-text-sm);
+  font-weight: var(--mj-font-semibold); line-height: 1.5; min-height: 44px;
+  cursor: pointer; white-space: nowrap;
+}
+.mj-btn--primary { background: var(--mj-brand-primary); color: var(--mj-brand-on-primary); border-color: var(--mj-brand-primary); }
+.mj-btn--outline { background: transparent; color: var(--mj-brand-primary); border-color: var(--mj-brand-primary); }
+.mj-btn--flat { background: transparent; color: var(--mj-text-secondary); border-color: transparent; padding: 8px 12px; }
+
+/* ============================================================
+   <mj-empty-state> — styles 1:1 from empty-state.component.ts
+   (:host -> .mj-empty-state, :host(.x) -> .mj-empty-state.x)
+   ============================================================ */
+.mj-empty-state {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center; padding: var(--mj-space-12); color: var(--mj-text-secondary);
+  font-family: var(--mj-font-family);
+}
+.mj-empty-state__icon { font-size: 3rem; line-height: 1; margin-bottom: var(--mj-space-4); color: var(--mj-text-disabled); }
+.mj-empty-state__title { margin: 0; font-size: var(--mj-text-lg); font-weight: 600; color: var(--mj-text-primary); }
+.mj-empty-state__message { margin: var(--mj-space-2) 0 0; font-size: var(--mj-text-sm); color: var(--mj-text-muted); max-width: 420px; }
+.mj-empty-state__actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: var(--mj-space-2); margin-top: var(--mj-space-6); }
+.mj-empty-state__actions:empty { display: none; }
+.mj-empty-state.mj-empty-state--compact { padding: var(--mj-space-8); }
+.mj-empty-state.mj-empty-state--compact .mj-empty-state__icon { font-size: 2rem; margin-bottom: var(--mj-space-3); }
+.mj-empty-state.mj-empty-state--large { padding: var(--mj-space-16) var(--mj-space-10); }
+.mj-empty-state.mj-empty-state--large .mj-empty-state__icon { font-size: 4rem; }
+.mj-empty-state.mj-empty-state--no-results .mj-empty-state__icon { color: var(--mj-text-muted); }
+.mj-empty-state.mj-empty-state--success .mj-empty-state__icon { color: var(--mj-status-success); }
+.mj-empty-state.mj-empty-state--warning .mj-empty-state__icon { color: var(--mj-status-warning); }
+.mj-empty-state.mj-empty-state--error .mj-empty-state__icon { color: var(--mj-status-error); }
+
+/* ============================================================
+   Gallery chrome (not part of the component)
+   ============================================================ */
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--mj-bg-page); color: var(--mj-text-primary); font-family: var(--mj-font-family); }
+.gallery-head { padding: 24px 32px; border-bottom: 1px solid var(--mj-border-default); }
+.gallery-head h1 { margin: 0 0 4px; font-size: 22px; }
+.gallery-head p { margin: 0; color: var(--mj-text-muted); font-size: 14px; }
+.section-title { padding: 24px 32px 4px; font-size: 13px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--mj-text-muted); }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 20px; padding: 12px 32px 24px; }
+.cell { margin: 0; border: 1px solid var(--mj-border-default); border-radius: 12px; overflow: hidden; background: var(--mj-bg-surface); }
+.cell-label { padding: 8px 14px; font-size: 12px; font-family: 'JetBrains Mono', ui-monospace, monospace; color: var(--mj-text-secondary); background: var(--mj-bg-surface-card); border-bottom: 1px solid var(--mj-border-default); }
+.cell-surface { min-height: 160px; display: flex; }
+.cell-surface .mj-empty-state { width: 100%; }
+</style>
+</head>
+<body>
+<div class="gallery-head">
+  <h1>&lt;mj-empty-state&gt; — variant gallery</h1>
+  <p>Every Variant × Size × icon × CTA combination the migrated empty-states use, rendered with the component's real template, styles, and design tokens. Toggle <code>data-theme</code> on &lt;html&gt; for dark.</p>
+</div>
+
+<div class="section-title">Variants (default size · default icon · title + message)</div>
+<div class="grid">
+  <figure class="cell"><figcaption class="cell-label">Variant="empty"</figcaption><div class="cell-surface">
+    <div class="mj-empty-state mj-empty-state--empty"><i class="mj-empty-state__icon fa-solid fa-inbox"></i><h3 class="mj-empty-state__title">No items yet</h3><p class="mj-empty-state__message">Items you create will show up here.</p><div class="mj-empty-state__actions"></div></div>
+  </div></figure>
+  <figure class="cell"><figcaption class="cell-label">Variant="no-results"</figcaption><div class="cell-surface">
+    <div class="mj-empty-state mj-empty-state--no-results"><i class="mj-empty-state__icon fa-solid fa-magnifying-glass"></i><h3 class="mj-empty-state__title">No matches</h3><p class="mj-empty-state__message">No results for the current search and filters.</p><div class="mj-empty-state__actions"></div></div>
+  </div></figure>
+  <figure class="cell"><figcaption class="cell-label">Variant="success"</figcaption><div class="cell-surface">
+    <div class="mj-empty-state mj-empty-state--success"><i class="mj-empty-state__icon fa-solid fa-circle-check"></i><h3 class="mj-empty-state__title">Nothing to change</h3><p class="mj-empty-state__message">The rules didn't match any of the selected records.</p><div class="mj-empty-state__actions"></div></div>
+  </div></figure>
+  <figure class="cell"><figcaption class="cell-label">Variant="warning"</figcaption><div class="cell-surface">
+    <div class="mj-empty-state mj-empty-state--warning"><i class="mj-empty-state__icon fa-solid fa-triangle-exclamation"></i><h3 class="mj-empty-state__title">No scope rules defined</h3><p class="mj-empty-state__message">All access denied by default.</p><div class="mj-empty-state__actions"></div></div>
+  </div></figure>
+  <figure class="cell"><figcaption class="cell-label">Variant="error"</figcaption><div class="cell-surface">
+    <div class="mj-empty-state mj-empty-state--error"><i class="mj-empty-state__icon fa-solid fa-triangle-exclamation"></i><h3 class="mj-empty-state__title">Couldn't load data</h3><p class="mj-empty-state__message">Something went wrong. Try again.</p><div class="mj-empty-state__actions"></div></div>
+  </div></figure>
+</div>
+
+<div class="section-title">Sizes (empty variant)</div>
+<div class="grid">
+  <figure class="cell"><figcaption class="cell-label">Size="compact"</figcaption><div class="cell-surface">
+    <div class="mj-empty-state mj-empty-state--empty mj-empty-state--compact"><i class="mj-empty-state__icon fa-solid fa-inbox"></i><h3 class="mj-empty-state__title">No items</h3><p class="mj-empty-state__message">Compact density for in-panel empties.</p><div class="mj-empty-state__actions"></div></div>
+  </div></figure>
+  <figure class="cell"><figcaption class="cell-label">Size="default"</figcaption><div class="cell-surface">
+    <div class="mj-empty-state mj-empty-state--empty"><i class="mj-empty-state__icon fa-solid fa-inbox"></i><h3 class="mj-empty-state__title">No items</h3><p class="mj-empty-state__message">Default density.</p><div class="mj-empty-state__actions"></div></div>
+  </div></figure>
+  <figure class="cell"><figcaption class="cell-label">Size="large"</figcaption><div class="cell-surface">
+    <div class="mj-empty-state mj-empty-state--empty mj-empty-state--large"><i class="mj-empty-state__icon fa-solid fa-inbox"></i><h3 class="mj-empty-state__title">No items</h3><p class="mj-empty-state__message">Large density for onboarding.</p><div class="mj-empty-state__actions"></div></div>
+  </div></figure>
+</div>
+
+<div class="section-title">Icon options</div>
+<div class="grid">
+  <figure class="cell"><figcaption class="cell-label">Icon="fa-solid fa-key" (explicit)</figcaption><div class="cell-surface">
+    <div class="mj-empty-state mj-empty-state--empty"><i class="mj-empty-state__icon fa-solid fa-key"></i><h3 class="mj-empty-state__title">No API keys yet</h3><p class="mj-empty-state__message">Generate a key to get started.</p><div class="mj-empty-state__actions"></div></div>
+  </div></figure>
+  <figure class="cell"><figcaption class="cell-label">Icon=null (variant default)</figcaption><div class="cell-surface">
+    <div class="mj-empty-state mj-empty-state--empty"><i class="mj-empty-state__icon fa-solid fa-inbox"></i><h3 class="mj-empty-state__title">No items yet</h3><p class="mj-empty-state__message">Default inbox icon from the empty variant.</p><div class="mj-empty-state__actions"></div></div>
+  </div></figure>
+  <figure class="cell"><figcaption class="cell-label">Icon="" (no icon)</figcaption><div class="cell-surface">
+    <div class="mj-empty-state mj-empty-state--empty"><h3 class="mj-empty-state__title">No version labels for this record yet.</h3><div class="mj-empty-state__actions"></div></div>
+  </div></figure>
+</div>
+
+<div class="section-title">CTA options</div>
+<div class="grid">
+  <figure class="cell"><figcaption class="cell-label">ActionText (primary)</figcaption><div class="cell-surface">
+    <div class="mj-empty-state mj-empty-state--empty"><i class="mj-empty-state__icon fa-solid fa-folder-open"></i><h3 class="mj-empty-state__title">No applications</h3><p class="mj-empty-state__message">Create one to define scope ceilings.</p><div class="mj-empty-state__actions"><button class="mj-btn mj-btn--primary">Configure Applications</button></div></div>
+  </div></figure>
+  <figure class="cell"><figcaption class="cell-label">ActionText + ActionIcon (primary)</figcaption><div class="cell-surface">
+    <div class="mj-empty-state mj-empty-state--empty"><i class="mj-empty-state__icon fa-solid fa-grip-vertical"></i><h3 class="mj-empty-state__title">This dashboard is empty</h3><p class="mj-empty-state__message">Start by adding reports or user views.</p><div class="mj-empty-state__actions"><button class="mj-btn mj-btn--primary"><i class="fa-solid fa-plus"></i> Add Item</button></div></div>
+  </div></figure>
+  <figure class="cell"><figcaption class="cell-label">no-results + reset (outline · rotate-left)</figcaption><div class="cell-surface">
+    <div class="mj-empty-state mj-empty-state--no-results"><i class="mj-empty-state__icon fa-solid fa-tags"></i><h3 class="mj-empty-state__title">No tags found for the current scope</h3><div class="mj-empty-state__actions"><button class="mj-btn mj-btn--outline"><i class="fa-solid fa-rotate-left"></i> Clear filters</button></div></div>
+  </div></figure>
+  <figure class="cell"><figcaption class="cell-label">ActionText (flat · pencil)</figcaption><div class="cell-surface">
+    <div class="mj-empty-state mj-empty-state--empty"><i class="mj-empty-state__icon fa-solid fa-file-lines"></i><h3 class="mj-empty-state__title">No requirements defined yet</h3><div class="mj-empty-state__actions"><button class="mj-btn mj-btn--flat"><i class="fa-solid fa-pencil"></i> Start writing</button></div></div>
+  </div></figure>
+</div>
+
+<div class="section-title">Real migrated examples</div>
+<div class="grid">
+  <figure class="cell"><figcaption class="cell-label">realtime · compact · comment-slash</figcaption><div class="cell-surface">
+    <div class="mj-empty-state mj-empty-state--empty mj-empty-state--compact"><i class="mj-empty-state__icon fa-solid fa-comment-slash"></i><h3 class="mj-empty-state__title">No meeting transcripts yet</h3><div class="mj-empty-state__actions"></div></div>
+  </div></figure>
+  <figure class="cell"><figcaption class="cell-label">api-usage · compact · chart-area</figcaption><div class="cell-surface">
+    <div class="mj-empty-state mj-empty-state--empty mj-empty-state--compact"><i class="mj-empty-state__icon fa-solid fa-chart-area"></i><h3 class="mj-empty-state__title">No usage data available</h3><div class="mj-empty-state__actions"></div></div>
+  </div></figure>
+  <figure class="cell"><figcaption class="cell-label">no-selection · hand-pointer + message</figcaption><div class="cell-surface">
+    <div class="mj-empty-state mj-empty-state--empty"><i class="mj-empty-state__icon fa-solid fa-hand-pointer"></i><h3 class="mj-empty-state__title">No scope selected</h3><p class="mj-empty-state__message">Select a scope on the left, or click New to create one.</p><div class="mj-empty-state__actions"></div></div>
+  </div></figure>
+  <figure class="cell"><figcaption class="cell-label">onboarding · large + Create CTA</figcaption><div class="cell-surface">
+    <div class="mj-empty-state mj-empty-state--empty mj-empty-state--large"><i class="mj-empty-state__icon fa-solid fa-list-check"></i><h3 class="mj-empty-state__title">No bulk operations yet</h3><p class="mj-empty-state__message">Create your first bulk operation to get started.</p><div class="mj-empty-state__actions"><button class="mj-btn mj-btn--primary"><i class="fa-solid fa-plus"></i> Create one</button></div></div>
+  </div></figure>
+</div>
+</body>
+</html>

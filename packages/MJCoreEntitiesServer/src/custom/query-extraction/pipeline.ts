@@ -12,6 +12,7 @@ import {
 } from "./resolve";
 import { RunLLMEnrichment, MergeParametersWithLLM } from "./enrich";
 import { SyncParameters, SyncFields, SyncEntities, SyncDependencies, RemoveAllRecords } from "./sync";
+import { QueryEngine } from "@memberjunction/core-entities";
 
 /**
  * Result of running the full extraction pipeline.
@@ -74,7 +75,7 @@ export async function CleanupQueryData(ctx: QuerySyncContext): Promise<void> {
 
 function resolve(ctx: QuerySyncContext, parseResult: ReturnType<typeof parseQuerySQL>): ResolveResult {
     const md = ctx.metadataProvider;
-    const allQueries = md.Queries;
+    const allQueries = QueryEngine.Instance.Queries;
 
     // Composition references
     const resolvedCompositionRefs = ResolveCompositionReferences(ctx.sql, ctx.queryName, allQueries);
@@ -109,7 +110,7 @@ function merge(
 
     // Parameters: merge deterministic + LLM
     const finalParams = resolveResult.allDeterministicParams.length > 0
-        ? MergeParametersWithLLM(resolveResult.allDeterministicParams, llmResult, resolveResult.passthroughContext)
+        ? MergeParametersWithLLM(resolveResult.allDeterministicParams, llmResult, resolveResult.passthroughContext, ctx.parameterHints)
         : null;
 
     // Fields priority: deterministic (SELECT * or explicit columns) → LLM selectClause

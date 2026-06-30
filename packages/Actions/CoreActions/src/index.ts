@@ -2,6 +2,7 @@ export * from './generated/action_subclasses.js';
 
 // Communication Actions
 export * from './custom/communication/send-single-message.action';
+export * from './custom/communication/send-to-audience.action';
 export * from './custom/communication/slack-webhook.action';
 export * from './custom/communication/teams-webhook.action';
 
@@ -10,6 +11,10 @@ export * from './custom/crud/create-record.action';
 export * from './custom/crud/get-record.action';
 export * from './custom/crud/update-record.action';
 export * from './custom/crud/delete-record.action';
+export * from './custom/crud/write-entity-fields.action';
+
+// Data processing
+export * from './custom/data/run-record-process.action';
 
 // Demo Actions
 export * from './custom/demo/get-weather.action';
@@ -31,6 +36,9 @@ export * from './custom/utilities/address-services.action';
 // Geo Actions
 export * from './custom/geo/scheduled-geocoding.action';
 
+// Interactive Forms Actions (Phase C: AI authoring of runtime forms)
+export * from './custom/interactive-forms';
+
 // Web Actions
 export * from './custom/web/web-search.action';
 export * from './custom/web/web-page-content.action';
@@ -51,6 +59,7 @@ export * from './custom/data/get-entity-details.action';
 export * from './custom/data/get-entity-list.action';
 export * from './custom/data/run-stored-query.action';
 export * from './custom/data/search-query-catalog.action';
+export * from './custom/data/search-entity.action';
 
 // Code Execution Actions
 export * from './custom/code-execution/execute-code.action';
@@ -71,6 +80,14 @@ export * from './custom/integration/oauth-flow.action';
 export * from './custom/integration/api-rate-limiter.action';
 export * from './custom/integration/gamma-generate-presentation.action';
 export * from './custom/integration/integration-action-executor';
+export * from './custom/integration/generate-integration-action.action';
+
+// eSignature Actions
+export * from './custom/esignature/base-esignature.action';
+export * from './custom/esignature/send-document-for-signature.action';
+export * from './custom/esignature/get-signature-status.action';
+export * from './custom/esignature/download-signed-document.action';
+export * from './custom/esignature/void-signature-request.action';
 
 // Security Actions
 export * from './custom/security/password-strength.action';
@@ -95,6 +112,7 @@ export * from './custom/ai/find-candidate-agents.action';
 export * from './custom/ai/find-candidate-actions.action';
 export * from './custom/ai/load-agent-spec.action';
 export * from './custom/ai/generate-image.action';
+export * from './custom/ai/run-cluster-analysis.action';
 export * from './custom/ai/actionsmith-agent';
 
 // User Management Actions

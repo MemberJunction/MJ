@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/installer",
-  "version": "5.33.0",
+  "version": "5.43.0",
   "description": "Headless, event-driven installer engine for MemberJunction",
   "type": "module",
   "main": "dist/index.js",
@@ -14,7 +14,9 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "adm-zip": "^0.5.16"
+    "adm-zip": "^0.5.16",
+    "minimatch": "^9.0.5",
+    "simple-git": "^3.30.0"
   },
   "devDependencies": {
     "@types/adm-zip": "^0.5.7",

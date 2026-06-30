@@ -64,6 +64,12 @@ export {
   LoadClusterVisualizationResource
 } from './KnowledgeHub/components/clusters/cluster-visualization-resource.component';
 export {
+  VisualizeResourceComponent,
+  LoadVisualizeResource
+} from './KnowledgeHub/components/visualize/visualize-resource.component';
+export { TagCloudComponent } from './KnowledgeHub/components/visualize/tag-cloud/tag-cloud.component';
+export { RecordDrilldownComponent } from './KnowledgeHub/components/visualize/record-drilldown/record-drilldown.component';
+export {
   AnalyticsResourceComponent,
   LoadAnalyticsResource
 } from './KnowledgeHub/components/analytics/analytics-resource.component';
@@ -88,7 +94,6 @@ export {
   // Action Explorer components
   ActionExplorerComponent,
   ActionTreePanelComponent,
-  ActionToolbarComponent,
   ActionBreadcrumbComponent,
   ActionCardComponent,
   ActionListItemComponent,
@@ -98,8 +103,8 @@ export {
   ActionExplorerStateService
 } from './Actions';
 
-// Re-export Actions ExecutionMonitoringComponent with alias to avoid conflict with AI version
-export { ExecutionMonitoringComponent as ActionsExecutionMonitoringComponent } from './Actions/components/execution-monitoring.component';
+// Re-export Actions ExecutionMonitoringComponent (renamed to avoid conflict with AI version)
+export { ActionExecutionMonitoringComponent } from './Actions/components/execution-monitoring.component';
 
 // Export Scheduling components as resources (BaseResourceComponent-based)
 export {
@@ -124,6 +129,10 @@ export {
 export {
   CommunicationTemplatesResourceComponent
 } from './Communication/communication-templates-resource.component';
+export {
+  CommunicationsNewMessageResource,
+  LoadCommunicationsNewMessageResource
+} from './Communication/communication-new-message-resource.component';
 
 // Export Testing components as resources (BaseResourceComponent-based)
 export {
@@ -154,6 +163,9 @@ export { HomeDashboardComponent } from './Home/home-dashboard.component';
 
 // Application Roles
 export { ApplicationRolesResourceComponent, LoadApplicationRolesResource } from './ApplicationRoles/application-roles-resource.component';
+
+// Realtime Recordings — review & replay recorded realtime sessions (audio + transcript)
+export { RealtimeRecordingsDashboardComponent, LoadRealtimeRecordingsDashboard } from './RealtimeRecordings/realtime-recordings-dashboard.component';
 
 // Permissions admin — three independent resource tabs (Phase 2a/b/c — unified permissions)
 export {
@@ -202,6 +214,8 @@ export * from './credentials-dashboards.module';
 export * from './data-explorer-dashboards.module';
 export * from './lists-dashboards.module';
 export * from './component-studio-dashboards.module';
+export * from './predictive-studio-dashboards.module';
+export { PredictiveStudioEngine } from './PredictiveStudio/engine/predictive-studio.engine';
 export * from './DatabaseDesigner/database-designer-dashboards.module';
 export { DatabaseDesignerDashboardComponent, LoadDatabaseDesignerDashboard } from './DatabaseDesigner/components/database-designer-dashboard.component';
 export * from './shared/shared-dashboard-widgets.module';

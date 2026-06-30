@@ -356,7 +356,11 @@ export class ResolverBase {
           userPayload,
           viewInput.MaxRows,
           viewInput.StartRow,
-          viewInput.Aggregates
+          viewInput.Aggregates,
+          viewInput.AfterKey
+            ? CompositeKey.FromKeyValuePairs((viewInput.AfterKey as { KeyValuePairs: { FieldName: string; Value: string }[] }).KeyValuePairs)
+            : undefined,
+          viewInput.BypassCache
         );
       }
       else {
@@ -397,7 +401,9 @@ export class ResolverBase {
         userPayload,
         viewInput.MaxRows,
         viewInput.StartRow,
-        viewInput.Aggregates
+        viewInput.Aggregates,
+        undefined,
+        viewInput.BypassCache
       );
     } catch (err) {
       console.log(err);
@@ -441,7 +447,9 @@ export class ResolverBase {
         userPayload,
         viewInput.MaxRows,
         viewInput.StartRow,
-        viewInput.Aggregates
+        viewInput.Aggregates,
+        undefined,
+        viewInput.BypassCache
       );
     } catch (err) {
       console.log(err);
@@ -505,12 +513,16 @@ export class ResolverBase {
           ignoreMaxRows: viewInput.IgnoreMaxRows,
           maxRows: viewInput.MaxRows,
           startRow: viewInput.StartRow,
+          afterKey: viewInput.AfterKey
+            ? CompositeKey.FromKeyValuePairs((viewInput.AfterKey as { KeyValuePairs: { FieldName: string; Value: string }[] }).KeyValuePairs)
+            : undefined,
           excludeDataFromAllPriorViewRuns: viewInput.EntityName ? false : viewInput.ExcludeDataFromAllPriorViewRuns,
           forceAuditLog: viewInput.ForceAuditLog,
           auditLogDescription: viewInput.AuditLogDescription,
           resultType: viewInput.ResultType,
           userPayload,
           aggregates: viewInput.Aggregates,
+          bypassCache: viewInput.BypassCache,
         });
       } catch (err) {
         LogError(err);
@@ -575,7 +587,16 @@ export class ResolverBase {
 
     // first check permissions, the logged in user must have read permissions on the entity to run the view
     if (entityInfo) {
-      const userInfo = UserCache.Users.find((u) => u.Email.toLowerCase().trim() === userPayload.email.toLowerCase().trim()); // get the user record from MD so we have ROLES attached, don't use the one from payload directly
+      // Prefer the authenticated session's payload user WHEN it carries roles — that is the
+      // authoritative per-session identity (and, for magic-link sessions, carries claims-based
+      // synthesized roles that are deliberately NOT persisted to the shared UserCache). For
+      // normal users the payload user IS the UserCache user, so this is a no-op; we only diverge
+      // for per-session synthesized identities. Fall back to the cache lookup when the payload
+      // user has no roles attached (older/edge auth paths).
+      const payloadUser = this.GetUserFromPayload(userPayload);
+      const userInfo = (payloadUser && payloadUser.UserRoles && payloadUser.UserRoles.length > 0)
+        ? payloadUser
+        : UserCache.Users.find((u) => u.Email.toLowerCase().trim() === userPayload.email.toLowerCase().trim());
       if (!userInfo) {
         throw new Error(`User ${userPayload.email} not found in metadata`);
       }
@@ -617,7 +638,7 @@ export class ResolverBase {
     // user has. The API key's associated user (in userPayload.userRecord) is
     // used later when the actual operation executes - their permissions are
     // the ultimate ceiling that scopes can only narrow, never expand.
-    const systemUser = UserCache.Instance.Users.find(u => u.Type === 'System');
+    const systemUser = UserCache.Instance.GetSystemUser();
     if (!systemUser) {
       throw new Error('System user not found');
     }
@@ -686,7 +707,9 @@ export class ResolverBase {
     userPayload: UserPayload | null,
     maxRows: number | undefined,
     startRow: number | undefined,
-    aggregates?: AggregateExpression[]
+    aggregates?: AggregateExpression[],
+    afterKey?: CompositeKey,
+    bypassCache?: boolean
   ) {
     try {
       if (!viewInfo || !userPayload) return null;
@@ -695,7 +718,12 @@ export class ResolverBase {
       await this.CheckAPIKeyScopeAuthorization('view:run', viewInfo.Entity, userPayload);
 
       const md = provider
-      const user = UserCache.Users.find((u) => u.Email.toLowerCase().trim() === userPayload?.email.toLowerCase().trim());
+      // Prefer the authenticated session's payload user — it is the authoritative per-request
+      // identity and (for magic-link sessions) carries the per-session resource scope / synthesized
+      // roles that drive RLS. The cached lookup is a fallback for paths where the payload user
+      // isn't populated. For normal users the two are the same instance, so this is a no-op.
+      const user = this.GetUserFromPayload(userPayload)
+        ?? UserCache.Users.find((u) => u.Email.toLowerCase().trim() === userPayload?.email.toLowerCase().trim());
       if (!user) throw new Error(`User ${userPayload?.email} not found in metadata`);
 
       const entityInfo = md.Entities.find((e) => e.Name === viewInfo.Entity);
@@ -745,10 +773,12 @@ export class ResolverBase {
           IgnoreMaxRows: ignoreMaxRows,
           MaxRows: maxRows,
           StartRow: startRow,
+          AfterKey: afterKey,
           ForceAuditLog: forceAuditLog,
           AuditLogDescription: auditLogDescription,
           ResultType: rt,
           Aggregates: aggregates,
+          BypassCache: bypassCache,
         },
         user
       );
@@ -807,8 +837,14 @@ export class ResolverBase {
       // Fix #1: Get user info only once for all queries
       let contextUser: UserInfo | null = null;
       if (params[0]?.userPayload?.email) {
-        const userEmail = params[0].userPayload.email.toLowerCase().trim();
-        const user = UserCache.Users.find(u => u.Email.toLowerCase().trim() === userEmail);
+        const userPayload = params[0].userPayload;
+        const userEmail = userPayload.email.toLowerCase().trim();
+        // Prefer the authenticated session's payload user — it is the authoritative per-request
+        // identity and (for magic-link sessions) carries the per-session resource scope / synthesized
+        // roles that drive RLS. The cached lookup is a fallback for paths where the payload user
+        // isn't populated. For normal users the two are the same instance, so this is a no-op.
+        const user = this.GetUserFromPayload(userPayload)
+          ?? UserCache.Users.find(u => u.Email.toLowerCase().trim() === userEmail);
         if (!user) {
           throw new Error(`User ${userEmail} not found in metadata`);
         }
@@ -857,10 +893,12 @@ export class ResolverBase {
           IgnoreMaxRows: param.ignoreMaxRows,
           MaxRows: param.maxRows,
           StartRow: param.startRow,
+          AfterKey: param.afterKey,
           ForceAuditLog: param.forceAuditLog,
           AuditLogDescription: param.auditLogDescription,
           ResultType: rt,
           Aggregates: param.aggregates,
+          BypassCache: param.bypassCache,
         });
       }
 
@@ -903,7 +941,9 @@ export class ResolverBase {
       if (!entityInfo) throw new Error(`Entity ${entityName} not found in metadata`);
 
       if (entityInfo.AuditRecordAccess) {
-        const userInfo = UserCache.Users.find((u) => u.Email.toLowerCase().trim() === userPayload?.email.toLowerCase().trim());
+        // Prefer the per-session payload user (the actual actor for this request) over the cache lookup.
+        const userInfo = this.GetUserFromPayload(userPayload)
+          ?? UserCache.Users.find((u) => u.Email.toLowerCase().trim() === userPayload?.email.toLowerCase().trim());
         const auditLogTypeName = 'Record Accessed';
         const auditLogType = md.AuditLogTypes.find((a) => a.Name.trim().toLowerCase() === auditLogTypeName.trim().toLowerCase());
 
@@ -921,7 +961,11 @@ export class ResolverBase {
     const md = provider;
     const entityInfo = md.Entities.find((e) => e.Name.trim().toLowerCase() === entityName.trim().toLowerCase());
     if (!entityInfo) throw new Error(`Entity ${entityName} not found in metadata`);
-    const user = UserCache.Users.find((u) => u.Email.toLowerCase().trim() === userPayload?.email.toLowerCase().trim());
+    // Prefer the authenticated session's payload user — it is the authoritative per-request identity
+    // and (for magic-link sessions) carries the per-session resource scope / synthesized roles that
+    // the RLS WHERE clause (e.g. {{ScopeResourceID}}) depends on. Cache lookup is the fallback.
+    const user = this.GetUserFromPayload(userPayload)
+      ?? UserCache.Users.find((u) => u.Email.toLowerCase().trim() === userPayload?.email.toLowerCase().trim());
     if (!user) throw new Error(`User ${userPayload?.email} not found in metadata`);
 
     return entityInfo.GetUserRowLevelSecurityWhereClause(user, type, returnPrefix);
@@ -939,7 +983,9 @@ export class ResolverBase {
   ): Promise<any> {
     try {
       const md = provider;
-      const userInfo = UserCache.Users.find((u) => u.Email.toLowerCase().trim() === userPayload?.email.toLowerCase().trim());
+      // Prefer the per-session payload user (the actual actor for this request) over the cache lookup.
+      const userInfo = this.GetUserFromPayload(userPayload)
+        ?? UserCache.Users.find((u) => u.Email.toLowerCase().trim() === userPayload?.email.toLowerCase().trim());
       const authorization = authorizationName
         ? md.Authorizations.find((a) => a.Name.trim().toLowerCase() === authorizationName.trim().toLowerCase())
         : null;

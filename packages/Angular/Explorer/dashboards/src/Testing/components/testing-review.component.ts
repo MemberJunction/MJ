@@ -33,26 +33,37 @@ interface ReviewFormState {
   selector: 'app-testing-review',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <!-- Page Header -->
+    @if (HideToolbar) {
+      <ng-container *ngTemplateOutlet="content"></ng-container>
+    } @else {
+      <mj-page-layout>
+        <mj-page-header
+          Title="Human Review"
+          Icon="fa-solid fa-clipboard-check"
+          Subtitle="Human-in-the-loop review for test outcomes">
+          <div meta>
+            @if (PendingCount > 0) {
+              <mj-stat-badge
+                Icon="fa-solid fa-hourglass-half"
+                [Count]="PendingCount"
+                Label="pending"
+                Variant="warning">
+              </mj-stat-badge>
+            }
+          </div>
+          <div actions>
+            <mj-refresh-button [Loading]="IsRefreshing" (Clicked)="Refresh()"></mj-refresh-button>
+          </div>
+        </mj-page-header>
+        <mj-page-body>
+          <ng-container *ngTemplateOutlet="content"></ng-container>
+        </mj-page-body>
+      </mj-page-layout>
+    }
+
+    <ng-template #content>
+    <!-- Inner page content -->
     <div class="review-page">
-      <div class="page-header">
-        <div class="header-left">
-          <h2>
-            <i class="fa-solid fa-clipboard-check"></i>
-            Human Review
-          </h2>
-          @if (PendingCount > 0) {
-            <div class="pending-badge">
-              <span class="badge-count">{{ PendingCount }}</span>
-              <span class="badge-text">pending</span>
-            </div>
-          }
-        </div>
-        <button class="refresh-btn" (click)="Refresh()" [disabled]="IsRefreshing">
-          <i class="fa-solid fa-arrows-rotate" [class.fa-spin]="IsRefreshing"></i>
-          {{ IsRefreshing ? 'Refreshing...' : 'Refresh' }}
-        </button>
-      </div>
 
       <!-- KPI Summary Row -->
       @if (Metrics) {
@@ -114,11 +125,9 @@ interface ReviewFormState {
       @if (CurrentView === 'queue') {
         <div class="content-card">
           @if (PendingItems.length === 0) {
-            <div class="empty-state">
-              <i class="fa-solid fa-circle-check"></i>
-              <h3>All caught up!</h3>
-              <p>No tests currently require human review.</p>
-            </div>
+            <mj-empty-state Variant="success"
+              Title="All caught up!"
+              Message="No tests currently require human review." />
           } @else {
             <div class="queue-list">
               @for (item of PendingItems; track item.testRunID) {
@@ -243,11 +252,9 @@ interface ReviewFormState {
           </div>
 
           @if (FilteredHistoryItems.length === 0) {
-            <div class="empty-state">
-              <i class="fa-solid fa-folder-open"></i>
-              <h3>No reviewed items</h3>
-              <p>Reviewed tests will appear here once feedback is submitted.</p>
-            </div>
+            <mj-empty-state Icon="fa-solid fa-folder-open"
+              Title="No reviewed items"
+              Message="Reviewed tests will appear here once feedback is submitted." />
           } @else {
             <div class="history-list">
               @for (item of FilteredHistoryItems; track item.id) {
@@ -322,15 +329,15 @@ interface ReviewFormState {
               Measures how often human reviewers agree with automated evaluation scores.
             </p>
             @if (AgreementRate < 70) {
-              <div class="calibration-warning">
-                <i class="fa-solid fa-triangle-exclamation"></i>
+              <mj-alert Variant="warning">
                 Low agreement may indicate evaluation criteria need refinement.
-              </div>
+              </mj-alert>
             }
           </div>
         </div>
       </div>
     </div>
+    </ng-template>
   `,
   styles: [`
     :host {
@@ -1011,31 +1018,6 @@ interface ReviewFormState {
       white-space: normal;
     }
 
-    /* Empty State */
-    .empty-state {
-      padding: 60px 20px;
-      text-align: center;
-    }
-
-    .empty-state i {
-      font-size: 52px;
-      margin-bottom: 16px;
-      color: var(--mj-status-success);
-    }
-
-    .empty-state h3 {
-      font-size: 18px;
-      color: var(--mj-text-primary);
-      margin: 0 0 8px 0;
-      font-weight: 600;
-    }
-
-    .empty-state p {
-      font-size: 14px;
-      color: var(--mj-text-disabled);
-      margin: 0;
-    }
-
     /* Calibration Section */
     .calibration-section {
       background: var(--mj-bg-surface);
@@ -1105,24 +1087,6 @@ interface ReviewFormState {
       line-height: 1.6;
     }
 
-    .calibration-warning {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 12px 16px;
-      background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
-      border: 1px solid var(--mj-status-warning);
-      border-radius: 8px;
-      font-size: 13px;
-      font-weight: 500;
-      color: var(--mj-status-warning);
-    }
-
-    .calibration-warning i {
-      color: var(--mj-status-warning);
-      font-size: 16px;
-      flex-shrink: 0;
-    }
 
     /* Success toast animation */
     .queue-item {
@@ -1197,6 +1161,8 @@ interface ReviewFormState {
 })
 export class TestingReviewComponent implements OnInit, OnDestroy {
   @Input() initialState: Record<string, unknown> | null = null;
+  /** When true, the inner bespoke .page-header is hidden — the parent shell owns the chrome. */
+  @Input() HideToolbar = false;
   @Output() stateChange = new EventEmitter<Record<string, unknown>>();
 
   private destroy$ = new Subject<void>();
@@ -1281,6 +1247,7 @@ export class TestingReviewComponent implements OnInit, OnDestroy {
       .subscribe(items => {
         this.PendingItems = items;
         this.PendingCount = items.length;
+        this.emitState();
         this.cdr.markForCheck();
       });
 
@@ -1288,6 +1255,7 @@ export class TestingReviewComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe(metrics => {
         this.Metrics = metrics;
+        this.emitState();
         this.cdr.markForCheck();
       });
 
@@ -1390,6 +1358,7 @@ export class TestingReviewComponent implements OnInit, OnDestroy {
     const target = event.target as HTMLInputElement;
     this.HistorySearchText = target.value;
     this.applyHistoryFilters();
+    this.emitState();
     this.cdr.markForCheck();
   }
 
@@ -1486,6 +1455,15 @@ export class TestingReviewComponent implements OnInit, OnDestroy {
   }
 
   private emitState(): void {
-    this.stateChange.emit({ viewMode: this.CurrentView });
+    this.stateChange.emit({
+      viewMode: this.CurrentView,
+      // Richer state for the dashboard's agent context (queue depth, reviewed
+      // count, avg human rating, agreement rate, history search).
+      pendingCount: this.PendingCount,
+      reviewedCount: this.Metrics?.humanReviewedCount ?? 0,
+      averageHumanRating: this.Metrics?.humanAvgRating ?? 0,
+      agreementRate: this.Metrics?.agreementRate ?? 0,
+      historySearchText: this.HistorySearchText
+    });
   }
 }

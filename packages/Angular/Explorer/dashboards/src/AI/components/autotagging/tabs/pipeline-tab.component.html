@@ -1,0 +1,323 @@
+<mj-page-header-interior
+    Title="Pipeline Monitor"
+    Subtitle="Real-time processing status and recent activity">
+  <div actions>
+    <button mjButton variant="secondary" size="sm" (click)="onRefresh()">
+      <i class="fa-solid fa-arrows-rotate"></i> <span class="mj-action-label">Refresh</span>
+    </button>
+  </div>
+</mj-page-header-interior>
+
+<mj-page-body-interior [Padding]="false" [Flex]="true">
+<div class="at-main-area">
+    <div class="at-page-body">
+        <!-- KPIs -->
+        <div class="at-kpi-strip">
+            @for (kpi of KPIMetrics; track kpi.Label) {
+                <div class="at-kpi-card">
+                    <div class="at-kpi-value" [class.at-kpi-error-value]="kpi.Label === 'Errors' && kpi.Value > 0">{{ kpi.Value | number }}</div>
+                    <div class="at-kpi-label">{{ kpi.Label }}</div>
+                    @if (kpi.Trend) {
+                        <div class="at-kpi-trend" [class.up]="kpi.TrendUp">
+                            @if (kpi.TrendUp) { <i class="fa-solid fa-arrow-up"></i> }
+                            {{ kpi.Trend }}
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+
+        <!-- Phase 4: Overview analytics (KPI cards + hand-rolled SVG charts) -->
+        <div class="at-analytics-section">
+            <classify-overview-analytics [Provider]="Provider"></classify-overview-analytics>
+        </div>
+
+        <div class="at-pipeline-layout">
+            <div class="at-pipeline-center">
+                <!-- Pipeline stages visualization (only during active run) -->
+                @if (PipelineStages.length > 0 && (IsRunning || IsPaused)) {
+                    <div class="at-pipeline-stages">
+                        @for (stage of PipelineStages; track stage.Name; let last = $last) {
+                            <div class="at-pipeline-stage"
+                                 [class.stage-idle]="stage.Status === 'idle'"
+                                 [class.stage-active]="stage.Status === 'active'"
+                                 [class.stage-complete]="stage.Status === 'complete'">
+                                <div class="at-pipeline-stage-icon">
+                                    @if (stage.Status === 'active') {
+                                        <i class="fa-solid fa-spinner fa-spin"></i>
+                                    } @else if (stage.Status === 'complete') {
+                                        <i class="fa-solid fa-check"></i>
+                                    } @else {
+                                        <i [class]="stage.Icon"></i>
+                                    }
+                                </div>
+                                <div class="at-pipeline-stage-name">{{ stage.Name }}</div>
+                            </div>
+                            @if (!last) {
+                                <div class="at-stage-connector"
+                                     [class.connector-complete]="stage.Status === 'complete'">
+                                </div>
+                            }
+                        }
+                    </div>
+                }
+
+                <!-- Progress bar (visible during run or paused) -->
+                @if (IsRunning || IsPaused) {
+                    <div class="at-progress-section">
+                        <div class="at-progress-header">
+                            <span class="at-progress-stage-label">{{ RunStage }}</span>
+                            <span class="at-progress-pct">{{ RunProgress | number:'1.0-0' }}%</span>
+                        </div>
+                        <div class="at-progress-bar"><div class="at-progress-fill" [style.width.%]="RunProgress" [class.at-progress-fill-paused]="IsPaused"></div></div>
+                        @if (RunCurrentItem) {
+                            <div class="at-progress-current">{{ RunCurrentItem }}</div>
+                        }
+                        <div class="at-pipeline-controls">
+                            @if (IsRunning && !IsPaused) {
+                                <button class="at-action-btn at-secondary-btn" (click)="onPause()" [disabled]="!CurrentProcessRunID">
+                                    <i class="fa-solid fa-pause"></i> Pause
+                                </button>
+                            }
+                            @if (IsPaused) {
+                                <button class="at-action-btn at-primary-btn" (click)="onResume()">
+                                    <i class="fa-solid fa-play"></i> Resume
+                                </button>
+                            }
+                            <button class="at-action-btn at-danger-btn" (click)="onCancel()">
+                                <i class="fa-solid fa-stop"></i> Cancel
+                            </button>
+                        </div>
+                    </div>
+                }
+
+                <!-- D2: Live Per-Source Progress (visible during run) -->
+                @if (IsRunning && LiveRunDetailRows.length > 0) {
+                    <div class="at-card" style="margin-bottom: 12px;">
+                        <div class="at-card-header">
+                            <span class="at-card-title"><i class="fa-solid fa-list-check"></i> Per-Source Progress</span>
+                            <button class="at-action-btn at-secondary-btn" style="font-size: 11px; padding: 3px 8px;" (click)="onLoadLiveRunDetails()">
+                                <i class="fa-solid fa-arrows-rotate"></i>
+                            </button>
+                        </div>
+                        <div class="at-card-body" style="max-height: 200px; overflow-y: auto;">
+                            <table class="at-run-table">
+                                <thead>
+                                    <tr>
+                                        <th>Source</th>
+                                        <th>Status</th>
+                                        <th>Items</th>
+                                        <th>Tagged</th>
+                                        <th>Vectorized</th>
+                                        <th>Errors</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @for (row of LiveRunDetailRows; track row.SourceName) {
+                                        <tr>
+                                            <td class="at-run-source-name">{{ row.SourceName }}</td>
+                                            <td>
+                                                <span class="at-run-status-badge" [class]="row.StatusClass">
+                                                    @if (row.StatusClass === 'running') {
+                                                        <i class="fa-solid fa-spinner fa-spin" style="font-size: 0.55rem"></i>
+                                                    }
+                                                    {{ row.Status }}
+                                                </span>
+                                            </td>
+                                            <td>{{ row.ItemsProcessed }}</td>
+                                            <td>{{ row.ItemsTagged }}</td>
+                                            <td>{{ row.ItemsVectorized }}</td>
+                                            <td [class.run-error-text]="row.ErrorCount > 0">{{ row.ErrorCount }}</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                }
+
+                <!-- Recent Processing Feed -->
+                <div class="at-card at-feed-card">
+                    <div class="at-card-header">
+                        <span class="at-card-title"><i class="fa-solid fa-bolt"></i> Recent Processing</span>
+                        <div class="at-feed-header-actions">
+                            <button class="at-feed-sort-btn" (click)="ToggleFeedSort()"
+                                    [title]="FeedSortOrder === 'newest' ? 'Showing newest first' : 'Showing oldest first'">
+                                <i class="fa-solid" [class.fa-arrow-down-short-wide]="FeedSortOrder === 'newest'"
+                                   [class.fa-arrow-up-short-wide]="FeedSortOrder === 'oldest'"></i>
+                                {{ FeedSortOrder === 'newest' ? 'Newest' : 'Oldest' }}
+                            </button>
+                            <span class="at-feed-count">{{ FilteredFeedItems.length }} items</span>
+                        </div>
+                    </div>
+                    <!-- Feed search bar -->
+                    <div class="at-feed-search-bar">
+                        <i class="fa-solid fa-search at-feed-search-icon"></i>
+                        <input type="text"
+                               class="mj-input at-feed-search-input"
+                               placeholder="Search items, sources, or tags..."
+                               [(ngModel)]="FeedSearchQuery"
+                               (input)="OnFeedSearchChange()">
+                        @if (FeedSearchQuery) {
+                            <button class="at-feed-search-clear" (click)="FeedSearchQuery = ''; OnFeedSearchChange()">
+                                <i class="fa-solid fa-times"></i>
+                            </button>
+                        }
+                    </div>
+                    <div class="at-card-body at-feed-scroll-body">
+                        @if (FilteredFeedItems.length === 0) {
+                            <mj-empty-state Size="compact"
+                                [Variant]="FeedSearchQuery ? 'no-results' : 'empty'"
+                                Icon="fa-solid fa-inbox"
+                                [Title]="FeedEmptyTitle" />
+                        }
+                        @for (item of PaginatedFeedItems; track item.Name + item.SourceName + item.TimeAgo) {
+                            <div class="at-feed-item at-feed-item-clickable" (click)="onFeedItemClick(GetFeedItemOriginalIndex(item))">
+                                <div class="at-feed-status-dot" [class]="item.Status"></div>
+                                <div class="at-feed-item-content">
+                                    <span class="at-feed-item-name">{{ item.Name }}</span>
+                                    <span class="at-feed-item-source-label">{{ item.SourceName }}</span>
+                                </div>
+                                <div class="at-feed-item-tags">
+                                    @for (tag of item.Tags; track tag) {
+                                        <span class="at-feed-tag">{{ tag }}</span>
+                                    }
+                                </div>
+                                <span class="at-feed-item-time">{{ item.TimeAgo }}</span>
+                            </div>
+                        }
+                    </div>
+                    <!-- Feed pagination -->
+                    @if (FeedTotalPages > 1) {
+                        <div class="at-feed-pagination">
+                            <button class="at-action-btn at-secondary-btn" [disabled]="FeedPage === 0" (click)="FeedPrevPage()">
+                                <i class="fa-solid fa-chevron-left"></i>
+                            </button>
+                            <span class="at-feed-pagination-label">Page {{ FeedPage + 1 }} of {{ FeedTotalPages }}</span>
+                            <button class="at-action-btn at-secondary-btn" [disabled]="FeedPage >= FeedTotalPages - 1" (click)="FeedNextPage()">
+                                <i class="fa-solid fa-chevron-right"></i>
+                            </button>
+                        </div>
+                    }
+                    @if (TotalItemCount > 0) {
+                        <div class="at-load-more-bar">
+                            <span class="at-load-more-count">Showing {{ FeedItems.length }} of {{ TotalItemCount }} items</span>
+                            @if (HasMoreItems) {
+                                <button mjButton variant="secondary" size="sm" (click)="onLoadMoreItems()" [disabled]="IsLoadingMoreItems">
+                                    @if (IsLoadingMoreItems) {
+                                        <i class="fa-solid fa-spinner fa-spin"></i> Loading…
+                                    } @else {
+                                        <i class="fa-solid fa-chevron-down"></i> Load more
+                                    }
+                                </button>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Right sidebar -->
+            <div class="at-pipeline-right">
+                <!-- Sources Quick List -->
+                <div class="at-card">
+                    <div class="at-card-header">
+                        <span class="at-card-title"><i class="fa-solid fa-database"></i> Sources</span>
+                    </div>
+                    <div class="at-card-body">
+                        @for (source of SourceMinis; track source.ID) {
+                            <div class="at-source-mini">
+                                <div class="at-source-mini-icon"><i [class]="source.Icon"></i></div>
+                                <div class="at-source-mini-info">
+                                    <div class="at-source-mini-name">{{ source.Name }}</div>
+                                    <div class="at-source-mini-meta">{{ source.Meta }}</div>
+                                </div>
+                                <div class="at-source-mini-status" [class]="source.StatusClass"></div>
+                            </div>
+                        }
+                    </div>
+                </div>
+                <!-- Trending Tags -->
+                <div class="at-card at-tag-cloud-card">
+                    <div class="at-card-title" style="margin-bottom: 10px;"><i class="fa-solid fa-chart-bar"></i> Trending Tags</div>
+                    <div class="at-tag-cloud">
+                        @for (tag of TrendingTags; track tag.Tag) {
+                            <span class="at-tag-pill" [class]="tag.SizeClass"
+                                  [style.opacity]="0.4 + tag.AvgWeight * 0.6"
+                                  [title]="'Weight: ' + tag.AvgWeight.toFixed(2)">{{ tag.Tag }}</span>
+                        }
+                    </div>
+                </div>
+
+                <!-- Pipeline Settings Widget -->
+                <div class="at-card at-config-card">
+                    <div class="at-card-header" (click)="onToggleConfig()" style="cursor:pointer">
+                        <span class="at-card-title"><i class="fa-solid fa-sliders"></i> Pipeline Settings</span>
+                        <i class="fa-solid" [class.fa-chevron-down]="!ShowPipelineConfig" [class.fa-chevron-up]="ShowPipelineConfig" style="font-size:0.7rem; color:var(--mj-text-muted)"></i>
+                    </div>
+                    @if (ShowPipelineConfig) {
+                        <div class="at-card-body at-config-body">
+                            <div class="at-config-row">
+                                <label class="at-config-label">Batch Size</label>
+                                <div class="at-config-control">
+                                    <input type="number" class="at-config-input" min="10" max="1000" step="10"
+                                           [(ngModel)]="PipelineConfig.Pipeline!.BatchSize">
+                                </div>
+                            </div>
+                            <div class="at-config-row">
+                                <label class="at-config-label">Throttle (ms)</label>
+                                <div class="at-config-control">
+                                    <input type="range" class="at-config-slider" min="0" max="5000" step="100"
+                                           [(ngModel)]="PipelineConfig.Pipeline!.DelayBetweenBatchesMs">
+                                    <span class="at-config-value">{{ PipelineConfig.Pipeline!.DelayBetweenBatchesMs }}ms</span>
+                                </div>
+                            </div>
+                            <div class="at-config-row">
+                                <label class="at-config-label">Error Tolerance</label>
+                                <div class="at-config-control">
+                                    <input type="range" class="at-config-slider" min="5" max="50" step="5"
+                                           [(ngModel)]="PipelineConfig.Pipeline!.ErrorThresholdPercent">
+                                    <span class="at-config-value">{{ PipelineConfig.Pipeline!.ErrorThresholdPercent }}%</span>
+                                </div>
+                            </div>
+                            <div class="at-config-row">
+                                <label class="at-config-label">Auto-resume</label>
+                                <div class="at-config-control">
+                                    <label class="at-config-toggle">
+                                        <input type="checkbox" [(ngModel)]="PipelineConfig.Pipeline!.ResumeFromLastBatch">
+                                        <span class="at-toggle-track"><span class="at-toggle-thumb"></span></span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="at-config-divider"></div>
+                            <div class="at-config-section-label">LLM Rate Limits</div>
+                            <div class="at-config-row">
+                                <label class="at-config-label">Requests/min</label>
+                                <div class="at-config-control">
+                                    <input type="number" class="at-config-input" min="1" max="500"
+                                           [(ngModel)]="PipelineConfig.RateLimits!.LLM!.RequestsPerMinute">
+                                </div>
+                            </div>
+                            <div class="at-config-row">
+                                <label class="at-config-label">Tokens/min</label>
+                                <div class="at-config-control">
+                                    <input type="number" class="at-config-input" min="1000" max="5000000" step="10000"
+                                           [(ngModel)]="PipelineConfig.RateLimits!.LLM!.TokensPerMinute">
+                                    <span class="at-config-value">{{ formatTokenCount(PipelineConfig.RateLimits!.LLM!.TokensPerMinute ?? 0) }}</span>
+                                </div>
+                            </div>
+                            <div class="at-config-section-label">Embedding Rate Limits</div>
+                            <div class="at-config-row">
+                                <label class="at-config-label">Requests/min</label>
+                                <div class="at-config-control">
+                                    <input type="number" class="at-config-input" min="1" max="1000"
+                                           [(ngModel)]="PipelineConfig.RateLimits!.Embedding!.RequestsPerMinute">
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+</mj-page-body-interior>

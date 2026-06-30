@@ -1,15 +1,14 @@
 import { Component, OnInit, OnDestroy, ViewChild, inject } from '@angular/core';
-import { Subject } from 'rxjs';
-import { CompositeKey, Metadata } from '@memberjunction/core';
+import { Subject, Subscription } from 'rxjs';
+import { BaseEntity, BaseEntityEvent, CompositeKey, Metadata } from '@memberjunction/core';
 import { MJAIAgentRunEntityExtended, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { RegisterClass } from '@memberjunction/global';
+import { MJGlobal, MJEvent, MJEventType, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { SharedService, NavigationService } from '@memberjunction/ng-shared';
 import { TimelineItem, AIAgentRunTimelineComponent } from './ai-agent-run-timeline.component';
 import { MJAIAgentRunFormComponent } from '../../generated/Entities/MJAIAgentRun/mjaiagentrun.form.component';
 import { ParseJSONRecursive, ParseJSONOptions } from '@memberjunction/global';
 import { AIAgentRunAnalyticsComponent } from './ai-agent-run-analytics.component';
-import { AIAgentRunVisualizationComponent } from './ai-agent-run-visualization.component';
 import { AIAgentRunCostService, AgentRunCostMetrics } from './ai-agent-run-cost.service';
 import { AIAgentRunDataHelper } from './ai-agent-run-data.service';
 import { ApplicationManager } from '@memberjunction/ng-base-application';
@@ -25,7 +24,14 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
   public record!: MJAIAgentRunEntityExtended;
   
   private destroy$ = new Subject<void>();
-  
+
+  // MJGlobal BaseEntity event subscription — fires on both local Save()
+  // and server-side remote-invalidate events. While the run is Running,
+  // this is how we hear about new steps and status changes without
+  // polling the DB on a timer. Only attached when Status === 'Running'.
+  private entityEventSubscription: Subscription | null = null;
+  private refreshInFlight = false;
+
   // UI state
   activeTab = 'timeline';
   selectedTimelineItem: TimelineItem | null = null;
@@ -51,7 +57,6 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
   
   @ViewChild(AIAgentRunTimelineComponent) timelineComponent?: AIAgentRunTimelineComponent;
   @ViewChild(AIAgentRunAnalyticsComponent) analyticsComponent?: AIAgentRunAnalyticsComponent;
-  @ViewChild(AIAgentRunVisualizationComponent) visualizationComponent?: AIAgentRunVisualizationComponent;
 
   // Field injections
   private navigationService = inject(NavigationService);
@@ -68,19 +73,151 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
       await this.dataHelper.loadAgentRunData(this.record.ID);
       await this.loadAgent();
       await this.loadCostMetrics();
-      
+
       // Parse all JSON fields on form load for instant access later
       this.parseAllFields();
+
+      // If the run is in progress, subscribe to BaseEntity events so we
+      // pick up new steps / status changes the moment AgentRunner saves
+      // them — no 30s polling timer. Same pattern used by the Form
+      // Builder cockpit. See `handleEntityEvent` below for filtering.
+      if (this.record.Status === 'Running') {
+        this.subscribeToRunEvents();
+      }
     }
   }
-  
+
   ngOnDestroy() {
     this.destroy$.next();
     this.destroy$.complete();
+    this.entityEventSubscription?.unsubscribe();
+    this.entityEventSubscription = null;
     this.clearParsedCache();
     this.dataHelper.clearData();
     this.costMetrics = null;
     this.agent = null;
+  }
+
+  private subscribeToRunEvents(): void {
+    if (this.entityEventSubscription) return;
+    this.entityEventSubscription = MJGlobal.Instance.GetEventListener(false)
+      .subscribe(mjEvent => this.handleEntityEvent(mjEvent));
+  }
+
+  private unsubscribeFromRunEvents(): void {
+    this.entityEventSubscription?.unsubscribe();
+    this.entityEventSubscription = null;
+  }
+
+  /**
+   * Filter the global BaseEntity event firehose down to saves on the
+   * current Agent Run row, its Steps, or its Prompt Runs — and only when
+   * AgentRunID matches `this.record.ID`. Local `save` events come from
+   * the in-process AgentRunner (dev/same-tab case, which is the primary
+   * use case here); `remote-invalidate` covers writes from a separate
+   * server process if GraphQL cache-invalidation is wired up.
+   */
+  private handleEntityEvent(mjEvent: MJEvent): void {
+    if (mjEvent.event !== MJEventType.ComponentEvent) return;
+    if (mjEvent.eventCode !== BaseEntity.BaseEventCode) return;
+    const evt = mjEvent.args as BaseEntityEvent | undefined;
+    if (!evt) return;
+    if (evt.type !== 'save' && evt.type !== 'remote-invalidate') return;
+
+    const entityName = evt.entityName ?? evt.baseEntity?.EntityInfo?.Name;
+    if (!entityName) return;
+
+    const runId = this.record?.ID;
+    if (!runId) return;
+
+    if (entityName === 'MJ: AI Agent Runs') {
+      // Status change on THIS run row.
+      const savedID = this.resolveEventID(evt);
+      if (savedID && UUIDsEqual(savedID, runId)) {
+        this.refreshData();
+        // If the run completed, drop the subscription — no further
+        // writes are expected and we don't want to hold the listener.
+        const newStatus = this.resolveEventField<string>(evt, 'Status');
+        if (newStatus && newStatus !== 'Running') {
+          this.unsubscribeFromRunEvents();
+        }
+      }
+      return;
+    }
+
+    if (entityName === 'MJ: AI Agent Run Steps' ||
+        entityName === 'MJ: AI Prompt Runs' ||
+        entityName === 'MJ: Action Execution Logs') {
+      // A child row was written for SOME run — only react if it belongs
+      // to ours. AgentRunID is the FK on steps; for prompt runs and
+      // action logs we just refresh if any field matches (cheap and the
+      // data helper handles dedupe).
+      const childAgentRunId = this.resolveEventField<string>(evt, 'AgentRunID');
+      if (childAgentRunId && UUIDsEqual(childAgentRunId, runId)) {
+        this.refreshRunDataDebounced();
+      }
+    }
+  }
+
+  private resolveEventID(evt: BaseEntityEvent): string | null {
+    if (evt.baseEntity) {
+      return evt.baseEntity.PrimaryKey?.ToConcatenatedString() ?? null;
+    }
+    const payload = evt.payload as { primaryKeyValues?: string | null; recordData?: string | null } | undefined;
+    if (!payload) return null;
+    try {
+      if (payload.primaryKeyValues) {
+        const pk = JSON.parse(payload.primaryKeyValues) as Record<string, unknown> | unknown[];
+        if (Array.isArray(pk)) {
+          const idPair = pk.find(p => (p as { FieldName?: string }).FieldName === 'ID') as { Value?: unknown } | undefined;
+          if (idPair?.Value != null) return String(idPair.Value);
+        } else if (pk && typeof pk === 'object' && 'ID' in pk) {
+          const v = (pk as { ID?: unknown }).ID;
+          if (v != null) return String(v);
+        }
+      }
+    } catch {
+      // bad JSON — fall through to recordData
+    }
+    try {
+      if (payload.recordData) {
+        const row = JSON.parse(payload.recordData) as Record<string, unknown>;
+        if (typeof row?.ID === 'string') return row.ID;
+      }
+    } catch {
+      // ignore
+    }
+    return null;
+  }
+
+  private resolveEventField<T>(evt: BaseEntityEvent, fieldName: string): T | null {
+    if (evt.baseEntity) {
+      const val = evt.baseEntity.Get?.(fieldName) as T | undefined;
+      return val ?? null;
+    }
+    const payload = evt.payload as { recordData?: string | null } | undefined;
+    if (!payload?.recordData) return null;
+    try {
+      const row = JSON.parse(payload.recordData) as Record<string, unknown>;
+      const v = row?.[fieldName];
+      return (v ?? null) as T | null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Collapse rapid bursts of step/prompt/action events into a single
+   * reload — AgentRunner often saves several rows in quick succession.
+   */
+  private refreshRunDataDebounced(): void {
+    if (this.refreshInFlight) return;
+    this.refreshInFlight = true;
+    queueMicrotask(() => {
+      this.refreshInFlight = false;
+      if (!this.record?.ID) return;
+      this.dataHelper.loadAgentRunData(this.record.ID, true);
+    });
   }
   
   private async loadAgent() {
@@ -120,7 +257,7 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
   changeTab(tab: string) {
     this.activeTab = tab;
     
-    // Lazy load visualization when the tab is first accessed
+    // Lazy load the Visualization (playable + static flow) view on first access
     if (tab === 'visualization' && !this.visualizationLoaded) {
       this.visualizationLoaded = true;
       this.cdr.markForCheck();
@@ -243,15 +380,6 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
     } catch (err) {
       console.error('Failed to copy to clipboard:', err);
     }
-  }
-  
-  onAgentRunCompleted(status: string) {
-    // Update the record status
-    this.record.Status = status as 'Running' | 'Completed' | 'Failed' | 'Cancelled' | 'Paused';
-    this.cdr.markForCheck();
-    
-    // Reload the full record to get updated data
-    this.refreshData();
   }
   
   /**

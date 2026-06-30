@@ -61,19 +61,6 @@ const FIELDS = [
     standalone: false,
     selector: 'app-analytics-error-analysis',
     template: `
-        <!-- Filter Bar -->
-        <app-analytics-filter-bar
-            [TimeRange]="TimeRange"
-            [Filters]="Filters"
-            [ShowAgentFilter]="false"
-            [ShowPromptFilter]="true"
-            [ShowModelFilter]="true"
-            [ShowStatusFilter]="false"
-            [ShowCompareToggle]="false"
-            [ShowExportButton]="false"
-            (TimeRangeChange)="OnTimeRangeChange($event)"
-            (FiltersChange)="OnFiltersChange($event)"
-        ></app-analytics-filter-bar>
 
         @if (IsLoading) {
             <div class="loading-container">
@@ -115,11 +102,9 @@ const FIELDS = [
 
             <!-- Error Groups -->
             @if (ErrorGroups.length === 0) {
-                <div class="empty-state">
-                    <i class="fa-solid fa-check-circle empty-state__icon"></i>
-                    <div class="empty-state__title">No Errors Found</div>
-                    <div class="empty-state__subtitle">No errors detected in the selected time range.</div>
-                </div>
+                <mj-empty-state Variant="success"
+                    Title="No Errors Found"
+                    Message="No errors detected in the selected time range." />
             }
 
             @for (group of ErrorGroups; track group.Source) {
@@ -251,31 +236,6 @@ const FIELDS = [
             overflow: hidden;
             text-overflow: ellipsis;
             max-width: 220px;
-        }
-
-        /* ── Empty State ── */
-        .empty-state {
-            text-align: center;
-            padding: 48px 24px;
-            color: var(--mj-text-muted);
-        }
-
-        .empty-state__icon {
-            font-size: 40px;
-            color: var(--mj-status-success);
-            margin-bottom: 12px;
-        }
-
-        .empty-state__title {
-            font-size: 16px;
-            font-weight: 600;
-            color: var(--mj-text-primary);
-            margin-bottom: 4px;
-        }
-
-        .empty-state__subtitle {
-            font-size: 13px;
-            color: var(--mj-text-muted);
         }
 
         /* ── Error Groups ── */
@@ -446,11 +406,33 @@ const FIELDS = [
     `]
 })
 export class AnalyticsErrorAnalysisComponent extends BaseAngularComponent implements OnInit, OnDestroy {
-    @Input() TimeRange = '7d';
-    @Input() Filters: GlobalFilterState = { Models: [], Agents: [], Prompts: [], Statuses: [] };
+    private _timeRange = '7d';
+    @Input()
+    set TimeRange(value: string) {
+        const prev = this._timeRange;
+        this._timeRange = value;
+        if (prev !== value && this.initialized) this.LoadData();
+    }
+    get TimeRange(): string { return this._timeRange; }
+
+    private _filters: GlobalFilterState = { Models: [], Agents: [], Prompts: [], Statuses: [] };
+    @Input()
+    set Filters(value: GlobalFilterState) {
+        const next = value ?? { Models: [], Agents: [], Prompts: [], Statuses: [] };
+        const changed = !this.shallowFiltersEqual(this._filters, next);
+        this._filters = next;
+        if (changed && this.initialized) this.LoadData();
+    }
+    get Filters(): GlobalFilterState { return this._filters; }
+
+    private shallowFiltersEqual(a: GlobalFilterState, b: GlobalFilterState): boolean {
+        const sameArr = (x: string[], y: string[]) => x.length === y.length && x.every((v, i) => v === y[i]);
+        return sameArr(a.Models, b.Models) && sameArr(a.Agents, b.Agents) && sameArr(a.Prompts, b.Prompts) && sameArr(a.Statuses, b.Statuses);
+    }
 
     private cdr = inject(ChangeDetectorRef);
     private destroy$ = new Subject<void>();
+    private initialized = false;
 
     public IsLoading = false;
 
@@ -466,6 +448,7 @@ export class AnalyticsErrorAnalysisComponent extends BaseAngularComponent implem
     private totalRunCount = 0;
 
     ngOnInit(): void {
+        this.initialized = true;
         this.LoadData();
     }
 

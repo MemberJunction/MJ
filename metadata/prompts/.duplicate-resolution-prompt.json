@@ -1,0 +1,89 @@
+{
+  "fields": {
+    "Name": "Duplicate Resolution",
+    "Description": "Shared core reasoning instructions for intelligent duplicate detection. Given a source record + vector-surfaced candidate matches and their field deltas, decides Merge / NotDuplicate / Uncertain, strengthens or weakens the vector score, picks the surviving record and per-field survivor choices, and explains why. Used directly as the cheap single-shot 'Prompt' reasoning path AND wrapped by the Duplicate Resolution Agent for the 'Agent' path, so both modes share one instruction set.",
+    "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+    "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
+    "TemplateText": "@file:templates/Duplicate Resolution.template.md",
+    "OutputExample": "@file:output/Duplicate Resolution.example.json",
+    "ResponseFormat": "JSON",
+    "OutputType": "object",
+    "ValidationBehavior": "Strict",
+    "MaxRetries": 2,
+    "PromptRole": "System",
+    "PromptPosition": "First",
+    "Status": "Active",
+    "EffortLevel": 1
+  },
+  "relatedEntities": {
+    "MJ: AI Prompt Models": [
+      {
+        "fields": {
+          "PromptID": "@parent:ID",
+          "ModelID": "@lookup:MJ: AI Models.Name=GPT-OSS-120B",
+          "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
+          "Priority": 4
+        },
+        "primaryKey": {
+          "ID": "53BF760D-E02A-4913-BF30-0384F5E3256D"
+        },
+        "sync": {
+          "lastModified": "2026-06-27T20:45:41.716Z",
+          "checksum": "17f4d7c80842eb25cf61e227677702ba786d1b56ae70aa3bcbceaf70cd511112"
+        }
+      },
+      {
+        "fields": {
+          "PromptID": "@parent:ID",
+          "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.1 Flash-Lite",
+          "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+          "Priority": 3
+        },
+        "primaryKey": {
+          "ID": "3176AC63-0198-4B6A-8262-EC1337DAC582"
+        },
+        "sync": {
+          "lastModified": "2026-06-27T20:45:41.732Z",
+          "checksum": "334a774b8652b293bbb3c34ead3602de3dbb2b9968f14157c4f727b1de064d53"
+        }
+      },
+      {
+        "fields": {
+          "PromptID": "@parent:ID",
+          "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.1 Flash-Lite",
+          "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+          "Priority": 3
+        },
+        "primaryKey": {
+          "ID": "F39ABC53-4A83-44BC-A2F9-B492C2E6DD12"
+        },
+        "sync": {
+          "lastModified": "2026-06-27T20:45:41.748Z",
+          "checksum": "7a18bb74b1816a7e938fbd68f3ab7bb300c00cc3197761c8ad771222a80fd59f"
+        }
+      },
+      {
+        "fields": {
+          "PromptID": "@parent:ID",
+          "ModelID": "@lookup:MJ: AI Models.Name=GPT-OSS-120B",
+          "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+          "Priority": 2
+        },
+        "primaryKey": {
+          "ID": "71C633BE-0053-49AB-8B01-41C2FF2897DF"
+        },
+        "sync": {
+          "lastModified": "2026-06-27T20:45:41.763Z",
+          "checksum": "a92d0f80938f839591d68e0d16214a360bf0204a5f7d162c16cd1807b9c77495"
+        }
+      }
+    ]
+  },
+  "primaryKey": {
+    "ID": "E3D1A85A-9E15-4F9A-93F8-D8BAA8032C9D"
+  },
+  "sync": {
+    "lastModified": "2026-06-27T20:45:41.679Z",
+    "checksum": "e20bd457573af56a7d0e41011aa41481539fb7243b70ff86d983ca9e0dcc1de5"
+  }
+}

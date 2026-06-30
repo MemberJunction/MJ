@@ -1,0 +1,91 @@
+<mj-collapsible-panel
+    SectionKey="agentRealtime"
+    SectionName="Realtime"
+    Icon="fa fa-tower-broadcast"
+    [Form]="FormComponent"
+    [FormContext]="FormContext">
+
+    @if (Loading) {
+        <mj-loading text="Loading realtime setup..."></mj-loading>
+    } @else if (LoadError) {
+        <mj-alert Variant="error">{{ LoadError }}</mj-alert>
+    } @else {
+        <p class="rt-intro">
+            A one-place summary of this agent's realtime / bridge setup — its co-agent pairings, its
+            type-level realtime configuration, and the bridge identities that route inbound calls and invites to it.
+        </p>
+
+        <!-- Co-agent pairings -->
+        <div class="rt-section">
+            <div class="rt-section-header">
+                <i class="fa-solid fa-people-arrows"></i>
+                <span>Co-agent pairings</span>
+                <span class="rt-count">{{ Pairings.length }}</span>
+            </div>
+            @if (Pairings.length === 0) {
+                <div class="rt-empty">No co-agent pairings reference this agent.</div>
+            } @else {
+                <div class="rt-list">
+                    @for (p of Pairings; track p.ID) {
+                        <button type="button" class="rt-row" (click)="OpenPairing(p)">
+                            <span class="rt-row-icon"><i class="fa-solid {{ PairingTypeIcon(p.Type) }}"></i></span>
+                            <span class="rt-row-main">
+                                <span class="rt-row-title">
+                                    {{ p.Type }}
+                                    @if (p.role === 'as-coagent') {
+                                        <span class="rt-rel">voices</span> {{ OtherAgentName(p) }}
+                                    } @else {
+                                        <span class="rt-rel">voiced by</span> {{ OtherAgentName(p) }}
+                                    }
+                                </span>
+                                <span class="rt-row-sub">
+                                    seq {{ p.Sequence }}
+                                    @if (p.IsDefault) { · <span class="rt-tag">default</span> }
+                                </span>
+                            </span>
+                            <span class="rt-status" [class.active]="p.Status === 'Active'">{{ p.Status }}</span>
+                        </button>
+                    }
+                </div>
+            }
+        </div>
+
+        <!-- Bridge identities -->
+        <div class="rt-section">
+            <div class="rt-section-header">
+                <i class="fa-solid fa-id-card"></i>
+                <span>Bridge identities</span>
+                <span class="rt-count">{{ Identities.length }}</span>
+            </div>
+            @if (Identities.length === 0) {
+                <div class="rt-empty">No bridge identities provisioned for this agent.</div>
+            } @else {
+                <div class="rt-list">
+                    @for (i of Identities; track i.ID) {
+                        <button type="button" class="rt-row" (click)="OpenIdentity(i)">
+                            <span class="rt-row-icon"><i class="fa-solid {{ IdentityTypeIcon(i.IdentityType) }}"></i></span>
+                            <span class="rt-row-main">
+                                <span class="rt-row-title">{{ i.DisplayName || i.IdentityValue }}</span>
+                                <span class="rt-row-sub">{{ i.IdentityType }} · {{ i.Provider }}</span>
+                            </span>
+                            <span class="rt-status" [class.active]="i.IsActive">{{ i.IsActive ? 'Active' : 'Inactive' }}</span>
+                        </button>
+                    }
+                </div>
+            }
+        </div>
+
+        <!-- Type configuration -->
+        <div class="rt-section">
+            <div class="rt-section-header">
+                <i class="fa-solid fa-gears"></i>
+                <span>Type configuration</span>
+            </div>
+            @if (PrettyTypeConfiguration) {
+                <pre class="rt-config">{{ PrettyTypeConfiguration }}</pre>
+            } @else {
+                <div class="rt-empty">No type configuration set — this agent uses its type's defaults.</div>
+            }
+        </div>
+    }
+</mj-collapsible-panel>

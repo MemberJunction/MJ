@@ -59,27 +59,11 @@ export class ConversationAttachmentService {
       const rv = RunView.FromMetadataProvider(this.Provider);
       const idList = conversationDetailIds.map(id => `'${id}'`).join(',');
 
-      const attachmentResult = await rv.RunView<MJConversationDetailAttachmentEntity>({
-        EntityName: 'MJ: Conversation Detail Attachments',
-        ExtraFilter: `ConversationDetailID IN (${idList})`,
-        OrderBy: 'DisplayOrder ASC, __mj_CreatedAt ASC',
-        ResultType: 'entity_object'
-      }, contextUser);
-
-      if (attachmentResult.Success && attachmentResult.Results) {
-        for (const attachment of attachmentResult.Results) {
-          const detailId = attachment.ConversationDetailID;
-
-          if (!result.has(detailId)) {
-            result.set(detailId, []);
-          }
-
-          const messageAttachment = this.convertToMessageAttachment(attachment);
-          result.get(detailId)!.push(messageAttachment);
-        }
-      }
-
-      // Also load input artifacts (ConversationDetailArtifact with Direction='Input')
+      // Load input artifacts (ConversationDetailArtifact with Direction='Input').
+      // Since the backfill migration (V202605271400__Backfill_Attachment_Artifacts)
+      // converted all legacy ConversationDetailAttachment rows to artifact pairs,
+      // the artifact junction is the single source of truth — no separate attachment
+      // query needed.
       const artifactLinksResult = await rv.RunView<MJConversationDetailArtifactEntity>({
         EntityName: 'MJ: Conversation Detail Artifacts',
         ExtraFilter: `ConversationDetailID IN (${idList}) AND Direction = 'Input'`,
@@ -179,6 +163,7 @@ export class ConversationAttachmentService {
     contextUser?: UserInfo
   ): Promise<MJConversationDetailAttachmentEntity[]> {
     const savedAttachments: MJConversationDetailAttachmentEntity[] = [];
+    const rejectionMessages: string[] = [];
     const md = this.Provider;
 
     for (let i = 0; i < pendingAttachments.length; i++) {
@@ -231,11 +216,24 @@ export class ConversationAttachmentService {
         if (saved) {
           savedAttachments.push(attachment);
         } else {
+          const message = attachment.LatestResult?.CompleteMessage
+            ?? `Attachment "${pending.fileName}" was rejected by the server.`;
           console.error('Failed to save attachment:', attachment.LatestResult);
+          rejectionMessages.push(message);
         }
       } catch (error) {
         console.error('Error saving attachment:', error);
+        rejectionMessages.push(
+          `Attachment "${pending.fileName}" failed to upload: ${error instanceof Error ? error.message : String(error)}`,
+        );
       }
+    }
+
+    // Surface server-side rejections (e.g. unregistered MIME types) to the
+    // caller — throwing here lets the message-input toast pipeline display
+    // the actual server message rather than silently dropping the file.
+    if (rejectionMessages.length > 0) {
+      throw new Error(rejectionMessages.join('\n'));
     }
 
     return savedAttachments;

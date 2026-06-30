@@ -128,39 +128,59 @@ describe('ArtifactToolManager', () => {
         });
     });
 
-    describe('ExecuteToolCalls', () => {
-        it('executes a tool call and stores results', async () => {
+    describe('ExecuteSingleToolCall', () => {
+        it('returns the stored result for a successful call', async () => {
             manager.Initialize([
                 makeArtifact('My Text', 'Text', 'line one\nline two\nline three'),
             ]);
 
-            await manager.ExecuteToolCalls([
-                { artifactId: 'A', tool: 'get_lines', input: { start: 0, count: 2 } },
-            ]);
+            const stored = await manager.ExecuteSingleToolCall({
+                artifactId: 'A',
+                tool: 'get_lines',
+                input: { start: 0, count: 2 },
+            });
 
-            const results = manager.GetPendingResults();
-            expect(results).toContain('get_lines');
-            expect(results).toContain('line one');
+            expect(stored.artifactId).toBe('A');
+            expect(stored.tool).toBe('get_lines');
+            expect(stored.result.success).toBe(true);
+            // The agent runtime persists this full result into Tool step
+            // OutputData; the raw data payload must survive.
+            expect(stored.result.data).toBeDefined();
+            expect(typeof stored.durationMs).toBe('number');
+            expect(stored.timestamp).toBeInstanceOf(Date);
         });
 
-        it('returns error for unknown artifact ID', async () => {
+        it('returns a structured error for an unknown artifact ID', async () => {
             manager.Initialize([
                 makeArtifact('X', 'JSON', '{}'),
                 makeArtifact('Y', 'JSON', '{}'),
             ]);
 
-            await manager.ExecuteToolCalls([
-                { artifactId: 'Z', tool: 'json_keys', input: {} },
-            ]);
+            const stored = await manager.ExecuteSingleToolCall({
+                artifactId: 'Z',
+                tool: 'json_keys',
+                input: {},
+            });
 
-            const results = manager.GetPendingResults();
-            expect(results).toContain('Unknown artifact ID');
+            expect(stored.result.success).toBe(false);
+            expect(stored.result.errorMessage).toContain('Unknown artifact ID');
+            expect(stored.result.data).toBeNull();
         });
     });
 
-    describe('GetPendingResults', () => {
-        it('returns empty string when no results', () => {
-            expect(manager.GetPendingResults()).toBe('');
+    describe('ExecuteToolCalls', () => {
+        it('dispatches every call and each returned result is observable via the snapshot resultCount', async () => {
+            manager.Initialize([
+                makeArtifact('First', 'JSON', '{"a":1}'),
+                makeArtifact('Second', 'JSON', '{"b":2}'),
+            ]);
+
+            await manager.ExecuteToolCalls([
+                { artifactId: 'A', tool: 'json_keys', input: {} },
+                { artifactId: 'B', tool: 'json_keys', input: {} },
+            ]);
+
+            expect(manager.ToJSON().resultCount).toBe(2);
         });
     });
 
@@ -226,22 +246,20 @@ describe('ArtifactToolManager', () => {
 
         it('dispatches overridden tool to child library', async () => {
             manager.Initialize([makeArtifact('Snapshot', 'Data Snapshot', '{}')]);
-            await manager.ExecuteToolCalls([
-                { artifactId: 'A', tool: 'shared_tool', input: {} },
-            ]);
-            expect(manager.GetAccessLog()[0].success).toBe(true);
+            const stored = await manager.ExecuteSingleToolCall({
+                artifactId: 'A', tool: 'shared_tool', input: {},
+            });
+            expect(stored.result.success).toBe(true);
             // Child library tags results with 'child'
-            const resultText = manager.GetPendingResults();
-            expect(resultText).toContain('"handledBy": "child"');
+            expect((stored.result.data as { handledBy?: string }).handledBy).toBe('child');
         });
 
         it('dispatches inherited tool to parent library', async () => {
             manager.Initialize([makeArtifact('Snapshot', 'Data Snapshot', '{}')]);
-            await manager.ExecuteToolCalls([
-                { artifactId: 'A', tool: 'parent_only_tool', input: {} },
-            ]);
-            const resultText = manager.GetPendingResults();
-            expect(resultText).toContain('"handledBy": "parent"');
+            const stored = await manager.ExecuteSingleToolCall({
+                artifactId: 'A', tool: 'parent_only_tool', input: {},
+            });
+            expect((stored.result.data as { handledBy?: string }).handledBy).toBe('parent');
         });
     });
 
@@ -324,62 +342,23 @@ describe('ArtifactToolManager', () => {
             manager.Initialize([
                 makeArtifact('Q1 Search', 'Search Result Set', minimalSearchResultSetContent),
             ]);
-            await manager.ExecuteToolCalls([
-                { artifactId: 'A', tool: 'filterByScore', input: { minScore: 0.7 } },
-            ]);
             // Should succeed (the search-specific tool is the leaf in the chain)
-            const log = manager.GetAccessLog();
-            expect(log).toHaveLength(1);
-            expect(log[0].tool).toBe('filterByScore');
-            expect(log[0].success).toBe(true);
+            const stored = await manager.ExecuteSingleToolCall({
+                artifactId: 'A', tool: 'filterByScore', input: { minScore: 0.7 },
+            });
+            expect(stored.tool).toBe('filterByScore');
+            expect(stored.result.success).toBe(true);
         });
 
         it('dispatches an inherited DataSnapshot tool (get_tables) to DataSnapshotToolLibrary through the parent chain', async () => {
             manager.Initialize([
                 makeArtifact('Q1 Search', 'Search Result Set', minimalSearchResultSetContent),
             ]);
-            await manager.ExecuteToolCalls([
-                { artifactId: 'A', tool: 'get_tables', input: {} },
-            ]);
-            const log = manager.GetAccessLog();
-            expect(log).toHaveLength(1);
-            expect(log[0].tool).toBe('get_tables');
-            expect(log[0].success).toBe(true);
-        });
-    });
-
-    describe('GetAccessLog', () => {
-        it('returns empty array when no tool calls have been made', () => {
-            manager.Initialize([makeArtifact('X', 'JSON', '{}')]);
-            expect(manager.GetAccessLog()).toEqual([]);
-        });
-
-        it('records one entry per tool call with timestamp and duration', async () => {
-            manager.Initialize([makeArtifact('Doc', 'JSON', '{"a":1,"b":2}')]);
-            await manager.ExecuteToolCalls([
-                { artifactId: 'A', tool: 'json_keys', input: {} },
-            ]);
-            const log = manager.GetAccessLog();
-            expect(log).toHaveLength(1);
-            expect(log[0].artifactId).toBe('A');
-            expect(log[0].tool).toBe('json_keys');
-            expect(log[0].timestamp).toBeInstanceOf(Date);
-            expect(log[0].durationMs).toBeGreaterThanOrEqual(0);
-        });
-
-        it('records failures with errorMessage', async () => {
-            // Two artifacts so the single-artifact fallback doesn't resolve an unknown ID
-            manager.Initialize([
-                makeArtifact('First', 'JSON', '{}'),
-                makeArtifact('Second', 'JSON', '{}'),
-            ]);
-            await manager.ExecuteToolCalls([
-                { artifactId: 'ZZZ', tool: 'json_keys', input: {} },
-            ]);
-            const log = manager.GetAccessLog();
-            expect(log).toHaveLength(1);
-            expect(log[0].success).toBe(false);
-            expect(log[0].errorMessage).toContain('Unknown artifact ID');
+            const stored = await manager.ExecuteSingleToolCall({
+                artifactId: 'A', tool: 'get_tables', input: {},
+            });
+            expect(stored.tool).toBe('get_tables');
+            expect(stored.result.success).toBe(true);
         });
     });
 });

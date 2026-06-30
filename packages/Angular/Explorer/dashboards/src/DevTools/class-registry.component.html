@@ -1,30 +1,27 @@
 <div class="mj-inspector mj-inspector--solo">
-    <div class="mj-inspector__header">
-        <div class="mj-inspector__header-icon"><i class="fa-solid fa-cubes"></i></div>
-        <div>
-            <h3 class="mj-inspector__header-title">Class Registry</h3>
-            <div class="mj-inspector__header-sub">Every class registered with <code>@RegisterClass</code></div>
-        </div>
-        <span class="mj-inspector__header-spacer"></span>
-        <div class="mj-inspector__header-actions">
-            <button class="mj-inspector__btn" type="button" (click)="ExpandAll()" title="Expand all groups">
-                <i class="fa-solid fa-expand"></i> Expand
+    <mj-page-header-interior
+        Role="region"
+        AriaLabel="Class registry inspector"
+        Title="Class Registry"
+        Subtitle="Every class registered with @RegisterClass">
+        <div actions>
+            <button mjButton variant="secondary" size="sm" (click)="ExpandAll()" title="Expand all groups">
+                <i class="fa-solid fa-expand" aria-hidden="true"></i> <span class="mj-action-label">Expand</span>
             </button>
-            <button class="mj-inspector__btn" type="button" (click)="CollapseAll()" title="Collapse all groups">
-                <i class="fa-solid fa-compress"></i> Collapse
+            <button mjButton variant="secondary" size="sm" (click)="CollapseAll()" title="Collapse all groups">
+                <i class="fa-solid fa-compress" aria-hidden="true"></i> <span class="mj-action-label">Collapse</span>
             </button>
-            <button class="mj-inspector__btn" type="button" (click)="refresh()" title="Re-scan registry">
-                <i class="fa-solid fa-rotate"></i> Refresh
-            </button>
-            <button class="mj-inspector__btn"
-                    [class.mj-inspector__btn--success]="CopyConfirmed"
-                    type="button" (click)="OnCopy()"
+            <mj-refresh-button [Loading]="false" (Clicked)="refresh()"></mj-refresh-button>
+            <button mjButton
+                    [variant]="CopyConfirmed ? 'success' : 'secondary'"
+                    size="sm"
+                    (click)="OnCopy()"
                     [title]="CopyConfirmed ? 'Copied' : 'Copy as JSON'">
-                <i class="fa-solid" [class.fa-clipboard]="!CopyConfirmed" [class.fa-check]="CopyConfirmed"></i>
-                {{ CopyConfirmed ? 'Copied' : 'Copy' }}
+                <i class="fa-solid" [class.fa-clipboard]="!CopyConfirmed" [class.fa-check]="CopyConfirmed" aria-hidden="true"></i>
+                <span class="mj-action-label">{{ CopyConfirmed ? 'Copied' : 'Copy' }}</span>
             </button>
         </div>
-    </div>
+    </mj-page-header-interior>
 
     <div class="cr-stats-row">
         <div class="cr-stat">
@@ -117,10 +114,8 @@
             </div>
         }
         @if (FilteredGroups.length === 0) {
-            <div class="cr-empty">
-                <i class="fa-solid fa-magnifying-glass"></i>
-                <span>No registrations match "{{ SearchQuery }}"</span>
-            </div>
+            <mj-empty-state class="cr-empty" Variant="no-results" Icon="fa-solid fa-magnifying-glass"
+                [Title]="'No registrations match “' + SearchQuery + '”'" />
         }
     </div>
 

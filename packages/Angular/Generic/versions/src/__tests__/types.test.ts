@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { MicroViewData, FieldChangeView, SlidePanelMode } from '../lib/types';
+import type { MicroViewData, FieldChangeView } from '../lib/types';
 
 describe('MicroViewData type', () => {
   it('should be constructable with required fields', () => {
@@ -11,7 +11,7 @@ describe('MicroViewData type', () => {
       FullRecordJSON: { Name: 'John', Email: 'john@test.com' },
       FieldDiffs: null
     };
-    expect(data.EntityName).toBe('Users');
+    expect(data.EntityName).toBe('MJ: Users');
     expect(data.RecordID).toBe('rec-1');
     expect(data.FullRecordJSON).toEqual({ Name: 'John', Email: 'john@test.com' });
   });
@@ -58,14 +58,5 @@ describe('FieldChangeView type', () => {
       ChangeType: 'Removed'
     };
     expect(change.ChangeType).toBe('Removed');
-  });
-});
-
-describe('SlidePanelMode type', () => {
-  it('should accept valid modes', () => {
-    const slide: SlidePanelMode = 'slide';
-    const dialog: SlidePanelMode = 'dialog';
-    expect(slide).toBe('slide');
-    expect(dialog).toBe('dialog');
   });
 });

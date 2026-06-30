@@ -12,7 +12,7 @@ interface SearchMatch {
  */
 @RegisterClass(BaseArtifactToolLibrary, 'JSONToolLibrary')
 export class JSONToolLibrary extends BaseArtifactToolLibrary {
-    GetToolList(): ArtifactToolDefinition[] {
+    protected getSubclassToolList(): ArtifactToolDefinition[] {
         return [
             {
                 name: 'json_path',
@@ -63,7 +63,7 @@ export class JSONToolLibrary extends BaseArtifactToolLibrary {
         ];
     }
 
-    async InvokeTool(
+    protected async invokeSubclassTool(
         toolName: string,
         input: Record<string, unknown>,
         artifactContent: string | Buffer
@@ -141,7 +141,13 @@ export class JSONToolLibrary extends BaseArtifactToolLibrary {
 
     /** Navigate a dot-separated path through a parsed JSON value. */
     private navigatePath(obj: unknown, path: string): { found: boolean; value: unknown } {
-        const segments = path.split('.');
+        // Empty path or "$" means the document root (e.g. iterating a top-level array). Also tolerate
+        // a leading "$." that LLMs add out of JSONPath habit.
+        const normalized = path.replace(/^\$\.?/, '');
+        if (normalized === '') {
+            return { found: true, value: obj };
+        }
+        const segments = normalized.split('.');
         let current: unknown = obj;
 
         for (const segment of segments) {

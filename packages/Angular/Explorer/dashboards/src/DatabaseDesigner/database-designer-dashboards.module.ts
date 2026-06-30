@@ -14,9 +14,21 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { MJButtonDirective } from '@memberjunction/ng-ui-components';
+import {
+    MJButtonDirective,
+    MJPageLayoutComponent,
+    MJPageHeaderComponent,
+    MJPageBodyComponent,
+    MJPageHeaderInteriorComponent,
+    MJPageBodyInteriorComponent,
+    MJPageSearchComponent,
+    MJRefreshButtonComponent,
+    MJStatBadgeComponent,
+    MjSlidePanelComponent,
+    MJEmptyStateComponent,
+    MJAlertComponent
+} from '@memberjunction/ng-ui-components';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
-import { VersionsModule } from '@memberjunction/ng-versions';
 import { MarkdownModule } from '@memberjunction/ng-markdown';
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
 import { EntityRelationshipDiagramModule } from '@memberjunction/ng-entity-relationship-diagram';
@@ -62,8 +74,18 @@ import { DatabaseDesignerService } from './services/database-designer.service';
         CommonModule,
         FormsModule,
         MJButtonDirective,
+        MJPageLayoutComponent,
+        MJPageHeaderComponent,
+        MJPageBodyComponent,
+        MJPageHeaderInteriorComponent,
+        MJPageBodyInteriorComponent,
+        MJPageSearchComponent,
+        MJRefreshButtonComponent,
+        MJStatBadgeComponent,
+        MjSlidePanelComponent,
+        MJEmptyStateComponent,
+        MJAlertComponent,
         SharedGenericModule,
-        VersionsModule,
         MarkdownModule,
         CodeEditorModule,
         EntityRelationshipDiagramModule,

@@ -98,7 +98,7 @@ export type ConversationGroupBy = 'project' | 'date' | 'none';
 /**
  * Type of entity being mentioned
  */
-export type MentionType = 'agent' | 'user';
+export type MentionType = 'agent' | 'user' | 'entity' | 'query';
 
 /**
  * Represents a mention in a message (@Agent or @User)
@@ -117,39 +117,5 @@ export interface MentionParseResult {
   mentions: Mention[];
   agentMention: Mention | null; // Single agent mention (first one found)
   userMentions: Mention[]; // All user mentions
-}
-
-/**
- * Suggested response option for quick user replies
- * These are displayed as interactive buttons below AI messages to streamline conversation flow
- */
-export interface SuggestedResponse {
-  /** Display text for the button or input placeholder */
-  text: string;
-
-  /** Whether to show an input field (uses text as placeholder) instead of a button */
-  allowInput: boolean;
-
-  /** Optional Font Awesome icon class (e.g., "fa fa-leaf", "fa fa-pencil") */
-  iconClass?: string;
-
-  /** Optional data payload to include when response is selected */
-  data?: Record<string, any>;
-}
-
-/**
- * Parse result for suggested responses from a conversation detail
- */
-export interface ParsedSuggestedResponses {
-  /** Array of suggested response objects */
-  responses: SuggestedResponse[];
-
-  /** Whether any response allows input */
-  hasInputOption: boolean;
-
-  /** The specific response that allows input (if any) */
-  inputResponse: SuggestedResponse | null;
-
-  /** All responses that are regular buttons (no input) */
-  regularResponses: SuggestedResponse[];
+  entityMentions: Mention[]; // All entity mentions (#Entity)
 }

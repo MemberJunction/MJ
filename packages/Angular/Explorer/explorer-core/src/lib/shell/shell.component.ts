@@ -13,9 +13,9 @@ import {
   AppAccessResult,
   NavItem
 } from '@memberjunction/ng-base-application';
-import { Metadata, EntityInfo, LogStatus, StartupManager, CompositeKey } from '@memberjunction/core';
+import { Metadata, EntityInfo, LogStatus, LogError, StartupManager, CompositeKey } from '@memberjunction/core';
 import { MJEventType, MJGlobal, uuidv4 , UUIDsEqual } from '@memberjunction/global';
-import { EventCodes, NavigationService, SharedService, SYSTEM_APP_ID, TitleService, DeveloperModeService, ThemeService, HomeAppPinService } from '@memberjunction/ng-shared';
+import { EventCodes, NavigationService, SharedService, SYSTEM_APP_ID, TitleService, DeveloperModeService, ThemeService, HomeAppPinService, ActivityService, ActivityItem } from '@memberjunction/ng-shared';
 import { StartupValidationService } from '../services/startup-validation.service';
 import { LogoGradient } from '@memberjunction/ng-shared-generic';
 import { NavItemClickEvent } from './components/header/app-nav.component';
@@ -63,6 +63,11 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   userMenuVisible = false; // User avatar context menu
   mobileNavOpen = false; // Mobile navigation drawer
   unreadNotificationCount = 0; // Notification badge count
+
+  // Global Activity indicator (P3)
+  activityItems: ActivityItem[] = [];
+  activityRunningCount = 0;
+  activityOpen = false;
   isViewingSystemTab = false; // True when viewing a resource tab (not associated with a registered app)
   loadingAppId: string | null = null; // ID of app currently being loaded (for app switcher loading indicator)
 
@@ -139,20 +144,31 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   private pendingAppPath: string | null = null; // Store the app path we tried to access
 
   /**
-   * Get Nav Bar apps positioned to the left of the app switcher
-   * Filters out apps that have HideNavBarIconWhenActive=true and are currently active
+   * Nav Bar apps positioned to the left of the app switcher.
+   * Backing field recomputed only when the active app or nav-app list changes
+   * (see {@link recomputeNavBarApps}) — NOT on every change-detection cycle, since
+   * this is bound directly in the shell nav template's @for/@if. Filters out apps
+   * that have HideNavBarIconWhenActive=true and are currently active.
    */
-  get leftOfSwitcherApps(): BaseApplication[] {
-    return this.appManager.GetNavBarApps('Left of App Switcher')
-      .filter(app => !(app.HideNavBarIconWhenActive && UUIDsEqual(app.ID, this.activeApp?.ID)));
-  }
+  public leftOfSwitcherApps: BaseApplication[] = [];
 
   /**
-   * Get Nav Bar apps positioned to the left of the user menu
-   * Filters out apps that have HideNavBarIconWhenActive=true and are currently active
+   * Nav Bar apps positioned to the left of the user menu.
+   * Backing field recomputed only when the active app or nav-app list changes
+   * (see {@link recomputeNavBarApps}). Filters out apps that have
+   * HideNavBarIconWhenActive=true and are currently active.
    */
-  get leftOfUserMenuApps(): BaseApplication[] {
-    return this.appManager.GetNavBarApps('Left of User Menu')
+  public leftOfUserMenuApps: BaseApplication[] = [];
+
+  /**
+   * Recompute the precomputed nav-bar app arrays. Called only when the active app
+   * changes or the underlying nav-app list (re)loads — keeping the filtered arrays
+   * (and their per-app UUIDsEqual checks) out of the per-CD-cycle hot path.
+   */
+  private recomputeNavBarApps(): void {
+    this.leftOfSwitcherApps = this.appManager.GetNavBarApps('Left of App Switcher')
+      .filter(app => !(app.HideNavBarIconWhenActive && UUIDsEqual(app.ID, this.activeApp?.ID)));
+    this.leftOfUserMenuApps = this.appManager.GetNavBarApps('Left of User Menu')
       .filter(app => !(app.HideNavBarIconWhenActive && UUIDsEqual(app.ID, this.activeApp?.ID)));
   }
 
@@ -179,7 +195,8 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     private homePinService: HomeAppPinService,
     private fileOpenService: FileOpenService,
     private feedbackDialogService: FeedbackDialogService,
-    private feedbackService: FeedbackService
+    private feedbackService: FeedbackService,
+    private activityService: ActivityService
   ) {
     super();
 
@@ -283,6 +300,16 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       })
     );
 
+    // Subscribe to the global Activity tracker (Run Pipeline, Sync, Cluster, …)
+    this.subscriptions.push(
+      this.activityService.Activities$.subscribe(items => {
+        this.activityItems = items;
+        this.activityRunningCount = items.filter(i => i.Status === 'running').length;
+        if (items.length === 0) this.activityOpen = false;
+        this.cdr.detectChanges();
+      })
+    );
+
     // Subscribe to unread notification count changes
     this.subscriptions.push(
       MJNotificationService.UnreadCount$.subscribe(count => {
@@ -295,6 +322,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     this.subscriptions.push(
       this.appManager.ActiveApp.subscribe(async app => {
         this.activeApp = app;
+        this.recomputeNavBarApps();
         this.cdr.detectChanges();
 
         // Create default tab when app is activated ONLY if:
@@ -330,10 +358,34 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
           return;
         }
 
+        // Nav-app list is now populated/changed — refresh the precomputed arrays
+        // bound in the header template.
+        this.recomputeNavBarApps();
+
         // Handle the case where user has no apps at all (only after loading is complete)
         if (apps.length === 0) {
           await this.handleNoAppsAvailable();
           return;
+        }
+
+        // App-locked session (e.g. magic-link): ignore whatever app the URL names
+        // (including a pasted /app/home) and keep the user on their scoped app.
+        const lockedId = this.authBase.GetSessionScope()?.restrictedToApplicationId;
+        if (lockedId) {
+          const scopedApp = this.appManager.GetAppById(lockedId);
+          if (scopedApp) {
+            // Resolve the app the URL currently names and compare by ID — never
+            // string-match a hand-rolled name slug, which diverges from a custom
+            // Path and would loop the redirect. (navigateToApp uses app.Path.)
+            const path = (this.router.url || '').split('#')[0].split('?')[0];
+            const urlAppPath = path.match(/\/app\/([^\/?#]+)/)?.[1];
+            const currentApp = urlAppPath ? this.appManager.GetAppByPath(decodeURIComponent(urlAppPath)) : undefined;
+            if (!currentApp || !UUIDsEqual(currentApp.ID, lockedId)) {
+              await this.navigateToApp(scopedApp);
+              return;
+            }
+            // already on the scoped app — fall through to normal handling below
+          }
         }
 
         // Check if URL specifies an app by parsing the browser URL
@@ -443,6 +495,29 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
           const userEntity = await md.GetEntityObject<any>('MJ: Users');
           await userEntity.Load(currentUserInfo.ID);
           this.applyUserAvatar(userEntity);
+        }
+      })
+    );
+
+    // Listen for tenant context changes (e.g., BCSaaS org switching).
+    // Two phases:
+    //   'start' (eventCode TenantChanging) — show loading screen immediately
+    //   'complete' (eventCode TenantChanged) — reload tabs and hide loading screen
+    this.subscriptions.push(
+      MJGlobal.Instance.GetEventListener(false).subscribe(async event => {
+        if (event.event === MJEventType.TenantChanged) {
+          if (event.eventCode === 'TenantChanging') {
+            this.currentLoadingText = 'Switching organization...';
+            this.loading = true;
+            this.cdr.detectChanges();
+          } else if (event.eventCode === 'TenantChanged' && this.tabContainerRef) {
+            try {
+              await this.tabContainerRef.ReloadAllTabs();
+            } finally {
+              this.loading = false;
+              this.cdr.detectChanges();
+            }
+          }
         }
       })
     );
@@ -1385,6 +1460,16 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
    * a race condition in components we DO NOT control, so while the naming
    * is intended to imply the goal it doesn't "hurt" to have this work this way
    */
+  /**
+   * True when the auth session is locked to a single application (e.g. a
+   * magic-link session). The header hides app-switching chrome so the external
+   * user stays within their scoped app. Data access is still enforced
+   * server-side by the user's role; this is the UI-confinement layer.
+   */
+  public get appSwitchingLocked(): boolean {
+    return !!this.authBase.GetSessionScope()?.restrictedToApplicationId;
+  }
+
   onFirstResourceLoadComplete(): void {
     this.waitingForFirstResource = false;
     this.loading = false;
@@ -1475,19 +1560,30 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   }
 
   /**
-   * Nuclear recovery: clear all browser-side cached data and reload the page.
-   * This clears localStorage, sessionStorage, and IndexedDB to recover
-   * from stuck loading states caused by corrupted or stale cached data.
+   * Nuclear recovery: reset server-side workspace, clear all browser-side
+   * cached data, and reload the page. This recovers from stuck loading states
+   * caused by corrupted, stale, or incompatible workspace/tab data (e.g., after
+   * a version upgrade that changes the workspace configuration schema).
    */
-  ResetApplication(): void {
+  async ResetApplication(): Promise<void> {
     try {
-      // 1. Clear localStorage
+      // 1. Reset server-side workspace to a clean default configuration.
+      //    This is the most common cause of stuck loading: stale tab configs
+      //    from a previous version reference resources/driver classes that
+      //    no longer exist or have changed format.
+      await this.workspaceManager.ResetConfiguration();
+    } catch (e) {
+      console.warn('Error resetting workspace configuration:', e);
+    }
+
+    try {
+      // 2. Clear localStorage
       localStorage.clear();
 
-      // 2. Clear sessionStorage
+      // 3. Clear sessionStorage
       sessionStorage.clear();
 
-      // 3. Delete all IndexedDB databases
+      // 4. Delete all IndexedDB databases
       if (window.indexedDB?.databases) {
         window.indexedDB.databases().then(databases => {
           for (const db of databases) {
@@ -2052,8 +2148,15 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       this.showPinProgress('Pinning...');
       // Let the UI render the overlay before starting the work
       await new Promise<void>(resolve => setTimeout(resolve, 0));
-      await this.handlePinToHome();
-      this.hidePinProgress();
+      try {
+        await this.handlePinToHome();
+      } catch (err) {
+        LogError(err);
+      } finally {
+        // Always clear the overlay — otherwise a failure (or a slow thumbnail
+        // capture) would leave the "Pinning..." spinner stuck on screen.
+        this.hidePinProgress();
+      }
       return;
     }
 
@@ -2184,8 +2287,12 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     });
 
     if (added) {
-      this.showPinProgress(`Capturing preview for "${displayName}"...`);
-      await this.captureAndAttachThumbnail(activeTab, resourceType);
+      // Capture the preview in the BACKGROUND — do not block pin completion (and the
+      // "Pinning..." overlay) on it. The thumbnail is purely decorative, and capture can
+      // be expensive for heavy resources (e.g. the Data Explorer's large grid/map DOM,
+      // where html-to-image clones the whole tree synchronously). The pin already exists
+      // the moment AddPin() returns, so let the overlay clear immediately.
+      void this.captureAndAttachThumbnail(activeTab, resourceType);
     } else {
       MJNotificationService.Instance.CreateSimpleNotification(
         `"${activeTab.title}" is already pinned to Home`, 'info', 3000
@@ -2590,6 +2697,27 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   /**
    * Show notifications page as a tab
    */
+  /** Toggle the global Activity drawer. */
+  toggleActivity(event: MouseEvent): void {
+    event.stopPropagation();
+    this.activityOpen = !this.activityOpen;
+    this.cdr.detectChanges();
+  }
+
+  /** Clear finished activities from the tracker. */
+  clearFinishedActivity(): void {
+    this.activityService.ClearFinished();
+  }
+
+  /** Close the Activity drawer when clicking anywhere outside it. */
+  @HostListener('document:click')
+  onDocumentClickCloseActivity(): void {
+    if (this.activityOpen) {
+      this.activityOpen = false;
+      this.cdr.detectChanges();
+    }
+  }
+
   showNotifications(): void {
     MJGlobal.Instance.RaiseEvent({
       event: MJEventType.ComponentEvent,
@@ -2914,8 +3042,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     }
 
     // Update URL to reflect the new app
-    const appPath = app.Path || app.Name;
-    this.router.navigateByUrl(`/app/${encodeURIComponent(appPath)}`);
+    this.router.navigateByUrl(this.appManager.GetAppUrl(app));
   }
 
   /**

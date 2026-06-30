@@ -1,9 +1,11 @@
 import { BaseInfo } from "./baseInfo"
 import { Metadata } from "./metadata"
+import { IMetadataProvider } from "./interfaces"
 import { RunViewParams } from "../views/runView"
 import { BaseEntity } from "./baseEntity"
 import { RowLevelSecurityFilterInfo, UserInfo, UserRoleInfo } from "./securityInfo"
 import { TypeScriptTypeFromSQLType, SQLFullType, SQLMaxLength, FormatValue, CodeNameFromString } from "./util"
+import { IsFixedWidthStringSQLType } from "@memberjunction/sql-dialect"
 import { LogError } from "./logging"
 import { CompositeKey } from "./compositeKey"
 import { WarningManager, SafeJSONParse, UUIDsEqual } from "@memberjunction/global"
@@ -16,6 +18,7 @@ export type EntityFieldExtendedType =
     | 'Code' | 'Email' | 'FaceTime' | 'Geo'
     | 'GeoLatitude' | 'GeoLongitude' | 'GeoCountry' | 'GeoStateProvince'
     | 'GeoCity' | 'GeoPostalCode' | 'GeoAddress'
+    | 'HTML' | 'Icon' | 'Markdown'
     | 'MSTeams' | 'Other' | 'SIP' | 'SMS' | 'Skype' | 'Tel' | 'URL' | 'WhatsApp' | 'ZoomMtg';
 
 /**
@@ -912,21 +915,36 @@ export class EntityFieldInfo extends BaseInfo {
         return GeneratedFormSectionType[this.GeneratedFormSection];
     }
 
+    /** Memoized {@link TSType} — `Type` is immutable after metadata load, so the classification never changes. */
+    private _tsType: EntityFieldTSType | undefined = undefined;
+
     /**
      * Provides the TypeScript type for a given Entity Field. This is useful to map
      * a wide array of database types to a narrower set of TypeScript types.
+     *
+     * Memoized: this getter is read per-field on extremely hot paths (the EntityField
+     * value getter/setter, BaseEntity.Set/SetMany, dirty-tracking, hydration, and the
+     * raw-mode Get() date check). Recomputing the SQL→TS classification (which runs
+     * several string-matching helpers + toLowerCase) on every access is wasteful since
+     * `Type` never changes after load.
      */
     get TSType(): EntityFieldTSType {
+        if (this._tsType !== undefined) return this._tsType;
         switch (TypeScriptTypeFromSQLType(this.Type).toLowerCase()) {
             case "number":
-                return EntityFieldTSType.Number
+                this._tsType = EntityFieldTSType.Number;
+                break;
             case "boolean":
-                return EntityFieldTSType.Boolean
+                this._tsType = EntityFieldTSType.Boolean;
+                break;
             case "date":
-                return EntityFieldTSType.Date
+                this._tsType = EntityFieldTSType.Date;
+                break;
             default:
-                return EntityFieldTSType.String
+                this._tsType = EntityFieldTSType.String;
+                break;
         }
+        return this._tsType;
     }
 
     /**
@@ -1065,11 +1083,29 @@ export class EntityFieldInfo extends BaseInfo {
     }
 
     /**
-     * Returns true if the field is a uniqueidentifier in the database.
+     * Returns true if the field is a GUID/UUID column in the database.
+     * Accepts both the SQL Server type name (`uniqueidentifier`) and the
+     * PostgreSQL type name (`uuid`) — on PG the metadata `Type` is reported as
+     * `uuid`, so a `uniqueidentifier`-only check would miss every UUID column.
      */
     get IsUniqueIdentifier(): boolean {
-        return this.Type.trim().toLowerCase() === 'uniqueidentifier';
-    }    
+        const t = this.Type.trim().toLowerCase();
+        return t === 'uniqueidentifier' || t === 'uuid';
+    }
+
+    /**
+     * Returns true if the field's SQL type is **fixed-width / space-padded**
+     * (SQL Server `char`/`nchar`, PostgreSQL `char`/`character`/`bpchar`).
+     *
+     * Authoritative source is `@memberjunction/sql-dialect` so the list of
+     * fixed-width types stays in one place per dialect. `BaseEntity` reads
+     * this on value-set to rtrim padding the DB returned, preventing
+     * spurious dirty-flagging when application code stores the logical
+     * (un-padded) form of the value.
+     */
+    get FixedWidthColumn(): boolean {
+        return IsFixedWidthStringSQLType(this.Type);
+    }
 
     /**
      * Returns true if the field has a default value set
@@ -1115,9 +1151,10 @@ export class EntityFieldInfo extends BaseInfo {
      *
      *   • **CodeGen**, when emitting the SP body (which `@params` to declare
      *     and which columns to `INSERT`/`UPDATE`), and
-     *   • **Runtime data providers** (`SQLServerDataProvider.generateSPParams`,
-     *     `PostgreSQLDataProvider.getWritableFields`), when building the
-     *     EXEC / parameter list passed to the SP.
+     *   • **Runtime data providers**, via the `RenderSaveCallBinding` hook
+     *     implemented by `SQLServerDataProvider` and `PostgreSQLDataProvider`
+     *     (orchestrated by `GenericDatabaseProvider.GenerateSaveSQL`), when
+     *     building the EXEC / parameter list passed to the SP.
      *
      * Keeping both sides on the same predicate guarantees the SP signature
      * and the call-site argument list always agree. Drift between them
@@ -1712,19 +1749,61 @@ export class EntityInfo extends BaseInfo {
     _oneToManyCount: number = 0
     _floatCount: number = 0
 
+    // --- Lazy caches for immutable field-derived collections ---------------------------------
+    // `_Fields` is populated once in the constructor and never reassigned, so these caches never
+    // need invalidation. They replace per-access `.filter()`/`.find()` scans on hot paths
+    // (PrimaryKeys is read on every load + save-state check; FieldByName is read per field read).
+    private _fieldByNameMap: Map<string, EntityFieldInfo> | null = null;
+    private _firstPrimaryKeyCache: EntityFieldInfo | undefined = undefined;
+    private _primaryKeysCache: EntityFieldInfo[] | null = null;
+    private _uniqueKeysCache: EntityFieldInfo[] | null = null;
+    private _foreignKeysCache: EntityFieldInfo[] | null = null;
+    private _encryptedFieldsCache: EntityFieldInfo[] | null = null;
+    private _datetimeFieldsCache: EntityFieldInfo[] | null = null;
+    private _nameFieldCache: EntityFieldInfo | null | undefined = undefined;
+
+    /**
+     * O(1) case-insensitive field lookup by name. Use this instead of `Fields.find(f => f.Name === name)`
+     * on hot paths — it builds a lowercased+trimmed `Map` once (lazily) and reuses it.
+     *
+     * NOTE: this is a *field-within-entity* index, distinct from the *entity-level* "Map-backed
+     * entity lookups" that were evaluated and skipped (~500 entities, negligible). Here a single
+     * entity can be read field-by-field in tight loops, so the index is worthwhile.
+     *
+     * @param name field name (matched case-insensitively, whitespace-trimmed)
+     * @returns the matching EntityFieldInfo, or undefined if not found
+     */
+    public FieldByName(name: string): EntityFieldInfo | undefined {
+        if (name == null) return undefined;
+        if (this._fieldByNameMap === null) {
+            const map = new Map<string, EntityFieldInfo>();
+            for (const f of this._Fields) {
+                if (f.Name != null) map.set(f.Name.trim().toLowerCase(), f);
+            }
+            this._fieldByNameMap = map;
+        }
+        return this._fieldByNameMap.get(name.trim().toLowerCase());
+    }
+
     /**
      * Returns the primary key field for the entity. For entities with a composite primary key, use the PrimaryKeys property which returns all.
      * In the case of a composite primary key, the PrimaryKey property will return the first field in the sequence of the primary key fields.
      */
     get FirstPrimaryKey(): EntityFieldInfo {
-        return this.Fields.find((f) => f.IsPrimaryKey);
+        if (this._firstPrimaryKeyCache === undefined) {
+            this._firstPrimaryKeyCache = this.Fields.find((f) => f.IsPrimaryKey);
+        }
+        return this._firstPrimaryKeyCache;
     }
 
     /**
      * Returns an array of all fields that are part of the primary key for the entity. If the entity has a single primary key, the array will have a single element.
      */
     get PrimaryKeys(): EntityFieldInfo[] {
-        return this.Fields.filter((f) => f.IsPrimaryKey);
+        if (this._primaryKeysCache === null) {
+            this._primaryKeysCache = this.Fields.filter((f) => f.IsPrimaryKey);
+        }
+        return this._primaryKeysCache;
     }
 
     /**
@@ -1732,7 +1811,10 @@ export class EntityInfo extends BaseInfo {
      * @returns {EntityFieldInfo[]} Array of fields with unique constraints
      */
     get UniqueKeys(): EntityFieldInfo[] {
-        return this.Fields.filter((f) => f.IsUnique);
+        if (this._uniqueKeysCache === null) {
+            this._uniqueKeysCache = this.Fields.filter((f) => f.IsUnique);
+        }
+        return this._uniqueKeysCache;
     }
 
     /**
@@ -1740,7 +1822,10 @@ export class EntityInfo extends BaseInfo {
      * @returns {EntityFieldInfo[]} Array of foreign key fields
      */
     get ForeignKeys(): EntityFieldInfo[] {
-        return this.Fields.filter((f) => f.RelatedEntityID && f.RelatedEntityID.length > 0);
+        if (this._foreignKeysCache === null) {
+            this._foreignKeysCache = this.Fields.filter((f) => f.RelatedEntityID && f.RelatedEntityID.length > 0);
+        }
+        return this._foreignKeysCache;
     }
 
     /**
@@ -1749,7 +1834,23 @@ export class EntityInfo extends BaseInfo {
      * @returns {EntityFieldInfo[]} Array of encrypted fields
      */
     get EncryptedFields(): EntityFieldInfo[] {
-        return this.Fields.filter((f) => f.Encrypt);
+        if (this._encryptedFieldsCache === null) {
+            this._encryptedFieldsCache = this.Fields.filter((f) => f.Encrypt);
+        }
+        return this._encryptedFieldsCache;
+    }
+
+    /**
+     * Returns an array of all fields whose TypeScript type is Date. Cached — used per query by
+     * the data providers' row post-processing to convert datetime values; recomputing the scan
+     * (and the per-field TSType classification) on every query is wasteful.
+     * @returns {EntityFieldInfo[]} Array of date/datetime fields
+     */
+    get DatetimeFields(): EntityFieldInfo[] {
+        if (this._datetimeFieldsCache === null) {
+            this._datetimeFieldsCache = this.Fields.filter((f) => f.TSType === EntityFieldTSType.Date);
+        }
+        return this._datetimeFieldsCache;
     }
 
     /**
@@ -1758,6 +1859,25 @@ export class EntityInfo extends BaseInfo {
      */
     get Fields(): EntityFieldInfo[] {
         return this._Fields;
+    }
+
+    private _hasInactiveFields: boolean | undefined = undefined;
+    /**
+     * Returns true if ANY field on this entity is `Deprecated` or `Disabled` (i.e. not `Active`).
+     *
+     * Computed once on first access and cached for the lifetime of this EntityInfo. The value is a
+     * property of the entity definition (shared across every record instance), so the common case —
+     * an entity whose fields are all Active — is a single cached boolean.
+     *
+     * This is the fast-path gate for active-status enforcement in BaseEntity.Get/Set/SetMany: when
+     * it is false those paths skip the per-field status lookup entirely, keeping hot read/write loops
+     * free of any deprecation-check overhead.
+     */
+    get HasInactiveFields(): boolean {
+        if (this._hasInactiveFields === undefined) {
+            this._hasInactiveFields = this._Fields.some(f => f.Status === 'Deprecated' || f.Status === 'Disabled');
+        }
+        return this._hasInactiveFields;
     }
     /**
      * Gets all relationships where other entities reference this entity.
@@ -1883,13 +2003,17 @@ export class EntityInfo extends BaseInfo {
       // the one literally named `Name`. Falls back to the first IsNameField
       // match (preserves prior behavior when there's no `Name` field), then
       // to a field named `Name` even without IsNameField set (legacy default).
+      if (this._nameFieldCache !== undefined) return this._nameFieldCache;
       const candidates = this.Fields.filter((f) => f.IsNameField);
       if (candidates.length > 1) {
         const literalName = candidates.find((f) => f.Name?.trim().toLowerCase() === 'name');
-        if (literalName) return literalName;
+        if (literalName) {
+          this._nameFieldCache = literalName;
+          return literalName;
+        }
       }
-      if (candidates.length > 0) return candidates[0];
-      return this.Fields.find((f) => f.Name?.trim().toLowerCase() === 'name') ?? null;
+      this._nameFieldCache = candidates.length > 0 ? candidates[0] : (this.FieldByName('name') ?? null);
+      return this._nameFieldCache;
     }
 
     /**************************************************************************
@@ -2057,11 +2181,15 @@ export class EntityInfo extends BaseInfo {
                 bucket.CanDelete = bucket.CanDelete || !!ep.CanDelete;
             }
 
+            // An API-driven action also requires that the entity ALLOWS that action at all
+            // (`Allow*API`). No role grant can create/update/delete records of an entity whose
+            // corresponding API is disabled — so fold the entity-level flag into the result.
+            // (Read has no `Allow*API` flag; it's governed by the entity view, so it's unchanged.)
             const userPermission: EntityUserPermissionInfo = new EntityUserPermissionInfo();
-            userPermission.CanCreate = allow.CanCreate && !deny.CanCreate;
+            userPermission.CanCreate = this.AllowCreateAPI && allow.CanCreate && !deny.CanCreate;
             userPermission.CanRead   = allow.CanRead   && !deny.CanRead;
-            userPermission.CanUpdate = allow.CanUpdate && !deny.CanUpdate;
-            userPermission.CanDelete = allow.CanDelete && !deny.CanDelete;
+            userPermission.CanUpdate = this.AllowUpdateAPI && allow.CanUpdate && !deny.CanUpdate;
+            userPermission.CanDelete = this.AllowDeleteAPI && allow.CanDelete && !deny.CanDelete;
             userPermission.Entity = this;
             userPermission.User = user;
 
@@ -2158,6 +2286,12 @@ export class EntityInfo extends BaseInfo {
      * @returns 
      */
     public GetUserRowLevelSecurityWhereClause(user: UserInfo, type: EntityPermissionType, returnPrefix: string): string {
+        // Central exemption check: if the user holds any role that grants this
+        // permission without an RLS filter, they are exempt — return no filter.
+        if (this.UserExemptFromRowLevelSecurity(user, type)) {
+            return '';
+        }
+
         const userRLS = this.GetUserRowLevelSecurityInfo(user, type);
         if (userRLS && userRLS.length > 0) {
             // userRLS has all of the objects that apply to this user. The user is NOT exempt from RLS, so we need to OR together all of the RLS object filters
@@ -2186,7 +2320,7 @@ export class EntityInfo extends BaseInfo {
         let keyValue: string = '';
         if (relationship.EntityKeyField && relationship.EntityKeyField.length > 0) {
             keyValue = record.Get(relationship.EntityKeyField);
-            quotes = record.EntityInfo.Fields.find((f) => f.Name.trim().toLowerCase() === relationship.EntityKeyField.trim().toLowerCase()).NeedsQuotes ? "'" : '';
+            quotes = record.EntityInfo.FieldByName(relationship.EntityKeyField)?.NeedsQuotes ? "'" : '';
         }
         else {
             // currently we only support a single value for FOREIGN KEYS, so we can just grab the first value in the primary key
@@ -2279,6 +2413,12 @@ export class EntityInfo extends BaseInfo {
 
     /**
      * Builds an ExtraFilter for direct organic key matching (field-to-field comparison).
+     *
+     * Per-column normalization: each side of the comparison uses its OWN normalization
+     * function (the spoke entity's organic key carries its own expression; the hub uses
+     * the parent organic key's expression). At runtime we look up the spoke entity's
+     * matching organic key (same Name) to find its expression. Falls back to the hub's
+     * expression on both sides if the spoke doesn't carry its own.
      */
     private static BuildDirectOrganicKeyFilter(
         record: BaseEntity,
@@ -2289,6 +2429,10 @@ export class EntityInfo extends BaseInfo {
         const relatedFields = relatedEntity.RelatedEntityFieldNamesArray;
         const conditions: string[] = [];
 
+        // Resolve the spoke entity's own organic key (matching by Name) to pull its
+        // per-column normalization. Falls back to the hub's expression if not found.
+        const spokeOrganicKey = EntityInfo.ResolveSpokeOrganicKey(relatedEntity, organicKey);
+
         for (let i = 0; i < matchFields.length; i++) {
             const value = record.Get(matchFields[i]);
             if (value == null) {
@@ -2297,12 +2441,31 @@ export class EntityInfo extends BaseInfo {
             }
             const relatedField = relatedFields[i] || matchFields[i];
             const escapedValue = String(value).replace(/'/g, "''");
-            conditions.push(EntityInfo.WrapWithNormalization(
-                `[${relatedField}]`, organicKey, escapedValue
+            conditions.push(EntityInfo.WrapBothSidesWithNormalization(
+                `[${relatedField}]`, spokeOrganicKey ?? organicKey,
+                escapedValue, organicKey
             ));
         }
 
         return conditions.join(' AND ');
+    }
+
+    /**
+     * Look up the spoke entity's organic key matching the hub's by Name, so we can apply
+     * the spoke's own normalization function on the spoke side. Returns undefined if the
+     * spoke entity doesn't have a parallel organic key — caller falls back to the hub's.
+     */
+    private static ResolveSpokeOrganicKey(
+        relatedEntity: EntityOrganicKeyRelatedEntityInfo,
+        hubOrganicKey: EntityOrganicKeyInfo,
+        provider?: IMetadataProvider
+    ): EntityOrganicKeyInfo | undefined {
+        const md = provider ?? Metadata.Provider;
+        if (!md) return undefined;
+        const spokeEntity = md.EntityByName?.(relatedEntity.RelatedEntity)
+            ?? md.Entities?.find?.((e: EntityInfo) => e.Name === relatedEntity.RelatedEntity);
+        if (!spokeEntity) return undefined;
+        return spokeEntity.OrganicKeys?.find((ok) => ok.Name === hubOrganicKey.Name);
     }
 
     /**
@@ -2317,6 +2480,9 @@ export class EntityInfo extends BaseInfo {
         const transitiveMatchFields = relatedEntity.TransitiveObjectMatchFieldNamesArray;
         const conditions: string[] = [];
 
+        // Transitive bridge values are normalized using the HUB's expression on both sides —
+        // the bridge view is a synthetic projection of hub-side values, not the spoke's raw
+        // column, so the spoke's own expression doesn't apply here.
         for (let i = 0; i < matchFields.length; i++) {
             const value = record.Get(matchFields[i]);
             if (value == null) {
@@ -2366,6 +2532,60 @@ export class EntityInfo extends BaseInfo {
         }
     }
 
+    /**
+     * Like WrapWithNormalization but takes a separate organic key for each side — so the
+     * spoke field uses the spoke entity's own expression while the literal value (sourced
+     * from the hub record) uses the hub's expression. Same canonical form on both sides
+     * when the expressions agree; different transforms applied independently when they
+     * don't (the per-column normalization case).
+     */
+    private static WrapBothSidesWithNormalization(
+        fieldExpression: string,
+        fieldOrganicKey: EntityOrganicKeyInfo,
+        escapedValue: string,
+        valueOrganicKey: EntityOrganicKeyInfo
+    ): string {
+        const leftSide = EntityInfo.NormalizeFieldExpression(fieldExpression, fieldOrganicKey);
+        const rightSide = EntityInfo.NormalizeLiteralExpression(escapedValue, valueOrganicKey);
+        return `${leftSide} = ${rightSide}`;
+    }
+
+    /** Apply an organic key's normalization to a SQL field expression (left side of compare). */
+    private static NormalizeFieldExpression(
+        fieldExpression: string,
+        organicKey: EntityOrganicKeyInfo
+    ): string {
+        switch (organicKey.NormalizationStrategy) {
+            case 'LowerCaseTrim': return `LOWER(LTRIM(RTRIM(${fieldExpression})))`;
+            case 'Trim':          return `LTRIM(RTRIM(${fieldExpression}))`;
+            case 'ExactMatch':    return fieldExpression;
+            case 'Custom': {
+                const expr = organicKey.CustomNormalizationExpression;
+                if (!expr) return fieldExpression;
+                return expr.replace(/\{\{FieldName\}\}/g, fieldExpression);
+            }
+            default: return fieldExpression;
+        }
+    }
+
+    /** Apply an organic key's normalization to a quoted literal value (right side of compare). */
+    private static NormalizeLiteralExpression(
+        escapedValue: string,
+        organicKey: EntityOrganicKeyInfo
+    ): string {
+        switch (organicKey.NormalizationStrategy) {
+            case 'LowerCaseTrim': return `LOWER(LTRIM(RTRIM('${escapedValue}')))`;
+            case 'Trim':          return `LTRIM(RTRIM('${escapedValue}'))`;
+            case 'ExactMatch':    return `'${escapedValue}'`;
+            case 'Custom': {
+                const expr = organicKey.CustomNormalizationExpression;
+                if (!expr) return `'${escapedValue}'`;
+                return expr.replace(/\{\{FieldName\}\}/g, `'${escapedValue}'`);
+            }
+            default: return `'${escapedValue}'`;
+        }
+    }
+
 
     constructor(initData: any = null) {
         super();
@@ -2375,6 +2595,25 @@ export class EntityInfo extends BaseInfo {
             // do some special handling to create class instances instead of just data objects
             // copy the Entity Fields (accept EntityFields, _Fields, or Fields as input names)
             this._Fields = [];
+
+            // Reset every lazy field-derived memo cache whenever _Fields is (re)assigned.
+            // These caches (FieldByName map, PrimaryKeys, UniqueKeys, ForeignKeys, EncryptedFields,
+            // DatetimeFields, NameField, FirstPrimaryKey) are populated lazily off this.Fields and
+            // were previously relying on an implicit "_Fields is write-once after construction"
+            // invariant. Today copyInitData/_Fields assignment only happens here in the constructor,
+            // so the caches are already null/undefined at this point — but resetting them explicitly
+            // is behavior-preserving (they simply rebuild lazily on next access) and removes the
+            // load-bearing write-once assumption, so any future re-init path can never serve a stale
+            // cache derived from the old field set.
+            this._fieldByNameMap = null;
+            this._firstPrimaryKeyCache = undefined;
+            this._primaryKeysCache = null;
+            this._uniqueKeysCache = null;
+            this._foreignKeysCache = null;
+            this._encryptedFieldsCache = null;
+            this._datetimeFieldsCache = null;
+            this._nameFieldCache = undefined;
+
             const ef = initData.EntityFields || initData._Fields || initData.Fields;
             if (ef) {
                 for (let j = 0; j < ef.length; j++) {

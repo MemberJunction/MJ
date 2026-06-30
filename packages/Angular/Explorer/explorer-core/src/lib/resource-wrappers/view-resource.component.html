@@ -27,6 +27,22 @@
                     <span>New Record</span>
                 </button>
 
+                <!-- Save as List Button — only meaningful for saved (non-dynamic) views. -->
+                @if (viewEntity?.ID) {
+                    <button
+                        class="action-button save-as-list-button"
+                        (click)="onSaveAsList()"
+                        [disabled]="isSavingAsList"
+                        title="Materialize these results as a static List">
+                        @if (isSavingAsList) {
+                            <i class="fa-solid fa-spinner fa-spin"></i>
+                        } @else {
+                            <i class="fa-solid fa-floppy-disk"></i>
+                        }
+                        <span>{{ isSavingAsList ? 'Saving...' : 'Save as List' }}</span>
+                    </button>
+                }
+
                 <!-- Export Button -->
                 <button
                     class="action-button export-button"
@@ -46,13 +62,25 @@
         <!-- Entity Viewer -->
         <mj-entity-viewer
             #entityViewer
-            [entity]="entityInfo"
-            [viewEntity]="viewEntity"
-            [gridState]="gridState"
-            [viewMode]="configuredViewMode"
-            [mapRenderMode]="configuredMapRenderMode"
-            (recordOpened)="onRecordOpened($any($event))"
-            (dataLoaded)="onDataLoaded()">
+            [Entity]="entityInfo"
+            [Provider]="Provider"
+            [ViewEntity]="viewEntity"
+            [GridState]="gridState"
+            [AutoSaveView]="true"
+            (RecordOpened)="onRecordOpened($any($event))"
+            (OpenRelatedRecordRequested)="onOpenRelatedRecord($event)"
+            (DataLoaded)="onDataLoaded()">
         </mj-entity-viewer>
+
+        <!-- Save-as-List dialog -->
+        <mj-save-view-as-list-dialog
+            [Provider]="ProviderToUse"
+            [Visible]="saveAsListDialogVisible"
+            [ViewId]="viewEntity?.ID ?? null"
+            [ViewName]="viewEntity?.Name ?? null"
+            [RecordCount]="saveAsListRecordCount"
+            (Save)="onSaveAsListSubmit($event)"
+            (Cancel)="onSaveAsListCancelled()">
+        </mj-save-view-as-list-dialog>
     }
 </div>

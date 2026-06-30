@@ -4,168 +4,26 @@
 }
 
 .activity-container {
-  padding: 20px;
-  height: 100%;
+  /* padding / scroll now owned by <mj-page-body>; flex sizing keeps the
+     inner split-view (flex: 1 + min-height: 0) able to fill remaining height. */
   display: flex;
   flex-direction: column;
+  flex: 1;
+  min-height: 0;
   gap: 14px;
-  overflow: auto;
 }
 
-/* ── Filter Bar ───────────────────────────────────────────── */
+/* Slot passthrough now lives in <mj-page-header>'s SCSS; per-section
+   .integration-header-* rules deleted. Stat badge styling now lives in
+   <mj-stat-badge>; per-section .integration-stat-badge* rules deleted. */
 
-.filter-bar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.filter-group {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.filter-pills {
-  gap: 0;
-}
-
-.pill-btn {
-  height: 32px;
-  padding: 0 14px;
-  border: 1px solid var(--mj-border-default);
-  background: var(--mj-bg-surface);
-  color: var(--mj-text-muted);
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
-  white-space: nowrap;
-}
-
-.pill-btn:first-child {
-  border-radius: 9999px 0 0 9999px;
-}
-
-.pill-btn:last-child {
-  border-radius: 0 9999px 9999px 0;
-}
-
-.pill-btn:not(:first-child) {
-  margin-left: -1px;
-}
-
-.pill-btn:hover {
-  background: var(--mj-status-info-bg);
-  border-color: var(--mj-border-strong);
-  z-index: 1;
-}
-
-.pill-btn.active {
-  background: var(--mj-brand-primary);
-  color: var(--mj-bg-surface);
-  border-color: var(--mj-brand-primary);
-  z-index: 2;
-}
-
-.filter-select {
-  padding: 6px 10px;
-  border: 1px solid var(--mj-border-default);
-  border-radius: 6px;
-  font-size: 13px;
-  background: var(--mj-bg-surface);
-  color: var(--mj-text-primary);
-  cursor: pointer;
-  min-width: 180px;
-  height: 32px;
-}
-
-.filter-select:focus {
-  outline: none;
-  border-color: var(--mj-brand-primary);
-}
-
-.search-input {
-  padding: 6px 10px;
-  border: 1px solid var(--mj-border-default);
-  border-radius: 6px;
-  font-size: 13px;
-  background: var(--mj-bg-surface);
-  color: var(--mj-text-primary);
-  min-width: 180px;
-  height: 32px;
-}
-
-.search-input::placeholder {
-  color: var(--mj-text-disabled);
-}
-
-.search-input:focus {
-  outline: none;
-  border-color: var(--mj-brand-primary);
-}
-
-.refresh-btn {
-  width: 32px;
-  height: 32px;
-  border: 1px solid var(--mj-border-default);
-  border-radius: 6px;
-  background: var(--mj-bg-surface);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--mj-text-muted);
-  font-size: 13px;
-  transition: background 0.15s, color 0.15s;
-}
-
-.refresh-btn:hover {
-  background: var(--mj-status-info-bg);
-  color: var(--mj-brand-primary);
-}
-
-/* ── Summary Strip ────────────────────────────────────────── */
-
-.summary-strip {
-  display: inline-flex;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-
-.summary-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  color: var(--mj-text-muted);
-}
-
-.badge-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.dot-blue { background: var(--mj-brand-primary); }
-.dot-green { background: var(--mj-color-success-600); }
-.dot-red { background: var(--mj-status-error); }
-.dot-amber { background: var(--mj-status-warning); }
-.dot-gray { background: var(--mj-text-disabled); }
-
-.badge-count {
-  font-weight: 700;
-  color: var(--mj-text-primary);
-}
-
-.count-green { color: var(--mj-color-success-600); }
-.count-red { color: var(--mj-color-error-600); }
-
-.badge-label {
-  color: var(--mj-text-disabled);
-  font-size: 12px;
+/* Vertical separator between distinct chip groups in the toolbar slot. */
+.toolbar-divider {
+  display: inline-block;
+  width: 1px;
+  height: 18px;
+  background: var(--mj-border-default);
+  margin: 0 4px;
 }
 
 /* ── Loading / Empty ──────────────────────────────────────── */
@@ -174,23 +32,6 @@
   display: flex;
   justify-content: center;
   padding: 48px;
-}
-
-.empty-state {
-  text-align: center;
-  padding: 48px;
-  color: var(--mj-text-disabled);
-}
-
-.empty-state i {
-  font-size: 32px;
-  margin-bottom: 12px;
-  display: block;
-}
-
-.empty-state p {
-  margin: 0;
-  font-size: 14px;
 }
 
 /* ── Split View ───────────────────────────────────────────── */
@@ -350,6 +191,7 @@
   text-align: center;
   color: var(--mj-text-disabled);
   font-size: 12px;
+  width: 100%;
 }
 
 .expanded-empty i {
@@ -584,6 +426,7 @@
   padding: 24px;
   text-align: center;
   color: var(--mj-text-disabled);
+  width: 100%;
 }
 
 .detail-empty i {

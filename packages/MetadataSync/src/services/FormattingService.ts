@@ -1,5 +1,6 @@
 import chalk from 'chalk';
 import { ValidationResult, ValidationError, ValidationWarning, FileValidationResult } from '../types/validation';
+import type { RecordChangeDetail } from './PushService';
 
 export class FormattingService {
     /**
@@ -124,35 +125,125 @@ export class FormattingService {
             deferred?: number;
         }
     ): string {
+        const innerWidth = 54;
+        const total = stats.created + stats.updated + stats.deleted + stats.skipped + (stats.unchanged || 0);
+        const num = (n: number) => n.toLocaleString('en-US');
+
         const lines: string[] = [];
 
-        lines.push(this.formatHeader(`${operation.charAt(0).toUpperCase() + operation.slice(1)} Summary`));
-        lines.push('');
+        // Title bar with rounded corners.
+        const title = ` ${operation.charAt(0).toUpperCase() + operation.slice(1)} Summary `;
+        const fill = Math.max(0, innerWidth - title.length);
+        const leftFill = Math.floor(fill / 2);
+        lines.push(chalk.cyan('╭' + '─'.repeat(leftFill)) + chalk.cyan(chalk.bold(title)) + chalk.cyan('─'.repeat(fill - leftFill) + '╮'));
 
-        const total = stats.created + stats.updated + stats.deleted + stats.skipped + (stats.unchanged || 0);
-
-        lines.push(chalk.bold('Operation Statistics:'));
-        lines.push('');
-        lines.push(`  ${chalk.green(this.symbols.success)} Created: ${chalk.green(stats.created)}`);
-        lines.push(`  ${chalk.blue(this.symbols.info)} Updated: ${chalk.blue(stats.updated)}`);
-        if (stats.unchanged !== undefined) {
-            lines.push(`  ${chalk.gray('-')} Unchanged: ${chalk.gray(stats.unchanged)}`);
-        }
-        lines.push(`  ${chalk.red(this.symbols.error)} Deleted: ${chalk.red(stats.deleted)}`);
-        lines.push(`  ${chalk.gray('-')} Skipped: ${chalk.gray(stats.skipped)}`);
+        // Two-column stat grid.
+        lines.push(this.boxRow(innerWidth, 'Created', num(stats.created), 'Updated', num(stats.updated)));
+        lines.push(this.boxRow(innerWidth, 'Deleted', num(stats.deleted), 'Unchanged', num(stats.unchanged || 0)));
+        lines.push(this.boxRow(innerWidth, 'Skipped', num(stats.skipped), 'Errors', num(stats.errors)));
         if (stats.deferred !== undefined && stats.deferred > 0) {
-            lines.push(`  ${chalk.yellow('⏳')} Deferred: ${chalk.yellow(stats.deferred)}`);
+            lines.push(this.boxRow(innerWidth, 'Deferred', num(stats.deferred), '', ''));
         }
-        lines.push('');
-        lines.push(`  Total Records: ${chalk.bold(total)}`);
-        lines.push(`  Duration: ${chalk.cyan(this.formatDuration(stats.duration))}`);
 
+        // Divider, then totals row.
+        lines.push(chalk.cyan('├' + '─'.repeat(innerWidth) + '┤'));
+        lines.push(this.boxRow(innerWidth, 'Total', `${num(total)} records`, 'Duration', this.formatDuration(stats.duration)));
+        lines.push(chalk.cyan('╰' + '─'.repeat(innerWidth) + '╯'));
+
+        // Errors stand out in red below the box (kept out of the box to avoid ANSI-width math).
         if (stats.errors > 0) {
-            lines.push('');
-            lines.push(chalk.red(`  ${this.symbols.error} Errors: ${stats.errors}`));
+            lines.push(chalk.red(`  ${this.symbols.error} ${stats.errors} error${stats.errors === 1 ? '' : 's'} — see output above`));
         }
 
         return lines.join('\n');
+    }
+
+    /**
+     * Render a single two-column row of the summary box. Cell contents are kept as raw
+     * (uncolored) text so column/border alignment math is exact — only the box borders are
+     * colored. Each column is `label` (padded) + `value`, clamped to a fixed column width.
+     */
+    private boxRow(innerWidth: number, l1: string, v1: string, l2: string, v2: string): string {
+        const labelW = 11;
+        const lead = 2;
+        const gap = 2;
+        const colW = Math.floor((innerWidth - lead - gap) / 2);
+        const cell = (label: string, value: string) =>
+            (label.padEnd(labelW) + value).padEnd(colW).slice(0, colW);
+        const interior = ' '.repeat(lead) + cell(l1, v1) + ' '.repeat(gap) + cell(l2, v2);
+        const padded = interior.padEnd(innerWidth).slice(0, innerWidth);
+        return chalk.cyan('│') + padded + chalk.cyan('│');
+    }
+
+    /**
+     * Render the end-of-run "Changes" recap: a focused block summarizing what was
+     * created/updated/deleted, GROUPED by entity + operation with counts (no per-record IDs
+     * or field diffs — those scale poorly and live in the detailed report instead). One line
+     * per entity/operation means the recap stays compact whether 1 or 10,000 records changed.
+     * Returns '' when there were no changes (caller should skip printing).
+     *
+     * For full per-record detail use `--verbose` (streams diffs inline during the push) or
+     * `--change-detail` (writes the report from `formatChangesReport()` to a file).
+     */
+    public formatChangesRecap(changes: RecordChangeDetail[]): string {
+        if (!changes || changes.length === 0) {
+            return '';
+        }
+
+        // Group by operation + entity name, accumulating counts.
+        const groups = new Map<string, { operation: RecordChangeDetail['operation']; entityName: string; count: number }>();
+        for (const c of changes) {
+            const key = `${c.operation}|${c.entityName}`;
+            const existing = groups.get(key);
+            if (existing) {
+                existing.count++;
+            } else {
+                groups.set(key, { operation: c.operation, entityName: c.entityName, count: 1 });
+            }
+        }
+
+        const opOrder: Record<RecordChangeDetail['operation'], number> = { created: 0, updated: 1, deleted: 2 };
+        const sorted = [...groups.values()].sort(
+            (a, b) => opOrder[a.operation] - opOrder[b.operation] || a.entityName.localeCompare(b.entityName)
+        );
+
+        const width = 60;
+        const lines: string[] = [];
+        const header = `── Changes (${changes.length}) `;
+        lines.push(chalk.cyan(chalk.bold(header + '─'.repeat(Math.max(4, width - header.length)))));
+
+        for (const g of sorted) {
+            const glyph =
+                g.operation === 'created' ? chalk.green('+') :
+                g.operation === 'deleted' ? chalk.red('-') :
+                chalk.yellow('~');
+            lines.push(`  ${glyph} ${chalk.bold(g.entityName)} ${chalk.dim('—')} ${g.count} ${g.operation}`);
+        }
+
+        lines.push(chalk.cyan('─'.repeat(width)));
+        return lines.join('\n');
+    }
+
+    /**
+     * Render the FULL per-record change report as plain text (no ANSI), suitable for writing
+     * to a file via `--change-detail`. Lists every record's operation, entity, primary key,
+     * and — for updates — the field-level diffs.
+     */
+    public formatChangesReport(changes: RecordChangeDetail[], generatedAt: string): string {
+        const lines: string[] = [];
+        lines.push('MemberJunction Metadata Sync — Detailed Change Report');
+        lines.push(`Generated: ${generatedAt}`);
+        lines.push(`Total changes: ${changes.length}`);
+        lines.push('');
+
+        for (const c of changes) {
+            lines.push(`[${c.operation.toUpperCase()}] ${c.entityName}  (${c.primaryKey})`);
+            for (const f of c.fields) {
+                lines.push(`    ${f.field}: ${f.oldValue} -> ${f.newValue}`);
+            }
+        }
+
+        return lines.join('\n') + '\n';
     }
 
     private formatHeader(title: string): string {
@@ -337,7 +428,7 @@ export class FormattingService {
         return filePath;
     }
 
-    private formatDuration(ms: number): string {
+    public formatDuration(ms: number): string {
         if (ms < 1000) return `${ms}ms`;
         if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
         return `${Math.floor(ms / 60000)}m ${Math.floor((ms % 60000) / 1000)}s`;

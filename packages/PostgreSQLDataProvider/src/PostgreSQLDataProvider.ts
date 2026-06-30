@@ -22,7 +22,8 @@ import {
 } from '@memberjunction/core';
 
 
-import { GenericDatabaseProvider } from '@memberjunction/generic-database-provider';
+import { GenericDatabaseProvider, SaveCoercedValue, SaveCallBinding, SaveSQLFragment } from '@memberjunction/generic-database-provider';
+import type { IColocatedVectorHost } from '@memberjunction/ai-vectordb';
 import { PostgreSQLDialect } from '@memberjunction/sql-dialect';
 import { PGConnectionManager } from './pgConnectionManager.js';
 import { PGQueryParameterProcessor } from './queryParameterProcessor.js';
@@ -59,7 +60,7 @@ export const POSTGRESQL_PROCEDURE_PARAM_LIMIT = 90;
  * - Boolean columns use true/false instead of 1/0
  * - Identifier quoting uses "double quotes" instead of [brackets]
  */
-export class PostgreSQLDataProvider extends GenericDatabaseProvider {
+export class PostgreSQLDataProvider extends GenericDatabaseProvider implements IColocatedVectorHost {
     private _connectionManager: PGConnectionManager = new PGConnectionManager();
     private _configData: PostgreSQLProviderConfigData | null = null;
     private _schemaName: string = '__mj';
@@ -332,6 +333,32 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider {
         }
     }
 
+    // ─── Colocated vector host (IColocatedVectorHost) ────────────────
+    // Lets a colocated vector provider (e.g. PgVectorColocated) store and query vectors
+    // in THIS database, reusing this connection — and, when a transaction is open, the
+    // same transaction — instead of opening a separate pool to a remote vector store.
+
+    public get ColocatedDialect(): DatabasePlatform {
+        return 'postgresql';
+    }
+
+    public get ColocatedSchema(): string {
+        return this._schemaName;
+    }
+
+    /**
+     * Execute a parameterized statement for a colocated vector provider against this
+     * connection. Uses the active transaction client when one is open (so vector writes
+     * commit/rollback with the entity write), otherwise the shared pool. Placeholders use
+     * PG's native `$1..$n`. Deliberately bypasses {@link ExecuteSQL}'s PascalCase
+     * auto-quoting — the vector provider emits its own correctly-quoted SQL.
+     */
+    public async RunColocatedSQL<T = Record<string, unknown>>(sql: string, params?: ReadonlyArray<unknown>): Promise<T[]> {
+        const source = this._transaction ?? this._connectionManager.Pool;
+        const result = await source.query(sql, params ? [...params] : undefined);
+        return result.rows as T[];
+    }
+
     // ─── Transaction Management ──────────────────────────────────────
 
     public override get IsInTransaction(): boolean {
@@ -567,6 +594,33 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider {
     }
 
     /**
+     * PostgreSQL per-field search predicate. The base (SQL Server) form emits
+     * `N'...'` string literals and `ESCAPE '\'` on LIKE — both invalid on PostgreSQL
+     * (`N'...'` is not a PG literal prefix, and the auto-quoting wraps the bare `ESCAPE`
+     * keyword, producing `syntax error at or near "ESCAPE"`). PostgreSQL's default
+     * backslash-escape behavior in LIKE makes the explicit ESCAPE clause unnecessary,
+     * so we emit plain quoted literals with no `N` prefix and no `ESCAPE`.
+     */
+    protected override buildPerFieldSearchPredicate(field: EntityFieldInfo, escapedTerm: string, rawSafeTerm: string): string {
+        if (field.UserSearchParamFormatAPI && field.UserSearchParamFormatAPI.length > 0) {
+            return field.UserSearchParamFormatAPI.replace('{0}', rawSafeTerm);
+        }
+        if (!this.isTextSearchableType(field)) return '';
+        const pred = (field.UserSearchPredicateAPI ?? 'Contains').trim();
+        switch (pred) {
+            case 'Exact':
+                return ` = '${rawSafeTerm}'`;
+            case 'BeginsWith':
+                return ` LIKE '${escapedTerm}%'`;
+            case 'EndsWith':
+                return ` LIKE '%${escapedTerm}'`;
+            case 'Contains':
+            default:
+                return ` LIKE '%${escapedTerm}%'`;
+        }
+    }
+
+    /**
      * Transforms user-provided SQL clauses (ExtraFilter, OrderBy) to quote
      * mixed-case identifiers and convert [bracket] notation for PostgreSQL.
      * Also coerces SQL Server bit literals (`= 1` / `= 0`) on boolean fields
@@ -578,7 +632,130 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider {
     protected override TransformExternalSQLClause(clause: string, entityInfo: EntityInfo): string {
         if (!clause || clause.length === 0) return clause;
         const quoted = this.quoteIdentifiersInSQL(clause, entityInfo);
-        return this.coerceBooleanLiteralsInSQL(quoted, entityInfo);
+        // Translate SQL Server date/time functions AFTER identifier quoting so the
+        // injected PG idioms (`AT TIME ZONE`, `INTERVAL`) are not re-quoted.
+        const dialectFns = this.translateTSQLDateFunctions(quoted);
+        return this.coerceBooleanLiteralsInSQL(dialectFns, entityInfo);
+    }
+
+    /**
+     * Translates the SQL Server date/time functions that show up in hand-written
+     * `ExtraFilter` / `OrderBy` clauses across the codebase into their PostgreSQL
+     * equivalents. PG has no `GETUTCDATE`/`GETDATE`/`DATEADD` and there is no shim
+     * function, so an untranslated clause errors with
+     * `function getutcdate() does not exist`. This is the framework backstop —
+     * app-layer call sites should prefer dialect-neutral literals, but any clause
+     * that still carries these forms is rewritten here. Covers the forms actually
+     * used in MJ filters:
+     *   - `GETUTCDATE()`           -> `(NOW() AT TIME ZONE 'UTC')`
+     *   - `SYSDATETIMEOFFSET()`    -> `NOW()`
+     *   - `GETDATE()`              -> `CURRENT_TIMESTAMP`
+     *   - `DATEADD(unit, n, expr)` -> `(expr + (n) * INTERVAL '1 <pg-unit>')`
+     *
+     * Public so it can be unit-tested directly (same convention as
+     * `autoQuoteIdentifiers`).
+     */
+    public translateTSQLDateFunctions(sql: string): string {
+        if (!sql || sql.length === 0) return sql;
+        let out = sql;
+        // Zero-arg "now" variants first, so a DATEADD's inner expression is
+        // already PG-native before the DATEADD rewrite walks it.
+        out = out.replace(/\bGETUTCDATE\s*\(\s*\)/gi, "(NOW() AT TIME ZONE 'UTC')");
+        out = out.replace(/\bSYSDATETIMEOFFSET\s*\(\s*\)/gi, 'NOW()');
+        out = out.replace(/\bGETDATE\s*\(\s*\)/gi, 'CURRENT_TIMESTAMP');
+        out = this.translateDateAdd(out);
+        return out;
+    }
+
+    /**
+     * Rewrites every `DATEADD(unit, n, expr)` occurrence using balanced-paren
+     * argument parsing (the 3rd argument can itself contain parentheses and even
+     * a nested `DATEADD`). Unknown date-parts or unparseable calls are left
+     * verbatim rather than guessed.
+     */
+    private translateDateAdd(sql: string): string {
+        const re = /\bDATEADD\s*\(/gi;
+        let result = '';
+        let cursor = 0;
+        let m: RegExpExecArray | null;
+        while ((m = re.exec(sql)) !== null) {
+            const openParen = m.index + m[0].length - 1; // index of '('
+            const parsed = this.splitBalancedArgs(sql, openParen);
+            if (!parsed || parsed.args.length !== 3) {
+                continue; // can't parse — leave this occurrence verbatim
+            }
+            const pgUnit = this.mapDatePartToPGUnit(parsed.args[0]);
+            if (!pgUnit) {
+                continue; // unknown unit — leave verbatim
+            }
+            const n = parsed.args[1].trim();
+            const expr = this.translateDateAdd(parsed.args[2].trim()); // recurse for nesting
+            const replacement = `(${expr} + (${n}) * INTERVAL '1 ${pgUnit}')`;
+            result += sql.slice(cursor, m.index) + replacement;
+            cursor = parsed.end + 1;
+            re.lastIndex = parsed.end + 1;
+        }
+        result += sql.slice(cursor);
+        return result;
+    }
+
+    /**
+     * Splits the comma-separated arguments of a function call starting at the
+     * given open-paren index, respecting nested parentheses and single-quoted
+     * string literals (with `''` escaping). Returns the trimmed-by-caller arg
+     * strings and the index of the matching close paren, or null if unbalanced.
+     */
+    private splitBalancedArgs(sql: string, openParenIndex: number): { args: string[]; end: number } | null {
+        let depth = 0;
+        let inString = false;
+        const args: string[] = [];
+        let current = '';
+        for (let i = openParenIndex; i < sql.length; i++) {
+            const ch = sql[i];
+            if (inString) {
+                current += ch;
+                if (ch === "'") {
+                    if (sql[i + 1] === "'") { current += sql[i + 1]; i++; } // escaped quote
+                    else { inString = false; }
+                }
+                continue;
+            }
+            if (ch === "'") { inString = true; current += ch; continue; }
+            if (ch === '(') {
+                depth++;
+                if (depth === 1) { continue; } // skip the outer open paren
+                current += ch;
+                continue;
+            }
+            if (ch === ')') {
+                depth--;
+                if (depth === 0) { args.push(current); return { args, end: i }; }
+                current += ch;
+                continue;
+            }
+            if (ch === ',' && depth === 1) { args.push(current); current = ''; continue; }
+            current += ch;
+        }
+        return null; // unbalanced
+    }
+
+    /**
+     * Maps a SQL Server datepart token (with the common abbreviations) to the
+     * PostgreSQL interval unit. Returns null for parts PG `INTERVAL` can't
+     * express directly (e.g. quarter) so the caller leaves the call verbatim.
+     */
+    private mapDatePartToPGUnit(part: string): string | null {
+        const p = part.trim().toLowerCase().replace(/^'|'$/g, '');
+        switch (p) {
+            case 'year': case 'yy': case 'yyyy': return 'year';
+            case 'month': case 'mm': case 'm': return 'month';
+            case 'week': case 'wk': case 'ww': return 'week';
+            case 'day': case 'dd': case 'd': return 'day';
+            case 'hour': case 'hh': return 'hour';
+            case 'minute': case 'mi': case 'n': return 'minute';
+            case 'second': case 'ss': case 's': return 'second';
+            default: return null;
+        }
     }
 
     /**
@@ -626,67 +803,176 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider {
         return this.GenerateSaveSQL(entity, isNew, user);
     }
 
-    /**
-     * Generates PostgreSQL function-call SQL for Save (Create/Update).
-     * Returns parameterized SQL with $1, $2, ... placeholders.
-     *
-     * When the entity tracks record changes, the resulting SQL is a CTE
-     * batch — the CRUD function-call result feeds a second CTE that
-     * inserts the RecordChange row using a SQL-side RecordID expression
-     * (so the post-INSERT primary key is captured without a JS round-trip).
-     * Payload assembly (diff, JSON, lineage) is delegated to the
-     * dialect-agnostic `BuildRecordChangePayload` helper on the base.
-     */
-    protected override async GenerateSaveSQL(entity: BaseEntity, isNew: boolean, user: UserInfo): Promise<SaveSQLResult> {
-        const entityInfo = entity.EntityInfo;
-        const fnName = this.getCRUDFunctionName(isNew ? 'create' : 'update', entityInfo);
-        const { paramValues, paramPlaceholders } = await this.buildCRUDParams(entity, isNew, entityInfo, user);
-        const simpleSQL = `SELECT * FROM ${this._schemaName}.${pgDialect.QuoteIdentifier(fnName)}(${paramPlaceholders})`;
+    // GenerateSaveSQL is now inherited from GenericDatabaseProvider — the
+    // dialect-driven concrete builder. PG-specific binding,
+    // result-capture, and record-change CTE rendering live in
+    // CoerceSaveFieldValue / RenderSaveCallBinding / WrapSaveCallForResult /
+    // WrapSaveCallWithRecordChange below. See
+    // plans/sp-save-builder-generic-layer-refactor.md (rev 4).
 
-        if (this.ShouldTrackRecordChanges(entityInfo)) {
-            const newData = entity.GetAll(false);
-            const oldData = !isNew ? entity.GetAll(true) : null;
-            // Empty recordID — the CTE resolves it via buildRecordIDFromCTE below.
-            const payload = this.BuildRecordChangePayload(
-                newData,
-                oldData,
-                '',
-                entityInfo,
-                isNew ? 'Create' : 'Update',
-                user,
-                entity.RestoreContext,
-                "'",
-            );
-            if (payload) {
-                const s = paramValues.length + 1;
-                const recordIDExpr = this.buildRecordIDFromCTE(entityInfo, 'save_result');
-                const fullSQL = `WITH save_result AS (
-    ${simpleSQL}
+    /**
+     * PostgreSQL per-field value transform. Replaces DB function-literal
+     * strings (`gen_random_uuid()`, `NOW()`, etc.) with their effective
+     * values so the caller binds a real argument instead of inserting the
+     * literal string. UUID generators produce a fresh UUID; non-UUID
+     * defaults bind `null` so the SP body lets the column default fire.
+     */
+    protected override CoerceSaveFieldValue(
+        field: EntityFieldInfo,
+        value: unknown,
+        _isUpdate: boolean,
+    ): SaveCoercedValue {
+        if (typeof value !== 'string') return { kind: 'use', value };
+        if (this.IsUUIDGenerationFunction(value)) {
+            return { kind: 'use', value: this.GenerateNewID() };
+        }
+        if (this.IsNonUUIDDatabaseFunction(value)) {
+            return { kind: 'use', value: null };
+        }
+        return { kind: 'use', value };
+    }
+
+    /**
+     * Renders the PostgreSQL binding for a save call. Picks between two
+     * shapes:
+     *
+     * - **pg-json-arg** (wide entities ≥ `ProcedureParamLimit` typed args):
+     *   a single `$1::jsonb` payload keyed by field name. Binary fields
+     *   serialize as base64; key-presence semantics on the SP side
+     *   interpret missing keys as "leave unchanged" and explicit nulls as
+     *   "clear" — no `_Clear` companions needed.
+     * - **pg-positional** (default): typed `$N` placeholders, named
+     *   `p_<lowercase-field-name>` to match the CodeGen-emitted SP
+     *   signature. `_Clear` companion args emitted for nullable columns
+     *   set explicitly to NULL.
+     */
+    protected override RenderSaveCallBinding(
+        entity: BaseEntity,
+        fieldValues: Map<EntityFieldInfo, unknown>,
+        isUpdate: boolean,
+        _spName: string,
+    ): SaveCallBinding {
+        if (this.UseJsonArgShape(entity.EntityInfo, isUpdate ? 'update' : 'create')) {
+            const payload: Record<string, unknown> = {};
+            for (const [field, value] of fieldValues) {
+                const processed = PGQueryParameterProcessor.ProcessParameterValue(value);
+                if (this.isBinaryField(field) && processed !== null && processed !== undefined) {
+                    payload[field.Name] = this.encodeBinaryToBase64(processed);
+                } else {
+                    payload[field.Name] = processed;
+                }
+            }
+            // UPDATE: orchestrator skips PK fields (see GenericDatabaseProvider.GenerateSaveSQL),
+            // so we append them from the loaded entity. JSON-arg sproc bodies hard-check
+            // `RAISE EXCEPTION 'sp*: p_data must include "<PK>"'` when the key is absent.
+            if (isUpdate) {
+                for (const pkv of entity.PrimaryKey.KeyValuePairs) {
+                    payload[pkv.FieldName] = pkv.Value;
+                }
+            }
+            return {
+                kind: 'pg-json-arg',
+                callArgsSQL: 'p_data => $1::jsonb',
+                values: [JSON.stringify(payload)],
+            };
+        }
+
+        const values: unknown[] = [];
+        const placeholders: string[] = [];
+        let paramIndex = 0;
+        for (const [field, value] of fieldValues) {
+            values.push(PGQueryParameterProcessor.ProcessParameterValue(value));
+            // Baseline-shipped sp* CRUD functions use `p_<lowercased flat field name>`
+            // (no inner separator) — e.g. `p_categoryid` for column "CategoryID".
+            // toSnakeCase would produce `p_category_id` and fail every Save.
+            placeholders.push(`p_${field.Name.toLowerCase()} => $${paramIndex + 1}`);
+            paramIndex++;
+
+            if ((value === null || value === undefined) && field.NeedsClearCompanion) {
+                values.push(true);
+                placeholders.push(`${pgDialect.ParameterRef(field.CodeName + '_Clear')} => $${paramIndex + 1}`);
+                paramIndex++;
+            }
+        }
+        // UPDATE: tail-append PK named-args from the loaded entity. Matches the
+        // SQL Server renderer's tail-append pattern; required because the
+        // orchestrator skips PK fields in the main fieldValues iteration.
+        if (isUpdate) {
+            for (const pkv of entity.PrimaryKey.KeyValuePairs) {
+                values.push(PGQueryParameterProcessor.ProcessParameterValue(pkv.Value));
+                placeholders.push(`p_${pkv.FieldName.toLowerCase()} => $${paramIndex + 1}`);
+                paramIndex++;
+            }
+        }
+        return {
+            kind: 'pg-positional',
+            callArgsSQL: placeholders.join(', '),
+            values,
+        };
+    }
+
+    /**
+     * Wraps a PG binding with the bare `SELECT * FROM schema.fn(...)`
+     * result-capture pattern. PG returns the row directly; no
+     * @ResultTable equivalent.
+     */
+    protected override WrapSaveCallForResult(
+        binding: SaveCallBinding,
+        entity: BaseEntity,
+        spName: string,
+    ): SaveSQLFragment {
+        if (binding.kind !== 'pg-positional' && binding.kind !== 'pg-json-arg') {
+            throw new Error(`PostgreSQLDataProvider.WrapSaveCallForResult: unexpected binding kind '${binding.kind}'`);
+        }
+        // CRUD functions live in the entity's OWN schema (e.g. hubspot.spCreatecontacts),
+        // not the MJ core schema. Codegen emits them via QuoteSchema(entity.SchemaName, fn),
+        // so the runtime must resolve the same schema or the function is "does not exist".
+        const sql = `SELECT * FROM ${pgDialect.QuoteSchema(entity.EntityInfo.SchemaName, spName)}(${binding.callArgsSQL})`;
+        return { sql, parameters: [...binding.values] };
+    }
+
+    /**
+     * Wraps a PG save SQL with the record-change CTE chain. The
+     * `save_result` CTE captures the inserted/updated row; `record_change`
+     * inserts the audit row with the SQL-side `RecordID` expression
+     * derived from `save_result`'s PK column(s).
+     */
+    protected override WrapSaveCallWithRecordChange(
+        saveSQL: SaveSQLFragment,
+        binding: SaveCallBinding,
+        payload: RecordChangePayload,
+        entity: BaseEntity,
+    ): SaveSQLFragment {
+        if (binding.kind !== 'pg-positional' && binding.kind !== 'pg-json-arg') {
+            throw new Error(`PostgreSQLDataProvider.WrapSaveCallWithRecordChange: unexpected binding kind '${binding.kind}'`);
+        }
+        const baseValues = saveSQL.parameters ?? [];
+        const recordIDExpr = this.buildRecordIDFromCTE(entity.EntityInfo, 'save_result');
+        const s = baseValues.length + 1;
+        const fullSQL = `WITH save_result AS (
+    ${saveSQL.sql}
 ),
 record_change AS (
     INSERT INTO ${this._schemaName}."RecordChange"
         ("EntityID", "RecordID", "UserID", "Type", "Source", "ChangesJSON", "ChangesDescription", "FullRecordJSON", "Status", "RestoredFromID", "RestoreReason")
-    SELECT $${s}::uuid, ${recordIDExpr}, $${s+1}::uuid, $${s+2}::varchar, $${s+3}::varchar, $${s+4}::text, $${s+5}::text, $${s+6}::text, 'Complete', $${s+7}::uuid, $${s+8}::text
+    SELECT $${s}::uuid, ${recordIDExpr}, $${s + 1}::uuid, $${s + 2}::varchar, $${s + 3}::varchar, $${s + 4}::text, $${s + 5}::text, $${s + 6}::text, 'Complete', $${s + 7}::uuid, $${s + 8}::text
     FROM save_result
     RETURNING "ID"
 )
 SELECT * FROM save_result`;
-                paramValues.push(
-                    payload.entityID,
-                    payload.userID,
-                    payload.type,
-                    payload.source,
-                    payload.changesJSON,
-                    payload.changesDescription,
-                    payload.fullRecordJSON,
-                    payload.restoredFromID,
-                    payload.restoreReason,
-                );
-                return { fullSQL, simpleSQL, parameters: paramValues };
-            }
-        }
-
-        return { fullSQL: simpleSQL, simpleSQL, parameters: paramValues };
+        const parameters = [
+            ...baseValues,
+            payload.entityID,
+            payload.userID,
+            payload.type,
+            payload.source,
+            payload.changesJSON,
+            payload.changesDescription,
+            payload.fullRecordJSON,
+            payload.restoredFromID,
+            payload.restoreReason,
+        ];
+        return { sql: fullSQL, parameters };
     }
 
     /**
@@ -702,7 +988,8 @@ SELECT * FROM save_result`;
         }
         const paramValues: unknown[] = pkFields.map((f: EntityFieldInfo) => entity.Get(f.Name));
         const paramPlaceholders = paramValues.map((_v: unknown, i: number) => `$${i + 1}`).join(', ');
-        const simpleSQL = `SELECT * FROM ${this._schemaName}.${pgDialect.QuoteIdentifier(fnName)}(${paramPlaceholders})`;
+        // Delete function lives in the entity's own schema, mirroring codegen output.
+        const simpleSQL = `SELECT * FROM ${pgDialect.QuoteSchema(entityInfo.SchemaName, fnName)}(${paramPlaceholders})`;
 
         if (this.ShouldTrackRecordChanges(entityInfo)) {
             const oldData = entity.GetAll(false);
@@ -973,100 +1260,15 @@ SELECT * FROM delete_result`;
         }
     }
 
-    private async buildCRUDParams(
-        entity: BaseEntity,
-        isNew: boolean,
-        entityInfo: EntityInfo,
-        contextUser?: UserInfo
-    ): Promise<{ paramValues: unknown[]; paramPlaceholders: string }> {
-        const fields = this.getWritableFields(entityInfo, isNew);
+    // buildCRUDParams / buildJsonArgCRUDParams have moved into the
+    // dialect-driven save pipeline:
+    //   - GenericDatabaseProvider.GenerateSaveSQL — orchestration + iteration
+    //   - RenderSaveCallBinding (above) — binding shape (positional / JSON-arg)
+    //   - WrapSaveCallForResult (above) — bare SELECT * FROM fn(...) wrap
+    //   - WrapSaveCallWithRecordChange (above) — CTE record-change wrap
+    // See plans/sp-save-builder-generic-layer-refactor.md (rev 4).
 
-        // Collect field values into a map for generic encryption processing
-        const fieldValueMap = new Map<EntityFieldInfo, unknown>();
-        for (const field of fields) {
-            let value = entity.Get(field.Name);
-            value = this.resolveFieldValue(value, field, isNew);
-            fieldValueMap.set(field, value);
-        }
-
-        // Encrypt field values using the generic method from GenericDatabaseProvider
-        await this.EncryptFieldValuesForSave(entity, fieldValueMap, contextUser);
-
-        // Wide entities use the JSON-arg sproc shape — single JSONB payload
-        // instead of N typed args. Codegen emits the matching shape; the same
-        // `useJsonArgShape` predicate gates both sides.
-        if (this.UseJsonArgShape(entityInfo, isNew ? 'create' : 'update')) {
-            return this.buildJsonArgCRUDParams(fieldValueMap);
-        }
-
-        // Build parameterized query components from (possibly encrypted) values
-        const paramValues: unknown[] = [];
-        const placeholders: string[] = [];
-        let paramIndex = 0;
-
-        for (const [field, value] of fieldValueMap) {
-            paramValues.push(PGQueryParameterProcessor.ProcessParameterValue(value));
-            // Use named parameter notation (p_fieldname => $N) to avoid parameter
-            // ordering mismatches with the stored functions. The baseline-shipped
-            // sp* CRUD functions use `p_{lowercased flat field name}` (no inner
-            // separator) — e.g. `p_categoryid` for column "CategoryID", not
-            // `p_category_id`. This matches the SQL Server convention the baseline
-            // converter ports over. Earlier this used toSnakeCase which produced
-            // `p_category_id` and failed every Save against the actual sp* functions.
-            const paramName = `p_${field.Name.toLowerCase()}`;
-            placeholders.push(`${paramName} => $${paramIndex + 1}`);
-            paramIndex++;
-
-            // Pillar 1 (tolerant SPs): when caller intentionally sets a
-            // nullable column to NULL, signal the SP's `_Clear` companion so
-            // the body knows to persist the literal NULL rather than letting
-            // COALESCE preserve the existing value (update) or substitute the
-            // default (create).
-            if ((value === null || value === undefined) && field.NeedsClearCompanion) {
-                const clearParamName = pgDialect.ParameterRef(field.CodeName + '_Clear');
-                paramValues.push(true);
-                placeholders.push(`${clearParamName} => $${paramIndex + 1}`);
-                paramIndex++;
-            }
-        }
-
-        return { paramValues, paramPlaceholders: placeholders.join(', ') };
-    }
-
-    /**
-     * Builds the JSON-arg CRUD payload for wide entities. Returns a single
-     * positional `$1::jsonb` placeholder backed by a JSON-stringified payload
-     * keyed by entity field names. Mirrors the typed-arg path's lossless
-     * "include every writable field" behavior — key-presence semantics on
-     * the JSONB sproc body interpret missing keys as "leave unchanged" and
-     * key-with-null as "clear", so an explicit null in the payload doubles as
-     * the `_Clear` signal without needing a companion arg.
-     *
-     * Binary fields (BYTEA / varbinary) are base64-encoded inline; the codegen-
-     * emitted sproc body decodes via `decode(p_data->>'Field', 'base64')`.
-     * Date/timestamp values serialize via JSON `Date.toISOString()` and the
-     * sproc casts back to TIMESTAMPTZ.
-     */
-    private buildJsonArgCRUDParams(
-        fieldValueMap: Map<EntityFieldInfo, unknown>
-    ): { paramValues: unknown[]; paramPlaceholders: string } {
-        const payload: Record<string, unknown> = {};
-        for (const [field, value] of fieldValueMap) {
-            const processed = PGQueryParameterProcessor.ProcessParameterValue(value);
-            // Binary columns serialize as base64 strings (no native JSON binary).
-            // The codegen-emitted sproc body decodes via `decode(..., 'base64')`.
-            if (this.isBinaryField(field) && processed !== null && processed !== undefined) {
-                payload[field.Name] = this.encodeBinaryToBase64(processed);
-            } else {
-                payload[field.Name] = processed;
-            }
-        }
-        return {
-            paramValues: [JSON.stringify(payload)],
-            paramPlaceholders: 'p_data => $1::jsonb',
-        };
-    }
-
+    /** Field-type predicate for BYTEA / varbinary / image columns. Used by JSON-arg payload. */
     private isBinaryField(field: EntityFieldInfo): boolean {
         const t = (field.Type || '').toLowerCase().trim();
         return t === 'bytea' || t.startsWith('varbinary') || t.startsWith('image');
@@ -1081,47 +1283,9 @@ SELECT * FROM delete_result`;
         return Buffer.from(value as ArrayBufferLike).toString('base64');
     }
 
-    /**
-     * Resolves a field value that may contain a database function string.
-     * - For UUID generation functions (gen_random_uuid, NEWID, etc.): generates a UUID via GenerateNewID()
-     * - For other known DB default functions (GETUTCDATE, NOW, etc.): returns null so the DB uses its default
-     * - For all other values: returns as-is
-     */
-    private resolveFieldValue(value: unknown, field: EntityFieldInfo, isNew: boolean): unknown {
-        if (typeof value !== 'string') {
-            return value;
-        }
-
-        if (this.IsUUIDGenerationFunction(value)) {
-            // Replace UUID generation function strings with an actual generated UUID.
-            // This handles the case where a field's default value is a DB function like
-            // gen_random_uuid() or NEWID() — we generate the UUID in TypeScript instead.
-            return this.GenerateNewID();
-        }
-
-        if (this.IsNonUUIDDatabaseFunction(value)) {
-            // For non-UUID database functions (GETUTCDATE, NOW, etc.), send null
-            // so the stored function/procedure lets the database use its column default
-            return null;
-        }
-
-        return value;
-    }
-
-    /**
-     * Returns the fields that should be passed as parameters to this entity's
-     * spCreate (when `isNew=true`) or spUpdate (when `isNew=false`) procedure.
-     *
-     * Delegates to {@link EntityFieldInfo.IsSPParameter} — the single source
-     * of truth for the SP parameter contract. CodeGen uses the same predicate
-     * when emitting the SP body, so the declared parameter list and this
-     * runtime argument list always agree. Drift between the two surfaces as
-     * a "too many / too few arguments" error at save time.
-     */
-    private getWritableFields(entityInfo: EntityInfo, isNew: boolean): EntityFieldInfo[] {
-        const isUpdate = !isNew;
-        return entityInfo.Fields.filter((f: EntityFieldInfo) => f.IsSPParameter(isUpdate));
-    }
+    // resolveFieldValue moved to CoerceSaveFieldValue (above).
+    // getWritableFields removed — the generic orchestrator filters via
+    // `EntityFieldInfo.IsSPParameter` directly.
 
     // ─── Record Change SQL Builders (abstract method implementations) ───
 
@@ -1291,6 +1455,25 @@ WHERE ${pgDialect.QuoteIdentifier(pkName)} = '${safePKValue}';`;
     ]);
 
     /**
+     * Keywords that are ONLY recognized when they appear in ALL-CAPS — matched
+     * case-sensitively, unlike `_SQL_KEYWORDS` (which is matched via
+     * `word.toUpperCase()`). These are reserved words that collide with very
+     * common PascalCase MJ column names, so they must NOT suppress quoting of
+     * the column form:
+     *   - `TYPE` — `ALTER COLUMN <c> TYPE <t>` / `CREATE TYPE`; but `Type` is a
+     *     column on RecordChange and many other entities.
+     *   - `DATA` — `ALTER COLUMN <c> SET DATA TYPE <t>`; but `Data` is a column
+     *     on several entities.
+     * Putting these in the case-insensitive set would fold `Type`/`Data` column
+     * refs to lowercase on PG ("column does not exist"). All-caps-only matching
+     * recognizes the DDL keyword form (dialects always emit keywords upper-case)
+     * while leaving the mixed-case column form quotable.
+     */
+    private static readonly _SQL_KEYWORDS_UPPERCASE_ONLY = new Set([
+        'TYPE', 'DATA',
+    ]);
+
+    /**
      * Quotes mixed-case identifiers in a raw SQL string for PostgreSQL.
      * Walks the string token by token, skipping string literals, dollar-quoted
      * blocks, already-quoted identifiers, square-bracketed identifiers, and
@@ -1439,7 +1622,12 @@ WHERE ${pgDialect.QuoteIdentifier(pkName)} = '${safePKValue}';`;
         while (j < len && /[a-zA-Z0-9_]/.test(sql[j])) j++;
         const word = sql.substring(start, j);
 
-        const isKeyword = PostgreSQLDataProvider._SQL_KEYWORDS.has(word.toUpperCase());
+        // All-caps-only keywords (TYPE/DATA) are matched case-sensitively so the
+        // DDL keyword form is recognized while the PascalCase column form stays quotable.
+        const isUpperCaseOnlyKeyword = word === word.toUpperCase()
+            && PostgreSQLDataProvider._SQL_KEYWORDS_UPPERCASE_ONLY.has(word);
+        const isKeyword = isUpperCaseOnlyKeyword
+            || PostgreSQLDataProvider._SQL_KEYWORDS.has(word.toUpperCase());
         const isAllLower = word === word.toLowerCase();
         const isMJInternal = word.startsWith('__mj_');
         const startsUpper = /^[A-Z]/.test(word);

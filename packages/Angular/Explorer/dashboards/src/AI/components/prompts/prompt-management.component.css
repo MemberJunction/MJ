@@ -3,119 +3,15 @@
    Clean flat-color interface with brand blue theme
    ============================================ */
 
-/* Container */
-.prompt-management-container {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
+/* Container is now provided by <mj-page-layout> */
+
+/* Tinted card background on the body — matches the original .prompts-content
+   surface treatment so prompt cards sit on a lightly-tinted surface. */
+:host mj-page-body {
   background: var(--mj-bg-surface-card);
 }
 
-/* Dashboard Header - Clean White Style */
-.dashboard-header {
-  background: var(--mj-bg-surface);
-  padding: 16px 24px;
-  border-bottom: 1px solid var(--mj-border-default);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-  position: relative;
-  z-index: 10;
-}
-
-.header-info {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-}
-
-.dashboard-title {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 700;
-  color: var(--mj-text-primary);
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.dashboard-title i {
-  color: var(--mj-brand-primary);
-  font-size: 22px;
-}
-
-.filter-toggle-btn {
-  background: var(--mj-bg-surface-card);
-  border: 1px solid var(--mj-border-default);
-  padding: 8px 16px;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--mj-text-secondary);
-  cursor: pointer;
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.filter-toggle-btn:hover {
-  background: var(--mj-bg-surface-sunken);
-  border-color: var(--mj-border-strong);
-  color: var(--mj-text-primary);
-}
-
-.filter-toggle-btn i {
-  font-size: 13px;
-  color: var(--mj-brand-primary);
-}
-
-.item-count {
-  color: var(--mj-text-muted);
-  font-size: 13px;
-  font-weight: 500;
-  background: var(--mj-bg-surface-sunken);
-  padding: 6px 12px;
-  border-radius: 16px;
-}
-
-.header-controls {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-/* View Toggle */
-.view-toggle {
-  display: flex;
-  background: var(--mj-bg-surface-sunken);
-  border-radius: 8px;
-  padding: 3px;
-  border: 1px solid var(--mj-border-default);
-}
-
-.view-btn {
-  background: transparent;
-  border: none;
-  padding: 8px 12px;
-  border-radius: 6px;
-  color: var(--mj-text-muted);
-  cursor: pointer;
-  transition: all 0.2s ease;
-  font-size: 14px;
-}
-
-.view-btn:hover {
-  color: var(--mj-text-primary);
-  background: color-mix(in srgb, var(--mj-brand-primary) 8%, transparent);
-}
-
-.view-btn.active {
-  background: var(--mj-bg-surface);
-  color: var(--mj-brand-primary);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-}
+/* View toggle now provided by <mj-view-toggle>. */
 
 .control-btn {
   background: var(--mj-bg-surface-card);
@@ -151,13 +47,6 @@
   box-shadow: 0 4px 12px color-mix(in srgb, var(--mj-brand-primary) 35%, transparent);
 }
 
-/* Main Content */
-.main-content {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
 
 .main-splitter {
   flex: 1;
@@ -397,13 +286,6 @@ as-split {
   background: var(--mj-text-disabled);
 }
 
-/* Prompts Content */
-.prompts-content {
-  height: 100%;
-  overflow-y: auto;
-  padding: 28px;
-  background: var(--mj-bg-surface-card);
-}
 
 /* Grid View */
 .prompts-grid {
@@ -886,59 +768,6 @@ as-split {
   box-shadow: 0 4px 12px color-mix(in srgb, var(--mj-brand-primary) 35%, transparent);
 }
 
-/* Empty State */
-.empty-state {
-  text-align: center;
-  padding: 100px 32px;
-  color: var(--mj-text-muted);
-}
-
-.empty-state i {
-  font-size: 80px;
-  background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  margin-bottom: 28px;
-  display: block;
-}
-
-.empty-state h3 {
-  color: var(--mj-text-primary);
-  font-size: 24px;
-  font-weight: 700;
-  margin: 0 0 12px 0;
-}
-
-.empty-state p {
-  font-size: 16px;
-  line-height: 1.6;
-  max-width: 420px;
-  margin: 0 auto 32px;
-  color: var(--mj-text-muted);
-}
-
-.empty-state-btn {
-  background: var(--mj-brand-primary);
-  color: var(--mj-text-inverse);
-  border: none;
-  padding: 14px 28px;
-  border-radius: 12px;
-  font-size: 15px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  box-shadow: 0 4px 15px color-mix(in srgb, var(--mj-brand-primary) 30%, transparent);
-}
-
-.empty-state-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px color-mix(in srgb, var(--mj-brand-primary) 40%, transparent);
-}
-
 /* Loading State */
 .loading-container {
   display: flex;
@@ -949,26 +778,8 @@ as-split {
 
 /* Responsive Design */
 @media (max-width: 768px) {
-  .dashboard-header {
-    flex-direction: column;
-    gap: 16px;
-    align-items: stretch;
-    padding: 16px 20px;
-  }
-
-  .header-info {
-    flex-wrap: wrap;
-    justify-content: center;
-  }
-
-  .header-controls {
-    justify-content: center;
-  }
-
-  .prompts-content {
-    padding: 16px;
-  }
-
+  /* Header chrome (incl. .action-btn-label collapse) is owned by the shared
+     <mj-page-header> — page-header.scss. No per-component header rules here. */
   .prompts-grid {
     grid-template-columns: 1fr;
     gap: 16px;

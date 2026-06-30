@@ -1,0 +1,36 @@
+{
+  "name": "@memberjunction/ai-bridge-livekit-native",
+  "type": "module",
+  "version": "5.43.0",
+  "description": "MemberJunction: the REAL native LiveKit room-client module for the LiveKit Realtime Bridge. Wraps @livekit/rtc-node (the Node WebRTC participant) behind the NativeRoomModule contract that @memberjunction/ai-bridge-livekit's LiveKitNativeMeetingSdk expects — joins a room as a bot, publishes the agent's voice on an audio track, and subscribes to per-participant audio for diarized hearing. Point LiveKitNativeSdkConfig.NativeModuleSpecifier at this package to make the agent talk in a LiveKit room.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "start": "ts-node-dev src/index.ts",
+    "build": "tsc && tsc-alias -f",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "author": "MemberJunction.com",
+  "license": "ISC",
+  "dependencies": {
+    "@memberjunction/core": "5.43.0",
+    "@memberjunction/ai-bridge-livekit": "5.43.0"
+  },
+  "optionalDependencies": {
+    "@livekit/rtc-node": "^0.13.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.11",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

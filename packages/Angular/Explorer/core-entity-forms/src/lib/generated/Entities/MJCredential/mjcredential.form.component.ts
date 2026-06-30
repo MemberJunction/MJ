@@ -18,7 +18,7 @@ export class MJCredentialFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'classification', sectionName: 'Classification', isExpanded: true },
             { sectionKey: 'basicInformation', sectionName: 'Basic Information', isExpanded: true },
-            { sectionKey: 'accessDetails', sectionName: 'Access Details', isExpanded: false },
+            { sectionKey: 'accessDetails', sectionName: 'Access Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJOAuthTokens', sectionName: 'O Auth Tokens', isExpanded: false },
             { sectionKey: 'mJSearchProviders', sectionName: 'Search Providers', isExpanded: false },
@@ -26,7 +26,8 @@ export class MJCredentialFormComponent extends BaseFormComponent {
             { sectionKey: 'mJMCPServerConnections', sectionName: 'MCP Server Connections', isExpanded: false },
             { sectionKey: 'mJVectorDatabases', sectionName: 'Vector Databases', isExpanded: false },
             { sectionKey: 'mJAICredentialBindings', sectionName: 'AI Credential Bindings', isExpanded: false },
-            { sectionKey: 'mJCompanyIntegrations', sectionName: 'Company Integrations', isExpanded: false }
+            { sectionKey: 'mJCompanyIntegrations', sectionName: 'Company Integrations', isExpanded: false },
+            { sectionKey: 'mJSignatureAccounts', sectionName: 'Signature Accounts', isExpanded: false }
         ]);
     }
 }

@@ -9,6 +9,8 @@
  * `@skyway/core` is not installed (e.g. in CI builds that don't need it).
  */
 import path from 'node:path';
+import type { DatabasePlatform } from '@memberjunction/core';
+import { GetDialect } from '@memberjunction/sql-dialect';
 
 /**
  * Minimal type definition for Skyway config so we don't need
@@ -35,6 +37,7 @@ interface SkywayConfig {
         BaselineOnMigrate: boolean;
     };
     Placeholders?: Record<string, string>;
+    TransactionMode?: 'per-run' | 'per-migration';
     Provider?: unknown;
 }
 
@@ -65,6 +68,12 @@ export interface MigrationRunOptions {
     MJCoreSchema?: string;
     /** Extra user placeholders merged into Skyway's Placeholders map. Overrides built-ins on key collision. */
     ExtraPlaceholders?: Record<string, string>;
+    /**
+     * Target database platform. Selects the Skyway provider
+     * (`@memberjunction/skyway-sqlserver` vs `@memberjunction/skyway-postgres`).
+     * Defaults to `'sqlserver'` for backward compatibility.
+     */
+    Platform?: DatabasePlatform;
 }
 
 /**
@@ -123,22 +132,19 @@ export interface MigrationRunResult {
  */
 export async function RunAppMigrations(options: MigrationRunOptions): Promise<MigrationRunResult> {
     const { MigrationsDir, SchemaName, DatabaseConfig, Verbose, MJCoreSchema, ExtraPlaceholders } = options;
+    const platform: DatabasePlatform = options.Platform ?? 'sqlserver';
 
     let skyway: SkywayInstance | undefined;
 
     try {
         // Use variables to prevent TypeScript from resolving the modules at compile time.
-        // @memberjunction/skyway-core + @memberjunction/skyway-sqlserver are published
-        // as dependencies of the host process (e.g. MJCLI).
+        // The skyway provider packages are published as (optional) dependencies of the
+        // host process (e.g. MJCLI). Install the one matching the target platform.
         const skywayModuleId = '@memberjunction/skyway-core';
-        const sqlServerProviderModuleId = '@memberjunction/skyway-sqlserver';
         const { Skyway } = await import(skywayModuleId);
-        const { SqlServerProvider } = await import(sqlServerProviderModuleId);
-        const config = BuildSkywayConfig(MigrationsDir, SchemaName, DatabaseConfig, MJCoreSchema, ExtraPlaceholders);
-        // Skyway 0.6.x requires an explicit provider. OpenApp migrations target
-        // SQL Server (Azure auto-detection is SQL-Server-specific), so we always
-        // attach the SqlServerProvider here.
-        config.Provider = new SqlServerProvider(config.Database);
+        const config = BuildSkywayConfig(MigrationsDir, SchemaName, DatabaseConfig, MJCoreSchema, ExtraPlaceholders, platform);
+        // Skyway 0.6.x requires an explicit provider, selected by platform.
+        config.Provider = await CreateSkywayProvider(platform, config.Database);
 
         if (Verbose) {
             console.log(`Running Skyway migrations for schema '${SchemaName}'`);
@@ -179,21 +185,59 @@ export async function RunAppMigrations(options: MigrationRunOptions): Promise<Mi
 }
 
 /**
- * Builds the SkywayConfig for running app migrations.
+ * Creates the Skyway database provider matching the target platform. The
+ * provider packages are optional peer dependencies of the host process —
+ * install the one matching your database. Mirrors MJCLI's `createSkywayProvider`.
  */
-function BuildSkywayConfig(
+async function CreateSkywayProvider(platform: DatabasePlatform, dbConfig: SkywayConfig['Database']): Promise<unknown> {
+    if (platform === 'postgresql') {
+        const postgresProviderModuleId = '@memberjunction/skyway-postgres';
+        try {
+            const { PostgresProvider } = await import(postgresProviderModuleId);
+            return new PostgresProvider(dbConfig);
+        } catch {
+            throw new Error(
+                'PostgreSQL provider not found. Install @memberjunction/skyway-postgres to run Open App migrations against PostgreSQL.'
+            );
+        }
+    }
+    const sqlServerProviderModuleId = '@memberjunction/skyway-sqlserver';
+    try {
+        const { SqlServerProvider } = await import(sqlServerProviderModuleId);
+        return new SqlServerProvider(dbConfig);
+    } catch {
+        throw new Error(
+            'SQL Server provider not found. Install @memberjunction/skyway-sqlserver to run Open App migrations against SQL Server.'
+        );
+    }
+}
+
+/**
+ * Builds the SkywayConfig for running app migrations.
+ *
+ * Exported for unit testing of the baseline semantics (B19).
+ */
+export function BuildSkywayConfig(
     migrationsDir: string,
     schemaName: string,
     dbConfig: SkywayDatabaseConfig,
     mjCoreSchema?: string,
-    extraPlaceholders?: Record<string, string>
+    extraPlaceholders?: Record<string, string>,
+    platform: DatabasePlatform = 'sqlserver'
 ): SkywayConfig {
     const absoluteDir = path.isAbsolute(migrationsDir)
         ? migrationsDir
         : path.resolve(migrationsDir);
 
-    // Auto-detect Azure SQL: if host ends with .database.windows.net, encrypt is required
-    const isAzureSql = dbConfig.Host.includes('.database.windows.net');
+    // Canonicalize the schema for the platform (PG folds unquoted DDL to lowercase) so Skyway's
+    // history table AND the `${flyway:defaultSchema}` the app's migrations resolve to both land in
+    // the SAME physical schema the app's (unquoted) DDL creates — no mixed-case/lowercase split.
+    const canonicalSchema = GetDialect(platform).CanonicalSchemaName(schemaName);
+
+    // Azure SQL auto-detection is SQL-Server-specific (host ends with
+    // .database.windows.net → encryption required). For PostgreSQL the encrypt/
+    // trust flags are honored as provided and never Azure-inferred.
+    const isAzureSql = platform === 'sqlserver' && dbConfig.Host.includes('.database.windows.net');
     const encrypt = dbConfig.Encrypt ?? isAzureSql;
     const trustCert = dbConfig.TrustServerCertificate ?? !isAzureSql;
 
@@ -212,12 +256,31 @@ function BuildSkywayConfig(
         },
         Migrations: {
             Locations: [absoluteDir],
-            DefaultSchema: schemaName,
-            BaselineVersion: '0',
+            // Use the dialect's canonical schema casing (#2926) so the seed/baseline
+            // resolves on both SQL Server and PostgreSQL.
+            DefaultSchema: canonicalSchema,
+            // BaselineVersion '1' is a skyway SENTINEL meaning "auto-select the
+            // highest B-prefixed baseline migration and RUN it" — it is NOT a
+            // Flyway-style numeric watermark/floor. Open apps ship their initial
+            // schema + entity-metadata seed as a B-baseline migration (e.g.
+            // bizapps-common's B...__Schema_and_Tables.sql), so on a fresh schema
+            // this sentinel is what actually creates everything.
+            //
+            // Do NOT change this to '0' (or any other number). Any non-'1' value is
+            // treated as an EXPLICIT baseline version that skyway exact-matches
+            // against the B files; since no app names a baseline "0", skyway then
+            // runs NO baseline at all, and the app's later V migrations fail against
+            // the un-seeded schema (e.g. "Expected exactly 1 row updated for
+            // [<App>: <Entity>] in [__mj].[Entity]; got 0. Aborting migration.").
+            //
+            // BaselineOnMigrate only fires when there's no history table, so a
+            // normal --keep-data reinstall (history intact) is unaffected either way.
+            // (See @memberjunction/skyway-core migration/resolver ResolveMigrations.)
+            BaselineVersion: '1',
             BaselineOnMigrate: true,
         },
         Placeholders: {
-            'flyway:defaultSchema': schemaName,
+            'flyway:defaultSchema': canonicalSchema,
             mjSchema: mjCoreSchema ?? '__mj',
             ...(extraPlaceholders ?? {}),
         },

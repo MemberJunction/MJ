@@ -19,16 +19,16 @@ function featureLoader(importFn: () => Promise<unknown>): () => Promise<void> {
 // --- @memberjunction/ng-dashboards → ./actions-dashboards.module (7 entries) ---
 const loadActionsDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/actions-dashboards.module'));
 
-// --- @memberjunction/ng-dashboards → ./ai-dashboards.module (15 entries) ---
+// --- @memberjunction/ng-dashboards → ./ai-dashboards.module (17 entries) ---
 const loadAiDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/ai-dashboards.module'));
 
-// --- @memberjunction/ng-dashboards → ./communication-dashboards.module (6 entries) ---
+// --- @memberjunction/ng-dashboards → ./communication-dashboards.module (7 entries) ---
 const loadCommunicationDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/communication-dashboards.module'));
 
-// --- @memberjunction/ng-dashboards → ./component-studio-dashboards.module (1 entries) ---
+// --- @memberjunction/ng-dashboards → ./component-studio-dashboards.module (3 entries) ---
 const loadComponentStudioDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/component-studio-dashboards.module'));
 
-// --- @memberjunction/ng-dashboards → ./core-dashboards.module (26 entries) ---
+// --- @memberjunction/ng-dashboards → ./core-dashboards.module (30 entries) ---
 const loadCoreDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/core-dashboards.module'));
 
 // --- @memberjunction/ng-dashboards → ./credentials-dashboards.module (6 entries) ---
@@ -40,7 +40,7 @@ const loadDataExplorerDashboardsModule = featureLoader(() => import('@memberjunc
 // --- @memberjunction/ng-dashboards → ./integration.module (6 entries) ---
 const loadIntegrationModule = featureLoader(() => import('@memberjunction/ng-dashboards/integration.module'));
 
-// --- @memberjunction/ng-dashboards → ./lists-dashboards.module (4 entries) ---
+// --- @memberjunction/ng-dashboards → ./lists-dashboards.module (5 entries) ---
 const loadListsDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/lists-dashboards.module'));
 
 // --- @memberjunction/ng-dashboards → ./mcp.module (2 entries) ---
@@ -48,6 +48,9 @@ const loadMcpModule = featureLoader(() => import('@memberjunction/ng-dashboards/
 
 // --- @memberjunction/ng-dashboards → ./module (3 entries) ---
 const loadModule = featureLoader(() => import('@memberjunction/ng-dashboards/module'));
+
+// --- @memberjunction/ng-dashboards → ./predictive-studio-dashboards.module (9 entries) ---
+const loadPredictiveStudioDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/predictive-studio-dashboards.module'));
 
 // --- @memberjunction/ng-dashboards → ./scheduling-dashboards.module (4 entries) ---
 const loadSchedulingDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/scheduling-dashboards.module'));
@@ -90,10 +93,12 @@ export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {
   'BaseResourceComponent::AutotaggingPipelineResource': loadAiDashboardsModule,
   'BaseResourceComponent::ClusterVisualizationResource': loadAiDashboardsModule,
   'BaseResourceComponent::DuplicateDetectionResource': loadAiDashboardsModule,
+  'BaseResourceComponent::FeaturePipelinesResource': loadAiDashboardsModule,
   'BaseResourceComponent::KnowledgeConfigResource': loadAiDashboardsModule,
   'BaseResourceComponent::SchedulingResource': loadAiDashboardsModule,
   'BaseResourceComponent::Tags': loadAiDashboardsModule,
   'BaseResourceComponent::VectorManagementResource': loadAiDashboardsModule,
+  'BaseResourceComponent::VisualizationResource': loadAiDashboardsModule,
 
   // @memberjunction/ng-dashboards → ./communication-dashboards.module
   'BaseDashboard::CommunicationDashboard': loadCommunicationDashboardsModule,
@@ -101,10 +106,13 @@ export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {
   'BaseResourceComponent::CommunicationMonitorResource': loadCommunicationDashboardsModule,
   'BaseResourceComponent::CommunicationProvidersResource': loadCommunicationDashboardsModule,
   'BaseResourceComponent::CommunicationRunsResource': loadCommunicationDashboardsModule,
+  'BaseResourceComponent::CommunicationsNewMessageResource': loadCommunicationDashboardsModule,
   'BaseResourceComponent::CommunicationTemplatesResource': loadCommunicationDashboardsModule,
 
   // @memberjunction/ng-dashboards → ./component-studio-dashboards.module
   'BaseDashboard::ComponentStudioDashboard': loadComponentStudioDashboardsModule,
+  'BaseResourceComponent::ComponentStudioResource': loadComponentStudioDashboardsModule,
+  'BaseResourceComponent::FormBuilderResource': loadComponentStudioDashboardsModule,
 
   // @memberjunction/ng-dashboards → ./core-dashboards.module
   'BaseApplication::HomeApplication': loadCoreDashboardsModule,
@@ -116,6 +124,9 @@ export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {
   'BaseResourceComponent::APIKeysResource': loadCoreDashboardsModule,
   'BaseResourceComponent::ApplicationRolesResource': loadCoreDashboardsModule,
   'BaseResourceComponent::AppStateInspector': loadCoreDashboardsModule,
+  'BaseResourceComponent::BulkOperationsContainer': loadCoreDashboardsModule,
+  'BaseResourceComponent::BulkOperationsOperations': loadCoreDashboardsModule,
+  'BaseResourceComponent::BulkOperationsRunHistory': loadCoreDashboardsModule,
   'BaseResourceComponent::ClassRegistryInspector': loadCoreDashboardsModule,
   'BaseResourceComponent::DashboardBrowserResource': loadCoreDashboardsModule,
   'BaseResourceComponent::EventMonitorInspector': loadCoreDashboardsModule,
@@ -127,6 +138,7 @@ export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {
   'BaseResourceComponent::PermissionsResourceAccessResource': loadCoreDashboardsModule,
   'BaseResourceComponent::PermissionsUserAccessResource': loadCoreDashboardsModule,
   'BaseResourceComponent::QueryBrowserResource': loadCoreDashboardsModule,
+  'BaseResourceComponent::RealtimeRecordingsDashboard': loadCoreDashboardsModule,
   'BaseResourceComponent::SettingsExplorerInspector': loadCoreDashboardsModule,
   'BaseResourceComponent::SystemDiagnosticsResource': loadCoreDashboardsModule,
   'BaseResourceComponent::VersionHistoryDiffResource': loadCoreDashboardsModule,
@@ -159,6 +171,7 @@ export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {
   'BaseResourceComponent::ListsCategoriesResource': loadListsDashboardsModule,
   'BaseResourceComponent::ListsMyListsResource': loadListsDashboardsModule,
   'BaseResourceComponent::ListsOperationsResource': loadListsDashboardsModule,
+  'BaseResourceComponent::ListsSharedWithMeResource': loadListsDashboardsModule,
 
   // @memberjunction/ng-dashboards → ./mcp.module
   'BaseDashboard::MCPDashboard': loadMcpModule,
@@ -168,6 +181,17 @@ export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {
   'BaseResourceComponent::ArchiveConfigResource': loadModule,
   'BaseResourceComponent::ArchiveRunsResource': loadModule,
   'BaseResourceComponent::DatabaseDesignerDashboard': loadModule,
+
+  // @memberjunction/ng-dashboards → ./predictive-studio-dashboards.module
+  'BaseDashboard::PredictiveStudioDashboard': loadPredictiveStudioDashboardsModule,
+  'BaseResourceComponent::PredictiveStudioCatalogResource': loadPredictiveStudioDashboardsModule,
+  'BaseResourceComponent::PredictiveStudioCompareResource': loadPredictiveStudioDashboardsModule,
+  'BaseResourceComponent::PredictiveStudioDashboard': loadPredictiveStudioDashboardsModule,
+  'BaseResourceComponent::PredictiveStudioExperimentsResource': loadPredictiveStudioDashboardsModule,
+  'BaseResourceComponent::PredictiveStudioHomeResource': loadPredictiveStudioDashboardsModule,
+  'BaseResourceComponent::PredictiveStudioPipelinesResource': loadPredictiveStudioDashboardsModule,
+  'BaseResourceComponent::PredictiveStudioProductionResource': loadPredictiveStudioDashboardsModule,
+  'BaseResourceComponent::PredictiveStudioRegistryResource': loadPredictiveStudioDashboardsModule,
 
   // @memberjunction/ng-dashboards → ./scheduling-dashboards.module
   'BaseDashboard::SchedulingDashboard': loadSchedulingDashboardsModule,
@@ -199,4 +223,4 @@ export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {
 
 };
 
-export const LAZY_FEATURE_CONFIG_COUNT = 96;
+export const LAZY_FEATURE_CONFIG_COUNT = 115;

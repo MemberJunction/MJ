@@ -130,9 +130,29 @@ export class WorkspaceStateManager {
   }
 
   /**
+   * Ephemeral mode: when `window.__MJ_EPHEMERAL_WORKSPACE__ === true` is set
+   * (only baked into the regression test Explorer build via Dockerfile.explorer),
+   * the workspace neither loads from nor persists to the server. Every fresh
+   * BrowserContext starts from a default workspace configuration, so tab/workspace
+   * state can never leak across regression tests sharing a user. Production
+   * deployments never set this flag, so behavior is unchanged.
+   */
+  private isEphemeral(): boolean {
+    return typeof window !== 'undefined'
+      && (window as Window & { __MJ_EPHEMERAL_WORKSPACE__?: boolean }).__MJ_EPHEMERAL_WORKSPACE__ === true;
+  }
+
+  /**
    * Load workspace from database using UserInfoEngine for centralized, cached access
    */
   private async loadWorkspace(userId: string): Promise<void> {
+    if (this.isEphemeral()) {
+      // Test mode — skip server load entirely. Just emit a default config so the
+      // workspace starts clean for this BrowserContext. No MJWorkspaceEntity is
+      // created or read; the DB row (if any) is ignored.
+      this.configuration$.next(createDefaultWorkspaceConfiguration());
+      return;
+    }
     // Use UserInfoEngine for centralized, cached workspace loading
     const engine = UserInfoEngine.Instance;
     const workspaces = engine.Workspaces;
@@ -174,6 +194,11 @@ export class WorkspaceStateManager {
    * Persist configuration to database (debounced)
    */
   private async persistConfiguration(): Promise<void> {
+    if (this.isEphemeral()) {
+      // Test mode — no-op. We never persist workspace state in the regression
+      // environment so tab/workspace state can't leak across tests.
+      return;
+    }
     const workspace = this.workspace$.value;
     const config = this.configuration$.value;
 
@@ -196,6 +221,16 @@ export class WorkspaceStateManager {
   UpdateConfiguration(config: WorkspaceConfiguration): void {
     this.configuration$.next(config);
     this.requestSave();
+  }
+
+  /**
+   * Reset workspace to a clean default configuration and persist immediately.
+   * Used for recovery when stale or corrupted workspace data prevents startup.
+   */
+  async ResetConfiguration(): Promise<void> {
+    const defaultConfig = createDefaultWorkspaceConfiguration();
+    this.configuration$.next(defaultConfig);
+    await this.persistConfiguration();
   }
 
   /**
@@ -641,6 +676,43 @@ export class WorkspaceStateManager {
           configuration: {
             ...tab.configuration,
             ...configUpdate
+          }
+        };
+      }
+      return tab;
+    });
+
+    this.UpdateConfiguration({
+      ...config,
+      tabs: updatedTabs
+    });
+  }
+
+  /**
+   * Update a tab's top-level `resourceRecordId` (and mirror it into `configuration.recordId`).
+   *
+   * Used when a "new record" tab transitions to a saved record — the tab was opened with
+   * an empty recordId, but once the user saves, the tab now represents an actual record.
+   * Without this, the next "Create New Record" request would match this tab (both have
+   * empty `resourceRecordId`) and focus the stale form instead of opening a fresh one.
+   *
+   * Also clears `configuration.isNew` since the record now exists.
+   */
+  UpdateTabResourceRecordId(tabId: string, newRecordId: string): void {
+    const config = this.configuration$.value;
+    if (!config) {
+      return;
+    }
+
+    const updatedTabs = config.tabs.map(tab => {
+      if (tab.id === tabId) {
+        const { isNew: _isNew, ...restConfig } = tab.configuration;
+        return {
+          ...tab,
+          resourceRecordId: newRecordId,
+          configuration: {
+            ...restConfig,
+            recordId: newRecordId
           }
         };
       }

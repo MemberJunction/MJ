@@ -129,8 +129,8 @@
 
   </div>
 } @else {
-  <div class="review-empty">
-    <i class="fa-regular fa-rectangle-list"></i>
-    <p>No schema defined yet. Complete the previous steps to see a review.</p>
-  </div>
+  <mj-empty-state class="review-empty"
+    Icon="fa-regular fa-rectangle-list"
+    Title="No schema defined yet"
+    Message="Complete the previous steps to see a review." />
 }

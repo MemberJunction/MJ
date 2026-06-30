@@ -15,6 +15,7 @@ import {
 import { RegisterClass } from '@memberjunction/global';
 import env from 'env-var';
 import mime from 'mime-types';
+import { Readable } from 'stream';
 import {
   CreatePreAuthUploadUrlPayload,
   FileSearchOptions,
@@ -22,6 +23,8 @@ import {
   FileStorageBase,
   GetObjectParams,
   GetObjectMetadataParams,
+  GetObjectStreamParams,
+  ObjectStreamResult,
   StorageListResult,
   StorageObjectMetadata,
   StorageProviderConfig,
@@ -677,6 +680,88 @@ export class AzureFileStorage extends FileStorageBase {
       console.error(error);
       throw new Error(`Failed to get object: ${params.objectId || params.fullPath}`);
     }
+  }
+
+  /**
+   * Azure Blob Storage supports ranged streaming via `BlobClient.download(offset, count)`.
+   */
+  public override get SupportsStreaming(): boolean {
+    return true;
+  }
+
+  /**
+   * Streams a blob's content from Azure Blob Storage, optionally honoring a byte range.
+   *
+   * Uses `BlobClient.download(offset, count)`, which returns a Node.js readable stream
+   * (`readableStreamBody`) without buffering the blob in memory. The inclusive
+   * `Range.Start`/`Range.End` are translated to the Azure `offset`/`count` model
+   * (`count = End - Start + 1`). The download response carries `contentType`,
+   * `contentLength`, and (for ranged reads) `contentRange`, which are mapped onto the
+   * {@link ObjectStreamResult}.
+   *
+   * @param params - Object identifier (objectId and fullPath are equivalent for Azure Blob) plus optional Range.
+   * @returns A Promise resolving to an {@link ObjectStreamResult}.
+   * @throws Error if the blob doesn't exist or cannot be streamed.
+   */
+  public override async GetObjectStream(params: GetObjectStreamParams): Promise<ObjectStreamResult> {
+    // Validate params
+    if (!params.objectId && !params.fullPath) {
+      throw new Error('Either objectId or fullPath must be provided');
+    }
+
+    // For Azure Blob, objectId and fullPath are the same (both are the blob name/path)
+    const objectName = params.objectId || params.fullPath!;
+
+    try {
+      const blobClient = this._getBlobClient(objectName);
+
+      const offset = params.Range?.Start ?? 0;
+      const count = params.Range?.End != null ? params.Range.End - offset + 1 : undefined;
+      const downloadResponse = await blobClient.download(offset, count);
+
+      if (!downloadResponse.readableStreamBody) {
+        throw new Error(`Empty response body for object: ${objectName}`);
+      }
+
+      // readableStreamBody is a NodeJS.ReadableStream; in Node it is a Readable instance.
+      const body = downloadResponse.readableStreamBody;
+      const stream = body instanceof Readable ? body : Readable.from(body as AsyncIterable<Buffer>);
+
+      const result: ObjectStreamResult = {
+        Stream: stream,
+        ContentType: downloadResponse.contentType,
+        ContentLength: downloadResponse.contentLength,
+      };
+
+      const contentRange = this._parseAzureContentRange(downloadResponse.contentRange);
+      if (contentRange) {
+        result.ContentRange = contentRange;
+      }
+
+      return result;
+    } catch (error) {
+      console.error('Error streaming object from Azure Blob Storage', { objectName });
+      console.error(error);
+      throw new Error(`Failed to stream object: ${params.objectId || params.fullPath}`);
+    }
+  }
+
+  /**
+   * Parses an Azure `Content-Range` value (`bytes start-end/total`) into the structured
+   * form used by {@link ObjectStreamResult.ContentRange}.
+   *
+   * @param contentRange - The raw `contentRange` value from the download response, if present.
+   * @returns The parsed range, or undefined when no (valid) range header was returned.
+   */
+  private _parseAzureContentRange(contentRange: string | undefined): { Start: number; End: number; Total: number } | undefined {
+    if (!contentRange) {
+      return undefined;
+    }
+    const match = /bytes\s+(\d+)-(\d+)\/(\d+)/.exec(contentRange);
+    if (!match) {
+      return undefined;
+    }
+    return { Start: Number(match[1]), End: Number(match[2]), Total: Number(match[3]) };
   }
 
   /**

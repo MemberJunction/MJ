@@ -223,7 +223,11 @@ vi.mock('@memberjunction/aiengine', () => ({
   },
 }));
 
-vi.mock('@memberjunction/core-entities', () => {
+vi.mock('@memberjunction/core-entities', async (importOriginal) => {
+  // Spread the real module so transitively-imported exports (e.g.
+  // MJAICredentialBindingEntity, pulled in via BaseAIEngine) always exist —
+  // otherwise adding any new core-entities export breaks this mock's load.
+  const actual = await importOriginal<typeof import('@memberjunction/core-entities')>();
   const mockVectorIndexes = [
     { ID: 'idx-1', Name: 'test-index', VectorDatabaseID: 'vdb-1', EmbeddingModelID: 'embed-model-1' },
   ];
@@ -238,6 +242,7 @@ vi.mock('@memberjunction/core-entities', () => {
     ),
   };
   return {
+    ...actual,
     MJContentSourceEntity: vi.fn(),
     MJContentItemEntity: vi.fn(),
     MJContentFileTypeEntity: vi.fn(),
@@ -599,6 +604,90 @@ describe('AutotagBaseEngine', () => {
 
       // Should not throw
       await expect(engine.saveLLMResults(results, mockUser)).resolves.not.toThrow();
+    });
+  });
+
+  describe('saveContentItemTags — lineage + reasoning (Phase 4)', () => {
+    type CapturedTag = {
+      ItemID?: string;
+      Tag?: string;
+      Weight?: number;
+      AIPromptRunID?: string | null;
+      Reasoning?: string | null;
+    };
+
+    // Install a provider whose GetEntityObject returns inspectable tag records.
+    function installCapturingProvider(): CapturedTag[] {
+      const captured: CapturedTag[] = [];
+      Object.defineProperty(engine, 'ProviderToUse', {
+        get() {
+          return {
+            GetEntityObject: vi.fn().mockImplementation(async () => {
+              const rec: CapturedTag & { NewRecord: () => void; Save: () => Promise<boolean> } = {
+                NewRecord: vi.fn(),
+                Save: vi.fn().mockResolvedValue(true),
+              } as never;
+              captured.push(rec);
+              return rec;
+            }),
+          };
+        },
+        configurable: true,
+      });
+      return captured;
+    }
+
+    it('stamps AIPromptRunID from LLMResults onto every tag', async () => {
+      const captured = installCapturingProvider();
+      const mockUser = { ID: 'user-1' } as never;
+      const results = {
+        __aiPromptRunID: 'run-123',
+        keywords: [
+          { tag: 'alpha', weight: 0.9 },
+          { tag: 'beta', weight: 0.4 },
+        ],
+      };
+
+      await engine.saveContentItemTags('item-1', results, mockUser);
+
+      expect(captured).toHaveLength(2);
+      expect(captured.every(c => c.AIPromptRunID === 'run-123')).toBe(true);
+      expect(captured.map(c => c.Tag)).toEqual(['alpha', 'beta']);
+      expect(captured.map(c => c.Weight)).toEqual([0.9, 0.4]);
+    });
+
+    it('captures per-tag reasoning when present (reasoning or rationale)', async () => {
+      const captured = installCapturingProvider();
+      const mockUser = { ID: 'user-1' } as never;
+      const results = {
+        __aiPromptRunID: 'run-xyz',
+        keywords: [
+          { tag: 'alpha', weight: 0.9, reasoning: 'central topic' },
+          { tag: 'beta', weight: 0.4, rationale: 'mentioned once' },
+          { tag: 'gamma', weight: 0.2 },
+        ],
+      };
+
+      await engine.saveContentItemTags('item-1', results, mockUser);
+
+      const byTag = new Map(captured.map(c => [c.Tag, c]));
+      expect(byTag.get('alpha')?.Reasoning).toBe('central topic');
+      expect(byTag.get('beta')?.Reasoning).toBe('mentioned once');
+      // No reasoning supplied → property left unset (nullable-safe).
+      expect(byTag.get('gamma')?.Reasoning).toBeUndefined();
+    });
+
+    it('leaves AIPromptRunID unset when no prompt run id is present', async () => {
+      const captured = installCapturingProvider();
+      const mockUser = { ID: 'user-1' } as never;
+      const results = {
+        keywords: [{ tag: 'alpha', weight: 0.5 }],
+      };
+
+      await engine.saveContentItemTags('item-1', results, mockUser);
+
+      expect(captured).toHaveLength(1);
+      expect(captured[0].AIPromptRunID).toBeUndefined();
     });
   });
 
@@ -1075,6 +1164,84 @@ describe('AutotagBaseEngine', () => {
       // EmbeddingRateLimiter.Acquire should have been called before the embedding call
       expect(acquireSpy).toHaveBeenCalled();
 
+      acquireSpy.mockRestore();
+    });
+  });
+
+  describe('Streaming pipeline (AsyncIterable input)', () => {
+    const mockUser = { ID: 'user-1' } as never;
+
+    function makeItem(id: string, sourceID = 'src-1'): Record<string, unknown> {
+      return {
+        ID: id, Name: `Item ${id}`, Text: `text ${id}`,
+        ContentSourceID: sourceID, ContentSourceTypeID: 'st1',
+        ContentFileTypeID: 'ft1', ContentTypeID: 'ct1',
+        TaggingStatus: 'Pending', EmbeddingStatus: 'Pending',
+      };
+    }
+
+    async function* yieldItems(items: Record<string, unknown>[]): AsyncIterable<never> {
+      for (const item of items) yield item as never;
+    }
+
+    it('accepts an AsyncIterable and batches items by Pipeline.BatchSize', async () => {
+      const acquireSpy = vi.spyOn(engine.LLMRateLimiter, 'Acquire');
+      const items = Array.from({ length: 5 }, (_, i) => makeItem(`s-${i}`));
+      const config = { Pipeline: { BatchSize: 2, ErrorThresholdPercent: 100, DelayBetweenBatchesMs: 0 } };
+
+      await engine.ExtractTextAndProcessWithLLM(yieldItems(items), mockUser, undefined, config);
+
+      // 5 items, batch size 2 → batches of [2, 2, 1] → 3 rate-limiter acquires.
+      // Critical invariant: the partial final batch still flushes (we don't
+      // drop items because the stream closed mid-batch).
+      expect(acquireSpy.mock.calls.length).toBe(3);
+      acquireSpy.mockRestore();
+    });
+
+    it('produces zero batches when the stream is empty', async () => {
+      const acquireSpy = vi.spyOn(engine.LLMRateLimiter, 'Acquire');
+      const config = { Pipeline: { BatchSize: 10, ErrorThresholdPercent: 100, DelayBetweenBatchesMs: 0 } };
+
+      await engine.ExtractTextAndProcessWithLLM(yieldItems([]), mockUser, undefined, config);
+
+      expect(acquireSpy).not.toHaveBeenCalled();
+      acquireSpy.mockRestore();
+    });
+
+    it('handles a stream smaller than batchSize as one partial batch', async () => {
+      const acquireSpy = vi.spyOn(engine.LLMRateLimiter, 'Acquire');
+      const items = [makeItem('only-one')];
+      const config = { Pipeline: { BatchSize: 50, ErrorThresholdPercent: 100, DelayBetweenBatchesMs: 0 } };
+
+      await engine.ExtractTextAndProcessWithLLM(yieldItems(items), mockUser, undefined, config);
+
+      // 1 item < 50 batchSize → one batch, one acquire.
+      expect(acquireSpy.mock.calls.length).toBe(1);
+      acquireSpy.mockRestore();
+    });
+
+    it('produces N batches when stream has N*batchSize items exactly', async () => {
+      const acquireSpy = vi.spyOn(engine.LLMRateLimiter, 'Acquire');
+      const items = Array.from({ length: 6 }, (_, i) => makeItem(`s-${i}`));
+      const config = { Pipeline: { BatchSize: 3, ErrorThresholdPercent: 100, DelayBetweenBatchesMs: 0 } };
+
+      await engine.ExtractTextAndProcessWithLLM(yieldItems(items), mockUser, undefined, config);
+
+      // 6 items, batch size 3 → exactly 2 full batches, no straggler flush.
+      expect(acquireSpy.mock.calls.length).toBe(2);
+      acquireSpy.mockRestore();
+    });
+
+    it('preserves array-form behavior (backwards compatibility)', async () => {
+      const acquireSpy = vi.spyOn(engine.LLMRateLimiter, 'Acquire');
+      const items = Array.from({ length: 5 }, (_, i) => makeItem(`s-${i}`)) as never[];
+      const config = { Pipeline: { BatchSize: 2, ErrorThresholdPercent: 100, DelayBetweenBatchesMs: 0 } };
+
+      // Same shape as the streaming case (5 items, batchSize 2 → 3 batches),
+      // exercised through the array path that pre-existing callers use.
+      await engine.ExtractTextAndProcessWithLLM(items, mockUser, undefined, config);
+
+      expect(acquireSpy.mock.calls.length).toBe(3);
       acquireSpy.mockRestore();
     });
   });

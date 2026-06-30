@@ -1,0 +1,72 @@
+<div class="tag-cloud-container">
+  <!-- Scope picker / sizing toolbar -->
+  <div class="tag-cloud-toolbar">
+    <div class="scope-field">
+      <label>Content Source</label>
+      <select class="mj-input" [(ngModel)]="SelectedContentSourceID" (ngModelChange)="OnScopeChanged()">
+        <option value="">All Sources</option>
+        @for (opt of ContentSourceOptions; track opt.ID) {
+          <option [value]="opt.ID">{{ opt.Name }}</option>
+        }
+      </select>
+    </div>
+
+    <div class="scope-field">
+      <label>Content Type</label>
+      <select class="mj-input" [(ngModel)]="SelectedContentTypeID" (ngModelChange)="OnScopeChanged()">
+        <option value="">All Types</option>
+        @for (opt of ContentTypeOptions; track opt.ID) {
+          <option [value]="opt.ID">{{ opt.Name }}</option>
+        }
+      </select>
+    </div>
+
+    <div class="scope-field">
+      <label>Tag Root</label>
+      <select class="mj-input" [(ngModel)]="SelectedTagRootID" (ngModelChange)="OnScopeChanged()">
+        <option value="">All Tags</option>
+        @for (opt of TagRootOptions; track opt.ID) {
+          <option [value]="opt.ID">{{ opt.Name }}</option>
+        }
+      </select>
+    </div>
+
+    <div class="scope-field size-field">
+      <label>Max Size: {{ MaxFontSize }}px</label>
+      <input type="range" min="28" max="96" step="4"
+             [value]="MaxFontSize"
+             (input)="OnSizeChanged($any($event.target).valueAsNumber)" />
+    </div>
+
+    @if (HasActiveScope) {
+      <button mjButton variant="flat" size="sm" (click)="ClearScope()">
+        <i class="fa-solid fa-filter-circle-xmark"></i> Clear
+      </button>
+    }
+  </div>
+
+  <!-- Cloud area -->
+  <div class="tag-cloud-area">
+    @if (IsLoading) {
+      <mj-loading text="Building tag cloud..."></mj-loading>
+    } @else if (!HasItems) {
+      <mj-empty-state class="tag-cloud-empty"
+        [Variant]="HasActiveScope ? 'no-results' : 'empty'"
+        Icon="fa-solid fa-tags"
+        Title="No tags found for the current scope"
+        [ActionText]="HasActiveScope ? 'Clear filters' : ''"
+        ActionIcon="fa-solid fa-rotate-left"
+        ActionVariant="outline"
+        (Action)="ClearScope()" />
+    } @else {
+      <mj-word-cloud
+        [Items]="Items"
+        [MinFontSize]="MinFontSize"
+        [MaxFontSize]="MaxFontSize"
+        [ColorMode]="ColorMode"
+        [Interactive]="true"
+        (ItemClick)="OnWordClicked($event)">
+      </mj-word-cloud>
+    }
+  </div>
+</div>

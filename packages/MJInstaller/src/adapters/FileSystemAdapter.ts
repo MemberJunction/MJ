@@ -295,6 +295,19 @@ export class FileSystemAdapter {
   }
 
   /**
+   * Read a file's raw bytes (no encoding interpretation). Useful for hashing
+   * or binary diffs where UTF-8 round-tripping would corrupt the content.
+   *
+   * @param filePath - Absolute path to the file.
+   * @returns File content as a Uint8Array.
+   * @throws Error if the file doesn't exist.
+   */
+  async ReadBytes(filePath: string): Promise<Uint8Array> {
+    const buf = await fs.readFile(filePath);
+    return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
+  }
+
+  /**
    * List file names in a directory, optionally filtered by a regex pattern.
    * Returns only regular files (not directories).
    *

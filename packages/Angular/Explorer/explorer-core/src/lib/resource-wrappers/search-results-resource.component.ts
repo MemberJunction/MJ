@@ -119,11 +119,12 @@ import { WordCloudItem, WordCloudItemEvent } from '@memberjunction/ng-word-cloud
 
             <!-- No server results -->
             @if (!IsSearching && ServerResultCount === 0 && HasSearched) {
-                <div class="search-no-results">
-                    <i class="fa-solid fa-magnifying-glass-minus"></i>
-                    <h3>No results found</h3>
-                    <p>Try different keywords or broaden your search.</p>
-                </div>
+                <mj-empty-state
+                    class="search-no-results"
+                    Variant="no-results"
+                    Icon="fa-solid fa-magnifying-glass-minus"
+                    Title="No results found"
+                    Message="Try different keywords or broaden your search." />
             }
             <!-- Results body (visible when server returned results) -->
             @if (ServerResultCount > 0) {
@@ -176,10 +177,11 @@ import { WordCloudItem, WordCloudItemEvent } from '@memberjunction/ng-word-cloud
                                     (OpenRecordRequested)="OnOpenRecord($event)">
                                 </mj-search-results>
                             } @else {
-                                <div class="search-no-results-inline">
-                                    <i class="fa-solid fa-filter-circle-xmark"></i>
-                                    <p>No results match current filters. Try lowering the minimum relevance.</p>
-                                </div>
+                                <mj-empty-state
+                                    class="search-no-results-inline"
+                                    Variant="no-results"
+                                    Icon="fa-solid fa-filter-circle-xmark"
+                                    Title="No results match current filters. Try lowering the minimum relevance." />
                             }
                         </div>
                     }
@@ -294,25 +296,6 @@ import { WordCloudItem, WordCloudItemEvent } from '@memberjunction/ng-word-cloud
             min-width: 0;
             overflow-y: auto;
         }
-        .search-no-results {
-            text-align: center;
-            padding: 60px 20px;
-            color: var(--mj-text-muted);
-        }
-        .search-no-results i {
-            font-size: 48px;
-            margin-bottom: 16px;
-            opacity: 0.4;
-        }
-        .search-no-results h3 {
-            font-size: 18px;
-            color: var(--mj-text-primary);
-            margin: 0 0 8px;
-        }
-        .search-no-results p {
-            font-size: 14px;
-            margin: 0;
-        }
         .search-results-body-wrapper {
             position: relative;
             flex: 1;
@@ -331,21 +314,6 @@ import { WordCloudItem, WordCloudItemEvent } from '@memberjunction/ng-word-cloud
         }
         .search-no-results-inline {
             flex: 1;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            color: var(--mj-text-muted);
-            padding: 40px 20px;
-        }
-        .search-no-results-inline i {
-            font-size: 32px;
-            opacity: 0.4;
-        }
-        .search-no-results-inline p {
-            font-size: 13px;
-            margin: 0;
         }
         .sr-view-toggle {
             display: flex;
@@ -579,6 +547,26 @@ export class SearchResultsResource extends BaseResourceComponent {
             this.ExecuteSearch(this.CurrentQuery);
         } else {
             // User raised or stayed at/above server threshold — client-side filter is sufficient
+            this.applyClientFilters();
+        }
+    }
+
+    /**
+     * React to ?minRelevance= changes that arrive after initial load — e.g. a Home pin or
+     * deep link to a specific relevance threshold, or browser back/forward — when this tab
+     * is re-focused rather than freshly loaded (so loadFromData() does not run again).
+     */
+    protected override OnQueryParamsChanged(params: Record<string, string>, _source: 'popstate' | 'deeplink'): void {
+        const minRelevance = params['minRelevance'];
+        if (minRelevance == null) return;
+        const mr = Number(minRelevance);
+        if (isNaN(mr) || mr < 0 || mr > 100 || mr === this.MinScorePercent) return;
+
+        this.MinScorePercent = mr;
+        if (mr < this.serverMinScorePercent && this.CurrentQuery) {
+            // Below what the server filtered — re-query with the lower threshold.
+            void this.ExecuteSearch(this.CurrentQuery);
+        } else {
             this.applyClientFilters();
         }
     }

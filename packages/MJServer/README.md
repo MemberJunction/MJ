@@ -109,6 +109,7 @@ MJServer uses a layered configuration system with the following priority (highes
 | `MJ_REST_API_EXCLUDE_ENTITIES` | Comma-separated entity exclude list | (optional) |
 | `MJ_TELEMETRY_ENABLED` | Enable server telemetry | `true` |
 | `METADATA_CACHE_REFRESH_INTERVAL` | Metadata refresh interval (ms) | `180000` |
+| `MJ_LOG_GRAPHQL_VARIABLES` | Enable redacted verbose echo of GraphQL variables to stdout — see [Debugging GraphQL requests](#debugging-graphql-requests) | `false` |
 
 ### Configuration File (`mj.config.cjs`)
 
@@ -166,7 +167,73 @@ module.exports = {
     enabled: true,
     level: 'standard',  // 'minimal' | 'standard' | 'verbose' | 'debug'
   },
+
+  // Debugging — see "Debugging GraphQL requests" below
+  loggingSettings: {
+    graphql: {
+      logVariables: false, // env override: MJ_LOG_GRAPHQL_VARIABLES
+    },
+  },
 };
+```
+
+### Debugging GraphQL requests
+
+By default, MJServer logs only the GraphQL `operationName` for each incoming request. The `variables` payload is **never** logged in the default configuration — this protects credentials and other sensitive material from leaking into container logs, cloud log aggregators, or `tail -f` sessions.
+
+For local debugging, you can enable a **redacted verbose echo** of variables via the `loggingSettings.graphql.logVariables` flag (or the `MJ_LOG_GRAPHQL_VARIABLES=true` environment variable). When enabled:
+
+- A second log line is emitted per root resolver call: `{ operation: '<name>', args: { ... } }`
+- Fields on `Create<X>Input` / `Update<X>Input` that map to an entity column with `EntityFieldInfo.Encrypt=true` are redacted automatically (metadata-driven).
+- Fields or parameters explicitly marked with the `@NoLog` decorator are redacted manually (for custom resolvers and non-metadata-bound args).
+- A boot-time audit warns about every custom-resolver `@Arg` that is neither metadata-bound nor `@NoLog`-marked, so authors know which arguments will appear in plaintext while the flag is active.
+- The first call into any such resolver also emits a one-time runtime warning naming the un-decorated args.
+
+**Security notes:**
+
+- This flag is opt-in and defaults to `false` in every environment regardless of `NODE_ENV`. Never set it to `true` in production.
+- It does NOT re-enable the historical variables leak. The default-config log line emits operation name only; the verbose echo is a separate, redaction-aware path.
+- Custom resolvers that accept sensitive arguments (e.g. credential-test mutations) should mark those parameters with `@NoLog` from `@memberjunction/server` so they remain redacted even when verbose logging is on.
+
+**Enabling for a single session:**
+
+```bash
+MJ_LOG_GRAPHQL_VARIABLES=true npm run start
+```
+
+**Enabling persistently via `mj.config.cjs`:**
+
+```javascript
+loggingSettings: {
+  graphql: {
+    logVariables: true,
+  },
+}
+```
+
+**Applying `@NoLog` to a custom resolver:**
+
+```typescript
+import { NoLog } from '@memberjunction/server';
+
+@Mutation(() => Boolean)
+async TestCredential(
+  @Arg('accessToken') @NoLog accessToken: string,
+  @Ctx() ctx: AppContext,
+): Promise<boolean> {
+  // ...
+}
+```
+
+```typescript
+import { InputType, Field } from 'type-graphql';
+import { NoLog } from '@memberjunction/server';
+
+@InputType()
+export class MyInput {
+  @Field(() => String) @NoLog Token: string;
+  @Field(() => String) Description: string;
+}
 ```
 
 ## Usage
@@ -415,7 +482,7 @@ The server includes resolvers for the following domains:
 | Resolver | Operations |
 |----------|------------|
 | `EntityResolver` | CRUD operations for all entities |
-| `RunViewResolver` | RunView by ID, name, or dynamic entity |
+| `RunViewResolver` | RunView by ID, name, or dynamic entity. All four input types (`RunViewByIDInput`, `RunViewByNameInput`, `RunDynamicViewInput`, `RunViewGenericInput`) expose an optional `AfterKey: CompositeKeyInputType` for keyset (seek) pagination — see [KEYSET_PAGINATION_GUIDE.md](../../guides/KEYSET_PAGINATION_GUIDE.md). |
 | `RunAIPromptResolver` | Execute AI prompts, simple prompts, text embeddings |
 | `RunAIAgentResolver` | Execute AI agents with session and streaming support |
 | `ActionResolver` | Execute MJ Actions |
@@ -482,6 +549,7 @@ All built-in resolvers extend `ResolverBase`, which provides:
 | `RunViewByNameGeneric()` | Execute a saved view by name |
 | `RunDynamicViewGeneric()` | Execute an ad-hoc view on an entity |
 | `RunViewsGeneric()` | Batch-execute multiple views |
+| `RunViewGenericInternal()` | Shared internal: extracts and forwards all RunView params including `AfterKey` (keyset pagination — see [KEYSET_PAGINATION_GUIDE.md](../../guides/KEYSET_PAGINATION_GUIDE.md)) |
 | `CheckUserReadPermissions()` | Validate entity-level read access |
 | `CheckAPIKeyScopeAuthorization()` | Validate API key scope |
 | `MapFieldNamesToCodeNames()` | Map field names for GraphQL transport |
@@ -879,8 +947,8 @@ Unhandled promise rejections are caught and logged without crashing the server.
 
 | Package | Purpose |
 |---------|---------|
-| [@memberjunction/core](../MJCore/README.md) | Core metadata, entities, RunView |
-| [@memberjunction/core-entities](../MJCoreEntities/README.md) | Generated entity classes |
+| [@memberjunction/core](../MJCore/readme.md) | Core metadata, entities, RunView |
+| [@memberjunction/core-entities](../MJCoreEntities/readme.md) | Generated entity classes |
 | [@memberjunction/global](../MJGlobal/README.md) | ClassFactory, event system |
 | [@memberjunction/sqlserver-dataprovider](../SQLServerDataProvider/README.md) | SQL Server data provider |
 | [@memberjunction/graphql-dataprovider](../GraphQLDataProvider/README.md) | GraphQL field mapping |
@@ -896,20 +964,20 @@ Unhandled promise rejections are caught and logged without crashing the server.
 | [@memberjunction/ai-prompts](../AI/Prompts/README.md) | AI prompt execution |
 | [@memberjunction/ai-agents](../AI/Agents/README.md) | AI agent framework |
 | [@memberjunction/ai-core-plus](../AI/CorePlus/README.md) | AI prompt parameters |
-| [@memberjunction/aiengine](../AIEngine/README.md) | AI engine orchestration |
-| [@memberjunction/ai-provider-bundle](../AI/ProviderBundle/README.md) | Bundled AI providers |
+| [@memberjunction/aiengine](../AI/Engine/README.md) | AI engine orchestration |
+| [@memberjunction/ai-provider-bundle](../AI/Providers/Bundle/README.md) | Bundled AI providers |
 
 ### Infrastructure Packages
 
 | Package | Purpose |
 |---------|---------|
-| [@memberjunction/scheduling-engine](../SchedulingEngine/README.md) | Scheduled job execution |
+| [@memberjunction/scheduling-engine](../Scheduling/engine/README.md) | Scheduled job execution |
 | [@memberjunction/actions](../Actions/README.md) | Action framework |
 | [@memberjunction/templates](../Templates/README.md) | Template engine |
-| [@memberjunction/notifications](../Notifications/README.md) | Notification system |
-| [@memberjunction/storage](../Storage/README.md) | File storage |
-| [@memberjunction/communication-ms-graph](../Communication/providers/MSGraphProvider/README.md) | MS Graph communications |
-| [@memberjunction/communication-sendgrid](../Communication/providers/SendGridProvider/README.md) | SendGrid communications |
+| [@memberjunction/notifications](../Communication/notifications/README.md) | Notification system |
+| [@memberjunction/storage](../MJStorage/readme.md) | File storage |
+| [@memberjunction/communication-ms-graph](../Communication/providers/MSGraph/README.md) | MS Graph communications |
+| [@memberjunction/communication-sendgrid](../Communication/providers/sendgrid/README.md) | SendGrid communications |
 
 ### Third-Party Dependencies
 
@@ -929,9 +997,9 @@ Unhandled promise rejections are caught and logged without crashing the server.
 ## Related Packages
 
 - [@memberjunction/server-bootstrap](../ServerBootstrap/README.md) -- Pre-built class registration manifest for tree-shaking prevention
-- [MJAPI](../../MJAPI/README.md) -- Reference server application that consumes this package
-- [@memberjunction/core](../MJCore/README.md) -- Core framework that MJServer exposes via API
-- [Caching & Pub/Sub Guide](/guides/CACHING_AND_PUBSUB_GUIDE.md) -- Comprehensive guide to caching architecture, Redis cross-server sync, and GraphQL cache invalidation subscriptions
+- [MJAPI](../MJAPI/README.md) -- Reference server application that consumes this package
+- [@memberjunction/core](../MJCore/readme.md) -- Core framework that MJServer exposes via API
+- [Caching & Pub/Sub Guide](../../guides/CACHING_AND_PUBSUB_GUIDE.md) -- Comprehensive guide to caching architecture, Redis cross-server sync, and GraphQL cache invalidation subscriptions
 
 ## Troubleshooting
 

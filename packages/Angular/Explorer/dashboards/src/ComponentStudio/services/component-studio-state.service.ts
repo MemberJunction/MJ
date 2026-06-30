@@ -2,8 +2,10 @@ import { Injectable, EventEmitter } from '@angular/core';
 import { RunView, CompositeKey, Metadata, IMetadataProvider } from '@memberjunction/core';
 import { ComponentMetadataEngine } from '@memberjunction/core-entities';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
+import { buildCuratedFormSchema, CuratedFormSchema, FormMode } from '@memberjunction/interactive-component-types/forms';
 import { ParseJSONRecursive, ParseJSONOptions } from '@memberjunction/global';
 import { BehaviorSubject, Subject } from 'rxjs';
+import { FormCanvasModel } from './form-canvas-model';
 
 /**
  * Lightweight summary of a database component for the browser list.
@@ -118,6 +120,84 @@ export class ComponentStudioStateService {
   get IsRunning(): boolean { return this._isRunning; }
   set IsRunning(value: boolean) { this._isRunning = value; }
 
+  // --- Form-role target entity (shared between Field Binding Inspector
+  // and the fixture-record live preview) ---
+  // Tracks which entity a form-role Component is being authored against.
+  // Inspector writes; Preview reads to build fixture FormHostProps; either
+  // can clear by setting to null. Independent of ComponentSpec because the
+  // author may want to inspect Customer fields while editing a form for
+  // Accounts, or simply hasn't decided yet.
+  private _formTargetEntityName: string | null = null;
+  get FormTargetEntityName(): string | null { return this._formTargetEntityName; }
+  set FormTargetEntityName(value: string | null) {
+    if (value === this._formTargetEntityName) return;
+    this._formTargetEntityName = value;
+    // Schema is keyed by entity — invalidate when target changes.
+    this._formSchema = null;
+    this.StateChanged.emit();
+  }
+
+  // --- Form Builder canvas state (live inside the Form Builder tab). ---
+  // The canvas is the source of truth WHILE the Form Builder tab is active;
+  // on save we serialize it back to ComponentSpec.code via canvas-to-code.
+  // When the user instead edits Code directly, the canvas is rebuilt via
+  // code-to-canvas (lossy) on tab focus. Schema is cached per entity so
+  // tab toggles don't pay the build cost repeatedly.
+  private _formCanvas: FormCanvasModel | null = null;
+  get FormCanvas(): FormCanvasModel | null { return this._formCanvas; }
+  set FormCanvas(value: FormCanvasModel | null) {
+    this._formCanvas = value;
+    this.StateChanged.emit();
+  }
+
+  private _formSchema: CuratedFormSchema | null = null;
+  get FormSchema(): CuratedFormSchema | null { return this._formSchema; }
+
+  private _formSelectedElementId: string | null = null;
+  get FormSelectedElementId(): string | null { return this._formSelectedElementId; }
+  set FormSelectedElementId(value: string | null) {
+    this._formSelectedElementId = value;
+    this.StateChanged.emit();
+  }
+
+  private _formSelectedSectionId: string | null = null;
+  get FormSelectedSectionId(): string | null { return this._formSelectedSectionId; }
+  set FormSelectedSectionId(value: string | null) {
+    this._formSelectedSectionId = value;
+    this.StateChanged.emit();
+  }
+
+  /** True when the parser couldn't fully round-trip code → canvas. UI shows a banner. */
+  private _formCodeOnlySectionsDetected = false;
+  get FormCodeOnlySectionsDetected(): boolean { return this._formCodeOnlySectionsDetected; }
+  set FormCodeOnlySectionsDetected(value: boolean) {
+    this._formCodeOnlySectionsDetected = value;
+    this.StateChanged.emit();
+  }
+
+  /** Preview mode for the Form Builder tab — drives the toolbar pills AND the preview pane. */
+  private _formPreviewMode: FormMode = 'view';
+  get FormPreviewMode(): FormMode { return this._formPreviewMode; }
+  set FormPreviewMode(value: FormMode) {
+    if (this._formPreviewMode === value) return;
+    this._formPreviewMode = value;
+    this.StateChanged.emit();
+  }
+
+  /** Build (and cache) the curated schema for the given entity. */
+  BuildFormSchema(entityName: string | null): CuratedFormSchema | null {
+    if (!entityName) {
+      this._formSchema = null;
+      return null;
+    }
+    if (this._formSchema && this._formSchema.entityName === entityName) {
+      return this._formSchema;
+    }
+    const schema = buildCuratedFormSchema(entityName, this.Provider);
+    this._formSchema = schema;
+    return schema;
+  }
+
   // --- Loading ---
   private _isLoading = true;
   get IsLoading(): boolean { return this._isLoading; }
@@ -207,6 +287,10 @@ export class ComponentStudioStateService {
 
   /** Emitted when a component spec is updated (e.g. by AI) */
   SpecUpdated = new EventEmitter<ComponentSpec>();
+
+  /** Emitted when the Form Builder tab's "Open in Chat" button is clicked.
+   * The dashboard subscribes and forwards to NavigationService.SetAgentContext. */
+  OpenInChatRequested = new EventEmitter<void>();
 
   private _provider: IMetadataProvider | null = null;
 

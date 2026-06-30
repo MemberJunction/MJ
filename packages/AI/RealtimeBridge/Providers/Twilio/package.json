@@ -1,0 +1,35 @@
+{
+  "name": "@memberjunction/ai-bridge-twilio",
+  "type": "module",
+  "version": "5.43.0",
+  "description": "MemberJunction: Twilio Realtime Bridge driver (telephony). Connects the realtime agent engine to a phone call over Twilio Programmable Voice + Media Streams — outbound dial, inbound DID routing, single-party audio in/out, DTMF send/receive, and call transfer — via an injectable telephony call SDK seam. Audio only: no video, no screen, no Meeting Controls.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "start": "ts-node-dev src/index.ts",
+    "build": "tsc && tsc-alias -f",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "author": "MemberJunction.com",
+  "license": "ISC",
+  "dependencies": {
+    "@memberjunction/core": "5.43.0",
+    "@memberjunction/global": "5.43.0",
+    "@memberjunction/core-entities": "5.43.0",
+    "@memberjunction/ai-bridge-base": "5.43.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.11",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

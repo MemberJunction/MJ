@@ -190,6 +190,71 @@ describe('LoopAgentType', () => {
             // Validation catches this before reaching the switch — error comes from isValidLoopResponse
         });
 
+        // ── Parallel Sub-Agent ──────────────────────────────────────────
+
+        it('should return Sub-Agent with subAgents array details when type is "Sub-Agent" with subAgents', async () => {
+            const result = await agent.DetermineNextStep(
+                mockPromptResult({
+                    taskComplete: false,
+                    nextStep: {
+                        type: 'Sub-Agent',
+                        subAgents: [
+                            { name: 'DbAgent', message: 'Query database', terminateAfter: false },
+                            { name: 'WebAgent', message: 'Search web', terminateAfter: false }
+                        ],
+                    },
+                }),
+                stubParams,
+                stubPayload,
+                stubState,
+            );
+
+            expect(result.step).toBe('Sub-Agent');
+            expect(result.subAgents).toBeDefined();
+            expect(result.subAgents).toHaveLength(2);
+            expect(result.subAgents![0].name).toBe('DbAgent');
+            expect(result.subAgents![0].message).toBe('Query database');
+            expect(result.subAgents![1].name).toBe('WebAgent');
+        });
+
+        it('should infer type "Sub-Agent" when type is missing but subAgents array is present', async () => {
+            const result = await agent.DetermineNextStep(
+                mockPromptResult({
+                    taskComplete: false,
+                    nextStep: {
+                        subAgents: [
+                            { name: 'HelperAgent1', message: 'Do task 1', terminateAfter: false },
+                            { name: 'HelperAgent2', message: 'Do task 2', terminateAfter: false }
+                        ],
+                    },
+                }),
+                stubParams,
+                stubPayload,
+                stubState,
+            );
+
+            expect(result.step).toBe('Sub-Agent');
+            expect(result.subAgents).toBeDefined();
+            expect(result.subAgents).toHaveLength(2);
+            expect(result.subAgents![0].name).toBe('HelperAgent1');
+        });
+
+        it('should return Retry when type is "Sub-Agent" but both subAgent and subAgents are missing', async () => {
+            const result = await agent.DetermineNextStep(
+                mockPromptResult({
+                    taskComplete: false,
+                    nextStep: {
+                        type: 'Sub-Agent',
+                    },
+                }),
+                stubParams,
+                stubPayload,
+                stubState,
+            );
+
+            expect(result.step).toBe('Retry');
+        });
+
         // ── Chat ───────────────────────────────────────────────────────
 
         it('should return Chat with terminate: true when type is "Chat" with message', async () => {
@@ -333,6 +398,58 @@ describe('LoopAgentType', () => {
 
             expect(result.step).toBe('Retry');
             expect(result.errorMessage).toContain('While');
+        });
+
+        // ── Pipeline ───────────────────────────────────────────────────
+
+        it('should accept nextStep.type "Pipeline" and return non-terminal Retry carrying the pipeline', async () => {
+            const pipeline = { steps: [{ tool: 'get_rows', with: {} }, { where: "Status == 'Open'" }, { count: true }] };
+            const result = await agent.DetermineNextStep(
+                mockPromptResult({
+                    taskComplete: false,
+                    nextStep: { type: 'Pipeline', pipeline },
+                }),
+                stubParams,
+                stubPayload,
+                stubState,
+            );
+
+            // Regression: the response validator must allow 'pipeline' so the pipeline is dispatched
+            // (returned on a non-terminal Retry for base-agent to execute), not bounced as invalid.
+            expect(result.step).toBe('Retry');
+            expect(result.terminate).toBe(false);
+            expect(result.pipeline).toEqual(pipeline);
+        });
+
+        it('should infer type "Pipeline" when type is missing but nextStep.pipeline has steps', async () => {
+            const pipeline = { steps: [{ tool: 'get_rows', with: {} }, { first: 5 }] };
+            const result = await agent.DetermineNextStep(
+                mockPromptResult({
+                    taskComplete: false,
+                    nextStep: { pipeline },
+                }),
+                stubParams,
+                stubPayload,
+                stubState,
+            );
+
+            expect(result.step).toBe('Retry');
+            expect(result.pipeline).toEqual(pipeline);
+        });
+
+        it('should return Retry when type is "Pipeline" but pipeline.steps is empty', async () => {
+            const result = await agent.DetermineNextStep(
+                mockPromptResult({
+                    taskComplete: false,
+                    nextStep: { type: 'Pipeline', pipeline: { steps: [] } },
+                }),
+                stubParams,
+                stubPayload,
+                stubState,
+            );
+
+            expect(result.step).toBe('Retry');
+            expect(result.errorMessage).toContain('Pipeline');
         });
 
         // ── Invalid / Unknown Type ─────────────────────────────────────
@@ -601,6 +718,28 @@ describe('LoopAgentType', () => {
             );
 
             expect(result.step).toBe('Retry');
+        });
+
+        it('should give a directive corrective message (not a terse one) on unparseable output', async () => {
+            // The retry feedback must explicitly steer the model back to JSON-only output and
+            // away from the prose-narration drift ("I'm executing the X action..."). A vague
+            // "couldn't parse" message gave strong in-context models nothing to correct against.
+            const result = await agent.DetermineNextStep(
+                {
+                    success: true,
+                    result: "I'm executing the Run Ad-hoc Query action with parameters: ...",
+                    chatResult: {} as AIPromptRunResult['chatResult'],
+                },
+                stubParams,
+                stubPayload,
+                stubState,
+            );
+
+            expect(result.step).toBe('Retry');
+            const msg = (result.errorMessage || '').toLowerCase();
+            expect(msg).toContain('json');
+            expect(msg).toContain('narration');
+            expect(msg).toContain('nothing else');
         });
 
         // ── Payload change request passthrough ──────────────────────────

@@ -68,7 +68,7 @@ Don't assume children will fall back to the global — they might, but you'd be 
 
 ### Migration Status
 
-There is a known multi-provider migration in flight — many existing Angular components in `packages/Angular/**` still call `new Metadata()` / `new RunView()` blindly and inherit the global provider. These are documented in [/plans/multi-provider-threading.md](/plans/multi-provider-threading.md) and will be migrated together as part of phase 6 of that effort.
+There is a known multi-provider migration in flight — many existing Angular components in `packages/Angular/**` still call `new Metadata()` / `new RunView()` blindly and inherit the global provider. These are documented in [/plans/multi-provider-threading.md](../../plans/multi-provider-threading.md) and will be migrated together as part of phase 6 of that effort.
 
 **For new components and any component you touch:** apply the pattern above. Don't add to the migration debt.
 
@@ -102,6 +102,53 @@ export class MyGenericComponent {
 Components in `packages/Angular/Explorer/` that need routing **MUST** use `NavigationService` from `@memberjunction/ng-explorer-core` — never `Router` directly. `NavigationService` encapsulates all routing logic for consistency and the ability to change routing strategy without touching individual components.
 
 The only exception is `MJExplorerAppComponent` which subscribes to `Router.events` to drive top-level state like the chat overlay visibility.
+
+---
+
+## 🚨 CRITICAL: Query-Param State MUST Round-Trip (Deep Links, Home Pins, Back/Forward) 🚨
+
+Any resource component (`BaseResourceComponent` / `BaseDashboard` subclass) that encodes sub-state in the URL via query params **MUST** be able to restore that state when it changes *after* initial load — not just on first mount. Reading params once in `ngOnInit` / `initDashboard` / a `Data` setter is **not enough**. If you only read on init, deep links, Home pins, and browser back/forward all silently break the moment the tab is **re-focused** instead of freshly created — which is the common case, because Explorer **caches and reuses resource components** (it detaches them from the DOM but keeps the instance alive; see [ComponentCacheManager](Explorer/explorer-core/src/lib/shell/components/tabs/component-cache-manager.ts)).
+
+### The contract: two halves, both required
+
+1. **Read initial params** (first mount): in `ngOnInit` / `initDashboard`, call `this.GetQueryParams()` and apply.
+2. **React to later changes** (tab re-focus, pin click, back/forward, deep link): override `OnQueryParamsChanged(params, source)` and apply the same state.
+
+```typescript
+// 1. Initial read
+protected initDashboard(): void {
+    const p = this.GetQueryParams();
+    if (p['entity']) this.openEntity(p['entity']);
+}
+
+// 2. React to ALL later changes — REQUIRED if you push params to the URL
+protected override OnQueryParamsChanged(params: Record<string, string>, _source: 'popstate' | 'deeplink'): void {
+    const entityId = params['entity'] || null;
+    if (entityId && entityId !== this.currentEntityId) {
+        this.openEntity(entityId);          // openEntity may call UpdateQueryParams — safe, auto-suppressed during delivery
+    } else if (!entityId && this.currentEntityId) {
+        this.closeEntity();
+    }
+}
+```
+
+**Rule of thumb:** if you ever call `UpdateQueryParams(...)` / `UpdateActiveTabQueryParams(...)`, you owe a matching `OnQueryParamsChanged` that restores that exact state. The two are a pair.
+
+### How delivery works (and why it's reliable)
+
+`OnQueryParamsChanged` is driven by `BaseResourceComponent` from two sources, both funneled through a de-duplicated delivery:
+- **Reactive** — `NavigationService.ObserveTabQueryParams(tabId)`, backed by the workspace `BehaviorSubject`. It replays the tab's current params on subscribe **and** emits later changes. This is **plain RxJS, independent of Angular change detection**, so it fires even on a cached/detached component. The first meaningful delivery is labeled `'deeplink'`, later ones `'popstate'`.
+- **Explicit** — the shell's popstate path calls `NavigationService.NotifyQueryParamsChanged`.
+
+Because delivery is RxJS-based (not CD-based), you do **not** need the `MJGlobal` event bus for this — the workspace stream already reaches detached components.
+
+### Do NOT use `ActivatedRoute` for this
+
+Some older components inject `ActivatedRoute` and subscribe to `route.queryParams`. This is off-pattern (violates the NavigationService-only rule) **and unreliable for pin clicks**: `UpdateActiveTabQueryParams` updates the tab config and the workspace stream, but does not directly drive the Angular router, so an `ActivatedRoute` subscription may not fire. Use `OnQueryParamsChanged` instead.
+
+### Cached components: navigation intent beats preserved state
+
+When the tab-container reattaches a cached component, an **incoming** navigation's query params (e.g. a Home pin targeting a specific conversation) take precedence over the component's own `savedQueryParams`. For cross-resource navigation that targets specific params, pass them **into** `NavigationService.SwitchToApp(appId, navItem, queryParams)` so they land in the tab config *synchronously* before the cached component reattaches — never via a post-hoc `.then(() => UpdateActiveTabQueryParams(...))`, which races the cache reattach and loses. See [tab-container.component.ts](Explorer/explorer-core/src/lib/shell/components/tabs/tab-container.component.ts) (`loadSingleResourceContent`, cached branch).
 
 ---
 
@@ -165,7 +212,7 @@ your-project@1.0.0
 
 ## 📚 Dashboard Development Guide
 
-**IMPORTANT**: When building dashboards in MemberJunction, always refer to the comprehensive guide at **[/guides/DASHBOARD_BEST_PRACTICES.md](/guides/DASHBOARD_BEST_PRACTICES.md)**.
+**IMPORTANT**: When building dashboards in MemberJunction, always refer to the comprehensive guide at **[/guides/DASHBOARD_BEST_PRACTICES.md](../../guides/DASHBOARD_BEST_PRACTICES.md)**.
 
 This guide covers:
 - Architecture patterns (no Angular data services - use MJ Engine classes)
@@ -174,11 +221,16 @@ This guide covers:
 - Getter/setter state management pattern
 - User preferences via UserInfoEngine
 - Data loading patterns with RunView and local caching
+- **Page Chrome** — the shared `<mj-page-layout>` / `<mj-page-header>` / `<mj-page-body>` trio used by every MJ Explorer dashboard. Don't roll bespoke headers, gradients, or sidebars; use the trio and project content into the `[meta]`/`[actions]`/`[toolbar]` slots. Full slot rules + exception list in [/plans/explorer-chrome-conventions.md](../../plans/explorer-chrome-conventions.md).
 - Layout patterns using CSS Flexbox/Grid
 - Permission checking patterns
 - Creating new Engine classes for domain logic
 
 **Read this guide before starting any dashboard work** to ensure consistency with established patterns.
+
+### ⚠️ Page Chrome — exception to be aware of
+
+If you're building an Angular component that gets **dynamically loaded into another resource's left-nav shell** (e.g. the explorer-settings sub-pages inside Admin's `admin-container`, the Dev Tools inspectors, SystemDiagnostics, Database Designer, etc.), do **NOT** wrap it in `<mj-page-layout>` + `<mj-page-header>` — that creates a doubled-header. Use **`<mj-page-header-interior>`** at the top of the body instead: a two-row card with `[Title]` + `[Subtitle]` inputs and `[meta]` / `[actions]` / `[toolbar]` slots (same slot conventions as `<mj-page-header>`, different visual shape). The toolbar row collapses entirely when empty. Full contract in Section 10 of [`plans/explorer-chrome-conventions.md`](../../plans/explorer-chrome-conventions.md). Reference implementations cover all four Admin shells (~15 sub-pages).
 
 ---
 
@@ -220,6 +272,40 @@ See the root [CLAUDE.md](../../CLAUDE.md) rule #4 for the full policy. Summary:
 ```
 
 The same rule applies to `[Submit] [Cancel]`, `[Update] [Cancel]`, `[Apply] [Discard]`, etc. — the affirmative action is always leftmost (after any far-left destructive actions like Sign Out / Delete).
+
+---
+
+## 🚨 Button Styling: Don't Override `.mj-btn` in Component CSS 🚨
+
+The `mjButton` directive's appearance is owned by **one** stylesheet — `button.scss` in `@memberjunction/ng-ui-components` — and loaded globally by the application. **Don't write component-scoped `.mj-btn` or `.mj-btn-*` rules anywhere else.**
+
+### Why
+
+Angular's emulated encapsulation gives a component-scoped `.mj-btn` rule higher specificity than the global directive's `.mj-btn` rule. The component-scoped override wins inside that component, and the button silently renders differently from how it looks everywhere else in the app — pill instead of rounded, 44px instead of 32px, different padding, whatever the override chose. Two pages with the same `<button mjButton variant="primary" size="sm">` end up looking different. The user-facing symptom is "this button doesn't match the rest of the app."
+
+### How to customize buttons
+
+- **Use the directive's inputs**: `[variant]="..."` (`primary` / `secondary` / `outline` / `flat` / `danger` / `icon` / `success` / `warning`) and `[size]="..."` (`sm` / `md` / `lg`). Together they cover the standard chrome shapes.
+- **Variant not covered?** Extend `button.scss` directly in `ng-ui-components` so the new variant is available app-wide. Don't add a variant by overriding `.mj-btn-secondary` in a component's CSS.
+- **Truly bespoke one-off?** Wrap the button in a wrapper class and target the wrapper, NOT `.mj-btn`. E.g., `.my-special-row > button { ... }` not `.my-special-row .mj-btn { ... }` — the wrapper-scoped descendant selector still leaves directive defaults intact for any other `.mj-btn` in the same component.
+
+### Legacy single-dash classes (`mj-btn-primary`, `mj-btn-icon-mobile`, etc.)
+
+These predate the mjButton directive. They use single-dash naming (`.mj-btn-primary`) where the directive applies BEM-style modifiers (`.mj-btn--primary`). The legacy classes don't match the directive's selectors and never did — they were always a parallel system. When migrating any component, **strip `class="mj-btn-icon-mobile"` / `class="mj-btn-primary"` / etc. from button elements**; the directive's `[variant]` + `[size]` inputs are the canonical way to express what those classes used to mean.
+
+### Anti-pattern (do not do this)
+
+```css
+/* my-component.component.css */
+.mj-btn {                              /* ❌ overrides the directive globally inside this component */
+  border-radius: var(--mj-radius-full);
+  padding: 0.75rem 1.5rem;
+  min-height: 44px;
+}
+.mj-btn-secondary {                    /* ❌ legacy class — doesn't match the directive anyway, just dead code */
+  background: var(--mj-bg-page);
+}
+```
 
 ---
 
@@ -466,10 +552,49 @@ export class WorkspaceComponent {
 4. **Framework Alignment**: Works with Angular's change detection naturally
 5. **Multiple Instance Support**: Same component can be used multiple times without conflict
 
-## 🚨 CRITICAL: Creating Custom Entity Forms 🚨
+## 🚨 Forms as Tabs, Dialogs & Slide-Ins — read the architecture guide first 🚨
 
-### Overview
-MemberJunction uses `@RegisterClass` to allow custom forms to override generated forms. When a user opens an entity record, the system looks for the highest-priority registered form for that entity.
+Any entity form (generated, custom, or interactive) can be rendered as a **full-page tab, a modal dialog, or a slide-in panel** from one set of forms — no per-surface code, no regeneration. Before building a bespoke "edit a record in a popup/drawer" component, use the generic capability:
+
+- **Declarative:** `<mj-form-dialog [EntityName]="..." [(Visible)]="...">` / `<mj-form-slide-in ...>`
+- **Imperative:** `MJFormPresenterService.Open({ EntityName, RecordId, Presentation: 'dialog' | 'slide-in' })`
+- **Per-instance control:** `EntityFormConfig` (toolbar/sections/width/links) — bridged through the form reference, so generated forms honor it without re-running CodeGen.
+
+All of it lives in `@memberjunction/ng-base-forms` (`MjEntityFormHostComponent` is the shared headless core; Explorer's `SingleRecordComponent` is now a thin wrapper over it). **Full details:** [/guides/FORMS_ARCHITECTURE_GUIDE.md](../../guides/FORMS_ARCHITECTURE_GUIDE.md).
+
+---
+
+## 🚨 CRITICAL: Extending Entity Forms — Two Valid Patterns 🚨
+
+MemberJunction has **two** patterns for extending generated entity forms. Both are first-class and supported — they exist because they solve different problems. Pick the one that matches your scope.
+
+### Pattern 1: `BaseFormPanel` slots — for adding panels alongside the generated UI
+
+Write a standalone Angular component that extends `BaseFormPanel`, decorate it with `@RegisterClassEx(BaseFormPanel, { metadata: { entity, slot, sortKey } })`, declare it in any module. The next time anyone opens that entity's edit form, the panel renders in your chosen slot via `<mj-form-panel-slot>`. No `*Extended` class. No restating every generated panel. No custom HTML for the existing form.
+
+**Use when** the generated form's layout is fine, you just want to add governance widgets, typed-config panels, type-conditional sections, or any standalone UI. The generated form keeps regenerating freely; your panels mount alongside.
+
+**Full authoring guide**: [`packages/Angular/Generic/base-forms/PANELS.md`](Generic/base-forms/PANELS.md) — slot positions, fallback chain, multiple-panels-per-slot ordering, composition (reusing panels outside the form), CodeGen requirement.
+
+```typescript
+@RegisterClassEx(BaseFormPanel, {
+    key: 'content-sources:my-extra-panel',
+    skipNullKeyWarning: true,
+    metadata: { entity: 'MJ: Content Sources', slot: 'after-fields', sortKey: 50 },
+})
+@Component({ standalone: false, selector: '...', templateUrl: '...' })
+export class MyExtraPanel extends BaseFormPanel<MJContentSourceEntity> { /* ... */ }
+```
+
+Slot positions (top to bottom): `top-area`, `before-fields`, `after-fields`, `after-related`, `after-everything`. The container always emits `after-everything`, so panels whose preferred slot is missing (downstream consumers running an older CodeGen template) fall through there — no broken state, just a less-ideal position until CodeGen runs against the new template.
+
+### Pattern 2: Full custom form override — for fundamentally different UX
+
+The "extend the generated form" pattern documented below. Use when the generated layout is the wrong shape for what you're building: you need to hide generated panels, restructure the toolbar, embed a non-collapsible-panel UX (a flow editor, a Kanban board, a wizard), or otherwise own the entire form rendering. The canonical example is `AIAgentFormComponentExtended` — its flow editor isn't a "panel alongside fields," it IS the form.
+
+**When in doubt**: if you can describe your extension as "the generated form plus a couple extra sections," use Pattern 1. If your answer is "the generated form is the wrong starting point entirely," use Pattern 2.
+
+### Pattern 2 details (full custom form override)
 
 ### The Pattern: Extend the Generated Form
 

@@ -1,6 +1,11 @@
 # Search Scopes & RAG+ Guide
 
 > Implementation guide for MemberJunction's **Search Scopes** + **agent RAG+** architecture. Use this alongside the full design in [`plans/search-scopes-rag-plus.md`](../plans/search-scopes-rag-plus.md).
+>
+> **Related search APIs:**
+> - **[SEARCH_OVERVIEW_GUIDE.md](./SEARCH_OVERVIEW_GUIDE.md)** — decision tree for picking the right search API.
+> - **[ENTITY_SEARCH_GUIDE.md](./ENTITY_SEARCH_GUIDE.md)** — `SearchEntity` / `SearchEntities` for ranked per-entity hybrid lexical + semantic search. Narrower than the cross-source `SearchEngine` covered here; use it when you know which entity (or set of entities) to search.
+> - **[Full-Text Search Guide](../packages/MJCore/docs/FULL_TEXT_SEARCH_GUIDE.md)** — lexical-only `FullTextSearch` over FTS-enabled entities.
 
 ---
 
@@ -146,8 +151,34 @@ Assign `__Scoped_Search` to an agent's action set. When the agent calls it, the 
 1. Resolves the agent identity from `params.Context.AgentID` (or explicit `AgentID` param).
 2. Enforces `SearchScopeAccess`.
 3. Resolves the target scope (explicit `ScopeID`, agent's default, or Global).
-4. Runs `SearchEngine.Search()` with `ScopeIDs: [resolvedScopeID]`.
-5. Returns ranked results + `ScopeID_Resolved` / `ScopeName_Resolved` output params.
+4. Reads the optional `PrimaryScopeRecordID` (string UUID) and `SecondaryScopes` (JSON string) inputs, assembling a `SearchContext` when at least one is supplied. See [§10](#10-multi-tenant-search-context) for the runtime context model.
+5. Runs `SearchEngine.Search()` with `ScopeIDs: [resolvedScopeID]` and `SearchContext: <assembled>`.
+6. Returns ranked results + `ScopeID_Resolved` / `ScopeName_Resolved` output params.
+
+#### Per-call multi-tenant inputs
+
+The action accepts two optional inputs whose values flow into `SearchParams.SearchContext` and are then Nunjucks-rendered into every scope-level filter (MetadataFilter, ExtraFilter, UserSearchString, FolderPath):
+
+| Input | Type | Purpose |
+|---|---|---|
+| `PrimaryScopeRecordID` | string (UUID) | Primary tenant key (e.g. `OrganizationID`). Available in templates as `{{ context.PrimaryScopeRecordID }}`. |
+| `SecondaryScopes` | JSON string | Flat object of additional dimensions as `{ "<key>": <value> }`. Each value must be `string \| number \| boolean \| string[]`. Available in templates as `{{ context.SecondaryScopes.<key> }}`. Incompatible value types are dropped at parse time with a log; malformed JSON falls back to `undefined` rather than failing the call. |
+
+Example agent tool call selecting only Finance-department content for Org `O1`:
+
+```json
+{
+  "tool": "Scoped Search",
+  "params": {
+    "Query":               "Q3 budget approval",
+    "AgentID":             "<agent-uuid>",
+    "PrimaryScopeRecordID":"O1",
+    "SecondaryScopes":     "{\"Department\":\"Finance\",\"Tags\":[\"q3\",\"approved\"]}"
+  }
+}
+```
+
+For this to actually narrow results, the scope's `SearchScopeEntity.ExtraFilter` (or `SearchScopeExternalIndex.MetadataFilter`) must reference the matching context fields, e.g. `OrganizationID = '{{ context.PrimaryScopeRecordID }}' AND Department = '{{ context.SecondaryScopes.Department }}'`. One scope definition then serves every tenant.
 
 ### Per-agent `FusionWeightsOverride`
 
@@ -301,7 +332,14 @@ After #2237 lands, update `metadata/artifact-types/.artifact-types.json` → cha
 
 ### Flowing context through agents
 
-`ExecuteAgentParams.primaryScopeRecordId` + `secondaryScopes` automatically flow into `AgentPreExecutionRAG` and `ScopedSearchAction` as `SearchContext`. No per-subsystem translation — the same `SecondaryScopeValue` type (`string | number | boolean | string[]`) is shared with the agent memory system via `@memberjunction/ai-core-plus`.
+Two distinct paths populate `SearchContext` at runtime. They use the same `SecondaryScopeValue` union (`string | number | boolean | string[]`) shared with the agent memory system via `@memberjunction/ai-core-plus`, so there is no per-subsystem translation regardless of how the values arrive:
+
+| Path | How context arrives | Where it's read |
+|---|---|---|
+| **Pre-execution RAG** (auto) | `ExecuteAgentParams.primaryScopeRecordId` + `secondaryScopes` flow directly from the agent run config | `AgentPreExecutionRAG` constructs `SearchContext` and calls `SearchEngine.Search()` before the agent's first LLM turn |
+| **Agent-invoked Scoped Search** (explicit) | `PrimaryScopeRecordID` and `SecondaryScopes` (JSON string) supplied as action params on each `__Scoped_Search` call | `ScopedSearchAction` parses and validates the inputs, builds `SearchContext`, and passes it via `SearchParams.SearchContext` to `SearchEngine.Search()` |
+
+The explicit-input path lets a single agent run multiple scoped queries with different tenant contexts (e.g. comparison across orgs in one turn) and lets callers other than `BaseAgent` — manual GraphQL invocations, external orchestrators — drive the action with per-call tenant info. Use `ActionInputMapping` on the agent step to wire `ExecuteAgentParams`-style values into the action's `PrimaryScopeRecordID` / `SecondaryScopes` inputs when you want a single agent payload to drive both paths consistently.
 
 ### Nunjucks rendering of scope config
 

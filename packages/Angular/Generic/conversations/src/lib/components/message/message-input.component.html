@@ -1,4 +1,4 @@
-<div class="message-input-wrapper">
+<div class="message-input-wrapper" cdkOverlayOrigin #pickerOrigin="cdkOverlayOrigin">
   <!-- Processing Indicator Overlay -->
   @if (isProcessing) {
     <div class="processing-indicator">
@@ -7,23 +7,57 @@
     </div>
   }
 
-  <!-- Message Input Box -->
+  <!-- Message Input Box (mic button lives in its in-composer toolbar) -->
   <mj-message-input-box
     #inputBox
     [placeholder]="placeholder"
     [disabled]="disabled || isProcessing"
     [showCharacterCount]="false"
-    [enableMentions]="true"
+    [enableMentions]="enableMentions"
     [enableAttachments]="enableAttachments"
     [maxAttachments]="maxAttachments"
     [maxAttachmentSizeBytes]="maxAttachmentSizeBytes"
     [acceptedFileTypes]="acceptedFileTypes"
     [currentUser]="currentUser"
     [rows]="3"
+    [enableRealtime]="true"
+    [voiceActive]="voiceActive"
+    [canStartRealtime]="canStartRealtime"
     [(value)]="messageText"
     (textSubmitted)="onTextSubmitted($event)"
     (attachmentsChanged)="onAttachmentsChanged($event)"
     (attachmentError)="onAttachmentError($event)"
-    (artifactPickerRequested)="onArtifactPickerRequested()">
+    (artifactPickerRequested)="onArtifactPickerRequested()"
+    (voiceRequested)="onStartRealtime()"
+    (voiceOptionsRequested)="onRealtimeOptions()">
   </mj-message-input-box>
+
+  <!-- Voice agent/co-agent/model picker — shown when starting a call on a conversation
+       with NO prior agent participation, or on demand via the caret next to the phone
+       button (any conversation). Rendered in a body-level CDK overlay anchored above the
+       composer so it POPS OUT of the chat overlay's clipping border instead of being cut
+       off at the top of a narrow (~390px) overlay. -->
+  <ng-template
+    cdkConnectedOverlay
+    [cdkConnectedOverlayOrigin]="pickerOrigin"
+    [cdkConnectedOverlayOpen]="showRealtimeAgentPicker"
+    [cdkConnectedOverlayPositions]="pickerOverlayPositions"
+    [cdkConnectedOverlayPush]="true"
+    [cdkConnectedOverlayHasBackdrop]="true"
+    cdkConnectedOverlayBackdropClass="cdk-overlay-transparent-backdrop"
+    (backdropClick)="onRealtimeAgentPickerCancelled()"
+    (detach)="onRealtimeAgentPickerCancelled()">
+    <mj-realtime-agent-picker
+      [Provider]="Provider"
+      [Agents]="voicePickerAgents"
+      [DefaultAgentId]="voicePickerDefaultAgentId"
+      [CoAgents]="voicePickerCoAgents"
+      [DefaultCoAgentId]="voicePickerDefaultCoAgentId"
+      (AgentPicked)="onRealtimeAgentPicked($event)"
+      (Cancelled)="onRealtimeAgentPickerCancelled()">
+    </mj-realtime-agent-picker>
+  </ng-template>
 </div>
+
+<!-- The voice "call mode" overlay is hosted by <mj-conversation-chat-area> (it fills the
+     whole conversation panel in place); this component only owns the trigger wiring. -->

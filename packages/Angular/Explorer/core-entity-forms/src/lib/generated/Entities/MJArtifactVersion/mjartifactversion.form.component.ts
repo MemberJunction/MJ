@@ -18,13 +18,15 @@ export class MJArtifactVersionFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'versionIdentity', sectionName: 'Version Identity', isExpanded: true },
             { sectionKey: 'contentMetadata', sectionName: 'Content & Metadata', isExpanded: false },
-            { sectionKey: 'ownershipAttribution', sectionName: 'Ownership & Attribution', isExpanded: false },
-            { sectionKey: 'fileStorage', sectionName: 'File Storage', isExpanded: false },
+            { sectionKey: 'ownershipAttribution', sectionName: 'Ownership & Attribution', isExpanded: true },
+            { sectionKey: 'fileStorage', sectionName: 'File Storage', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJArtifactVersionAttributes', sectionName: 'Artifact Version Attributes', isExpanded: false },
             { sectionKey: 'mJCollectionArtifacts', sectionName: 'Collection Artifacts', isExpanded: false },
+            { sectionKey: 'mJArtifactUses', sectionName: 'Artifact Uses', isExpanded: false },
             { sectionKey: 'mJConversationDetailArtifacts', sectionName: 'Conversation Detail Artifacts', isExpanded: false },
-            { sectionKey: 'mJArtifactUses', sectionName: 'Artifact Uses', isExpanded: false }
+            { sectionKey: 'mJConversationDetailAttachments', sectionName: 'Conversation Detail Attachments', isExpanded: false },
+            { sectionKey: 'mJSignatureRequestDocuments', sectionName: 'Signature Request Documents', isExpanded: false }
         ]);
     }
 }

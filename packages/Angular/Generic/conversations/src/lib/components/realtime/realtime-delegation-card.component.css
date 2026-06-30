@@ -1,0 +1,307 @@
+:host {
+  display: block;
+  /* sage / delegated-agent accent (distinct from the co-agent brand blue) */
+  --sage: var(--mj-color-violet-400, #a78bfa);
+  --sage-bg: color-mix(in srgb, var(--mj-color-violet-400, #a78bfa) 12%, transparent);
+  --sage-border: color-mix(in srgb, var(--mj-color-violet-400, #a78bfa) 40%, transparent);
+}
+
+.avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-weight: 600;
+  font-size: 11px;
+  flex-shrink: 0;
+  background: var(--sage-bg);
+  color: var(--mj-color-violet-300, var(--mj-text-primary));
+  border: 1px solid var(--sage-border);
+}
+
+/* ---------- Working card (compact) ---------- */
+.work-card {
+  border: 1px solid var(--sage-border);
+  background: var(--sage-bg);
+  border-radius: var(--mj-radius-lg, 12px);
+  padding: 10px 14px;
+  max-width: 560px;
+}
+.work-card__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.work-card__title {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--mj-text-primary);
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.work-card__step {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--mj-text-primary);
+}
+.work-card__detail {
+  font-size: 12px;
+  color: var(--mj-text-muted);
+  padding-left: 14px;
+  margin-top: 3px;
+  border-left: 2px solid var(--sage-border);
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: var(--mj-radius-full, 9999px);
+  font-size: 10.5px;
+  font-weight: 700;
+  flex-shrink: 0;
+  line-height: 1.5;
+}
+.pill--running {
+  background: color-mix(in srgb, var(--sage) 18%, transparent);
+  color: var(--mj-color-violet-300, var(--mj-text-secondary));
+  border: 1px solid var(--sage-border);
+}
+.pill i { font-size: 9px; }
+.spin { animation: rt-spin 1.1s linear infinite; }
+
+/* Thin progress bar — determinate (server %) or indeterminate slide */
+.work-progress {
+  height: 3px;
+  border-radius: var(--mj-radius-full, 9999px);
+  background: color-mix(in srgb, var(--sage) 18%, transparent);
+  overflow: hidden;
+  margin-top: 9px;
+  position: relative;
+}
+.work-progress__fill {
+  height: 100%;
+  border-radius: var(--mj-radius-full, 9999px);
+  background: var(--sage);
+  transition: width 240ms ease;
+}
+.work-progress__fill--slide {
+  position: absolute;
+  width: 35%;
+  animation: rt-slide 1.6s ease-in-out infinite;
+}
+
+/* ---------- Done chip (collapsed single line) ---------- */
+.done {
+  max-width: 560px;
+}
+.done-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.done-row .done-chip {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ---------- Developer link (gear-gated "Open run") ---------- */
+.dev-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: var(--mj-radius-full, 9999px);
+  border: 1px dashed var(--mj-border-strong);
+  background: transparent;
+  color: var(--mj-text-muted);
+  font-family: inherit;
+  font-size: 10.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: color 140ms ease, border-color 140ms ease, background 140ms ease;
+}
+.dev-link:hover {
+  color: var(--mj-text-link, var(--mj-brand-primary));
+  border-color: var(--mj-brand-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 8%, transparent);
+}
+.dev-link i {
+  font-size: 9px;
+}
+.dev-link--inline {
+  margin-left: 8px;
+}
+
+/* ---------- "View →" artifact chip (focuses the artifact's surface tab) ---------- */
+.artifact-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: var(--mj-radius-full, 9999px);
+  border: 1px solid var(--sage-border);
+  background: var(--sage-bg);
+  color: var(--mj-color-violet-300, var(--mj-text-secondary));
+  font-family: inherit;
+  font-size: 10.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: color 140ms ease, border-color 140ms ease, background 140ms ease;
+}
+.artifact-link:hover {
+  color: var(--mj-text-primary);
+  border-color: var(--sage);
+  background: color-mix(in srgb, var(--sage) 18%, transparent);
+}
+.artifact-link i {
+  font-size: 9px;
+}
+.artifact-link--detail {
+  margin-top: 8px;
+  max-width: 100%;
+}
+.artifact-link--detail span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.done-chip {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+  font-size: 12.5px;
+  padding: 6px 12px;
+  border-radius: var(--mj-radius-full, 9999px);
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
+  color: var(--mj-text-secondary);
+  cursor: pointer;
+  transition: border-color 140ms ease, background 140ms ease;
+}
+.done-chip:hover {
+  border-color: var(--sage-border);
+  background: var(--mj-bg-surface-hover, var(--mj-bg-surface));
+}
+.done-chip__mark {
+  font-size: 11px;
+  color: var(--mj-status-success);
+  flex-shrink: 0;
+}
+.done-chip--failed .done-chip__mark {
+  color: var(--mj-status-error);
+}
+.done-chip--failed {
+  border-color: var(--mj-status-error-border, var(--mj-border-default));
+}
+.done-chip__agent {
+  font-weight: 700;
+  color: var(--mj-text-primary);
+  flex-shrink: 0;
+}
+.done-chip__sep {
+  color: var(--mj-text-disabled);
+  flex-shrink: 0;
+}
+.done-chip__preview {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--mj-text-secondary);
+}
+.via-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--mj-color-violet-300, var(--mj-text-muted));
+  flex-shrink: 0;
+}
+.via-badge i {
+  font-size: 9px;
+  cursor: help;
+}
+.done-chip__chev {
+  font-size: 10px;
+  color: var(--mj-text-muted);
+  flex-shrink: 0;
+}
+
+/* ---------- Expanded result detail ---------- */
+.done-detail {
+  margin-top: 6px;
+  margin-left: 12px;
+  padding: 10px 14px;
+  border-left: 2px solid var(--sage);
+  background: var(--mj-bg-surface);
+  border-radius: 0 var(--mj-radius-lg, 12px) var(--mj-radius-lg, 12px) 0;
+  border-top: 1px solid var(--mj-border-subtle, var(--mj-border-default));
+  border-right: 1px solid var(--mj-border-subtle, var(--mj-border-default));
+  border-bottom: 1px solid var(--mj-border-subtle, var(--mj-border-default));
+}
+.done-detail__body {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--mj-text-primary);
+  white-space: pre-wrap;
+}
+.done-detail__meta {
+  margin-top: 8px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--mj-text-muted);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.done-detail__meta i {
+  cursor: help;
+}
+
+@keyframes rt-spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes rt-slide {
+  0% { left: -35%; }
+  100% { left: 100%; }
+}
+
+/* ---------- ✕ cancel affordance on the WORKING card (explicit user cancel) ---------- */
+.cancel-work {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: var(--mj-radius-full, 9999px);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--mj-text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.cancel-work:hover {
+  color: var(--mj-status-error);
+  border-color: var(--mj-status-error-border, var(--mj-status-error));
+  background: color-mix(in srgb, var(--mj-status-error) 8%, transparent);
+}
+.cancel-work i {
+  font-size: 11px;
+}

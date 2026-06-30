@@ -2,9 +2,9 @@
   {
     "fields": {
       "Name": "Geocoding Maintenance",
-      "Description": "Runs every 4 hours to find missing geocodes, retry failed attempts, and clean up orphaned RecordGeoCode rows.",
+      "Description": "Runs on a recurring basis as a safety net for records that bypass BaseEntity.Save() (bulk SQL imports, direct DB operations). Live geocoding is handled inline during entity saves; this job finds and geocodes missing rows, retries failed attempts, and cleans up orphaned RecordGeoCode rows. Default cadence is weekly (Saturdays 2 AM UTC); administrators can adjust the CronExpression as needed.",
       "JobTypeID": "@lookup:MJ: Scheduled Job Types.DriverClass=ActionScheduledJobDriver",
-      "CronExpression": "0 */15 * * * *",
+      "CronExpression": "0 0 2 * * 6",
       "Timezone": "UTC",
       "Status": "Active",
       "Configuration": {
@@ -27,8 +27,8 @@
       "ID": "2D1DB8F6-8630-4237-892B-AB1D89378635"
     },
     "sync": {
-      "lastModified": "2026-04-11T04:11:17.016Z",
-      "checksum": "e05b2759426367ed97b620d7903d12e9f551ac8b437e01ecfc2b7f4d6c7e6e8d"
+      "lastModified": "2026-05-16T22:42:29.220Z",
+      "checksum": "00ce65d9788b7213cf395a2e704df72e8e5c0ea5870013bd2b889e0bde4c2ec9"
     }
   }
 ]

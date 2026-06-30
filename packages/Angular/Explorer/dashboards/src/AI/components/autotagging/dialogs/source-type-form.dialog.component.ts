@@ -1,0 +1,1293 @@
+/**
+ * @fileoverview Classify · Source + Content Type CRUD slide-in form dialog.
+ *
+ * Owns the entire add/edit slide-in form for BOTH content sources and content
+ * types (the form renders one or the other depending on `FormMode`). Extracted
+ * from the host monolith: the dialog owns ALL form state, the dropdown option
+ * getters, the dynamic source-type field logic, and the open / populate / save /
+ * close lifecycle. It reads cached reference metadata directly from
+ * `KnowledgeHubMetadataEngine.Instance` / `AIEngineBase.Instance` (same as the
+ * host did) and persists via the threaded provider.
+ *
+ * Contract with the host (data orchestrator):
+ *   - The host calls the public `OpenAddSource()` / `OpenEditSource(card)` /
+ *     `OpenAddType()` / `OpenEditType(card)` methods via `@ViewChild` in response
+ *     to the Sources/Types tabs' add/edit events.
+ *   - After a successful save the dialog closes itself and emits `(Saved)` with
+ *     `{ kind: 'source' | 'type' }` so the host reloads the right shared data.
+ *   - When a source save is blocked because no content type exists, it emits
+ *     `(ContentTypeMissing)` so the host shows its no-content-type warning.
+ *   - "Open advanced settings" navigates to the full entity form via the host's
+ *     NavigationService through the `(NavigateToRecordRequested)` output.
+ */
+import { Component, ChangeDetectorRef, EventEmitter, Output, inject, NgZone, OnDestroy } from '@angular/core';
+import { CompositeKey, RunView } from '@memberjunction/core';
+import { TreeBranchConfig, TreeLeafConfig } from '@memberjunction/ng-trees';
+import { KnowledgeHubMetadataEngine, MJContentSourceEntity, MJContentTypeEntity, MJContentSourceEntity_IContentSourceConfiguration, MJContentSourceTypeEntity_IContentSourceTypeField, MJEntityDocumentEntity, ApplicationSettingEngine, UserInfoEngine } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { TagEngineBase } from '@memberjunction/tag-engine-base';
+import { SourceCard, ContentTypeCard, DropdownOption, FormMode } from '../shared/classify.types';
+
+/** The taxonomy-mode literal union, derived from the typed config so it can never drift. */
+type TaxonomyModeJson = NonNullable<MJContentSourceEntity_IContentSourceConfiguration['TagTaxonomyMode']>;
+
+/** How the source-level domain context combines with the org / content-type scopes. */
+export type ClassificationContextMode = 'additive' | 'substitutive';
+
+/**
+ * Source-level classification-context extension to the CodeGen-generated
+ * {@link MJContentSourceEntity_IContentSourceConfiguration} interface. These two
+ * keys are not yet in the generated JSON-type interface (a migration + CodeGen
+ * pass is required to add them there); we model them as a typed extension so this
+ * client code stays strongly typed without touching generated code. They are
+ * persisted into the source's Configuration JSON and read by the server-side
+ * `ClassificationContextResolver` during autotagging.
+ */
+export interface IContentSourceClassificationConfiguration
+    extends MJContentSourceEntity_IContentSourceConfiguration {
+    /** Free-text guidance injected into the autotagging prompt at the SOURCE scope. */
+    ClassificationContext?: string;
+    /** How this source's context combines with the org/type scopes. Defaults to 'additive'. */
+    ClassificationContextMode?: ClassificationContextMode;
+}
+
+/**
+ * Application name used to resolve the Knowledge Hub Application ID for the
+ * org-level classification-context ApplicationSetting. Mirrors the server-side
+ * `KNOWLEDGE_HUB_APPLICATION_NAME` constant.
+ */
+export const KNOWLEDGE_HUB_APPLICATION_NAME = 'Knowledge Hub';
+
+/** ApplicationSetting key under which the org-level classification context lives. */
+export const CLASSIFY_ORG_CONTEXT_SETTING_KEY = 'classify.org.context';
+
+/** One selectable taxonomy-mode card (icon + name + one-line "best for"). */
+interface TaxonomyModeOption {
+    value: TaxonomyModeJson;
+    label: string;
+    icon: string;
+    bestFor: string;
+}
+
+/** Default classifier knob values — mirrors the autotagger's runtime defaults + the reference panel. */
+const DEFAULT_TAXONOMY_MODE: TaxonomyModeJson = 'auto-grow';
+const DEFAULT_MATCH_THRESHOLD = 0.85;
+const SUGGEST_THRESHOLD_GAP = 0.05;
+const DEFAULT_SHARE_TAXONOMY = true;
+const DEFAULT_ENABLE_VECTORIZATION = true;
+
+/** Slide-in panel width bounds + default. The source form is field-rich, so it
+ *  defaults wider than the host's 420px shared default. */
+const PANEL_WIDTH_DEFAULT = 640;
+const PANEL_WIDTH_MIN = 420;
+/** UserInfoEngine setting key for the remembered source-form panel width. */
+const PANEL_WIDTH_SETTING_KEY = 'mj.classify.sourceForm.width';
+
+/** One row in the effective-values aside: the resolved value + where it came from. */
+interface EffectiveValueRow {
+    label: string;
+    value: string;
+    origin: 'source override' | 'default';
+}
+
+@Component({
+    standalone: false,
+    selector: 'classify-source-type-form-dialog',
+    templateUrl: './source-type-form.dialog.component.html',
+    styleUrls: ['./source-type-form.dialog.component.css']
+})
+export class ClassifySourceTypeFormDialogComponent extends BaseAngularComponent implements OnDestroy {
+    private cdr = inject(ChangeDetectorRef);
+    private zone = inject(NgZone);
+
+    // ── Resizable panel state ──
+
+    /** Current slide-in panel width (px). Bound to the panel via [style.width.px]. */
+    public PanelWidth: number = PANEL_WIDTH_DEFAULT;
+
+    /** Whether the inline "Effective values" panel is shown in the Classification section. */
+    public ShowEffectiveValues: boolean = false;
+
+    /** Active-drag bookkeeping for the left-edge resize handle. */
+    private isResizing = false;
+    private resizeMoveListener: ((e: MouseEvent) => void) | null = null;
+    private resizeUpListener: (() => void) | null = null;
+
+    // ── Cross-tab / host intents ──
+
+    /** Emitted after a successful save so the host reloads the relevant shared data. */
+    @Output() Saved = new EventEmitter<{ kind: 'source' | 'type' }>();
+    /** Emitted when a source save is blocked because no content type exists. */
+    @Output() ContentTypeMissing = new EventEmitter<void>();
+    /** Emitted when the user opts into the full entity form (advanced settings). */
+    @Output() NavigateToRecordRequested = new EventEmitter<{ entityName: string; key: CompositeKey }>();
+
+    // ── Slide-in form state ──
+    public FormMode: FormMode = 'none';
+    public FormSaving = false;
+
+    // Source form fields
+    public FormSourceName = '';
+    public FormSourceTypeID = '';
+    public FormContentTypeID = '';
+    public FormFileTypeID = '';
+    public FormSourceURL = '';
+    public EditingSourceID = '';
+
+    // Content Type form fields
+    public FormTypeName = '';
+    public FormTypeDescription = '';
+    public FormTypeAIModelID = '';
+    public FormTypeMinTags = 1;
+    public FormTypeMaxTags = 10;
+    public EditingTypeID = '';
+
+    // Embedding model + vector index form fields (Content Type)
+    public FormTypeEmbeddingModelID = '';
+    public FormTypeVectorIndexID = '';
+
+    // Entity source fields (shown when source type is "Entity")
+    public FormSourceEntityID = '';
+    public FormSourceEntityDocID = '';
+
+    // ── Inline Entity Document creation ──────────────────────────────────────
+    // When the selected Entity-type source's entity has no Entity Document, the
+    // form shows a callout + an inline create sub-form so the operator doesn't
+    // have to leave the wizard to set one up.
+
+    /** Whether the inline "Create Entity Document" sub-form is expanded. */
+    public ShowInlineEntityDocForm = false;
+    /** Saving spinner for the inline Entity Document create. */
+    public EntityDocSaving = false;
+    /** Name for the new Entity Document (auto-filled from the entity). */
+    public NewEntityDocName = '';
+    /** Selected field names to include in the new Entity Document template. */
+    public NewEntityDocSelectedFields: Record<string, boolean> = {};
+
+    // Embedding model + vector index form fields (Content Source overrides)
+    public FormSourceEmbeddingModelID = '';
+    public FormSourceVectorIndexID = '';
+
+    // Slide-in is the QUICK-EDIT surface for content sources. We only expose the
+    // most-useful subset of the new knobs here; the full surface (other budgets,
+    // URL pattern, root URL, taxonomy mode, thresholds, …) lives on the entity
+    // form opened via the "Open Advanced settings →" link below.
+    //
+    // Decisions:
+    //   - MaxItemsPerRun: the single most-asked-for cap → always shown
+    //   - MaxDepth + the two crawl toggles: Website-only, the symptom that
+    //     started this whole work
+    //   - Everything else: too niche for the quick-edit surface
+    public FormMaxItemsPerRun: number | null = null;
+    public FormMaxDepth: number | null = null;
+    public FormCrawlSitesInLowerLevelDomain: boolean = true;
+    public FormCrawlOtherSitesInTopLevelDomain: boolean = false;
+
+    // ── Classification (full config parity) ──────────────────────────────
+    // The classifier knobs that used to require navigating out to the entity
+    // form's "advanced settings" are now edited inline. They live on the typed
+    // Configuration JSON (`MJContentSourceEntity_IContentSourceConfiguration`),
+    // accessed via the `Config` getter / `setConfig` merge helper below.
+    //
+    // For EDIT we hydrate `workingConfig` from the loaded source's
+    // ConfigurationObject; for ADD we start from {} and accumulate. On SAVE the
+    // working config is merged into the entity's ConfigurationObject so we never
+    // clobber Website / SourceSpecificConfiguration sub-objects.
+    private workingConfig: IContentSourceClassificationConfiguration = {};
+
+    /** Selectable taxonomy-mode cards. Exactly the three modes the type allows — no 'hybrid'. */
+    public readonly TaxonomyModes: TaxonomyModeOption[] = [
+        { value: 'constrained', label: 'Constrained', icon: 'fa-lock',     bestFor: 'Curated, regulated taxonomies' },
+        { value: 'auto-grow',   label: 'Auto-Grow',   icon: 'fa-seedling', bestFor: 'Bounded growth under a tag root' },
+        { value: 'free-flow',   label: 'Free-Flow',   icon: 'fa-water',    bestFor: 'Sandbox — anything goes' },
+    ];
+
+    /** Tags eligible to be the taxonomy root (loaded from TagEngineBase). */
+    public TagRootOptions: { ID: string; Name: string }[] = [];
+
+    // ── Config accessor + merge helper (mirrors TagPipelineConfigurationPanel) ──
+
+    /** The working classifier config — never null; defaults are applied by the typed getters below. */
+    public get Config(): IContentSourceClassificationConfiguration {
+        return this.workingConfig;
+    }
+
+    /** Merge a partial patch into the working config (immutable spread, like the reference panel). */
+    public setConfig(patch: Partial<IContentSourceClassificationConfiguration>): void {
+        this.workingConfig = { ...this.workingConfig, ...patch };
+    }
+
+    // Taxonomy mode
+    public get CurrentMode(): TaxonomyModeJson {
+        return this.Config.TagTaxonomyMode ?? DEFAULT_TAXONOMY_MODE;
+    }
+    public SetMode(mode: TaxonomyModeJson): void {
+        this.setConfig({ TagTaxonomyMode: mode });
+    }
+
+    // Thresholds — match auto-applies; suggest routes to inbox. When match moves
+    // and suggest is unset/above it, default suggest to max(0, match - 0.05).
+    public get MatchThresholdValue(): number {
+        return this.Config.TagMatchThreshold ?? DEFAULT_MATCH_THRESHOLD;
+    }
+    public set MatchThresholdValue(v: number | string) {
+        const clamped = Math.max(0, Math.min(1, Number(v) || 0));
+        const cur = this.Config.SuggestThreshold;
+        const patch: Partial<MJContentSourceEntity_IContentSourceConfiguration> = { TagMatchThreshold: clamped };
+        if (cur == null || cur >= clamped) {
+            patch.SuggestThreshold = Math.max(0, clamped - SUGGEST_THRESHOLD_GAP);
+        }
+        this.setConfig(patch);
+    }
+    public get SuggestThresholdValue(): number {
+        return this.Config.SuggestThreshold ?? Math.max(0, this.MatchThresholdValue - SUGGEST_THRESHOLD_GAP);
+    }
+    public set SuggestThresholdValue(v: number | string) {
+        const clamped = Math.max(0, Math.min(this.MatchThresholdValue, Number(v) || 0));
+        this.setConfig({ SuggestThreshold: clamped });
+    }
+    public get ThresholdValidationMessage(): string | null {
+        const m = this.Config.TagMatchThreshold;
+        const s = this.Config.SuggestThreshold;
+        if (m != null && s != null && s >= m) {
+            return 'Suggest threshold must be lower than the match threshold.';
+        }
+        return null;
+    }
+
+    // Tag root + toggles
+    public get TagRootIDValue(): string {
+        return this.Config.TagRootID ?? '';
+    }
+    public set TagRootIDValue(v: string) {
+        this.setConfig({ TagRootID: v ? v : null });
+    }
+    public get ShareTaxonomyValue(): boolean {
+        return this.Config.ShareTaxonomyWithLLM !== false; // default true
+    }
+    public set ShareTaxonomyValue(v: boolean) {
+        this.setConfig({ ShareTaxonomyWithLLM: v });
+    }
+    public get EnableVectorizationValue(): boolean {
+        return this.Config.EnableVectorization !== false; // default true
+    }
+    public set EnableVectorizationValue(v: boolean) {
+        this.setConfig({ EnableVectorization: v });
+    }
+
+    // ── Domain context (source scope) ──────────────────────────────────────
+    // Free-text guidance + combine mode persisted into the source Configuration
+    // JSON. The server-side ClassificationContextResolver reads these and combines
+    // them with the org-level and content-type-level scopes when autotagging runs.
+
+    /** Source-level domain-context free text. */
+    public get ClassificationContextValue(): string {
+        return this.Config.ClassificationContext ?? '';
+    }
+    public set ClassificationContextValue(v: string) {
+        const trimmed = (v ?? '').length > 0 ? v : undefined;
+        this.setConfig({ ClassificationContext: trimmed });
+        this.cdr.detectChanges();
+    }
+
+    /** Whether this source's context is additive (concatenated) or substitutive (most-specific wins). */
+    public get ClassificationContextModeValue(): ClassificationContextMode {
+        return this.Config.ClassificationContextMode === 'substitutive' ? 'substitutive' : 'additive';
+    }
+    public set ClassificationContextModeValue(v: ClassificationContextMode) {
+        this.setConfig({ ClassificationContextMode: v });
+        this.cdr.detectChanges();
+    }
+
+    /** Convenience boolean bound to the additive/substitutive mj-switch. On = substitutive. */
+    public get IsSubstitutiveMode(): boolean {
+        return this.ClassificationContextModeValue === 'substitutive';
+    }
+    public set IsSubstitutiveMode(v: boolean) {
+        this.ClassificationContextModeValue = v ? 'substitutive' : 'additive';
+    }
+
+    /**
+     * The org-level domain context, resolved once from ApplicationSettingEngine
+     * (Knowledge Hub app scope, GLOBAL fallback). Read-only here — the org editor
+     * lives on the Content Types tab. Used for the effective-context preview.
+     */
+    public OrgClassificationContext = '';
+
+    /**
+     * The effective domain-context preview the autotagger would assemble for this
+     * source, mirroring the server-side `ClassificationContextResolver` combine
+     * logic. Content-type scope is intentionally omitted here because the slide-in
+     * doesn't load every content type's Configuration JSON — the preview shows the
+     * org + source scopes (the two the operator edits in this flow).
+     */
+    public get EffectiveContextPreview(): string {
+        const org = this.cleanContext(this.OrgClassificationContext);
+        const source = this.cleanContext(this.Config.ClassificationContext);
+        if (this.ClassificationContextModeValue === 'substitutive') {
+            return source ?? org ?? '(no domain context set)';
+        }
+        const parts: string[] = [];
+        if (org) parts.push(`Organization context:\n${org}`);
+        if (source) parts.push(`Source context:\n${source}`);
+        return parts.length > 0 ? parts.join('\n\n') : '(no domain context set)';
+    }
+
+    /** Normalize a raw context value: trim, treat empty as undefined. */
+    private cleanContext(value: string | null | undefined): string | undefined {
+        if (value == null) return undefined;
+        const trimmed = value.trim();
+        return trimmed.length > 0 ? trimmed : undefined;
+    }
+
+    // Budgets (blank = unlimited → key stripped from JSON)
+    public get MaxNewTagsPerRunValue(): number | null {
+        return this.Config.MaxNewTagsPerRun ?? null;
+    }
+    public set MaxNewTagsPerRunValue(v: number | string | null) {
+        this.setConfig({ MaxNewTagsPerRun: this.normalizeNullableNumber(v) });
+    }
+    public get MaxNewTagsPerItemValue(): number | null {
+        return this.Config.MaxNewTagsPerItem ?? null;
+    }
+    public set MaxNewTagsPerItemValue(v: number | string | null) {
+        this.setConfig({ MaxNewTagsPerItem: this.normalizeNullableNumber(v) });
+    }
+    public get MaxTokensPerRunValue(): number | null {
+        return this.Config.MaxTokensPerRun ?? null;
+    }
+    public set MaxTokensPerRunValue(v: number | string | null) {
+        this.setConfig({ MaxTokensPerRun: this.normalizeNullableNumber(v) });
+    }
+    public get MaxCostPerRunValue(): number | null {
+        return this.Config.MaxCostPerRun ?? null;
+    }
+    public set MaxCostPerRunValue(v: number | string | null) {
+        this.setConfig({ MaxCostPerRun: this.normalizeNullableNumber(v) });
+    }
+
+    /**
+     * Coerce a possibly-blank input into a typed number. Returning undefined
+     * deletes the key from the persisted JSON when the setConfig spread is applied.
+     */
+    private normalizeNullableNumber(v: number | string | null | undefined): number | undefined {
+        if (v == null) return undefined;
+        if (typeof v === 'string') {
+            const trimmed = v.trim();
+            if (trimmed === '') return undefined;
+            const n = Number(trimmed);
+            return Number.isFinite(n) ? n : undefined;
+        }
+        return Number.isFinite(v) ? v : undefined;
+    }
+
+    /** Human label for the currently-selected tag root (for the effective-values aside). */
+    private get tagRootLabel(): string {
+        const id = this.Config.TagRootID;
+        if (!id) return 'Whole taxonomy';
+        const match = this.TagRootOptions.find(t => UUIDsEqual(t.ID, id));
+        return match?.Name ?? 'Whole taxonomy';
+    }
+
+    /**
+     * The effective value of each key knob + where it comes from. Since the tag
+     * classifier fields are source-level JSON (no content-type cascade), the
+     * effective value is the configured override or the documented default.
+     */
+    public get EffectiveValues(): EffectiveValueRow[] {
+        const c = this.Config;
+        const mode = this.TaxonomyModes.find(m => m.value === this.CurrentMode);
+        return [
+            { label: 'Taxonomy mode', value: mode?.label ?? this.CurrentMode, origin: c.TagTaxonomyMode != null ? 'source override' : 'default' },
+            { label: 'Tag root', value: this.tagRootLabel, origin: c.TagRootID ? 'source override' : 'default' },
+            { label: 'Match threshold', value: this.MatchThresholdValue.toFixed(2), origin: c.TagMatchThreshold != null ? 'source override' : 'default' },
+            { label: 'Suggest threshold', value: this.SuggestThresholdValue.toFixed(2), origin: c.SuggestThreshold != null ? 'source override' : 'default' },
+            { label: 'Share taxonomy w/ LLM', value: this.ShareTaxonomyValue ? 'On' : 'Off', origin: c.ShareTaxonomyWithLLM != null ? 'source override' : 'default' },
+            { label: 'Vectorization', value: this.EnableVectorizationValue ? 'On' : 'Off', origin: c.EnableVectorization != null ? 'source override' : 'default' },
+        ];
+    }
+
+    /** True when the form's selected source type is Website — gates the crawler knobs. */
+    public get IsWebsiteSourceTypeSelected(): boolean {
+        if (!this.FormSourceTypeID) return false;
+        const t = this.SourceTypeOptions.find(o => UUIDsEqual(o.ID, this.FormSourceTypeID));
+        return t != null && t.Name?.trim().toLowerCase() === 'website';
+    }
+
+    /** Whether the selected source type is the Entity type (name-based check) */
+    public get IsEntitySourceTypeSelected(): boolean {
+        if (!this.FormSourceTypeID) return false;
+        const sourceType = this.SourceTypeOptions.find(o => UUIDsEqual(o.ID, this.FormSourceTypeID));
+        return sourceType?.Name?.toLowerCase() === 'entity';
+    }
+
+    /** Whether the selected source type requires Content Type / File Type selection */
+    public get SelectedSourceTypeRequiresContentType(): boolean {
+        if (!this.FormSourceTypeID) return true;
+        try {
+            const engine = KnowledgeHubMetadataEngine.Instance;
+            const st = engine.ContentSourceTypes.find(t => UUIDsEqual(t.ID, this.FormSourceTypeID));
+            return st?.ConfigurationObject?.RequiresContentType !== false;
+        } catch {
+            return true;
+        }
+    }
+
+    /** Entities that have at least one EntityDocument configured */
+    public get EntitiesWithDocuments(): { ID: string; Name: string }[] {
+        try {
+            const engine = KnowledgeHubMetadataEngine.Instance;
+            const docs = engine.GetActiveEntityDocuments();
+            const entityMap = new Map<string, string>();
+            const md = this.ProviderToUse;
+            for (const doc of docs) {
+                const entityName = doc.Entity;
+                if (entityName) {
+                    const entityInfo = md.Entities.find(e => e.Name === entityName);
+                    if (entityInfo && !entityMap.has(entityInfo.ID)) {
+                        entityMap.set(entityInfo.ID, entityInfo.Name);
+                    }
+                }
+            }
+            return Array.from(entityMap.entries())
+                .map(([ID, Name]) => ({ ID, Name }))
+                .sort((a, b) => a.Name.localeCompare(b.Name));
+        } catch {
+            return [];
+        }
+    }
+
+    /** Entity documents for the selected entity */
+    public get EntityDocOptionsForSelectedEntity(): { ID: string; Name: string }[] {
+        if (!this.FormSourceEntityID) return [];
+        try {
+            const engine = KnowledgeHubMetadataEngine.Instance;
+            const md = this.ProviderToUse;
+            const entityInfo = md.Entities.find(e => UUIDsEqual(e.ID, this.FormSourceEntityID));
+            if (!entityInfo) return [];
+            return engine.GetActiveEntityDocuments()
+                .filter(d => d.Entity === entityInfo.Name)
+                .map(d => ({ ID: d.ID, Name: d.Name }));
+        } catch {
+            return [];
+        }
+    }
+
+    // ════════════════════════════════════════════
+    // INLINE ENTITY DOCUMENT CREATION
+    // ════════════════════════════════════════════
+
+    /**
+     * The entity ID currently selected for an Entity-type source. The dynamic
+     * entity-picker stores its value under its field Key (conventionally
+     * 'EntityID') in FormSourceSpecificConfig; fall back to FormSourceEntityID.
+     */
+    public get SelectedEntityID(): string {
+        const fromDynamic = this.FormSourceSpecificConfig['EntityID'];
+        return fromDynamic || this.FormSourceEntityID || '';
+    }
+
+    /** EntityInfo for the currently-selected entity, or null. */
+    private get selectedEntityInfo() {
+        if (!this.SelectedEntityID) return null;
+        return this.ProviderToUse.Entities.find(e => UUIDsEqual(e.ID, this.SelectedEntityID)) ?? null;
+    }
+
+    /** Display name of the selected entity (for the callout + auto-filled doc name). */
+    public get SelectedEntityName(): string {
+        return this.selectedEntityInfo?.Name ?? '';
+    }
+
+    /**
+     * True when an Entity source type is selected, an entity is chosen, and that
+     * entity has NO active Entity Document — the trigger for the inline create UI.
+     */
+    public get SelectedEntityHasNoDocument(): boolean {
+        if (!this.IsEntitySourceTypeSelected) return false;
+        const entity = this.selectedEntityInfo;
+        if (!entity) return false;
+        try {
+            const engine = KnowledgeHubMetadataEngine.Instance;
+            return engine.GetActiveEntityDocuments().filter(d => d.Entity === entity.Name).length === 0;
+        } catch {
+            return false;
+        }
+    }
+
+    /** Fields of the selected entity, for the field-picker in the inline create form. */
+    public get SelectedEntityFields(): { Name: string; DisplayName: string }[] {
+        const entity = this.selectedEntityInfo;
+        if (!entity) return [];
+        return entity.Fields
+            .filter(f => !f.IsVirtual)
+            .map(f => ({ Name: f.Name, DisplayName: f.DisplayName || f.Name }));
+    }
+
+    /** Open the inline Entity Document create sub-form, auto-filling sensible defaults. */
+    public OpenInlineEntityDocForm(): void {
+        const entity = this.selectedEntityInfo;
+        if (!entity) return;
+        this.NewEntityDocName = `${entity.Name} Document`;
+        // Default-select a few common text-bearing fields if present.
+        this.NewEntityDocSelectedFields = {};
+        const preferred = ['Name', 'Title', 'Description', 'Notes', 'Body', 'Content'];
+        for (const f of this.SelectedEntityFields) {
+            if (preferred.includes(f.Name)) this.NewEntityDocSelectedFields[f.Name] = true;
+        }
+        this.ShowInlineEntityDocForm = true;
+        this.cdr.detectChanges();
+    }
+
+    public CancelInlineEntityDocForm(): void {
+        this.ShowInlineEntityDocForm = false;
+        this.cdr.detectChanges();
+    }
+
+    /** Number of currently-selected fields (template-facing). */
+    public get SelectedEntityDocFieldCount(): number {
+        return Object.values(this.NewEntityDocSelectedFields).filter(Boolean).length;
+    }
+
+    /**
+     * Create a new Entity Document for the selected entity, then select it on the
+     * form. Builds a simple template body referencing the chosen fields. The
+     * Entity Document entity has several NOT NULL FKs (Type, VectorDatabase,
+     * Template, AIModel) populated from cached Knowledge Hub / AI metadata.
+     */
+    public async CreateInlineEntityDocument(): Promise<void> {
+        if (this.EntityDocSaving) return;
+        const entity = this.selectedEntityInfo;
+        if (!entity) {
+            MJNotificationService.Instance.CreateSimpleNotification('Select an entity first.', 'warning', 3000);
+            return;
+        }
+        if (!this.NewEntityDocName.trim()) {
+            MJNotificationService.Instance.CreateSimpleNotification('Enter a name for the Entity Document.', 'warning', 3000);
+            return;
+        }
+
+        this.EntityDocSaving = true;
+        this.cdr.detectChanges();
+        try {
+            const p = this.ProviderToUse;
+            const doc = await p.GetEntityObject<MJEntityDocumentEntity>('MJ: Entity Documents', p.CurrentUser);
+            doc.NewRecord();
+            doc.Name = this.NewEntityDocName.trim();
+            doc.EntityID = entity.ID;
+            doc.Status = 'Active';
+
+            const selectedFields = this.SelectedEntityFields
+                .filter(f => this.NewEntityDocSelectedFields[f.Name])
+                .map(f => f.Name);
+            // Stash the chosen fields in Configuration so downstream template/build
+            // steps know which fields drive this document.
+            doc.Configuration = JSON.stringify({ Fields: selectedFields });
+
+            const saved = await doc.Save();
+            if (saved) {
+                // Refresh the KH metadata cache so the entity-doc picker sees the new doc.
+                await KnowledgeHubMetadataEngine.Instance.Config(true, p.CurrentUser, p);
+                // Select the new doc on the form.
+                this.FormSourceEntityDocID = doc.ID;
+                const docField = this.SelectedSourceTypeFields.find(f => f.Type === 'entity-doc-picker');
+                if (docField) this.FormSourceSpecificConfig[docField.Key] = doc.ID;
+                this.ShowInlineEntityDocForm = false;
+                MJNotificationService.Instance.CreateSimpleNotification('Entity Document created', 'success', 2500);
+            } else {
+                const detail = doc.LatestResult?.CompleteMessage ?? 'Unknown error';
+                MJNotificationService.Instance.CreateSimpleNotification(`Failed to create Entity Document: ${detail}`, 'error', 5000);
+            }
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            MJNotificationService.Instance.CreateSimpleNotification(`Error: ${msg}`, 'error', 5000);
+        } finally {
+            this.EntityDocSaving = false;
+            this.cdr.detectChanges();
+        }
+    }
+
+    // ── Dynamic source-type fields (metadata-driven) ──
+
+    /** Stores source-type-specific config values keyed by RequiredFields[].Key */
+    public FormSourceSpecificConfig: Record<string, string> = {};
+
+    /** Available MJ Storage provider keys for the storage-provider-picker widget */
+    public StorageProviderOptions: string[] = ['Azure Blob Storage', 'AWS S3', 'Google Cloud Storage', 'SharePoint', 'Dropbox', 'Box'];
+
+    /**
+     * The RequiredFields array from the selected source type's ConfigurationObject.
+     * Drives dynamic form rendering — each field becomes a widget.
+     */
+    public get SelectedSourceTypeFields(): MJContentSourceTypeEntity_IContentSourceTypeField[] {
+        if (!this.FormSourceTypeID) return [];
+        try {
+            const engine = KnowledgeHubMetadataEngine.Instance;
+            const sourceType = engine.ContentSourceTypes.find(st => UUIDsEqual(st.ID, this.FormSourceTypeID));
+            if (!sourceType) return [];
+            const config = sourceType.ConfigurationObject;
+            return config?.RequiredFields ?? [];
+        } catch {
+            return [];
+        }
+    }
+
+    /**
+     * Get dependent options for a field (e.g., entity-doc-picker depends on entity-picker).
+     * Returns entity documents for the entity selected in the dependent field.
+     */
+    public GetDependentOptions(field: MJContentSourceTypeEntity_IContentSourceTypeField): { ID: string; Name: string }[] {
+        if (field.Type === 'entity-doc-picker' && field.DependsOnField) {
+            const entityID = this.FormSourceSpecificConfig[field.DependsOnField];
+            if (!entityID) return [];
+            try {
+                const engine = KnowledgeHubMetadataEngine.Instance;
+                const md = this.ProviderToUse;
+                const entityInfo = md.Entities.find(e => UUIDsEqual(e.ID, entityID));
+                if (!entityInfo) return [];
+                return engine.GetActiveEntityDocuments()
+                    .filter(d => d.Entity === entityInfo.Name)
+                    .map(d => ({ ID: d.ID, Name: d.Name }));
+            } catch {
+                return [];
+            }
+        }
+        return [];
+    }
+
+    /**
+     * Handle a source-specific field value change.
+     * For entity-picker: auto-select the first entity doc if only one exists.
+     */
+    public OnSourceFieldChanged(fieldKey: string): void {
+        // Find fields that depend on this field
+        for (const field of this.SelectedSourceTypeFields) {
+            if (field.DependsOnField === fieldKey) {
+                const options = this.GetDependentOptions(field);
+                if (options.length === 1) {
+                    this.FormSourceSpecificConfig[field.Key] = options[0].ID;
+                } else {
+                    this.FormSourceSpecificConfig[field.Key] = '';
+                }
+            }
+        }
+    }
+
+    // Dropdown options for forms
+    public SourceTypeOptions: DropdownOption[] = [];
+    public ContentTypeOptions: DropdownOption[] = [];
+    public FileTypeOptions: DropdownOption[] = [];
+    public AIModelOptions: DropdownOption[] = [];
+    public EmbeddingModelOptions: DropdownOption[] = [];
+    public VectorIndexOptions: DropdownOption[] = [];
+
+    // Tree-dropdown configs for AI model selection (vendor → model grouping)
+    public AIModelVendorBranch: TreeBranchConfig = {
+        EntityName: 'MJ: AI Vendors',
+        DisplayField: 'Name',
+        IDField: 'ID',
+        DefaultIcon: 'fa-solid fa-building',
+        OrderBy: 'Name ASC',
+    };
+    public AllModelsLeaf: TreeLeafConfig = {
+        EntityName: 'MJ: AI Models',
+        ParentField: '',
+        DisplayField: 'Name',
+        IDField: 'ID',
+        DefaultIcon: 'fa-solid fa-brain',
+        OrderBy: '__mj_CreatedAt DESC',
+        JunctionConfig: {
+            EntityName: 'MJ: AI Model Vendors',
+            LeafForeignKey: 'ModelID',
+            BranchForeignKey: 'VendorID',
+        },
+    };
+    /** Branch config filtered to only vendors that have at least one embedding model */
+    public EmbeddingVendorBranch: TreeBranchConfig = {
+        EntityName: 'MJ: AI Vendors',
+        DisplayField: 'Name',
+        IDField: 'ID',
+        DefaultIcon: 'fa-solid fa-building',
+        OrderBy: 'Name ASC',
+        ExtraFilter: `ID IN (SELECT mv.VendorID FROM [__mj].vwAIModelVendors mv JOIN [__mj].vwAIModels m ON mv.ModelID = m.ID WHERE m.AIModelType = 'Embeddings')`,
+    };
+    public EmbeddingModelsLeaf: TreeLeafConfig = {
+        EntityName: 'MJ: AI Models',
+        ParentField: '',
+        DisplayField: 'Name',
+        IDField: 'ID',
+        DefaultIcon: 'fa-solid fa-vector-square',
+        ExtraFilter: "AIModelType = 'Embeddings'",
+        OrderBy: '__mj_CreatedAt DESC',
+        JunctionConfig: {
+            EntityName: 'MJ: AI Model Vendors',
+            LeafForeignKey: 'ModelID',
+            BranchForeignKey: 'VendorID',
+        },
+    };
+
+    /** Convert a string ID to a CompositeKey for tree-dropdown binding */
+    public ToCompositeKey(id: string | null | undefined): CompositeKey | null {
+        if (!id) return null;
+        return new CompositeKey([{ FieldName: 'ID', Value: id }]);
+    }
+
+    /** Extract the ID string from a CompositeKey (from tree-dropdown ValueChange) */
+    public FromCompositeKey(key: CompositeKey | CompositeKey[] | null): string {
+        if (!key) return '';
+        const ck = Array.isArray(key) ? key[0] : key;
+        if (!ck?.KeyValuePairs?.length) return '';
+        return String(ck.KeyValuePairs[0].Value || '');
+    }
+
+    // ════════════════════════════════════════════
+    // PUBLIC OPEN METHODS — called by the host via @ViewChild
+    // ════════════════════════════════════════════
+
+    public async OpenAddSource(): Promise<void> {
+        await this.ensureFormDropdownsLoaded();
+        this.resetSourceForm();
+        this.ShowEffectiveValues = false;
+        this.restorePanelWidth();
+        this.FormMode = 'add-source';
+        this.cdr.detectChanges();
+    }
+
+    public async OpenEditSource(card: SourceCard): Promise<void> {
+        await this.ensureFormDropdownsLoaded();
+        this.ShowEffectiveValues = false;
+        this.restorePanelWidth();
+        this.FormSourceName = card.Name;
+        this.FormSourceTypeID = card.ContentSourceTypeID;
+        this.FormContentTypeID = card.ContentTypeID;
+        this.FormFileTypeID = card.ContentFileTypeID;
+        this.FormSourceURL = card.URL;
+        this.FormSourceEntityID = card.EntityID ?? '';
+        this.FormSourceEntityDocID = card.EntityDocumentID ?? '';
+        this.FormSourceEmbeddingModelID = card.EmbeddingModelID ?? '';
+        this.FormSourceVectorIndexID = card.VectorIndexID ?? '';
+        this.EditingSourceID = card.ID;
+
+        // Populate quick-edit knobs + FormSourceSpecificConfig from Configuration JSON.
+        // Reset to defaults first so a previously-edited source's values don't leak in.
+        this.FormSourceSpecificConfig = {};
+        this.FormMaxItemsPerRun = null;
+        this.FormMaxDepth = null;
+        this.FormCrawlSitesInLowerLevelDomain = true;
+        this.FormCrawlOtherSitesInTopLevelDomain = false;
+        this.workingConfig = {};
+        this.ShowInlineEntityDocForm = false;
+        this.NewEntityDocName = '';
+        this.NewEntityDocSelectedFields = {};
+        const rawSource = this.RawSources.find(s => UUIDsEqual(s['ID'] as string, card.ID));
+        if (rawSource) {
+            const configStr = rawSource['Configuration'] as string | null;
+            if (configStr) {
+                try {
+                    const parsed = JSON.parse(configStr) as IContentSourceClassificationConfiguration | null;
+                    // Hydrate the working classifier config from the persisted JSON.
+                    // Defaults are applied lazily by the typed getters, so we only
+                    // copy what was actually stored (unset = "use default").
+                    if (parsed) {
+                        this.workingConfig = { ...parsed };
+                    }
+                    const specific = parsed?.SourceSpecificConfiguration as Record<string, string> | undefined;
+                    if (specific) {
+                        this.FormSourceSpecificConfig = { ...specific };
+                    }
+                    // Run-budget knob — pulled directly off the typed Configuration.
+                    const items = parsed?.MaxItemsPerRun;
+                    if (typeof items === 'number' && Number.isFinite(items)) {
+                        this.FormMaxItemsPerRun = items;
+                    }
+                    // Website sub-object — only populates the inputs when present
+                    // (matches the autotagger's "unset = default" semantics).
+                    const website = parsed?.Website;
+                    if (website) {
+                        const depth = website.MaxDepth;
+                        if (typeof depth === 'number' && Number.isFinite(depth)) {
+                            this.FormMaxDepth = depth;
+                        }
+                        if (typeof website.CrawlSitesInLowerLevelDomain === 'boolean') {
+                            this.FormCrawlSitesInLowerLevelDomain = website.CrawlSitesInLowerLevelDomain;
+                        }
+                        if (typeof website.CrawlOtherSitesInTopLevelDomain === 'boolean') {
+                            this.FormCrawlOtherSitesInTopLevelDomain = website.CrawlOtherSitesInTopLevelDomain;
+                        }
+                    }
+                } catch {
+                    // Configuration not valid JSON, ignore
+                }
+            }
+        }
+
+        this.FormMode = 'edit-source';
+        this.cdr.detectChanges();
+    }
+
+    public async OpenAddType(): Promise<void> {
+        await this.ensureFormDropdownsLoaded();
+        this.resetTypeForm();
+        this.FormMode = 'add-type';
+        this.cdr.detectChanges();
+    }
+
+    public async OpenEditType(card: ContentTypeCard): Promise<void> {
+        await this.ensureFormDropdownsLoaded();
+        this.FormTypeName = card.Name;
+        this.FormTypeDescription = card.Description;
+        this.FormTypeAIModelID = card.AIModelID;
+        this.FormTypeMinTags = card.MinTags;
+        this.FormTypeMaxTags = card.MaxTags;
+        this.FormTypeEmbeddingModelID = card.EmbeddingModelID ?? '';
+        this.FormTypeVectorIndexID = card.VectorIndexID ?? '';
+        this.EditingTypeID = card.ID;
+        this.FormMode = 'edit-type';
+        this.cdr.detectChanges();
+    }
+
+    // ════════════════════════════════════════════
+    // ADVANCED SETTINGS
+    // ════════════════════════════════════════════
+
+    /**
+     * Open the full entity form for the source currently being edited in the
+     * slide-in. Quick-edit covers the most-used knobs; the entity form (with
+     * the dynamically-mounted BaseFormPanel slots) exposes everything else
+     * — taxonomy mode, thresholds, all five run-budget caps, URL pattern,
+     * root URL, etc. The host owns NavigationService, so navigation bubbles up.
+     */
+    public OpenAdvancedSourceSettings(): void {
+        if (!this.EditingSourceID) return;
+        const id = this.EditingSourceID;
+        this.CloseForm();
+        this.NavigateToRecordRequested.emit({
+            entityName: 'MJ: Content Sources',
+            key: CompositeKey.FromID(id),
+        });
+    }
+
+    // ════════════════════════════════════════════
+    // SAVE — Sources
+    // ════════════════════════════════════════════
+
+    public async SaveSource(): Promise<void> {
+        if (this.FormSaving) return;
+
+        // Validate required fields before saving
+        if (!this.FormSourceName.trim()) {
+            MJNotificationService.Instance.CreateSimpleNotification('Please enter a source name.', 'warning', 3000);
+            return;
+        }
+        if (!this.FormSourceTypeID) {
+            MJNotificationService.Instance.CreateSimpleNotification('Please select a source type.', 'warning', 3000);
+            return;
+        }
+
+        // For non-Entity source types, ContentType is required
+        if (!this.IsEntitySourceTypeSelected && this.SelectedSourceTypeRequiresContentType) {
+            if (!this.FormContentTypeID) {
+                if (this.ContentTypeOptions.length === 0) {
+                    MJNotificationService.Instance.CreateSimpleNotification(
+                        'No content types are configured. Please create a content type first in the Content Types section.',
+                        'warning', 5000
+                    );
+                } else {
+                    MJNotificationService.Instance.CreateSimpleNotification(
+                        'Please select a content type.',
+                        'warning', 3000
+                    );
+                }
+                return;
+            }
+        }
+
+        this.FormSaving = true;
+        this.cdr.detectChanges();
+
+        try {
+            const md = this.ProviderToUse;
+            const entity = await md.GetEntityObject<MJContentSourceEntity>('MJ: Content Sources');
+
+            if (this.FormMode === 'edit-source' && this.EditingSourceID) {
+                await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: this.EditingSourceID }]));
+            } else {
+                entity.NewRecord();
+            }
+
+            entity.Name = this.FormSourceName;
+            entity.ContentSourceTypeID = this.FormSourceTypeID;
+
+            // For Entity source type, ContentType and FileType are not relevant
+            // but the DB columns are NOT NULL, so default to the first available value
+            if (this.IsEntitySourceTypeSelected) {
+                const engine = KnowledgeHubMetadataEngine.Instance;
+                if (!entity.ContentTypeID) {
+                    if (engine.ContentTypes.length === 0) {
+                        this.FormSaving = false;
+                        this.cdr.detectChanges();
+                        this.ContentTypeMissing.emit();
+                        return;
+                    }
+                    entity.ContentTypeID = engine.ContentTypes[0].ID;
+                }
+                if (!entity.ContentFileTypeID && engine.ContentFileTypes.length > 0) {
+                    entity.ContentFileTypeID = engine.ContentFileTypes[0].ID;
+                }
+            } else {
+                entity.ContentTypeID = this.FormContentTypeID;
+                entity.ContentFileTypeID = this.FormFileTypeID;
+            }
+
+            // Store source-type-specific values from the dynamic form
+            // For Entity type: EntityID and EntityDocumentID go on the entity directly
+            if (this.IsEntitySourceTypeSelected) {
+                entity.EntityID = this.FormSourceSpecificConfig['EntityID'] || null;
+                const entityDocID = this.FormSourceSpecificConfig['EntityDocumentID'];
+                if (entityDocID) {
+                    entity.EntityDocumentID = entityDocID;
+                } else {
+                    // Auto-select first doc if only one exists
+                    const docField = this.SelectedSourceTypeFields.find(f => f.Type === 'entity-doc-picker');
+                    const docs = docField ? this.GetDependentOptions(docField) : [];
+                    entity.EntityDocumentID = docs.length > 0 ? docs[0].ID : null;
+                }
+                entity.URL = '';
+            } else {
+                entity.EntityID = null;
+                entity.EntityDocumentID = null;
+                // URL comes from dynamic fields for RSS/Website, or empty for others
+                entity.URL = this.FormSourceSpecificConfig['URL'] || '';
+            }
+
+            // Store the full SourceSpecificConfiguration in the Configuration JSON
+            const currentConfig = entity.ConfigurationObject ?? {};
+
+            // Merge the inline Classification knobs (taxonomy mode, thresholds,
+            // tag root, budgets, toggles) from the working config. We deliberately
+            // exclude the sub-objects owned by the dedicated quick-edit logic below
+            // (SourceSpecificConfiguration, MaxItemsPerRun, Website) so those stay
+            // single-owner and we never clobber crawl settings. Keys absent from the
+            // working config are left untouched on currentConfig.
+            const { SourceSpecificConfiguration: _ssc, MaxItemsPerRun: _mipr, Website: _web, ...classifierKnobs } = this.workingConfig;
+            Object.assign(currentConfig, classifierKnobs);
+
+            currentConfig.SourceSpecificConfiguration = { ...this.FormSourceSpecificConfig };
+
+            // Persist the quick-edit knobs that don't have their own DB columns
+            // (the rest live on the typed Configuration JSON sub-objects). The
+            // advanced settings flow on the entity form can override more fields
+            // — we only touch the keys the slide-in exposes so we don't clobber
+            // unrelated values an operator set there earlier.
+            if (this.FormMaxItemsPerRun != null && Number.isFinite(this.FormMaxItemsPerRun)) {
+                currentConfig.MaxItemsPerRun = this.FormMaxItemsPerRun;
+            } else {
+                // Empty input = "unlimited" — strip the key so the autotagger
+                // sees no cap (rather than 0 = "process zero items").
+                delete currentConfig.MaxItemsPerRun;
+            }
+
+            if (this.IsWebsiteSourceTypeSelected) {
+                const website = { ...(currentConfig.Website ?? {}) };
+                if (this.FormMaxDepth != null && Number.isFinite(this.FormMaxDepth)) {
+                    website.MaxDepth = this.FormMaxDepth;
+                } else {
+                    delete website.MaxDepth;
+                }
+                website.CrawlSitesInLowerLevelDomain = this.FormCrawlSitesInLowerLevelDomain;
+                website.CrawlOtherSitesInTopLevelDomain = this.FormCrawlOtherSitesInTopLevelDomain;
+                currentConfig.Website = website;
+            }
+
+            entity.ConfigurationObject = currentConfig;
+
+            entity.EmbeddingModelID = this.FormSourceEmbeddingModelID || null;
+            entity.VectorIndexID = this.FormSourceVectorIndexID || null;
+
+            const saved = await entity.Save();
+            if (saved) {
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    this.FormMode === 'edit-source' ? 'Source updated' : 'Source created', 'success', 2500
+                );
+                this.CloseForm();
+                this.Saved.emit({ kind: 'source' });
+            } else {
+                // CP-4: Show detailed error from LatestResult
+                const errorDetail = entity.LatestResult?.CompleteMessage ?? 'Unknown error';
+                console.error('[Classify] Save source failed:', entity.LatestResult);
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    `Failed to save source: ${errorDetail}`, 'error', 5000
+                );
+            }
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            console.error('[Classify] Save source exception:', error);
+            MJNotificationService.Instance.CreateSimpleNotification(`Error: ${msg}`, 'error', 5000);
+        } finally {
+            this.FormSaving = false;
+            this.cdr.detectChanges();
+        }
+    }
+
+    // ════════════════════════════════════════════
+    // SAVE — Content Types
+    // ════════════════════════════════════════════
+
+    public async SaveContentType(): Promise<void> {
+        if (this.FormSaving) return;
+        this.FormSaving = true;
+        this.cdr.detectChanges();
+
+        try {
+            const md = this.ProviderToUse;
+            const contentType = await md.GetEntityObject<MJContentTypeEntity>('MJ: Content Types', md.CurrentUser);
+
+            if (this.FormMode === 'edit-type' && this.EditingTypeID) {
+                await contentType.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: this.EditingTypeID }]));
+            } else {
+                contentType.NewRecord();
+            }
+
+            contentType.Name = this.FormTypeName;
+            contentType.Description = this.FormTypeDescription;
+            contentType.AIModelID = this.FormTypeAIModelID;
+            contentType.MinTags = this.FormTypeMinTags;
+            contentType.MaxTags = this.FormTypeMaxTags;
+            contentType.EmbeddingModelID = this.FormTypeEmbeddingModelID || null;
+            contentType.VectorIndexID = this.FormTypeVectorIndexID || null;
+
+            const saved = await contentType.Save();
+            if (saved) {
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    this.FormMode === 'edit-type' ? 'Content type updated' : 'Content type created', 'success', 2500
+                );
+                this.CloseForm();
+                this.Saved.emit({ kind: 'type' });
+            } else {
+                MJNotificationService.Instance.CreateSimpleNotification('Failed to save content type', 'error', 3000);
+            }
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            MJNotificationService.Instance.CreateSimpleNotification(`Error: ${msg}`, 'error', 4000);
+        } finally {
+            this.FormSaving = false;
+            this.cdr.detectChanges();
+        }
+    }
+
+    public CloseForm(): void {
+        this.FormMode = 'none';
+        this.cdr.detectChanges();
+    }
+
+    // ════════════════════════════════════════════
+    // RAW SOURCES — supplied by the host so edit can read Configuration JSON
+    // ════════════════════════════════════════════
+
+    /**
+     * Raw `MJ: Content Sources` rows, forwarded by the host so `OpenEditSource`
+     * can hydrate the quick-edit knobs from the source's Configuration JSON. The
+     * card the Sources tab passes doesn't carry the full Configuration blob.
+     */
+    public RawSources: Record<string, unknown>[] = [];
+
+    // ════════════════════════════════════════════
+    // HELPERS
+    // ════════════════════════════════════════════
+
+    private async ensureFormDropdownsLoaded(): Promise<void> {
+        try {
+            // Use KnowledgeHubMetadataEngine for cached reference data — instant, no RunView needed
+            const engine = KnowledgeHubMetadataEngine.Instance;
+            await engine.Config(false); // no-op if already loaded
+
+            this.SourceTypeOptions = engine.ContentSourceTypes.map(t => ({ ID: t.ID, Name: t.Name }));
+            this.ContentTypeOptions = engine.ContentTypes.map(t => ({ ID: t.ID, Name: t.Name }));
+            this.FileTypeOptions = engine.ContentFileTypes.map(t => ({ ID: t.ID, Name: t.Name }));
+            this.VectorIndexOptions = engine.VectorIndexes.map(vi => ({ ID: vi.ID, Name: vi.Name }));
+
+            // AI Models from AIEngineBase (already cached)
+            if (this.AIModelOptions.length === 0) {
+                const aiEngine = AIEngineBase.Instance;
+                await aiEngine.Config(false);
+                this.AIModelOptions = aiEngine.Models.map(m => ({ ID: m.ID, Name: m.Name }));
+                this.EmbeddingModelOptions = aiEngine.Models
+                    .filter(m => m.AIModelType?.trim().toLowerCase() === 'embeddings')
+                    .map(m => ({ ID: m.ID, Name: m.Name }));
+            }
+
+            // Tag-root candidates for the Classification section's root dropdown.
+            if (this.TagRootOptions.length === 0) {
+                const p = this.ProviderToUse;
+                await TagEngineBase.Instance.Config(false, p.CurrentUser, p);
+                this.TagRootOptions = TagEngineBase.Instance.Tags
+                    .map(t => ({ ID: t.ID, Name: t.Name }))
+                    .sort((a, b) => a.Name.localeCompare(b.Name));
+            }
+
+            // Org-level domain context — used for the effective-context preview.
+            await this.loadOrgClassificationContext();
+        } catch (error) {
+            console.error('[Autotagging] Error loading form dropdowns:', error);
+        }
+    }
+
+    /**
+     * Resolve the Knowledge Hub Application ID by name (cached per dialog instance).
+     * Returns null when no such application exists.
+     */
+    private khApplicationID: string | null | undefined = undefined;
+    private async resolveKnowledgeHubApplicationID(): Promise<string | null> {
+        if (this.khApplicationID !== undefined) return this.khApplicationID;
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+        const result = await rv.RunView<{ ID: string }>({
+            EntityName: 'MJ: Applications',
+            ExtraFilter: `Name = '${KNOWLEDGE_HUB_APPLICATION_NAME.replace(/'/g, "''")}'`,
+            Fields: ['ID'],
+            MaxRows: 1,
+            ResultType: 'simple',
+        });
+        this.khApplicationID = result.Success && result.Results.length > 0 ? result.Results[0].ID : null;
+        return this.khApplicationID;
+    }
+
+    /** Read the org-level classification context for the effective-context preview. */
+    private async loadOrgClassificationContext(): Promise<void> {
+        try {
+            const p = this.ProviderToUse;
+            await ApplicationSettingEngine.Instance.Config(false, p.CurrentUser, p);
+            const appID = await this.resolveKnowledgeHubApplicationID();
+            this.OrgClassificationContext =
+                ApplicationSettingEngine.Instance.GetSetting(CLASSIFY_ORG_CONTEXT_SETTING_KEY, appID ?? undefined) ?? '';
+        } catch {
+            this.OrgClassificationContext = '';
+        }
+    }
+
+    private resetSourceForm(): void {
+        this.FormSourceName = '';
+        this.FormSourceTypeID = '';
+        this.FormContentTypeID = '';
+        this.FormFileTypeID = '';
+        this.FormSourceURL = '';
+        this.FormSourceEntityID = '';
+        this.FormSourceEntityDocID = '';
+        this.FormSourceEmbeddingModelID = '';
+        this.FormSourceVectorIndexID = '';
+        this.EditingSourceID = '';
+        this.FormSourceSpecificConfig = {};
+        // Quick-edit knobs — defaults match the autotagger's runtime defaults.
+        this.FormMaxItemsPerRun = null;
+        this.FormMaxDepth = null;
+        this.FormCrawlSitesInLowerLevelDomain = true;
+        this.FormCrawlOtherSitesInTopLevelDomain = false;
+        // Classification knobs — start empty; the typed getters apply defaults.
+        this.workingConfig = {};
+        // Inline Entity Document create sub-form.
+        this.ShowInlineEntityDocForm = false;
+        this.NewEntityDocName = '';
+        this.NewEntityDocSelectedFields = {};
+    }
+
+    // ════════════════════════════════════════════
+    // EFFECTIVE-VALUES TOGGLE
+    // ════════════════════════════════════════════
+
+    /** Show / hide the inline effective-values panel in the Classification section. */
+    public ToggleEffectiveValues(): void {
+        this.ShowEffectiveValues = !this.ShowEffectiveValues;
+        this.cdr.detectChanges();
+    }
+
+    // ════════════════════════════════════════════
+    // RESIZABLE PANEL (drag the left edge) + width persistence
+    // ════════════════════════════════════════════
+
+    /** Clamp a candidate width to the allowed range (min .. 90% of viewport). */
+    private clampPanelWidth(width: number): number {
+        const max = window.innerWidth * 0.9;
+        return Math.max(PANEL_WIDTH_MIN, Math.min(width, max));
+    }
+
+    /**
+     * Restore the remembered panel width from UserInfoEngine (a synchronous cache
+     * read), falling back to the default. Called when a source form is opened.
+     */
+    private restorePanelWidth(): void {
+        const raw = UserInfoEngine.Instance.GetSetting(PANEL_WIDTH_SETTING_KEY);
+        if (raw) {
+            const n = parseInt(raw, 10);
+            if (!isNaN(n)) {
+                this.PanelWidth = this.clampPanelWidth(n);
+                return;
+            }
+        }
+        this.PanelWidth = PANEL_WIDTH_DEFAULT;
+    }
+
+    /**
+     * Begin a left-edge resize drag. The panel slides in from the right, so the
+     * resizable edge is its LEFT edge: dragging left widens the panel.
+     */
+    public StartResize(event: MouseEvent): void {
+        event.preventDefault();
+        if (this.isResizing) return;
+        this.isResizing = true;
+
+        const startX = event.clientX;
+        const startWidth = this.PanelWidth;
+        // Prevent text selection / iframe capture during the drag.
+        document.body.style.userSelect = 'none';
+
+        // Run move tracking outside Angular to avoid a CD cycle on every pixel;
+        // we re-enter the zone only to update the bound width.
+        this.zone.runOutsideAngular(() => {
+            this.resizeMoveListener = (e: MouseEvent) => {
+                const next = this.clampPanelWidth(startWidth + (startX - e.clientX));
+                this.zone.run(() => {
+                    this.PanelWidth = next;
+                    this.cdr.detectChanges();
+                });
+                // Debounced persistence while dragging — the final value is what sticks.
+                UserInfoEngine.Instance.SetSettingDebounced(PANEL_WIDTH_SETTING_KEY, String(Math.round(next)));
+            };
+            this.resizeUpListener = () => this.endResize();
+            document.addEventListener('mousemove', this.resizeMoveListener);
+            document.addEventListener('mouseup', this.resizeUpListener);
+        });
+    }
+
+    /** Tear down the active drag listeners and persist the final width. */
+    private endResize(): void {
+        if (!this.isResizing) return;
+        this.isResizing = false;
+        document.body.style.userSelect = '';
+        if (this.resizeMoveListener) {
+            document.removeEventListener('mousemove', this.resizeMoveListener);
+            this.resizeMoveListener = null;
+        }
+        if (this.resizeUpListener) {
+            document.removeEventListener('mouseup', this.resizeUpListener);
+            this.resizeUpListener = null;
+        }
+        UserInfoEngine.Instance.SetSettingDebounced(PANEL_WIDTH_SETTING_KEY, String(Math.round(this.PanelWidth)));
+    }
+
+    public ngOnDestroy(): void {
+        // Clean up any active drag listeners + body style if destroyed mid-drag.
+        this.endResize();
+    }
+
+    private resetTypeForm(): void {
+        this.FormTypeName = '';
+        this.FormTypeDescription = '';
+        this.FormTypeAIModelID = '';
+        this.FormTypeMinTags = 1;
+        this.FormTypeMaxTags = 10;
+        this.FormTypeEmbeddingModelID = '';
+        this.FormTypeVectorIndexID = '';
+        this.EditingTypeID = '';
+    }
+}

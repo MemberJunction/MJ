@@ -18,22 +18,25 @@ export class MJAIAgentRunFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'runIdentificationHierarchy', sectionName: 'Run Identification & Hierarchy', isExpanded: true },
             { sectionKey: 'executionDetailsOutcome', sectionName: 'Execution Details & Outcome', isExpanded: true },
-            { sectionKey: 'contextualRelationships', sectionName: 'Contextual Relationships', isExpanded: false },
-            { sectionKey: 'resourceUsageCost', sectionName: 'Resource Usage & Cost', isExpanded: false },
-            { sectionKey: 'configurationOverrides', sectionName: 'Configuration & Overrides', isExpanded: false },
-            { sectionKey: 'testingValidation', sectionName: 'Testing & Validation', isExpanded: false },
-            { sectionKey: 'scopeMultiTenant', sectionName: 'Scope & Multi-Tenant', isExpanded: false },
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
+            { sectionKey: 'contextualRelationships', sectionName: 'Contextual Relationships', isExpanded: true },
+            { sectionKey: 'resourceUsageCost', sectionName: 'Resource Usage & Cost', isExpanded: true },
+            { sectionKey: 'configurationOverrides', sectionName: 'Configuration & Overrides', isExpanded: true },
+            { sectionKey: 'testingValidation', sectionName: 'Testing & Validation', isExpanded: true },
+            { sectionKey: 'scopeMultiTenant', sectionName: 'Scope & Multi-Tenant', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJAIAgentRunSteps', sectionName: 'AI Agent Run Steps', isExpanded: false },
-            { sectionKey: 'mJAIAgentRunsParentRunID', sectionName: 'AI Agent Runs (Parent Run)', isExpanded: false },
             { sectionKey: 'mJAIAgentExamples', sectionName: 'AI Agent Examples', isExpanded: false },
             { sectionKey: 'mJAIAgentNotes', sectionName: 'AI Agent Notes', isExpanded: false },
-            { sectionKey: 'mJAIAgentRunMedias', sectionName: 'AI Agent Run Medias', isExpanded: false },
             { sectionKey: 'mJAIAgentRequestsOriginatingAgentRunID', sectionName: 'AI Agent Requests (Originating Agent Run)', isExpanded: false },
+            { sectionKey: 'mJAIAgentRunMedias', sectionName: 'AI Agent Run Medias', isExpanded: false },
+            { sectionKey: 'mJAIAgentRunSteps', sectionName: 'AI Agent Run Steps', isExpanded: false },
+            { sectionKey: 'mJAIAgentRunsParentRunID', sectionName: 'AI Agent Runs (Parent Run)', isExpanded: false },
             { sectionKey: 'mJAIAgentRequestsResumingAgentRunID', sectionName: 'AI Agent Requests (Resuming Agent Run)', isExpanded: false },
             { sectionKey: 'mJAIPromptRuns', sectionName: 'AI Prompt Runs', isExpanded: false },
-            { sectionKey: 'mJAIAgentRunsLastRunID', sectionName: 'AI Agent Runs (Last Run)', isExpanded: false }
+            { sectionKey: 'mJAIAgentRunsLastRunID', sectionName: 'AI Agent Runs (Last Run)', isExpanded: false },
+            { sectionKey: 'mJProcessRunDetails', sectionName: 'Process Run Details', isExpanded: false },
+            { sectionKey: 'mJDuplicateRunDetailMatches', sectionName: 'Duplicate Run Detail Matches', isExpanded: false },
+            { sectionKey: 'mJExperimentSessionIterations', sectionName: 'Experiment Session Iterations', isExpanded: false },
+            { sectionKey: 'mJExperimentSessions', sectionName: 'Experiment Sessions', isExpanded: false }
         ]);
     }
 }

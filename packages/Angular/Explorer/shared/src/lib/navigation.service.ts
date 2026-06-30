@@ -2,7 +2,9 @@ import { Injectable, OnDestroy } from '@angular/core';
 import { WorkspaceStateManager, NavItem, DynamicNavItem, TabRequest, ApplicationManager } from '@memberjunction/ng-base-application';
 import { NavigationOptions } from './navigation.interfaces';
 import { CompositeKey } from '@memberjunction/core';
-import { fromEvent, Subject, Subscription } from 'rxjs';
+import { fromEvent, BehaviorSubject, Subject, Subscription, Observable } from 'rxjs';
+import type { AppContextSnapshot } from '@memberjunction/ai-core-plus';
+import { map, distinctUntilChanged } from 'rxjs/operators';
 import { UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from './base-resource-component';
 
@@ -168,6 +170,53 @@ export class NavigationService implements OnDestroy {
    */
   public readonly AgentContextUpdated$ = new Subject<AgentContextUpdate>();
 
+  /** The client tools currently surfaced to the agent (the most recent SetAgentClientTools set). */
+  private currentAgentTools: NonNullable<AgentContextUpdate['AgentClientTools']> = [];
+
+  /**
+   * Tools captured for each cached resource component at the moment it was DETACHED, keyed by that
+   * component (the one the cache manager tracks). Replayed on reattach. Captured at detach time (vs.
+   * keyed by the registering component) so it works even when a resource WRAPPER component is what's
+   * cached/reattached while an INNER child component is what actually called SetAgentClientTools
+   * (e.g. Data Explorer's resource wrapper hosting its dashboard) — keying by the registerer would
+   * miss on reattach. This keeps the agent's live tool set a function of the CURRENTLY attached
+   * surface, fixing the staleness where a previous app's tools lingered after navigation.
+   */
+  private readonly agentToolsByDetachedResource = new Map<BaseResourceComponent, NonNullable<AgentContextUpdate['AgentClientTools']>>();
+
+  /**
+   * Latest `AppContextSnapshot` published by the Explorer app shell.
+   *
+   * Why: any embedded `<mj-conversation-chat-area>` instance outside the
+   * floating chat overlay (Form Builder cockpit, future domain dashboards
+   * that pop their own AI pane) needs to feed the SAME context the overlay
+   * does so the agent sees what app + view + dashboard state the user is
+   * looking at. Without this, the agent only sees the embedder's narrow
+   * `AdditionalContext` slice and treats the user as if they have no app
+   * context at all — which is the bug we just fixed.
+   *
+   * `MJExplorerAppComponent` is the canonical publisher (it owns the
+   * snapshot construction); consumers SUBSCRIBE and bind the value to
+   * their chat-area's `[appContext]`. Non-Explorer apps (custom MJ apps
+   * that don't include explorer-app at all) build their own snapshot via
+   * `BuildAppContextSnapshot()` in `@memberjunction/ai-core-plus`.
+   *
+   * Initial value is `null`; the publisher emits the first real snapshot
+   * after the active app + nav state resolve on bootstrap.
+   */
+  public readonly AppContextSnapshot$ = new BehaviorSubject<AppContextSnapshot | null>(null);
+
+  /**
+   * Push a fresh AppContextSnapshot. Called by MJExplorerAppComponent
+   * after each (a) app/tab change, (b) `handleAgentContextUpdate`
+   * merging in `AdditionalContext` from a dashboard. Idempotent — no
+   * de-duplication; embedders should treat the stream as "the latest
+   * value is canonical."
+   */
+  public PublishAppContextSnapshot(snapshot: AppContextSnapshot | null): void {
+    this.AppContextSnapshot$.next(snapshot);
+  }
+
   /**
    * Report the current agent-visible state from a resource component.
    * Call this whenever the dashboard's internal state changes (tab switch,
@@ -199,7 +248,45 @@ export class NavigationService implements OnDestroy {
     ParameterSchema: Record<string, unknown>;
     Handler: (params: Record<string, unknown>) => Promise<unknown>;
   }>): void {
+    this.currentAgentTools = tools;
     this.AgentContextUpdated$.next({ Caller: caller, AgentClientTools: tools });
+  }
+
+  /**
+   * Re-publish a cached resource component's tools when its tab is re-focused. Cached components keep
+   * their Angular instance but do NOT re-run `ngAfterViewInit`, so they never re-register on reattach
+   * — the shell calls this so the just-reactivated surface's tools become the agent's active set
+   * again. Replays the set captured for this component at its last detach; no-op (lets a fresh
+   * component register itself) when none was captured (e.g. a component's very first attach).
+   */
+  public NotifyResourceReattached(caller: BaseResourceComponent): void {
+    const tools = this.agentToolsByDetachedResource.get(caller);
+    if (tools === undefined) {
+      return;
+    }
+    this.currentAgentTools = tools;
+    this.AgentContextUpdated$.next({ Caller: caller, AgentClientTools: tools });
+  }
+
+  /**
+   * Capture + clear the active client tools when a resource component's tab is detached (navigated
+   * away from), so the previous surface's tools aren't offered to the agent on the next surface. We
+   * snapshot whatever tools are CURRENTLY active and key them by the detaching component, so
+   * {@link NotifyResourceReattached} can replay them — robust to a wrapper component being the one
+   * cached/reattached while an inner child actually registered the tools (e.g. Data Explorer).
+   */
+  public NotifyResourceDetached(caller: BaseResourceComponent): void {
+    this.agentToolsByDetachedResource.set(caller, this.currentAgentTools);
+    this.currentAgentTools = [];
+    this.AgentContextUpdated$.next({ Caller: caller, AgentClientTools: [] });
+  }
+
+  /**
+   * Drop a destroyed component's captured tools (e.g. on LRU eviction), so the map doesn't retain
+   * references to dead component instances.
+   */
+  public ForgetResource(caller: BaseResourceComponent): void {
+    this.agentToolsByDetachedResource.delete(caller);
   }
 
   ngOnDestroy(): void {
@@ -744,8 +831,13 @@ export class NavigationService implements OnDestroy {
    * If the requested nav item already has an open tab, switches to that tab instead of creating a new one.
    * @param appId The application ID to switch to
    * @param navItemName Optional name of a nav item to open within the app. If provided, opens that nav item.
+   * @param queryParams Optional query params to apply to the target tab. Applied SYNCHRONOUSLY once the
+   *                    target tab is active — critical when navigating (e.g. from a Home pin) to an
+   *                    app whose resource component is cached: the params must be in the tab config
+   *                    BEFORE the tab-container reattaches the cached component, otherwise the cache
+   *                    restores its own (stale) saved params and the navigation intent is lost.
    */
-  async SwitchToApp(appId: string, navItemName?: string): Promise<void> {
+  async SwitchToApp(appId: string, navItemName?: string, queryParams?: Record<string, string | null>): Promise<void> {
     await this.appManager.SetActiveApp(appId);
 
     const app = this.appManager.GetAllApps().find(a => UUIDsEqual(a.ID, appId));
@@ -772,6 +864,14 @@ export class NavigationService implements OnDestroy {
         } else {
           // Open new tab for this nav item
           this.OpenNavItem(appId, navItem, app.GetColor());
+        }
+        // Apply the requested query params to whichever tab is now active — synchronously,
+        // so they're present before the (possibly cached) resource component reattaches.
+        if (queryParams && Object.keys(queryParams).length > 0) {
+          const targetTabId = this.workspaceManager.GetActiveTabId();
+          if (targetTabId) {
+            this.applyQueryParamsToTab(targetTabId, queryParams);
+          }
         }
         return;
       }
@@ -830,6 +930,39 @@ export class NavigationService implements OnDestroy {
    */
   NotifyQueryParamsChanged(tabId: string, params: Record<string, string>): void {
     this.queryParamChanged$.next({ TabId: tabId, Params: params });
+  }
+
+  /**
+   * Reactively observe the query params for a specific tab.
+   *
+   * Backed by the workspace BehaviorSubject, so a subscriber receives the current
+   * params *immediately* on subscribe AND every subsequent change — including the
+   * deep-link params that the ResourceResolver merges into the tab configuration on
+   * a cold/direct URL load.
+   *
+   * This is the race-free counterpart to {@link NotifyQueryParamsChanged} (a plain
+   * Subject that drops events fired before a component has subscribed). A resource
+   * component that mounts from workspace restoration can subscribe here and still
+   * pick up its initial deep-link state regardless of whether the params landed in
+   * the tab config before or after it mounted.
+   */
+  public ObserveTabQueryParams(tabId: string): Observable<Record<string, string>> {
+    return this.workspaceManager.Configuration.pipe(
+      map(config => {
+        const tab = config?.tabs?.find(t => t.id === tabId);
+        return (tab?.configuration?.['queryParams'] || {}) as Record<string, string>;
+      }),
+      distinctUntilChanged((a, b) => this.shallowParamsEqual(a, b))
+    );
+  }
+
+  private shallowParamsEqual(a: Record<string, string>, b: Record<string, string>): boolean {
+    const keysA = Object.keys(a);
+    const keysB = Object.keys(b);
+    if (keysA.length !== keysB.length) {
+      return false;
+    }
+    return keysA.every(key => a[key] === b[key]);
   }
 
   /**

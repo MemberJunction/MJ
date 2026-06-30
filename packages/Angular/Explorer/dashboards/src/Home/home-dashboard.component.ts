@@ -4,13 +4,15 @@ import { takeUntil } from 'rxjs/operators';
 import { BaseResourceComponent, NavigationService, RecentAccessService, RecentAccessItem, HomeAppPinService, HomeAppPinnedItem, HomeAppPinInput, ActionPinConfiguration } from '@memberjunction/ng-shared';
 import { RegisterClass } from '@memberjunction/global';
 import { Metadata, CompositeKey, EntityRecordNameInput, RunView } from '@memberjunction/core';
-import { ResourceData, MJUserFavoriteEntity, MJUserNotificationEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { ResourceData, MJUserFavoriteEntity, MJUserNotificationEntity, UserInfoEngine, DashboardEngine, UserViewEngine, QueryEngine } from '@memberjunction/core-entities';
 import { ActionEngineBase } from '@memberjunction/actions-base';
 import { ApplicationManager, BaseApplication } from '@memberjunction/ng-base-application';
 import { UserAppConfigComponent } from '@memberjunction/ng-explorer-settings';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ActionPinConfigResult } from './action-pin-config-dialog.component';
 import { ActionPinRunResult } from './action-pin-runner-dialog.component';
+import { buildHomeAgentContext, buildHomeNotFoundError, resolveNamedRecord, NamedRecord, RecentItemSummary } from './home-agent-context';
+import { AgentToolResult, validateStringParam } from '../shared/agent-tool-validation';
 
 /**
  * Cached app data with pre-computed values for optimal rendering performance
@@ -69,6 +71,9 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
 
   // Sidebar state - default closed on all screen sizes
   public sidebarOpen = false;
+
+  // Pin empty-state dismissal preference (persisted in UserSettings via UserInfoEngine)
+  public HidePinEmptyState = false;
 
   // Pin state
   public PinnedItems: HomeAppPinnedItem[] = [];
@@ -195,6 +200,9 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
         this.isLoading = false;
         this.NotifyLoadComplete();
 
+        // Apps changed → keep the agent's view of the launcher in sync.
+        this.publishAgentContext();
+
         this.cdr.markForCheck();
       });
 
@@ -204,6 +212,7 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
       .subscribe(notifications => {
         this.unreadNotifications = notifications.filter(n => n.Unread).slice(0, 5);
         this.notificationsLoading = false;
+        this.publishAgentContext();
         this.cdr.markForCheck();
       });
 
@@ -213,6 +222,7 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
       .subscribe(items => {
         this.recentItems = this.deduplicateRecents(items).slice(0, 5);
         this.recentsLoading = false;
+        this.publishAgentContext();
         this.cdr.markForCheck();
       });
 
@@ -223,6 +233,10 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
     this.loadFavorites();
     this.loadRecents();
 
+    // Load pin empty-state dismissal preference
+    const hideSetting = UserInfoEngine.Instance.GetSetting('HomeApp.HidePinEmptyState');
+    this.HidePinEmptyState = hideSetting === 'true';
+
     // Load pinned items
     await this.pinService.LoadPins();
     this.pinService.Pins$
@@ -231,6 +245,7 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
         this.PinnedItems = pins;
         this.UngroupedPins = this.pinService.GetUngroupedPins();
         this.PinGroups = this.pinService.GetGroups();
+        this.publishAgentContext();
         this.cdr.markForCheck();
       });
 
@@ -239,6 +254,282 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
 
     // Resolve missing icons for Custom pins
     this.resolveCustomPinIcons();
+
+    // Pre-warm engines used by the Add Pin panel so the first click feels instant.
+    // DashboardEngine and QueryEngine already auto-start; UserViewEngine and ActionEngineBase
+    // don't, so kick them off in the background (fire-and-forget — Config(false) is idempotent
+    // and they cache their results, so a subsequent OpenAddPinPanel() call will be a no-op).
+    UserViewEngine.Instance.Config(false, this.ProviderToUse.CurrentUser, this.ProviderToUse)
+      .catch(err => console.warn('[Home] UserViewEngine pre-warm failed', err));
+    ActionEngineBase.Instance.Config(false, this.ProviderToUse.CurrentUser, this.ProviderToUse)
+      .catch(err => console.warn('[Home] ActionEngineBase pre-warm failed', err));
+
+    // Publish the initial agent context and register the client tools the AI agent
+    // can invoke against the Home surface. Ongoing re-emits happen in the subscriptions
+    // above (apps, notifications, recents, pins).
+    this.publishAgentContext();
+    this.registerAgentClientTools();
+  }
+
+  // ========================================
+  // AI AGENT CONTEXT & CLIENT TOOLS
+  // ========================================
+  //
+  // 🚨 SAFETY BOUNDARY: the Home dashboard exposes ONLY navigation / discovery /
+  // panel-toggle operations to the agent. No pin create, no pin delete, no pin
+  // rename, no group mutation, no reordering — those are user-confirm-driven or
+  // destructive and stay in the UI. Every tool below maps to the exact same
+  // component method a user click would call (OpenApp→onAppClick, OpenPin→OnPinClick,
+  // search→AddPanel search field, panel/sidebar/edit-mode toggles). Handlers are
+  // tolerant: they never throw, returning { Success, Data?, ErrorMessage? }.
+
+  /**
+   * Publish the current Home dashboard state to the AI agent via NavigationService.
+   * The shaping lives in the pure {@link buildHomeAgentContext} helper so it stays
+   * unit-testable. Called on init and on every meaningful state change.
+   */
+  private publishAgentContext(): void {
+    const context = buildHomeAgentContext({
+      AppCount: this.apps.length,
+      VisibleAppCount: this.appsDisplayData.length,
+      AppNames: this.apps.map(a => a.Name),
+      PinnedItemCount: this.PinnedItems.length,
+      PinGroupCount: this.PinGroups.length,
+      PinGroupNames: this.PinGroups,
+      PinNames: this.PinnedItems.map(p => p.DisplayName),
+      UnreadNotifications: this.unreadNotifications.length,
+      NotificationTitles: this.unreadNotifications.map(n => n.Title ?? '(untitled)'),
+      RecentItemsCount: this.recentItems.length,
+      RecentItems: this.buildRecentItemSummaries(),
+      EditMode: this.EditMode,
+      AddPanelOpen: this.AddPanelOpen,
+      SidebarOpen: this.sidebarOpen,
+      AddPanelSearchQuery: this.AddPanelSearchQuery,
+    });
+    this.navigationService.SetAgentContext(this, context);
+  }
+
+  /** Structured recent-item summaries (display name + resource type) for the agent context. */
+  private buildRecentItemSummaries(): RecentItemSummary[] {
+    return this.recentItems.map(item => ({
+      Name: item.recordName || item.entityName || item.recordId,
+      ResourceType: item.resourceType,
+    }));
+  }
+
+  /**
+   * Register the client tools the AI agent can invoke against the Home dashboard.
+   * All are navigation / discovery / panel-toggle operations (see SAFETY BOUNDARY
+   * above). Each handler delegates to the same component method a user interaction
+   * would call and returns a tolerant result.
+   *
+   * Tools:
+   * - OpenApp: switch to an application by name (exact or partial match).
+   * - OpenPin: open a pinned item by its display name (exact or partial match).
+   * - SearchPins: find pinned items by a name query (read-only — returns matches).
+   * - OpenRecent: open a recently-accessed item by display name (read-only navigation).
+   * - SearchAddPinPanel: open the Add Pin panel (if needed) and apply a search query.
+   * - ClearAddPinPanelSearch: clear the Add Pin panel search query.
+   * - OpenAddPinPanel / CloseAddPinPanel: toggle the Add Pin panel.
+   * - ToggleSidebar: toggle the notifications/favorites/recents sidebar.
+   * - TogglePinEditMode: toggle pin edit mode (reorder/rename UI affordances).
+   */
+  private registerAgentClientTools(): void {
+    this.navigationService.SetAgentClientTools(this, [
+      {
+        Name: 'OpenApp',
+        Description: 'Switch to an application by its name (e.g. "Data Explorer", "Knowledge Hub").',
+        ParameterSchema: { type: 'object', properties: { appName: { type: 'string' } }, required: ['appName'] },
+        Handler: async (params: Record<string, unknown>) => this.toolOpenApp(params),
+      },
+      {
+        Name: 'OpenPin',
+        Description: 'Open a pinned item on the Home screen by its display name (exact or partial match).',
+        ParameterSchema: { type: 'object', properties: { pinName: { type: 'string' } }, required: ['pinName'] },
+        Handler: async (params: Record<string, unknown>) => this.toolOpenPin(params),
+      },
+      {
+        Name: 'SearchPins',
+        Description: 'Find pinned items on the Home screen whose display name matches a query (case-insensitive contains). Read-only — returns the matching pin names; does not open anything.',
+        ParameterSchema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] },
+        Handler: async (params: Record<string, unknown>) => this.toolSearchPins(params),
+      },
+      {
+        Name: 'OpenRecent',
+        Description: 'Open a recently-accessed item from the Home sidebar by its display name (exact or partial match). Read-only navigation.',
+        ParameterSchema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] },
+        Handler: async (params: Record<string, unknown>) => this.toolOpenRecent(params),
+      },
+      {
+        Name: 'SearchAddPinPanel',
+        Description: 'Open the Add Pin panel (if not already open) and filter its available resources by a search query.',
+        ParameterSchema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] },
+        Handler: async (params: Record<string, unknown>) => this.toolSearchAddPinPanel(params),
+      },
+      {
+        Name: 'ClearAddPinPanelSearch',
+        Description: 'Clear the search query in the Add Pin panel.',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => this.toolClearAddPinPanelSearch(),
+      },
+      {
+        Name: 'OpenAddPinPanel',
+        Description: 'Open the Add Pin panel so the user can browse pinnable resources.',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => {
+          await this.OpenAddPinPanel();
+          this.publishAgentContext();
+          return { Success: true };
+        },
+      },
+      {
+        Name: 'CloseAddPinPanel',
+        Description: 'Close the Add Pin panel.',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => {
+          this.CloseAddPinPanel();
+          this.publishAgentContext();
+          return { Success: true };
+        },
+      },
+      {
+        Name: 'ToggleSidebar',
+        Description: 'Toggle the Home sidebar (unread notifications, favorites, and recent items).',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => {
+          this.toggleSidebar();
+          this.publishAgentContext();
+          return { Success: true, Data: { SidebarOpen: this.sidebarOpen } };
+        },
+      },
+      {
+        Name: 'TogglePinEditMode',
+        Description: 'Toggle pin edit mode on the Home screen (lets the user rename/reorder pins). This only changes the UI mode — it does not modify any pins.',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => {
+          this.ToggleEditMode();
+          this.publishAgentContext();
+          return { Success: true, Data: { EditMode: this.EditMode } };
+        },
+      },
+    ]);
+  }
+
+  /** Resolve an app by name (exact then partial, case-insensitive) and switch to it. */
+  private async toolOpenApp(params: Record<string, unknown>): Promise<AgentToolResult & { Data?: Record<string, unknown> }> {
+    const parsed = validateStringParam(params['appName'], 'appName');
+    if (!parsed.ok) {
+      return parsed.result;
+    }
+    const appName = parsed.value.trim();
+    if (!appName) {
+      return { Success: false, ErrorMessage: 'appName is required.' };
+    }
+    const candidates: NamedRecord[] = this.apps.map(a => ({ Name: a.Name }));
+    const match = resolveNamedRecord(appName, candidates);
+    if (!match) {
+      return { Success: false, ErrorMessage: buildHomeNotFoundError(appName, 'app', candidates) };
+    }
+    const app = this.apps.find(a => a.Name === match.Name);
+    if (!app) {
+      return { Success: false, ErrorMessage: buildHomeNotFoundError(appName, 'app', candidates) };
+    }
+    await this.onAppClick(app);
+    return { Success: true, Data: { AppName: app.Name } };
+  }
+
+  /** The pinned items narrowed to the resolver's structural shape (Name == DisplayName). */
+  private get pinNamedRecords(): NamedRecord[] {
+    return this.PinnedItems.map(p => ({ Name: p.DisplayName }));
+  }
+
+  /** Resolve a pinned item by display name (exact then partial, case-insensitive) and open it. */
+  private toolOpenPin(params: Record<string, unknown>): AgentToolResult & { Data?: Record<string, unknown> } {
+    const parsed = validateStringParam(params['pinName'], 'pinName');
+    if (!parsed.ok) {
+      return parsed.result;
+    }
+    const pinName = parsed.value.trim();
+    if (!pinName) {
+      return { Success: false, ErrorMessage: 'pinName is required.' };
+    }
+    const match = resolveNamedRecord(pinName, this.pinNamedRecords);
+    if (!match) {
+      return { Success: false, ErrorMessage: buildHomeNotFoundError(pinName, 'pinned item', this.pinNamedRecords) };
+    }
+    const pin = this.PinnedItems.find(p => p.DisplayName === match.Name);
+    if (!pin) {
+      return { Success: false, ErrorMessage: buildHomeNotFoundError(pinName, 'pinned item', this.pinNamedRecords) };
+    }
+    // OnPinClick is a no-op while in edit mode; clear edit mode so the open succeeds.
+    if (this.EditMode) {
+      this.EditMode = false;
+    }
+    this.OnPinClick(pin);
+    return { Success: true, Data: { PinName: pin.DisplayName } };
+  }
+
+  /** Find pinned items whose display name matches a query (read-only — returns matches). */
+  private toolSearchPins(params: Record<string, unknown>): AgentToolResult & { Data?: Record<string, unknown> } {
+    const parsed = validateStringParam(params['query'], 'query');
+    if (!parsed.ok) {
+      return parsed.result;
+    }
+    const query = parsed.value.trim().toLowerCase();
+    const matches = query
+      ? this.PinnedItems.filter(p => p.DisplayName.toLowerCase().includes(query))
+      : [...this.PinnedItems];
+    return { Success: true, Data: { Matches: matches.map(p => p.DisplayName), MatchCount: matches.length } };
+  }
+
+  /** Resolve a recent item by display name (exact then partial) and navigate to it. */
+  private toolOpenRecent(params: Record<string, unknown>): AgentToolResult & { Data?: Record<string, unknown> } {
+    const parsed = validateStringParam(params['name'], 'name');
+    if (!parsed.ok) {
+      return parsed.result;
+    }
+    const name = parsed.value.trim();
+    if (!name) {
+      return { Success: false, ErrorMessage: 'name is required.' };
+    }
+    // Build the same display name the context publishes, then resolve against it.
+    const named: NamedRecord[] = this.recentItems.map(item => ({
+      Name: item.recordName || item.entityName || item.recordId,
+    }));
+    const match = resolveNamedRecord(name, named);
+    if (!match) {
+      return { Success: false, ErrorMessage: buildHomeNotFoundError(name, 'recent item', named) };
+    }
+    const idx = named.findIndex(n => n.Name === match.Name);
+    const item = this.recentItems[idx];
+    if (!item) {
+      return { Success: false, ErrorMessage: buildHomeNotFoundError(name, 'recent item', named) };
+    }
+    this.onRecentClick(item);
+    return { Success: true, Data: { Name: match.Name, ResourceType: item.resourceType } };
+  }
+
+  /** Open the Add Pin panel (if needed) and apply a search query. */
+  private async toolSearchAddPinPanel(params: Record<string, unknown>): Promise<AgentToolResult & { Data?: Record<string, unknown> }> {
+    const parsed = validateStringParam(params['query'], 'query');
+    if (!parsed.ok) {
+      return parsed.result;
+    }
+    if (!this.AddPanelOpen) {
+      await this.OpenAddPinPanel();
+    }
+    this.AddPanelSearchQuery = parsed.value;
+    this.publishAgentContext();
+    this.cdr.markForCheck();
+    return { Success: true, Data: { Query: parsed.value } };
+  }
+
+  /** Clear the Add Pin panel search query. */
+  private toolClearAddPinPanelSearch(): AgentToolResult {
+    this.AddPanelSearchQuery = '';
+    this.publishAgentContext();
+    this.cdr.markForCheck();
+    return { Success: true };
   }
 
   ngOnDestroy(): void {
@@ -746,12 +1037,11 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
         if (appName) {
           const app = this.appManager.GetAllApps().find(a => a.Name === appName);
           if (app) {
-            this.navigationService.SwitchToApp(app.ID, navItemName).then(() => {
-              // Apply query params after the tab is created/activated
-              if (queryParams && Object.keys(queryParams).length > 0) {
-                this.navigationService.UpdateActiveTabQueryParams(queryParams);
-              }
-            });
+            // Pass query params INTO SwitchToApp so they're applied synchronously when the
+            // target tab activates — before a cached resource component reattaches. The old
+            // post-hoc UpdateActiveTabQueryParams() in a .then() raced the cache reattach and
+            // lost: e.g. two conversation pins both landed on whatever chat was already open.
+            void this.navigationService.SwitchToApp(app.ID, navItemName, queryParams);
           } else {
             console.warn(`[Pin Click] Custom pin: app "${appName}" not found`, config);
           }
@@ -815,6 +1105,16 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
       this.EditingPinId = null;
       this.EditingGroupName = null;
     }
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Permanently hide the "No pinned items yet" empty state for this user.
+   * Persisted in UserSettings via UserInfoEngine.
+   */
+  DismissPinEmptyState(): void {
+    this.HidePinEmptyState = true;
+    UserInfoEngine.Instance.SetSettingDebounced('HomeApp.HidePinEmptyState', 'true');
     this.cdr.markForCheck();
   }
 
@@ -1129,50 +1429,44 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   }
 
   private async loadAvailableResources(): Promise<void> {
-    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-
-    // Actions come from ActionEngineBase's cache — no RunView needed. Config() is idempotent,
-    // so calling it in parallel with the remaining RunViews is cheap on repeat loads and avoids
-    // a redundant DB round trip when the engine is already primed.
-    const [dashboards, views, queries] = await Promise.all([
-      rv.RunView<{ID: string; Name: string}>({
-        EntityName: 'MJ: Dashboards',
-        Fields: ['ID', 'Name'],
-        ExtraFilter: `Type='Config'`,
-        OrderBy: 'Name',
-        ResultType: 'simple'
-      }),
-      rv.RunView<{ID: string; Name: string; Entity: string}>({
-        EntityName: 'MJ: User Views',
-        Fields: ['ID', 'Name', 'Entity'],
-        ExtraFilter: `UserID='${this.metadata.CurrentUser.ID}'`,
-        OrderBy: 'Name',
-        ResultType: 'simple'
-      }),
-      rv.RunView<{ID: string; Name: string}>({
-        EntityName: 'MJ: Queries',
-        Fields: ['ID', 'Name'],
-        OrderBy: 'Name',
-        ResultType: 'simple'
-      }),
-      ActionEngineBase.Instance.Config()
+    // All four engines are singletons that cache their data in memory. Config(false) is a no-op
+    // after first init — DashboardEngine and QueryEngine auto-start at app startup, UserViewEngine
+    // and ActionEngineBase initialize on first call. Running them in parallel means whichever
+    // ones still need to load do so concurrently, and the already-initialized ones return immediately.
+    await Promise.all([
+      DashboardEngine.Instance.Config(false, this.ProviderToUse.CurrentUser, this.ProviderToUse),
+      UserViewEngine.Instance.Config(false, this.ProviderToUse.CurrentUser, this.ProviderToUse),
+      QueryEngine.Instance.Config(false, this.ProviderToUse.CurrentUser, this.ProviderToUse),
+      ActionEngineBase.Instance.Config(false, this.ProviderToUse.CurrentUser, this.ProviderToUse)
     ]);
+
+    const cachedDashboards = DashboardEngine.Instance.Dashboards
+      .filter(d => d.Type === 'Config')
+      .sort((a, b) => a.Name.localeCompare(b.Name));
+
+    const cachedViews = UserViewEngine.Instance.GetViewsForCurrentUser()
+      .slice()
+      .sort((a, b) => a.Name.localeCompare(b.Name));
+
+    const cachedQueries = QueryEngine.Instance.Queries
+      .slice()
+      .sort((a, b) => a.Name.localeCompare(b.Name));
 
     const cachedActions = ActionEngineBase.Instance.Actions
       .filter(a => a.Status === 'Active')
       .sort((a, b) => a.Name.localeCompare(b.Name));
 
-    this.AvailableDashboards = (dashboards.Results || []).map(d => ({
+    this.AvailableDashboards = cachedDashboards.map(d => ({
       id: d.ID, name: d.Name,
       pinned: this.pinService.IsPinned('Dashboards', { dashboardId: d.ID })
     }));
 
-    this.AvailableViews = (views.Results || []).map(v => ({
+    this.AvailableViews = cachedViews.map(v => ({
       id: v.ID, name: v.Name, entityName: v.Entity || '',
       pinned: this.pinService.IsPinned('User Views', { viewId: v.ID })
     }));
 
-    this.AvailableQueries = (queries.Results || []).map(q => ({
+    this.AvailableQueries = cachedQueries.map(q => ({
       id: q.ID, name: q.Name,
       pinned: this.pinService.IsPinned('Queries', { queryId: q.ID })
     }));

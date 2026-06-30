@@ -1,0 +1,18 @@
+[
+  {
+    "fields": {
+      "Name": "Realtime: Advanced Bridge Controls",
+      "ParentID": null,
+      "IsActive": true,
+      "UseAuditLog": true,
+      "Description": "Gates who can start and manage realtime bridge sessions — joining external meetings (Zoom/Teams/Meet/Webex/Slack/Discord/LiveKit) or placing/receiving phone calls (Twilio/Vonage/RingCentral) on the organization's behalf. Acting as the org inside a third-party meeting or on its phone lines is privileged, so bridge session start/management requires this authorization separately from ordinary realtime session use."
+    },
+    "primaryKey": {
+      "ID": "1DC185AE-3861-4084-A407-8211F9B5867C"
+    },
+    "sync": {
+      "lastModified": "2026-06-16T01:17:11.188Z",
+      "checksum": "1948be1f084bda2a7f962e67b89cffd5cad81bc320467899520448a73d42e462"
+    }
+  }
+]

@@ -1,5 +1,5 @@
 import { Component, OnInit, OnDestroy, ChangeDetectionStrategy, inject } from '@angular/core';
-import { Subject, debounceTime } from 'rxjs';
+import { Subject, debounceTime, takeUntil } from 'rxjs';
 import { RegisterClass, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { SharedService } from '@memberjunction/ng-shared';
@@ -110,6 +110,12 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
     public showAddFromViewLoader = false;
     public userViews: MJUserViewEntityExtended[] | null = null;
     public userViewsToAdd: MJUserViewEntityExtended[] = [];
+    /**
+     * Normalized-UUID set of the IDs in {@link userViewsToAdd}, kept in sync with that
+     * array. Lets {@link isViewSelected} (bound per-row in the dialog's @for, ~2x/row)
+     * do an O(1) lookup instead of scanning the array with UUIDsEqual on every check.
+     */
+    private userViewsToAddIds: Set<string> = new Set<string>();
     public addFromViewProgress = 0;
     public addFromViewTotal = 0;
     public fetchingRecordsToSave = false;
@@ -118,6 +124,10 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
     public showShareDialog = false;
     public shareDialogConfig: ListShareDialogConfig | null = null;
 
+    // Invitations / audit log dialogs — opened from the share dialog.
+    public showInvitationsDialog = false;
+    public showAuditLogDialog = false;
+
     private destroy$ = new Subject<void>();
     private get metadata() { return this.ProviderToUse; }
     override async ngOnInit(): Promise<void> {
@@ -125,7 +135,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
 
         // Set up search debounce
         this.searchSubject
-            .pipe(debounceTime(300))
+            .pipe(debounceTime(300), takeUntil(this.destroy$))
             .subscribe((searchText) => this.searchRecords(searchText));
 
         await this.loadExplorerData();
@@ -670,6 +680,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
     public async openAddFromViewDialog(): Promise<void> {
         this.showAddFromViewDialog = true;
         this.userViewsToAdd = [];
+        this.userViewsToAddIds.clear();
         this.cdr.markForCheck();
 
         if (!this.userViews) {
@@ -680,6 +691,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
     public closeAddFromViewDialog(): void {
         this.showAddFromViewDialog = false;
         this.userViewsToAdd = [];
+        this.userViewsToAddIds.clear();
         this.showAddFromViewLoader = false;
         this.addFromViewProgress = 0;
         this.addFromViewTotal = 0;
@@ -713,14 +725,16 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
         const index = this.userViewsToAdd.findIndex(v => UUIDsEqual(v.ID, view.ID));
         if (index >= 0) {
             this.userViewsToAdd.splice(index, 1);
+            this.userViewsToAddIds.delete(NormalizeUUID(view.ID));
         } else {
             this.userViewsToAdd.push(view);
+            this.userViewsToAddIds.add(NormalizeUUID(view.ID));
         }
         this.cdr.markForCheck();
     }
 
     public isViewSelected(view: MJUserViewEntityExtended): boolean {
-        return this.userViewsToAdd.some(v => UUIDsEqual(v.ID, view.ID));
+        return this.userViewsToAddIds.has(NormalizeUUID(view.ID));
     }
 
     public async confirmAddFromView(): Promise<void> {
@@ -830,6 +844,35 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
     public onShareDialogCancel(): void {
         this.showShareDialog = false;
         this.shareDialogConfig = null;
+        this.cdr.markForCheck();
+    }
+
+    // ==========================================
+    // Invitations / Audit Log dialogs (mockups 16, 18)
+    // ==========================================
+
+    public openInvitationsDialog(): void {
+        // Closing share dialog so it doesn't stack visually. User can
+        // reopen via toolbar; the share dialog isn't stateful enough to
+        // need preservation across this transition.
+        this.showShareDialog = false;
+        this.showInvitationsDialog = true;
+        this.cdr.markForCheck();
+    }
+
+    public closeInvitationsDialog(): void {
+        this.showInvitationsDialog = false;
+        this.cdr.markForCheck();
+    }
+
+    public openAuditLogDialog(): void {
+        this.showShareDialog = false;
+        this.showAuditLogDialog = true;
+        this.cdr.markForCheck();
+    }
+
+    public closeAuditLogDialog(): void {
+        this.showAuditLogDialog = false;
         this.cdr.markForCheck();
     }
 }

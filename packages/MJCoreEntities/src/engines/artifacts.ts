@@ -1,9 +1,14 @@
-import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, UserInfo } from "@memberjunction/core";
+import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, LogStatus, UserInfo } from "@memberjunction/core";
 import {
     MJArtifactTypeEntity,
     MJArtifactEntity,
     MJArtifactVersionEntity
 } from "../generated/entity_subclasses";
+import {
+    ResolveArtifactTypeByMime,
+    FindArtifactTypeConflicts,
+    type ArtifactTypeMatcher,
+} from "./artifact-mime-resolver";
 
 /**
  * Caching of metadata for artifacts, artifact versions, and artifact types.
@@ -107,13 +112,41 @@ export class ArtifactMetadataEngine extends BaseEngine<ArtifactMetadataEngine> {
     }
 
     /**
-     * Finds the artifact type whose ContentType (MIME type) matches the given
-     * mimeType string (case-insensitive). Used by AgentRunner to resolve the
-     * correct ArtifactType for file outputs such as PDFs and spreadsheets.
+     * Resolves an upload's MIME type (and optional file extension) to the
+     * highest-priority registered Artifact Type. Supports exact matches and
+     * subtype wildcards (e.g. `text/*`, `image/*`), with deterministic
+     * tiebreaking via Priority → SystemSupplied → ID. See
+     * `artifact-mime-resolver.ts` for the full algorithm.
      */
-    public GetArtifactTypeByMimeType(mimeType: string): MJArtifactTypeEntity | undefined {
-        if (!mimeType) return undefined;
-        const lower = mimeType.trim().toLowerCase();
-        return this._artifactTypes.find(t => t.ContentType.trim().toLowerCase() === lower);
+    public GetArtifactTypeByMimeType(mimeType: string, fileExtension?: string): MJArtifactTypeEntity | undefined {
+        const matchers = this._artifactTypes.map(t => this.toMatcher(t));
+        const found = ResolveArtifactTypeByMime(matchers, mimeType, fileExtension);
+        return found ? this.FindArtifactTypeByID(found.id) : undefined;
+    }
+
+    /**
+     * Logs WARN for any pair of registered Artifact Types that share an
+     * identical (ContentType, Priority, SystemSupplied) triple — almost always
+     * a configuration mistake, and the ID-tiebreaker would otherwise hide it.
+     * Call after Config() to surface registry ambiguity at boot.
+     */
+    public LogArtifactTypeRegistryConflicts(): void {
+        const matchers = this._artifactTypes.map(t => this.toMatcher(t));
+        const conflicts = FindArtifactTypeConflicts(matchers);
+        for (const c of conflicts) {
+            LogStatus(
+                `WARN ArtifactMetadataEngine: ${c.matcherNames.length} Artifact Types share (ContentType=${c.contentType}, Priority=${c.priority}, SystemSupplied=${c.systemSupplied}): ${c.matcherNames.join(', ')}. Resolution will use lowest-ID tiebreaker — set Priority explicitly to disambiguate.`
+            );
+        }
+    }
+
+    private toMatcher(t: MJArtifactTypeEntity): ArtifactTypeMatcher {
+        return {
+            id: t.ID,
+            name: t.Name,
+            contentType: t.ContentType,
+            priority: t.Priority,
+            systemSupplied: t.SystemSupplied,
+        };
     }
 }

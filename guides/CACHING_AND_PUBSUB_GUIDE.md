@@ -547,6 +547,22 @@ protected async syncLocalCacheForConfig(
 
 When the cache exceeds `maxSizeBytes` or `maxEntries`, entries are evicted to make room.
 
+### Size Estimation (sampled, not exact)
+
+Entry `sizeBytes` is an **approximate** figure used only for eviction accounting — it is never
+exact and never affects correctness. Rather than `JSON.stringify` the entire result array on every
+cache write (which previously ran an O(rows × fields) serialization on the per-save/delete hot
+path), `estimateResultsSize()` samples a few random rows and scales:
+
+- sample count = `clamp(ceil(rowCount × 0.10), 3, 10)` distinct **random** row indexes
+- average `JSON.stringify(row).length` across the sample, multiply by `rowCount`, ×2 for UTF-16
+- `rowCount === 0` → 0; `rowCount ≤ 3` → measure every row (no sampling)
+
+Random (not first-N) sampling avoids systematic skew when rows are heterogeneous (e.g. a nullable
+large JSON/text column whose head rows happen to be null or oversized). Single-row cache mutations
+(`UpsertSingleEntity`/`RemoveSingleEntity`) likewise avoid per-row `CompositeKey` allocation by
+keying their internal dedup Map with a cheap delimiter-joined PK string.
+
 ### Eviction Trigger
 
 ```typescript
@@ -781,6 +797,47 @@ sequenceDiagram
 ## BaseEngine Integration
 
 All MemberJunction engine singletons (AIEngineBase, DashboardEngine, UserInfoEngine, etc.) extend `BaseEngine<T>`, which provides automatic data loading, caching, and real-time refresh.
+
+### Reactive UI consumption — `ObserveProperty` (the API to know about)
+
+Engines expose every array property as a lazy RxJS observable. **This is the canonical way to keep an Angular UI in sync with cached entities** — no manual reload loops, no `loadX()` calls after every mutation, no race conditions with BaseEntity events.
+
+```typescript
+// From inside the engine — declare a Configs entry (BaseEngine wires the events):
+public async Config(forceRefresh = false, contextUser?, provider?) {
+    await this.Load([
+        { Type: 'entity', EntityName: 'MJ: My Things',
+          PropertyName: '_things',
+          CacheLocal: true },
+    ], provider, forceRefresh, contextUser);
+}
+public get Things(): MyThingEntity[] { return this._things ?? []; }
+public get Things$(): Observable<MyThingEntity[]> {
+    return this.ObserveProperty<MyThingEntity>('_things');
+}
+
+// From a consumer (Angular component, service, anywhere):
+await MyEngine.Instance.Config(false, user, provider);  // lazy — no-op if loaded
+MyEngine.Instance.Things$.subscribe(things => {
+    // Fires immediately with the current array (BehaviorSubject semantics),
+    // and again on every save / delete / remote-invalidate.
+    this.things = things;
+    this.cdr.markForCheck();
+});
+```
+
+Behind the scenes:
+
+- `ObserveProperty(propertyName)` is **lazy-created on first call** — engines whose properties are never observed pay zero runtime cost for the observable.
+- `BehaviorSubject` semantics: subscribers receive the current array immediately on subscribe, then re-receive the same array reference on every mutation.
+- The mutation triggers come from BaseEngine's built-in BaseEntity event handler — `DebounceIndividualBaseEntityEvent` → `ProcessEntityEvent` → either an in-place array mutation (when no `Filter`/`OrderBy`/`AdditionalLoading` are set, so MJ can safely splice) or a full refresh (when a filter is set so MJ can't determine whether the saved row still belongs). Either way, `emitPropertyChange(propertyName)` fires and the observable re-emits.
+- `DataChange$: Observable<EngineDataChangeEvent>` is the engine-wide complement — emits one event per refresh with the config + new data.
+
+**When to build a new engine vs. reuse an existing service**:
+
+- ✅ **Build an engine** when (a) the entity set is small (a few hundred rows max, or filter-narrowable to that), (b) more than one surface needs the same data, and (c) you want UIs / runtime resolvers to auto-update when the data changes. Examples in the repo: `ConversationEngine`, `InteractiveFormsEngine`, `UserInfoEngine`, `KnowledgeHubMetadataEngine`, `ComponentMetadataEngine`.
+- ❌ **Don't bulk-load** if the entity has a huge column (e.g., NVARCHAR(MAX) JSON, vector embeddings) AND no good filter exists to narrow the set — you'd poison `LocalCacheManager`'s memory budget. See `ComponentMetadataEngine`'s comment about deliberately omitting `MJ: Components` for that reason; `InteractiveFormsEngine` solves it by filtering to `Type='Form'` so only the form-role rows (small dataset) get cached.
+- ❌ **Don't add an engine for one-off ad-hoc queries** — that's what `RunView`/`RunViews` is for. Engines are for entities consumed in many places.
 
 ### Engine Configuration
 
@@ -1061,6 +1118,40 @@ When to use this pattern instead of startup loading:
 When startup loading is still right:
 - Dataset is small and lookups happen everywhere (e.g. `AIEngineBase`, `UserInfoEngine`)
 - The first lookup happens in a hot path that can't easily await an async load (e.g. a synchronous render loop with no setup hook)
+
+### Check the Registry Before You Query (MJ Convention)
+
+The flip side of engines caching eagerly: **other code should reuse those caches instead of re-querying.** In any process that bootstraps via `StartupManager` (MJAPI, MJCLI commands, mj-sync), every `@RegisterForStartup` engine has already loaded its entities into memory before your code runs. A consumer that issues its own unfiltered `RunView` for one of those entities doubles the DB round trips and the RAM, and trips the `REDUNDANT DATA LOADING` warning from `BaseEngineRegistry`'s load tracking.
+
+`BaseEngineRegistry` (in `@memberjunction/core`) provides the reverse lookup:
+
+```typescript
+import { BaseEngineRegistry } from '@memberjunction/core';
+
+// "Best cache or null" — the common one-liner
+const rows = BaseEngineRegistry.Instance.TryGetCachedRecords<UserInfo>('Users', { unfilteredOnly: true });
+if (rows) { /* serve from memory */ } else { /* RunView fallback */ }
+
+// Full matches — when you need to vet the donor's config before trusting it
+const matches = BaseEngineRegistry.Instance.FindCachedEntity('MJ: AI Prompts', { unfilteredOnly: true });
+```
+
+`FindCachedEntity` returns, per loaded engine that caches the entity: the engine instance, the full `BaseEnginePropertyConfig` that produced the cache, and a **live reference** to the cached array (unfiltered full-set caches sort first).
+
+**Vetting a donor.** Treat a match as the authoritative full set only when all of these hold:
+
+1. **`unfilteredOnly: true`** — a `Filter` means a subset, useless as a full cache.
+2. **No `OrderBy`** on the config — ordered configs fail `canUseImmediateMutation` (see [Immediate Mutation vs Debounced Refresh](#immediate-mutation-vs-debounced-refresh)), so the donor responds to entity events with a full refresh that **reassigns** the array property. If your usage outlives a single tick, resolve the array per-access via donor engine + `config.PropertyName` rather than capturing the reference.
+3. **`ResultType` is not `'simple'`** (and `records[0] instanceof BaseEntity` when rows exist) — required if you'll call `.Get()` / `.PrimaryKey` / `.Save()` on the rows.
+4. **Not yourself** — guard `match.engine === this` so an engine's own slot from a prior run can't masquerade as a donor.
+
+**The returned array is the donor's live array — read it, don't mutate it.** For unfiltered/unordered/`entity_object` configs the donor's BaseEntity event subscription keeps the array current on save/delete automatically (see [Real-Time Array Updates](#real-time-array-updates-event-handling)), so a live reference stays fresh for free. Writing into a donor's array requires understanding both sides' dedup semantics — `SyncMetadataEngine` in `@memberjunction/metadata-sync` is the correctly-engineered exception and the reference implementation: its `delegateEntityIfCached()` partitions a dynamic entity set into "delegate to a donor" vs. "self-load", resolves donor arrays per-access, and PK-dedups its writes against the donor's event handler.
+
+A simpler read-only example is `AIEngine.RefreshActions()` in `@memberjunction/aiengine`: `ActionEngineBase` and `ActionEngineServer` are separate singletons that each cache the same unfiltered `'MJ: Actions'` set, so on the server one of them is usually already loaded. `RefreshActions` does `BaseEngineRegistry.Instance.TryGetCachedRecords<MJActionEntity>('MJ: Actions', { unfilteredOnly: true })` and reuses whichever sibling already holds the set, falling back to loading `ActionEngineBase` only on a miss — eliminating a redundant 6-entity load (and the duplicate-RunView telemetry warning) at agent/job startup.
+
+**Why this is a convention, not a one-off optimization**: donors are discovered dynamically at runtime. Consumers get faster automatically as new engines ship — no version coupling, no hardcoded donor lists. When no engine caches the entity, the lookup returns empty and the consumer falls back to its own `RunView`/`Load`, so adoption is always graceful.
+
+The same convention is summarized in the repo root [CLAUDE.md](../CLAUDE.md) under "Check the Registry Before You Query".
 
 ### LocalCacheManager Independent Event Handling
 

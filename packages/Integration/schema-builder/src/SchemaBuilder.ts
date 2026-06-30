@@ -30,6 +30,7 @@ import { MetadataEmitter } from './MetadataEmitter.js';
 import { existsSync, readFileSync } from 'node:fs';
 import { SchemaEvolution } from './SchemaEvolution.js';
 import { IsIntegrationWriteAllowed } from './AccessControl.js';
+import { GetDialect } from '@memberjunction/sql-dialect';
 
 /**
  * Main entry point for the Integration Schema Builder.
@@ -84,8 +85,16 @@ export class SchemaBuilder {
         // blocks __mj by default. Integration access control is handled in Step 1 above.
         const ddlGen = new GenericDDLGenerator();
         for (const config of newConfigs) {
+            // Dialect-aware row-size guard: a dialect with a hard in-row size limit (SQL Server's
+            // ~8060 bytes) makes very wide tables (600+ columns) impossible to INSERT into — cap to a
+            // fitting core subset + warn, rather than emit a doomed table. No-op on dialects with no
+            // in-row limit (PostgreSQL/TOAST). Mutates config.Columns.
+            output.Warnings.push(...this.CapColumnsForRowSize(config, input.Platform));
             const tableDef = this.ConvertToTableDefinition(config, input.Platform);
-            ddlParts.push(ddlGen.GenerateCreateTable(tableDef, input.Platform));
+            // IfNotExists: integration Create-Tables must be idempotent — a physical table
+            // may already exist with no MJ entity yet (e.g. a prior run created the table but
+            // CodeGen hadn't created the entity), and re-running must not collide.
+            ddlParts.push(ddlGen.GenerateCreateTable(tableDef, input.Platform, { IfNotExists: true }));
             ddlParts.push(''); // blank line separator
         }
 
@@ -288,6 +297,77 @@ export class SchemaBuilder {
         };
     }
 
+    /**
+     * Dialect-aware row-size guard. A dialect that reports a hard in-row size limit
+     * ({@link SQLDialect.MaxInRowSizeBytes} — e.g. SQL Server's ~8060 bytes) pushes only
+     * variable-length values off-row, leaving a small in-row pointer. A very wide table (hundreds of
+     * columns — e.g. a 600+ field CRM object) can exceed that limit with the pointers alone, so NO row
+     * can ever be inserted: every INSERT fails with a cryptic "Cannot create a row of size N ..." error
+     * and the table is dead on arrival. Rather than emit such a doomed table, we cap the materialized
+     * columns to a declared-priority CORE SUBSET that fits — always keeping the primary-key columns —
+     * and return a structured warning naming the deferred fields. The deferred fields still sync to the
+     * source and land in __mj_integration_CustomOverflow (not lost); they are simply not persisted as
+     * typed columns. Dialects with no in-row limit (PostgreSQL/TOAST) only get a soft advisory as the
+     * hard column-count cap nears. The per-type in-row footprint and both limits come from the dialect,
+     * so there is no platform branching here. Mutates config.Columns in place to the kept subset so all
+     * downstream steps (DDL, soft FK, metadata) operate on the columns that actually exist.
+     */
+    private CapColumnsForRowSize(config: TargetTableConfig, platform: DatabasePlatform): string[] {
+        const dialect = GetDialect(platform);
+        const maxRowBytes = dialect.MaxInRowSizeBytes;
+        const maxCols = dialect.MaxColumnCount;
+
+        // Dialects with no in-row size limit (e.g. PostgreSQL/TOAST) can never have a doomed-row table;
+        // only advise as the hard column-count cap nears (no graceful subset needed — rare).
+        if (maxRowBytes == null) {
+            if (maxCols != null && config.Columns.length > maxCols - 100) {
+                return [`Table ${config.SchemaName}.${config.TableName} has ${config.Columns.length} columns, approaching the ${maxCols}-column hard limit. Consider splitting the object.`];
+            }
+            return [];
+        }
+
+        const BUDGET = maxRowBytes - 60; // safety margin under the dialect's hard in-row limit
+        const SYNC_RESERVE = 400; // generous in-row floor for ID + __mj timestamps + the __mj_integration_* sync columns
+        const totalCols = config.Columns.length;
+        const pkSet = new Set((config.PrimaryKeyFields ?? []).map(p => p.toLowerCase()));
+
+        let used = SYNC_RESERVE;
+        const keptNames = new Set<string>();
+        const deferred: string[] = [];
+
+        // Pass 1 — primary-key columns are identity; always kept, counted first.
+        for (const col of config.Columns) {
+            if (pkSet.has(col.TargetColumnName.toLowerCase())) {
+                keptNames.add(col.TargetColumnName);
+                used += dialect.EstimateInRowBytes(col.TargetSqlType);
+            }
+        }
+        // Pass 2 — remaining columns in declared order until the budget is exhausted.
+        for (const col of config.Columns) {
+            if (pkSet.has(col.TargetColumnName.toLowerCase())) continue;
+            const w = dialect.EstimateInRowBytes(col.TargetSqlType);
+            if (used + w <= BUDGET) {
+                keptNames.add(col.TargetColumnName);
+                used += w;
+            } else {
+                deferred.push(col.TargetColumnName);
+            }
+        }
+
+        if (deferred.length === 0) return [];
+
+        // Keep declared order for stable, reviewable DDL.
+        config.Columns = config.Columns.filter(c => keptNames.has(c.TargetColumnName));
+        const sample = deferred.slice(0, 20).join(', ');
+        const more = deferred.length > 20 ? `, … (+${deferred.length - 20} more)` : '';
+        return [
+            `Table ${config.SchemaName}.${config.TableName}: deferred ${deferred.length} of ${totalCols} columns to stay within the ${maxRowBytes}-byte in-row row-size limit ` +
+            `(in-row row-overflow pointers alone would exceed it). Materialized a ${config.Columns.length}-column core subset; all primary-key columns retained. ` +
+            `Deferred fields still sync and are captured in __mj_integration_CustomOverflow, but are not persisted as typed columns. ` +
+            `Deferred: ${sample}${more}.`,
+        ];
+    }
+
     /** Integration-specific sync columns added to every integration table. */
     private IntegrationSyncColumns(platform: DatabasePlatform): ColumnDefinition[] {
         return [
@@ -305,6 +385,78 @@ export class SchemaBuilder {
                 RawSqlType: platform === 'sqlserver' ? 'DATETIMEOFFSET' : 'TIMESTAMPTZ',
                 IsNullable: true,
                 Description: 'Timestamp of the last successful sync for this record',
+            },
+            {
+                Name: '__mj_integration_LastSyncedSnapshot',
+                Type: 'string' as SchemaFieldType,
+                RawSqlType: platform === 'sqlserver' ? 'NVARCHAR(MAX)' : 'TEXT',
+                IsNullable: true,
+                Description: 'The external record values as of the last successful sync, serialized as JSON. The last-known external state, kept independent of local edits, used to detect changes without a watermark and as the common ancestor for field-level merge (combine) on bidirectional push.',
+            },
+            {
+                Name: '__mj_integration_SyncMessage',
+                Type: 'string' as SchemaFieldType,
+                RawSqlType: platform === 'sqlserver' ? 'NVARCHAR(MAX)' : 'TEXT',
+                IsNullable: true,
+                Description: 'Human-readable detail when SyncStatus is Error or Conflict (the conflicting fields and values, or the apply error). NULL when Active.',
+            },
+            {
+                Name: '__mj_integration_ContentHash',
+                Type: 'string' as SchemaFieldType,
+                RawSqlType: platform === 'sqlserver' ? 'NVARCHAR(64)' : 'VARCHAR(64)',
+                IsNullable: true,
+                Description: 'SHA-256 (hex) of the last-synced external field values. Lets the engine detect changes and skip re-loading/re-writing unchanged records for sources that have no usable watermark (e.g. YourMembership, which re-fetches every record each sync).',
+            },
+            {
+                Name: '__mj_integration_CustomOverflow',
+                Type: 'string' as SchemaFieldType,
+                RawSqlType: platform === 'sqlserver' ? 'NVARCHAR(MAX)' : 'TEXT',
+                IsNullable: true,
+                Description: 'Backend staging (system) column: JSON of source fields a record returned that have no field map yet — the extra keys this table has no column for. A post-sync Runtime-Schema-Updation pass promotes pervasive keys to real columns and clears them here. Not user-facing metadata; transient until promotion.',
+            },
+            // ── Per-record sync ledger (plan §2.5) ──────────────────────────────────────
+            {
+                Name: '__mj_integration_ExternalVersion',
+                Type: 'string' as SchemaFieldType,
+                RawSqlType: platform === 'sqlserver' ? 'NVARCHAR(255)' : 'VARCHAR(255)',
+                IsNullable: true,
+                Description: 'The external system’s version/etag/modified token for the last-synced state, used for optimistic-concurrency (OCC) detection on bidirectional push. Null when the source exposes no version token.',
+            },
+            {
+                Name: '__mj_integration_LastSeenModifiedValue',
+                Type: 'string' as SchemaFieldType,
+                RawSqlType: platform === 'sqlserver' ? 'NVARCHAR(255)' : 'VARCHAR(255)',
+                IsNullable: true,
+                Description: 'The watermark / last-modified value observed for THIS record on the last sync (per-record, independent of the entity-map-level CompanyIntegrationSyncWatermark).',
+            },
+            {
+                Name: '__mj_integration_LastReconciledAt',
+                Type: 'datetime' as SchemaFieldType,
+                RawSqlType: platform === 'sqlserver' ? 'DATETIMEOFFSET' : 'TIMESTAMPTZ',
+                IsNullable: true,
+                Description: 'Timestamp this record was last confirmed against the source system. Lets a reconcile find records not seen recently (delete-detection candidates).',
+            },
+            {
+                Name: '__mj_integration_LastWriterDirection',
+                Type: 'string' as SchemaFieldType,
+                RawSqlType: platform === 'sqlserver' ? 'NVARCHAR(10)' : 'VARCHAR(10)',
+                IsNullable: true,
+                Description: 'Which side last wrote this row: "Pull" (external→MJ) or "Push" (MJ→external). Informs conflict handling and audit.',
+            },
+            {
+                Name: '__mj_integration_IsTombstoned',
+                Type: 'boolean' as SchemaFieldType,
+                RawSqlType: platform === 'sqlserver' ? 'BIT' : 'BOOLEAN',
+                IsNullable: false,
+                DefaultValue: platform === 'sqlserver' ? '0' : 'FALSE',
+                Description: 'Explicit soft-delete flag, set when the record is detected as deleted/archived upstream. A queryable tombstone, distinct from the SyncStatus="Archived" text status.',
+            },
+            {
+                Name: '__mj_integration_DeletedDetectedAt',
+                Type: 'datetime' as SchemaFieldType,
+                RawSqlType: platform === 'sqlserver' ? 'DATETIMEOFFSET' : 'TIMESTAMPTZ',
+                IsNullable: true,
+                Description: 'Timestamp the upstream deletion was detected (set alongside IsTombstoned). Null while the record is live.',
             },
         ];
     }

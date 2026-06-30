@@ -25,10 +25,8 @@
         
         <div class="prompts-list">
           @if (availablePrompts.length === 0) {
-            <div class="empty-state">
-              <i class="fa-solid fa-comment-dots text-muted"></i>
-              <p class="text-muted">No prompts available</p>
-            </div>
+            <mj-empty-state Size="compact" Icon="fa-solid fa-comment-dots"
+              Title="No prompts available" />
           } @else {
             @for (promptItem of filteredAvailablePrompts; track promptItem.ID) {
               <div class="prompt-item" (click)="selectPromptForHistory(promptItem)">
@@ -398,10 +396,8 @@
             </div>
           </div>
         } @else {
-          <div class="no-selection-message">
-            <i class="fa-solid fa-hand-pointer text-muted"></i>
-            <p class="text-muted">Select a version from the timeline to view details.</p>
-          </div>
+          <mj-empty-state Size="compact" Icon="fa-solid fa-hand-pointer"
+            Title="Select a version from the timeline to view details." />
         }
       </div>
     }
@@ -410,14 +406,13 @@
   <!-- Error state -->
   @if (error) {
     <div class="error-container">
-      <div class="alert alert-danger" role="alert">
-        <i class="fa-solid fa-exclamation-triangle"></i>
+      <mj-alert Variant="error">
         {{ error }}
-        <button type="button" class="btn btn-sm btn-outline-danger ms-2" (click)="refreshHistory()">
+        <button mjButton variant="danger" size="sm" actions (click)="refreshHistory()">
           <i class="fa-solid fa-refresh"></i>
           Retry
         </button>
-      </div>
+      </mj-alert>
     </div>
   }
   }

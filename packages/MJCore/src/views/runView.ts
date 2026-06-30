@@ -3,7 +3,73 @@ import { IMetadataProvider, IRunViewProvider, RunViewResult } from '../generic/i
 import { UserInfo } from '../generic/securityInfo';
 import { BaseEntity } from '../generic/baseEntity';
 import { PlatformSQL, IsPlatformSQL } from '../generic/platformSQL';
+import { CompositeKey } from '../generic/compositeKey';
 import type { CacheChangedEvent } from '../generic/localCacheManager';
+
+/**
+ * Reason codes for {@link AfterKeyNotSupportedError}. Use these to make caller
+ * fallback logic explicit (e.g., "if reason is CompositePK, fall back to OFFSET pagination").
+ */
+export type AfterKeyNotSupportedReason =
+    | 'CompositePK'             // Entity has > 1 PK column
+    | 'UnsupportedPKType'       // PK column type is not in the orderable allowlist
+    | 'IncompatibleOrderBy'     // OrderBy references columns other than the PK
+    | 'StartRowConflict'        // AfterKey was combined with StartRow
+    | 'AfterKeyShape';          // AfterKey CompositeKey doesn't match the entity's PK shape
+
+/**
+ * Thrown by {@link RunView} / RunViews when `AfterKey` is provided but cannot be honored.
+ *
+ * See the keyset-pagination guide for caller patterns. The most common case is `CompositePK`:
+ * an entity with a composite primary key cannot use keyset pagination in v1 — callers should
+ * either iterate with OFFSET-based `StartRow` (acceptable for small result sets) or restructure
+ * the workload around a single-PK projection.
+ *
+ * @since v5.x
+ */
+export class AfterKeyNotSupportedError extends Error {
+    constructor(
+        public readonly EntityName: string,
+        public readonly Reason: AfterKeyNotSupportedReason,
+        message: string
+    ) {
+        super(message);
+        this.name = 'AfterKeyNotSupportedError';
+    }
+}
+
+/**
+ * Orderable SQL types that can be used as the primary key column for keyset pagination.
+ *
+ * Excludes types where `WHERE pk > @last` is either unsupported or semantically meaningless
+ * (`xml`, `sql_variant`, large binary types, etc.). In practice every reasonable primary key
+ * type is on this list — this is defensive against exotic future PKs, not a real constraint
+ * for any standard MJ entity.
+ *
+ * Case-insensitive comparison via the helper {@link IsKeysetPaginationOrderableType}.
+ */
+export const KEYSET_PAGINATION_ORDERABLE_PK_TYPES: ReadonlyArray<string> = [
+    'uniqueidentifier',
+    'int', 'bigint', 'smallint', 'tinyint',
+    'decimal', 'numeric', 'money', 'smallmoney',
+    'float', 'real', 'double precision',
+    'char', 'varchar', 'nchar', 'nvarchar', 'text', 'ntext',
+    'date', 'datetime', 'datetime2', 'datetimeoffset', 'smalldatetime', 'time',
+    'bit',
+    // PostgreSQL native names that may appear in EntityField.Type when running on PG
+    'uuid', 'integer', 'bigserial', 'serial', 'numeric', 'character varying', 'character', 'timestamp', 'timestamp with time zone', 'timestamp without time zone', 'boolean'
+];
+
+/**
+ * Returns true if the given SQL type name is acceptable as a keyset-pagination PK column.
+ * Comparison is case-insensitive and trims any precision/scale parens (e.g. `nvarchar(255)` → `nvarchar`).
+ */
+export function IsKeysetPaginationOrderableType(sqlTypeName: string | null | undefined): boolean {
+    if (!sqlTypeName) return false;
+    // Strip parameterization like "nvarchar(255)" or "decimal(10, 2)"
+    const normalized = sqlTypeName.replace(/\s*\([^)]*\)\s*$/, '').trim().toLowerCase();
+    return KEYSET_PAGINATION_ORDERABLE_PK_TYPES.includes(normalized);
+}
 
 /**
  * Single aggregate expression to compute alongside the main view query.
@@ -26,6 +92,25 @@ export interface AggregateExpression {
      * If not provided, defaults to the expression itself.
      */
     alias?: string;
+}
+
+/**
+ * Telemetry controls attached to a {@link RunViewParams}. See {@link RunViewParams.Telemetry}.
+ */
+export interface RunViewTelemetryOptions {
+    /**
+     * When true, this view is exempt from the telemetry optimization/redundancy analyzers — it will
+     * not produce, nor count toward, `Duplicate RunView` / `Entity Already in Engine` /
+     * `Sequential Queries` / `Multiple Calls` warnings. Use for queries that are intentionally
+     * separate or that deliberately read fresh/volatile state instead of a cached engine copy.
+     * Timing/stat telemetry is still recorded.
+     */
+    Exempt?: boolean;
+    /**
+     * Optional human-readable justification for the exemption. Recorded with the telemetry event and
+     * emitted in verbose telemetry logging so the intent is auditable (e.g. why a cache was bypassed).
+     */
+    Reason?: string;
 }
 
 /**
@@ -123,8 +208,67 @@ export class RunViewParams {
     MaxRows?: number;
     /**
      * optional - if provided, this value will be used to offset the rows returned.
+     *
+     * **Note on deep pagination**: `StartRow` is implemented via SQL `OFFSET` semantics,
+     * which is O(N) in the offset value — early pages are fine, but deep pages (offset
+     * in the tens or hundreds of thousands) get progressively slower because the server
+     * has to enumerate and discard the skipped rows.
+     *
+     * For background jobs and bulk processing that iterate through entire tables, prefer
+     * {@link AfterKey} (keyset / seek pagination), which stays O(log N) regardless of depth.
+     * UI grid pagination (a few hundred pages at most) is fine to keep on `StartRow`.
      */
     StartRow?: number;
+    /**
+     * optional - keyset (a.k.a. "seek") pagination using the entity's primary key.
+     *
+     * When set, the query returns the next page of records **after** the given PK value,
+     * ordered by the PK column. Unlike `StartRow` (which uses `OFFSET` and is O(N) in
+     * the offset), keyset pagination stays O(log N) regardless of how deep you go —
+     * making it the right choice for jobs that walk entire large tables.
+     *
+     * @example Single-column PK (the only shape supported in v1)
+     * ```typescript
+     * // Page 1
+     * let result = await rv.RunView({
+     *     EntityName: 'Tax Returns',
+     *     ExtraFilter: 'AddressLine1 IS NOT NULL',
+     *     MaxRows: 500,
+     *     ResultType: 'entity_object'
+     * }, contextUser);
+     *
+     * // Page 2+
+     * while (result.Results.length === 500) {
+     *     const lastId = result.Results[result.Results.length - 1].ID;
+     *     result = await rv.RunView({
+     *         EntityName: 'Tax Returns',
+     *         ExtraFilter: 'AddressLine1 IS NOT NULL',
+     *         AfterKey: CompositeKey.FromID(lastId),
+     *         MaxRows: 500,
+     *         ResultType: 'entity_object'
+     *     }, contextUser);
+     * }
+     * ```
+     *
+     * **Constraints (throw {@link AfterKeyNotSupportedError} when violated):**
+     * - Entity must have a single-column primary key (use `RunViewParams.StartRow`
+     *   for composite-PK entities).
+     * - The PK column type must be in {@link KEYSET_PAGINATION_ORDERABLE_PK_TYPES}
+     *   (essentially all standard SQL types).
+     * - `OrderBy`, if set, must reference only the PK column (any `ASC`/`DESC` direction).
+     * - Cannot be combined with `StartRow`.
+     *
+     * **Caching behavior**: When `AfterKey` is present, the query bypasses the server
+     * cache (both read and write) — keyset queries are inherently single-use (each call
+     * uses a different seek key), so caching them is pure overhead.
+     *
+     * **End-of-data signal**: When a page returns fewer rows than `MaxRows`, you've
+     * reached the end of the result set.
+     *
+     * @see {@link AfterKeyNotSupportedError}
+     * @since v5.x
+     */
+    AfterKey?: CompositeKey;
     /**
      * optional - if set to true, the view run will ALWAYS be logged to the Audit Log, regardless of the entity's property settings for logging view runs.
      */
@@ -202,6 +346,25 @@ export class RunViewParams {
     Aggregates?: AggregateExpression[];
 
     /**
+     * Optional telemetry controls for this view. Use to mark a view that is *intentionally*
+     * separate, repeated, or redundant — e.g. a live read of volatile state that deliberately
+     * must NOT use a cached engine's copy — so the telemetry optimization/redundancy analyzers
+     * (`Duplicate RunView`, `Entity Already in Engine`, `Sequential Queries`, `Multiple Calls`)
+     * skip it instead of flagging it as noise. The optional `Reason` is recorded with the
+     * telemetry event and surfaced in verbose telemetry logging for auditability.
+     *
+     * @example
+     * ```typescript
+     * await rv.RunView({
+     *     EntityName: 'MJ: Scheduled Jobs',
+     *     ExtraFilter: `ID IN (...) AND ExpectedCompletionAt < '${now}'`,
+     *     Telemetry: { Exempt: true, Reason: 'Live lock-state read for hung-job sweep; cache would be stale' }
+     * }, contextUser);
+     * ```
+     */
+    Telemetry?: RunViewTelemetryOptions;
+
+    /**
      * Optional callback invoked when the cached result set for this exact query
      * fingerprint is updated by another server instance (via Redis pub/sub).
      *
@@ -261,6 +424,7 @@ export class RunViewParams {
         if (a.IgnoreMaxRows !== b.IgnoreMaxRows) return false;
         if (a.MaxRows !== b.MaxRows) return false;
         if (a.StartRow !== b.StartRow) return false;
+        if (!RunViewParams.afterKeyEqual(a.AfterKey, b.AfterKey)) return false;
         if (a.ForceAuditLog !== b.ForceAuditLog) return false;
         if (a.AuditLogDescription !== b.AuditLogDescription) return false;
         if (a.ResultType !== b.ResultType) return false;
@@ -288,6 +452,23 @@ export class RunViewParams {
         if (a.length !== b.length) return false;
         for (let i = 0; i < a.length; i++) {
             if (a[i] !== b[i]) return false;
+        }
+        return true;
+    }
+
+    /**
+     * Helper method to compare two AfterKey (CompositeKey) values for equality.
+     * Two AfterKeys are equal if they contain the same key/value pairs (order-insensitive).
+     */
+    private static afterKeyEqual(a: CompositeKey | undefined, b: CompositeKey | undefined): boolean {
+        if (a === b) return true;
+        if (!a || !b) return false;
+        const aPairs = a.KeyValuePairs ?? [];
+        const bPairs = b.KeyValuePairs ?? [];
+        if (aPairs.length !== bPairs.length) return false;
+        for (const pair of aPairs) {
+            const match = bPairs.find(p => p.FieldName === pair.FieldName);
+            if (!match || match.Value !== pair.Value) return false;
         }
         return true;
     }

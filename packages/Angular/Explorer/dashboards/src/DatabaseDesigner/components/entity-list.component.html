@@ -1,41 +1,35 @@
-<div class="entity-list-root">
-
-  <!-- ── Header ─────────────────────────────────────────────────────────── -->
-  <div class="entity-list-header">
-    <h2 class="entity-list-title">
-      <i class="fa-solid fa-table-cells-large"></i>
-      Database Designer
-    </h2>
-    <button
-      mjButton
-      buttonStyle="primary"
-      class="new-entity-btn"
-      (click)="OnNewEntity()">
-      <i class="fa-solid fa-plus"></i>
-      New Entity
+<!--
+  Database Designer is a sub-page of Admin → Data & Schema's left-nav shell, so
+  per Section 9b/10 of plans/explorer-chrome-conventions.md we use the interior
+  chrome pattern instead of <mj-page-layout> + <mj-page-header> (which would
+  produce a doubled-header inside the Admin shell).
+-->
+<mj-page-header-interior
+  AriaLabel="Database Designer"
+  Title="Database Designer"
+  Subtitle="Browse and create user-defined entities">
+  <!-- X-of-Y filtered count earns its meta spot per chrome conventions §2.
+       Material on this page (~300 entities per deployment) makes the
+       narrowing signal valuable. -->
+  <div meta>
+    <mj-stat-badge
+      [Count]="FilteredEntities.length"
+      [Total]="TotalEntityCount"
+      Label="entities">
+    </mj-stat-badge>
+  </div>
+  <div actions>
+    <mj-refresh-button [Loading]="IsLoading" (Clicked)="OnRefresh()"></mj-refresh-button>
+    <button mjButton variant="primary" size="sm" (click)="OnNewEntity()">
+      <i class="fa-solid fa-plus" aria-hidden="true"></i> <span class="mj-action-label">New Entity</span>
     </button>
   </div>
-
-  <!-- ── Toolbar ────────────────────────────────────────────────────────── -->
-  <div class="entity-list-toolbar">
-    <div class="search-wrap">
-      <i class="fa-solid fa-magnifying-glass search-icon"></i>
-      <input
-        type="text"
-        class="mj-input search-input"
-        placeholder="Search by name, table, or schema…"
-        [(ngModel)]="SearchTerm"
-        aria-label="Search entities" />
-      @if (SearchTerm) {
-        <button
-          class="search-clear"
-          (click)="SearchTerm = ''"
-          aria-label="Clear search">
-          <i class="fa-solid fa-xmark"></i>
-        </button>
-      }
-    </div>
-
+  <div toolbar>
+    <mj-page-search
+      Placeholder="Search by name, table, or schema..."
+      [Value]="SearchTerm"
+      (ValueChange)="SearchTerm = $event">
+    </mj-page-search>
     @if (AvailableFilterSchemas.length > 1) {
       <select
         class="mj-input schema-filter"
@@ -48,24 +42,13 @@
         }
       </select>
     }
-
-    <button
-      mjButton
-      buttonStyle="secondary"
-      class="refresh-btn"
-      title="Refresh list"
-      [disabled]="IsLoading"
-      (click)="OnRefresh()">
-      <i class="fa-solid fa-rotate" [class.fa-spin]="IsLoading"></i>
-    </button>
   </div>
+</mj-page-header-interior>
 
+<mj-page-body-interior [Padding]="false">
   <!-- ── Error ──────────────────────────────────────────────────────────── -->
   @if (ErrorMessage) {
-    <div class="entity-list-error" role="alert">
-      <i class="fa-solid fa-circle-exclamation"></i>
-      {{ ErrorMessage }}
-    </div>
+    <mj-alert Variant="error" class="entity-list-error">{{ ErrorMessage }}</mj-alert>
   }
 
   <!-- ── Loading skeleton ───────────────────────────────────────────────── -->
@@ -223,4 +206,4 @@
       </div>
     }
   }
-</div>
+</mj-page-body-interior>

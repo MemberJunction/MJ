@@ -1,34 +1,30 @@
-<div class="duplicate-detection-container">
-    <!-- Header -->
-    <div class="page-header">
-        <div class="header-left">
-            <h2 class="page-title">
-                <i class="fa-solid fa-clone"></i> Duplicate Detection
-            </h2>
-        </div>
-        <div class="header-actions">
-            <div class="run-detection-controls">
-                <select class="entity-doc-select"
-                        [(ngModel)]="SelectedEntityDocumentID"
-                        [disabled]="IsDetecting">
-                    <option value="">Select entity document...</option>
-                    @for (doc of EntityDocuments; track doc.ID) {
-                        <option [value]="doc.ID">{{ doc.Name }} ({{ doc.EntityName }})</option>
-                    }
-                </select>
-                <button class="run-detection-btn"
-                        (click)="RunDetection()"
-                        [disabled]="IsDetecting || !SelectedEntityDocumentID">
-                    @if (IsDetecting) {
-                        <i class="fa-solid fa-spinner fa-spin"></i> Detecting...
-                    } @else {
-                        <i class="fa-solid fa-magnifying-glass"></i> Run Detection
-                    }
-                </button>
-            </div>
-        </div>
+<mj-page-layout>
+  <mj-page-header
+    Title="Record Duplicates"
+    Icon="fa-solid fa-clone"
+    Subtitle="Find and merge near-duplicate entity records using semantic similarity">
+    <div actions>
+      <select class="mj-input kh-doc-select"
+              [(ngModel)]="SelectedEntityDocumentID"
+              [disabled]="IsDetecting">
+          <option value="">Select entity document…</option>
+          @for (doc of EntityDocuments; track doc.ID) {
+              <option [value]="doc.ID">{{ doc.Name }} ({{ doc.EntityName }})</option>
+          }
+      </select>
+      <button mjButton variant="primary" size="sm"
+              (click)="RunDetection()"
+              [disabled]="IsDetecting || !SelectedEntityDocumentID">
+          @if (IsDetecting) {
+              <i class="fa-solid fa-spinner fa-spin"></i> <span class="action-btn-label">Detecting…</span>
+          } @else {
+              <i class="fa-solid fa-magnifying-glass"></i> <span class="action-btn-label">Run Detection</span>
+          }
+      </button>
     </div>
+  </mj-page-header>
 
+  <mj-page-body [Flex]="true">
     <!-- Detection Progress (visible during run) -->
     @if (IsDetecting) {
         <div class="detection-progress-section">
@@ -76,6 +72,28 @@
                     (input)="OnAbsoluteThresholdChanged($any($event.target).value / 100)"
                     [disabled]="IsDetecting" />
                 <span class="threshold-hint">Score above which duplicates are auto-confirmed</span>
+            </div>
+            <div class="threshold-slider-group reasoning-group">
+                <div class="threshold-label">
+                    <i class="fa-solid fa-brain"></i> LLM Reasoning
+                    <mj-switch [(ngModel)]="EnableLLMReasoning"
+                        (ngModelChange)="OnEnableReasoningChanged($event)"
+                        [Disabled]="IsDetecting"></mj-switch>
+                    @if (EnableLLMReasoning) {
+                        <span class="threshold-value">{{ (ReasoningThreshold * 100).toFixed(0) }}%</span>
+                    }
+                </div>
+                @if (EnableLLMReasoning) {
+                    <input type="range" class="threshold-slider"
+                        [min]="30" [max]="99" [step]="1"
+                        [value]="ReasoningThreshold * 100"
+                        (input)="OnReasoningThresholdChanged($any($event.target).value / 100)"
+                        (change)="OnReasoningThresholdCommitted($any($event.target).value / 100)"
+                        [disabled]="IsDetecting" />
+                    <span class="threshold-hint">Only run the LLM on matches at or above this vector score — controls LLM cost</span>
+                } @else {
+                    <span class="threshold-hint">Vector-only — enable to let an LLM judge borderline matches per entity</span>
+                }
             </div>
         </div>
     }
@@ -163,10 +181,9 @@
 
     <!-- Merge Warning Banner (non-blocking, shown when entity lacks AllowRecordMerge) -->
     @if (ShowMergeWarningBanner) {
-        <div class="merge-warning-banner">
-            <i class="fa-solid fa-triangle-exclamation"></i>
+        <mj-alert Variant="warning">
             Merging is not available for this entity. Detection results are read-only.
-        </div>
+        </mj-alert>
     }
 
     <!-- Content -->
@@ -179,11 +196,9 @@
             <mj-loading text="Loading duplicate detection results..."></mj-loading>
         </div>
     } @else if (TotalGroupCount === 0) {
-        <div class="empty-state">
-            <i class="fa-solid fa-clone empty-icon"></i>
-            <p class="empty-text">No duplicate detection results found.</p>
-            <p class="empty-subtext">Select an entity document and click "Run Detection" to start.</p>
-        </div>
+        <mj-empty-state Icon="fa-solid fa-clone"
+            Title="No duplicate detection results found."
+            Message="Select an entity document and click &quot;Run Detection&quot; to start." />
     } @else {
         <!-- Kanban Board -->
         <div class="kanban-board">
@@ -258,10 +273,8 @@
                         </div>
                     }
                     @if (PendingGroups.length === 0) {
-                        <div class="column-empty">
-                            <i class="fa-solid fa-check-circle"></i>
-                            <span>No pending items</span>
-                        </div>
+                        <mj-empty-state Size="compact" Variant="success" Icon="fa-solid fa-circle-check"
+                            Title="No pending items" />
                     }
                 </div>
             </div>
@@ -325,10 +338,8 @@
                         </div>
                     }
                     @if (ApprovedGroups.length === 0) {
-                        <div class="column-empty">
-                            <i class="fa-solid fa-inbox"></i>
-                            <span>No approved items</span>
-                        </div>
+                        <mj-empty-state Size="compact" Variant="empty" Icon="fa-solid fa-inbox"
+                            Title="No approved items" />
                     }
                 </div>
             </div>
@@ -392,10 +403,8 @@
                         </div>
                     }
                     @if (RejectedGroups.length === 0) {
-                        <div class="column-empty">
-                            <i class="fa-solid fa-inbox"></i>
-                            <span>No rejected items</span>
-                        </div>
+                        <mj-empty-state Size="compact" Variant="empty" Icon="fa-solid fa-inbox"
+                            Title="No rejected items" />
                     }
                 </div>
             </div>
@@ -526,10 +535,36 @@
                              [class.match-rejected]="match.Match.ApprovalStatus === 'Rejected'">
                             <div class="col-header-top">
                                 <span class="col-header-name">{{ match.Name }}</span>
-                                <span class="score-indicator" [class]="GetScoreClass(match.Score)">
+                                <span class="score-indicator" [class]="GetScoreClass(match.Score)"
+                                      title="Vector similarity score">
                                     {{ (match.Score * 100).toFixed(0) }}%
                                 </span>
                             </div>
+                            <!-- LLM verdict (compact — full reasoning prose opens in a floating popover) -->
+                            @if (match.LLMRecommendation) {
+                                <div class="llm-verdict-row">
+                                    <span class="llm-rec-badge" [class]="GetLLMRecommendationClass(match.LLMRecommendation)"
+                                          title="AI recommendation (distinct from the vector similarity score)">
+                                        <i class="fa-solid" [class]="GetLLMRecommendationIcon(match.LLMRecommendation)"></i>
+                                        {{ GetLLMRecommendationLabel(match.LLMRecommendation) }}
+                                        @if (match.LLMConfidence != null) {
+                                            <span class="llm-conf-inline">{{ (match.LLMConfidence * 100).toFixed(0) }}%</span>
+                                        }
+                                    </span>
+                                    @if (match.HasDisagreement) {
+                                        <span class="llm-disagree-chip" title="The AI verdict conflicts with the vector score — click for the AI's reasoning"
+                                              (click)="match.LLMReasoning && OpenReasoningPopover(match, mi + 1, $event)">
+                                            <i class="fa-solid fa-triangle-exclamation"></i>
+                                        </span>
+                                    }
+                                    @if (match.LLMReasoning) {
+                                        <button type="button" class="llm-why-btn" [class.active]="IsReasoningPopoverOpen(mi + 1)"
+                                                (click)="OpenReasoningPopover(match, mi + 1, $event)" title="Show the AI's reasoning">
+                                            <i class="fa-solid fa-circle-info"></i> Why?
+                                        </button>
+                                    }
+                                </div>
+                            }
                             <span class="col-header-diff-count">{{ match.DiffCount }} difference{{ match.DiffCount !== 1 ? 's' : '' }}</span>
                             <div class="surviving-selector">
                                 <input type="radio" name="survivor" class="surviving-radio"
@@ -668,6 +703,39 @@
                 </div>
             </div>
 
+            <!-- ═══ Floating LLM reasoning popover ═══ -->
+            @if (ReasoningPopover) {
+                <div class="reasoning-popover-backdrop" (click)="CloseReasoningPopover()"></div>
+                <div class="reasoning-popover" [style.top.px]="ReasoningPopover.top" [style.left.px]="ReasoningPopover.left">
+                    <div class="reasoning-popover-header">
+                        <span class="reasoning-popover-title">
+                            <i class="fa-solid fa-robot"></i>
+                            AI reasoning &middot; {{ ReasoningPopover.name }}
+                        </span>
+                        <button class="reasoning-popover-close" (click)="CloseReasoningPopover()" title="Close (Esc)">
+                            <i class="fa-solid fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="reasoning-popover-meta">
+                        @if (ReasoningPopover.recommendation) {
+                            <span class="llm-rec-badge" [class]="GetLLMRecommendationClass(ReasoningPopover.recommendation)">
+                                <i class="fa-solid" [class]="GetLLMRecommendationIcon(ReasoningPopover.recommendation)"></i>
+                                {{ GetLLMRecommendationLabel(ReasoningPopover.recommendation) }}
+                            </span>
+                        }
+                        @if (ReasoningPopover.confidence != null) {
+                            <span class="llm-confidence-badge">{{ (ReasoningPopover.confidence * 100).toFixed(0) }}% confidence</span>
+                        }
+                        @if (ReasoningPopover.hasDisagreement) {
+                            <span class="llm-disagreement-pill">
+                                <i class="fa-solid fa-triangle-exclamation"></i> Disagrees with vector score
+                            </span>
+                        }
+                    </div>
+                    <div class="reasoning-popover-body">{{ ReasoningPopover.reasoning }}</div>
+                </div>
+            }
+
             <!-- Footer -->
             <div class="comparison-footer">
                 <div class="comparison-footer-left">
@@ -791,4 +859,5 @@
         </div>
     }
 
-</div>
+  </mj-page-body>
+</mj-page-layout>

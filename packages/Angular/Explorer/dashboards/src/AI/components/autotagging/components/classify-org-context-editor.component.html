@@ -1,0 +1,33 @@
+<div class="cls-org-ctx">
+    <button class="cls-org-ctx-head" (click)="Toggle()">
+        <i class="fa-solid fa-building"></i>
+        <span class="cls-org-ctx-title">Organization domain context</span>
+        @if (HasUnsavedChanges) {
+            <span class="cls-org-ctx-dirty">Unsaved</span>
+        }
+        <i class="fa-solid" [class.fa-chevron-down]="!Expanded" [class.fa-chevron-up]="Expanded"></i>
+    </button>
+
+    @if (Expanded) {
+        <div class="cls-org-ctx-body">
+            @if (IsLoading) {
+                <mj-loading text="Loading org context…" size="small"></mj-loading>
+            } @else {
+                <p class="cls-org-ctx-help">
+                    Applies to every source as the broadest classification-context scope. Source and
+                    content-type guidance combine with this at run time.
+                </p>
+                <textarea class="mj-textarea" rows="5"
+                          [(ngModel)]="ContextText"
+                          placeholder="Org-wide guidance for the classifier — your organization's domain, audience, taxonomy conventions…"></textarea>
+                <div class="cls-org-ctx-actions">
+                    <button mjButton variant="primary" size="sm" (click)="Save()"
+                            [disabled]="IsSaving || !HasUnsavedChanges">
+                        @if (IsSaving) { <i class="fa-solid fa-spinner fa-spin"></i> Saving… }
+                        @else { <i class="fa-solid fa-check"></i> Save }
+                    </button>
+                </div>
+            }
+        </div>
+    }
+</div>

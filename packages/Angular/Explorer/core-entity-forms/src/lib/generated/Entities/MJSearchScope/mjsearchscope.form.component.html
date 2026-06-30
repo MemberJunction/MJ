@@ -5,6 +5,8 @@
     (HistoryRequested)="OnHistoryRequested()"
     (ListManagementRequested)="OnListManagementRequested()">
 
+    <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="before-fields" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
+
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
@@ -181,34 +183,11 @@
 
     </mj-collapsible-panel>
 
+    <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-fields" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
+
     <!-- ========================================
          RELATED ENTITY PANELS
          ======================================== -->
-
-    <!-- Search Scope External Indexes Section -->
-    <mj-collapsible-panel
-        SectionKey="mJSearchScopeExternalIndexes"
-        SectionName="Search Scope External Indexes"
-        Icon="fa fa-search-plus"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJSearchScopeExternalIndexes')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Search Scope External Indexes','SearchScopeID')"
-                [NewRecordValues]="NewRecordValues('MJ: Search Scope External Indexes')"
-                [AllowLoad]="IsSectionExpanded('mJSearchScopeExternalIndexes')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJSearchScopeExternalIndexes', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
 
     <!-- Search Scope Entities Section -->
     <mj-collapsible-panel
@@ -235,6 +214,31 @@
         }
     </mj-collapsible-panel>
 
+    <!-- Search Scope External Indexes Section -->
+    <mj-collapsible-panel
+        SectionKey="mJSearchScopeExternalIndexes"
+        SectionName="Search Scope External Indexes"
+        Icon="fa fa-search-plus"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJSearchScopeExternalIndexes')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Search Scope External Indexes','SearchScopeID')"
+                [NewRecordValues]="NewRecordValues('MJ: Search Scope External Indexes')"
+                [AllowLoad]="IsSectionExpanded('mJSearchScopeExternalIndexes')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJSearchScopeExternalIndexes', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <!-- Search Scope Permissions Section -->
     <mj-collapsible-panel
         SectionKey="mJSearchScopePermissions"
@@ -254,31 +258,6 @@
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJSearchScopePermissions', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
-    <!-- Search Scope Test Queries Section -->
-    <mj-collapsible-panel
-        SectionKey="mJSearchScopeTestQueries"
-        SectionName="Search Scope Test Queries"
-        Icon="fa fa-search"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJSearchScopeTestQueries')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Search Scope Test Queries','SearchScopeID')"
-                [NewRecordValues]="NewRecordValues('MJ: Search Scope Test Queries')"
-                [AllowLoad]="IsSectionExpanded('mJSearchScopeTestQueries')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJSearchScopeTestQueries', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -335,6 +314,31 @@
         }
     </mj-collapsible-panel>
 
+    <!-- Search Scope Test Queries Section -->
+    <mj-collapsible-panel
+        SectionKey="mJSearchScopeTestQueries"
+        SectionName="Search Scope Test Queries"
+        Icon="fa fa-search"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJSearchScopeTestQueries')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Search Scope Test Queries','SearchScopeID')"
+                [NewRecordValues]="NewRecordValues('MJ: Search Scope Test Queries')"
+                [AllowLoad]="IsSectionExpanded('mJSearchScopeTestQueries')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJSearchScopeTestQueries', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <!-- AI Agent Search Scopes Section -->
     <mj-collapsible-panel
         SectionKey="mJAIAgentSearchScopes"
@@ -384,5 +388,7 @@
         </div>
         }
     </mj-collapsible-panel>
+
+    <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-related" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
 </mj-record-form-container>
         

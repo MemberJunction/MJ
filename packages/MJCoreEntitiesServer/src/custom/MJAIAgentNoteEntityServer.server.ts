@@ -1,6 +1,6 @@
 import { RegisterClass } from "@memberjunction/global";
 import { BaseEntity, EntityDeleteOptions, EntitySaveOptions, LogError, SimpleEmbeddingResult } from "@memberjunction/core";
-import { MJAIAgentNoteEntity } from "@memberjunction/core-entities";
+import { MJAIAgentNoteEntity, IsInjectableNoteStatus } from "@memberjunction/core-entities";
 import { EmbedTextLocalHelper } from "./util";
 import { AIEngine } from "@memberjunction/aiengine";
 
@@ -9,9 +9,12 @@ import { AIEngine } from "@memberjunction/aiengine";
  *   1. Auto-generates an embedding when the Note field is new or dirty.
  *   2. Keeps `AIEngine._noteVectorService` in sync with the note's persisted Status.
  *      Invariant: the vector service contains an entry for a note iff its current Status
- *      is 'Active' AND it has a non-empty EmbeddingVector. This write-side invariant lets
- *      the retrieval filters (`composeNoteFilters`) be pure scope filters — they don't
- *      need to consult any additional cache to decide whether a vector hit is still valid.
+ *      is injectable ('Active' or 'Provisional' — see INJECTABLE_NOTE_STATUSES in
+ *      @memberjunction/core-entities) AND it has a non-empty EmbeddingVector. This
+ *      write-side invariant lets the retrieval filters (`composeNoteFilters`) be pure
+ *      scope filters — they don't need to consult any additional cache to decide
+ *      whether a vector hit is still valid. Provisional notes (written in-flight by
+ *      agents) are deliberately injectable immediately, pending Memory Manager hardening.
  */
 @RegisterClass(BaseEntity, 'MJ: AI Agent Notes')
 export class MJAIAgentNoteEntityServer extends MJAIAgentNoteEntity {
@@ -41,8 +44,8 @@ export class MJAIAgentNoteEntityServer extends MJAIAgentNoteEntity {
             if (!saved) return false;
 
             // 3. Sync the in-memory vector service with the just-persisted Status.
-            //    - Active + has embedding → (re)insert so retrieval can find it.
-            //    - Anything else (Revoked/Archived, or cleared embedding) → drop the vector
+            //    - Injectable (Active/Provisional) + has embedding → (re)insert so retrieval can find it.
+            //    - Anything else (Revoked/Archived/Pending, or cleared embedding) → drop the vector
             //      entry. The original vector metadata still holds a reference to the stale
             //      entity instance, so leaving it would leak into future retrievals.
             //
@@ -50,7 +53,7 @@ export class MJAIAgentNoteEntityServer extends MJAIAgentNoteEntity {
             //    background load completes, the underlying vector service is null and the
             //    update would silently no-op. EnsureLoaded blocks until the engine is ready.
             await AIEngine.Instance.EnsureLoaded();
-            if (this.Status === 'Active' && this.EmbeddingVector) {
+            if (IsInjectableNoteStatus(this.Status) && this.EmbeddingVector) {
                 AIEngine.Instance.AddOrUpdateSingleNoteEmbedding(this);
             } else {
                 AIEngine.Instance.RemoveSingleNoteEmbedding(this.ID);

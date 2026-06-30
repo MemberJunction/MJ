@@ -1,33 +1,83 @@
-<!-- Tags Dashboard -->
-<div class="at-dashboard">
-
-    <!-- ══════ LEFT NAV ══════ -->
-    <div class="at-left-nav">
-        <div class="at-left-nav-header">
-            <h2><i class="fa-solid fa-sitemap"></i> Tags</h2>
-        </div>
-        <div class="at-left-nav-items">
-            @for (item of NavItems; track item.Tab) {
-                <div class="at-nav-item" [class.active]="ActiveTab === item.Tab" (click)="SwitchTab(item.Tab)">
-                    <i [class]="item.Icon"></i> {{ item.Label }}
-                    @if (item.BadgeText) {
-                        <span class="at-nav-badge" [class.at-nav-badge-live]="item.BadgeClass === 'nav-badge-live'">{{ item.BadgeText }}</span>
-                    }
-                </div>
-            }
-        </div>
-        <div class="at-left-nav-footer">
-            <button class="at-run-pipeline-btn" (click)="RunHealthNow()" [disabled]="HealthRunning">
-                @if (HealthRunning) {
-                    <i class="fa-solid fa-spinner fa-spin"></i> Running…
-                } @else {
-                    <i class="fa-solid fa-heart-pulse"></i> Run Tag Health
-                }
-            </button>
-        </div>
+<mj-page-layout>
+  <mj-page-header
+    Title="Tags"
+    Icon="fa-solid fa-sitemap"
+    Subtitle="Taxonomy management, health monitoring, and tag library">
+    <div actions>
+      <button mjButton variant="secondary" size="sm" (click)="RunHealthNow()" [disabled]="HealthRunning">
+        @if (HealthRunning) {
+          <i class="fa-solid fa-spinner fa-spin"></i> <span class="action-btn-label">Running…</span>
+        } @else {
+          <i class="fa-solid fa-heart-pulse"></i> <span class="action-btn-label">Run Tag Health</span>
+        }
+      </button>
     </div>
+  </mj-page-header>
 
-    <!-- ══════ MAIN AREA ══════ -->
+  <mj-page-body [Flex]="true" [Padding]="false">
+  <!-- Tags Dashboard -->
+  <div class="at-dashboard">
+
+    <mj-left-nav
+      MobileTitle="Sections"
+      [Sections]="navSections"
+      [ActiveId]="ActiveTab"
+      (ItemClicked)="onNavItemClicked($event)">
+    </mj-left-nav>
+
+    <mj-left-nav-content>
+
+    <mj-page-header-interior
+        [Title]="currentTabTitle"
+        [Subtitle]="currentTabSubtitle">
+      @if (ActiveTab === 'tags' || ActiveTab === 'taxonomy') {
+        <div toolbar>
+          @switch (ActiveTab) {
+            @case ('tags') {
+              <input type="text" class="at-search-input" placeholder="Search tags..."
+                     [(ngModel)]="TagSearchQuery" (input)="FilterTags()">
+            }
+            @case ('taxonomy') {
+              <mj-tab-nav
+                  [Tabs]="taxSubTabsConfig"
+                  [ActiveKey]="TaxSubTab"
+                  (TabChange)="onTaxSubTabChange($event)">
+              </mj-tab-nav>
+            }
+          }
+        </div>
+      }
+      <div actions>
+        @switch (ActiveTab) {
+          @case ('taxonomy') {
+            <button mjButton variant="secondary" size="sm" (click)="RefreshTaxonomyData()">
+              <i class="fa-solid fa-arrows-rotate"></i> <span class="mj-action-label">Refresh</span>
+            </button>
+          }
+          @case ('suggestions') {
+            <button mjButton variant="secondary" size="sm" (click)="loadSuggestions()">
+              <i class="fa-solid fa-arrows-rotate"></i> <span class="mj-action-label">Refresh</span>
+            </button>
+            <button mjButton variant="primary" size="sm" (click)="RunHealthNow()" [disabled]="HealthRunning">
+              @if (HealthRunning) { <i class="fa-solid fa-spinner fa-spin"></i> <span class="mj-action-label">Running…</span> }
+              @else { <i class="fa-solid fa-heart-pulse"></i> <span class="mj-action-label">Run Tag Health</span> }
+            </button>
+          }
+          @case ('health') {
+            <button mjButton variant="secondary" size="sm" (click)="RebuildEmbeddings()" [disabled]="RebuildEmbeddingsRunning">
+              @if (RebuildEmbeddingsRunning) { <i class="fa-solid fa-spinner fa-spin"></i> <span class="mj-action-label">Rebuilding…</span> }
+              @else { <i class="fa-solid fa-rotate"></i> <span class="mj-action-label">Rebuild stale embeddings</span> }
+            </button>
+            <button mjButton variant="primary" size="sm" (click)="RunHealthNow()" [disabled]="HealthRunning">
+              @if (HealthRunning) { <i class="fa-solid fa-spinner fa-spin"></i> <span class="mj-action-label">Running…</span> }
+              @else { <i class="fa-solid fa-play"></i> <span class="mj-action-label">Run now</span> }
+            </button>
+          }
+        }
+      </div>
+    </mj-page-header-interior>
+
+    <mj-page-body-interior [Padding]="false" [Flex]="true">
     <div class="at-main-area">
 
         @if (IsLoading) {
@@ -40,16 +90,6 @@
             <!-- TAB 4: TAG LIBRARY -->
             <!-- ════════════════════════════════════════════ -->
             @if (ActiveTab === 'tags') {
-                <div class="at-page-header">
-                    <div>
-                        <div class="at-page-title">Overview</div>
-                        <div class="at-page-subtitle">{{ TagRows.length }} unique tags across all content sources</div>
-                    </div>
-                    <div class="at-page-actions">
-                        <input type="text" class="at-search-input" placeholder="Search tags..."
-                               [(ngModel)]="TagSearchQuery" (input)="FilterTags()">
-                    </div>
-                </div>
                 <div class="at-page-body">
                     <div class="at-tag-lib-layout">
                         <div class="at-tag-lib-main">
@@ -106,13 +146,14 @@
                                             Content items tagged "{{ SelectedDrillDownTag }}"
                                             ({{ TagDrillDownItems.length }})
                                         </span>
-                                        <button class="at-slide-close" (click)="CloseDrillDownTag()" style="background:none;border:none;cursor:pointer;color:var(--mj-text-muted)">
+                                        <button class="at-slide-close" (click)="CloseDrillDownTag()" style="background:none;border:none;cursor:pointer;color:var(--mj-text-muted)" aria-label="Close">
                                             <i class="fa-solid fa-times"></i>
                                         </button>
                                     </div>
                                     <div class="at-card-body" style="max-height: 300px; overflow-y: auto;">
                                         @if (TagDrillDownItems.length === 0) {
-                                            <div class="at-empty-state"><p>No content items found for this tag.</p></div>
+                                            <mj-empty-state Size="compact" Icon="fa-solid fa-inbox"
+                                                Title="No content items found for this tag." />
                                         } @else {
                                             <table class="at-tag-table">
                                                 <thead>
@@ -154,7 +195,7 @@
                                         [Animate]="true">
                                     </mj-word-cloud>
                                 } @else {
-                                    <div class="at-tag-cloud-empty">No tags yet</div>
+                                    <mj-empty-state Size="compact" Icon="fa-solid fa-tag" Title="No tags yet" />
                                 }
                             </div>
                             <div class="at-card" style="padding: 16px; margin-top: 12px;">
@@ -177,42 +218,6 @@
             <!-- TAB 6: TAXONOMY GOVERNANCE -->
             <!-- ════════════════════════════════════════════ -->
             @if (ActiveTab === 'taxonomy') {
-                <div class="at-page-header">
-                    <div>
-                        <div class="at-page-title">Taxonomy Governance</div>
-                        <div class="at-page-subtitle">Manage tag hierarchy, resolve duplicates, and monitor taxonomy health &mdash; <strong>{{ TaxHealth.Total }} total tags</strong></div>
-                    </div>
-                    <div class="at-page-actions">
-                        <button class="at-action-btn at-secondary-btn" (click)="RefreshTaxonomyData()">
-                            <i class="fa-solid fa-arrows-rotate"></i> Refresh
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Sub-tab strip -->
-                <div class="at-tax-tab-strip">
-                    <div class="at-tax-tab" [class.active]="TaxSubTab === 'tree'" (click)="SwitchTaxSubTab('tree')">
-                        <i class="fa-solid fa-sitemap"></i> Tree View
-                    </div>
-                    <div class="at-tax-tab" [class.active]="TaxSubTab === 'duplicates'" (click)="SwitchTaxSubTab('duplicates')">
-                        <i class="fa-solid fa-link"></i> Duplicates
-                        @if (TaxDuplicates.length > 0) {
-                            <span class="at-tax-tab-badge at-tax-badge-warning">{{ TaxDuplicates.length }}</span>
-                        }
-                    </div>
-                    <div class="at-tax-tab" [class.active]="TaxSubTab === 'orphans'" (click)="SwitchTaxSubTab('orphans')">
-                        <i class="fa-solid fa-ban"></i> Orphans
-                        @if (TaxOrphans.length > 0) {
-                            <span class="at-tax-tab-badge at-tax-badge-error">{{ TaxOrphans.length }}</span>
-                        }
-                    </div>
-                    <div class="at-tax-tab" [class.active]="TaxSubTab === 'treemap'" (click)="SwitchTaxSubTab('treemap')">
-                        <i class="fa-solid fa-chart-tree-map"></i> Treemap
-                    </div>
-                    <div class="at-tax-tab" [class.active]="TaxSubTab === 'audit'" (click)="SwitchTaxSubTab('audit')">
-                        <i class="fa-solid fa-scroll"></i> Audit Log
-                    </div>
-                </div>
 
                 <div class="at-page-body">
 
@@ -236,10 +241,8 @@
                                      (dragover)="$event.preventDefault()"
                                      (drop)="OnDropToRoot($event)">
                                     @if (TaxFilteredNodes.length === 0) {
-                                        <div class="at-empty-state">
-                                            <i class="fa-solid fa-sitemap"></i>
-                                            <p>No tags found</p>
-                                        </div>
+                                        <mj-empty-state Size="compact" Icon="fa-solid fa-sitemap"
+                                            Title="No tags found" />
                                     }
                                     @for (node of TaxFilteredNodes; track node.ID) {
                                         <div class="at-tax-tree-node"
@@ -516,10 +519,8 @@
                                         </div>
                                     }
                                 } @else {
-                                    <div class="at-empty-state" style="height: 100%;">
-                                        <i class="fa-solid fa-hand-pointer"></i>
-                                        <p>Select a tag from the tree to view details</p>
-                                    </div>
+                                    <mj-empty-state class="at-fill" Icon="fa-solid fa-hand-pointer"
+                                        Title="Select a tag from the tree to view details" />
                                 }
                             </div>
                         </div>
@@ -564,10 +565,8 @@
                         </div>
 
                         @if (TaxDuplicates.length === 0) {
-                            <div class="at-empty-state">
-                                <i class="fa-solid fa-check-circle"></i>
-                                <p>No duplicate tags detected</p>
-                            </div>
+                            <mj-empty-state Variant="success" Size="compact"
+                                Title="No duplicate tags detected" />
                         }
 
                         <div class="at-tax-dup-list">
@@ -628,10 +627,8 @@
                         </div>
 
                         @if (TaxOrphans.length === 0) {
-                            <div class="at-empty-state">
-                                <i class="fa-solid fa-check-circle"></i>
-                                <p>No orphaned tags</p>
-                            </div>
+                            <mj-empty-state Variant="success" Size="compact"
+                                Title="No orphaned tags" />
                         }
 
                         <div class="at-tax-orphan-grid">
@@ -671,10 +668,8 @@
                         </div>
 
                         @if (TaxTreemapCells.length === 0) {
-                            <div class="at-empty-state">
-                                <i class="fa-solid fa-chart-tree-map"></i>
-                                <p>No taxonomy data to visualize</p>
-                            </div>
+                            <mj-empty-state Size="compact" Icon="fa-solid fa-chart-tree-map"
+                                Title="No taxonomy data to visualize" />
                         } @else {
                             <div class="at-tax-treemap-container">
                                 @for (cell of TaxTreemapCells; track $index) {
@@ -694,7 +689,7 @@
                                 <div class="at-tax-drillin-panel" (click)="$event.stopPropagation()">
                                     <div class="at-tax-drillin-header">
                                         <h3><i class="fa-solid fa-tag"></i> {{ TreemapDrillInNode.Name }}</h3>
-                                        <button class="at-schedule-dialog-close" (click)="CloseTreemapDrillIn()">
+                                        <button class="at-schedule-dialog-close" (click)="CloseTreemapDrillIn()" aria-label="Close">
                                             <i class="fa-solid fa-times"></i>
                                         </button>
                                     </div>
@@ -784,10 +779,8 @@
                         </div>
 
                         @if (GetFilteredAuditEvents().length === 0) {
-                            <div class="at-empty-state">
-                                <i class="fa-solid fa-scroll"></i>
-                                <p>No audit events match the current filters</p>
-                            </div>
+                            <mj-empty-state Variant="no-results" Size="compact" Icon="fa-solid fa-scroll"
+                                Title="No audit events match the current filters" />
                         }
 
                         <div class="at-tax-audit-timeline">
@@ -816,20 +809,6 @@
             <!-- TAB: SUGGESTIONS — server-driven inbox        -->
             <!-- ════════════════════════════════════════════ -->
             @if (ActiveTab === 'suggestions') {
-                <div class="at-page-header">
-                    <div>
-                        <div class="at-page-title">Suggestions Inbox</div>
-                        <div class="at-page-subtitle">{{ SuggestionRows.length }} pending · select rows for bulk approve / reject</div>
-                    </div>
-                    <div class="at-page-actions">
-                        <button class="at-action-btn at-secondary-btn" (click)="loadSuggestions()"><i class="fa-solid fa-arrows-rotate"></i> Refresh</button>
-                        <button class="at-action-btn at-primary-btn" (click)="RunHealthNow()" [disabled]="HealthRunning">
-                            @if (HealthRunning) { <i class="fa-solid fa-spinner fa-spin"></i> Running… }
-                            @else { <i class="fa-solid fa-heart-pulse"></i> Run Tag Health }
-                        </button>
-                    </div>
-                </div>
-
                 <div class="at-page-body">
                     <div class="sg-shell">
                         <div class="sg-main">
@@ -866,7 +845,8 @@
 
                             <div class="sg-table-body">
                                 @if (SuggestionRowsFiltered.length === 0) {
-                                    <div class="at-empty-state"><i class="fa-solid fa-inbox"></i><p>No pending suggestions.</p></div>
+                                    <mj-empty-state Variant="success" Size="compact"
+                                        Title="No pending suggestions." />
                                 } @else {
                                     <table class="sg-table">
                                         <thead>
@@ -948,7 +928,7 @@
                                         <div style="font-weight: 600;">"{{ SuggestionSelected.ProposedName }}"</div>
                                         <div class="at-muted" style="font-size: 11px;">{{ SuggestionSelected.CreatedAt | date: 'short' }}</div>
                                     </div>
-                                    <button class="at-action-btn at-btn-xs" (click)="CloseDrawer()" title="Close"><i class="fa-solid fa-xmark"></i></button>
+                                    <button class="at-action-btn at-btn-xs" (click)="CloseDrawer()" title="Close" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
                                 </div>
                                 <div class="sg-drawer-bd">
                                     <span class="sg-reason {{ ReasonClass(SuggestionSelected.Reason) }}">
@@ -1006,23 +986,6 @@
             <!-- TAB: HEALTH — Tag Health 3-card summary       -->
             <!-- ════════════════════════════════════════════ -->
             @if (ActiveTab === 'health') {
-                <div class="at-page-header">
-                    <div>
-                        <div class="at-page-title">Tag Health</div>
-                        <div class="at-page-subtitle">Automated signals about taxonomy quality</div>
-                    </div>
-                    <div class="at-page-actions">
-                        <button class="at-action-btn at-secondary-btn" (click)="RebuildEmbeddings()" [disabled]="RebuildEmbeddingsRunning">
-                            @if (RebuildEmbeddingsRunning) { <i class="fa-solid fa-spinner fa-spin"></i> Rebuilding… }
-                            @else { <i class="fa-solid fa-rotate"></i> Rebuild stale embeddings }
-                        </button>
-                        <button class="at-action-btn at-primary-btn" (click)="RunHealthNow()" [disabled]="HealthRunning">
-                            @if (HealthRunning) { <i class="fa-solid fa-spinner fa-spin"></i> Running… }
-                            @else { <i class="fa-solid fa-play"></i> Run now }
-                        </button>
-                    </div>
-                </div>
-
                 <div class="health-shell">
                     <div class="runbar">
                         <div class="stat">
@@ -1131,7 +1094,8 @@
                             <span class="at-muted" style="font-size: 11px;">last {{ HealthRunHistory.length }} runs</span>
                         </div>
                         @if (HealthRunHistory.length === 0) {
-                            <div class="at-empty-state" style="padding: 32px;"><i class="fa-solid fa-clock-rotate-left"></i><p>No runs yet.</p></div>
+                            <mj-empty-state Size="compact" Icon="fa-solid fa-clock-rotate-left"
+                                Title="No runs yet." />
                         } @else {
                             <table>
                                 <thead>
@@ -1164,6 +1128,8 @@
 
     </div>
     <!-- end at-main-area -->
+    </mj-page-body-interior>
+    </mj-left-nav-content>
 
     <!-- ══════ ITEM DETAIL SLIDE-IN ══════ -->
     @if (ShowItemDetail && SelectedFeedItem) {
@@ -1262,7 +1228,7 @@
             <div class="at-schedule-dialog" (click)="$event.stopPropagation()">
                 <div class="at-schedule-dialog-header">
                     <h3><i class="fa-solid fa-triangle-exclamation"></i> {{ ConfirmDialogTitle }}</h3>
-                    <button class="at-schedule-dialog-close" (click)="ConfirmDialogCancel()">
+                    <button class="at-schedule-dialog-close" (click)="ConfirmDialogCancel()" aria-label="Close">
                         <i class="fa-solid fa-times"></i>
                     </button>
                 </div>
@@ -1285,7 +1251,7 @@
             <div class="at-schedule-dialog" (click)="$event.stopPropagation()">
                 <div class="at-schedule-dialog-header">
                     <h3><i class="fa-solid fa-code-branch"></i> Split Tag</h3>
-                    <button class="at-schedule-dialog-close" (click)="CloseSplitDialog()">
+                    <button class="at-schedule-dialog-close" (click)="CloseSplitDialog()" aria-label="Close">
                         <i class="fa-solid fa-times"></i>
                     </button>
                 </div>
@@ -1314,7 +1280,7 @@
             <div class="at-schedule-dialog" (click)="$event.stopPropagation()">
                 <div class="at-schedule-dialog-header">
                     <h3><i class="fa-solid fa-plus"></i> Create Tag</h3>
-                    <button class="at-schedule-dialog-close" (click)="CloseCreateTagDialog()">
+                    <button class="at-schedule-dialog-close" (click)="CloseCreateTagDialog()" aria-label="Close">
                         <i class="fa-solid fa-times"></i>
                     </button>
                 </div>
@@ -1346,7 +1312,7 @@
             <div class="at-schedule-dialog" (click)="$event.stopPropagation()">
                 <div class="at-schedule-dialog-header">
                     <h3><i class="fa-solid fa-arrows-up-down"></i> Move Tag</h3>
-                    <button class="at-schedule-dialog-close" (click)="CloseMoveDialog()">
+                    <button class="at-schedule-dialog-close" (click)="CloseMoveDialog()" aria-label="Close">
                         <i class="fa-solid fa-times"></i>
                     </button>
                 </div>
@@ -1376,7 +1342,7 @@
             <div class="at-schedule-dialog" (click)="$event.stopPropagation()">
                 <div class="at-schedule-dialog-header">
                     <h3><i class="fa-solid fa-compress"></i> Merge "{{ MergeSourceTag?.Name }}" Into...</h3>
-                    <button class="at-schedule-dialog-close" (click)="CloseMergeIntoDialog()">
+                    <button class="at-schedule-dialog-close" (click)="CloseMergeIntoDialog()" aria-label="Close">
                         <i class="fa-solid fa-times"></i>
                     </button>
                 </div>
@@ -1407,4 +1373,6 @@
         </div>
     }
 
-</div>
+  </div>
+  </mj-page-body>
+</mj-page-layout>

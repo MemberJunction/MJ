@@ -26,6 +26,16 @@ export class ClassRegistration {
     Key: string | null = null; // used to identify a special attribute that we use to determine if this is the right sub-class. For example, in the case of BaseEntity and Entity object subclasses we'll have a LOT of entries
                 // in the registration list, so we'll use the key to identify which sub-class to use for a given entity
     Priority: number = 0; // if there are multiple entries for a given combination of baseClass and subClass and key, we will use the priority to determine which one to use. The higher the number, the higher the priority
+    /**
+     * Optional structured metadata. Useful when callers want to attach
+     * filterable/sortable attributes to a registration without polluting the
+     * Key string (e.g. form-panel slots: { entity, slot, sortKey }).
+     *
+     * Pair with `ClassFactory.GetAllRegistrationsByMetadata()` /
+     * `GetAllRegistrationsByKeyPrefix()` / `GetAllRegistrationsByKeyPattern()`
+     * to discover registrations beyond exact-key matching.
+     */
+    Metadata?: Record<string, unknown>;
 }
  
 
@@ -35,6 +45,17 @@ export class ClassRegistration {
  */
 export class ClassFactory {
     private _registrations: ClassRegistration[] = [];
+
+    /**
+     * Memoized results of {@link GetRegistration}, keyed by `baseClassName|normalizedKey`.
+     * GetRegistration is on extremely hot paths (every `CreateInstance`, including one call
+     * per entity field during hydration) and otherwise re-`filter()`s the entire global
+     * registration list on every call. The map is fully cleared whenever a new registration
+     * is added (see {@link Register}) so it can never serve a stale result — registrations are
+     * almost always all added at startup, so in practice the cache is built once and reused.
+     * A `null` value is a cached "no registration found" (still a valid, useful memo).
+     */
+    private _registrationCache: Map<string, ClassRegistration | null> = new Map();
 
     /**
      * Registered lazy loader callbacks. When `GetRegistrationAsync` or `CreateInstanceAsync`
@@ -130,7 +151,7 @@ export class ClassFactory {
      * @param skipNullKeyWarning If true, will not print a warning if the key is null or undefined. This is useful for cases where you know that the key is not needed and you don't want to see the warning in the console.
      * @param autoRegisterWithRootClass If true, will automatically register the subclass with the root class of the baseClass hierarchy. This ensures proper priority ordering when multiple subclasses are registered in a hierarchy. Defaults to false to preserve the original registration contract where classes are stored under the baseClass you specify.
      */
-    public Register(baseClass: unknown, subClass: unknown, key: string | null = null, priority: number = 0, skipNullKeyWarning: boolean = false, autoRegisterWithRootClass: boolean = false): void {
+    public Register(baseClass: unknown, subClass: unknown, key: string | null = null, priority: number = 0, skipNullKeyWarning: boolean = false, autoRegisterWithRootClass: boolean = false, metadata?: Record<string, unknown>): void {
         if (baseClass && subClass) {
             const baseClassName = (baseClass as NamedClass).name;
             const subClassName = (subClass as NamedClass).name;
@@ -181,8 +202,12 @@ export class ClassFactory {
             reg.RootClass = rootClass;
             reg.Key = key;
             reg.Priority = priority;
+            if (metadata !== undefined) reg.Metadata = metadata;
 
             this._registrations.push(reg);
+            // Invalidate the GetRegistration memo — a new registration may change the
+            // highest-priority winner for any (baseClass, key) bucket.
+            this._registrationCache.clear();
         }
     }
 
@@ -233,9 +258,83 @@ export class ClassFactory {
     }
 
     /**
+     * Returns all registrations for a given base class whose `Key` STARTS WITH the
+     * provided prefix (case-insensitive, trimmed). Useful when registrations follow
+     * a naming convention with a structured prefix (e.g. `"<EntityName>:..."`).
+     *
+     * Prefer `GetAllRegistrationsByMetadata` when the discriminating data is
+     * structured — putting tuples in the key string is fragile.
+     */
+    public GetAllRegistrationsByKeyPrefix(baseClass: unknown, keyPrefix: string): ClassRegistration[] {
+        if (!baseClass || keyPrefix == null) return [];
+        const baseClassName = (baseClass as { name: string }).name;
+        const needle = keyPrefix.trim().toLowerCase();
+        return this._registrations.filter(r => {
+            const regBaseClassName = (r.BaseClass as { name: string }).name;
+            if (regBaseClassName !== baseClassName) return false;
+            return r.Key != null && r.Key.trim().toLowerCase().startsWith(needle);
+        });
+    }
+
+    /**
+     * Returns all registrations for a given base class whose `Key` matches the
+     * provided regex (tested against the trimmed-but-original-case key). Use for
+     * more nuanced discovery patterns than the prefix helper handles.
+     */
+    public GetAllRegistrationsByKeyPattern(baseClass: unknown, pattern: RegExp): ClassRegistration[] {
+        if (!baseClass || !pattern) return [];
+        const baseClassName = (baseClass as { name: string }).name;
+        return this._registrations.filter(r => {
+            const regBaseClassName = (r.BaseClass as { name: string }).name;
+            if (regBaseClassName !== baseClassName) return false;
+            return r.Key != null && pattern.test(r.Key.trim());
+        });
+    }
+
+    /**
+     * Returns all registrations for a given base class whose attached `Metadata`
+     * bag satisfies the predicate. Registrations with no metadata are passed
+     * `undefined` to the predicate.
+     *
+     * This is the recommended discovery path for structured per-registration
+     * data (e.g. form-panel slots that filter by `{ entity, slot }`). It avoids
+     * the brittleness of encoding tuples into the Key string.
+     */
+    public GetAllRegistrationsByMetadata(
+        baseClass: unknown,
+        predicate: (metadata: Record<string, unknown> | undefined, registration: ClassRegistration) => boolean
+    ): ClassRegistration[] {
+        if (!baseClass || typeof predicate !== 'function') return [];
+        const baseClassName = (baseClass as { name: string }).name;
+        return this._registrations.filter(r => {
+            const regBaseClassName = (r.BaseClass as { name: string }).name;
+            if (regBaseClassName !== baseClassName) return false;
+            return predicate(r.Metadata, r);
+        });
+    }
+
+    /**
      * Returns the registration with the highest priority for a given base class and key. If key is not provided, will return the registration with the highest priority for the base class.
      */
     public GetRegistration(baseClass: unknown, key?: string | null): ClassRegistration | null {
+        if (!baseClass) return null;
+
+        // Memoized fast path — avoids re-filtering the entire registration list on every call.
+        const cacheKey = `${(baseClass as { name: string }).name}|${key == null ? '' : key.trim().toLowerCase()}`;
+        const cached = this._registrationCache.get(cacheKey);
+        if (cached !== undefined) return cached; // includes cached `null` (no-registration) results
+
+        const resolved = this.resolveRegistration(baseClass, key);
+        this._registrationCache.set(cacheKey, resolved);
+        return resolved;
+    }
+
+    /**
+     * Uncached core of {@link GetRegistration}: filters all matching registrations and returns
+     * the highest-priority (last-registered on ties). Kept private so the public accessor can
+     * memoize without the cache logic obscuring the resolution rule.
+     */
+    private resolveRegistration(baseClass: unknown, key?: string | null): ClassRegistration | null {
         let matches = this.GetAllRegistrations(baseClass, key)
         if (matches && matches.length > 0) {
             // figure out the highest priority for all the matching registrations

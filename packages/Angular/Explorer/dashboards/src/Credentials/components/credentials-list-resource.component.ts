@@ -6,6 +6,7 @@ import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { RunView, Metadata } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { CredentialEditPanelComponent } from '@memberjunction/ng-credentials';
+import { FilterFieldConfig, ViewToggleOption } from '@memberjunction/ng-ui-components';
 type ViewMode = 'grid' | 'list';
 type StatusFilter = '' | 'active' | 'inactive' | 'expired' | 'expiring';
 
@@ -41,6 +42,65 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
     protected override destroy$ = new Subject<void>();
 
     @ViewChild('editPanel') editPanel!: CredentialEditPanelComponent;
+
+    public readonly viewOptions: ViewToggleOption[] = [
+        { key: 'grid', icon: 'fa-solid fa-grip', title: 'Grid view' },
+        { key: 'list', icon: 'fa-solid fa-list', title: 'List view' }
+    ];
+
+    public get FilterFields(): FilterFieldConfig[] {
+        const typeOptions = [
+            { text: 'All Types', value: '' as const },
+            ...this.types.map(t => ({ text: t.Name, value: t.ID as string }))
+        ];
+        return [
+            {
+                key: 'typeFilter',
+                type: 'dropdown',
+                label: 'Type',
+                icon: 'fa-solid fa-shapes',
+                placeholder: 'All Types',
+                filterable: true,
+                options: typeOptions
+            },
+            {
+                key: 'statusFilter',
+                type: 'dropdown',
+                label: 'Status',
+                icon: 'fa-solid fa-circle-info',
+                placeholder: 'All Statuses',
+                options: [
+                    { text: 'All Statuses', value: '' },
+                    { text: 'Active', value: 'active' },
+                    { text: 'Inactive', value: 'inactive' },
+                    { text: 'Expiring Soon', value: 'expiring' },
+                    { text: 'Expired', value: 'expired' }
+                ]
+            }
+        ];
+    }
+    public get FilterValues(): Record<string, unknown> {
+        return { typeFilter: this.selectedTypeFilter, statusFilter: this.selectedStatusFilter };
+    }
+    public get ActiveFilterCount(): number {
+        let n = 0;
+        if (this.selectedTypeFilter) n++;
+        if (this.selectedStatusFilter) n++;
+        return n;
+    }
+    public onFilterValuesChange(v: Record<string, unknown>): void {
+        const next = (v ?? {}) as { typeFilter?: string; statusFilter?: StatusFilter };
+        if ((next.typeFilter ?? '') !== this.selectedTypeFilter) {
+            this.onTypeFilterChange(next.typeFilter ?? '');
+        }
+        if ((next.statusFilter ?? '') !== this.selectedStatusFilter) {
+            this.onStatusFilterChange(next.statusFilter ?? '');
+        }
+    }
+    public resetFilters(): void {
+        if (this.selectedTypeFilter) this.onTypeFilterChange('');
+        if (this.selectedStatusFilter) this.onStatusFilterChange('');
+    }
 
     constructor(
         private cdr: ChangeDetectorRef
@@ -397,6 +457,20 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
         this.selectedStatusFilter = '';
         this.showActiveOnly = false;
         this.applyFilters();
+    }
+
+    /** True when search and/or any filter narrow the list. */
+    public get IsListNarrowed(): boolean {
+        return !!(this.searchText || this.selectedTypeFilter || this.selectedStatusFilter);
+    }
+
+    /** Empty-state CTA: reset filters when narrowed, otherwise create. */
+    public onEmptyStateAction(): void {
+        if (this.IsListNarrowed) {
+            this.clearFilters();
+        } else {
+            this.createNewCredential();
+        }
     }
 
     public get hasActiveFilters(): boolean {

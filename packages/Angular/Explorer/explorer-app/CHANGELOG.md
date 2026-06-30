@@ -1,5 +1,390 @@
 # @memberjunction/ng-explorer-app
 
+## 5.43.0
+
+### Patch Changes
+
+- a95ef89: fix(open-app): `mj app` runtime-load + lifecycle correctness, plus installer/Explorer fixes
+
+  The next-applicable subset of the OpenApp lifecycle audit — runtime-load and install/upgrade/remove correctness — across four packages:
+  - **`@memberjunction/open-app-engine`.** Makes an installed Open App actually take effect and the lifecycle reversible/repeatable: installed server packages load at boot from `dynamicPackages.server[]` (and their generated GraphQL resolvers enter the live schema), and installed client packages are recorded in `dynamicPackages.client[]`; install status + reinstall correctness (npm-install failure leaves the app `Disabled` not falsely `Active`; an `Error`-state app is reinstallable; rollback drops only a schema we created; migrations baseline so a `V1` migration is never skipped); atomic upgrade dependency rewrite; and remove data-safety (DB-first ordering, co-tenant shared-schema guard, and metadata cleanup committed in one transaction on PostgreSQL). Also removes an app's **own `Application` row on uninstall** — an app's metadata-sync migration registers an `Application` (fixed UUID) grouping its entities; removal previously left it orphaned, so a reinstall's migration re-`INSERT`ed the same UUID and failed on `PK_Application_ID`. Removal now deletes an Application **wholly owned** by the removed schema (best-effort, after the atomic metadata commit; an Application that also groups other apps' entities, or one with user-added dependents, is left intact and reused). +unit tests.
+  - **`@memberjunction/cli`.** The Open App client load mechanism now lives in distributed packages instead of bespoke MJExplorer files. `mj codegen manifest` gains `--open-app-client-bootstrap`: after generating the class-registrations manifest, it appends a managed, idempotent block of side-effect imports — one per installed Open App client package recorded in `dynamicPackages.client[]` — so the apps' `@RegisterClass` decorators run when the client bundle loads. The block is rebuilt on every run, so it tracks install/remove/enable/disable (each of which edits `dynamicPackages.client`). This lets MJExplorer drop its hand-written `ensure-open-app-bootstrap.mjs` script, the separate generated bootstrap file, and the extra `app.module.ts` import — keeping the app paper-thin (changes there don't auto-distribute like npm packages). +unit tests for the pure block transform.
+  - **`@memberjunction/installer`.** The configure phase wrote a real `.env` (DB credentials, API keys) but emitted no `.gitignore`, so a freshly scaffolded project could commit secrets via `git init && git add .`. It now guarantees a `.gitignore` ignoring `.env`/`.env.*` (keeping `.env.example`); idempotent — appends only missing entries, never rewriting user lines.
+  - **`@memberjunction/ng-explorer-app`.** Fixes an MJExplorer login crash where `MJNotificationService.Instance` was read before DI constructed the singleton (surfaced by magic-link's instant, no-redirect login) — the service is now injected into `MJExplorerAppComponent` so it's constructed before `handleLogin` runs.
+
+- Updated dependencies [40eb4e0]
+- Updated dependencies [9f6aa87]
+- Updated dependencies [ad8d8f1]
+- Updated dependencies [a4cdfb0]
+- Updated dependencies [3eaa05a]
+  - @memberjunction/core@5.43.0
+  - @memberjunction/ai-core-plus@5.43.0
+  - @memberjunction/ng-conversations@5.43.0
+  - @memberjunction/ai-agent-client@5.43.0
+  - @memberjunction/ng-bootstrap@5.43.0
+  - @memberjunction/ng-auth-services@5.43.0
+  - @memberjunction/ng-base-application@5.43.0
+  - @memberjunction/ng-explorer-core@5.43.0
+  - @memberjunction/ng-shared@5.43.0
+  - @memberjunction/ng-workspace-initializer@5.43.0
+  - @memberjunction/ng-base-types@5.43.0
+  - @memberjunction/ng-feedback@5.43.0
+  - @memberjunction/ng-notifications@5.43.0
+  - @memberjunction/ng-agent-client@5.43.0
+  - @memberjunction/ng-explorer-service-worker@5.43.0
+
+## 5.42.0
+
+### Patch Changes
+
+- Updated dependencies [313c1c5]
+- Updated dependencies [256ab06]
+- Updated dependencies [9b9b484]
+- Updated dependencies [e7c2437]
+- Updated dependencies [08c016c]
+- Updated dependencies [5fde509]
+- Updated dependencies [4ec1732]
+- Updated dependencies [2f225e4]
+- Updated dependencies [0fa3cbc]
+- Updated dependencies [e4235fd]
+- Updated dependencies [3ee0f22]
+- Updated dependencies [a5d4a15]
+- Updated dependencies [da5a3dd]
+  - @memberjunction/ng-explorer-core@5.42.0
+  - @memberjunction/ai-core-plus@5.42.0
+  - @memberjunction/core@5.42.0
+  - @memberjunction/ng-conversations@5.42.0
+  - @memberjunction/ng-bootstrap@5.42.0
+  - @memberjunction/ng-feedback@5.42.0
+  - @memberjunction/ng-workspace-initializer@5.42.0
+  - @memberjunction/ng-shared@5.42.0
+  - @memberjunction/ai-agent-client@5.42.0
+  - @memberjunction/ng-auth-services@5.42.0
+  - @memberjunction/ng-base-application@5.42.0
+  - @memberjunction/ng-base-types@5.42.0
+  - @memberjunction/ng-notifications@5.42.0
+  - @memberjunction/ng-agent-client@5.42.0
+  - @memberjunction/ng-explorer-service-worker@5.42.0
+
+## 5.41.0
+
+### Minor Changes
+
+- cd6c5f0: Realtime AI Agents wave 3: consolidated v5.41 migration (sessions, channels, co-agent schema) with the AIAgentCoAgent affinity registry replacing AIAgentPairedAgent — typed relationship vocabulary (CoAgent implemented; Peer/Delegate/Fallback/Reviewer/Observer reserved), type-level co-agent defaults as junction rows (removing the only FK cycle in core MJ), and the full code sweep (engine cache, resolver resolution chain, server-side invariants, client pairing reads, regenerated manifests). Realtime UX: progressive-disclosure voice console with persisted captions preference, user-owned composer and tabs toggles, audio-reactive visuals; whiteboard pages/multi-select and review-persistence fixes. Gemini Live triggering turns ride realtime text so widget clicks/typed input/narration speak immediately on native-audio models. CodeGen: single-winner IsNameField enforcement with eligibility guardrail fixes, SCC-based cycle diagnostics, and clean-database bootstrap robustness (conditional engine registry datasets).
+
+### Patch Changes
+
+- Updated dependencies [8fd6f59]
+- Updated dependencies [6f227ab]
+- Updated dependencies [cd6c5f0]
+- Updated dependencies [8c8b658]
+- Updated dependencies [659ee5b]
+- Updated dependencies [cc604aa]
+- Updated dependencies [4b30726]
+- Updated dependencies [ef5a5d7]
+- Updated dependencies [15b743b]
+- Updated dependencies [a5f5472]
+- Updated dependencies [ddaa30e]
+- Updated dependencies [1568bae]
+- Updated dependencies [4b3fb9d]
+- Updated dependencies [fb2a22f]
+- Updated dependencies [c5d93a0]
+  - @memberjunction/core@5.41.0
+  - @memberjunction/ng-conversations@5.41.0
+  - @memberjunction/ng-bootstrap@5.41.0
+  - @memberjunction/ai-core-plus@5.41.0
+  - @memberjunction/ng-notifications@5.41.0
+  - @memberjunction/ai-agent-client@5.41.0
+  - @memberjunction/ng-auth-services@5.41.0
+  - @memberjunction/ng-base-application@5.41.0
+  - @memberjunction/ng-explorer-core@5.41.0
+  - @memberjunction/ng-shared@5.41.0
+  - @memberjunction/ng-workspace-initializer@5.41.0
+  - @memberjunction/ng-base-types@5.41.0
+  - @memberjunction/ng-feedback@5.41.0
+  - @memberjunction/ng-agent-client@5.41.0
+  - @memberjunction/ng-explorer-service-worker@5.41.0
+
+## 5.40.2
+
+### Patch Changes
+
+- @memberjunction/ng-bootstrap@5.40.2
+- @memberjunction/ng-explorer-core@5.40.2
+- @memberjunction/ng-conversations@5.40.2
+- @memberjunction/ng-workspace-initializer@5.40.2
+- @memberjunction/ai-agent-client@5.40.2
+- @memberjunction/ai-core-plus@5.40.2
+- @memberjunction/ng-auth-services@5.40.2
+- @memberjunction/ng-base-application@5.40.2
+- @memberjunction/ng-explorer-service-worker@5.40.2
+- @memberjunction/ng-shared@5.40.2
+- @memberjunction/ng-agent-client@5.40.2
+- @memberjunction/ng-base-types@5.40.2
+- @memberjunction/ng-feedback@5.40.2
+- @memberjunction/ng-notifications@5.40.2
+- @memberjunction/core@5.40.2
+
+## 5.40.1
+
+### Patch Changes
+
+- Updated dependencies [e50381b]
+  - @memberjunction/core@5.40.1
+  - @memberjunction/ai-agent-client@5.40.1
+  - @memberjunction/ai-core-plus@5.40.1
+  - @memberjunction/ng-bootstrap@5.40.1
+  - @memberjunction/ng-auth-services@5.40.1
+  - @memberjunction/ng-base-application@5.40.1
+  - @memberjunction/ng-explorer-core@5.40.1
+  - @memberjunction/ng-shared@5.40.1
+  - @memberjunction/ng-workspace-initializer@5.40.1
+  - @memberjunction/ng-base-types@5.40.1
+  - @memberjunction/ng-conversations@5.40.1
+  - @memberjunction/ng-feedback@5.40.1
+  - @memberjunction/ng-notifications@5.40.1
+  - @memberjunction/ng-agent-client@5.40.1
+  - @memberjunction/ng-explorer-service-worker@5.40.1
+
+## 5.40.0
+
+### Minor Changes
+
+- 253a188: Knowledge Hub Classify redesign
+  - **Clustering**: new `@memberjunction/clustering-engine` (framework-agnostic fetch → cluster → reduce → LLM-name pipeline), a "Run Cluster Analysis" action, a `RunClusterAnalysis` GraphQL resolver, a `GraphQLClusterClient` transport, and the Angular `ClusteringService` thinned to delegate to the server.
+  - **View-type plug-in architecture (entity viewer)**: `ViewType` registry + `ViewTypeEngine` + `IViewTypeDescriptor`/`IViewRenderer`/`IViewPropSheet` contracts in `ng-entity-viewer`, with Grid/Cards/Timeline/Map descriptors. The host now **dynamic-mounts** any registered plug-in view type (via `ViewContainerRef`) with zero host changes, and the switcher shows the active type's icon + label, collapsing from an icon strip to a dropdown as the list grows. **Cluster view type** added in `@memberjunction/ng-clustering` (descriptor + `IViewRenderer` wrapper over the scatter + `IViewPropSheet` + an Entity-Document availability engine) — available on any entity with vectors, reusing the same `ClusteringService`. The active view type persists to `UserView.ViewTypeID` (new source of truth; backfilled from the legacy `DisplayState.defaultMode`) and per-view-type config to `UserView.DisplayState.viewTypeConfigs` (new typed `IViewTypeConfigEntry`). `ViewType.Icon` is now `ExtendedType='Icon'` for the admin icon picker. See `packages/Angular/Generic/entity-viewer/VIEW_TYPE_PLUGINS.md`.
+  - **Classify UX**: per-tab scroll fix, Refresh buttons, meaningful content-item display names, loading states, `BaseEntityEvent` reactivity, and load-more pagination.
+  - **Audit & analytics**: direct tag→prompt-run lineage (`AIPromptRunID` + `Reasoning` on Content Item Tags), `ClassifyAnalyticsEngine`, reusable item grid + drilldown, and an Overview analytics section.
+  - **Setup & onboarding**: contextual prompt injection (org/content-type/source aggregation), `generateSeedTaxonomy` (clustering-backed) + resolver, source-form domain-context UI, org-context editor, inline Entity Document creation, seed-taxonomy review, and a guided setup wizard.
+  - **Visualize surface**: Knowledge Hub "Clusters" tab generalized to a "Visualize" host with Clusters / Tag Cloud modes, a `TagCloudEngine`, and a shared record drilldown.
+  - **Foundations**: `ApplicationSettingEngine` (global + app-scoped settings), and the `tag-engine` → `tag-engine-base` split so browser code no longer pulls server-only AI dependencies.
+  - **Fix**: stop server-only packages (`templates` → `aiengine`/`ai-provider-bundle`, storage, vector-DB and LLM provider SDKs) from leaking into the browser class-registration manifest, which previously broke the MJExplorer cold build. Added CLAUDE.md guardrails to the Bootstrap and BootstrapLite packages.
+
+### Patch Changes
+
+- 7bbfd62: Add PreShellGuard for request-scoped TenantContext and auth fixes in MJServer CurrentUserContextResolver
+- Updated dependencies [804f9f6]
+- Updated dependencies [73bb233]
+- Updated dependencies [7bbfd62]
+- Updated dependencies [43e6c0f]
+- Updated dependencies [253a188]
+- Updated dependencies [40e90fa]
+- Updated dependencies [6957711]
+  - @memberjunction/core@5.40.0
+  - @memberjunction/ng-bootstrap@5.40.0
+  - @memberjunction/ng-auth-services@5.40.0
+  - @memberjunction/ng-explorer-core@5.40.0
+  - @memberjunction/ng-shared@5.40.0
+  - @memberjunction/ng-conversations@5.40.0
+  - @memberjunction/ai-agent-client@5.40.0
+  - @memberjunction/ai-core-plus@5.40.0
+  - @memberjunction/ng-base-application@5.40.0
+  - @memberjunction/ng-workspace-initializer@5.40.0
+  - @memberjunction/ng-base-types@5.40.0
+  - @memberjunction/ng-feedback@5.40.0
+  - @memberjunction/ng-notifications@5.40.0
+  - @memberjunction/ng-agent-client@5.40.0
+  - @memberjunction/ng-explorer-service-worker@5.40.0
+
+## 5.39.0
+
+### Patch Changes
+
+- Updated dependencies [361eb4c]
+- Updated dependencies [f4bf584]
+- Updated dependencies [bd95e83]
+- Updated dependencies [3c53858]
+- Updated dependencies [3b29882]
+- Updated dependencies [d1cc0ad]
+- Updated dependencies [0f9acba]
+- Updated dependencies [ae74fd5]
+- Updated dependencies [9bc2916]
+- Updated dependencies [a101a34]
+  - @memberjunction/core@5.39.0
+  - @memberjunction/ng-explorer-core@5.39.0
+  - @memberjunction/ai-core-plus@5.39.0
+  - @memberjunction/ng-bootstrap@5.39.0
+  - @memberjunction/ai-agent-client@5.39.0
+  - @memberjunction/ng-auth-services@5.39.0
+  - @memberjunction/ng-base-application@5.39.0
+  - @memberjunction/ng-shared@5.39.0
+  - @memberjunction/ng-workspace-initializer@5.39.0
+  - @memberjunction/ng-base-types@5.39.0
+  - @memberjunction/ng-conversations@5.39.0
+  - @memberjunction/ng-feedback@5.39.0
+  - @memberjunction/ng-notifications@5.39.0
+  - @memberjunction/ng-agent-client@5.39.0
+  - @memberjunction/ng-explorer-service-worker@5.39.0
+
+## 5.38.0
+
+### Patch Changes
+
+- Updated dependencies [6b6c321]
+- Updated dependencies [67d6562]
+- Updated dependencies [4ee0b06]
+- Updated dependencies [748b2e7]
+- Updated dependencies [ce7d2f5]
+- Updated dependencies [6a571d3]
+- Updated dependencies [275afda]
+- Updated dependencies [d285996]
+- Updated dependencies [8bd97f3]
+- Updated dependencies [6a3ac36]
+- Updated dependencies [918d663]
+- Updated dependencies [c0b40c0]
+- Updated dependencies [b2e6782]
+- Updated dependencies [d5a51b3]
+- Updated dependencies [a529993]
+- Updated dependencies [60947be]
+- Updated dependencies [2ee14f1]
+- Updated dependencies [ebb0e3d]
+  - @memberjunction/ai-core-plus@5.38.0
+  - @memberjunction/ng-base-application@5.38.0
+  - @memberjunction/core@5.38.0
+  - @memberjunction/ng-shared@5.38.0
+  - @memberjunction/ng-explorer-core@5.38.0
+  - @memberjunction/ng-conversations@5.38.0
+  - @memberjunction/ng-workspace-initializer@5.38.0
+  - @memberjunction/ng-bootstrap@5.38.0
+  - @memberjunction/ai-agent-client@5.38.0
+  - @memberjunction/ng-auth-services@5.38.0
+  - @memberjunction/ng-base-types@5.38.0
+  - @memberjunction/ng-feedback@5.38.0
+  - @memberjunction/ng-notifications@5.38.0
+  - @memberjunction/ng-agent-client@5.38.0
+  - @memberjunction/ng-explorer-service-worker@5.38.0
+
+## 5.37.0
+
+### Patch Changes
+
+- 86a9d0e: Make the floating chat-agents overlay bubble user-draggable (mouse, touch, or pen) so it can be moved out of the way of underlying app buttons it would otherwise occlude. Position persists per-user; the expanded panel anchors to the bubble's location and clamps so the chat interface always stays visible. MJExplorer passes its shell-header height as a top boundary so the bubble cannot be dragged into the header.
+- Updated dependencies [86a9d0e]
+- Updated dependencies [22b775f]
+- Updated dependencies [4f15f31]
+  - @memberjunction/ng-conversations@5.37.0
+  - @memberjunction/ai-core-plus@5.37.0
+  - @memberjunction/core@5.37.0
+  - @memberjunction/ai-agent-client@5.37.0
+  - @memberjunction/ng-bootstrap@5.37.0
+  - @memberjunction/ng-explorer-core@5.37.0
+  - @memberjunction/ng-shared@5.37.0
+  - @memberjunction/ng-workspace-initializer@5.37.0
+  - @memberjunction/ng-feedback@5.37.0
+  - @memberjunction/ng-notifications@5.37.0
+  - @memberjunction/ng-auth-services@5.37.0
+  - @memberjunction/ng-base-application@5.37.0
+  - @memberjunction/ng-base-types@5.37.0
+  - @memberjunction/ng-agent-client@5.37.0
+  - @memberjunction/ng-explorer-service-worker@5.37.0
+
+## 5.36.0
+
+### Patch Changes
+
+- Updated dependencies [91036ee]
+- Updated dependencies [70fce34]
+- Updated dependencies [4d16916]
+  - @memberjunction/ng-explorer-core@5.36.0
+  - @memberjunction/ng-bootstrap@5.36.0
+  - @memberjunction/core@5.36.0
+  - @memberjunction/ai-agent-client@5.36.0
+  - @memberjunction/ng-shared@5.36.0
+  - @memberjunction/ng-workspace-initializer@5.36.0
+  - @memberjunction/ng-conversations@5.36.0
+  - @memberjunction/ng-feedback@5.36.0
+  - @memberjunction/ng-notifications@5.36.0
+  - @memberjunction/ai-core-plus@5.36.0
+  - @memberjunction/ng-base-application@5.36.0
+  - @memberjunction/ng-base-types@5.36.0
+  - @memberjunction/ng-auth-services@5.36.0
+  - @memberjunction/ng-agent-client@5.36.0
+  - @memberjunction/ng-explorer-service-worker@5.36.0
+
+## 5.35.0
+
+### Patch Changes
+
+- Updated dependencies [6fa8e13]
+- Updated dependencies [2c905e3]
+- Updated dependencies [c1f1cad]
+- Updated dependencies [32c4a02]
+- Updated dependencies [9580189]
+- Updated dependencies [207cba4]
+- Updated dependencies [aedd4dc]
+- Updated dependencies [383784c]
+- Updated dependencies [ac4b9a5]
+  - @memberjunction/core@5.35.0
+  - @memberjunction/ng-conversations@5.35.0
+  - @memberjunction/ai-agent-client@5.35.0
+  - @memberjunction/ai-core-plus@5.35.0
+  - @memberjunction/ng-shared@5.35.0
+  - @memberjunction/ng-explorer-core@5.35.0
+  - @memberjunction/ng-bootstrap@5.35.0
+  - @memberjunction/ng-auth-services@5.35.0
+  - @memberjunction/ng-base-application@5.35.0
+  - @memberjunction/ng-workspace-initializer@5.35.0
+  - @memberjunction/ng-base-types@5.35.0
+  - @memberjunction/ng-feedback@5.35.0
+  - @memberjunction/ng-notifications@5.35.0
+  - @memberjunction/ng-agent-client@5.35.0
+  - @memberjunction/ng-explorer-service-worker@5.35.0
+
+## 5.34.1
+
+### Patch Changes
+
+- Updated dependencies [3a35358]
+- Updated dependencies [5abf790]
+  - @memberjunction/core@5.34.1
+  - @memberjunction/ng-base-application@5.34.1
+  - @memberjunction/ai-core-plus@5.34.1
+  - @memberjunction/ai-agent-client@5.34.1
+  - @memberjunction/ng-bootstrap@5.34.1
+  - @memberjunction/ng-auth-services@5.34.1
+  - @memberjunction/ng-explorer-core@5.34.1
+  - @memberjunction/ng-shared@5.34.1
+  - @memberjunction/ng-workspace-initializer@5.34.1
+  - @memberjunction/ng-base-types@5.34.1
+  - @memberjunction/ng-conversations@5.34.1
+  - @memberjunction/ng-feedback@5.34.1
+  - @memberjunction/ng-notifications@5.34.1
+  - @memberjunction/ng-agent-client@5.34.1
+  - @memberjunction/ng-explorer-service-worker@5.34.1
+
+## 5.34.0
+
+### Patch Changes
+
+- b03bfb4: Replace hardcoded colors with semantic design tokens across Angular components and shared styles, restoring correct dark-mode behavior and enabling white-labeling. Also maps the System Diagnostics PerfMon chrome (background, borders, text, controls) to MJ semantic tokens so the panel adapts to the active theme; series colors stay categorical.
+- 7d8a0f9: Bound memory leaks: ResultHistory cap, QueueBase Stop/ IShutdownable, A2AServer, TaskStore, sweep, MJLruCache for provider / issuer caches, BaseLLM streaming reset, ShutdownRegister + SIGTERM contract.
+- Updated dependencies [b03bfb4]
+- Updated dependencies [7d8a0f9]
+- Updated dependencies [003317f]
+- Updated dependencies [cfffb6d]
+- Updated dependencies [e999e0d]
+- Updated dependencies [a6a16fa]
+- Updated dependencies [389d356]
+- Updated dependencies [ae5cfbd]
+- Updated dependencies [6d8ee1a]
+- Updated dependencies [ad61267]
+- Updated dependencies [72cb92e]
+  - @memberjunction/ng-bootstrap@5.34.0
+  - @memberjunction/ng-explorer-core@5.34.0
+  - @memberjunction/ai-agent-client@5.34.0
+  - @memberjunction/ai-core-plus@5.34.0
+  - @memberjunction/ng-auth-services@5.34.0
+  - @memberjunction/ng-base-application@5.34.0
+  - @memberjunction/ng-explorer-service-worker@5.34.0
+  - @memberjunction/ng-shared@5.34.0
+  - @memberjunction/ng-workspace-initializer@5.34.0
+  - @memberjunction/ng-agent-client@5.34.0
+  - @memberjunction/ng-base-types@5.34.0
+  - @memberjunction/ng-conversations@5.34.0
+  - @memberjunction/ng-feedback@5.34.0
+  - @memberjunction/ng-notifications@5.34.0
+  - @memberjunction/core@5.34.0
+
 ## 5.33.0
 
 ### Patch Changes

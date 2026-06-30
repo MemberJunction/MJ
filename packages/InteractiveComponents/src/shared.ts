@@ -305,6 +305,100 @@ export interface SimpleGeoDataEngine {
     Loaded?: boolean;
 }
 
+// =========================================================================
+// ML — Trained predictive models (catalog + scoring)
+// =========================================================================
+
+/**
+ * A single trained predictive model from the catalog, surfaced to Interactive Components
+ * so they can let users pick a model and weave its predictions into charts/tables.
+ * Sourced from the `MJ: ML Models` entity (one row per immutable, versioned model).
+ */
+export interface SimpleMLModelInfo {
+    /** The `MJ: ML Models` row id — pass this to {@link SimpleMLTools.score}. */
+    id: string;
+    /** Denormalized name of the training pipeline that produced this model. */
+    pipeline: string;
+    /** Monotonic model version under the pipeline (higher = newer). */
+    version: number;
+    /** The label/column the model predicts (e.g. "Renewed"). */
+    targetVariable: string;
+    /** The kind of prediction the model makes: 'classification' or 'regression'. */
+    problemType: string;
+    /** Lifecycle status of the model (e.g. 'Published', 'Validated', 'Draft', 'Archived'). */
+    status: string;
+    /** Parsed training metrics, when the model carries them. Shape is algorithm-dependent. */
+    metrics?: Record<string, unknown>;
+    /** Parsed holdout metrics scored once on the locked holdout — the honest performance number. */
+    holdoutMetrics?: Record<string, unknown>;
+}
+
+/** A single prediction returned from {@link SimpleMLTools.score} (ephemeral — not written back). */
+export interface SimpleMLPrediction {
+    /** The scored record's primary-key value, when known. */
+    recordId?: string;
+    /** Numeric model output (probability for classification, value for regression). */
+    score: number;
+    /** Predicted class label (classification only). */
+    class?: string;
+}
+
+/** The summary of a {@link SimpleMLTools.score} call. */
+export interface SimpleMLScoreResult {
+    /** Number of records successfully scored. */
+    scoredCount: number;
+    /** Number of records that failed to score. */
+    failedCount: number;
+    /** Number of records skipped (no selector matched / nothing to score). */
+    skippedCount: number;
+    /** The ephemeral predictions, one per successfully scored record. */
+    predictions?: SimpleMLPrediction[];
+}
+
+/** Optional filter narrowing the models returned by {@link SimpleMLTools.listModels}. */
+export interface SimpleMLListModelsFilter {
+    /** Restrict to models with this lifecycle status (defaults to 'Published' when omitted). */
+    status?: string;
+    /** Restrict to models predicting this target variable. */
+    targetVariable?: string;
+    /** Cap the number of models returned. */
+    maxResults?: number;
+}
+
+/**
+ * Provides a simple interface for InteractiveComponents to use the host MJ instance's trained
+ * predictive models — listing what models are available and scoring records with them so the
+ * component can fold predictions (renewal likelihood, lead scores, churn risk, …) into its
+ * visualizations. Scoring is invoked over the wire against the host's Predictive Studio engine,
+ * so no model-training machinery runs in the browser.
+ *
+ * NOTE: the owning `ComponentUtilities.ml` property may be `undefined` when this capability is not
+ * available in the current environment/security context — component code must guard for that.
+ */
+export interface SimpleMLTools {
+    /**
+     * List the trained predictive models available to the component, newest version first.
+     * Resilient: returns an empty array if the catalog cannot be read.
+     * @param filter - Optional filter to narrow by status / target variable / count.
+     * @param contextUser - Optional context user (server-side scoping; ignored in the browser).
+     */
+    listModels: (filter?: SimpleMLListModelsFilter, contextUser?: UserInfo) => Promise<SimpleMLModelInfo[]>;
+
+    /**
+     * Score a set of records with a trained model and return the predictions ephemerally
+     * (nothing is written back to the database).
+     * @param modelId - The {@link SimpleMLModelInfo.id} of the model to score with.
+     * @param records - The records to score, either as primary-key strings or as row objects
+     *                  (the primary key is then read from `options.primaryKeyField`, default `'ID'`).
+     * @param options - Optional primary-key field name and context user.
+     */
+    score: (
+        modelId: string,
+        records: Array<Record<string, unknown> | string>,
+        options?: { primaryKeyField?: string; contextUser?: UserInfo }
+    ) => Promise<SimpleMLScoreResult>;
+}
+
 /**
  * Provides a simple interface for InteractiveComponents to perform a wide variety of common AI operations
  * such as prompt execution with LLMs, calculating embeddings on strings, and using vector search for small to mediun

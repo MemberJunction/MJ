@@ -8,7 +8,8 @@ import {
     MJAIAgentRunEntity,
     MJAIAgentRunEntityType,
     MJConversationDetailRatingEntityType,
-    MJConversationDetailArtifactEntityType
+    MJConversationDetailArtifactEntityType,
+    MJProjectEntity
 } from "../generated/entity_subclasses";
 import { ArtifactMetadataEngine } from "./artifacts";
 import { ResourcePermissionEngine } from "../custom/ResourcePermissions/ResourcePermissionEngine";
@@ -27,6 +28,45 @@ const CONVERSATIONS_RESOURCE_TYPE_ID = '81D4BC3D-9FEB-EF11-B01A-286B35C04427';
  * "Shared by {email}" badges and gate actions (e.g., View-only recipients
  * can't send messages).
  */
+/**
+ * Optional scoping inputs to {@link ConversationEngine.CreateConversation}.
+ * Forwards to the new ApplicationScope / ApplicationID / DefaultAgentID
+ * columns on Conversation. All fields optional; omit for the default
+ * 'Global' main-chat behavior. Embedded chat surfaces (e.g. the Form
+ * Builder cockpit) should pass `applicationScope: 'Application'` plus an
+ * `applicationId` so the conversation doesn't pollute the main chat list.
+ */
+export interface CreateConversationOptions {
+    /**
+     * Where this conversation surfaces in the UI:
+     *  - 'Global'      → main Chat app (no app binding). Default.
+     *  - 'Application' → embedded surface only; hidden from main chat.
+     *  - 'Both'        → visible in both surfaces by default.
+     * DB CHECK constraint requires applicationId to match (Application/Both
+     * ⇒ applicationId NOT NULL; Global ⇒ applicationId NULL).
+     */
+    applicationScope?: 'Global' | 'Application' | 'Both';
+    /** The owning Application's ID. Required when scope is Application or Both. */
+    applicationId?: string | null;
+    /** Optional per-conversation pinned default agent (e.g. Research Agent). */
+    defaultAgentId?: string | null;
+    /**
+     * "What is this conversation about?" pointer — the Entity whose record
+     * this conversation references. Paired with {@link linkedRecordId} via
+     * the DB CHECK constraint `CK_Conversation_LinkBinding`: both NULL or
+     * both populated. Form Builder cockpit passes the MJ: Components
+     * entity ID + the active form's ComponentID so the cockpit can later
+     * filter "prior conversations about THIS form."
+     */
+    linkedEntityId?: string | null;
+    /**
+     * Primary key of the linked record, serialized as a string. Used with
+     * {@link linkedEntityId}. NVARCHAR(500) in the DB — handles any PK shape
+     * (UUID, int, composite).
+     */
+    linkedRecordId?: string | null;
+}
+
 export interface SharedByInfo {
     /** Grantor user ID. Null when the share predates the `SharedByUserID` column. */
     UserID: string | null;
@@ -203,6 +243,24 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         return this._conversations$.value;
     }
 
+    private _projects$ = new BehaviorSubject<MJProjectEntity[]>([]);
+
+    /**
+     * Observable stream of the projects (conversation folders) for the current
+     * environment. Emits whenever projects are loaded or a project is created,
+     * renamed, or deleted (kept in sync via the entity event handler).
+     */
+    public get Projects$(): Observable<MJProjectEntity[]> {
+        return this._projects$.asObservable();
+    }
+
+    /**
+     * Current snapshot of projects/folders (non-reactive).
+     */
+    public get Projects(): MJProjectEntity[] {
+        return this._projects$.value;
+    }
+
     // ========================================================================
     // INTERNAL STATE
     // ========================================================================
@@ -212,6 +270,9 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
 
     /** Track the environment ID used for the last load */
     private _lastEnvironmentId: string | null = null;
+
+    /** Track the environment ID used for the last projects (folders) load */
+    private _lastProjectsEnvironmentId: string | null = null;
 
     /**
      * For conversations the current user *received* via sharing, this map goes
@@ -275,7 +336,12 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      * @param contextUser - The current user context
      * @param forceRefresh - If true, reloads even if data is already cached
      */
-    public async LoadConversations(environmentId: string, contextUser: UserInfo, forceRefresh: boolean = false): Promise<void> {
+    public async LoadConversations(
+        environmentId: string,
+        contextUser: UserInfo,
+        forceRefresh: boolean = false,
+        options?: { includeApplicationScoped?: boolean }
+    ): Promise<void> {
         // Skip if already loaded for this environment (unless forcing)
         if (!forceRefresh && this._lastEnvironmentId === environmentId && this._conversations$.value.length > 0) {
             return;
@@ -292,18 +358,21 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             .GetUserAvailableResources(contextUser, CONVERSATIONS_RESOURCE_TYPE_ID);
         const sharedConversationIds = sharedPermissions.map((p) => p.ResourceRecordID);
 
-        // Build the "shared by" map for the sidebar/header UI. Requires one
-        // extra query to fetch grantor emails (the ResourcePermission view
-        // only denormalizes Name, not Email).
         const rv = new RunView();
-        await this.rebuildSharedByMap(rv, sharedPermissions, contextUser);
-
         const ownershipClause = `UserID='${contextUser.ID}'`;
         const sharedClause =
             sharedConversationIds.length > 0
                 ? ` OR ID IN (${sharedConversationIds.map((id) => `'${id}'`).join(',')})`
                 : '';
-        const filter = `EnvironmentID='${environmentId}' AND (${ownershipClause}${sharedClause}) AND (IsArchived IS NULL OR IsArchived=0)`;
+        // Default main-chat view shows Global + Both. App-scoped
+        // conversations live inside their owning Application's embedded
+        // surface and are filtered out here. Callers that want to surface
+        // them (e.g. an "Include app conversations" toggle) pass
+        // includeApplicationScoped=true to drop the scope predicate.
+        const scopeClause = options?.includeApplicationScoped
+            ? ''
+            : ` AND ApplicationScope IN ('Global', 'Both')`;
+        const filter = `EnvironmentID='${environmentId}' AND (${ownershipClause}${sharedClause}) AND (IsArchived IS NULL OR IsArchived=0)${scopeClause}`;
 
         const result = await rv.RunView<MJConversationEntity>(
             {
@@ -322,6 +391,29 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             console.error('[ConversationEngine] Failed to load conversations:', result.ErrorMessage);
             this._conversations$.next([]);
         }
+
+        // Build the "shared by" map AFTER fetching conversations so we can
+        // exclude permissions on conversations the user owns. A role-inherited
+        // grant on the user's own conversation (e.g. they're in a role that
+        // got View access via a feedback workflow) must NOT appear as
+        // "shared with me at View level" — otherwise the chat UI would treat
+        // their own conversation as read-only. See isReadOnlyView in
+        // conversation-chat-area.component.
+        const ownedConversationIds = new Set(
+            (result.Results ?? [])
+                .filter((c) => c.UserID && UUIDsEqual(c.UserID, contextUser.ID))
+                .map((c) => NormalizeUUID(c.ID))
+        );
+        const trulySharedPermissions = sharedPermissions.filter(
+            (p) => !ownedConversationIds.has(NormalizeUUID(p.ResourceRecordID))
+        );
+        await this.rebuildSharedByMap(rv, trulySharedPermissions, contextUser);
+
+        // Load the folder (project) list so the sidebar can group conversations
+        // under their folder. Done after the conversation query (so it isn't
+        // delayed) and after the early-return guard above; LoadProjects has its
+        // own per-environment guard to avoid redundant reloads.
+        await this.LoadProjects(environmentId, contextUser, forceRefresh);
     }
 
     /**
@@ -383,6 +475,190 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     }
 
     /**
+     * Loads the projects (conversation folders) for an environment and emits via Projects$.
+     * Projects are environment-scoped (not user-scoped) and small, so the full active set
+     * is cached. Skips reloading when already loaded for the same environment unless forced.
+     *
+     * @param environmentId - The environment to filter projects by
+     * @param contextUser - The current user context
+     * @param forceRefresh - If true, reloads even if already cached for this environment
+     */
+    public async LoadProjects(
+        environmentId: string,
+        contextUser: UserInfo,
+        forceRefresh: boolean = false
+    ): Promise<void> {
+        if (!forceRefresh && this._lastProjectsEnvironmentId === environmentId) {
+            return;
+        }
+
+        const rv = new RunView();
+        const result = await rv.RunView<MJProjectEntity>(
+            {
+                EntityName: 'MJ: Projects',
+                ExtraFilter: `EnvironmentID='${environmentId}' AND (IsArchived IS NULL OR IsArchived=0)`,
+                OrderBy: 'Name ASC',
+                MaxRows: 1000,
+                ResultType: 'entity_object'
+            },
+            contextUser
+        );
+
+        if (result.Success) {
+            this._lastProjectsEnvironmentId = environmentId;
+            this._projects$.next(result.Results || []);
+        } else {
+            console.error('[ConversationEngine] Failed to load projects:', result.ErrorMessage);
+            this._projects$.next([]);
+        }
+    }
+
+    /**
+     * Assigns a conversation to a folder (project), or removes it from its folder when
+     * projectId is null. Thin wrapper over {@link SaveConversation} that keeps the
+     * intent explicit at call sites.
+     *
+     * @param conversationId - The conversation to move
+     * @param projectId - The target project ID, or null to ungroup
+     * @param contextUser - The current user context
+     * @returns true if saved successfully
+     */
+    public async MoveConversationToProject(
+        conversationId: string,
+        projectId: string | null,
+        contextUser: UserInfo
+    ): Promise<boolean> {
+        return this.SaveConversation(conversationId, { ProjectID: projectId }, contextUser);
+    }
+
+    /**
+     * Reparents a folder (project) under another folder, or to the top level when
+     * parentId is null. Callers are responsible for preventing cycles (don't pass a
+     * descendant of the folder as its new parent). Updates the cached entity in place
+     * and re-emits Projects$.
+     *
+     * @param projectId - The folder to move
+     * @param parentId - The new parent folder ID, or null for top level
+     * @param contextUser - The current user context
+     * @returns true if saved successfully
+     */
+    public async MoveProjectToParent(
+        projectId: string,
+        parentId: string | null,
+        contextUser: UserInfo
+    ): Promise<boolean> {
+        let project = this._projects$.value.find(p => UUIDsEqual(p.ID, projectId));
+        if (!project) {
+            const md = this.ProviderToUse;
+            project = await md.GetEntityObject<MJProjectEntity>('MJ: Projects', contextUser);
+            const loaded = await project.Load(projectId);
+            if (!loaded) {
+                throw new Error('Folder not found');
+            }
+        }
+
+        project.ParentID = parentId;
+
+        this._selfMutating = true;
+        try {
+            const saved = await project.Save();
+            if (!saved) {
+                throw new Error(project.LatestResult?.CompleteMessage || 'Failed to move folder');
+            }
+        } finally {
+            this._selfMutating = false;
+        }
+
+        this._projects$.next([...this._projects$.value]);
+        return true;
+    }
+
+    /**
+     * Deletes a folder (project) in an FK-safe way. The Conversation→Project and
+     * Project→Project (ParentID) foreign keys are RESTRICT, so the row can't be
+     * deleted while anything references it. Before deleting, this:
+     *   1. Unassigns every conversation directly in the folder (ProjectID → null).
+     *   2. Reparents direct child folders to this folder's parent (one level up).
+     *   3. Deletes the now-unreferenced folder.
+     * Conversations and subfolders are preserved — only the folder itself is removed.
+     *
+     * Note: this does NOT reassign Tasks that reference the project; if a Task still
+     * references it, the final delete will fail and this throws with the DB message.
+     *
+     * @param id - The project (folder) ID to delete
+     * @param contextUser - The current user context
+     * @returns true if deleted successfully
+     */
+    public async DeleteProject(id: string, contextUser: UserInfo): Promise<boolean> {
+        const md = this.ProviderToUse;
+
+        // 1. Unassign conversations directly in this folder
+        const directConversations = this._conversations$.value.filter(
+            c => c.ProjectID && UUIDsEqual(c.ProjectID, id)
+        );
+        for (const conv of directConversations) {
+            await this.SaveConversation(conv.ID, { ProjectID: null }, contextUser);
+        }
+
+        // 2. Reparent direct child folders to this folder's parent
+        const target = this._projects$.value.find(p => UUIDsEqual(p.ID, id));
+        const newParentId = target?.ParentID ?? null;
+        const childFolders = this._projects$.value.filter(
+            p => p.ParentID && UUIDsEqual(p.ParentID, id)
+        );
+        if (childFolders.length > 0) {
+            this._selfMutating = true;
+            try {
+                for (const child of childFolders) {
+                    child.ParentID = newParentId;
+                    const saved = await child.Save();
+                    if (!saved) {
+                        throw new Error(child.LatestResult?.CompleteMessage || 'Failed to reparent subfolder');
+                    }
+                }
+            } finally {
+                this._selfMutating = false;
+            }
+            // Children were mutated in place — re-emit so subscribers re-read the tree
+            this._projects$.next([...this._projects$.value]);
+        }
+
+        // 3. Delete the now-unreferenced folder
+        let project = target;
+        if (!project) {
+            project = await md.GetEntityObject<MJProjectEntity>('MJ: Projects', contextUser);
+            const loaded = await project.Load(id);
+            if (!loaded) {
+                throw new Error('Folder not found');
+            }
+        }
+
+        // Remove from the cached list BEFORE calling Delete(). BaseEntity.Delete() calls
+        // NewRecord() which wipes the entity's fields — including ID — so filtering the list
+        // by ID *after* the delete wouldn't match the (now-blank) cached entity and the folder
+        // would linger until a manual refresh. Capture the pre-delete array so we can restore
+        // it if the delete fails.
+        const projectsBeforeDelete = this._projects$.value;
+        this._projects$.next(projectsBeforeDelete.filter(p => !UUIDsEqual(p.ID, id)));
+
+        this._selfMutating = true;
+        let deleted = false;
+        try {
+            deleted = await project.Delete();
+        } finally {
+            this._selfMutating = false;
+        }
+
+        if (!deleted) {
+            // Restore the list on failure (the entity wasn't deleted, so its fields are intact)
+            this._projects$.next(projectsBeforeDelete);
+            throw new Error(project.LatestResult?.CompleteMessage || 'Failed to delete folder');
+        }
+
+        return true;
+    }
+
+    /**
      * Creates a new conversation, saves it to the database, and adds it to the cached list.
      *
      * @param name - Display name for the conversation
@@ -398,7 +674,8 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         environmentId: string,
         contextUser: UserInfo,
         description?: string,
-        projectId?: string
+        projectId?: string,
+        options?: CreateConversationOptions
     ): Promise<MJConversationEntity> {
         const md = this.ProviderToUse;
         const conversation = await md.GetEntityObject<MJConversationEntity>('MJ: Conversations', contextUser);
@@ -409,14 +686,99 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         if (description) conversation.Description = description;
         if (projectId) conversation.ProjectID = projectId;
 
+        // Application scoping — when set by an embedded chat surface (e.g.
+        // the Form Builder cockpit), keeps this conversation OUT of the main
+        // chat list by default. The DB CHECK constraint enforces that
+        // ApplicationID is set iff ApplicationScope is 'Application' or 'Both';
+        // we just forward the caller's choices and let the DB validate.
+        if (options?.applicationScope) {
+            conversation.ApplicationScope = options.applicationScope;
+        }
+        if (options?.applicationId !== undefined) {
+            conversation.ApplicationID = options.applicationId;
+        }
+        if (options?.defaultAgentId !== undefined) {
+            conversation.DefaultAgentID = options.defaultAgentId;
+        }
+        // Linked-record binding — the DB CK_Conversation_LinkBinding CHECK
+        // requires both Linked* columns to be populated together or both
+        // null. We forward each caller-supplied value when explicitly
+        // provided (undefined = leave the field alone, null = explicit
+        // clear). If the caller supplies only one of the two, the DB
+        // rejects on save — surfacing the misconfiguration loudly rather
+        // than letting half a link silently land.
+        if (options?.linkedEntityId !== undefined) {
+            conversation.LinkedEntityID = options.linkedEntityId;
+        }
+        if (options?.linkedRecordId !== undefined) {
+            conversation.LinkedRecordID = options.linkedRecordId;
+        }
+
         const saved = await conversation.Save();
         if (!saved) {
             throw new Error(conversation.LatestResult?.Message || 'Failed to create conversation');
         }
 
-        // Prepend to the list and emit
-        const updated = [conversation, ...this._conversations$.value];
-        this._conversations$.next(updated);
+        // The engine's cached list represents the main Chat app's view —
+        // 'Global' + 'Both' conversations. App-scoped conversations live
+        // outside that list (they surface in the embedded chat for their
+        // owning app), so don't prepend them. Without this guard, a
+        // cockpit-originated conversation would pop into main chat the
+        // moment it's created even though LoadConversations() filters it
+        // out on next refresh.
+        if (conversation.ApplicationScope !== 'Application') {
+            const updated = [conversation, ...this._conversations$.value];
+            this._conversations$.next(updated);
+        }
+        return conversation;
+    }
+
+    /**
+     * Folds a conversation that was created OUTSIDE this engine (e.g. server-side by a
+     * realtime-session mint, which never fires a client BaseEntity event) into the cached
+     * list so {@link Conversations$} emits reactively — the sidebar list updates without a
+     * manual refresh. Costs at most ONE single-row query, and only when the conversation
+     * isn't already cached:
+     *
+     *  - Already in the list → no-op (returns the cached entity).
+     *  - Not cached → loads the single row, and (unless it's app-scoped, which lives
+     *    outside the main-chat list — see {@link CreateConversation}) prepends it and
+     *    re-emits. Returns the loaded entity, or null when the row can't be read.
+     *
+     * Idempotent and safe to call from a session-start hook on every start.
+     *
+     * @param id - The conversation ID to ensure is present in the cache
+     * @param contextUser - The current user context
+     * @returns The cached/loaded conversation entity, or null when it can't be loaded
+     */
+    public async EnsureConversationLoaded(
+        id: string,
+        contextUser: UserInfo
+    ): Promise<MJConversationEntity | null> {
+        const existing = this.GetConversation(id);
+        if (existing) {
+            return existing;
+        }
+
+        const md = this.ProviderToUse;
+        const conversation = await md.GetEntityObject<MJConversationEntity>('MJ: Conversations', contextUser);
+        const loaded = await conversation.Load(id);
+        if (!loaded) {
+            return null;
+        }
+
+        // App-scoped conversations live inside their owning Application's embedded surface,
+        // not the main-chat list this engine caches — mirror CreateConversation and skip them.
+        if (conversation.ApplicationScope === 'Application') {
+            return conversation;
+        }
+
+        // Re-check under the loaded row in case a concurrent emit added it meanwhile.
+        if (this.GetConversation(id)) {
+            return this.GetConversation(id)!;
+        }
+
+        this._conversations$.next([conversation, ...this._conversations$.value]);
         return conversation;
     }
 
@@ -1060,8 +1422,10 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      */
     public ClearCache(): void {
         this._conversations$.next([]);
+        this._projects$.next([]);
         this._detailCache.clear();
         this._lastEnvironmentId = null;
+        this._lastProjectsEnvironmentId = null;
     }
 
     // ========================================================================
@@ -1218,6 +1582,10 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             return this.handleConversationDetailEntityEvent(event, effectiveType);
         }
 
+        if (normalizedName === 'mj: projects') {
+            return this.handleProjectEntityEvent(event, effectiveType);
+        }
+
         if (normalizedName === 'mj: ai agent runs') {
             return this.handleAgentRunEntityEvent(event, effectiveType);
         }
@@ -1282,6 +1650,21 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             if (existing) {
                 this.mergeDataOntoRecord(existing, data);
                 this._conversations$.next([...this._conversations$.value]);
+            } else if (event.baseEntity) {
+                // A conversation created OUTSIDE this engine (local save event) that we don't
+                // yet hold — append it so the list updates reactively. Only fold in the
+                // main-chat scope this engine caches, and only for the loaded environment;
+                // app-scoped rows live in their owning surface (see CreateConversation), and
+                // archived rows don't belong in the active list.
+                const scope = data['ApplicationScope'] as string | undefined;
+                const environmentId = data['EnvironmentID'] as string | undefined;
+                const isArchived = data['IsArchived'] === true;
+                const inLoadedEnvironment =
+                    !this._lastEnvironmentId ||
+                    (environmentId != null && UUIDsEqual(environmentId, this._lastEnvironmentId));
+                if (scope !== 'Application' && !isArchived && inLoadedEnvironment) {
+                    this._conversations$.next([event.baseEntity as MJConversationEntity, ...this._conversations$.value]);
+                }
             }
         } else if (action === 'delete') {
             const existing = this.GetConversation(id);
@@ -1326,6 +1709,49 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         } else if (action === 'delete') {
             cached.Details = cached.Details.filter(d => !UUIDsEqual(d.ID, id));
             cached.AgentRunsByDetailId.delete(id);
+        }
+
+        return true;
+    }
+
+    /**
+     * Handles save/delete events on Project entities from local or remote code.
+     * Keeps the folder list in sync when a folder is created, renamed, archived, or
+     * deleted via the project form modal. Only tracks projects in the currently-loaded
+     * environment; archived projects are dropped from the active list.
+     */
+    private handleProjectEntityEvent(event: BaseEntityEvent, action: string): boolean {
+        const data = this.extractRecordData(event);
+        const id = data?.['ID'] as string;
+        if (!id) return true;
+
+        const current = this._projects$.value;
+        const existingIdx = current.findIndex(p => UUIDsEqual(p.ID, id));
+
+        if (action === 'delete') {
+            if (existingIdx >= 0) {
+                this._projects$.next(current.filter(p => !UUIDsEqual(p.ID, id)));
+            }
+            return true;
+        }
+
+        // save — only track projects in the loaded environment; drop archived ones
+        const environmentId = data?.['EnvironmentID'] as string | undefined;
+        const isArchived = data?.['IsArchived'] === true;
+        const inLoadedEnvironment =
+            !this._lastProjectsEnvironmentId ||
+            (environmentId != null && UUIDsEqual(environmentId, this._lastProjectsEnvironmentId));
+
+        if (existingIdx >= 0) {
+            if (isArchived || !inLoadedEnvironment) {
+                this._projects$.next(current.filter(p => !UUIDsEqual(p.ID, id)));
+            } else {
+                this.mergeDataOntoRecord(current[existingIdx], data);
+                this._projects$.next([...current]);
+            }
+        } else if (event.baseEntity && !isArchived && inLoadedEnvironment) {
+            // New folder from a local event — append the entity object
+            this._projects$.next([...current, event.baseEntity as MJProjectEntity]);
         }
 
         return true;

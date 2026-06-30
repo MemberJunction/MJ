@@ -19,9 +19,10 @@
       (attachmentClicked)="onAttachmentClicked($event)">
     </mj-mention-editor>
 
-    <!-- Attach Buttons - Positioned over editor -->
-    @if (enableAttachments) {
+    <!-- Attach + voice buttons - Positioned over editor -->
+    @if (enableAttachments || enableRealtime) {
       <div class="attach-buttons">
+        @if (enableAttachments) {
         <button
           class="attach-button-icon"
           [disabled]="disabled"
@@ -58,6 +59,30 @@
           >
           <i class="fa-solid fa-cube"></i>
         </button>
+        }
+        @if (enableRealtime) {
+        <button
+          class="attach-button-icon voice-button-icon"
+          [class.voice-button-icon--active]="voiceActive"
+          [disabled]="!canStartRealtime"
+          (click)="onRealtimeClick(); $event.stopPropagation()"
+          [title]="voiceActive ? 'Voice call active' : 'Start a voice call'"
+          aria-label="Start a voice call"
+          >
+          <i class="fa-solid fa-phone" aria-hidden="true"></i>
+        </button>
+        <!-- Caret beside the phone: opens the agent/model picker so call OPTIONS stay one
+             click away while the plain phone click keeps its instant-start behavior. -->
+        <button
+          class="attach-button-icon voice-options-button-icon"
+          [disabled]="!canStartRealtime"
+          (click)="onRealtimeOptionsClick(); $event.stopPropagation()"
+          title="Voice call options (choose agent and voice model)"
+          aria-label="Voice call options"
+          >
+          <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+        </button>
+        }
       </div>
     }
 

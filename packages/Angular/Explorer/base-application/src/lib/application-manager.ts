@@ -26,6 +26,7 @@ export interface UserAppConfig {
   providedIn: 'root'
 })
 export class ApplicationManager {
+  private static _recoveryAttempted = false;
   private applications$ = new BehaviorSubject<BaseApplication[]>([]);
   private allApplications$ = new BehaviorSubject<BaseApplication[]>([]);
   private userAppConfigs$ = new BehaviorSubject<UserAppConfig[]>([]);
@@ -302,6 +303,24 @@ export class ApplicationManager {
       // Load and apply user's app configuration
       await this.loadUserApplicationConfig();
 
+      // Recovery check: if no active apps but metadata has Active applications,
+      // the engine may have failed to load UserApplications (e.g., cache corruption).
+      // Attempt one recovery by force-refreshing UserInfoEngine before giving up.
+      const activeApps = this.applications$.value;
+      const hasMetadataApps = md.Applications.some(a => a.Status === 'Active');
+      if (activeApps.length === 0 && hasMetadataApps && !ApplicationManager._recoveryAttempted) {
+        ApplicationManager._recoveryAttempted = true;
+        const activeAppCount = md.Applications.filter(a => a.Status === 'Active').length;
+        const engineHealthy = UserInfoEngine.Instance.AllPropertiesLoadedSuccessfully;
+        const userAppCount = UserInfoEngine.Instance.UserApplications?.length ?? 0;
+        LogStatus(
+          `ApplicationManager: Recovery triggered — ` +
+          `activeApps=0, metadataActiveApps=${activeAppCount}, ` +
+          `engineHealthy=${engineHealthy}, userAppRecords=${userAppCount}`
+        );
+        await this.attemptRecovery();
+      }
+
       this.initialized = true;
       this._readyResolve();
 
@@ -372,6 +391,30 @@ export class ApplicationManager {
   }
 
   /**
+   * One-shot recovery attempt when the initial load produces zero apps despite
+   * Active applications existing in metadata. Force-refreshes UserInfoEngine
+   * to bypass any corrupted cache, then re-runs the user app configuration
+   * (which includes the self-healing path for new users).
+   */
+  private async attemptRecovery(): Promise<void> {
+    try {
+      const engine = UserInfoEngine.Instance;
+      await engine.Config(true);
+      await this.loadUserApplicationConfig();
+
+      const recoveredCount = this.applications$.value.length;
+      const engineHealthy = engine.AllPropertiesLoadedSuccessfully;
+      if (recoveredCount > 0) {
+        LogStatus(`ApplicationManager: Recovery succeeded — ${recoveredCount} apps loaded, engineHealthy=${engineHealthy}`);
+      } else {
+        LogError(`ApplicationManager: Recovery completed but still 0 apps — engineHealthy=${engineHealthy}`);
+      }
+    } catch (error) {
+      LogError('ApplicationManager: Recovery attempt failed:', undefined, error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  /**
    * Set the active application by ID
    */
   async SetActiveApp(appId: string): Promise<void> {
@@ -401,6 +444,18 @@ export class ApplicationManager {
    */
   GetAppById(appId: string): BaseApplication | undefined {
     return this.applications$.value.find(a => UUIDsEqual(a.ID, appId));
+  }
+
+  /**
+   * Canonical `/app/:slug` URL for an application. Uses the app's `Path`
+   * (what {@link GetAppByPath} matches on), falling back to `Name`, and
+   * url-encodes the segment. This is the single source of truth for app URLs —
+   * never hand-roll a slug from `Name` (e.g. spaces→hyphens), because a custom
+   * `Path` would then diverge from the URL and `GetAppByPath` would fail to
+   * resolve it (broken navigation / redirect loops).
+   */
+  GetAppUrl(app: BaseApplication): string {
+    return `/app/${encodeURIComponent(app.Path || app.Name)}`;
   }
 
   /**

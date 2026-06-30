@@ -4,7 +4,7 @@
 **Created**: 2026-02-16
 **Author**: Architecture Team
 **Target Version**: MJ v5.x
-**Prerequisite**: [Skyway Multi-Database Support](./multi-database-skyway-support.md)
+**Prerequisite**: [Skyway Multi-Database Support](../../multi-database-skyway-support.md)
 
 ---
 

@@ -22,10 +22,10 @@
         "isDefault": false
       },
       {
-        "Label": "Clusters",
+        "Label": "Visualize",
         "Icon": "fa-solid fa-circle-nodes",
         "ResourceType": "Custom",
-        "DriverClass": "ClusterVisualizationResource",
+        "DriverClass": "VisualizationResource",
         "isDefault": false
       },
       {
@@ -33,6 +33,13 @@
         "Icon": "fa-solid fa-clone",
         "ResourceType": "Custom",
         "DriverClass": "DuplicateDetectionResource",
+        "isDefault": false
+      },
+      {
+        "Label": "Feature Pipelines",
+        "Icon": "fa-solid fa-diagram-project",
+        "ResourceType": "Custom",
+        "DriverClass": "FeaturePipelinesResource",
         "isDefault": false
       },
       {
@@ -65,7 +72,7 @@
     "ID": "796EB8B2-B392-428B-839C-E9637C3D7EDB"
   },
   "sync": {
-    "lastModified": "2026-05-01T18:47:56.524Z",
-    "checksum": "ede1799605922038250fb7ec80cca4746f621c2abedb626ae95d3b48ec6dff7c"
+    "lastModified": "2026-06-27T20:45:42.867Z",
+    "checksum": "5d78f20f7fe76ab5e3b98f9a3155f9d565c72fa931f21ad5308b3f5daed0a281"
   }
 }
