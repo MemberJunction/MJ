@@ -187,7 +187,7 @@ import {
     MagicLinkProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (391 classes)
+// @memberjunction/core-entities (392 classes)
 import {
     AIAgentPermissionProvider,
     AccessControlRuleProvider,
@@ -508,6 +508,7 @@ import {
     MJScheduledJobRunEntity,
     MJScheduledJobTypeEntity,
     MJSchemaInfoEntity,
+    MJScopedPromptPartEntity,
     MJSearchExecutionLogEntity,
     MJSearchProviderEntity,
     MJSearchScopeEntity,
@@ -1691,6 +1692,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJScheduledJobRunEntity,
     MJScheduledJobTypeEntity,
     MJSchemaInfoEntity,
+    MJScopedPromptPartEntity,
     MJSearchExecutionLogEntity,
     MJSearchProviderEntity,
     MJSearchScopeEntity,
@@ -2269,7 +2271,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 939;
+export const CLASS_REGISTRATIONS_COUNT = 940;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

@@ -182,7 +182,7 @@ import {
     ZhipuLLM,
 } from '@memberjunction/ai-zhipu';
 
-// @memberjunction/core-entities (391 classes)
+// @memberjunction/core-entities (392 classes)
 import {
     AIAgentPermissionProvider,
     AccessControlRuleProvider,
@@ -503,6 +503,7 @@ import {
     MJScheduledJobRunEntity,
     MJScheduledJobTypeEntity,
     MJSchemaInfoEntity,
+    MJScopedPromptPartEntity,
     MJSearchExecutionLogEntity,
     MJSearchProviderEntity,
     MJSearchScopeEntity,
@@ -1491,6 +1492,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJScheduledJobRunEntity,
     MJScheduledJobTypeEntity,
     MJSchemaInfoEntity,
+    MJScopedPromptPartEntity,
     MJSearchExecutionLogEntity,
     MJSearchProviderEntity,
     MJSearchScopeEntity,
@@ -1979,7 +1981,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 848;
+export const CLASS_REGISTRATIONS_COUNT = 849;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
