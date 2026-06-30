@@ -29,7 +29,8 @@
     "@memberjunction/predictive-studio-core": "5.43.0",
     "@memberjunction/predictive-studio-sidecar": "5.43.0",
     "@memberjunction/record-set-processor": "5.43.0",
-    "@memberjunction/record-set-processor-base": "5.43.0"
+    "@memberjunction/record-set-processor-base": "5.43.0",
+    "rxjs": "^7.8.2"
   },
   "devDependencies": {
     "@types/node": "24.10.11",
