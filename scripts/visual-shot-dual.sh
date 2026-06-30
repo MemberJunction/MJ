@@ -28,7 +28,7 @@ mkdir -p "$DIR"
 shoot() { # $1 = theme on|off  $2 = filename
   npx playwright-cli eval "() => { ${1}; ${FORCE} return 1; }" >/dev/null 2>&1 || true
   sleep 1
-  npx playwright-cli screenshot --filename="$DIR/$2" >/dev/null 2>&1
+  npx playwright-cli screenshot --full-page --filename="$DIR/$2" >/dev/null 2>&1
 }
 
 shoot "document.documentElement.removeAttribute('data-theme');" "${OUT}-light.png"
