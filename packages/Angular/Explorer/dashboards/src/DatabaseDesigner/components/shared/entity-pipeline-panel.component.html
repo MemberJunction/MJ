@@ -41,16 +41,14 @@
       }
 
       <!-- Success card -->
-      <div class="success-card">
-        <i class="fa-solid fa-circle-check success-icon"></i>
-        <h3 class="success-title">{{ PipelineResult.EntityName }} created!</h3>
+      <mj-alert Variant="success" [Title]="PipelineResult.EntityName + ' created!'">
         <p class="success-path">{{ FullTablePath }}</p>
         <p class="success-cols">{{ SuccessColumnSummary }}</p>
         <p class="success-refresh-hint">
           <i class="fa-solid fa-rotate-right"></i>
           Don't see it in the entity list? Click <strong>Refresh</strong> to reload.
         </p>
-      </div>
+      </mj-alert>
     </div>
   }
 
@@ -74,18 +72,14 @@
       }
 
       <!-- Error card -->
-      <div class="error-card">
-        <i class="fa-solid fa-circle-xmark error-icon"></i>
-        <h3 class="error-title">
-          @if (ModificationType === 'create') { Entity creation failed }
-          @else { Apply changes failed }
-        </h3>
+      <mj-alert Variant="error"
+        [Title]="ModificationType === 'create' ? 'Entity creation failed' : 'Apply changes failed'">
         <p class="error-message">{{ ErrorMessage }}</p>
-        <button mjButton buttonStyle="secondary" (click)="Reset()">
+        <button mjButton buttonStyle="secondary" actions (click)="Reset()">
           <i class="fa-solid fa-rotate-right"></i>
           Try Again
         </button>
-      </div>
+      </mj-alert>
     </div>
   }
 

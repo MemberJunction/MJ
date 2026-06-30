@@ -1,13 +1,12 @@
 <div class="test-run-form" [class.is-mobile]="false">
   <!-- Error State -->
   @if (error) {
-    <div class="error-banner" (click)="retryLoad()">
-      <i class="fas fa-exclamation-triangle"></i>
+    <mj-alert Variant="error">
       <span>{{ error }}</span>
-      <button class="retry-btn">
+      <button actions mjButton variant="secondary" size="sm" (click)="retryLoad()">
         <i class="fas fa-redo"></i> Retry
       </button>
-    </div>
+    </mj-alert>
   }
 
   <!-- Header Section -->

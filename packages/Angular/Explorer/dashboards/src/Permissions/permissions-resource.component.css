@@ -43,23 +43,6 @@
   color: var(--mj-text-muted);
 }
 
-/* Messages */
-.message {
-  padding: 10px 14px;
-  border-radius: 6px;
-  margin-bottom: 16px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 14px;
-}
-
-.error-message {
-  background: var(--mj-status-error-bg);
-  color: var(--mj-status-error-text);
-  border: 1px solid var(--mj-status-error-border);
-}
-
 /* User selector (legacy name kept for User Access tab, plus generic selector-row for Resource tab) */
 .user-selector-row,
 .selector-row {

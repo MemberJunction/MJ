@@ -3,10 +3,7 @@
     <!-- Preview mode — no toolbar wrap. Just the form body for clean
          "what the form looks like" previews (Form Builder cockpit). -->
     @if (loadError) {
-        <div class="mj-error-banner">
-            <i class="fa-solid fa-triangle-exclamation"></i>
-            <span>{{ loadError }}</span>
-        </div>
+        <mj-alert Variant="error">{{ loadError }}</mj-alert>
     } @else if (componentSpec && formHostProps) {
         <mj-react-component
             #reactComponent
@@ -32,10 +29,7 @@
     (ListManagementRequested)="OnListManagementRequested()">
 
     @if (loadError) {
-        <div class="mj-error-banner">
-            <i class="fa-solid fa-triangle-exclamation"></i>
-            <span>{{ loadError }}</span>
-        </div>
+        <mj-alert Variant="error">{{ loadError }}</mj-alert>
     } @else if (componentSpec && formHostProps) {
         <mj-react-component
             #reactComponent

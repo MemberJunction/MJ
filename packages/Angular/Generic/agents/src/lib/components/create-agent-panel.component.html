@@ -8,21 +8,12 @@
     } @else {
         <!-- Error State -->
         @if (ErrorMessage) {
-            <div class="cap-error" @slideDown>
-                <i class="fa-solid fa-exclamation-triangle"></i>
-                <span>{{ ErrorMessage }}</span>
-                <button class="cap-error-dismiss" (click)="ErrorMessage = null">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
-            </div>
+            <mj-alert Variant="error" Dismissible (Dismissed)="ErrorMessage = null" @slideDown>{{ ErrorMessage }}</mj-alert>
         }
 
         <!-- Parent Agent Info -->
         @if (IsSubAgent && Config.ParentAgentName) {
-            <div class="cap-parent-info" @slideDown>
-                <i class="fa-solid fa-link"></i>
-                <span>Sub-agent of: <strong>{{ Config.ParentAgentName }}</strong></span>
-            </div>
+            <mj-alert Variant="info" Icon="fa-solid fa-link" @slideDown>Sub-agent of: <strong>{{ Config.ParentAgentName }}</strong></mj-alert>
         }
 
         <!-- Form -->
