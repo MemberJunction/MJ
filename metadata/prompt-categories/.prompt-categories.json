@@ -39,5 +39,19 @@
       "lastModified": "2026-02-13T21:09:14.622Z",
       "checksum": "7ade514101c9d231e843b8fd8a28bb1af78b7e401c3c5195039e5124969c140b"
     }
+  },
+  {
+    "fields": {
+      "Name": "Predictive Studio",
+      "ParentID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
+      "Description": "System prompts for the Predictive Studio Model Development Agent and its sub-agents"
+    },
+    "primaryKey": {
+      "ID": "7471E17C-2DD5-464B-B3D3-D8D788760FFA"
+    },
+    "sync": {
+      "lastModified": "2026-06-30T23:51:08.410Z",
+      "checksum": "fbe0f085bbf93eaecd34933637507d5e82cbdc559544c0b8ec998ea7ea7c8e74"
+    }
   }
 ]
