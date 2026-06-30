@@ -397,6 +397,8 @@ describe('SessionManager — server-side channel plugin lifecycle notifications'
             AgentID: 'agent-1',
             UserID: 'user-1',
             ConversationID: 'conv-existing',
+            // Verbatim per-session config blob handed to data-aware channels; null when unset.
+            AgentSessionConfig: null,
         });
         expect((user as { ID: string }).ID).toBe('user-1');
         expect(prov).toBe(provider);

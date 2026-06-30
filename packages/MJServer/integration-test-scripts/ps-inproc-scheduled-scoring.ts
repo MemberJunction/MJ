@@ -47,7 +47,7 @@ import {
   CompositeKey,
   type IMetadataProvider,
 } from '@memberjunction/core';
-import { SafeJSONParse } from '@memberjunction/global';
+import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import '@memberjunction/core-entities';
 import {
   MJMLAlgorithmEntity,
@@ -443,7 +443,7 @@ async function main(): Promise<void> {
       check(job.CronExpression === MONTHLY_CRON, `Job CronExpression = '${MONTHLY_CRON}' (got '${job.CronExpression}')`);
       check(job.Status === 'Active', `Job Status = 'Active' (got '${job.Status}')`);
       const jobCfg = SafeJSONParse<ScheduledJobConfiguration>(job.Configuration ?? '');
-      check(jobCfg?.RecordProcessID === rp.ID, `Job Configuration.RecordProcessID === the RP id`);
+      check(UUIDsEqual(jobCfg?.RecordProcessID ?? '', rp.ID), `Job Configuration.RecordProcessID === the RP id`);
     }
 
     // ── 5b. Verify the ML Model Scoring Binding (the lineage row) ─────────────
@@ -458,8 +458,8 @@ async function main(): Promise<void> {
     check(bindingRows.length === 1, `exactly ONE scoring binding exists for the model (found ${bindingRows.length})`);
     const binding = bindingRows[0];
     if (binding) {
-      check(binding.ID === scoringBindingId, `binding id matches the helper's returned binding (${scoringBindingId})`);
-      check(binding.RecordProcessID === rp.ID, `binding RecordProcessID === the RP id`);
+      check(UUIDsEqual(binding.ID, scoringBindingId), `binding id matches the helper's returned binding (${scoringBindingId})`);
+      check(UUIDsEqual(binding.RecordProcessID, rp.ID), `binding RecordProcessID === the RP id`);
       check(binding.TargetEntityID === entityId(md, 'Memberships'), `binding TargetEntityID === Memberships entity id`);
       check(binding.TargetColumn === OUTPUT_FIELD, `binding TargetColumn === '${OUTPUT_FIELD}' (got '${binding.TargetColumn}')`);
       check(binding.Mode === 'Scheduled', `binding Mode === 'Scheduled' (got '${binding.Mode}')`);
