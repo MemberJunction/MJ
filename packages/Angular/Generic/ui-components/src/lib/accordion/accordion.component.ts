@@ -103,13 +103,19 @@ export class MJAccordionActionsDirective {
               {{ Title }}
             }
           </span>
-          <i class="fa-solid fa-chevron-down mj-accordion-icon"></i>
         </button>
         @if (actionsTemplate) {
           <div class="mj-accordion-actions">
             <ng-container [ngTemplateOutlet]="actionsTemplate.templateRef"></ng-container>
           </div>
         }
+        <!-- The chevron is ALWAYS the rightmost element of the header row (after any
+             actions). It's a secondary, a11y-hidden toggle affordance — the primary
+             disclosure control is the title button above (which owns aria-expanded). -->
+        <button class="mj-accordion-chevron" type="button" tabindex="-1" aria-hidden="true"
+          [disabled]="Disabled" (click)="Toggle()">
+          <i class="fa-solid fa-chevron-down mj-accordion-icon"></i>
+        </button>
       </div>
       <div class="mj-accordion-body-outer" [attr.inert]="Expanded ? null : ''">
         <div class="mj-accordion-body-clip">

@@ -170,4 +170,33 @@ describe('MJAccordionPanelComponent header actions slot (DOM)', () => {
     // ... and NOT inside the toggle button (no button-in-button)
     expect(toggle.contains(editBtn)).toBe(false);
   });
+
+  it('keeps the chevron as the rightmost header element, after the actions slot', () => {
+    @Component({
+      standalone: true,
+      imports: [MJAccordionPanelComponent, MJAccordionActionsDirective],
+      template: `
+        <mj-accordion-panel Title="Connection">
+          <ng-template mjAccordionActions>
+            <button class="host-edit-btn" type="button">edit</button>
+          </ng-template>
+          <p>body</p>
+        </mj-accordion-panel>
+      `,
+    })
+    class HostComponent {}
+
+    const fixture = TestBed.createComponent(HostComponent);
+    fixture.detectChanges();
+
+    const row = fixture.nativeElement.querySelector('.mj-accordion-header-row') as HTMLElement;
+    const actions = fixture.nativeElement.querySelector('.mj-accordion-actions') as HTMLElement;
+    const chevron = fixture.nativeElement.querySelector('.mj-accordion-chevron') as HTMLElement;
+
+    expect(chevron).not.toBeNull();
+    // chevron is the LAST child of the header row ...
+    expect(row.lastElementChild).toBe(chevron);
+    // ... and it comes AFTER the actions slot in document order
+    expect(actions.compareDocumentPosition(chevron) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
 });

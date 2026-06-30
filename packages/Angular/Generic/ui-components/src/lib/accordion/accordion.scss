@@ -16,14 +16,21 @@
 }
 
 /* The header ROW owns the background/separator so the toggle button and the
-   optional actions cluster sit on one continuous surface. */
+   optional actions cluster sit on one continuous surface. Hover lives HERE (not on
+   the individual title/chevron buttons) so hovering ANY part of the header — title,
+   actions, or chevron — lights up the whole bar as one unit. */
 .mj-accordion-header-row {
   display: flex; align-items: stretch;
   background: var(--mj-bg-surface-sunken);
+  transition: background var(--mj-transition-fast);
+}
+.mj-accordion-panel:not(.mj-accordion-panel--disabled) > .mj-accordion-header-row:hover {
+  background: var(--mj-bg-surface-hover);
 }
 
-/* The toggle button is the disclosure control (title + chevron). It's
-   transparent over the row background; hover paints just the toggle area. */
+/* The toggle button is the disclosure control (title + chevron). Transparent over
+   the row so the row-level hover shows through; the button itself paints nothing on
+   hover (the whole bar reacts together). */
 .mj-accordion-header {
   flex: 1 1 auto; min-width: 0;
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
@@ -31,16 +38,28 @@
   background: transparent; border: none; cursor: pointer;
   font-family: var(--mj-font-family); font-size: var(--mj-text-sm);
   font-weight: var(--mj-font-semibold); color: var(--mj-text-primary);
-  text-align: left; transition: background var(--mj-transition-fast);
-  &:hover { background: var(--mj-bg-surface-hover); }
+  text-align: left;
   &:focus-visible { outline: none; box-shadow: var(--mj-focus-ring); }
 }
 
 /* Header actions — interactive controls (edit/copy/run/checkbox) that live in
-   the header but are NOT the toggle. Sibling of the button (no button-in-button). */
+   the header but are NOT the toggle. Sibling of the button (no button-in-button).
+   Sits BEFORE the chevron so the chevron stays the rightmost element. */
 .mj-accordion-actions {
   display: flex; align-items: center; gap: 4px;
-  flex-shrink: 0; padding: 0 12px 0 4px;
+  flex-shrink: 0; padding: 0 4px;
+}
+
+/* Chevron toggle — ALWAYS the rightmost element of the header row (after any
+   actions). Secondary, a11y-hidden affordance; the title button is the announced
+   disclosure control. Stretches the full header height so the whole right edge
+   toggles on click. */
+.mj-accordion-chevron {
+  flex-shrink: 0;
+  align-self: stretch;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0 16px;
+  background: transparent; border: none; cursor: pointer;
 }
 
 /* In dark mode the "sunken" header (near-black) sits much darker than the body
@@ -144,16 +163,15 @@
 .mj-accordion-badge--warning { background: var(--mj-status-warning-bg); color: var(--mj-status-warning-text); }
 .mj-accordion-badge--info    { background: var(--mj-status-info-bg);    color: var(--mj-status-info-text); }
 
-.mj-accordion-panel--disabled .mj-accordion-header {
-  opacity: 0.5;
-  cursor: not-allowed;
-  &:hover { background: transparent; }
-}
+.mj-accordion-panel--disabled .mj-accordion-header-row { opacity: 0.5; }
+.mj-accordion-panel--disabled .mj-accordion-header,
+.mj-accordion-panel--disabled .mj-accordion-chevron { cursor: not-allowed; }
 
 /* ── Density (Size="sm") — tighter padding + smaller text for dense contexts ── */
 .mj-accordion-panel--sm {
   .mj-accordion-header { padding: 8px 12px; font-size: var(--mj-text-xs); }
-  .mj-accordion-actions { padding-right: 8px; }
+  .mj-accordion-actions { padding-right: 4px; }
+  .mj-accordion-chevron { padding: 0 12px; }
   .mj-accordion-body { padding: 10px 12px; }
 }
 
@@ -212,7 +230,16 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    /* Fill mode can't tween the height (it fills the leftover pane, not content
+       height), so it gets a reveal instead: a quick fade + slide-in re-triggered
+       each time the --expanded class is applied. The chevron still rotates. */
+    animation: mj-accordion-fill-reveal var(--mj-transition-base) ease;
   }
+}
+
+@keyframes mj-accordion-fill-reveal {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 /* ── Emphasis variants (visual hierarchy, brand-colored — not status) ───────
@@ -225,10 +252,8 @@
 .mj-accordion-panel[data-variant='secondary'] {
   border-color: color-mix(in srgb, var(--mj-brand-primary) 30%, var(--mj-border-default));
   .mj-accordion-header-row { background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface)); }
-  .mj-accordion-header {
-    color: var(--mj-brand-primary);
-    &:hover { background: color-mix(in srgb, var(--mj-brand-primary) 14%, var(--mj-bg-surface)); }
-  }
+  &:not(.mj-accordion-panel--disabled) > .mj-accordion-header-row:hover { background: color-mix(in srgb, var(--mj-brand-primary) 14%, var(--mj-bg-surface)); }
+  .mj-accordion-header { color: var(--mj-brand-primary); }
   .mj-accordion-icon { color: var(--mj-brand-primary); }
   &.mj-accordion-panel--expanded .mj-accordion-header-row {
     border-bottom-color: color-mix(in srgb, var(--mj-brand-primary) 22%, var(--mj-border-default));
@@ -239,10 +264,8 @@
 .mj-accordion-panel[data-variant='primary'] {
   border-color: var(--mj-brand-primary);
   .mj-accordion-header-row { background: var(--mj-brand-primary); }
-  .mj-accordion-header {
-    color: var(--mj-text-inverse);
-    &:hover { background: var(--mj-brand-primary-hover); }
-  }
+  &:not(.mj-accordion-panel--disabled) > .mj-accordion-header-row:hover { background: var(--mj-brand-primary-hover); }
+  .mj-accordion-header { color: var(--mj-text-inverse); }
   .mj-accordion-icon { color: var(--mj-text-inverse); }
   &.mj-accordion-panel--expanded .mj-accordion-header-row { border-bottom-color: transparent; }
 }
@@ -250,4 +273,5 @@
 @media (prefers-reduced-motion: reduce) {
   .mj-accordion-icon { transition: none; }
   .mj-accordion-body-outer { transition: none; }
+  .mj-accordion-panel--fill.mj-accordion-panel--expanded .mj-accordion-body { animation: none; }
 }
