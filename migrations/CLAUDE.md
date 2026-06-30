@@ -96,10 +96,12 @@ V[YYYYMMDDHHMM]__v[VERSION].x_[DESCRIPTION].sql
 
 **NEVER INCLUDE IN MIGRATIONS:**
 - View creation/updates (handled by CodeGen)
-- EntityField inserts/updates (handled by CodeGen)
+- EntityField inserts/updates — **including `ValueListType` and `EntityFieldValue` rows** (handled by CodeGen)
 - Entity metadata changes (handled by CodeGen)
 - Stored procedure creation/updates (handled by CodeGen)
 - Any MemberJunction metadata updates (handled by CodeGen)
+
+> 🚨 **Value lists / dropdowns / generated unions come FROM THE SCHEMA, not from hand-written metadata.** A field's `EntityFieldValue` list, its `EntityField.ValueListType`, and its generated TypeScript union are all **derived by CodeGen from the column's CHECK constraint**. To change the allowed values of such a field, **drop the old CHECK constraint and add a new one (with the changed value set) in a SINGLE migration**, then run `mj codegen` — which re-syncs the `EntityFieldValue` rows + `ValueListType` and regenerates the union automatically. **NEVER `INSERT`/`UPDATE` `EntityFieldValue`, and NEVER `UPDATE EntityField.ValueListType`, directly in a migration** — that bypasses the source of truth and silently drifts from (or is overwritten by) CodeGen. (To allow values beyond the listed set, that's a CodeGen/metadata concern — don't force it with hand-written rows.)
 
 **The MemberJunction CodeGen system automatically handles:**
 - Creating/updating all views based on schema changes

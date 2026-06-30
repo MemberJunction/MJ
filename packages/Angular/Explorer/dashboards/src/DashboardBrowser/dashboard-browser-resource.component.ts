@@ -5,14 +5,25 @@ import { takeUntil } from 'rxjs/operators';
 import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { Metadata, CompositeKey } from '@memberjunction/core';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
-import { ResourceData, MJDashboardEntity, MJDashboardCategoryEntity, MJDashboardPartTypeEntity, DashboardEngine, DashboardUserPermissions, MJDashboardCategoryLinkEntity } from '@memberjunction/core-entities';
+import { ResourceData, MJDashboardEntity, MJDashboardCategoryEntity, MJDashboardPartTypeEntity, DashboardEngine, DashboardUserPermissions, MJDashboardCategoryLinkEntity, MJDashboardPermissionEntity } from '@memberjunction/core-entities';
 import { ShareDialogResult } from './dashboard-share-dialog.component';
+import {
+    buildDashboardBrowserAgentContext,
+    isValidBrowserViewMode,
+    OpenedDashboardPanelSummary,
+} from './dashboard-browser-agent-context';
+import {
+    AgentToolResult,
+    validateStringParam,
+} from '../shared/agent-tool-validation';
 import {
     DashboardViewerComponent,
     DashboardNavRequestEvent,
     PanelInteractionEvent,
     AddPanelResult,
     createDefaultDashboardConfig,
+    extractPanelsFromLayout,
+    DashboardConfig,
     DashboardPanel,
     EditPartDialogResult,
     // Browser event types from generic component
@@ -32,6 +43,26 @@ import {
  * Mode for the dashboard browser
  */
 type BrowserMode = 'list' | 'view' | 'edit';
+
+/**
+ * Local shape for an agent client tool. Matches the inline array type that
+ * `NavigationService.SetAgentClientTools` accepts, so the mode-scoped tool
+ * builders can compose typed `AgentClientTool[]` arrays without `any`.
+ */
+interface AgentClientTool {
+    Name: string;
+    Description: string;
+    ParameterSchema: Record<string, unknown>;
+    Handler: (params: Record<string, unknown>) => Promise<unknown>;
+}
+
+/**
+ * Tolerant result shape for the read-only DETAIL tools, which return a data
+ * payload on success. Extends the shared {@link AgentToolResult} (Success /
+ * ErrorMessage) with an optional `Data` object. Kept local to DashboardBrowser
+ * (the shared validation module is intentionally not modified).
+ */
+type AgentToolDataResult = AgentToolResult & { Data?: Record<string, unknown> };
 
 /**
  * Resource component for browsing, creating, and editing dashboards.
@@ -59,6 +90,22 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
     public selectedCategoryId: string | null = null;
     public viewMode: DashboardBrowserViewMode = 'cards';
     public showAddPanelDialog = false;
+
+    /**
+     * Free-text search the agent has applied to the dashboard list (via the
+     * SearchDashboards tool). Reported in the agent context so the agent knows
+     * how the visible list is currently narrowed; cleared by ClearDashboardFilters.
+     */
+    private agentSearchText = '';
+
+    /**
+     * Which tool-set ('list' vs 'open') is currently registered with the agent.
+     * The Dashboard Browser exposes different tools depending on whether the user
+     * is browsing the list or has a dashboard open (mirrors the Data Explorer's
+     * mode-scoped tools). We only re-register on the flip — see
+     * {@link syncAgentToolsForMode}.
+     */
+    private lastRegisteredToolMode: 'list' | 'open' | null = null;
 
     // Config dialog state
     public showConfigDialog = false;
@@ -121,6 +168,8 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
         this.loadDashboards();
         this.subscribeToQueryParams();
         this.loadViewPreference();
+        this.syncAgentToolsForMode();
+        this.emitAgentContext();
     }
 
     ngOnDestroy(): void {
@@ -139,6 +188,617 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
 
     async GetResourceIconClass(data: ResourceData): Promise<string> {
         return 'fa-solid fa-gauge-high';
+    }
+
+    // ========================================
+    // Agent Context & Client Tools
+    //
+    // 🔒 SAFETY BOUNDARY: the Dashboard Browser exposes ONLY read-only /
+    // navigational tools to the AI agent. The tool-set is MODE-SCOPED (mirrors
+    // the Data Explorer):
+    //   COMMON (both modes): SearchDashboards, OpenDashboard (by name/id —
+    //     still useful while viewing, to switch dashboards), RefreshDashboardList.
+    //   LIST mode only: SelectCategory, FilterByCategory, ClearDashboardFilters,
+    //     SwitchViewMode.
+    //   OPEN mode only (a dashboard is open): BackToList, GetDashboardPanels,
+    //     GetDashboardDetail.
+    //   READ-ONLY DETAIL (registered in both modes alongside the above):
+    //     GetCategoryHierarchy, GetDashboardShares (and GetDashboardDetail).
+    //
+    // Mutating operations — create / delete / save / share / move a dashboard,
+    // create / delete a category, add / remove / configure a panel — are
+    // intentionally NOT exposed. The agent helps the user find, open, and
+    // understand dashboards (including the panels on the open one, its owner,
+    // dates, access level, the category tree, and who it's shared with); the
+    // user performs every mutation from the UI. Do NOT add a mutating tool here
+    // without revisiting this boundary.
+    // ========================================
+
+    /**
+     * Report the current browser state to the AI agent (async chat agent and
+     * realtime co-agent). Re-emit whenever mode, selection, category filter,
+     * view mode, or loading state changes.
+     */
+    private emitAgentContext(): void {
+        // Keep the registered tool-set aligned with the current mode before we
+        // publish context, so the agent's tool manifest and context agree.
+        this.syncAgentToolsForMode();
+
+        const selectedCategory = this.selectedCategoryId
+            ? this.categories.find(c => UUIDsEqual(c.ID, this.selectedCategoryId!)) ?? null
+            : null;
+
+        const dashboardOpen = this.mode !== 'list' && this.selectedDashboard !== null;
+
+        this.navigationService.SetAgentContext(this, buildDashboardBrowserAgentContext({
+            Mode: this.mode,
+            SelectedDashboardId: this.selectedDashboard?.ID ?? null,
+            SelectedDashboardName: this.selectedDashboard?.Name ?? null,
+            VisibleDashboardNames: this.dashboards.map(d => d.Name || '(untitled)'),
+            TotalDashboardCount: this.TotalAccessibleDashboardCount,
+            FilteredDashboardCount: this.dashboards.length,
+            SearchText: this.agentSearchText,
+            AvailableCategoryNames: this.categories.map(c => c.Name),
+            SelectedCategoryId: this.selectedCategoryId,
+            SelectedCategoryName: selectedCategory?.Name ?? null,
+            ViewMode: this.viewMode,
+            IsLoading: this.isLoading,
+            // Opened-dashboard awareness (only meaningful when a dashboard is open)
+            OpenedDashboardName: dashboardOpen ? (this.selectedDashboard?.Name ?? null) : null,
+            OpenedDashboardId: dashboardOpen ? (this.selectedDashboard?.ID ?? null) : null,
+            OpenedDashboardIsEditing: this.mode === 'edit',
+            OpenedDashboardCanEdit: dashboardOpen ? this.selectedDashboardPermissions.CanEdit : false,
+            OpenedDashboardPanels: dashboardOpen ? this.readOpenedDashboardPanels() : [],
+        }));
+    }
+
+    /**
+     * Read the panels/widgets on the currently-open dashboard from the viewer.
+     *
+     * The viewer holds the live `DashboardConfig` whose `layout` embeds each
+     * panel in Golden Layout's componentState; {@link extractPanelsFromLayout}
+     * pulls them out. We resolve each panel's part-type name via the viewer's
+     * `getPartTypeForPanel`. Tolerant by design — if the viewer isn't mounted
+     * yet (e.g. context emitted before @ViewChild resolves) we return an empty
+     * list rather than throwing.
+     *
+     * @returns a descriptive panel summary list (never null)
+     */
+    private readOpenedDashboardPanels(): OpenedDashboardPanelSummary[] {
+        const viewer = this.dashboardViewer;
+        if (!viewer) return [];
+
+        try {
+            const config = viewer.getConfig();
+            const panels = extractPanelsFromLayout(config?.layout ?? null);
+            return panels.map(panel => {
+                const partType = viewer.getPartTypeForPanel(panel.id);
+                const summary: OpenedDashboardPanelSummary = {
+                    Title: panel.title || '(untitled panel)',
+                    PartTypeName: partType?.Name || panel.config?.type || 'Unknown',
+                };
+                const icon = panel.icon || partType?.Icon || undefined;
+                if (icon) {
+                    summary.Icon = icon;
+                }
+                return summary;
+            });
+        } catch {
+            // Reading panels is best-effort; never let it break context emission.
+            return [];
+        }
+    }
+
+    /**
+     * The total number of dashboards accessible to the current user, independent
+     * of any in-memory search narrowing the agent has applied. `this.dashboards`
+     * shrinks when SearchDashboards filters it, so we read the unfiltered count
+     * straight from the engine to keep TotalDashboardCount honest.
+     */
+    private get TotalAccessibleDashboardCount(): number {
+        const md = this.ProviderToUse;
+        return DashboardEngine.Instance.GetAccessibleDashboards(md.CurrentUser.ID).length;
+    }
+
+    /**
+     * Re-register the agent client tools when the effective tool-mode flips.
+     *
+     * The Dashboard Browser surfaces different tools depending on whether the
+     * user is browsing the list ('list') or has a dashboard open ('open' — the
+     * view/edit modes collapse to one tool-mode here). We compute the effective
+     * mode, and only when it differs from {@link lastRegisteredToolMode} do we
+     * call `SetAgentClientTools` with `[...common, ...(list ? list : open)]`.
+     * Guarding on the flip avoids re-registering on every context emission.
+     *
+     * Mirrors the Data Explorer's mode-scoped tool approach.
+     */
+    private syncAgentToolsForMode(): void {
+        const effective: 'list' | 'open' = this.mode === 'list' ? 'list' : 'open';
+        if (effective === this.lastRegisteredToolMode) {
+            return;
+        }
+        this.lastRegisteredToolMode = effective;
+
+        const scoped = effective === 'list' ? this.listModeTools() : this.openModeTools();
+        this.navigationService.SetAgentClientTools(this, [...this.commonTools(), ...scoped]);
+    }
+
+    /**
+     * Tools available in BOTH modes — find, switch to, and reload dashboards.
+     * OpenDashboard stays available while viewing so the agent can switch to
+     * another dashboard without first going back to the list.
+     */
+    private commonTools(): AgentClientTool[] {
+        return [
+            {
+                Name: 'SearchDashboards',
+                Description: 'Search/filter the dashboard list by a text query matching dashboard name or description.',
+                ParameterSchema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] },
+                Handler: async (params: Record<string, unknown>): Promise<AgentToolResult> => {
+                    const v = validateStringParam(params['query'], 'query');
+                    if (!v.ok) return v.result;
+                    return this.AgentSearchDashboards(v.value);
+                },
+            },
+            {
+                Name: 'OpenDashboard',
+                Description: 'Open a dashboard for viewing (inline). Accepts either the dashboard NAME (as listed in VisibleDashboards) or its ID. Works from the list and while another dashboard is open (to switch).',
+                ParameterSchema: { type: 'object', properties: { dashboard: { type: 'string', description: 'The dashboard name or ID to open.' }, dashboardId: { type: 'string', description: 'Deprecated alias for "dashboard" — the dashboard ID.' } } },
+                Handler: async (params: Record<string, unknown>): Promise<AgentToolResult> => {
+                    const v = validateStringParam(params['dashboard'] ?? params['dashboardId'], 'dashboard');
+                    if (!v.ok) return v.result;
+                    return this.AgentOpenDashboard(v.value);
+                },
+            },
+            {
+                Name: 'RefreshDashboardList',
+                Description: 'Reload the list of dashboards and categories from the server.',
+                ParameterSchema: { type: 'object', properties: {} },
+                Handler: async (): Promise<AgentToolResult> => {
+                    // loadDashboards() rebuilds the full list, so any prior agent
+                    // search no longer applies — clear the tracked search text.
+                    this.agentSearchText = '';
+                    await this.loadDashboards();
+                    this.emitAgentContext();
+                    return { Success: true };
+                },
+            },
+            {
+                Name: 'GetCategoryHierarchy',
+                Description: 'Get the dashboard category tree the user can access — each category\'s name, ID, parent ID, and the number of accessible dashboards filed directly under it. Read-only.',
+                ParameterSchema: { type: 'object', properties: {} },
+                Handler: async (): Promise<AgentToolResult> => this.AgentGetCategoryHierarchy(),
+            },
+            {
+                Name: 'GetDashboardShares',
+                Description: 'List who a dashboard is shared with and their access level (read/edit/delete/share). Defaults to the open dashboard; pass a dashboardId (or name) to inspect another accessible dashboard. Read-only — returns no secrets.',
+                ParameterSchema: { type: 'object', properties: { dashboardId: { type: 'string', description: 'Optional dashboard ID or name. Defaults to the open dashboard.' } } },
+                Handler: async (params: Record<string, unknown>): Promise<AgentToolResult> => {
+                    return this.AgentGetDashboardShares(params['dashboardId']);
+                },
+            },
+        ];
+    }
+
+    /**
+     * Tools available only while browsing the LIST — category filtering, clear
+     * filters, and view-mode toggling. These have no meaning while a single
+     * dashboard is open, so they're scoped out of the OPEN tool-set.
+     */
+    private listModeTools(): AgentClientTool[] {
+        return [
+            {
+                Name: 'SelectCategory',
+                Description: 'Filter the dashboard list to a category. Accepts either the category NAME (as listed in AvailableCategories) or its ID. Pass an empty string to clear the category filter (show root).',
+                ParameterSchema: { type: 'object', properties: { category: { type: 'string', description: 'The category name or ID to filter by. Empty string clears the filter.' } }, required: ['category'] },
+                Handler: async (params: Record<string, unknown>): Promise<AgentToolResult> => {
+                    const v = validateStringParam(params['category'], 'category');
+                    if (!v.ok) return v.result;
+                    return this.AgentSelectCategory(v.value);
+                },
+            },
+            {
+                Name: 'FilterByCategory',
+                Description: 'Filter the dashboard list to a category by its ID. Pass an empty string to clear the category filter (show root). Prefer SelectCategory, which also accepts a category name.',
+                ParameterSchema: { type: 'object', properties: { categoryId: { type: 'string' } }, required: ['categoryId'] },
+                Handler: async (params: Record<string, unknown>): Promise<AgentToolResult> => {
+                    const v = validateStringParam(params['categoryId'], 'categoryId');
+                    if (!v.ok) return v.result;
+                    return this.AgentSelectCategory(v.value);
+                },
+            },
+            {
+                Name: 'ClearDashboardFilters',
+                Description: 'Clear all active dashboard-list filters — both the text search and the category filter — and return to the full list at the root category.',
+                ParameterSchema: { type: 'object', properties: {} },
+                Handler: async (): Promise<AgentToolResult> => this.AgentClearDashboardFilters(),
+            },
+            {
+                Name: 'SwitchViewMode',
+                Description: 'Switch the dashboard list view mode between "cards" and "list".',
+                ParameterSchema: { type: 'object', properties: { mode: { type: 'string', enum: ['cards', 'list'] } }, required: ['mode'] },
+                Handler: async (params: Record<string, unknown>): Promise<AgentToolResult> => {
+                    return this.AgentSwitchViewMode(params['mode']);
+                },
+            },
+        ];
+    }
+
+    /**
+     * Tools available only while a dashboard is OPEN (view/edit) — go back to
+     * the list, inspect the open dashboard's panels, and read its detail
+     * (owner, dates, access level). Scoped out of the LIST tool-set because
+     * there's no open dashboard there.
+     */
+    private openModeTools(): AgentClientTool[] {
+        return [
+            {
+                Name: 'BackToList',
+                Description: 'Return from a dashboard view/edit back to the dashboard list.',
+                ParameterSchema: { type: 'object', properties: {} },
+                Handler: async (): Promise<AgentToolResult> => {
+                    this.backToList();
+                    this.emitAgentContext();
+                    return { Success: true };
+                },
+            },
+            {
+                Name: 'GetDashboardPanels',
+                Description: 'List the panels/widgets on a dashboard — each panel\'s title, part-type, and icon. Defaults to the open dashboard; pass a dashboardId (or name) to inspect another accessible dashboard. Read-only.',
+                ParameterSchema: { type: 'object', properties: { dashboardId: { type: 'string', description: 'Optional dashboard ID or name. Defaults to the open dashboard.' } } },
+                Handler: async (params: Record<string, unknown>): Promise<AgentToolResult> => {
+                    return this.AgentGetDashboardPanels(params['dashboardId']);
+                },
+            },
+            {
+                Name: 'GetDashboardDetail',
+                Description: 'Get detail about a dashboard — owner, created/updated dates, category, and the current user\'s access level (CanRead/Edit/Delete/Share, IsOwner). Defaults to the open dashboard; pass a dashboardId (or name) for another accessible dashboard. Read-only.',
+                ParameterSchema: { type: 'object', properties: { dashboardId: { type: 'string', description: 'Optional dashboard ID or name. Defaults to the open dashboard.' } } },
+                Handler: async (params: Record<string, unknown>): Promise<AgentToolResult> => {
+                    return this.AgentGetDashboardDetail(params['dashboardId']);
+                },
+            },
+        ];
+    }
+
+    /**
+     * Filter the dashboard list by a text query against name + description.
+     * The generic browser owns the category/view chrome; this surfaces a
+     * name/description filter via the same selected-category mechanism is not
+     * applicable, so we narrow the in-memory list the browser renders.
+     */
+    private AgentSearchDashboards(query: string): AgentToolResult {
+        const q = query.trim().toLowerCase();
+        const engine = DashboardEngine.Instance;
+        const md = this.ProviderToUse;
+        const all = [...engine.GetAccessibleDashboards(md.CurrentUser.ID)];
+
+        const matched = q
+            ? all.filter(d =>
+                (d.Name || '').toLowerCase().includes(q) ||
+                (d.Description || '').toLowerCase().includes(q))
+            : all;
+
+        this.agentSearchText = query.trim();
+        this.dashboards = matched.sort((a, b) =>
+            new Date(b.__mj_UpdatedAt).getTime() - new Date(a.__mj_UpdatedAt).getTime());
+        this.mode = 'list';
+        this.selectedDashboard = null;
+        this.emitAgentContext();
+        this.cdr.detectChanges();
+        return { Success: true };
+    }
+
+    /**
+     * Apply a category filter by NAME or ID (empty string clears it) and return
+     * to the list. Resolves a supplied name (case-insensitive) to its id against
+     * the loaded, accessible category list — mirroring the Data Explorer's
+     * SelectView name→id resolution.
+     */
+    private AgentSelectCategory(categoryNameOrId: string): AgentToolResult {
+        const raw = categoryNameOrId.trim();
+
+        // Empty string clears the filter.
+        if (!raw) {
+            this.selectedCategoryId = null;
+            this.mode = 'list';
+            this.selectedDashboard = null;
+            this.updateUrlQueryParams();
+            this.emitAgentContext();
+            this.cdr.detectChanges();
+            return { Success: true };
+        }
+
+        // Prefer an exact id match, then fall back to a case-insensitive name match.
+        const lowered = raw.toLowerCase();
+        const match =
+            this.categories.find(c => UUIDsEqual(c.ID, raw)) ??
+            this.categories.find(c => (c.Name || '').toLowerCase() === lowered);
+
+        if (!match) {
+            const available = this.categories.map(c => c.Name).join(', ') || '(none)';
+            return { Success: false, ErrorMessage: `No accessible category named or identified by "${raw}". Available categories: ${available}.` };
+        }
+
+        this.selectedCategoryId = match.ID;
+        this.mode = 'list';
+        this.selectedDashboard = null;
+        this.updateUrlQueryParams();
+        this.emitAgentContext();
+        this.cdr.detectChanges();
+        return { Success: true };
+    }
+
+    /** Clear both the text search and the category filter, returning to the full root list. */
+    private AgentClearDashboardFilters(): AgentToolResult {
+        this.agentSearchText = '';
+        this.selectedCategoryId = null;
+        this.mode = 'list';
+        this.selectedDashboard = null;
+
+        // Restore the full accessible list (the search may have narrowed this.dashboards).
+        const engine = DashboardEngine.Instance;
+        const md = this.ProviderToUse;
+        this.dashboards = [...engine.GetAccessibleDashboards(md.CurrentUser.ID)].sort((a, b) =>
+            new Date(b.__mj_UpdatedAt).getTime() - new Date(a.__mj_UpdatedAt).getTime());
+
+        this.updateUrlQueryParams();
+        this.emitAgentContext();
+        this.cdr.detectChanges();
+        return { Success: true };
+    }
+
+    /**
+     * Open a dashboard for inline viewing by NAME or ID. Resolves a supplied name
+     * (case-insensitive) to its dashboard against the loaded, accessible list —
+     * mirroring the Data Explorer's SelectView name→id resolution.
+     */
+    private AgentOpenDashboard(dashboardNameOrId: string): AgentToolResult {
+        const raw = dashboardNameOrId.trim();
+        if (!raw) return { Success: false, ErrorMessage: 'A dashboard name or ID is required.' };
+
+        // Search against the full accessible set (not just this.dashboards, which a
+        // prior search may have narrowed) so the agent can open any dashboard by name.
+        const engine = DashboardEngine.Instance;
+        const md = this.ProviderToUse;
+        const accessible = engine.GetAccessibleDashboards(md.CurrentUser.ID);
+
+        const lowered = raw.toLowerCase();
+        const dashboard =
+            accessible.find(d => UUIDsEqual(d.ID, raw)) ??
+            accessible.find(d => (d.Name || '').toLowerCase() === lowered);
+
+        if (!dashboard) {
+            const available = accessible.map(d => d.Name || '(untitled)').slice(0, 25).join(', ') || '(none)';
+            return { Success: false, ErrorMessage: `No accessible dashboard named or identified by "${raw}". Available dashboards include: ${available}.` };
+        }
+        this.openDashboard(dashboard);
+        this.emitAgentContext();
+        return { Success: true };
+    }
+
+    /** Switch and persist the list view mode (cards | list). */
+    private AgentSwitchViewMode(rawMode: unknown): AgentToolResult {
+        if (!isValidBrowserViewMode(rawMode)) {
+            return { Success: false, ErrorMessage: 'mode must be one of: cards, list.' };
+        }
+        this.viewMode = rawMode;
+        this.saveViewPreference(rawMode);
+        this.emitAgentContext();
+        this.cdr.detectChanges();
+        return { Success: true };
+    }
+
+    // ========================================
+    // Read-only detail tools (GetDashboardPanels / GetDashboardDetail /
+    // GetCategoryHierarchy / GetDashboardShares).
+    // These return descriptive data only — no mutations, never throw.
+    // ========================================
+
+    /**
+     * Resolve an optional `dashboardId` tool param (ID **or** name, or omitted)
+     * to a concrete accessible dashboard. When omitted/empty, defaults to the
+     * currently-open dashboard. Returns null with a tolerant error result when
+     * nothing matches.
+     */
+    private resolveDashboardForTool(
+        rawParam: unknown,
+    ): { ok: true; dashboard: MJDashboardEntity } | { ok: false; result: AgentToolResult } {
+        const engine = DashboardEngine.Instance;
+        const md = this.ProviderToUse;
+        const accessible = engine.GetAccessibleDashboards(md.CurrentUser.ID);
+
+        const raw = typeof rawParam === 'string' ? rawParam.trim() : '';
+
+        // No param → default to the open dashboard.
+        if (!raw) {
+            if (this.selectedDashboard) {
+                return { ok: true, dashboard: this.selectedDashboard };
+            }
+            return {
+                ok: false,
+                result: { Success: false, ErrorMessage: 'No dashboard is open. Provide a dashboardId (or name) to inspect a specific dashboard.' },
+            };
+        }
+
+        const lowered = raw.toLowerCase();
+        const dashboard =
+            accessible.find(d => UUIDsEqual(d.ID, raw)) ??
+            accessible.find(d => (d.Name || '').toLowerCase() === lowered);
+
+        if (!dashboard) {
+            const available = accessible.map(d => d.Name || '(untitled)').slice(0, 25).join(', ') || '(none)';
+            return {
+                ok: false,
+                result: { Success: false, ErrorMessage: `No accessible dashboard named or identified by "${raw}". Available dashboards include: ${available}.` },
+            };
+        }
+        return { ok: true, dashboard };
+    }
+
+    /**
+     * Return the panel list for the open (or named) dashboard. For the open
+     * dashboard we read live panels from the viewer; for another dashboard we
+     * parse its persisted UIConfigDetails. Read-only.
+     */
+    private AgentGetDashboardPanels(rawDashboardId: unknown): AgentToolDataResult {
+        const resolved = this.resolveDashboardForTool(rawDashboardId);
+        if (!resolved.ok) return resolved.result;
+        const dashboard = resolved.dashboard;
+
+        // If this is the currently-open dashboard, read the viewer's live panels
+        // (reflects any in-session, unsaved layout edits).
+        const isOpen = this.selectedDashboard !== null && UUIDsEqual(dashboard.ID, this.selectedDashboard.ID);
+        const panels = isOpen
+            ? this.readOpenedDashboardPanels()
+            : this.readPanelsFromPersistedConfig(dashboard);
+
+        return {
+            Success: true,
+            Data: {
+                DashboardId: dashboard.ID,
+                DashboardName: dashboard.Name,
+                PanelCount: panels.length,
+                Panels: panels,
+            },
+        };
+    }
+
+    /**
+     * Parse a dashboard's persisted UIConfigDetails into a descriptive panel
+     * summary list, resolving each panel's part-type name from the engine's
+     * cached part types. Tolerant — returns [] on missing/invalid config.
+     */
+    private readPanelsFromPersistedConfig(dashboard: MJDashboardEntity): OpenedDashboardPanelSummary[] {
+        const raw = dashboard.UIConfigDetails;
+        if (!raw) return [];
+
+        try {
+            const parsed = JSON.parse(raw) as Partial<DashboardConfig> | null;
+            const panels = extractPanelsFromLayout(parsed?.layout ?? null);
+            const partTypes = DashboardEngine.Instance.DashboardPartTypes;
+
+            return panels.map(panel => {
+                const partType = partTypes.find(pt => UUIDsEqual(pt.ID, panel.partTypeId)) ?? null;
+                const summary: OpenedDashboardPanelSummary = {
+                    Title: panel.title || '(untitled panel)',
+                    PartTypeName: partType?.Name || panel.config?.type || 'Unknown',
+                };
+                const icon = panel.icon || partType?.Icon || undefined;
+                if (icon) {
+                    summary.Icon = icon;
+                }
+                return summary;
+            });
+        } catch {
+            return [];
+        }
+    }
+
+    /**
+     * Return owner / dates / category / access-level detail for the open (or
+     * named) dashboard. Access level comes from the DashboardEngine permissions
+     * already computed by the browser. Read-only.
+     */
+    private AgentGetDashboardDetail(rawDashboardId: unknown): AgentToolDataResult {
+        const resolved = this.resolveDashboardForTool(rawDashboardId);
+        if (!resolved.ok) return resolved.result;
+        const dashboard = resolved.dashboard;
+
+        const md = this.ProviderToUse;
+        const perms = DashboardEngine.Instance.GetDashboardPermissions(dashboard.ID, md.CurrentUser.ID);
+
+        return {
+            Success: true,
+            Data: {
+                DashboardId: dashboard.ID,
+                DashboardName: dashboard.Name,
+                Description: dashboard.Description ?? null,
+                Owner: dashboard.User ?? null,
+                CategoryName: dashboard.Category ?? null,
+                CategoryId: dashboard.CategoryID ?? null,
+                CreatedAt: this.toIsoOrNull(dashboard.__mj_CreatedAt),
+                UpdatedAt: this.toIsoOrNull(dashboard.__mj_UpdatedAt),
+                Access: {
+                    CanRead: perms.CanRead,
+                    CanEdit: perms.CanEdit,
+                    CanDelete: perms.CanDelete,
+                    CanShare: perms.CanShare,
+                    IsOwner: perms.IsOwner,
+                    PermissionSource: perms.PermissionSource,
+                },
+            },
+        };
+    }
+
+    /**
+     * Return the accessible category tree (name, ID, parent ID, and per-category
+     * count of accessible dashboards filed directly under it). Read-only.
+     */
+    private AgentGetCategoryHierarchy(): AgentToolDataResult {
+        const md = this.ProviderToUse;
+        const engine = DashboardEngine.Instance;
+        const categories = engine.GetAccessibleCategories(md.CurrentUser.ID);
+        const accessible = engine.GetAccessibleDashboards(md.CurrentUser.ID);
+
+        const tree = categories.map(cat => ({
+            Name: cat.Name,
+            Id: cat.ID,
+            ParentId: cat.ParentID ?? null,
+            DashboardCount: accessible.filter(d => d.CategoryID && UUIDsEqual(d.CategoryID, cat.ID)).length,
+        }));
+
+        // Dashboards with no (accessible) category sit at the root.
+        const rootDashboardCount = accessible.filter(d => !d.CategoryID).length;
+
+        return {
+            Success: true,
+            Data: {
+                CategoryCount: tree.length,
+                RootDashboardCount: rootDashboardCount,
+                Categories: tree,
+            },
+        };
+    }
+
+    /**
+     * Return who a dashboard is shared with and their access level. Uses
+     * DashboardEngine.GetDashboardShares (the real method) over the cached
+     * permission records. Returns no secrets. Read-only.
+     */
+    private AgentGetDashboardShares(rawDashboardId: unknown): AgentToolDataResult {
+        const resolved = this.resolveDashboardForTool(rawDashboardId);
+        if (!resolved.ok) return resolved.result;
+        const dashboard = resolved.dashboard;
+
+        const shares: MJDashboardPermissionEntity[] = DashboardEngine.Instance.GetDashboardShares(dashboard.ID);
+
+        const sharedWith = shares.map(s => ({
+            UserName: s.User ?? null,
+            CanRead: s.CanRead,
+            CanEdit: s.CanEdit,
+            CanDelete: s.CanDelete,
+            CanShare: s.CanShare,
+            SharedByUserName: s.SharedByUser ?? null,
+        }));
+
+        return {
+            Success: true,
+            Data: {
+                DashboardId: dashboard.ID,
+                DashboardName: dashboard.Name,
+                Owner: dashboard.User ?? null,
+                ShareCount: sharedWith.length,
+                SharedWith: sharedWith,
+            },
+        };
+    }
+
+    /** Format a date to ISO, tolerant of null/invalid values. */
+    private toIsoOrNull(value: Date | null | undefined): string | null {
+        if (!value) return null;
+        const time = new Date(value).getTime();
+        return Number.isFinite(time) ? new Date(time).toISOString() : null;
     }
 
     // ========================================
@@ -296,6 +956,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
     public onCategoryChange(event: CategoryChangeEvent): void {
         this.selectedCategoryId = event.CategoryId;
         this.updateUrlQueryParams();
+        this.emitAgentContext();
     }
 
     /**
@@ -304,6 +965,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
     public onViewPreferenceChange(event: ViewPreferenceChangeEvent): void {
         this.viewMode = event.ViewMode;
         this.saveViewPreference(event.ViewMode);
+        this.emitAgentContext();
     }
 
     /**
@@ -464,6 +1126,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
 
         this.updateUrlQueryParams();
         this.NotifyDisplayNameChanged(dashboard.Name || 'Dashboard');
+        this.emitAgentContext();
         this.cdr.detectChanges();
     }
 
@@ -496,6 +1159,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
         this.originalDescription = dashboard.Description || '';
         this.originalConfig = dashboard.UIConfigDetails || '';
 
+        this.emitAgentContext();
         this.cdr.detectChanges();
     }
 
@@ -507,6 +1171,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
         this.mode = 'list';
         this.updateUrlQueryParams();
         this.NotifyDisplayNameChanged('Dashboards');
+        this.emitAgentContext();
         this.cdr.detectChanges();
     }
 
@@ -785,9 +1450,9 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
     /**
      * Handle add panel dialog result
      */
-    public onPanelAdded(result: AddPanelResult): void {
+    public async onPanelAdded(result: AddPanelResult): Promise<void> {
         if (this.dashboardViewer) {
-            this.dashboardViewer.addPanel(
+            await this.dashboardViewer.addPanel(
                 result.PartType.ID,
                 result.Config,
                 result.Title,
@@ -795,6 +1460,8 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
             );
         }
         this.showAddPanelDialog = false;
+        // Panel set changed — refresh opened-dashboard context for the agent.
+        this.emitAgentContext();
         this.cdr.detectChanges();
     }
 
@@ -844,6 +1511,8 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
             );
         }
         this.closeConfigDialog();
+        // A panel's title/icon/config may have changed — refresh agent context.
+        this.emitAgentContext();
     }
 
     /**
@@ -886,6 +1555,8 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
             this.dashboardViewer.confirmRemovePanel(this.confirmPanelId);
         }
         this.closeRemoveConfirmDialog();
+        // Panel set changed — refresh opened-dashboard context for the agent.
+        this.emitAgentContext();
     }
 
     /**
@@ -977,6 +1648,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
             // Also watch for late-arriving query params from pin navigation
             this.watchForLateQueryParams();
 
+            this.emitAgentContext();
             this.NotifyLoadComplete();
         } catch (err) {
             console.error('Failed to load dashboards:', err);
@@ -1073,6 +1745,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
                     }
                 }
 
+                this.emitAgentContext();
                 this.cdr.detectChanges();
             });
     }

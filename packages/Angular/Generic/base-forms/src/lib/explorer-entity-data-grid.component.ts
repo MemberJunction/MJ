@@ -22,6 +22,8 @@ import { FormNavigationEvent } from './types/navigation-events';
   standalone: false,
     selector: 'mj-explorer-entity-data-grid',
     template: `
+        <!-- Related-entity / form-embedded grid: not a saved User View, so there's no canonical
+             GridState to manage — suppress the "Manage Columns" chooser (AllowColumnToggle=false). -->
         <mj-entity-data-grid
             #innerGrid
             [Params]="Params"
@@ -31,6 +33,7 @@ import { FormNavigationEvent } from './types/navigation-events';
             [Height]="Height"
             [ToolbarConfig]="ToolbarConfig"
             [SelectionMode]="SelectionMode"
+            [AllowColumnToggle]="false"
             (AfterRowDoubleClick)="onRowDoubleClick($event)"
             (AfterRowClick)="onRowClick($event)"
             (AfterDataLoad)="onDataLoad($event)"

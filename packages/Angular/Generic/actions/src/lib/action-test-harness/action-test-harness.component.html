@@ -171,25 +171,18 @@
             </div>
 
             @if (ExecutionError) {
-                <div class="error-result">
-                    <i class="fa-solid fa-exclamation-triangle"></i>
-                    <div class="error-content">
-                        <h5>Execution Error</h5>
-                        <p>{{ ExecutionError }}</p>
-                    </div>
-                </div>
+                <mj-alert Variant="error" Title="Execution Error">{{ ExecutionError }}</mj-alert>
             }
 
             @if (ExecutionResult) {
-                <div class="success-result" [class.failure]="!ExecutionResult.Success">
+                <div class="success-result">
                     <!-- Status Banner -->
-                    <div class="status-banner" [style.background-color]="GetResultColor()">
-                        <i [class]="'fa-solid ' + GetResultIcon()"></i>
+                    <mj-alert [Variant]="ExecutionResult.Success ? 'success' : 'error'">
                         <span>{{ ExecutionResult.Success ? 'Success' : 'Failed' }}</span>
                         @if (ExecutionResult.ResultCode) {
-                            <span class="result-code">{{ ExecutionResult.ResultCode }}</span>
+                            <span actions class="result-code">{{ ExecutionResult.ResultCode }}</span>
                         }
-                    </div>
+                    </mj-alert>
 
                     <!-- Message -->
                     @if (ExecutionResult.Message) {

@@ -14,7 +14,9 @@ import {
   MJFilterPopoverComponent,
   MJFilterPanelComponent,
   MJStatBadgeComponent,
-  MJRefreshButtonComponent
+  MJRefreshButtonComponent,
+  MJEmptyStateComponent,
+  MJAlertComponent
 } from '@memberjunction/ng-ui-components';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { CredentialsModule } from '@memberjunction/ng-credentials';
@@ -60,6 +62,8 @@ import { IntegrationDataService } from './services/integration-data.service';
     MJFilterPanelComponent,
     MJStatBadgeComponent,
     MJRefreshButtonComponent,
+    MJEmptyStateComponent,
+    MJAlertComponent,
     SharedGenericModule,
     CredentialsModule,
     NgTreesModule,

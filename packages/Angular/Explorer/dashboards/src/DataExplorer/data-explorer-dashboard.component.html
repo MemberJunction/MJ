@@ -256,17 +256,14 @@
 
                 <!-- No results -->
                 @if (filteredEntityCount === 0 && entities.length > 0) {
-                  <div class="home-no-results">
-                    <i class="fa-solid fa-magnifying-glass"></i>
-                    <p>No entities match "{{ entityFilterText }}"</p>
-                  </div>
+                  <mj-empty-state Variant="no-results"
+                    Title="No entities found"
+                    [Message]="NoEntityResultsMessage" />
                 }
                 @if (entities.length === 0) {
-                  <div class="empty-state">
-                    <i class="fa-solid fa-database empty-icon"></i>
-                    <h3>No Entities Available</h3>
-                    <p>There are no entities configured for this application.</p>
-                  </div>
+                  <mj-empty-state Icon="fa-solid fa-database"
+                    Title="No Entities Available"
+                    Message="There are no entities configured for this application." />
                 }
               </div>
             </div>

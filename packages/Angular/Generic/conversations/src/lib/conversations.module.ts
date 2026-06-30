@@ -2,9 +2,10 @@ import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
+import { OverlayModule } from '@angular/cdk/overlay';
 
 // MJ UI Components
-import { MJButtonDirective, MJDatepickerComponent, MJDialogComponent, MJDialogActionsComponent } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJDatepickerComponent, MJDialogComponent, MJDialogActionsComponent, MJEmptyStateComponent, MJAlertComponent } from '@memberjunction/ng-ui-components';
 
 // MemberJunction modules
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
@@ -77,6 +78,10 @@ import { LoadRealtimeWhiteboardChannel } from './components/realtime/whiteboard/
 import { LoadWhiteboardArtifactViewer } from './components/realtime/whiteboard/whiteboard-artifact-viewer.component';
 import { LoadRealtimeRemoteBrowserChannel } from './components/realtime/remote-browser/remote-browser-channel';
 import { RemoteBrowserSurfaceComponent } from './components/realtime/remote-browser/remote-browser-surface.component';
+import { LoadRealtimeMediaChannel } from './components/realtime/media/media-channel';
+import { LoadClientContextChannel } from './components/realtime/channels/client-context-channel';
+import { RealtimeMediaSurfaceComponent } from './components/realtime/media/realtime-media-surface.component';
+import { RealtimeEvidencePlaybackComponent } from './components/realtime/evidence-playback/realtime-evidence-playback.component';
 
 // Directives
 import { SearchShortcutDirective } from './directives/search-shortcut.directive';
@@ -99,6 +104,10 @@ LoadRealtimeWhiteboardChannel();
 // Remote Browser channel plugin — same registry-driven resolution (ClientPluginClass
 // 'RealtimeRemoteBrowserChannel'); the static call defeats tree-shaking of its @RegisterClass.
 LoadRealtimeRemoteBrowserChannel();
+// Media channel plugin — same registry-driven resolution (ClientPluginClass
+// 'RealtimeMediaChannel'); the static call defeats tree-shaking of its @RegisterClass.
+LoadRealtimeMediaChannel();
+LoadClientContextChannel();
 // Whiteboard ARTIFACT VIEWER plugin — resolved by the artifact plugin host via the
 // ClassFactory (keyed by the artifact type's DriverClass), same tree-shaking concern.
 LoadWhiteboardArtifactViewer();
@@ -162,10 +171,13 @@ const COMPONENTS = [
     FormsModule,
     ReactiveFormsModule,
     RouterModule,
+    OverlayModule,
     MJButtonDirective,
     MJDatepickerComponent,
     MJDialogComponent,
     MJDialogActionsComponent,
+    MJEmptyStateComponent,
+    MJAlertComponent,
     ContainerDirectivesModule,
     CodeEditorModule,
     ArtifactsModule,
@@ -192,7 +204,9 @@ const COMPONENTS = [
     RealtimeAgentPickerComponent,
     RealtimeSessionOverlayComponent,
     RealtimeWhiteboardHostComponent,
-    RemoteBrowserSurfaceComponent
+    RemoteBrowserSurfaceComponent,
+    RealtimeMediaSurfaceComponent,
+    RealtimeEvidencePlaybackComponent
   ],
   exports: [
     ...COMPONENTS,
@@ -211,7 +225,9 @@ const COMPONENTS = [
     RealtimeAgentPickerComponent,
     RealtimeSessionOverlayComponent,
     RealtimeWhiteboardHostComponent,
-    RemoteBrowserSurfaceComponent
+    RemoteBrowserSurfaceComponent,
+    RealtimeMediaSurfaceComponent,
+    RealtimeEvidencePlaybackComponent
   ]
 })
 export class ConversationsModule { }

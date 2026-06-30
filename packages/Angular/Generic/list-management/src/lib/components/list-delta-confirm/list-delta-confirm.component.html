@@ -32,13 +32,9 @@
       </div>
 
       @if (!hasDrops) {
-        <div class="delta-banner delta-banner--safe">
-          <i class="fa-solid fa-circle-check"></i>
-          <span>Safe operation — no records will be removed from the list.</span>
-        </div>
+        <mj-alert Variant="success">Safe operation — no records will be removed from the list.</mj-alert>
       } @else {
-        <div class="delta-banner delta-banner--danger">
-          <i class="fa-solid fa-triangle-exclamation"></i>
+        <mj-alert Variant="error">
           <div class="delta-banner__copy">
             <div>
               <strong>{{ Delta.Counts.Remove }} record(s) will be removed from this list.</strong>
@@ -56,7 +52,7 @@
               <span>I understand {{ Delta.Counts.Remove }} record(s) will be removed</span>
             </label>
           </div>
-        </div>
+        </mj-alert>
       }
 
       @if (previewAdds.length > 0) {

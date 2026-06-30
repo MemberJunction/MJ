@@ -5,8 +5,7 @@
     Title="Save View Results as List"
     (Close)="OnCancel()">
     <form class="save-view-form" (submit)="$event.preventDefault(); OnSave()">
-      <div class="info-banner">
-        <i class="fa-solid fa-circle-info"></i>
+      <mj-alert Variant="info">
         <div>
           Materializes
           @if (RecordCount != null) {
@@ -19,7 +18,7 @@
           }
           into a static List. The list can be refreshed from this view later if you keep lineage on.
         </div>
-      </div>
+      </mj-alert>
 
       <div class="field">
         <label class="field__label" for="save-view-list-name">List name</label>

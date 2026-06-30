@@ -28,7 +28,7 @@ import {
   LayoutNode
 } from '@memberjunction/ng-base-application';
 import { MJGlobal } from '@memberjunction/global';
-import { BaseResourceComponent, HomeAppPinService } from '@memberjunction/ng-shared';
+import { BaseResourceComponent, HomeAppPinService, NavigationService } from '@memberjunction/ng-shared';
 import { ResourceData, MJResourceTypeEntity, ResourcePermissionEngine } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { BaseEntity, DatasetResultType, LogError, Metadata } from '@memberjunction/core';
@@ -70,6 +70,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
   @Output() layoutInitError = new EventEmitter<void>();
 
   private pinService = inject(HomeAppPinService);
+  private navigationService = inject(NavigationService);
   private subscriptions: Subscription[] = [];
   private layoutInitRetryCount = 0;
   private readonly MAX_LAYOUT_INIT_RETRIES = 5;
@@ -113,7 +114,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
   ) {
     super();
     // Initialize component cache manager
-    this.cacheManager = new ComponentCacheManager(this.appRef);
+    this.cacheManager = new ComponentCacheManager(this.appRef, this.navigationService);
   }
 
   ngOnInit(): void {

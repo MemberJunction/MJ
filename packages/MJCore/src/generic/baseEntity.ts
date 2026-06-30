@@ -2219,9 +2219,37 @@ export abstract class BaseEntity<T = unknown> {
         this._childEntity = null;
         this._childEntities = null;
         this._childEntityDiscoveryDone = false;
-        // Generate UUID for non-auto-increment GUID/UUID primary keys
-        // (SQL Server `uniqueidentifier` / PostgreSQL `uuid`)
-        if (this.EntityInfo.PrimaryKeys.length === 1) {
+        // Primary-key assignment for a new record.
+        //
+        // Warning, get recurses up the tree adding O(N^2) complexity.
+        // If an entity tree exceeds 3 entities deep, we may want to
+        // consider a more efficient approach. However, the efficient
+        // option currently uses name reference to reach into the parent's
+        // field and pull the key value, passing it down the chain.
+        // That approach is more fragile and less idiomatic to the
+        // rest of the entities codebase. So we settle for some
+        // efficiency with SetLocal, but use get which gets the root's value
+        // when setting keys.
+        if (this._parentEntity) {
+            this._parentEntity.NewRecord();
+            for (const pk of this.EntityInfo.PrimaryKeys) {
+                const parentValue = this._parentEntity.Get(pk.Name);
+                if (parentValue != null) {
+                    this.SetLocal(pk.Name, parentValue);
+                    // The shared PK is ReadOnly, so SetLocal above consumed its
+                    // one-time write (_NeverSet -> false). Restore _NeverSet so the
+                    // child's OWN mirror can be re-written if the shared key is set
+                    // again this lifecycle — e.g. an explicit PK in newValues below,
+                    // or a later Set('ID', ...). Without this, the routed Set would
+                    // update the parent while the child's ReadOnly mirror stays
+                    // locked at the adopted value, re-diverging the shared key.
+                    this.GetFieldByName(pk.Name)?.ResetNeverSetFlag();
+                }
+            }
+        } else if (this.EntityInfo.PrimaryKeys.length === 1) {
+            // Root of an IS-A chain, or a standalone (non-IS-A) entity: generate
+            // a single GUID/UUID PK here (SQL Server `uniqueidentifier` /
+            // PostgreSQL `uuid`).
             const pk = this.EntityInfo.PrimaryKeys[0];
             if (!pk.AutoIncrement &&
                 pk.IsUniqueIdentifier &&
@@ -2237,23 +2265,13 @@ export abstract class BaseEntity<T = unknown> {
             }
         }
 
+        // Apply caller-supplied values LAST so an explicit PK (or any routed
+        // parent field) wins over the generated/adopted value instead of being
+        // clobbered by the parent's NewRecord().
         if (newValues) {
             newValues.KeyValuePairs.filter(kv => kv.Value !== null && kv.Value !== undefined).forEach(kv => {
                 this.Set(kv.FieldName, kv.Value);
             });
-        }
-
-        // IS-A composition: propagate PK value to parent entity chain
-        // Parent needs NewRecord() called first, then share the same PK value
-        if (this._parentEntity) {
-            this._parentEntity.NewRecord();
-            // Propagate PK — child and parent must share the same UUID
-            for (const pk of this.EntityInfo.PrimaryKeys) {
-                const pkValue = this.Get(pk.Name);
-                if (pkValue != null) {
-                    this._parentEntity.Set(pk.Name, pkValue);
-                }
-            }
         }
 
         this.RaiseEvent('new_record', null);

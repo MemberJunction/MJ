@@ -249,6 +249,17 @@ export class SchedulingActivityComponent implements OnInit, OnDestroy {
     if (this.JobNameFilter) this.OnJobNameFilterChange('');
   }
 
+  /** True when search and/or filters narrow the execution list. */
+  public get IsListNarrowed(): boolean {
+    return this.SearchTerm !== '' || this.ActiveFilterCount > 0;
+  }
+
+  /** Reset search + all filters (used by the no-results empty-state CTA). */
+  public ResetAllFiltersAndSearch(): void {
+    if (this.SearchTerm) this.OnSearchChange('');
+    this.ResetFilters();
+  }
+
   public ShouldShowLabel(index: number): boolean {
     const total = this.Trends.length;
     if (total <= 10) return true;

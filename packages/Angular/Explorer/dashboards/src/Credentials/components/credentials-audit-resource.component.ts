@@ -230,6 +230,19 @@ export class CredentialsAuditResourceComponent extends BaseResourceComponent imp
         this.applyFilters();
     }
 
+    /** True when search and/or any filter narrow the log list. */
+    public get IsListNarrowed(): boolean {
+        return !!(this.searchText || this.selectedStatus || this.selectedOperation);
+    }
+
+    /** Empty-state CTA: reset search + status + operation filters. */
+    public resetAuditFilters(): void {
+        this.searchText = '';
+        this.selectedStatus = '';
+        this.selectedOperation = '';
+        this.applyFilters();
+    }
+
     public setViewMode(mode: 'table' | 'timeline'): void {
         this.viewMode = mode;
         this.cdr.markForCheck();

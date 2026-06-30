@@ -470,11 +470,6 @@
 .model-prompt-priority-matrix .error-container {
   padding: 1rem;
 }
-.model-prompt-priority-matrix .error-container .alert {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
 
 @media (max-width: 1200px) {
   .model-prompt-priority-matrix .matrix-toolbar .toolbar-section {

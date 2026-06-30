@@ -11,6 +11,7 @@ export * from './custom/crud/create-record.action';
 export * from './custom/crud/get-record.action';
 export * from './custom/crud/update-record.action';
 export * from './custom/crud/delete-record.action';
+export * from './custom/crud/write-entity-fields.action';
 
 // Data processing
 export * from './custom/data/run-record-process.action';

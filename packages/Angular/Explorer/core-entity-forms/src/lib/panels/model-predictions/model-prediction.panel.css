@@ -1,0 +1,159 @@
+/* Entity-agnostic model-prediction panel.
+   Design-token-clean: every color is a --mj-* semantic token. The gauge bands
+   are intentionally NEUTRAL — they encode position on the value axis (low/mid/high)
+   via opacity of a single brand color, never green=good / red=bad. */
+
+.mpp-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 4px 2px;
+}
+
+.mpp-card {
+    border: 1px solid var(--mj-border-default);
+    border-radius: var(--mj-radius-md, 8px);
+    background: var(--mj-bg-surface-card);
+    padding: 14px 16px;
+}
+
+/* ---- Header ---- */
+.mpp-card-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.mpp-label {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--mj-text-primary);
+}
+
+.mpp-provenance {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.75rem;
+    color: var(--mj-text-muted);
+}
+
+.mpp-prov-icon {
+    color: var(--mj-brand-primary);
+}
+
+.mpp-dot {
+    color: var(--mj-text-disabled);
+}
+
+/* ---- Primary value ---- */
+.mpp-value-row {
+    margin: 2px 0 10px;
+}
+
+.mpp-value {
+    font-size: 1.75rem;
+    font-weight: 700;
+    line-height: 1.1;
+    color: var(--mj-text-primary);
+    font-variant-numeric: tabular-nums;
+}
+
+.mpp-value-muted {
+    color: var(--mj-text-disabled);
+    font-weight: 500;
+}
+
+/* ---- Gauge (neutral tercile) ---- */
+.mpp-gauge {
+    margin-bottom: 4px;
+}
+
+.mpp-gauge-track {
+    position: relative;
+    height: 10px;
+    border-radius: var(--mj-radius-full, 9999px);
+    background: var(--mj-bg-surface-sunken);
+    overflow: hidden;
+}
+
+.mpp-gauge-fill {
+    height: 100%;
+    border-radius: var(--mj-radius-full, 9999px);
+    background: var(--mj-brand-primary);
+    transition: width 0.3s ease;
+}
+
+/* Band shading: same brand hue, varied opacity = neutral position cue only. */
+.mpp-band-low {
+    background: color-mix(in srgb, var(--mj-brand-primary) 55%, transparent);
+}
+.mpp-band-mid {
+    background: color-mix(in srgb, var(--mj-brand-primary) 78%, transparent);
+}
+.mpp-band-high {
+    background: var(--mj-brand-primary);
+}
+
+.mpp-gauge-scale {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 4px;
+    font-size: 0.68rem;
+    color: var(--mj-text-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+/* ---- Drivers ---- */
+.mpp-drivers {
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid var(--mj-border-subtle, var(--mj-border-default));
+}
+
+.mpp-drivers-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--mj-text-secondary);
+    margin-bottom: 8px;
+}
+
+.mpp-driver {
+    display: grid;
+    grid-template-columns: minmax(80px, 38%) 1fr;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 6px;
+}
+
+.mpp-driver-name {
+    font-size: 0.8rem;
+    color: var(--mj-text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.mpp-driver-bar-track {
+    display: block;
+    height: 7px;
+    border-radius: var(--mj-radius-full, 9999px);
+    background: var(--mj-bg-surface-sunken);
+    overflow: hidden;
+}
+
+.mpp-driver-bar-fill {
+    display: block;
+    height: 100%;
+    border-radius: var(--mj-radius-full, 9999px);
+    background: color-mix(in srgb, var(--mj-brand-primary) 70%, transparent);
+    transition: width 0.3s ease;
+}

@@ -52,9 +52,10 @@
             <mj-loading [showText]="false" size="medium"></mj-loading>
           }
           @if (!Reports.length && !showloader) {
-            <div class="no-items-message">
-              No reports available
-            </div>
+            <mj-empty-state
+              Size="compact"
+              Icon="fa-solid fa-file-lines"
+              Title="No reports available" />
           }
         }
       }

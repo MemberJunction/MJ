@@ -27,16 +27,10 @@
   @if (!IsLoading && APIKey) {
     <!-- Success/Error Messages -->
     @if (SuccessMessage) {
-      <div class="message success">
-        <i class="fa-solid fa-check-circle"></i>
-        {{SuccessMessage}}
-      </div>
+      <mj-alert Variant="success" class="slideout-msg-gap">{{SuccessMessage}}</mj-alert>
     }
     @if (ErrorMessage) {
-      <div class="message error">
-        <i class="fa-solid fa-circle-exclamation"></i>
-        {{ErrorMessage}}
-      </div>
+      <mj-alert Variant="error" class="slideout-msg-gap">{{ErrorMessage}}</mj-alert>
     }
     <!-- Tabs -->
     <div class="slideout-tabs">
@@ -205,13 +199,9 @@
           }
           <!-- Revoked Notice -->
           @if (APIKey.Status === 'Revoked') {
-            <div class="revoked-notice">
-              <i class="fa-solid fa-ban"></i>
-              <div>
-                <strong>This API key has been revoked</strong>
-                <p>It can no longer be used for authentication. Consider deleting this record if no longer needed.</p>
-              </div>
-            </div>
+            <mj-alert Variant="info" Icon="fa-solid fa-ban" Title="This API key has been revoked">
+              It can no longer be used for authentication. Consider deleting this record if no longer needed.
+            </mj-alert>
           }
         </div>
       }
@@ -240,13 +230,9 @@
           </div>
           <!-- No Scopes Warning -->
           @if (!IsLoadingScopes && getAssignedScopeCount() === 0 && APIKey.Status === 'Active') {
-            <div class="no-scopes-warning">
-              <i class="fa-solid fa-triangle-exclamation"></i>
-              <div>
-                <strong>Warning: No permissions assigned</strong>
-                <p>This API key has no assigned scopes and cannot perform any operations. All API requests using this key will be rejected until scopes are assigned.</p>
-              </div>
-            </div>
+            <mj-alert Variant="warning" Title="No permissions assigned">
+              This API key has no assigned scopes and cannot perform any operations. All API requests using this key will be rejected until scopes are assigned.
+            </mj-alert>
           }
           @if (IsLoadingScopes) {
             <mj-loading text="Loading permissions..."></mj-loading>
@@ -352,11 +338,9 @@
                 </div>
               }
               @if (UsageLogs.length === 0) {
-                <div class="empty-state">
-                  <i class="fa-solid fa-chart-area"></i>
-                  <span>No usage logs yet</span>
-                  <p>Usage will be recorded when this API key is used for authentication</p>
-                </div>
+                <mj-empty-state Icon="fa-solid fa-chart-area"
+                  Title="No usage logs yet"
+                  Message="Usage will be recorded when this API key is used for authentication" />
               }
             </div>
           }

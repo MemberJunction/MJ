@@ -1,5 +1,29 @@
 # @memberjunction/generic-database-provider
 
+## 5.43.0
+
+### Patch Changes
+
+- Updated dependencies [40eb4e0]
+- Updated dependencies [9f6aa87]
+- Updated dependencies [b98366b]
+- Updated dependencies [9200b13]
+- Updated dependencies [ad8d8f1]
+- Updated dependencies [a4cdfb0]
+  - @memberjunction/core@5.43.0
+  - @memberjunction/global@5.43.0
+  - @memberjunction/actions@5.43.0
+  - @memberjunction/sql-dialect@5.43.0
+  - @memberjunction/core-entities@5.43.0
+  - @memberjunction/aiengine@5.43.0
+  - @memberjunction/ai-vectors-memory@5.43.0
+  - @memberjunction/actions-base@5.43.0
+  - @memberjunction/encryption@5.43.0
+  - @memberjunction/queue@5.43.0
+  - @memberjunction/query-processor@5.43.0
+  - @memberjunction/geo-core@5.43.0
+  - @memberjunction/sql-parser@5.43.0
+
 ## 5.42.0
 
 ### Minor Changes

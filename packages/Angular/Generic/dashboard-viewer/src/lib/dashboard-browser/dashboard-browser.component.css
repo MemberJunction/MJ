@@ -573,170 +573,18 @@
 }
 
 /* Empty State */
-.empty-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
+/* Empty state fills the browser pane (flex-fill — mj-empty-state centers
+   its content but does not grow on its own). */
+.dashboard-empty {
     flex: 1;
-    padding: 48px 24px;
-    text-align: center;
     min-height: 400px;
 }
 
-.empty-state-content {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    max-width: 480px;
-}
-
-/* Standard empty icon */
-.empty-icon {
-    width: 100px;
-    height: 100px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
-    border-radius: 50%;
-    margin-bottom: 24px;
-    box-shadow: 0 4px 20px color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
-}
-
-.empty-icon i {
-    font-size: 40px;
-    color: color-mix(in srgb, var(--mj-brand-primary) 50%, var(--mj-bg-surface));
-}
-
-.empty-icon.folder-empty {
-    background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
-}
-
-.empty-icon.folder-empty i {
-    color: var(--mj-status-warning);
-}
-
-.empty-icon.search-empty {
-    background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
-}
-
-.empty-icon.search-empty i {
-    color: var(--mj-brand-primary);
-}
-
-/* Welcome illustration for first-time users */
-.empty-illustration {
-    position: relative;
-    width: 160px;
-    height: 160px;
-    margin-bottom: 32px;
-}
-
-.illustration-bg {
-    width: 120px;
-    height: 120px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: var(--mj-brand-primary);
-    border-radius: 50%;
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    box-shadow: 0 8px 32px color-mix(in srgb, var(--mj-brand-primary) 30%, transparent);
-}
-
-.illustration-bg .main-icon {
-    font-size: 48px;
-    color: var(--mj-text-inverse);
-}
-
-.illustration-accent {
-    position: absolute;
-    width: 40px;
-    height: 40px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: var(--mj-bg-surface);
-    border-radius: 50%;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-}
-
-.illustration-accent i {
-    font-size: 16px;
-}
-
-.illustration-accent.accent-1 {
-    top: 0;
-    right: 10px;
-}
-
-.illustration-accent.accent-1 i {
-    color: var(--mj-status-success);
-}
-
-.illustration-accent.accent-2 {
-    bottom: 10px;
-    left: 0;
-}
-
-.illustration-accent.accent-2 i {
-    color: var(--mj-status-error);
-}
-
-.illustration-accent.accent-3 {
-    bottom: 0;
-    right: 0;
-}
-
-.illustration-accent.accent-3 i {
-    color: var(--mj-brand-primary);
-}
-
-/* Empty state typography */
-.empty-title {
-    margin: 0 0 12px 0;
-    font-size: 24px;
-    font-weight: 600;
-    color: var(--mj-text-primary);
-}
-
-.empty-state-content h3.empty-title {
-    font-size: 20px;
-}
-
-.empty-description {
-    margin: 0 0 28px 0;
-    color: var(--mj-text-secondary);
-    font-size: 15px;
-    line-height: 1.6;
-    max-width: 380px;
-}
-
-.empty-description strong {
-    color: var(--mj-text-primary);
-}
-
-/* Empty state actions */
-.empty-actions {
-    display: flex;
-    gap: 12px;
-    margin-bottom: 32px;
-}
-
-.btn-primary.large {
-    padding: 14px 28px;
-    font-size: 15px;
-    border-radius: 8px;
-}
-
-/* Feature highlights for first-time users */
+/* Feature highlights projected into the first-time onboarding empty state */
 .empty-features {
     display: flex;
     gap: 32px;
+    margin-top: var(--mj-space-5);
     padding-top: 24px;
     border-top: 1px solid var(--mj-border-default);
 }
@@ -760,20 +608,6 @@
     border-radius: 8px;
     color: var(--mj-brand-primary);
     font-size: 16px;
-}
-
-/* Legacy support */
-.empty-state h3:not(.empty-title) {
-    margin: 0 0 8px 0;
-    font-size: 18px;
-    color: var(--mj-text-primary);
-}
-
-.empty-state p:not(.empty-description) {
-    margin: 0 0 24px 0;
-    color: var(--mj-text-secondary);
-    font-size: 14px;
-    max-width: 300px;
 }
 
 /* Category Drop Zones */

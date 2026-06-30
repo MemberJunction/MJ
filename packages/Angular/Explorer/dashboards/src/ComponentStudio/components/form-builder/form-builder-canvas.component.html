@@ -1,11 +1,10 @@
 <div class="canvas-root" (click)="OnCanvasBackgroundClick()">
 
   @if (!Canvas) {
-    <div class="canvas-empty">
-      <i class="fa-solid fa-table-list"></i>
-      <h3>No form loaded</h3>
-      <p>Pick an entity from the toolbar to start a new form, or select one from the left panel.</p>
-    </div>
+    <mj-empty-state class="canvas-empty"
+      Icon="fa-solid fa-table-list"
+      Title="No form loaded"
+      Message="Pick an entity from the toolbar to start a new form, or select one from the left panel." />
   } @else {
     <div class="canvas-title-row" (click)="$event.stopPropagation()">
       <input class="canvas-title" type="text"

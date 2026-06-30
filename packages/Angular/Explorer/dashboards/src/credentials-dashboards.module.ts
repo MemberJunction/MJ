@@ -11,7 +11,9 @@ import {
   MJFilterPanelComponent,
   MJViewToggleComponent,
   MJStatBadgeComponent,
-  MJRefreshButtonComponent
+  MJRefreshButtonComponent,
+  MJEmptyStateComponent,
+  MJAlertComponent
 } from '@memberjunction/ng-ui-components';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
@@ -54,6 +56,8 @@ import { GroupByPipe } from './Credentials/pipes/group-by.pipe';
     MJViewToggleComponent,
     MJStatBadgeComponent,
     MJRefreshButtonComponent,
+    MJEmptyStateComponent,
+    MJAlertComponent,
     ContainerDirectivesModule,
     SharedGenericModule,
     CredentialsModule

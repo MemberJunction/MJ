@@ -15,6 +15,7 @@ import {
   DataLoadedEvent,
   FilteredCountChangedEvent,
   SortState,
+  SortDirection,
   PaginationState,
   ViewGridState
 } from '../types';
@@ -427,11 +428,30 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
     }
   }
 
+  private _gridState: ViewGridState | null = null;
+
   /**
-   * Grid state configuration from a User View
-   * Controls column visibility, widths, order, and sort settings
+   * Canonical grid state for the current view — the single, framework-wide source of truth for a
+   * view's columns (visibility / order / width / formatting), sort, filter and aggregates. It is
+   * the `UserView.GridState` column, also read by `MJUserViewEntity.Columns`, the GraphQL data
+   * provider's server-side field list, the config panel, and export.
+   *
+   * Any view type that {@link IViewTypeDescriptor.UsesCanonicalGridState} is backed by this store
+   * rather than by an opaque per-view-type blob (see {@link effectiveRendererConfig}). Reactive:
+   * when the host updates this after the renderer is mounted (e.g. the config panel just saved new
+   * columns), we re-push the active renderer's config so the change reflects without a full reload.
    */
-  @Input() GridState: ViewGridState | null = null;
+  @Input()
+  set GridState(value: ViewGridState | null) {
+    const previous = this._gridState;
+    this._gridState = value;
+    if (this._initialized && value !== previous) {
+      this.refreshCanonicalGridStateRenderer();
+    }
+  }
+  get GridState(): ViewGridState | null {
+    return this._gridState;
+  }
 
   /**
    * Whether to render the Recycle Bin chip in the viewer header.
@@ -485,6 +505,13 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
    * the outer app; the container forwards it without acting on it.
    */
   @Output() CreateRecordRequested = new EventEmitter<void>();
+
+  /**
+   * Bubbled up from a plug-in renderer asking the host to open this view's configuration UI
+   * (e.g. the grid's "Manage Columns" affordance). The host (the view workspace) owns the config
+   * panel; the container just forwards the request. See {@link IViewRenderer.configureRequested}.
+   */
+  @Output() ConfigureRequested = new EventEmitter<void>();
 
   /**
    * The initial/active view type to open in, by `MJ: View Types` row ID. Hosts that persist
@@ -686,6 +713,16 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
       return this.getEntityInfoFromViewEntity(this.ViewEntity);
     }
     return null;
+  }
+
+  /** Title shown in the "no records" empty state — varies with the active filter. */
+  get NoRecordsTitle(): string {
+    return this.DebouncedFilterText ? 'No matching records' : 'No records found';
+  }
+
+  /** True when the "no records" empty state is the result of an active filter. */
+  get IsNoRecordsFiltered(): boolean {
+    return !!this.DebouncedFilterText;
   }
 
   /**
@@ -1292,6 +1329,131 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
   }
 
   // ========================================
+  // PROGRAMMATIC GRID CONTROL (agent / external driver)
+  // ========================================
+  // These thin, public methods expose the same pagination/sort the user drives
+  // interactively so an external driver (e.g. the AI agent, via the dashboard's
+  // ViewWorkspace passthrough) can page and sort the grid. They are no-ops when
+  // records are externally supplied (no internal RunView to retrigger).
+
+  /** Current (1-based) page number the grid is showing. Internally stored 0-based. */
+  public get CurrentPageNumber(): number {
+    return this.Pagination.currentPage + 1;
+  }
+
+  /** Number of records loaded per page. */
+  public get CurrentPageSize(): number {
+    return this.Pagination.pageSize;
+  }
+
+  /** Total records available for the current entity/view/filter (from the server). */
+  public get TotalRecords(): number {
+    return this.Pagination.totalRecords;
+  }
+
+  /** The grid's active sort state, or null when unsorted. */
+  public get CurrentSortState(): SortState | null {
+    return this.InternalSortState;
+  }
+
+  /**
+   * Navigate to a specific (1-based) page. Clamps to the valid range. Returns the
+   * page actually navigated to, or null when paging isn't applicable (externally
+   * supplied records).
+   */
+  public GoToPageNumber(pageNumber: number): number | null {
+    if (this._records) {
+      return null;
+    }
+    const totalPages = this.TotalPageCount;
+    const clamped = Math.min(Math.max(1, Math.floor(pageNumber)), Math.max(1, totalPages));
+    this.OnPageChange({ PageNumber: clamped, PageSize: this.Pagination.pageSize } as PageChangeEvent);
+    return clamped;
+  }
+
+  /** Total page count derived from total records and page size (min 1). */
+  public get TotalPageCount(): number {
+    const size = this.Pagination.pageSize;
+    if (size <= 0 || this.Pagination.totalRecords <= 0) {
+      return 1;
+    }
+    return Math.ceil(this.Pagination.totalRecords / size);
+  }
+
+  /** Advance to the next page (no-op past the last page). Returns the new 1-based page or null. */
+  public NextPage(): number | null {
+    return this.GoToPageNumber(this.CurrentPageNumber + 1);
+  }
+
+  /** Go to the previous page (no-op before the first page). Returns the new 1-based page or null. */
+  public PreviousPage(): number | null {
+    return this.GoToPageNumber(this.CurrentPageNumber - 1);
+  }
+
+  /**
+   * Set the server-side page size and reload from page 1. Returns the size applied,
+   * or null when paging isn't applicable (externally supplied records).
+   */
+  public SetServerPageSize(pageSize: number): number | null {
+    if (this._records || !Number.isFinite(pageSize) || pageSize <= 0) {
+      return null;
+    }
+    const size = Math.floor(pageSize);
+    this.Pagination.pageSize = size;
+    this.OnPageChange({ PageNumber: 1, PageSize: size } as PageChangeEvent);
+    return size;
+  }
+
+  /**
+   * Apply a server-side sort by field + direction and reload. Returns true when the
+   * sort was applied, false when sorting isn't applicable (externally supplied records).
+   */
+  public ApplySort(field: string, direction: SortDirection): boolean {
+    if (this._records) {
+      return false;
+    }
+    // Drive through the public SortState input so the reload logic stays in one place.
+    this.SortState = { field, direction };
+    return true;
+  }
+
+  /**
+   * Programmatically select a record — the no-UI equivalent of a user row-click. Highlights
+   * the row (by pushing {@link SelectedRecordID} down to the active renderer) AND emits
+   * {@link RecordSelected} so the host runs its selection path (open the detail panel, etc.).
+   * Returns false when there's no entity context. This is the entry point for an external
+   * driver (the AI agent's SelectRecord tool); the record must be one of the loaded rows.
+   *
+   * @param record - a record from the currently-loaded set
+   * @returns true when selection was applied, false when no entity context is available
+   */
+  public SelectRecord(record: Record<string, unknown>): boolean {
+    const entity = this.EffectiveEntity;
+    if (!entity || !record) {
+      return false;
+    }
+    const compositeKey = buildCompositeKey(record, entity);
+    // Drive the highlight through the same input the user-click path uses.
+    this.SelectedRecordID = compositeKey.ToConcatenatedString();
+    this.RecordSelected.emit({ record, entity, compositeKey });
+    return true;
+  }
+
+  /**
+   * Export the current view's records via the active renderer's optional imperative export
+   * ({@link IViewRenderer.exportRecords}). Returns false when no renderer is mounted or the
+   * active view type doesn't support export (e.g. timeline/map). The grid renderer downloads
+   * the file itself; this is the no-UI entry point for an external driver (the AI agent).
+   */
+  public async ExportRecords(format?: 'csv' | 'excel' | 'json'): Promise<boolean> {
+    const renderer = this.dynamicRendererRef?.instance;
+    if (!renderer || typeof renderer.exportRecords !== 'function') {
+      return false;
+    }
+    return renderer.exportRecords(format);
+  }
+
+  // ========================================
   // VIEW MODE
   // ========================================
 
@@ -1684,6 +1846,9 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
     inst.dataRequest
       ?.pipe(takeUntil(this.destroy$))
       .subscribe((req: ViewDataRequest) => this.onDynamicDataRequest(req));
+    inst.configureRequested
+      ?.pipe(takeUntil(this.destroy$))
+      .subscribe(() => this.ConfigureRequested.emit());
 
     const created = { ref, inputs };
     this.dynamicRendererCache.set(option.viewTypeId, created);
@@ -1740,11 +1905,95 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
     this.setDynamicInput(ref, 'records', this.FilteredRecords);
     this.setDynamicInput(ref, 'selectedRecordId', this.SelectedRecordID);
     this.setDynamicInput(ref, 'filterText', this.DebouncedFilterText);
-    this.setDynamicInput(ref, 'config', this.viewTypeConfigById.get(option.viewTypeId) ?? {});
+    this.setDynamicInput(ref, 'config', this.effectiveRendererConfig(option));
     this.setDynamicInput(ref, 'totalRecordCount', this.TotalRecordCount);
     this.setDynamicInput(ref, 'page', this.Pagination.currentPage + 1);
     this.setDynamicInput(ref, 'pageSize', this.Pagination.pageSize);
     this.setDynamicInput(ref, 'isLoading', this.IsLoading);
+  }
+
+  // ========================================
+  // CANONICAL GRID-STATE BRIDGE
+  // (keeps view types that render the view's columns reading/writing the one source of truth —
+  //  UserView.GridState — instead of a divergent per-view-type copy in DisplayState.viewTypeConfigs)
+  // ========================================
+
+  /**
+   * The config object pushed to {@link option}'s renderer. For a view type that
+   * {@link IViewTypeDescriptor.UsesCanonicalGridState}, its `gridState` is backed by the canonical
+   * store ({@link GridState}) so the grid renders the same columns the config panel, the server
+   * query, and export use — rather than the opaque per-view-type blob. All other view types get
+   * their per-view-type config verbatim.
+   */
+  private effectiveRendererConfig(option: ViewModeOption): Record<string, unknown> {
+    const base = this.viewTypeConfigById.get(option.viewTypeId) ?? {};
+    if (!option.descriptor.UsesCanonicalGridState) {
+      return base;
+    }
+    const gridState = this.resolveCanonicalGridState(base);
+    return gridState ? { ...base, gridState } : base;
+  }
+
+  /**
+   * Resolve the grid state a canonical view type should render, preferring the canonical store: the
+   * explicit {@link GridState} input (hosts that own persistence, e.g. the view workspace, feed it),
+   * else the loaded `UserView` record's GridState column (hosts that pass only `[viewEntity]`, e.g.
+   * Explorer's view-resource). Falls back to any columns the per-view-type blob carried — a one-time
+   * migration for views whose in-grid column edits landed in `DisplayState.viewTypeConfigs` before
+   * this bridge existed; once such a view is re-saved, its columns persist to the canonical store.
+   */
+  private resolveCanonicalGridState(base: Record<string, unknown>): ViewGridState | null {
+    const canonical = this._gridState ?? this.viewRecordGridState();
+    if (canonical?.columnSettings?.length) {
+      return canonical;
+    }
+    const fromBlob = base['gridState'] as ViewGridState | undefined;
+    if (fromBlob?.columnSettings?.length) {
+      return fromBlob;
+    }
+    // Neither has columns — return canonical (may still carry sort/aggregates) or nothing.
+    return canonical ?? null;
+  }
+
+  /**
+   * The canonical grid state off the loaded `UserView` record's GridState column, surfaced as a
+   * {@link ViewGridState}. `GridStateObject` (`MJUserViewEntity_IGridState`) and `ViewGridState`
+   * share the same persisted shape — the grid and config panel treat them interchangeably.
+   */
+  private viewRecordGridState(): ViewGridState | null {
+    const obj = this._viewEntity?.GridStateObject;
+    return obj ? (obj as ViewGridState) : null;
+  }
+
+  /**
+   * Re-push the active renderer's config when the canonical {@link GridState} changes after mount
+   * (e.g. the config panel saved new columns). No-op unless a renderer is mounted and the active
+   * view type uses the canonical grid state — so non-grid view types and the pre-mount phase are
+   * unaffected. Pushing a fresh `config` object reference triggers the renderer's input-change path.
+   */
+  private refreshCanonicalGridStateRenderer(): void {
+    const ref = this.dynamicRendererRef;
+    const option = this.ActiveDynamicOption;
+    if (!ref || !option?.descriptor.UsesCanonicalGridState) {
+      return;
+    }
+    this.setDynamicInput(ref, 'config', this.effectiveRendererConfig(option));
+    ref.changeDetectorRef.detectChanges();
+  }
+
+  /**
+   * Persist a canonical grid-state change to the loaded `UserView` record's GridState column — the
+   * same canonical store the config panel writes to. Only the record target reaches here (the
+   * per-user default-view case is handled by the existing user-settings persistence). Logs (does
+   * not throw) on failure, mirroring {@link saveViewEntity}.
+   */
+  private async persistCanonicalGridState(gridState: ViewGridState | undefined): Promise<void> {
+    const ve = this._viewEntity;
+    if (!gridState || !ve?.ID) {
+      return;
+    }
+    ve.GridStateObject = gridState;
+    await this.saveViewEntity(ve);
   }
 
   /**
@@ -1782,6 +2031,27 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
       return;
     }
     this.viewTypeConfigById.set(viewTypeId, config);
+
+    // For a canonical-grid-state view type (e.g. the grid), the columns/sort the renderer just
+    // changed belong in the canonical `UserView.GridState` store — the same place the config panel,
+    // the server-side field list, and export read. Mirror it into the input so re-pushes/reads stay
+    // fresh, and (for a saved view record) persist to the GridState column instead of the opaque
+    // per-view-type blob. The per-user default-view case has no record, so it keeps the existing
+    // user-settings persistence (which already captures the full config including gridState).
+    const usesCanonicalGridState = this.AvailableViewTypes.find(o => o.viewTypeId === viewTypeId)
+      ?.descriptor.UsesCanonicalGridState === true;
+    if (usesCanonicalGridState) {
+      const newGridState = config['gridState'] as ViewGridState | undefined;
+      if (newGridState) {
+        this._gridState = newGridState;
+      }
+      if (this.AutoSaveView && this.persistenceTarget() === 'record') {
+        void this.persistCanonicalGridState(newGridState);
+        this.AfterViewTypeConfigChange.emit({ ViewTypeID: viewTypeId, Config: config, Cancel: false });
+        return;
+      }
+    }
+
     if (this.AutoSaveView) {
       void this.persistViewTypeConfig(viewTypeId);
     }

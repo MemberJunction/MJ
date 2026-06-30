@@ -64,21 +64,6 @@
     padding: 0;
 }
 
-/* Alert */
-.share-alert {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 12px 20px;
-    font-size: 13px;
-}
-
-.share-alert-error {
-    background: var(--mj-bg-error);
-    color: var(--mj-status-error);
-    border-bottom: 1px solid var(--mj-border-error);
-}
-
 /* Sections */
 .share-section {
     padding: 16px 20px;
@@ -187,13 +172,6 @@
 
 .share-user-option:hover i.fa-plus {
     opacity: 1;
-}
-
-.share-no-results {
-    padding: 16px;
-    text-align: center;
-    color: var(--mj-text-secondary);
-    font-size: 13px;
 }
 
 /* Avatar */
@@ -376,23 +354,6 @@
 .share-remove-btn:hover {
     background: var(--mj-bg-error);
     color: var(--mj-status-error);
-}
-
-/* Empty State */
-.share-empty {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 20px;
-    color: var(--mj-text-disabled);
-    font-size: 13px;
-    background: var(--mj-bg-surface-card);
-    border-radius: 8px;
-    justify-content: center;
-}
-
-.share-empty i {
-    font-size: 16px;
 }
 
 /* Removed Section */

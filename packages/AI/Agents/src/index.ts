@@ -42,6 +42,7 @@ export * from './memory-manager-agent';
 export * from './query-builder-agent';
 export * from './MJAIAgentRequestEntityServer';
 export * from './KnowledgeAgent';
+export * from './DuplicateReasoningAgentProvider';
 export * from './ClientToolRequestManager';
 export * from './realtime/realtime-session-runner';
 export * from './realtime/bridge-realtime-session-factory';
@@ -57,8 +58,14 @@ export * from './realtime/realtime-coagent-config';
 export * from './realtime/realtime-narration';
 export * from './realtime/realtime-channel-server-host';
 export * from './realtime/whiteboard-channel-server';
+export * from './realtime/client-context-channel-server';
 export * from './realtime/meeting-controls-state';
 export * from './realtime/meeting-controls-channel-server';
+export * from './realtime/media-channel-server';
+export * from './realtime/realtime-channel-server-data-context';
+export * from './realtime/agent-media-library';
+export * from './realtime/realtime-recording-capture';
+export * from './realtime/realtime-recording-store';
 
 // Re-export from ai-reranker for backward compatibility
 export {

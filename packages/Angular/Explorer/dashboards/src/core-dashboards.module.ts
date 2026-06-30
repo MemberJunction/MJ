@@ -23,7 +23,9 @@ import {
   MJRefreshButtonComponent,
   MJLeftNavComponent,
   MJLeftNavContentComponent,
-  MJTabNavComponent
+  MJTabNavComponent,
+  MJEmptyStateComponent,
+  MJAlertComponent
 } from '@memberjunction/ng-ui-components';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
@@ -78,6 +80,10 @@ import { APIScopesPanelComponent } from './APIKeys/api-scopes-panel.component';
 import { APIUsagePanelComponent } from './APIKeys/api-usage-panel.component';
 // Application Roles
 import { ApplicationRolesResourceComponent } from './ApplicationRoles/application-roles-resource.component';
+// Realtime Recordings (recorded realtime sessions — replay audio + transcript)
+import { RealtimeRecordingsDashboardComponent } from './RealtimeRecordings/realtime-recordings-dashboard.component';
+import { MJStorageMediaPlayerComponent } from '@memberjunction/ng-media-player';
+import { AngularSplitModule } from 'angular-split';
 // Permissions (Phase 2a/b/c — unified permissions admin); three independent resources
 import { PermissionsUserAccessResourceComponent } from './Permissions/user-access-resource.component';
 import { PermissionsResourceAccessResourceComponent } from './Permissions/resource-access-resource.component';
@@ -126,6 +132,8 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     APIUsagePanelComponent,
     // Application Roles
     ApplicationRolesResourceComponent,
+    // Realtime Recordings
+    RealtimeRecordingsDashboardComponent,
     // Permissions admin — three independent resource tabs
     PermissionsUserAccessResourceComponent,
     PermissionsResourceAccessResourceComponent,
@@ -162,6 +170,8 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     MJLeftNavComponent,
     MJLeftNavContentComponent,
     MJTabNavComponent,
+    MJEmptyStateComponent,
+    MJAlertComponent,
     ContainerDirectivesModule,
     SharedGenericModule,
     RecordProcessStudioComponent,
@@ -175,7 +185,9 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     ExportServiceModule,
     NgTreesModule,
     ResourcePermissionsModule,
-    SharedPipesModule
+    SharedPipesModule,
+    AngularSplitModule,
+    MJStorageMediaPlayerComponent
   ],
   exports: [
     BulkOperationsContainerComponent,
@@ -206,6 +218,7 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     APIScopesPanelComponent,
     APIUsagePanelComponent,
     ApplicationRolesResourceComponent,
+    RealtimeRecordingsDashboardComponent,
     PermissionsUserAccessResourceComponent,
     PermissionsResourceAccessResourceComponent,
     PermissionsAuditLogResourceComponent,

@@ -22,10 +22,7 @@
         <form [formGroup]="roleForm" (ngSubmit)="onSubmit()">
           @if (error) {
             <div class="content-section">
-              <div class="alert alert-error">
-                <i class="fa-solid fa-exclamation-triangle"></i>
-                <div>{{ error }}</div>
-              </div>
+              <mj-alert Variant="error" [Message]="error" />
             </div>
           }
           <!-- Basic Information Section -->
@@ -104,21 +101,9 @@
               </div>
               <div class="form-grid">
                 @if (isSystemRole) {
-                  <div class="alert alert-warning">
-                    <i class="fa-solid fa-shield-halved"></i>
-                    <div>
-                      <strong>System Role</strong>
-                      <p>This is a system-defined role. Some properties may be limited for editing to maintain system integrity.</p>
-                    </div>
-                  </div>
+                  <mj-alert Variant="warning" Title="System Role" Message="This is a system-defined role. Some properties may be limited for editing to maintain system integrity." />
                 } @else {
-                  <div class="alert alert-info">
-                    <i class="fa-solid fa-user-tag"></i>
-                    <div>
-                      <strong>Custom Role</strong>
-                      <p>This is a custom role that can be fully configured and modified.</p>
-                    </div>
-                  </div>
+                  <mj-alert Variant="info" Title="Custom Role" Message="This is a custom role that can be fully configured and modified." />
                 }
               </div>
             </div>
@@ -135,13 +120,9 @@
                   <p class="section-description">Manage role permissions and access rights</p>
                 </div>
                 <div class="form-grid">
-                  <div class="alert alert-info">
-                    <i class="fa-solid fa-info-circle"></i>
-                    <div>
-                      <strong>Permission Management</strong>
-                      <p>Role permissions can be managed in the <strong>Permissions</strong> tab of the settings dashboard. Use that interface to configure specific access rights for this role.</p>
-                    </div>
-                  </div>
+                  <mj-alert Variant="info" Title="Permission Management">
+                    Role permissions can be managed in the <strong>Permissions</strong> tab of the settings dashboard. Use that interface to configure specific access rights for this role.
+                  </mj-alert>
                 </div>
               </div>
             </div>

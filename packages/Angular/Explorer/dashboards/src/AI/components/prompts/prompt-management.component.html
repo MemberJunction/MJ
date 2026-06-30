@@ -56,20 +56,14 @@
           <!-- Prompts Display -->
           @if (!isLoading) {
             @if (filteredPrompts.length === 0) {
-              <div class="empty-state">
-                <i class="fa-solid fa-message"></i>
-                <h3>No prompts found</h3>
-                <p>{{ hasActiveFilters ? 'Try adjusting your filters' : 'Create your first AI prompt to get started' }}</p>
-                @if (!hasActiveFilters && UserCanCreatePrompts) {
-                  <button
-                    type="button"
-                    class="empty-state-btn"
-                    (click)="createNewPrompt()">
-                    <i class="fa-solid fa-plus"></i>
-                    Create New Prompt
-                  </button>
-                }
-              </div>
+              <mj-empty-state
+                [Variant]="hasActiveFilters ? 'no-results' : 'empty'"
+                Icon="fa-solid fa-message"
+                Title="No prompts found"
+                [Message]="hasActiveFilters ? 'Try adjusting your filters' : 'Create your first AI prompt to get started'"
+                [ActionText]="hasActiveFilters ? 'Reset filters' : (UserCanCreatePrompts ? 'Create New Prompt' : '')"
+                [ActionIcon]="hasActiveFilters ? 'fa-solid fa-rotate-left' : 'fa-solid fa-plus'"
+                (Action)="onEmptyStateAction()" />
             } @else {
               <!-- Grid View -->
               @if (viewMode === 'grid') {

@@ -42,6 +42,7 @@ import { LiveKitConnectionOverlayComponent } from './components/livekit-connecti
 import { LiveKitPreJoinComponent, type LiveKitPreJoinChoices } from './components/livekit-prejoin.component';
 import { LiveKitAgentStateComponent, type LiveKitAgentVisualState } from './components/livekit-agent-state.component';
 import { LiveKitWhiteboardSurfaceComponent } from './components/livekit-whiteboard-surface.component';
+import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 import {
   deriveAgentState,
   isAgentVisualState,
@@ -120,6 +121,7 @@ export interface LiveKitLayoutOption {
     LiveKitPreJoinComponent,
     LiveKitAgentStateComponent,
     LiveKitWhiteboardSurfaceComponent,
+    MJEmptyStateComponent,
   ],
   templateUrl: './livekit-room.component.html',
   styleUrls: ['./livekit-room.component.css'],

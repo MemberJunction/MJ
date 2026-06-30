@@ -12,7 +12,7 @@ import { NgTreesModule } from '@memberjunction/ng-trees';
 import { SharedDashboardWidgetsModule } from './shared/shared-dashboard-widgets.module';
 import { SharedPipesModule } from './shared/shared-pipes.module';
 import { SearchModule } from '@memberjunction/ng-search';
-import { MJButtonDirective, MJComboboxComponent, MJDropdownComponent, MJSwitchComponent, MJPageHeaderComponent, MJPageLayoutComponent, MJPageBodyComponent, MJPageHeaderInteriorComponent, MJPageBodyInteriorComponent, MJFilterPopoverComponent, MJPageSearchComponent, MJFilterPanelComponent, MJFilterFieldComponent, MJFilterChipComponent, MJTabNavComponent, MJViewToggleComponent, MJStatBadgeComponent, MJRefreshButtonComponent, MJLeftNavComponent, MJLeftNavContentComponent, MJDialogComponent, MJDialogActionsComponent } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJComboboxComponent, MJDropdownComponent, MJSwitchComponent, MJPageHeaderComponent, MJPageLayoutComponent, MJPageBodyComponent, MJPageHeaderInteriorComponent, MJPageBodyInteriorComponent, MJFilterPopoverComponent, MJPageSearchComponent, MJFilterPanelComponent, MJFilterFieldComponent, MJFilterChipComponent, MJTabNavComponent, MJViewToggleComponent, MJStatBadgeComponent, MJRefreshButtonComponent, MJLeftNavComponent, MJLeftNavContentComponent, MJDialogComponent, MJDialogActionsComponent, MJEmptyStateComponent, MJAlertComponent } from '@memberjunction/ng-ui-components';
 
 // AI Components
 import { ModelManagementComponent } from './AI/components/models/model-management.component';
@@ -91,8 +91,13 @@ import {
   AnalyticsResourceComponent,
   LoadAnalyticsResource
 } from './KnowledgeHub/components/analytics/analytics-resource.component';
+import {
+  FeaturePipelinesResourceComponent,
+  LoadFeaturePipelinesResource
+} from './KnowledgeHub/components/feature-pipelines/feature-pipelines-resource.component';
 import { ClusteringModule } from '@memberjunction/ng-clustering';
 import { SchedulingModule } from '@memberjunction/ng-scheduling';
+import { RecordProcessEditorComponent } from '@memberjunction/ng-record-process-studio';
 import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
 
 /**
@@ -142,6 +147,7 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     RecordDrilldownComponent,
     SchedulingResourceComponent,
     AnalyticsResourceComponent,
+    FeaturePipelinesResourceComponent,
     AIAnalyticsResourceComponent,
     AnalyticsFilterBarComponent,
     AnalyticsExecutiveSummaryComponent,
@@ -194,9 +200,12 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     MJRefreshButtonComponent,
     MJDialogComponent,
     MJDialogActionsComponent,
+    MJEmptyStateComponent,
+    MJAlertComponent,
     ClusteringModule,
     SchedulingModule,
-    MJWordCloudComponent
+    MJWordCloudComponent,
+    RecordProcessEditorComponent
   ],
   providers: [
     AIInstrumentationService
@@ -220,6 +229,7 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     VisualizeResourceComponent,
     SchedulingResourceComponent,
     AnalyticsResourceComponent,
+    FeaturePipelinesResourceComponent,
     AIAnalyticsResourceComponent,
     AnalyticsFilterBarComponent,
     AnalyticsExecutiveSummaryComponent,
@@ -245,6 +255,7 @@ export class AIDashboardsModule {
         LoadVisualizeResource();
         LoadSchedulingResource();
         LoadAnalyticsResource();
+        LoadFeaturePipelinesResource();
         LoadAIAnalyticsResource();
         LoadAnalyticsExecutiveSummary();
         LoadAnalyticsPromptRuns();

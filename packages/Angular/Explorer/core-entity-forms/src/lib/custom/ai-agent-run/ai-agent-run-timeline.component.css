@@ -17,9 +17,7 @@
 }
 
 /* State Displays */
-.empty-state,
-.loading-state,
-.error-state {
+.loading-state {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -29,8 +27,11 @@
   gap: 16px;
 }
 
-.error-state {
-  color: var(--mj-status-error);
+/* Empty / error placeholders fill the container vertically */
+.timeline-container mj-empty-state,
+:host > mj-empty-state {
+  flex: 1;
+  min-height: 200px;
 }
 
 /* Loading and No Children States */

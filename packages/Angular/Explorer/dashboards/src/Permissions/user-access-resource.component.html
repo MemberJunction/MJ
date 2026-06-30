@@ -11,10 +11,7 @@
   <mj-page-body>
 
   @if (ErrorMessage) {
-    <div class="message error-message">
-      <i class="fa-solid fa-circle-exclamation"></i>
-      <span>{{ ErrorMessage }}</span>
-    </div>
+    <mj-alert Variant="error">{{ ErrorMessage }}</mj-alert>
   }
 
   <div class="selector-row">
@@ -42,15 +39,13 @@
   @if (IsLoadingPermissions) {
     <mj-loading text="Loading permissions..." size="medium"></mj-loading>
   } @else if (!SelectedUserId) {
-    <div class="empty-state">
-      <i class="fa-solid fa-user-slash"></i>
-      <p>Select a user above to see their access report.</p>
-    </div>
+    <mj-empty-state Icon="fa-solid fa-user-slash"
+      Title="No user selected"
+      Message="Select a user above to see their access report." />
   } @else if (DomainGroups.length === 0) {
-    <div class="empty-state">
-      <i class="fa-solid fa-folder-open"></i>
-      <p>This user has no permissions granted in any domain.</p>
-    </div>
+    <mj-empty-state Icon="fa-solid fa-folder-open"
+      Title="No permissions"
+      Message="This user has no permissions granted in any domain." />
   } @else {
     <div class="total-summary">
       <strong>{{ TotalCount }}</strong> permission{{ TotalCount === 1 ? '' : 's' }} across

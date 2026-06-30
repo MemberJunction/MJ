@@ -2,7 +2,7 @@ import { NgModule } from "@angular/core";
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { DragDropModule } from '@angular/cdk/drag-drop';
-import { MJButtonDirective, MJAccordionPanelComponent, MJAccordionTitleDirective, MJDropdownComponent, MJComboboxComponent, MJSwitchComponent, MJDialogComponent, MJDialogTitlebarComponent, MJDialogActionsComponent, MJNumericInputComponent, MJWindowComponent, MJWindowTitlebarComponent, MJProgressBarComponent, MjSlidePanelComponent } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJAccordionPanelComponent, MJAccordionTitleDirective, MJDropdownComponent, MJComboboxComponent, MJSwitchComponent, MJDialogComponent, MJDialogTitlebarComponent, MJDialogActionsComponent, MJNumericInputComponent, MJWindowComponent, MJWindowTitlebarComponent, MJProgressBarComponent, MjSlidePanelComponent, MJEmptyStateComponent, MJAlertComponent } from '@memberjunction/ng-ui-components';
 import { AngularSplitModule } from 'angular-split';
 import { AgGridModule } from 'ag-grid-angular';
 import { BaseFormsModule, MjFormDialogComponent } from '@memberjunction/ng-base-forms';
@@ -47,8 +47,12 @@ import { MJAIAgentRunFormComponentExtended } from "./ai-agent-run/ai-agent-run.c
 import { AIAgentRunTimelineComponent } from "./ai-agent-run/ai-agent-run-timeline.component";
 import { AIAgentRunStepNodeComponent } from "./ai-agent-run/ai-agent-run-step-node.component";
 import { AIAgentRunAnalyticsComponent } from "./ai-agent-run/ai-agent-run-analytics.component";
-import { AIAgentRunVisualizationComponent } from "./ai-agent-run/ai-agent-run-visualization.component";
 import { AIAgentRunStepDetailComponent } from "./ai-agent-run/ai-agent-run-step-detail.component";
+import { AIAgentRunFlowComponent } from "./ai-agent-run/flow/agent-run-flow.component";
+import { FlameCascadeComponent } from "./ai-agent-run/flow/flame-cascade.component";
+import { SubwayLinesComponent } from "./ai-agent-run/flow/subway-lines.component";
+import { ConstellationComponent } from "./ai-agent-run/flow/constellation.component";
+import { FlowchartComponent } from "./ai-agent-run/flow/flowchart.component";
 import { MJQueryFormComponentExtended } from "./Queries/query-form.component";
 import { QueryRunDialogComponent } from "./Queries/query-run-dialog.component";
 import { FlowAgentFormSectionComponent } from "./AIAgents/FlowAgentType/flow-agent-form-section.component";
@@ -84,6 +88,11 @@ import { MJAIBridgeAgentIdentityFormComponentExtended, LoadMJAIBridgeAgentIdenti
 // AI Agent "Realtime" panel (Pattern 1 — BaseFormPanel slot). Imported so the
 // @RegisterClassEx decorator runs at module load (Angular tree-shaking guard).
 import { AgentRealtimePanel, LoadAgentRealtimePanel } from "../panels/ai-agents/agent-realtime.panel";
+// Model Predictions — an ENTITY-AGNOSTIC BaseFormPanel (Pattern 1) registered
+// against the '*' wildcard entity, so it mounts on every entity form and
+// self-hides unless that entity has an active MJ: ML Model Scoring Binding.
+// Imported here so the @RegisterClassEx decorator runs at module load.
+import { ModelPredictionPanel } from "../panels/model-predictions/model-prediction.panel";
 
 @NgModule({
     declarations: [
@@ -112,8 +121,12 @@ import { AgentRealtimePanel, LoadAgentRealtimePanel } from "../panels/ai-agents/
         AIAgentRunTimelineComponent,
         AIAgentRunStepNodeComponent,
         AIAgentRunAnalyticsComponent,
-        AIAgentRunVisualizationComponent,
         AIAgentRunStepDetailComponent,
+        AIAgentRunFlowComponent,
+        FlameCascadeComponent,
+        SubwayLinesComponent,
+        ConstellationComponent,
+        FlowchartComponent,
         MJQueryFormComponentExtended,
         QueryRunDialogComponent,
         FlowAgentFormSectionComponent,
@@ -128,6 +141,8 @@ import { AgentRealtimePanel, LoadAgentRealtimePanel } from "../panels/ai-agents/
         // ContentSource-specific BaseFormPanel slot components (no custom form override).
         TagPipelineConfigurationPanel,
         WebsiteCrawlerSettingsPanel,
+        // Entity-agnostic ('*') Model Predictions panel — mounts on every form, self-hides when N/A.
+        ModelPredictionPanel,
         MJSearchScopeFormComponentExtended,
         MJSearchScopeProviderFormComponentExtended,
         MJAIAgentSessionFormComponentExtended,
@@ -144,6 +159,8 @@ import { AgentRealtimePanel, LoadAgentRealtimePanel } from "../panels/ai-agents/
         ReactiveFormsModule,
         DragDropModule,
         AgGridModule,
+        MJEmptyStateComponent,
+        MJAlertComponent,
         MJButtonDirective,
         MJAccordionPanelComponent,
         MJAccordionTitleDirective,
@@ -208,6 +225,7 @@ import { AgentRealtimePanel, LoadAgentRealtimePanel } from "../panels/ai-agents/
         MJListFormComponentExtended,
         TagPipelineConfigurationPanel,
         WebsiteCrawlerSettingsPanel,
+        ModelPredictionPanel,
         MJSearchScopeFormComponentExtended,
         MJSearchScopeProviderFormComponentExtended,
         MJAIAgentSessionFormComponentExtended,

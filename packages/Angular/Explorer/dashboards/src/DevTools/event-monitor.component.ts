@@ -1,8 +1,10 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, AfterViewInit, ChangeDetectorRef } from '@angular/core';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { RegisterClass, MJGlobal, MJEvent } from '@memberjunction/global';
 import { Subscription } from 'rxjs';
 import { DevToolsPrefs } from './dev-tools-prefs';
+import { buildEventMonitorAgentContext } from './dev-tools-agent-context';
+import { AgentToolResult, validateStringParam, validateEnumParam } from '../shared/agent-tool-validation';
 
 interface EventMonitorPrefs {
     filter?: string;
@@ -41,7 +43,7 @@ type SortDir = 'asc' | 'desc';
     templateUrl: './event-monitor.component.html',
     styleUrls: ['./inspector-shared.css', './event-monitor.component.css']
 })
-export class EventMonitorComponent extends BaseResourceComponent implements OnInit, OnDestroy {
+export class EventMonitorComponent extends BaseResourceComponent implements OnInit, OnDestroy, AfterViewInit {
 
     public readonly MaxEvents = 500;
     public Events: EventRow[] = [];
@@ -73,6 +75,14 @@ export class EventMonitorComponent extends BaseResourceComponent implements OnIn
         this.subscribe();
         this.rateTimer = setInterval(() => this.tickRate(), 500);
         this.NotifyLoadComplete();
+    }
+
+    public ngAfterViewInit(): void {
+        // Publish the initial agent context and register the client tools the AI
+        // agent can invoke against this surface. Ongoing re-emit happens in the
+        // user-action methods (pause/clear/filter/sort) and in tickRate (live metrics).
+        this.publishAgentContext();
+        this.registerAgentClientTools();
     }
 
     public ngOnDestroy(): void {
@@ -109,6 +119,7 @@ export class EventMonitorComponent extends BaseResourceComponent implements OnIn
     public TogglePause(): void {
         this.Paused = !this.Paused;
         this.cdr.markForCheck();
+        this.publishAgentContext();
     }
 
     public ToggleAutoScroll(): void {
@@ -120,6 +131,7 @@ export class EventMonitorComponent extends BaseResourceComponent implements OnIn
         this.seq = 0;
         this.Stats.kept = 0;
         this.cdr.markForCheck();
+        this.publishAgentContext();
     }
 
     public ToggleRow(row: EventRow): void {
@@ -128,6 +140,7 @@ export class EventMonitorComponent extends BaseResourceComponent implements OnIn
 
     public OnTypeFilterClick(type: string): void {
         this.TypeFilter = this.TypeFilter === type ? '' : type;
+        this.publishAgentContext();
     }
 
     public OnSortClick(field: SortField): void {
@@ -138,11 +151,13 @@ export class EventMonitorComponent extends BaseResourceComponent implements OnIn
             this.SortDir = field === 'time' ? 'desc' : 'asc';
         }
         this.savePrefs();
+        this.publishAgentContext();
     }
 
     /** Public so the template can call on every ngModelChange (filters, selects). */
     public PersistPrefs(): void {
         this.savePrefs();
+        this.publishAgentContext();
     }
 
     public async OnCopyRow(row: EventRow): Promise<void> {
@@ -156,6 +171,25 @@ export class EventMonitorComponent extends BaseResourceComponent implements OnIn
         try {
             await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
         } catch { /* clipboard unavailable */ }
+    }
+
+    /** Empty-state presentation for the event list — varies by capture state. */
+    public get EmptyVariant(): 'empty' | 'warning' | 'no-results' {
+        if (this.Stats.captured === 0) return 'empty';
+        return this.Paused ? 'warning' : 'no-results';
+    }
+    public get EmptyIcon(): string {
+        if (this.Stats.captured === 0) return 'fa-solid fa-radio';
+        return this.Paused ? 'fa-solid fa-pause' : 'fa-solid fa-filter';
+    }
+    public get EmptyTitle(): string {
+        if (this.Stats.captured === 0) return 'Listening for events…';
+        return this.Paused ? 'Capture is paused' : 'No events match your filter';
+    }
+    public get EmptyMessage(): string {
+        if (this.Stats.captured === 0) return 'Trigger an action — saves, navigation, AI events all show up here.';
+        if (this.Paused) return `${this.Stats.captured} events fired since you paused. Click Resume to start collecting again.`;
+        return `${this.Stats.kept} events in buffer · clear filters to see them.`;
     }
 
     public get FilteredEvents(): EventRow[] {
@@ -194,6 +228,7 @@ export class EventMonitorComponent extends BaseResourceComponent implements OnIn
         this.ComponentFilter = '';
         this.CodeFilter = '';
         this.savePrefs();
+        this.publishAgentContext();
     }
 
     public get HasActiveFilters(): boolean {
@@ -279,6 +314,8 @@ export class EventMonitorComponent extends BaseResourceComponent implements OnIn
         this.rateBucket = this.rateBucket.filter(t => t >= cutoff);
         this.Stats.perSecond = this.rateBucket.length;
         this.cdr.markForCheck();
+        // Keep the agent's view of live metrics (event count / rate) current.
+        this.publishAgentContext();
     }
 
     private summarizeArgs(args: unknown): string {
@@ -292,5 +329,163 @@ export class EventMonitorComponent extends BaseResourceComponent implements OnIn
             return `{ ${keys.slice(0, 3).join(', ')}${keys.length > 3 ? ', …' : ''} }`;
         }
         return String(args);
+    }
+
+    // ========================================
+    // AI AGENT CONTEXT & CLIENT TOOLS
+    //
+    // 🔒 SAFETY BOUNDARY — CLASSIFICATION: SAFE developer diagnostic.
+    // The Event Monitor is a live tail of MJGlobal's event bus. The context and
+    // tools below report/control only the monitor's own capture state — event
+    // counts, live rate, pause flag, the user's filters and sort. No tool reads
+    // or mutates application data; the surface is a read-only diagnostic with
+    // capture controls scoped entirely to this inspector's in-memory ring buffer.
+    // ========================================
+
+    /** Publish the current Event Monitor capture state to the AI agent. */
+    private publishAgentContext(): void {
+        const filtered = this.FilteredEvents;
+        const context = buildEventMonitorAgentContext({
+            EventCount: this.Stats.captured,
+            BufferedCount: this.Stats.kept,
+            EventsPerSecond: this.Stats.perSecond,
+            Paused: this.Paused,
+            TextFilter: this.Filter,
+            TypeFilter: this.TypeFilter,
+            ComponentFilter: this.ComponentFilter,
+            CodeFilter: this.CodeFilter,
+            SortField: this.SortField,
+            SortDirection: this.SortDir,
+            FilteredCount: filtered.length,
+            KnownTypes: this.KnownTypes,
+            KnownComponents: this.KnownComponents,
+            KnownCodes: this.KnownCodes,
+            // Secret-free summaries of the most-recent visible events. `summary` is
+            // already a redacted payload-shape preview (keys/length, never values).
+            RecentEvents: filtered.slice(0, 25).map(e => ({
+                Type: e.type,
+                Component: e.componentName,
+                Summary: e.summary,
+            })),
+        });
+        this.navigationService.SetAgentContext(this, context);
+    }
+
+    /**
+     * Register the client tools the AI agent can invoke against the Event Monitor.
+     * All operate on the inspector's own capture state — no application mutation.
+     * Tools: PauseEventMonitor / ResumeEventMonitor, ClearEventLog,
+     * FilterEventsByType, FilterEventsByComponent, ClearEventFilters,
+     * SetEventMonitorSort.
+     */
+    private registerAgentClientTools(): void {
+        this.navigationService.SetAgentClientTools(this, [
+            {
+                Name: 'PauseEventMonitor',
+                Description: 'Pause live event capture (events keep counting but are not added to the log).',
+                ParameterSchema: { type: 'object', properties: {} },
+                Handler: async () => {
+                    if (!this.Paused) this.TogglePause();
+                    return { Success: true };
+                },
+            },
+            {
+                Name: 'ResumeEventMonitor',
+                Description: 'Resume live event capture after it was paused.',
+                ParameterSchema: { type: 'object', properties: {} },
+                Handler: async () => {
+                    if (this.Paused) this.TogglePause();
+                    return { Success: true };
+                },
+            },
+            {
+                Name: 'ClearEventLog',
+                Description: 'Clear all events currently held in the Event Monitor buffer.',
+                ParameterSchema: { type: 'object', properties: {} },
+                Handler: async () => {
+                    this.Clear();
+                    return { Success: true };
+                },
+            },
+            {
+                Name: 'FilterEventsByType',
+                Description: 'Filter the event log to a single event type. Pass an empty string to clear the type filter.',
+                ParameterSchema: { type: 'object', properties: { type: { type: 'string' } }, required: ['type'] },
+                Handler: async (params: Record<string, unknown>) => this.toolFilterByType(params),
+            },
+            {
+                Name: 'FilterEventsByComponent',
+                Description: 'Filter the event log to a single emitting component name. Pass an empty string to clear the component filter.',
+                ParameterSchema: { type: 'object', properties: { component: { type: 'string' } }, required: ['component'] },
+                Handler: async (params: Record<string, unknown>) => this.toolFilterByComponent(params),
+            },
+            {
+                Name: 'ClearEventFilters',
+                Description: 'Clear all active Event Monitor filters (text, type, component, code) so every captured event is shown.',
+                ParameterSchema: { type: 'object', properties: {} },
+                Handler: async () => {
+                    this.ClearFilters();
+                    this.cdr.markForCheck();
+                    return { Success: true };
+                },
+            },
+            {
+                Name: 'SetEventMonitorSort',
+                Description: 'Set the event log sort field (time | type | eventCode | component) and direction (asc | desc).',
+                ParameterSchema: {
+                    type: 'object',
+                    properties: {
+                        field: { type: 'string', enum: ['time', 'type', 'eventCode', 'component'] },
+                        direction: { type: 'string', enum: ['asc', 'desc'] },
+                    },
+                    required: ['field', 'direction'],
+                },
+                Handler: async (params: Record<string, unknown>) => this.toolSetSort(params),
+            },
+        ]);
+    }
+
+    /** Apply (or clear, on empty string) the event-type filter. */
+    private toolFilterByType(params: Record<string, unknown>): AgentToolResult {
+        const validated = validateStringParam(params['type'], 'type');
+        if (!validated.ok) {
+            return validated.result;
+        }
+        this.TypeFilter = validated.value;
+        this.savePrefs();
+        this.publishAgentContext();
+        this.cdr.markForCheck();
+        return { Success: true };
+    }
+
+    /** Apply (or clear, on empty string) the component-name filter. */
+    private toolFilterByComponent(params: Record<string, unknown>): AgentToolResult {
+        const validated = validateStringParam(params['component'], 'component');
+        if (!validated.ok) {
+            return validated.result;
+        }
+        this.ComponentFilter = validated.value;
+        this.savePrefs();
+        this.publishAgentContext();
+        this.cdr.markForCheck();
+        return { Success: true };
+    }
+
+    /** Set the sort field + direction from validated enum params. */
+    private toolSetSort(params: Record<string, unknown>): AgentToolResult {
+        const field = validateEnumParam<SortField>(params['field'], ['time', 'type', 'eventCode', 'component'], 'field');
+        if (!field.ok) {
+            return field.result;
+        }
+        const dir = validateEnumParam<SortDir>(params['direction'], ['asc', 'desc'], 'direction');
+        if (!dir.ok) {
+            return dir.result;
+        }
+        this.SortField = field.value;
+        this.SortDir = dir.value;
+        this.savePrefs();
+        this.publishAgentContext();
+        this.cdr.markForCheck();
+        return { Success: true };
     }
 }

@@ -1,0 +1,948 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Praxis · Realtime Session</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+<style>
+  /* ============================================================
+     DESIGN TOKENS — light theme (default)
+     ============================================================ */
+  :root {
+    --mj-bg-page: #f4f6f9;
+    --mj-bg-surface: #ffffff;
+    --mj-bg-surface-card: #f8f9fa;
+    --mj-bg-surface-sunken: #f1f5f9;
+    --mj-bg-surface-hover: #eef2f7;
+
+    --mj-text-primary: #1f2933;
+    --mj-text-secondary: #475569;
+    --mj-text-muted: #64748b;
+    --mj-text-inverse: #ffffff;
+
+    --mj-border-default: #e2e8f0;
+    --mj-border-strong: #cbd5e1;
+    --mj-border-focus: #0076b6;
+
+    --mj-brand-primary: #0076b6;
+    --mj-brand-primary-hover: #005f93;
+
+    --mj-status-success: #16a34a;
+    --mj-status-warning: #ea8c00;
+    --mj-status-error: #dc2626;
+    --mj-status-info: #0076b6;
+
+    /* chat specific */
+    --mj-chat-bubble-user: var(--mj-brand-primary);
+    --mj-chat-bubble-user-text: var(--mj-text-inverse);
+    --mj-chat-bubble-agent: var(--mj-bg-surface-card);
+    --mj-chat-bubble-agent-text: var(--mj-text-primary);
+
+    --mj-radius-sm: 8px;
+    --mj-radius-md: 12px;
+    --mj-radius-lg: 18px;
+    --mj-radius-pill: 999px;
+
+    --mj-shadow-sm: 0 1px 2px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.04);
+    --mj-shadow-md: 0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
+    --mj-shadow-lg: 0 12px 32px rgba(0,0,0,0.12), 0 4px 8px rgba(0,0,0,0.06);
+  }
+
+  /* ============================================================
+     DESIGN TOKENS — dark theme
+     ============================================================ */
+  :root[data-theme="dark"] {
+    --mj-bg-page: #0f172a;
+    --mj-bg-surface: #1e293b;
+    --mj-bg-surface-card: #172033;
+    --mj-bg-surface-sunken: #0b1220;
+    --mj-bg-surface-hover: #243349;
+
+    --mj-text-primary: #e2e8f0;
+    --mj-text-secondary: #94a3b8;
+    --mj-text-muted: #64748b;
+    --mj-text-inverse: #ffffff;
+
+    --mj-border-default: #334155;
+    --mj-border-strong: #475569;
+    --mj-border-focus: #2b9fd6;
+
+    --mj-brand-primary: #2b9fd6;
+    --mj-brand-primary-hover: #50b4e3;
+
+    --mj-status-success: #22c55e;
+    --mj-status-warning: #f59e0b;
+    --mj-status-error: #f87171;
+    --mj-status-info: #2b9fd6;
+
+    --mj-chat-bubble-user: var(--mj-brand-primary);
+    --mj-chat-bubble-user-text: #07202e;
+    --mj-chat-bubble-agent: var(--mj-bg-surface-card);
+    --mj-chat-bubble-agent-text: var(--mj-text-primary);
+
+    --mj-shadow-sm: 0 1px 2px rgba(0,0,0,0.4);
+    --mj-shadow-md: 0 4px 12px rgba(0,0,0,0.5);
+    --mj-shadow-lg: 0 12px 32px rgba(0,0,0,0.6);
+  }
+
+  /* ============================================================
+     BASE
+     ============================================================ */
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--mj-bg-page);
+    color: var(--mj-text-primary);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    transition: background 0.2s ease, color 0.2s ease;
+  }
+  h1, h2, h3, h4 { margin: 0; font-weight: 650; letter-spacing: -0.01em; }
+  button { font-family: inherit; cursor: pointer; }
+
+  :focus-visible {
+    outline: 2px solid var(--mj-border-focus);
+    outline-offset: 2px;
+    border-radius: var(--mj-radius-sm);
+  }
+
+  .app { display: flex; flex-direction: column; min-height: 100vh; }
+
+  /* ============================================================
+     TOP APP BAR
+     ============================================================ */
+  .appbar {
+    display: flex; align-items: center; gap: 18px;
+    padding: 0 22px; height: 60px;
+    background: var(--mj-bg-surface);
+    border-bottom: 1px solid var(--mj-border-default);
+    box-shadow: var(--mj-shadow-sm);
+    position: sticky; top: 0; z-index: 50;
+  }
+  .brand { display: flex; align-items: center; gap: 11px; }
+  .brand-mark {
+    width: 32px; height: 32px; border-radius: 9px;
+    background: linear-gradient(135deg, var(--mj-brand-primary), var(--mj-brand-primary-hover));
+    display: grid; place-items: center; color: var(--mj-text-inverse);
+    box-shadow: var(--mj-shadow-sm);
+  }
+  .brand-name { font-size: 15px; font-weight: 700; }
+  .brand-name .sub { color: var(--mj-text-muted); font-weight: 500; }
+
+  .view-switcher {
+    display: flex; gap: 4px; margin-left: 14px;
+    background: var(--mj-bg-surface-sunken);
+    padding: 4px; border-radius: var(--mj-radius-pill);
+    border: 1px solid var(--mj-border-default);
+  }
+  .view-tab {
+    border: none; background: transparent; color: var(--mj-text-secondary);
+    padding: 7px 16px; border-radius: var(--mj-radius-pill);
+    font-size: 13px; font-weight: 600;
+    display: inline-flex; align-items: center; gap: 7px;
+    transition: background 0.18s ease, color 0.18s ease;
+  }
+  .view-tab:hover { color: var(--mj-text-primary); background: var(--mj-bg-surface-hover); }
+  .view-tab.active {
+    background: var(--mj-bg-surface); color: var(--mj-brand-primary);
+    box-shadow: var(--mj-shadow-sm);
+  }
+
+  .appbar-spacer { flex: 1; }
+
+  .icon-btn {
+    width: 38px; height: 38px; border-radius: 10px;
+    border: 1px solid var(--mj-border-default);
+    background: var(--mj-bg-surface);
+    color: var(--mj-text-secondary);
+    display: grid; place-items: center; font-size: 15px;
+    transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+  }
+  .icon-btn:hover {
+    background: var(--mj-bg-surface-hover);
+    color: var(--mj-text-primary);
+    border-color: var(--mj-border-strong);
+  }
+
+  /* ============================================================
+     VIEW CONTAINERS
+     ============================================================ */
+  .view { display: none; padding: 22px; flex: 1; }
+  .view.active { display: block; }
+
+  /* ============================================================
+     LIVE SESSION LAYOUT
+     ============================================================ */
+  .live-grid {
+    display: grid;
+    grid-template-columns: 40fr 60fr;
+    gap: 22px;
+    max-width: 1500px; margin: 0 auto;
+    align-items: stretch;
+  }
+  .card {
+    background: var(--mj-bg-surface);
+    border: 1px solid var(--mj-border-default);
+    border-radius: var(--mj-radius-lg);
+    box-shadow: var(--mj-shadow-sm);
+  }
+
+  /* ---- Conversation panel ---- */
+  .conv-panel { display: flex; flex-direction: column; min-height: 640px; }
+
+  .agent-header {
+    display: flex; align-items: center; gap: 16px;
+    padding: 20px 22px; border-bottom: 1px solid var(--mj-border-default);
+  }
+  .orb-wrap { position: relative; width: 64px; height: 64px; flex: none; }
+  .orb {
+    position: absolute; inset: 8px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, var(--mj-brand-primary), var(--mj-brand-primary-hover));
+    display: grid; place-items: center; color: var(--mj-text-inverse);
+    font-size: 18px; z-index: 2;
+    box-shadow: 0 0 18px color-mix(in srgb, var(--mj-brand-primary) 60%, transparent);
+  }
+  .orb-ring {
+    position: absolute; inset: 0; border-radius: 50%;
+    border: 2px solid var(--mj-brand-primary);
+    opacity: 0.6;
+    animation: pulse-ring 2s ease-out infinite;
+  }
+  .orb-ring.delay { animation-delay: 1s; }
+  @keyframes pulse-ring {
+    0%   { transform: scale(0.75); opacity: 0.7; }
+    100% { transform: scale(1.25); opacity: 0; }
+  }
+  .agent-meta { display: flex; flex-direction: column; gap: 4px; }
+  .agent-meta .name { font-size: 16px; font-weight: 700; }
+  .state-pill {
+    display: inline-flex; align-items: center; gap: 7px;
+    align-self: flex-start;
+    padding: 4px 12px; border-radius: var(--mj-radius-pill);
+    font-size: 12px; font-weight: 650;
+    color: var(--mj-brand-primary);
+    background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+    border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 30%, transparent);
+  }
+  .state-pill .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--mj-brand-primary);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--mj-brand-primary) 60%, transparent);
+    animation: glow-dot 1.4s ease-in-out infinite;
+  }
+  @keyframes glow-dot {
+    0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--mj-brand-primary) 55%, transparent); }
+    50%      { box-shadow: 0 0 0 6px color-mix(in srgb, var(--mj-brand-primary) 0%, transparent); }
+  }
+
+  /* ---- Transcript ---- */
+  .transcript {
+    flex: 1; overflow-y: auto; padding: 20px 22px;
+    display: flex; flex-direction: column; gap: 16px;
+  }
+  .turn { display: flex; flex-direction: column; max-width: 82%; gap: 5px; }
+  .turn.user { align-self: flex-end; align-items: flex-end; }
+  .turn.agent { align-self: flex-start; align-items: flex-start; }
+  .bubble {
+    padding: 11px 15px; border-radius: var(--mj-radius-md);
+    font-size: 13.5px; line-height: 1.5;
+  }
+  .turn.user .bubble {
+    background: var(--mj-chat-bubble-user);
+    color: var(--mj-chat-bubble-user-text);
+    border-bottom-right-radius: 4px;
+  }
+  .turn.agent .bubble {
+    background: var(--mj-chat-bubble-agent);
+    color: var(--mj-chat-bubble-agent-text);
+    border: 1px solid var(--mj-border-default);
+    border-bottom-left-radius: 4px;
+  }
+  .turn-meta {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 11px; color: var(--mj-text-muted);
+  }
+  .turn-meta .who { font-weight: 650; color: var(--mj-text-secondary); }
+
+  .inprogress-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 10.5px; font-weight: 650;
+    color: var(--mj-status-info);
+    background: color-mix(in srgb, var(--mj-status-info) 12%, var(--mj-bg-surface));
+    border: 1px solid color-mix(in srgb, var(--mj-status-info) 30%, transparent);
+    padding: 2px 8px; border-radius: var(--mj-radius-pill);
+  }
+  .typing { display: inline-flex; align-items: center; gap: 5px; padding: 4px 2px; }
+  .typing .d {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--mj-text-muted);
+    animation: typing-bounce 1.2s infinite ease-in-out;
+  }
+  .typing .d:nth-child(2) { animation-delay: 0.18s; }
+  .typing .d:nth-child(3) { animation-delay: 0.36s; }
+  @keyframes typing-bounce {
+    0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
+    30%           { transform: translateY(-5px); opacity: 1; }
+  }
+
+  /* ---- Bottom call bar ---- */
+  .call-bar {
+    border-top: 1px solid var(--mj-border-default);
+    padding: 14px 22px;
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  .call-controls { display: flex; align-items: center; gap: 12px; }
+  .call-btn {
+    width: 50px; height: 50px; border-radius: 50%;
+    border: 1px solid var(--mj-border-default);
+    background: var(--mj-bg-surface-card);
+    color: var(--mj-text-secondary);
+    display: grid; place-items: center; font-size: 17px;
+    transition: transform 0.15s ease, background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+  }
+  .call-btn:hover { transform: translateY(-1px); background: var(--mj-bg-surface-hover); color: var(--mj-text-primary); }
+  .call-btn.mic-active {
+    background: var(--mj-brand-primary); color: var(--mj-text-inverse);
+    border-color: var(--mj-brand-primary);
+    box-shadow: 0 0 0 5px color-mix(in srgb, var(--mj-brand-primary) 18%, transparent);
+  }
+  .call-btn.mic-active:hover { background: var(--mj-brand-primary-hover); }
+  .call-btn.end {
+    background: var(--mj-status-error); color: var(--mj-text-inverse);
+    border-color: var(--mj-status-error);
+    margin-left: auto;
+  }
+  .call-btn.end:hover { filter: brightness(0.93); }
+  .rec-row {
+    display: flex; align-items: center; gap: 9px;
+    font-size: 12px; color: var(--mj-text-muted);
+  }
+  .rec-dot {
+    width: 9px; height: 9px; border-radius: 50%;
+    background: var(--mj-status-error);
+    animation: rec-blink 1.6s ease-in-out infinite;
+  }
+  @keyframes rec-blink { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+  .rec-row strong { color: var(--mj-text-secondary); font-weight: 650; }
+
+  /* ============================================================
+     DEMONSTRATION SURFACE (right)
+     ============================================================ */
+  .demo-panel { display: flex; flex-direction: column; min-height: 640px; }
+  .demo-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 20px; border-bottom: 1px solid var(--mj-border-default);
+  }
+  .demo-head h3 { font-size: 14px; }
+  .demo-head .hint-chip {
+    font-size: 11px; color: var(--mj-text-muted);
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .media-tabs {
+    display: flex; gap: 6px; padding: 12px 20px 0;
+    flex-wrap: wrap;
+  }
+  .media-tab {
+    border: 1px solid var(--mj-border-default);
+    background: var(--mj-bg-surface-card);
+    color: var(--mj-text-secondary);
+    padding: 8px 14px; border-radius: var(--mj-radius-sm);
+    font-size: 12.5px; font-weight: 600;
+    display: inline-flex; align-items: center; gap: 7px;
+    transition: all 0.18s ease;
+  }
+  .media-tab:hover { background: var(--mj-bg-surface-hover); color: var(--mj-text-primary); }
+  .media-tab.active {
+    background: var(--mj-brand-primary); color: var(--mj-text-inverse);
+    border-color: var(--mj-brand-primary);
+  }
+
+  .media-pane { flex: 1; padding: 16px 20px 20px; display: flex; flex-direction: column; }
+  .media-stage {
+    flex: 1; position: relative; border-radius: var(--mj-radius-md);
+    overflow: hidden; border: 1px solid var(--mj-border-default);
+    background:
+      linear-gradient(135deg,
+        color-mix(in srgb, var(--mj-brand-primary) 22%, var(--mj-bg-surface-sunken)),
+        color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface-sunken)));
+    display: grid; place-items: center; min-height: 340px;
+  }
+  .media-placeholder { text-align: center; color: var(--mj-text-secondary); }
+  .media-placeholder .big-icon {
+    font-size: 54px; color: color-mix(in srgb, var(--mj-brand-primary) 70%, var(--mj-text-muted));
+    opacity: 0.85;
+  }
+  .media-placeholder p { margin: 12px 0 0; font-size: 12.5px; color: var(--mj-text-muted); }
+
+  /* highlight overlay (Media_Highlight tool) */
+  .highlight-box {
+    position: absolute; top: 26%; left: 18%; width: 36%; height: 30%;
+    border: 2px solid var(--mj-status-warning);
+    border-radius: 6px;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-status-warning) 22%, transparent);
+    background: color-mix(in srgb, var(--mj-status-warning) 8%, transparent);
+  }
+  .highlight-label {
+    position: absolute; top: -11px; left: -2px;
+    background: var(--mj-status-warning); color: var(--mj-text-inverse);
+    font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 5px;
+    white-space: nowrap;
+  }
+
+  .caption-bar {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    padding: 10px 14px; font-size: 12px; font-weight: 600;
+    color: var(--mj-text-inverse);
+    background: linear-gradient(to top, rgba(0,0,0,0.55), rgba(0,0,0,0));
+  }
+  .media-controls {
+    position: absolute; top: 12px; right: 12px;
+    display: flex; gap: 6px;
+  }
+  .media-ctrl {
+    width: 34px; height: 34px; border-radius: 8px;
+    border: none; background: rgba(0,0,0,0.42);
+    color: #fff; display: grid; place-items: center; font-size: 13px;
+    backdrop-filter: blur(4px);
+    transition: background 0.16s ease;
+  }
+  .media-ctrl:hover { background: rgba(0,0,0,0.62); }
+
+  .empty-hint {
+    margin-top: 14px; padding: 12px 16px;
+    background: var(--mj-bg-surface-sunken);
+    border: 1px dashed var(--mj-border-strong);
+    border-radius: var(--mj-radius-sm);
+    font-size: 12.5px; color: var(--mj-text-muted);
+    display: flex; align-items: center; gap: 10px;
+  }
+  .empty-hint i { color: var(--mj-brand-primary); }
+
+  /* ============================================================
+     EVIDENCE REVIEW
+     ============================================================ */
+  .evidence-wrap { max-width: 1400px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; }
+
+  .session-head { padding: 20px 24px; }
+  .session-head-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  .session-head h2 { font-size: 19px; }
+  .session-head .date { color: var(--mj-text-muted); font-size: 13px; margin-top: 4px; }
+  .dur-badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 13px; font-weight: 650; color: var(--mj-text-secondary);
+    background: var(--mj-bg-surface-sunken);
+    border: 1px solid var(--mj-border-default);
+    padding: 7px 14px; border-radius: var(--mj-radius-pill);
+  }
+  .summary-chips { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 7px;
+    font-size: 12px; font-weight: 600; color: var(--mj-text-secondary);
+    background: var(--mj-bg-surface-card);
+    border: 1px solid var(--mj-border-default);
+    padding: 6px 13px; border-radius: var(--mj-radius-pill);
+  }
+  .chip i { color: var(--mj-brand-primary); }
+
+  /* ---- Audio player ---- */
+  .player-card { padding: 20px 24px; }
+  .player-row { display: flex; align-items: center; gap: 18px; }
+  .play-btn {
+    width: 54px; height: 54px; border-radius: 50%; flex: none;
+    background: var(--mj-brand-primary); color: var(--mj-text-inverse);
+    border: none; display: grid; place-items: center; font-size: 18px;
+    box-shadow: var(--mj-shadow-md);
+    transition: transform 0.15s ease, background 0.18s ease;
+  }
+  .play-btn:hover { transform: scale(1.05); background: var(--mj-brand-primary-hover); }
+
+  .wave-zone { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+  .waveform {
+    position: relative; height: 64px;
+    display: flex; align-items: center; gap: 2px;
+    cursor: pointer;
+    padding: 0 2px;
+  }
+  .wave-bar {
+    flex: 1; min-width: 2px; border-radius: 2px;
+    background: var(--mj-border-strong);
+    transition: background 0.1s ease;
+  }
+  .wave-bar.played { background: var(--mj-brand-primary); }
+  .scrubber {
+    position: absolute; top: -4px; bottom: -4px; left: 35%;
+    width: 3px; border-radius: 3px;
+    background: var(--mj-brand-primary);
+  }
+  .scrubber::after {
+    content: ""; position: absolute; left: 50%; top: 50%;
+    width: 16px; height: 16px; border-radius: 50%;
+    transform: translate(-50%, -50%);
+    background: var(--mj-bg-surface);
+    border: 3px solid var(--mj-brand-primary);
+    box-shadow: var(--mj-shadow-sm);
+    transition: transform 0.15s ease;
+  }
+  .waveform:hover .scrubber::after { transform: translate(-50%, -50%) scale(1.18); }
+
+  .player-meta { display: flex; align-items: center; justify-content: space-between; }
+  .player-time { font-size: 12.5px; color: var(--mj-text-secondary); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .speed-ctrl {
+    border: 1px solid var(--mj-border-default);
+    background: var(--mj-bg-surface-card);
+    color: var(--mj-text-secondary);
+    font-size: 12px; font-weight: 650;
+    padding: 5px 11px; border-radius: var(--mj-radius-pill);
+    transition: all 0.16s ease;
+  }
+  .speed-ctrl:hover { background: var(--mj-bg-surface-hover); color: var(--mj-text-primary); }
+
+  /* ---- Transcript + detail split ---- */
+  .review-split { display: grid; grid-template-columns: 1fr 320px; gap: 22px; align-items: start; }
+
+  .ev-transcript { padding: 8px; }
+  .ev-transcript-head {
+    padding: 12px 16px; font-size: 13px; font-weight: 700;
+    color: var(--mj-text-secondary);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .ev-turn {
+    width: 100%; text-align: left;
+    display: grid; grid-template-columns: 116px 1fr auto; gap: 14px; align-items: start;
+    padding: 13px 16px; border-radius: var(--mj-radius-md);
+    border: 1px solid transparent; background: transparent;
+    color: var(--mj-text-primary);
+    transition: background 0.16s ease, border-color 0.16s ease;
+    position: relative;
+  }
+  .ev-turn:hover { background: var(--mj-bg-surface-hover); }
+  .ev-turn:hover .seek-icon { opacity: 1; transform: translateX(0); }
+  .ev-turn.active {
+    background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+    border-color: color-mix(in srgb, var(--mj-brand-primary) 25%, transparent);
+  }
+  .ev-turn.active::before {
+    content: ""; position: absolute; left: 0; top: 8px; bottom: 8px;
+    width: 4px; border-radius: 4px; background: var(--mj-brand-primary);
+  }
+  .ev-speaker { display: flex; flex-direction: column; gap: 3px; }
+  .speaker-tag {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12px; font-weight: 700;
+  }
+  .speaker-tag.interviewer { color: var(--mj-brand-primary); }
+  .speaker-tag.candidate { color: var(--mj-status-success); }
+  .speaker-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+  .ev-ts { font-size: 11px; color: var(--mj-text-muted); font-variant-numeric: tabular-nums; }
+  .ev-text { font-size: 13.5px; line-height: 1.55; color: var(--mj-text-primary); }
+  .seek-icon {
+    color: var(--mj-brand-primary); font-size: 13px;
+    opacity: 0; transform: translateX(-4px);
+    transition: opacity 0.16s ease, transform 0.16s ease;
+    align-self: center;
+  }
+
+  /* ---- Evidence detail panel ---- */
+  .detail-card { padding: 20px; position: sticky; top: 82px; }
+  .detail-card h4 { font-size: 13px; color: var(--mj-text-secondary); text-transform: uppercase; letter-spacing: 0.04em; font-size: 11px; }
+  .detail-speaker { margin-top: 14px; }
+  .detail-quote {
+    margin-top: 12px; padding: 14px;
+    background: var(--mj-bg-surface-sunken);
+    border-left: 3px solid var(--mj-brand-primary);
+    border-radius: var(--mj-radius-sm);
+    font-size: 13px; line-height: 1.55; color: var(--mj-text-primary);
+  }
+  .detail-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+  .meta-chip {
+    font-size: 11px; font-weight: 600; color: var(--mj-text-secondary);
+    background: var(--mj-bg-surface-card); border: 1px solid var(--mj-border-default);
+    padding: 5px 10px; border-radius: var(--mj-radius-sm);
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .meta-chip i { color: var(--mj-text-muted); }
+  .jump-btn {
+    margin-top: 18px; width: 100%;
+    display: inline-flex; align-items: center; justify-content: center; gap: 9px;
+    background: var(--mj-brand-primary); color: var(--mj-text-inverse);
+    border: none; padding: 11px 16px; border-radius: var(--mj-radius-md);
+    font-size: 13px; font-weight: 650;
+    box-shadow: var(--mj-shadow-sm);
+    transition: background 0.18s ease, transform 0.15s ease;
+  }
+  .jump-btn:hover { background: var(--mj-brand-primary-hover); transform: translateY(-1px); }
+
+  .section-label {
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--mj-text-muted); margin: 0 0 4px;
+  }
+
+  /* ============================================================
+     RESPONSIVE
+     ============================================================ */
+  @media (max-width: 900px) {
+    .live-grid { grid-template-columns: 1fr; }
+    .review-split { grid-template-columns: 1fr; }
+    .detail-card { position: static; }
+    .conv-panel, .demo-panel { min-height: auto; }
+    .view-switcher { margin-left: 0; }
+    .ev-turn { grid-template-columns: 100px 1fr; }
+    .ev-turn .seek-icon { display: none; }
+  }
+  @media (max-width: 640px) {
+    .appbar { flex-wrap: wrap; height: auto; padding: 10px 14px; gap: 10px; }
+    .view { padding: 14px; }
+    .brand-name .sub { display: none; }
+  }
+
+  /* ============================================================
+     REDUCED MOTION
+     ============================================================ */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+    }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ============ TOP APP BAR ============ -->
+  <header class="appbar">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true"><i class="fa-solid fa-waveform-lines"></i></div>
+      <div class="brand-name">Praxis <span class="sub">· Realtime Session</span></div>
+    </div>
+
+    <nav class="view-switcher" role="tablist" aria-label="Session views">
+      <button class="view-tab active" role="tab" aria-selected="true" data-view="live" id="tab-live">
+        <i class="fa-solid fa-microphone-lines" aria-hidden="true"></i> Live Session
+      </button>
+      <button class="view-tab" role="tab" aria-selected="false" data-view="evidence" id="tab-evidence">
+        <i class="fa-solid fa-clipboard-list" aria-hidden="true"></i> Evidence Review
+      </button>
+    </nav>
+
+    <div class="appbar-spacer"></div>
+
+    <button class="icon-btn" id="theme-toggle" aria-label="Toggle light and dark theme" title="Toggle theme">
+      <i class="fa-solid fa-moon" aria-hidden="true"></i>
+    </button>
+  </header>
+
+  <!-- ============ VIEW 1: LIVE SESSION ============ -->
+  <main class="view active" id="view-live" role="tabpanel" aria-labelledby="tab-live">
+    <div class="live-grid">
+
+      <!-- LEFT: conversation -->
+      <section class="card conv-panel" aria-label="Conversation">
+        <div class="agent-header">
+          <div class="orb-wrap" aria-hidden="true">
+            <span class="orb-ring"></span>
+            <span class="orb-ring delay"></span>
+            <span class="orb"><i class="fa-solid fa-volume-high"></i></span>
+          </div>
+          <div class="agent-meta">
+            <span class="name">Interviewer</span>
+            <span class="state-pill"><span class="dot"></span> Speaking</span>
+          </div>
+        </div>
+
+        <div class="transcript" id="transcript" tabindex="0" aria-label="Live transcript">
+          <div class="turn agent">
+            <div class="bubble">Thanks for joining today. To start, could you walk me through a project you're genuinely proud of?</div>
+            <div class="turn-meta"><span class="who">Interviewer</span> · <span>00:04</span></div>
+          </div>
+
+          <div class="turn user">
+            <div class="bubble">Sure. Last year I led the migration of our billing platform off a monolith onto an event-driven architecture.</div>
+            <div class="turn-meta"><span>00:12</span> · <span class="who">You</span></div>
+          </div>
+
+          <div class="turn agent">
+            <div class="bubble">That's a meaningful undertaking. What was the hardest tradeoff you had to make along the way?</div>
+            <div class="turn-meta"><span class="who">Interviewer</span> · <span>00:21</span></div>
+          </div>
+
+          <div class="turn user">
+            <div class="bubble">Honestly, deciding when to accept eventual consistency. We chose it for the ledger reads, but kept writes strongly consistent.</div>
+            <div class="turn-meta"><span>00:33</span> · <span class="who">You</span></div>
+          </div>
+
+          <!-- IN-PROGRESS agent turn -->
+          <div class="turn agent">
+            <div class="bubble">
+              <div class="typing" aria-label="Interviewer is speaking">
+                <span class="d"></span><span class="d"></span><span class="d"></span>
+              </div>
+            </div>
+            <div class="turn-meta">
+              <span class="who">Interviewer</span> · <span>00:41</span>
+              <span class="inprogress-pill"><i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i> In-Progress</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="call-bar">
+          <div class="call-controls">
+            <button class="call-btn mic-active" aria-label="Microphone active" title="Microphone active">
+              <i class="fa-solid fa-microphone" aria-hidden="true"></i>
+            </button>
+            <button class="call-btn" aria-label="Mute microphone" title="Mute">
+              <i class="fa-solid fa-microphone-slash" aria-hidden="true"></i>
+            </button>
+            <button class="call-btn end" aria-label="End call" title="End call">
+              <i class="fa-solid fa-phone-slash" aria-hidden="true"></i>
+            </button>
+          </div>
+          <div class="rec-row">
+            <span class="rec-dot" aria-hidden="true"></span>
+            <strong>Recording on</strong> — audio stored securely
+          </div>
+        </div>
+      </section>
+
+      <!-- RIGHT: demonstration surface -->
+      <section class="card demo-panel" aria-label="Shared media">
+        <div class="demo-head">
+          <h3>Demonstration Surface</h3>
+          <span class="hint-chip"><i class="fa-solid fa-share-nodes" aria-hidden="true"></i> Shared by Interviewer</span>
+        </div>
+
+        <div class="media-tabs" role="tablist" aria-label="Media channels">
+          <button class="media-tab active" role="tab" aria-selected="true"><i class="fa-solid fa-image" aria-hidden="true"></i> Image</button>
+          <button class="media-tab" role="tab" aria-selected="false"><i class="fa-solid fa-video" aria-hidden="true"></i> Video</button>
+          <button class="media-tab" role="tab" aria-selected="false"><i class="fa-solid fa-volume-high" aria-hidden="true"></i> Audio</button>
+          <button class="media-tab" role="tab" aria-selected="false"><i class="fa-solid fa-file-pdf" aria-hidden="true"></i> PDF</button>
+          <button class="media-tab" role="tab" aria-selected="false"><i class="fa-solid fa-globe" aria-hidden="true"></i> Web</button>
+        </div>
+
+        <div class="media-pane">
+          <div class="media-stage">
+            <div class="media-controls">
+              <button class="media-ctrl" aria-label="Zoom in" title="Zoom"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i></button>
+              <button class="media-ctrl" aria-label="Open in new tab" title="Open"><i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i></button>
+              <button class="media-ctrl" aria-label="Download" title="Download"><i class="fa-solid fa-download" aria-hidden="true"></i></button>
+            </div>
+
+            <div class="highlight-box" aria-hidden="true">
+              <span class="highlight-label">Media_Highlight · Region A</span>
+            </div>
+
+            <div class="media-placeholder">
+              <div class="big-icon"><i class="fa-solid fa-image"></i></div>
+              <p>Product overview render</p>
+            </div>
+
+            <div class="caption-bar">Fig 1. Product overview</div>
+          </div>
+
+          <div class="empty-hint">
+            <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+            The agent will share visuals here during the conversation.
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- ============ VIEW 2: EVIDENCE REVIEW ============ -->
+  <main class="view" id="view-evidence" role="tabpanel" aria-labelledby="tab-evidence">
+    <div class="evidence-wrap">
+
+      <!-- Session header -->
+      <section class="card session-head">
+        <div class="session-head-top">
+          <div>
+            <h2>Interview · Candidate A</h2>
+            <div class="date"><i class="fa-regular fa-calendar" aria-hidden="true"></i> June 24, 2026 · 2:15 PM</div>
+          </div>
+          <span class="dur-badge"><i class="fa-regular fa-clock" aria-hidden="true"></i> 07:42</span>
+        </div>
+        <div class="summary-chips">
+          <span class="chip"><i class="fa-solid fa-volume-high" aria-hidden="true"></i> Recording: Audio</span>
+          <span class="chip"><i class="fa-solid fa-comments" aria-hidden="true"></i> Turns: 24</span>
+          <span class="chip"><i class="fa-solid fa-users" aria-hidden="true"></i> Speakers: 2</span>
+        </div>
+      </section>
+
+      <!-- Audio player -->
+      <section class="card player-card" aria-label="Audio playback">
+        <div class="player-row">
+          <button class="play-btn" id="play-btn" aria-label="Pause playback" title="Pause">
+            <i class="fa-solid fa-pause" aria-hidden="true"></i>
+          </button>
+          <div class="wave-zone">
+            <div class="waveform" id="waveform" role="slider" aria-label="Audio scrubber" aria-valuemin="0" aria-valuemax="100" aria-valuenow="35" tabindex="0">
+              <!-- bars injected by script -->
+              <div class="scrubber" aria-hidden="true"></div>
+            </div>
+            <div class="player-meta">
+              <span class="player-time">02:41 / 07:42</span>
+              <button class="speed-ctrl" aria-label="Playback speed">1.0×</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Transcript + detail -->
+      <div class="review-split">
+
+        <section class="card ev-transcript" aria-label="Time-aligned transcript">
+          <div class="ev-transcript-head">
+            <span>Transcript</span>
+            <span style="font-weight:500;color:var(--mj-text-muted);font-size:11px;">Click any line to seek</span>
+          </div>
+
+          <button class="ev-turn">
+            <div class="ev-speaker"><span class="speaker-tag interviewer"><span class="speaker-dot"></span>Interviewer</span><span class="ev-ts">00:04</span></div>
+            <div class="ev-text">Thanks for making the time today. Let's start broad — tell me what drew you to this role.</div>
+            <i class="fa-solid fa-play seek-icon" aria-hidden="true"></i>
+          </button>
+
+          <button class="ev-turn">
+            <div class="ev-speaker"><span class="speaker-tag candidate"><span class="speaker-dot"></span>Candidate</span><span class="ev-ts">00:18</span></div>
+            <div class="ev-text">It was the scope of the data platform, really. I've spent years wishing the tooling I had looked like what you're building.</div>
+            <i class="fa-solid fa-play seek-icon" aria-hidden="true"></i>
+          </button>
+
+          <button class="ev-turn">
+            <div class="ev-speaker"><span class="speaker-tag interviewer"><span class="speaker-dot"></span>Interviewer</span><span class="ev-ts">00:47</span></div>
+            <div class="ev-text">Give me a concrete example of a system you've owned end to end.</div>
+            <i class="fa-solid fa-play seek-icon" aria-hidden="true"></i>
+          </button>
+
+          <button class="ev-turn">
+            <div class="ev-speaker"><span class="speaker-tag candidate"><span class="speaker-dot"></span>Candidate</span><span class="ev-ts">01:09</span></div>
+            <div class="ev-text">The billing migration I mentioned. I owned it from the RFC through to the production cutover and the on-call rotation afterward.</div>
+            <i class="fa-solid fa-play seek-icon" aria-hidden="true"></i>
+          </button>
+
+          <button class="ev-turn">
+            <div class="ev-speaker"><span class="speaker-tag interviewer"><span class="speaker-dot"></span>Interviewer</span><span class="ev-ts">01:52</span></div>
+            <div class="ev-text">What went wrong that you didn't anticipate?</div>
+            <i class="fa-solid fa-play seek-icon" aria-hidden="true"></i>
+          </button>
+
+          <!-- ACTIVE (currently playing) -->
+          <button class="ev-turn active">
+            <div class="ev-speaker"><span class="speaker-tag candidate"><span class="speaker-dot"></span>Candidate</span><span class="ev-ts">02:41</span></div>
+            <div class="ev-text">We underestimated replay traffic. When we re-emitted six months of events, downstream consumers fell over. I built a throttled backfill to recover — that's the part I'm proudest of, honestly.</div>
+            <i class="fa-solid fa-play seek-icon" aria-hidden="true"></i>
+          </button>
+
+          <button class="ev-turn">
+            <div class="ev-speaker"><span class="speaker-tag interviewer"><span class="speaker-dot"></span>Interviewer</span><span class="ev-ts">03:30</span></div>
+            <div class="ev-text">How did you decide on the throttle rate?</div>
+            <i class="fa-solid fa-play seek-icon" aria-hidden="true"></i>
+          </button>
+
+          <button class="ev-turn">
+            <div class="ev-speaker"><span class="speaker-tag candidate"><span class="speaker-dot"></span>Candidate</span><span class="ev-ts">03:48</span></div>
+            <div class="ev-text">Empirically. We ramped on a canary consumer and watched p99 lag, then set the ceiling at 70% of where things started degrading.</div>
+            <i class="fa-solid fa-play seek-icon" aria-hidden="true"></i>
+          </button>
+
+          <button class="ev-turn">
+            <div class="ev-speaker"><span class="speaker-tag interviewer"><span class="speaker-dot"></span>Interviewer</span><span class="ev-ts">04:35</span></div>
+            <div class="ev-text">If you joined us, what's the first thing you'd want to understand about our stack?</div>
+            <i class="fa-solid fa-play seek-icon" aria-hidden="true"></i>
+          </button>
+
+          <button class="ev-turn">
+            <div class="ev-speaker"><span class="speaker-tag candidate"><span class="speaker-dot"></span>Candidate</span><span class="ev-ts">05:02</span></div>
+            <div class="ev-text">The metadata layer — how much of the platform is genuinely driven by it versus convention. That tells me how far I can push the abstraction.</div>
+            <i class="fa-solid fa-play seek-icon" aria-hidden="true"></i>
+          </button>
+        </section>
+
+        <!-- Detail panel -->
+        <aside class="card detail-card" aria-label="Selected turn detail">
+          <h4>Selected Turn</h4>
+          <div class="detail-speaker">
+            <span class="speaker-tag candidate"><span class="speaker-dot"></span>Candidate</span>
+          </div>
+          <div class="detail-quote">
+            "We underestimated replay traffic… I built a throttled backfill to recover — that's the part I'm proudest of, honestly."
+          </div>
+          <div class="detail-chips">
+            <span class="meta-chip"><i class="fa-solid fa-hourglass-start" aria-hidden="true"></i> Start 02:41</span>
+            <span class="meta-chip"><i class="fa-solid fa-hourglass-end" aria-hidden="true"></i> End 03:29</span>
+            <span class="meta-chip"><i class="fa-solid fa-user" aria-hidden="true"></i> Candidate A</span>
+          </div>
+          <button class="jump-btn">
+            <i class="fa-solid fa-forward" aria-hidden="true"></i> Jump to 02:41
+          </button>
+        </aside>
+
+      </div>
+    </div>
+  </main>
+
+</div>
+
+<script>
+  // ---- Theme toggle ----
+  (function () {
+    const root = document.documentElement;
+    const btn = document.getElementById('theme-toggle');
+    const icon = btn.querySelector('i');
+    btn.addEventListener('click', () => {
+      const dark = root.getAttribute('data-theme') === 'dark';
+      root.setAttribute('data-theme', dark ? 'light' : 'dark');
+      icon.className = dark ? 'fa-solid fa-moon' : 'fa-solid fa-sun';
+      btn.setAttribute('aria-label', dark ? 'Switch to dark theme' : 'Switch to light theme');
+    });
+  })();
+
+  // ---- View switcher ----
+  (function () {
+    const tabs = document.querySelectorAll('.view-tab');
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        tabs.forEach(t => { t.classList.remove('active'); t.setAttribute('aria-selected', 'false'); });
+        tab.classList.add('active'); tab.setAttribute('aria-selected', 'true');
+        const target = tab.dataset.view;
+        document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+        document.getElementById('view-' + target).classList.add('active');
+      });
+    });
+  })();
+
+  // ---- Media tabs ----
+  (function () {
+    const mtabs = document.querySelectorAll('.media-tab');
+    mtabs.forEach(t => t.addEventListener('click', () => {
+      mtabs.forEach(x => { x.classList.remove('active'); x.setAttribute('aria-selected', 'false'); });
+      t.classList.add('active'); t.setAttribute('aria-selected', 'true');
+    }));
+  })();
+
+  // ---- Waveform generation (believable static waveform, 35% played) ----
+  (function () {
+    const wf = document.getElementById('waveform');
+    const scrubber = wf.querySelector('.scrubber');
+    const COUNT = 120;
+    const PLAYED = Math.round(COUNT * 0.35);
+    const frag = document.createDocumentFragment();
+    for (let i = 0; i < COUNT; i++) {
+      const bar = document.createElement('div');
+      bar.className = 'wave-bar' + (i < PLAYED ? ' played' : '');
+      // pseudo-organic envelope so it reads like speech, not noise
+      const env = Math.sin(i / 7) * 0.5 + Math.sin(i / 2.3) * 0.3 + 0.6;
+      const h = Math.max(0.14, Math.min(1, env * (0.55 + Math.random() * 0.45)));
+      bar.style.height = (h * 100) + '%';
+      frag.appendChild(bar);
+    }
+    wf.insertBefore(frag, scrubber);
+  })();
+</script>
+</body>
+</html>

@@ -32,10 +32,7 @@
 
       <!-- Error Message -->
       @if (ErrorMessage) {
-        <div class="error-message" role="alert">
-          <i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i>
-          <span>{{ ErrorMessage }}</span>
-        </div>
+        <mj-alert Variant="error">{{ ErrorMessage }}</mj-alert>
       }
 
       <!-- Main Content -->
@@ -64,10 +61,10 @@
 
               <div class="panel-content">
                 @if (AvailableApps.length === 0) {
-                  <div class="empty-state">
-                    <i class="fa-solid fa-check-double" aria-hidden="true"></i>
-                    <p>All applications added!</p>
-                  </div>
+                  <mj-empty-state
+                    Size="compact"
+                    Icon="fa-solid fa-check-double"
+                    Title="All applications added!" />
                 }
 
                 @for (item of AvailableApps; track item.app.ID) {
@@ -113,11 +110,11 @@
 
               <div class="panel-content">
                 @if (ActiveApps.length === 0) {
-                  <div class="empty-state">
-                    <i class="fa-solid fa-inbox" aria-hidden="true"></i>
-                    <p>No applications selected</p>
-                    <p class="hint">Add apps from the available list</p>
-                  </div>
+                  <mj-empty-state
+                    Size="compact"
+                    Icon="fa-solid fa-inbox"
+                    Title="No applications selected"
+                    Message="Add apps from the available list" />
                 }
 
                 @if (ActiveApps.length > 0) {

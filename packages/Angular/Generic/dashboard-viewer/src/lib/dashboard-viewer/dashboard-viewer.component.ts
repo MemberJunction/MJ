@@ -18,7 +18,7 @@ import {
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { Metadata, RunView } from '@memberjunction/core';
-import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
+import { MJGlobal, UUIDsEqual, EscapeHTML } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { DashboardEngine, MJDashboardEntity, MJDashboardPartTypeEntity, MJDashboardCategoryEntity } from '@memberjunction/core-entities';
 import { BreadcrumbNavigateEvent } from '../breadcrumb/dashboard-breadcrumb.component';
@@ -805,8 +805,8 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
         const titleSection = document.createElement('div');
         titleSection.style.cssText = 'display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;';
         titleSection.innerHTML = `
-            <i class="${panel.icon || 'fa-solid fa-puzzle-piece'}" style="color: var(--mj-brand-primary); font-size: 14px;"></i>
-            <span style="font-weight: 500; font-size: 14px; color: var(--mj-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${panel.title}</span>
+            <i class="${EscapeHTML(panel.icon || 'fa-solid fa-puzzle-piece')}" style="color: var(--mj-brand-primary); font-size: 14px;"></i>
+            <span style="font-weight: 500; font-size: 14px; color: var(--mj-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${EscapeHTML(panel.title)}</span>
         `;
         header.appendChild(titleSection);
 
@@ -958,9 +958,9 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
                         <i class="fa-solid fa-table" style="font-size: 20px; color: var(--mj-brand-primary);"></i>
                         <div>
                             <div style="font-weight: 500; color: var(--mj-text-primary); font-size: 14px;">Entity View</div>
-                            <div style="font-size: 12px; color: var(--mj-text-secondary);">${entityName || 'View ' + viewInfo}</div>
+                            <div style="font-size: 12px; color: var(--mj-text-secondary);">${EscapeHTML(entityName || 'View ' + viewInfo)}</div>
                         </div>
-                        <span style="margin-left: auto; padding: 4px 10px; background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent); color: var(--mj-brand-primary); border-radius: 12px; font-size: 11px; font-weight: 500;">${displayMode}</span>
+                        <span style="margin-left: auto; padding: 4px 10px; background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent); color: var(--mj-brand-primary); border-radius: 12px; font-size: 11px; font-weight: 500;">${EscapeHTML(displayMode)}</span>
                     </div>
                 </div>
                 <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--mj-text-muted); padding: 24px;">
@@ -995,7 +995,7 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
                         <i class="fa-solid fa-database" style="font-size: 20px; color: var(--mj-brand-primary);"></i>
                         <div>
                             <div style="font-weight: 500; color: var(--mj-text-primary); font-size: 14px;">Query Results</div>
-                            <div style="font-size: 12px; color: var(--mj-text-secondary);">${queryInfo}</div>
+                            <div style="font-size: 12px; color: var(--mj-text-secondary);">${EscapeHTML(queryInfo)}</div>
                         </div>
                         <span style="margin-left: auto; padding: 4px 10px; background: color-mix(in srgb, var(--mj-status-success) 10%, transparent); color: var(--mj-status-success); border-radius: 12px; font-size: 11px; font-weight: 500;">${autoRefreshSeconds > 0 ? 'Refresh: ' + autoRefreshSeconds + 's' : 'Manual refresh'}</span>
                     </div>
@@ -1032,9 +1032,9 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
                         <i class="fa-solid fa-cube" style="font-size: 20px; color: var(--mj-brand-primary);"></i>
                         <div>
                             <div style="font-weight: 500; color: var(--mj-text-primary); font-size: 14px;">Artifact</div>
-                            <div style="font-size: 12px; color: var(--mj-text-secondary);">ID: ${artifactInfo}</div>
+                            <div style="font-size: 12px; color: var(--mj-text-secondary);">ID: ${EscapeHTML(artifactInfo)}</div>
                         </div>
-                        <span style="margin-left: auto; padding: 4px 10px; background: color-mix(in srgb, var(--mj-status-error) 10%, transparent); color: var(--mj-status-error); border-radius: 12px; font-size: 11px; font-weight: 500;">${versionInfo}</span>
+                        <span style="margin-left: auto; padding: 4px 10px; background: color-mix(in srgb, var(--mj-status-error) 10%, transparent); color: var(--mj-status-error); border-radius: 12px; font-size: 11px; font-weight: 500;">${EscapeHTML(versionInfo)}</span>
                     </div>
                 </div>
                 <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--mj-text-muted); padding: 24px;">
@@ -1051,7 +1051,7 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
         container.innerHTML = `
             <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--mj-text-secondary); text-align: center; padding: 24px;">
                 <i class="fa-solid fa-puzzle-piece" style="font-size: 48px; color: var(--mj-text-muted); margin-bottom: 16px;"></i>
-                <h4 style="margin: 0 0 8px 0; color: var(--mj-text-primary);">${partTypeName} Part</h4>
+                <h4 style="margin: 0 0 8px 0; color: var(--mj-text-primary);">${EscapeHTML(partTypeName)} Part</h4>
                 <p style="margin: 0; font-size: 13px;">This part type is not yet fully implemented.</p>
             </div>
         `;
