@@ -35,16 +35,36 @@
  * only validates inputs, maps a cadence to a cron string, populates that one Record
  * Process row, and records the binding for it.
  *
+ * The shape + field-population primitives (scope model, value-kind → result-ref,
+ * `Configuration` / `OutputMapping` serialization, scope application, validation,
+ * entity resolution, lineage-binding creation) are shared with the on-demand sibling
+ * ({@link module:scoring/scoring-process}) in {@link module:scoring/scoring-process-shared};
+ * this module composes them and owns only the schedule-specific bits (cadence → cron).
+ *
  * The `'ML Model'` `WorkType` is a runtime-registered extension (PS2-1) that the
  * CodeGen'd `WorkType` value-list union (`'Action' | 'Agent' | 'FieldRules' |
  * 'Infer'`) cannot represent, so it is set via `rp.Set('WorkType', 'ML Model')` —
  * the same legitimate, documented exception PS2-1's scoring path uses.
  */
 
-import { LogError, type UserInfo, type IMetadataProvider, Metadata } from '@memberjunction/core';
+import { type UserInfo, type IMetadataProvider, Metadata } from '@memberjunction/core';
 import type { MJRecordProcessEntity, MJMLModelScoringBindingEntity } from '@memberjunction/core-entities';
-import { upsertScoringBinding } from '../scoring/scoring-binding';
-import { MetadataEntityFactory } from '../training/seams';
+import {
+  ML_MODEL_WORK_TYPE,
+  applyScope,
+  modelConfiguration,
+  writeBackOutputMapping,
+  createScoringBinding,
+  countScopeSelectors,
+  resolveTargetEntityID,
+  isNonEmpty,
+  type ScoringValueKind,
+  type ScoringScope,
+} from '../scoring/scoring-process-shared';
+
+// Re-export the shared value-kind under this module's long-standing name so existing
+// consumers (and the barrel) keep importing `ScoringValueKind` from here unchanged.
+export type { ScoringValueKind } from '../scoring/scoring-process-shared';
 
 /**
  * Recurrence for the scheduled scoring run. The named cadences map to a fixed cron
@@ -53,34 +73,12 @@ import { MetadataEntityFactory } from '../training/seams';
 export type ScoringCadence = 'Monthly' | 'Weekly' | 'Daily' | { cron: string };
 
 /**
- * Which prediction value the write-back lands in the target column: the numeric
- * `score` (probability / regression value — the default) or the predicted `class`
- * label (classification). Maps to the `OutputMapping` result-ref `$.score` / `$.class`.
- */
-export type ScoringValueKind = 'score' | 'class';
-
-/**
  * The scope of records each scheduled run scores. Exactly one selector must be
- * populated — the common case is a `filter` (SQL predicate over the target entity,
- * e.g. only active memberships), but a saved `viewId` or `listId` is also supported,
- * as is `all` (the whole entity — "score everyone"). Mirrors the Record Set Processing
- * `ScopeType` shapes (Filter / View / List); `all` is expressed as a `Filter` with an
- * explicit all-rows predicate (`(1=1)`).
+ * populated — the common case is a `filter`, but a saved `viewId`/`listId` and `all`
+ * (the whole entity) are supported too. An alias of the shared {@link ScoringScope}
+ * shape, kept under this module's long-standing name for backwards compatibility.
  */
-export interface ScheduledScoringScope {
-  /** A SQL filter (`ScopeFilter`) over the target entity selecting the rows to score. */
-  filter?: string;
-  /** A `User Views` id whose rows are scored (`ScopeViewID`). */
-  viewId?: string;
-  /** A `Lists` id whose member rows are scored (`ScopeListID`). */
-  listId?: string;
-  /**
-   * Score the WHOLE target entity ("score everyone"). When `true`, the run scores
-   * every row — expressed as `ScopeType='Filter'` with the explicit all-rows
-   * predicate `(1=1)`. Mutually exclusive with `filter` / `viewId` / `listId`.
-   */
-  all?: boolean;
-}
+export type ScheduledScoringScope = ScoringScope;
 
 /**
  * Inputs for {@link createScheduledModelScoring}. The required trio — `modelId`,
@@ -137,8 +135,8 @@ export const CADENCE_CRON: Readonly<Record<'Monthly' | 'Weekly' | 'Daily', strin
   Daily: '0 0 * * *',
 };
 
-/** The runtime-registered scoring work-type (PS2-1) — not in the CodeGen'd `WorkType` union. */
-const ML_MODEL_WORK_TYPE = 'ML Model';
+/** The helper name used to prefix this module's errors + binding-failure logs. */
+const HELPER_NAME = 'createScheduledModelScoring';
 
 /**
  * The result of {@link createScheduledModelScoring}: the saved scheduled Record
@@ -193,7 +191,7 @@ export async function createScheduledModelScoring(
   validateOptions(opts);
 
   const provider = opts.provider ?? Metadata.Provider;
-  const entityID = resolveTargetEntityID(opts.targetEntityName, provider);
+  const entityID = resolveTargetEntityID(opts.targetEntityName, provider, HELPER_NAME);
   const cron = cadenceToCron(opts.cadence);
 
   const rp = await provider.GetEntityObject<MJRecordProcessEntity>('MJ: Record Processes', opts.contextUser);
@@ -202,59 +200,25 @@ export async function createScheduledModelScoring(
 
   if (!(await rp.Save())) {
     throw new Error(
-      `createScheduledModelScoring: failed to save Record Process for model '${opts.modelId}': ` +
+      `${HELPER_NAME}: failed to save Record Process for model '${opts.modelId}': ` +
         `${rp.LatestResult?.CompleteMessage ?? 'unknown error'}`,
     );
   }
 
   // Lineage binding only in write-back mode — generic output has no column to bind.
   const binding = isNonEmpty(opts.outputField)
-    ? await createScoringBinding(opts, rp.ID, entityID, provider)
+    ? await createScoringBinding(
+        opts.modelId,
+        opts.outputField,
+        rp.ID,
+        entityID,
+        'Scheduled',
+        provider,
+        opts.contextUser,
+        HELPER_NAME,
+      )
     : null;
   return { recordProcess: rp, binding };
-}
-
-/**
- * Record the `MJ: ML Model Scoring Bindings` lineage row for a just-saved scheduled
- * Record Process. Reuses the already-resolved `entityID` (no second metadata lookup)
- * and the production `MetadataEntityFactory` over the same provider so the binding
- * lands on the right server in multi-provider setups.
- *
- * Fail-loud on save failure: {@link upsertScoringBinding} throws (after `LogError`)
- * when the binding `Save()` fails, which propagates out of this helper. We do NOT
- * swallow it — a scheduled Record Process whose lineage binding is missing would
- * score records but stay invisible to the model-prediction panel / production
- * dashboard, the exact bug this wiring exists to prevent. The Record Process is
- * already persisted at this point, so the failure is surfaced for operator follow-up
- * rather than rolled back (there is no cross-row transaction across the two saves).
- */
-async function createScoringBinding(
-  opts: ScheduleModelScoringOptions,
-  recordProcessId: string,
-  entityID: string,
-  provider: IMetadataProvider,
-): Promise<MJMLModelScoringBindingEntity> {
-  try {
-    return await upsertScoringBinding(
-      {
-        mlModelId: opts.modelId,
-        recordProcessId,
-        targetEntityId: entityID,
-        targetColumn: opts.outputField,
-        mode: 'Scheduled',
-      },
-      new MetadataEntityFactory(provider),
-      opts.contextUser,
-    );
-  } catch (e) {
-    // upsertScoringBinding already LogError'd the underlying Save() failure; add the
-    // scheduled-scoring context (the saved RP id) so the inconsistency is traceable.
-    LogError(
-      `createScheduledModelScoring: Record Process '${recordProcessId}' saved but its scoring binding ` +
-        `failed for model '${opts.modelId}': ${e instanceof Error ? e.message : String(e)}`,
-    );
-    throw e;
-  }
 }
 
 // ----- field population --------------------------------------------------------
@@ -285,46 +249,17 @@ function applyRecordProcessFields(
 
   applyScope(rp, opts.scope);
 
-  rp.Configuration = JSON.stringify({
-    modelId: opts.modelId,
-    primaryKeyField: opts.primaryKeyField ?? 'ID',
-  });
+  rp.Configuration = modelConfiguration(opts.modelId, opts.primaryKeyField);
   // Write-back mode only: map the prediction into the target column. Generic mode
   // (no outputField) leaves OutputMapping unset — predictions land in run history only.
   if (isNonEmpty(opts.outputField)) {
-    rp.OutputMapping = JSON.stringify({
-      fields: { [opts.outputField]: outputRef(opts.valueKind) },
-    });
+    rp.OutputMapping = writeBackOutputMapping(opts.outputField, opts.valueKind);
   }
 
   rp.ScheduleEnabled = true;
   rp.CronExpression = cron;
   rp.Timezone = opts.timezone ?? 'UTC';
   rp.OnDemandEnabled = true;
-}
-
-/** Set the `ScopeType` + corresponding scope field from the (validated, single-selector) scope. */
-function applyScope(rp: MJRecordProcessEntity, scope: ScheduledScoringScope): void {
-  if (scope.all === true) {
-    // Whole entity ("score everyone") — a Filter with an explicit all-rows predicate.
-    rp.ScopeType = 'Filter';
-    rp.ScopeFilter = '(1=1)';
-  } else if (scope.filter != null) {
-    rp.ScopeType = 'Filter';
-    rp.ScopeFilter = scope.filter;
-  } else if (scope.viewId != null) {
-    rp.ScopeType = 'View';
-    rp.ScopeViewID = scope.viewId;
-  } else {
-    // validateOptions guarantees exactly one selector — listId is the remaining case.
-    rp.ScopeType = 'List';
-    rp.ScopeListID = scope.listId as string;
-  }
-}
-
-/** The prediction result-ref the write-back maps into the column: `$.class` for a label, else `$.score`. */
-function outputRef(valueKind: ScoringValueKind | undefined): string {
-  return valueKind === 'class' ? '$.class' : '$.score';
 }
 
 // ----- cadence + naming --------------------------------------------------------
@@ -341,7 +276,7 @@ export function cadenceToCron(cadence: ScoringCadence | undefined): string {
   if (typeof cadence === 'object') {
     const cron = cadence.cron?.trim();
     if (!cron) {
-      throw new Error('createScheduledModelScoring: an explicit cadence must supply a non-empty `cron` expression.');
+      throw new Error(`${HELPER_NAME}: an explicit cadence must supply a non-empty \`cron\` expression.`);
     }
     return cron;
   }
@@ -372,43 +307,14 @@ function defaultName(opts: ScheduleModelScoringOptions, cron: string): string {
  */
 function validateOptions(opts: ScheduleModelScoringOptions): void {
   if (!isNonEmpty(opts.modelId)) {
-    throw new Error('createScheduledModelScoring: `modelId` is required.');
+    throw new Error(`${HELPER_NAME}: \`modelId\` is required.`);
   }
   if (!isNonEmpty(opts.targetEntityName)) {
-    throw new Error('createScheduledModelScoring: `targetEntityName` is required.');
+    throw new Error(`${HELPER_NAME}: \`targetEntityName\` is required.`);
   }
   if (countScopeSelectors(opts.scope) !== 1) {
     throw new Error(
-      'createScheduledModelScoring: `scope` must populate exactly one of: filter, viewId, listId, all.',
+      `${HELPER_NAME}: \`scope\` must populate exactly one of: filter, viewId, listId, all.`,
     );
   }
-}
-
-/** Count how many of the mutually-exclusive scope selectors are populated. */
-function countScopeSelectors(scope: ScheduledScoringScope | undefined): number {
-  if (!scope) {
-    return 0;
-  }
-  let count = 0;
-  if (isNonEmpty(scope.filter)) count++;
-  if (isNonEmpty(scope.viewId)) count++;
-  if (isNonEmpty(scope.listId)) count++;
-  if (scope.all === true) count++;
-  return count;
-}
-
-/** Resolve the target entity's id from its name, throwing when the entity is unknown. */
-function resolveTargetEntityID(targetEntityName: string, provider: IMetadataProvider): string {
-  const entity = provider.EntityByName(targetEntityName);
-  if (!entity) {
-    throw new Error(
-      `createScheduledModelScoring: target entity '${targetEntityName}' was not found in metadata.`,
-    );
-  }
-  return entity.ID;
-}
-
-/** Whether a value is a non-empty (trimmed) string. */
-function isNonEmpty(value: string | undefined | null): value is string {
-  return typeof value === 'string' && value.trim().length > 0;
 }

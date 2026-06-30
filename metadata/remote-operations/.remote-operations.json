@@ -348,5 +348,25 @@
       "lastModified": "2026-06-27T17:36:19.927Z",
       "checksum": "120b6d6d76a06bebad5f99db4d89e9b3c28047f3452f2d3167b50f4c30a4ac97"
     }
+  },
+  {
+    "fields": {
+      "Name": "Create Scoring Process",
+      "OperationKey": "PredictiveStudio.CreateScoringProcess",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Predictive Studio",
+      "Description": "Create an on-demand WorkType='ML Model' MJ: Record Processes row that scores a target entity's records with a trained MJ: ML Models (no schedule). The scope selects records (a saved view / a list / an entity filter / the whole entity). When outputField is supplied, the run writes the prediction into that column and a MJ: ML Model Scoring Bindings lineage row (Mode='OnDemand') is created; when omitted, output is generic (run history only) with no binding. Returns the new Record Process id, whether a write-back column was configured, and the scoring binding id (when created). The created row is then run-now via the Run Record Process operation or scheduled via the generic scheduling dialog. Delegates to createScoringProcess in @memberjunction/predictive-studio-engine.",
+      "InputTypeName": "PredictiveStudioCreateScoringProcessInput",
+      "InputTypeDefinition": "@file:types/predictive-studio-create-scoring-process.input.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "PredictiveStudioCreateScoringProcessOutput",
+      "OutputTypeDefinition": "@file:types/predictive-studio-create-scoring-process.output.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiredScope": "predictive:execute",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    }
   }
 ]
