@@ -15,7 +15,8 @@
     max-width: 600px;
 }
 
-.provider-picker-help code {
+.provider-picker-help code,
+mj-alert code {
     background: var(--mj-bg-surface-sunken);
     padding: 0.1rem 0.3rem;
     border-radius: 2px;
