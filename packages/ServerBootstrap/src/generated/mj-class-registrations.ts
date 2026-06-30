@@ -982,7 +982,7 @@ import {
     PromptReasoningProvider,
 } from '@memberjunction/ai-vector-dupe';
 
-// @memberjunction/ai-agents (18 classes)
+// @memberjunction/ai-agents (19 classes)
 import {
     CSVToolLibrary,
     DataSnapshotToolLibrary,
@@ -994,6 +994,7 @@ import {
     JSONToolLibrary,
     LoopAgentType,
     MJAIAgentRequestEntityServer,
+    MediaChannelServer,
     MeetingControlsChannelServer,
     MemoryManagerAgent,
     PDFToolLibrary,
@@ -1978,6 +1979,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     JSONToolLibrary,
     LoopAgentType,
     MJAIAgentRequestEntityServer,
+    MediaChannelServer,
     MeetingControlsChannelServer,
     MemoryManagerAgent,
     PDFToolLibrary,
@@ -2211,7 +2213,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 912;
+export const CLASS_REGISTRATIONS_COUNT = 913;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
