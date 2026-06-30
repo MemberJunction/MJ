@@ -448,7 +448,11 @@ BEGIN
   LEFT JOIN unnest(string_to_array(COALESCE(p_ExcludedSchemaNames, ''), ',')) AS ex(v)
     ON e."SchemaName"::text = TRIM(ex.v)
   WHERE e."VirtualEntity" = FALSE
-    AND e."ExternalDataSourceID" IS NULL -- exclude external-data-source entities (no physical table/view; data is remote)
+    -- Exclude external-data-source entities (remote; no physical table/view). NOTE: this is the FIELD-level
+    -- prune. The ENTITY-level prune (vwEntitiesWithMissingBaseTables + the ExternalDataSourceID guard in
+    -- manage-metadata) stays inert on PG until the PG EDS migration adds Entity."ExternalDataSourceID" AND
+    -- recreates vwEntitiesWithMissingBaseTables as SELECT e.* (mirroring SQL Server migration 1726).
+    AND e."ExternalDataSourceID" IS NULL
     AND ex.v IS NULL
     AND (NOT v_is_scoped OR ef."EntityID" IN (SELECT s.entity_id FROM _del_scope s));
 
