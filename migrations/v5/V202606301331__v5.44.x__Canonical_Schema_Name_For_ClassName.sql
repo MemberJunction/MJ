@@ -10,8 +10,8 @@
 --
 -- Background:
 --   GetClassNameSchemaPrefix(SchemaName) preserves the input case verbatim
---   (only special case: __mj -> 'MJ'). On SQL Server the schema is stored as
---   authored (__mj_BizAppsCommon -> 'mjBizAppsCommon'). On PostgreSQL the
+--   (the core MJ schema is special-cased to the 'MJ' prefix). On SQL Server the
+--   schema is stored as authored (__mj_BizAppsCommon -> 'mjBizAppsCommon'). On PostgreSQL the
 --   physical schema is folded to lowercase (__mj_bizappscommon ->
 --   'mjbizappscommon'), which no longer matches the published class names ->
 --   consuming-app builds fail with TS2724.
@@ -24,7 +24,7 @@
 --
 -- Changes:
 --   1. SchemaInfo gets a new nullable CanonicalSchemaName column. NULL on every
---      existing row / install, on the core __mj schema, and on SQL Server (where
+--      existing row / install, on the core MJ schema, and on SQL Server (where
 --      SchemaName is already canonical) -> COALESCE falls back to SchemaName ->
 --      NET-ZERO change to ClassName/CodeName there.
 --   2. vwEntities (a CUSTOM core view, BaseViewGenerated = 0, hand-maintained in
@@ -41,7 +41,7 @@
 -- BASE views that CodeGen owns. vwEntities is a hand-maintained system view that
 -- CodeGen does not regenerate, so editing it here is correct and precedented.
 --
--- Net effect on existing SQL Server / __mj entities: NONE (CanonicalSchemaName
+-- Net effect on existing SQL Server / core-schema entities: NONE (CanonicalSchemaName
 -- is NULL -> COALESCE -> SchemaName, identical to today).
 -- =============================================================================
 
@@ -131,7 +131,7 @@ GO
 --         spUpdateSchemaInfoFromDatabase (the CodeGen metadata-sync proc).
 --
 --   The OpenApp install records the canonical (case-preserved) schema name on
---   [__mj].[OpenApp].SchemaName, but the SchemaInfo row is materialized HERE,
+--   the OpenApp table's SchemaName column, but the SchemaInfo row is materialized HERE,
 --   from the DB catalog (lowercase on PG) — so a fresh-install-then-codegen flow
 --   would otherwise leave CanonicalSchemaName NULL on the new row. We backfill it
 --   catalog-only (no manifest-file reading): for any SchemaInfo row still missing
