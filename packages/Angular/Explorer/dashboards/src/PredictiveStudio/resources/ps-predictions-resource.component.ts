@@ -1,12 +1,13 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, inject } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
-import { LogError, UserInfo } from '@memberjunction/core';
-import { MJEnvironmentEntityExtended, MJMLModelEntity } from '@memberjunction/core-entities';
+import { LogError, RunView, UserInfo } from '@memberjunction/core';
+import { MJEnvironmentEntityExtended, MJMLModelEntity, MJProcessRunDetailEntity } from '@memberjunction/core-entities';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { trustDots, trustEvidenceLine } from '@memberjunction/predictive-studio-core';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { PSResourceBase } from './ps-resource-base';
 import { buildBusinessCatalog, type BusinessPredictionCard } from '../business-predictions.view-models';
+import { parseAtRiskRows, topGlobalDrivers, type AtRiskRow } from '../at-risk.view-models';
 
 const PREDICTIVE_STUDIO_APP_ID = '299C9272-8D38-40CA-85D4-0980F2C9FAD1';
 const MODEL_DEV_AGENT_NAME = 'Model Development Agent';
@@ -92,14 +93,38 @@ const MODEL_DEV_AGENT_NAME = 'Model Development Agent';
                 </div>
               </div>
 
-              <!-- A3 (ranked at-risk list) + A4 (actions) attach here -->
               <div class="ps-biz-workspace-body" data-testid="ps-workspace-body">
+                @if (selected.canOpen) {
+                  @if (drivers.length > 0) {
+                    <div class="ps-drivers" data-testid="ps-drivers">
+                      <i class="fa-solid fa-lightbulb"></i> <strong>What's driving this:</strong>
+                      @for (d of drivers; track d) { <span class="ps-driver-chip">{{ d }}</span> }
+                    </div>
+                  }
+                  @if (atRiskLoading) {
+                    <mj-loading text="Loading who's at risk…" size="small"></mj-loading>
+                  } @else if (atRiskRows.length > 0) {
+                    <div class="ps-atrisk" data-testid="ps-atrisk-list" #atriskList>
+                      <div class="ps-atrisk-head"><span>Member</span><span class="ps-atrisk-rcol">Likelihood</span></div>
+                      @for (r of atRiskRows.slice(0, 50); track r.recordId) {
+                        <div class="ps-atrisk-row" data-testid="ps-atrisk-row">
+                          <span class="ps-atrisk-id mono">{{ r.recordId }}</span>
+                          <span class="ps-atrisk-bar"><span class="ps-atrisk-fill" [class]="'risk-' + r.band" [style.width.%]="r.riskPct"></span></span>
+                          <span class="ps-atrisk-pct" [class]="'risk-' + r.band">{{ r.riskPct }}%</span>
+                        </div>
+                      }
+                      <div class="ps-atrisk-foot muted">{{ atRiskRows.length > 50 ? 'Showing top 50 of ' + atRiskRows.length : atRiskRows.length + ' members' }} · highest first</div>
+                    </div>
+                  } @else {
+                    <div class="ps-atrisk-empty muted" data-testid="ps-atrisk-empty">No results yet — run this prediction from <strong>Models in Production</strong> to see who's at risk.</div>
+                  }
+                }
                 <div class="ps-action-bar" [class.locked]="!selected.canOpen" data-testid="ps-action-bar">
                   @if (selected.canOpen) {
-                    <button mjButton variant="primary" size="sm"><i class="fa-solid fa-list-check"></i> Review the call list</button>
-                    <button mjButton variant="secondary" size="sm"><i class="fa-solid fa-floppy-disk"></i> Save scores to records</button>
-                    <button mjButton variant="secondary" size="sm"><i class="fa-solid fa-paper-plane"></i> Send to a list</button>
-                    <button mjButton variant="secondary" size="sm"><i class="fa-solid fa-file-export"></i> Share / export</button>
+                    <button mjButton variant="primary" size="sm" data-testid="ps-act-review" (click)="scrollToList()"><i class="fa-solid fa-list-check"></i> Review the call list</button>
+                    <button mjButton variant="secondary" size="sm" data-testid="ps-act-save" (click)="askAgentTo('Save these renewal-risk scores onto the member records so my team can use them.')"><i class="fa-solid fa-floppy-disk"></i> Save scores to records</button>
+                    <button mjButton variant="secondary" size="sm" data-testid="ps-act-list" (click)="askAgentTo('Put these at-risk members into a list called &quot;At-Risk Renewals&quot; for outreach.')"><i class="fa-solid fa-paper-plane"></i> Send to a list</button>
+                    <button mjButton variant="secondary" size="sm" data-testid="ps-act-export" [disabled]="atRiskRows.length === 0" (click)="exportList()"><i class="fa-solid fa-file-export"></i> Share / export</button>
                   } @else {
                     <div class="ps-action-locked"><i class="fa-solid fa-lock"></i> {{ selected.trust.gateReason }}</div>
                   }
@@ -170,6 +195,28 @@ const MODEL_DEV_AGENT_NAME = 'Model Development Agent';
       .ps-action-bar { display: flex; gap: 10px; flex-wrap: wrap; padding: 14px 16px; border-radius: var(--mj-radius-lg); background: var(--mj-bg-surface-card); border: 1px solid var(--mj-border-default); }
       .ps-action-bar.locked { background: var(--mj-status-error-bg); border-color: var(--mj-status-error-border); }
       .ps-action-locked { display: flex; align-items: center; gap: 8px; color: var(--mj-status-error-text); font-weight: 600; font-size: var(--mj-text-sm); }
+      .ps-drivers { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 0 0 16px; color: var(--mj-text-secondary); font-size: var(--mj-text-sm); }
+      .ps-drivers i { color: var(--mj-status-warning); }
+      .ps-driver-chip { background: var(--mj-bg-surface-card); border: 1px solid var(--mj-border-default); border-radius: var(--mj-radius-full); padding: 2px 10px; font-weight: 600; color: var(--mj-text-primary); }
+      .ps-atrisk { border: 1px solid var(--mj-border-default); border-radius: var(--mj-radius-lg); overflow: hidden; margin-bottom: 16px; background: var(--mj-bg-surface); }
+      .ps-atrisk-head { display: grid; grid-template-columns: 1fr 140px 52px; gap: 12px; padding: 8px 14px; background: var(--mj-bg-surface-card); border-bottom: 1px solid var(--mj-border-default); font-size: var(--mj-text-xs); font-weight: 600; color: var(--mj-text-muted); text-transform: uppercase; letter-spacing: .03em; }
+      .ps-atrisk-rcol { grid-column: 2 / span 2; text-align: right; }
+      .ps-atrisk-row { display: grid; grid-template-columns: 1fr 140px 52px; gap: 12px; align-items: center; padding: 9px 14px; border-bottom: 1px solid var(--mj-border-subtle); }
+      .ps-atrisk-row:last-child { border-bottom: none; }
+      .ps-atrisk-row:hover { background: var(--mj-bg-surface-hover); }
+      .ps-atrisk-id { font-size: var(--mj-text-xs); color: var(--mj-text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .ps-atrisk-bar { height: 8px; border-radius: var(--mj-radius-full); background: var(--mj-bg-surface-sunken); overflow: hidden; }
+      .ps-atrisk-fill { display: block; height: 100%; border-radius: var(--mj-radius-full); }
+      .ps-atrisk-pct { text-align: right; font-weight: 700; font-size: var(--mj-text-sm); font-variant-numeric: tabular-nums; }
+      .ps-atrisk-fill.risk-high { background: var(--mj-status-error); }
+      .ps-atrisk-fill.risk-medium { background: var(--mj-status-warning); }
+      .ps-atrisk-fill.risk-low { background: var(--mj-status-success); }
+      .ps-atrisk-pct.risk-high { color: var(--mj-status-error-text); }
+      .ps-atrisk-pct.risk-medium { color: var(--mj-status-warning-text); }
+      .ps-atrisk-pct.risk-low { color: var(--mj-status-success-text); }
+      .ps-atrisk-foot { padding: 8px 14px; font-size: var(--mj-text-xs); }
+      .ps-atrisk-empty { padding: 24px; text-align: center; border: 1px dashed var(--mj-border-default); border-radius: var(--mj-radius-lg); margin-bottom: 16px; }
+      .mono { font-family: var(--mj-font-family-mono); }
       .ps-biz-copilot { width: 420px; max-width: 42vw; flex: none; border-left: 1px solid var(--mj-border-default); background: var(--mj-bg-surface); display: flex; flex-direction: column; min-height: 0; }
       .ps-biz-copilot-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid var(--mj-border-default); }
       .ps-biz-copilot-title { display: flex; align-items: center; gap: 8px; font-weight: 600; color: var(--mj-text-primary); }
@@ -198,6 +245,13 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
   public pendingPrompt: string | null = null;
   private _modelDevAgentId: string | null = null;
 
+  /** The ranked at-risk rows for the open prediction's latest run (empty until loaded / when no run yet). */
+  public atRiskRows: AtRiskRow[] = [];
+  /** Plain-language "what's driving this" drivers for the open prediction (global feature importance). */
+  public drivers: string[] = [];
+  /** Whether the at-risk list is loading for the open prediction. */
+  public atRiskLoading = false;
+
   /** The business catalog cards, most-trustworthy first, derived from the engine's published models. */
   public get cards(): BusinessPredictionCard[] {
     return buildBusinessCatalog(
@@ -219,13 +273,71 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
     if (!c.canOpen) return;
     this.selected = c;
     this.view = 'workspace';
+    this.atRiskRows = [];
+    this.drivers = [];
     this.cdrLocal.detectChanges();
+    void this.loadAtRisk(c);
+  }
+
+  /** Load the open prediction's plain-language drivers + its latest run's ranked at-risk rows. */
+  private async loadAtRisk(c: BusinessPredictionCard): Promise<void> {
+    const model = this.engine.PublishedModels.find((m) => m.ID === c.modelId);
+    this.drivers = topGlobalDrivers(model?.FeatureImportance ?? null, 3);
+    this.atRiskLoading = true;
+    this.cdrLocal.detectChanges();
+    try {
+      const provider = this.ProviderToUse;
+      const user = provider.CurrentUser ?? undefined;
+      const runs = await this.engine.LoadRecentRunsForModel(c.modelId, provider, user, { maxRows: 1 });
+      const latest = runs[0];
+      if (latest?.ID) {
+        const res = await RunView.FromMetadataProvider(provider).RunView<MJProcessRunDetailEntity>(
+          { EntityName: 'MJ: Process Run Details', ExtraFilter: `ProcessRunID='${latest.ID}'`, MaxRows: 2137, ResultType: 'entity_object' },
+          user,
+        );
+        if (res.Success && this.selected?.modelId === c.modelId) {
+          this.atRiskRows = parseAtRiskRows((res.Results ?? []).map((d) => ({ recordId: d.RecordID, ResultPayload: d.ResultPayload })));
+        }
+      }
+    } catch (err) {
+      LogError(`PSPredictionsResource.loadAtRisk: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      this.atRiskLoading = false;
+      this.cdrLocal.detectChanges();
+    }
   }
 
   public backToCatalog(): void {
     this.view = 'catalog';
     this.selected = null;
+    this.atRiskRows = [];
+    this.drivers = [];
     this.cdrLocal.detectChanges();
+  }
+
+  /** "Review the call list" — scroll the ranked at-risk list into view. */
+  public scrollToList(): void {
+    document.querySelector('[data-testid="ps-atrisk-list"]')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  /** "Save scores" / "Send to a list" — open the docked co-pilot seeded with the request (the agent does it). */
+  public askAgentTo(prompt: string): void {
+    this.pendingPrompt = prompt;
+    this.chatOpen = true;
+    void this.ensureModelDevAgentResolved();
+    this.cdrLocal.detectChanges();
+  }
+
+  /** "Share / export" — download the at-risk list as a CSV (dependency-free). */
+  public exportList(): void {
+    if (this.atRiskRows.length === 0) return;
+    const csv = ['Member,Likelihood %,Predicted', ...this.atRiskRows.map((r) => `${r.recordId},${r.riskPct},${r.class ?? ''}`)].join('\n');
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${(this.selected?.title ?? 'prediction').replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-at-risk.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   public newPrediction(): void {
