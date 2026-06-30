@@ -55,6 +55,33 @@ export class MJAccordionActionsDirective {
 }
 
 /**
+ * Directive to mark a template as the accordion **body** — the panel's collapsible
+ * content. Use this INSTEAD of placing content directly in the panel when the body
+ * may be expensive (code editors, grids, large lists) OR just to be future-proof:
+ * the accordion instantiates the template **lazily on first expand** and then keeps
+ * it alive, so nothing is created until the user opens the panel, while later
+ * open/close still animates. Consumers never have to reason about content weight or
+ * write `@if (expanded)` themselves.
+ *
+ * @example
+ * ```html
+ * <mj-accordion-panel [Expanded]="open" (ExpandedChange)="open = $event">
+ *   <ng-template mjAccordionTitle>Configuration</ng-template>
+ *   <ng-template mjAccordionBody>
+ *     <mj-code-editor ...></mj-code-editor>   <!-- not created until first opened -->
+ *   </ng-template>
+ * </mj-accordion-panel>
+ * ```
+ */
+@Directive({
+  selector: '[mjAccordionBody]',
+  standalone: true
+})
+export class MJAccordionBodyDirective {
+  constructor(public templateRef: TemplateRef<unknown>) {}
+}
+
+/**
  * mj-accordion-panel — Collapsible panel. Replaces `<kendo-panelbar-item>` and `<kendo-expansionpanel>`.
  *
  * Supports two title modes:
@@ -120,7 +147,13 @@ export class MJAccordionActionsDirective {
       <div class="mj-accordion-body-outer" [attr.inert]="Expanded ? null : ''">
         <div class="mj-accordion-body-clip">
           <div class="mj-accordion-body" role="region" [id]="BodyId" [attr.aria-labelledby]="HeaderId">
+            <!-- Legacy: content placed directly in the panel (eager). -->
             <ng-content></ng-content>
+            <!-- Preferred: [mjAccordionBody] template — instantiated lazily on first
+                 expand, then kept alive so later toggles still animate. -->
+            @if (bodyTemplate && (Expanded || hasBeenExpanded)) {
+              <ng-container [ngTemplateOutlet]="bodyTemplate.templateRef"></ng-container>
+            }
           </div>
         </div>
       </div>
@@ -129,7 +162,18 @@ export class MJAccordionActionsDirective {
 })
 export class MJAccordionPanelComponent {
   @Input() Title = '';
-  @Input() Expanded = false;
+  private _expanded = false;
+  /** Latches true the first time the panel is expanded; never resets. Lets a
+   *  [mjAccordionBody] template instantiate lazily on first open and then stay
+   *  alive so subsequent open/close still animates. */
+  private _everExpanded = false;
+  @Input()
+  set Expanded(value: boolean) {
+    this._expanded = value;
+    if (value) this._everExpanded = true;
+  }
+  get Expanded(): boolean { return this._expanded; }
+  get hasBeenExpanded(): boolean { return this._everExpanded; }
   @Input() Disabled = false;
   /**
    * Emphasis variant for visual hierarchy:
@@ -179,6 +223,7 @@ export class MJAccordionPanelComponent {
   @Output() ExpandedChange = new EventEmitter<boolean>();
   @ContentChild(MJAccordionTitleDirective) titleTemplate: MJAccordionTitleDirective | null = null;
   @ContentChild(MJAccordionActionsDirective) actionsTemplate: MJAccordionActionsDirective | null = null;
+  @ContentChild(MJAccordionBodyDirective) bodyTemplate: MJAccordionBodyDirective | null = null;
   @HostBinding('class.mj-accordion-panel-host') readonly hostClass = true;
   /** Host claims flex:1 of its parent ONLY while a Fill panel is expanded —
    *  so a collapsed Fill panel sits at natural (header) height like any other. */

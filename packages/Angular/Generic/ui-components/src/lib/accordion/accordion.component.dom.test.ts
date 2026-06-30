@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { Component } from '@angular/core';
+import { Component, Input } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { MJAccordionPanelComponent, MJAccordionActionsDirective } from './accordion.component';
+import { MJAccordionPanelComponent, MJAccordionActionsDirective, MJAccordionBodyDirective } from './accordion.component';
 
 /**
  * DOM-level spec for `<mj-accordion-panel>`. Focuses on the WAI-ARIA accordion
@@ -169,6 +169,36 @@ describe('MJAccordionPanelComponent header actions slot (DOM)', () => {
     expect(actions.contains(editBtn)).toBe(true);
     // ... and NOT inside the toggle button (no button-in-button)
     expect(toggle.contains(editBtn)).toBe(false);
+  });
+
+  it('instantiates [mjAccordionBody] lazily on first expand, then keeps it alive across collapse', () => {
+    @Component({
+      standalone: true,
+      imports: [MJAccordionPanelComponent, MJAccordionBodyDirective],
+      template: `
+        <mj-accordion-panel [Expanded]="open">
+          <ng-template mjAccordionBody><p class="lazy-body">lazy</p></ng-template>
+        </mj-accordion-panel>
+      `,
+    })
+    class HostComponent { @Input() open = false; }
+
+    const fixture = TestBed.createComponent(HostComponent);
+    fixture.detectChanges();
+    const body = () => fixture.nativeElement.querySelector('.lazy-body');
+
+    // collapsed (never opened) → body template NOT instantiated
+    expect(body()).toBeNull();
+
+    // first expand → body instantiated
+    fixture.componentRef.setInput('open', true);
+    fixture.detectChanges();
+    expect(body()).not.toBeNull();
+
+    // collapse again → body STAYS in the DOM (kept alive so collapse animates)
+    fixture.componentRef.setInput('open', false);
+    fixture.detectChanges();
+    expect(body()).not.toBeNull();
   });
 
   it('keeps the chevron as the rightmost header element, after the actions slot', () => {
