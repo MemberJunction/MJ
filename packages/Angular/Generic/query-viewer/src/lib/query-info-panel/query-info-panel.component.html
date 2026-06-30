@@ -77,7 +77,7 @@
             <ng-template mjAccordionTitle>
               <span class="section-title">Technical Description</span>
             </ng-template>
-            @if (IsSectionExpanded('technical')) {
+            <ng-template mjAccordionBody>
               <div class="technical-description-content">
                 <mj-markdown
                   [data]="QueryInfo.TechnicalDescription || ''"
@@ -87,7 +87,7 @@
                   [enableSmartypants]="true">
                 </mj-markdown>
               </div>
-            }
+            </ng-template>
           </mj-accordion-panel>
         }
         <!-- Fields Section -->
@@ -177,7 +177,7 @@
           <ng-template mjAccordionTitle>
             <span class="section-title">SQL Query</span>
           </ng-template>
-          @if (IsSectionExpanded('sql')) {
+          <ng-template mjAccordionBody>
               @if (QueryInfo.SQL) {
                 <div class="sql-container">
                   <mj-code-editor
@@ -193,7 +193,7 @@
                   Icon="fa-solid fa-code"
                   Title="SQL not available" />
               }
-          }
+          </ng-template>
         </mj-accordion-panel>
         <!-- Dependent Queries Section -->
         @if (QueryInfo.QueryDependents.length > 0) {

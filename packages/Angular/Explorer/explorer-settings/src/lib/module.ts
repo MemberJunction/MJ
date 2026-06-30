@@ -16,8 +16,7 @@ import {
   MJViewToggleComponent,
   MJEmptyStateComponent,
   MJAlertComponent,
-  MJAccordionPanelComponent,
-  MJAccordionTitleDirective
+  MJAccordionModule
 } from '@memberjunction/ng-ui-components';
 
 import { EntityPermissionsModule } from '@memberjunction/ng-entity-permissions';
@@ -106,8 +105,7 @@ import { ApplicationDialogComponent } from './application-management/application
     MJViewToggleComponent,
     MJEmptyStateComponent,
     MJAlertComponent,
-    MJAccordionPanelComponent,
-    MJAccordionTitleDirective
+    MJAccordionModule
   ],
   exports: [
     // Main settings container

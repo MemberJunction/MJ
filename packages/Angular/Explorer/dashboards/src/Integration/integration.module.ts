@@ -17,8 +17,7 @@ import {
   MJRefreshButtonComponent,
   MJEmptyStateComponent,
   MJAlertComponent,
-  MJAccordionPanelComponent,
-  MJAccordionTitleDirective
+  MJAccordionModule
 } from '@memberjunction/ng-ui-components';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { CredentialsModule } from '@memberjunction/ng-credentials';
@@ -66,8 +65,7 @@ import { IntegrationDataService } from './services/integration-data.service';
     MJRefreshButtonComponent,
     MJEmptyStateComponent,
     MJAlertComponent,
-    MJAccordionPanelComponent,
-    MJAccordionTitleDirective,
+    MJAccordionModule,
     SharedGenericModule,
     CredentialsModule,
     NgTreesModule,

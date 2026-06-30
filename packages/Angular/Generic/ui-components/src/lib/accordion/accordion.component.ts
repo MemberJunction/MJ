@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, HostBinding, ContentChild, TemplateRef, Directive } from '@angular/core';
+import { Component, Input, Output, EventEmitter, HostBinding, ContentChild, TemplateRef, Directive, NgModule } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 
 /** Process-wide counter for generating unique, stable accordion element ids
@@ -245,3 +245,36 @@ export class MJAccordionPanelComponent {
     this.ExpandedChange.emit(this.Expanded);
   }
 }
+
+/**
+ * Convenience module bundling the accordion panel + all of its slot directives.
+ * Import this ONE symbol instead of listing the component and each directive
+ * separately:
+ *
+ * ```ts
+ * import { MJAccordionModule } from '@memberjunction/ng-ui-components';
+ * @NgModule({ imports: [MJAccordionModule, ...] })   // or @Component standalone imports
+ * ```
+ *
+ * Why a module (not a bare `const [...]` array): Angular's AOT compiler can't
+ * statically expand a value-array imported across a compiled-package boundary in
+ * an `imports` array (NG1010), and `as const` makes it a readonly tuple the
+ * `imports` type rejects (TS2322). An NgModule is always a valid `imports` entry
+ * in both NgModule and standalone consumers. Adding a future accordion directive
+ * here makes it available to every consumer automatically — no per-module churn.
+ */
+@NgModule({
+  imports: [
+    MJAccordionPanelComponent,
+    MJAccordionTitleDirective,
+    MJAccordionActionsDirective,
+    MJAccordionBodyDirective,
+  ],
+  exports: [
+    MJAccordionPanelComponent,
+    MJAccordionTitleDirective,
+    MJAccordionActionsDirective,
+    MJAccordionBodyDirective,
+  ],
+})
+export class MJAccordionModule {}

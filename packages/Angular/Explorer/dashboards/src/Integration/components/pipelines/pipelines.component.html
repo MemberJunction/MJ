@@ -517,7 +517,7 @@
                 <span class="ve-section-title">Sync Info</span>
               </ng-template>
 
-              @if (InfoPanelExpanded) {
+              <ng-template mjAccordionBody>
                 <div class="ve-section-body ve-info-body">
                   @if (InfoPanelLoading) {
                     <div class="ve-info-loading">
@@ -600,7 +600,7 @@
                     </div>
                   }
                 </div>
-              }
+              </ng-template>
             </mj-accordion-panel>
           </div>
 

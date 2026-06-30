@@ -30,9 +30,7 @@ import {
     MJStatBadgeComponent,
     MJEmptyStateComponent,
     MJAlertComponent,
-    MJAccordionPanelComponent,
-    MJAccordionTitleDirective,
-    MJAccordionActionsDirective
+    MJAccordionModule
 } from '@memberjunction/ng-ui-components';
 
 // MemberJunction Modules
@@ -85,9 +83,7 @@ import { MCPLogDetailPanelComponent } from './components/mcp-log-detail-panel.co
     MJStatBadgeComponent,
         MJEmptyStateComponent,
         MJAlertComponent,
-        MJAccordionPanelComponent,
-        MJAccordionTitleDirective,
-        MJAccordionActionsDirective,
+        MJAccordionModule,
         SharedGenericModule,
         CredentialsModule,
         CodeEditorModule,
