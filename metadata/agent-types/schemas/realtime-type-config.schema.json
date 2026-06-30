@@ -49,6 +49,25 @@
           "properties": {
             "paceMs": { "type": "number", "description": "Minimum milliseconds between spoken progress narrations while delegated work runs." }
           }
+        },
+        "disclosure": {
+          "type": "string",
+          "enum": ["silent", "mention", "hand-voice"],
+          "description": "Default delegation disclosure — how the co-agent narrates handing a request to a colleague: 'mention' (name the handoff aloud), 'silent' (absorb and speak the result as its own), 'hand-voice' (reserved). Absent => 'mention'. Overridable by app AgentSettings and per-target."
+        },
+        "allowedAgents": {
+          "type": "array",
+          "description": "Delegation targets the lead co-agent may invoke via invoke-target-agent. UNION-accumulated across cascade layers (type/co-agent/target/app) + dynamic registrations; never array-replaced.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "agentId": { "type": "string", "description": "The target agent's MJ: AI Agents ID (loop or flow)." },
+              "label": { "type": "string", "description": "Friendly name for the capability manifest / disclosure narration." },
+              "disclosure": { "type": "string", "enum": ["silent", "mention", "hand-voice"], "description": "Per-target disclosure override; falls back to the effective default." }
+            },
+            "required": ["agentId"]
+          }
         }
       }
     }

@@ -1,9 +1,9 @@
-import { ChangeDetectorRef, Component, OnInit, inject } from '@angular/core';
+import { ChangeDetectorRef, Component, OnInit, AfterViewInit, inject } from '@angular/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
 import { ResourceData } from '@memberjunction/core-entities';
-import { IRunViewProvider, RunView } from '@memberjunction/core';
+import { CompositeKey, IRunViewProvider, RunView } from '@memberjunction/core';
 import {
   IntegrationDataService,
   IntegrationSummary,
@@ -11,6 +11,16 @@ import {
   RunDetailRow,
   EntityMapRow,
 } from '../../services/integration-data.service';
+import {
+  buildActivityAgentContext,
+  resolveIntegrationSurface,
+  navLabelForSurface,
+  resolveIntegrationRecord,
+  buildIntegrationNotFoundError,
+  ActivityRunSummary,
+  NamedIntegrationRecord,
+} from '../../integration-agent-context';
+import { AgentToolResult, validateEnumParam, validateStringParam } from '../../../shared/agent-tool-validation';
 
 type StatusFilterType = 'All' | 'Success' | 'Failed' | 'In Progress' | 'Pending';
 type DateFilterType = 'today' | '7d' | '30d' | 'all';
@@ -36,11 +46,12 @@ interface IntegrationOption {
   templateUrl: './activity.component.html',
   styleUrls: ['./activity.component.css']
 })
-export class ActivityComponent extends BaseResourceComponent implements OnInit {
+export class ActivityComponent extends BaseResourceComponent implements OnInit, AfterViewInit {
 
   // Data
   AllRuns: IntegrationRunRow[] = [];
   FilteredRuns: IntegrationRunRow[] = [];
+  Summaries: IntegrationSummary[] = [];
   Integrations: IntegrationOption[] = [];
   SelectedRunID: string | null = null;
   SelectedRunDetails: RunDetailRow[] = [];
@@ -92,6 +103,7 @@ export class ActivityComponent extends BaseResourceComponent implements OnInit {
         this.dataService.LoadIntegrationSummaries(provider),
         this.loadAllRuns(provider)
       ]);
+      this.Summaries = summaries;
       this.Integrations = this.buildIntegrationOptions(summaries);
       this.AllRuns = runs;
       this.ApplyFilters();
@@ -183,6 +195,248 @@ export class ActivityComponent extends BaseResourceComponent implements OnInit {
     filtered = this.filterByDate(filtered);
     filtered = this.filterBySearch(filtered);
     this.FilteredRuns = filtered;
+    this.emitAgentContext();
+  }
+
+  // ---------------------------------------------------------------------------
+  // AI Agent Context & Client Tools
+  //
+  // 🔒 SAFETY BOUNDARY: The Activity surface exposes ONLY read-only filter /
+  // search / select / open-record / navigation / refresh tools to the agent
+  // (SwitchIntegrationSurface, FilterActivityByStatus / ByTimeRange / ByIntegration,
+  // SearchActivity, ClearActivityFilters, SelectActivityRun, OpenActivityRunRecord,
+  // RefreshIntegrationData). It deliberately does NOT expose any sync trigger
+  // (RunSync — a LIVE external sync), nor any mutation of mappings, schedules, or
+  // credentials. SelectActivityRun opens the read-only detail panel;
+  // OpenActivityRunRecord opens the run record in a tab for VIEWING (not editing).
+  // The agent can narrow what's shown and select/open runs; the user performs
+  // every mutating action from the UI.
+  // ---------------------------------------------------------------------------
+
+  ngAfterViewInit(): void {
+    this.emitAgentContext();
+    this.registerAgentTools();
+  }
+
+  private emitAgentContext(): void {
+    const kpis = this.dataService.ComputeKPIs(this.Summaries);
+    const selectedRun = this.GetSelectedRun();
+    const context = buildActivityAgentContext({
+      KPIs: {
+        TotalIntegrations: kpis.TotalIntegrations,
+        ActiveSyncs: kpis.ActiveSyncs,
+        RecordsSyncedToday: kpis.RecordsSyncedToday,
+        SyncErrorRate: kpis.ErrorRate,
+        PipelineCount: 0,
+        ScheduledSyncCount: 0,
+      },
+      IsLoading: this.IsLoading,
+      StatusFilter: this.StatusFilter,
+      DateFilter: this.DateFilter,
+      IntegrationFilterName: this.resolveIntegrationFilterName(),
+      SearchQuery: this.SearchQuery,
+      FilteredRunCount: this.FilteredRuns.length,
+      TotalRunCount: this.AllRuns.length,
+      SuccessfulRunCount: this.SuccessfulRuns,
+      FailedRunCount: this.FailedRuns,
+      TotalRecordsProcessed: this.TotalRecordsProcessed,
+      VisibleRuns: this.FilteredRuns.map(r => this.buildRunSummary(r)),
+      SelectedRunId: this.SelectedRunID,
+      SelectedRunName: selectedRun ? this.runLabel(selectedRun) : null,
+      AvailableIntegrationNames: this.Integrations.map(i => i.Name),
+    });
+    this.navigationService.SetAgentContext(this, context);
+  }
+
+  private registerAgentTools(): void {
+    this.navigationService.SetAgentClientTools(this, [
+      {
+        Name: 'SwitchIntegrationSurface',
+        Description: 'Switch to a different Integration surface. Valid surfaces: Overview, Connections, Activity, Schedules.',
+        ParameterSchema: { type: 'object', properties: { surface: { type: 'string' } }, required: ['surface'] },
+        Handler: async (params: Record<string, unknown>) => this.toolSwitchSurface(params),
+      },
+      {
+        Name: 'FilterActivityByStatus',
+        Description: 'Filter the run-activity list by status. Valid: All, Success, Failed, In Progress, Pending.',
+        ParameterSchema: { type: 'object', properties: { status: { type: 'string' } }, required: ['status'] },
+        Handler: async (params: Record<string, unknown>) => this.toolFilterByStatus(params),
+      },
+      {
+        Name: 'FilterActivityByTimeRange',
+        Description: 'Filter the run-activity list by time range. Valid: today, 7d, 30d, all.',
+        ParameterSchema: { type: 'object', properties: { range: { type: 'string' } }, required: ['range'] },
+        Handler: async (params: Record<string, unknown>) => this.toolFilterByTimeRange(params),
+      },
+      {
+        Name: 'FilterActivityByIntegration',
+        Description: 'Filter the run-activity list to a single integration. Accepts the integration ID or name (exact or partial), or "all" to clear.',
+        ParameterSchema: { type: 'object', properties: { integration: { type: 'string' } }, required: ['integration'] },
+        Handler: async (params: Record<string, unknown>) => this.toolFilterByIntegration(params),
+      },
+      {
+        Name: 'SearchActivity',
+        Description: 'Search the run-activity list by integration or company name.',
+        ParameterSchema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] },
+        Handler: async (params: Record<string, unknown>) => this.toolSearch(params),
+      },
+      {
+        Name: 'ClearActivityFilters',
+        Description: 'Reset the run-activity filters (status → All, time range → 7d, integration → all, search cleared).',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => {
+          this.ResetIntegrationFilter();
+          this.OnSearchValueChange('');
+          return { Success: true };
+        },
+      },
+      {
+        Name: 'SelectActivityRun',
+        Description: 'Open the detail panel for a run. Accepts the run ID or a run label (integration/company/status, exact or partial).',
+        ParameterSchema: { type: 'object', properties: { run: { type: 'string' } }, required: ['run'] },
+        Handler: async (params: Record<string, unknown>) => this.toolSelectRun(params),
+      },
+      {
+        Name: 'OpenActivityRunRecord',
+        Description: 'Open a company-integration-run record in a tab for viewing. Accepts the run ID or a run label (exact or partial).',
+        ParameterSchema: { type: 'object', properties: { run: { type: 'string' } }, required: ['run'] },
+        Handler: async (params: Record<string, unknown>) => this.toolOpenRunRecord(params),
+      },
+      {
+        Name: 'RefreshIntegrationData',
+        Description: 'Reload the integration run-activity history.',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => {
+          await this.LoadData();
+          return { Success: true };
+        },
+      },
+    ]);
+  }
+
+  private async toolSwitchSurface(params: Record<string, unknown>): Promise<AgentToolResult> {
+    const surface = resolveIntegrationSurface(params['surface']);
+    if (!surface) {
+      return { Success: false, ErrorMessage: 'Invalid surface. Expected one of: Overview, Connections, Activity, Schedules.' };
+    }
+    const tabId = await this.navigationService.OpenNavItemByName(navLabelForSurface(surface));
+    if (!tabId) {
+      return { Success: false, ErrorMessage: `Could not open the "${surface}" surface.` };
+    }
+    return { Success: true };
+  }
+
+  private toolFilterByStatus(params: Record<string, unknown>): AgentToolResult {
+    const check = validateEnumParam<StatusFilterType>(params['status'], this.StatusOptions, 'status');
+    if (!check.ok) {
+      return check.result;
+    }
+    this.SetStatusFilter(check.value);
+    return { Success: true };
+  }
+
+  private toolFilterByTimeRange(params: Record<string, unknown>): AgentToolResult {
+    const allowed = this.DateOptions.map(d => d.Value);
+    const check = validateEnumParam<DateFilterType>(params['range'], allowed, 'range');
+    if (!check.ok) {
+      return check.result;
+    }
+    this.SetDateFilter(check.value);
+    return { Success: true };
+  }
+
+  private toolFilterByIntegration(params: Record<string, unknown>): AgentToolResult {
+    const check = validateStringParam(params['integration'], 'integration');
+    if (!check.ok) {
+      return check.result;
+    }
+    if (check.value.trim().toLowerCase() === 'all') {
+      this.SetIntegrationFilter(null);
+      return { Success: true };
+    }
+    const candidates: NamedIntegrationRecord[] = this.Integrations.map(i => ({ ID: i.ID, Name: i.Name }));
+    const match = resolveIntegrationRecord(check.value, candidates);
+    if (!match) {
+      return { Success: false, ErrorMessage: buildIntegrationNotFoundError(check.value, candidates, 'integration') };
+    }
+    this.SetIntegrationFilter(match.ID);
+    return { Success: true };
+  }
+
+  private toolSearch(params: Record<string, unknown>): AgentToolResult {
+    const check = validateStringParam(params['query'], 'query');
+    if (!check.ok) {
+      return check.result;
+    }
+    this.OnSearchValueChange(check.value);
+    return { Success: true };
+  }
+
+  private async toolSelectRun(params: Record<string, unknown>): Promise<AgentToolResult> {
+    const match = this.resolveRunFromParam(params['run']);
+    if (!match.ok) {
+      return match.result;
+    }
+    // SelectRun toggles; only open when not already the selected run.
+    if (!UUIDsEqual(this.SelectedRunID, match.value.ID)) {
+      await this.SelectRun(match.value.ID);
+    }
+    this.emitAgentContext();
+    return { Success: true };
+  }
+
+  private toolOpenRunRecord(params: Record<string, unknown>): AgentToolResult {
+    const match = this.resolveRunFromParam(params['run']);
+    if (!match.ok) {
+      return match.result;
+    }
+    this.navigationService.OpenEntityRecord('MJ: Company Integration Runs', CompositeKey.FromID(match.value.ID));
+    return { Success: true };
+  }
+
+  /** Resolve an agent-supplied run reference (id or label) against the loaded runs. */
+  private resolveRunFromParam(
+    raw: unknown,
+  ): { ok: true; value: IntegrationRunRow } | { ok: false; result: AgentToolResult } {
+    const check = validateStringParam(raw, 'run');
+    if (!check.ok) {
+      return { ok: false, result: check.result };
+    }
+    const candidates: NamedIntegrationRecord[] = this.AllRuns.map(r => ({ ID: r.ID, Name: this.runLabel(r) }));
+    const match = resolveIntegrationRecord(check.value, candidates);
+    if (!match) {
+      return { ok: false, result: { Success: false, ErrorMessage: buildIntegrationNotFoundError(check.value, candidates, 'run') } };
+    }
+    const run = this.AllRuns.find(r => UUIDsEqual(r.ID, match.ID));
+    if (!run) {
+      return { ok: false, result: { Success: false, ErrorMessage: buildIntegrationNotFoundError(check.value, candidates, 'run') } };
+    }
+    return { ok: true, value: run };
+  }
+
+  /** Human-readable label for a run row, used for agent name-resolution + context. */
+  private runLabel(run: IntegrationRunRow): string {
+    const who = run.Integration ?? 'Integration';
+    const company = run.Company ? ` (${run.Company})` : '';
+    return `${who}${company} · ${run.Status}`;
+  }
+
+  private buildRunSummary(run: IntegrationRunRow): ActivityRunSummary {
+    return {
+      ID: run.ID,
+      Name: this.runLabel(run),
+      Status: run.Status,
+      TotalRecords: run.TotalRecords,
+      When: this.dataService.ComputeRelativeTime(run.StartedAt),
+    };
+  }
+
+  /** Resolve the active integration-filter ID to its display name, or null. */
+  private resolveIntegrationFilterName(): string | null {
+    if (!this.IntegrationFilter) {
+      return null;
+    }
+    return this.Integrations.find(i => UUIDsEqual(i.ID, this.IntegrationFilter))?.Name ?? null;
   }
 
   private filterByStatus(runs: IntegrationRunRow[]): IntegrationRunRow[] {
@@ -327,12 +581,14 @@ export class ActivityComponent extends BaseResourceComponent implements OnInit {
       this.SelectedRunID = null;
       this.SelectedRunDetails = [];
       this.WatermarkData = [];
+      this.emitAgentContext();
       return;
     }
     this.SelectedRunID = runID;
     this.ActiveDetailTab = 'entities';
     this.IsLoadingDetail = true;
     this.cdr.detectChanges();
+    this.emitAgentContext();
 
     const run = this.findRunByID(runID);
     try {

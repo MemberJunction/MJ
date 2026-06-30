@@ -7,7 +7,7 @@
  *
  * @module @memberjunction/server
  */
-import { LoadWhiteboardChannelServer, LoadMeetingControlsChannelServer, LoadMediaChannelServer } from '@memberjunction/ai-agents';
+import { LoadWhiteboardChannelServer, LoadMeetingControlsChannelServer, LoadMediaChannelServer, LoadClientContextChannelServer } from '@memberjunction/ai-agents';
 import { LoadRemoteBrowserChannel } from '@memberjunction/remote-browser-server';
 import { LoadSelfHostRemoteBrowser } from '@memberjunction/remote-browser-selfhost';
 import { BindRemoteBrowserGoalEngine } from './remoteBrowserGoalEngine.js';
@@ -18,6 +18,7 @@ import { BindRemoteBrowserGoalEngine } from './remoteBrowserGoalEngine.js';
 LoadWhiteboardChannelServer();
 LoadMeetingControlsChannelServer();
 LoadMediaChannelServer();
+LoadClientContextChannelServer();
 // Remote Browser native channel (client-direct): the lifecycle-only server channel plugin + the
 // Self-Hosted Chrome backend driver (whose default runner launches a local headless Chromium via
 // Playwright — pulled in transitively through the SelfHost package, documented and acceptable).

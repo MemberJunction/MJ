@@ -198,6 +198,11 @@ export class CommunicationLogsResourceComponent extends BaseResourceComponent im
     public statusFilter = '';
     private searchTerm = '';
 
+    /** The current free-text search applied to the log list (read-only, for agent context). */
+    public get SearchText(): string {
+        return this.searchTerm;
+    }
+
     constructor(private cdr: ChangeDetectorRef) {
         super();
     }

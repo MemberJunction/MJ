@@ -32,6 +32,33 @@ import { CredentialEngine } from '@memberjunction/credentials';
 import { RegisterClass , UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { GraphQLDataProvider, gql } from '@memberjunction/graphql-dataprovider';
 import { MCPToolsService, MCPSyncState, MCPSyncResult } from './services/mcp-tools.service';
+import {
+    buildMCPAgentContextFull,
+    isValidMCPTab,
+    isValidToolsViewMode,
+    resolveMCPItem,
+    buildMCPNotFoundError,
+    MCP_TABS,
+    MCP_TOOLS_VIEW_MODES,
+    MCP_LOG_SORT_COLUMNS,
+    type MCPAgentContextInput,
+    type MCPTabContextInput,
+    type MCPNamedItem,
+} from './mcp-agent-context';
+import { validateEnumParam, validateStringParam } from '../shared/agent-tool-validation';
+import type { AgentToolResult } from '../shared/agent-tool-validation';
+
+/**
+ * Local alias for the client-tool shape `NavigationService.SetAgentClientTools`
+ * accepts. Declared here (not imported) so we don't add a re-export across the
+ * shared validation file (mirrors the Testing dashboard's local alias).
+ */
+type MCPAgentTool = {
+    Name: string;
+    Description: string;
+    ParameterSchema: Record<string, unknown>;
+    Handler: (params: Record<string, unknown>) => Promise<unknown>;
+};
 
 /**
  * User preferences for the MCP Dashboard
@@ -295,6 +322,15 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     };
 
     public ActiveTab: MCPDashboardTab = 'servers';
+
+    /**
+     * The tab the agent tool-set was last registered for. Mode-scoping guard:
+     * the safe tool surface differs per tab (servers/connections/tools/logs), so
+     * `syncAgentToolsForMode()` only re-registers on a tab transition. Mirrors the
+     * Data Explorer's `lastRegisteredToolMode`.
+     */
+    private lastRegisteredToolMode: MCPDashboardTab | null = null;
+
     public IsLoading = false;
     public ErrorMessage: string | null = null;
 
@@ -431,6 +467,10 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         const tab = params['tab'] as MCPDashboardTab | undefined;
         if (tab && this.isValidTab(tab) && tab !== this.ActiveTab) {
             this.ActiveTab = tab;
+            // Keep the mode-scoped agent tools + deep context aligned with the tab
+            // when it changes via back/forward or a deep link.
+            this.syncAgentToolsForMode();
+            this.publishAgentContext();
             this.cdr.detectChanges();
         }
     }
@@ -566,7 +606,669 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     }
 
     ngAfterViewInit(): void {
+        this.publishAgentContext();
+        this.syncAgentToolsForMode();
         this.cdr.markForCheck();
+    }
+
+    // ================================================================
+    // AI Agent Context & Client Tools — DEEP enrichment (Data-Explorer depth)
+    //
+    // 🚨 SAFETY BOUNDARY — READ-ONLY / NAVIGATIONAL ONLY 🚨
+    // MCP is a credential-bearing surface. Servers carry OAuth client secrets,
+    // connections carry bearer tokens, and OAuth token / client-registration /
+    // credential entities are in scope here. The agent context and client tools
+    // registered below are strictly READ / FILTER / SORT / SELECT / NAVIGATE +
+    // a read-only favorite-toggle preference:
+    //   - tab switches, free-text search, per-tab status filters, server/category
+    //     filter, favorites/recent toggles, tools view-mode, logs sort
+    //   - SELECT a server / connection / tool / log (by id OR name) — highlights /
+    //     expands / opens the detail panel
+    //   - OPEN the selected record in a tab for VIEWING (OpenEntityRecord — never edits)
+    //   - data refresh (read-only reload)
+    //
+    // 🔒 DELIBERATELY NOT exposed to the agent (must stay human-initiated):
+    //   - create / edit / delete of servers and connections
+    //   - MCP tool EXECUTION / test-with-params (untrusted LLM-supplied args
+    //     against real, side-effecting external tools) — NO execute path
+    //   - ANY secret/credential value: server URL/command, bearer token, OAuth
+    //     client secret, encrypted credential, or tool input/output payload
+    //
+    // Context exposes ONLY aggregate + per-tab counts, navigation/filter state,
+    // the user's own search terms, and user-facing DISPLAY names (server / tool /
+    // connection names; log labels are tool-name + status only) — never secrets,
+    // never tool args, never tool results.
+    //
+    // MODE-SCOPING (mirrors the Data Explorer / Testing dashboards): the safe tool
+    // surface differs per active tab, so `SetAgentClientTools` re-registers ONLY on
+    // a tab transition (guarded by {@link lastRegisteredToolMode}). COMMON tools
+    // (tab switch, search, refresh, clear filters) are always present; per-tab
+    // tools (server/connection/tool/log select+open+filter+sort) appear only while
+    // their tab is active.
+    // ================================================================
+
+    /**
+     * Publish the current MCP dashboard state to the AI agent. Re-invoked on every
+     * meaningful state change (data load, filter/search change, tab switch,
+     * view-mode/sort change, selection change). The shaping lives in the pure
+     * {@link buildMCPAgentContextFull} helper so it stays unit-testable and the
+     * secret-free guarantee is auditable in one place.
+     */
+    private publishAgentContext(): void {
+        const top: MCPAgentContextInput = {
+            ActiveTab: this.ActiveTab,
+            ServerCount: this.stats.totalServers,
+            ActiveServerCount: this.stats.activeServers,
+            ConnectionCount: this.stats.totalConnections,
+            ToolCount: this.stats.totalTools,
+            RecentExecutionCount: this.stats.recentExecutions,
+            FailedExecutionCount: this.stats.failedExecutions,
+            CurrentSearchTerm: this.filters$.value.searchTerm,
+            ToolsViewMode: this.ToolsViewMode,
+        };
+        this.navigationService.SetAgentContext(this, buildMCPAgentContextFull(top, this.buildActiveTabContext()));
+    }
+
+    /** Build the deep per-tab context slice for whichever tab is active. */
+    private buildActiveTabContext(): MCPTabContextInput {
+        const f = this.filters$.value;
+        switch (this.ActiveTab) {
+            case 'connections': {
+                const selected = this.connections.find(c => this.ExpandedConnectionID && UUIDsEqual(c.ID, this.ExpandedConnectionID)) ?? null;
+                return {
+                    Tab: 'connections',
+                    Data: {
+                        ConnectionCount: this.connections.length,
+                        FilteredConnectionCount: this.filteredConnections.length,
+                        ConnectionStatusFilter: f.connectionStatus ?? 'all',
+                        VisibleConnectionNames: this.filteredConnections.map(c => c.Name),
+                        SelectedConnectionId: selected?.ID ?? null,
+                        SelectedConnectionName: selected?.Name ?? null,
+                    },
+                };
+            }
+            case 'tools': {
+                const selected = this.tools.find(t => this.ExpandedToolId && UUIDsEqual(t.ID, this.ExpandedToolId)) ?? null;
+                const serverFilter = f.toolsServer ?? 'all';
+                const serverFilterName = serverFilter && serverFilter !== 'all'
+                    ? (this.toolsAvailableServers.find(s => UUIDsEqual(s.ID, serverFilter))?.Name ?? null)
+                    : null;
+                return {
+                    Tab: 'tools',
+                    Data: {
+                        ToolCount: this.tools.length,
+                        FilteredToolCount: this.filteredTools.length,
+                        ToolsViewMode: this.ToolsViewMode,
+                        ToolStatusFilter: f.toolStatus ?? 'all',
+                        ServerFilter: serverFilter,
+                        ServerFilterName: serverFilterName,
+                        CategoryFilter: f.toolsCategory ?? 'all',
+                        FavoritesOnly: f.favoritesOnly ?? false,
+                        RecentOnly: f.recentOnly ?? false,
+                        FavoriteToolCount: this.favoritedToolIDs.size,
+                        VisibleToolNames: this.filteredTools.map(t => t.ToolTitle || t.ToolName),
+                        AvailableServerNames: this.toolsAvailableServers.map(s => s.Name),
+                        AvailableCategoryNames: this.toolsAvailableCategories.map(c => c.category),
+                        SelectedToolId: selected?.ID ?? null,
+                        SelectedToolName: selected ? (selected.ToolTitle || selected.ToolName) : null,
+                    },
+                };
+            }
+            case 'logs': {
+                return {
+                    Tab: 'logs',
+                    Data: {
+                        ExecutionCount: this.executionLogs.length,
+                        FilteredExecutionCount: this.filteredLogs.length,
+                        FailedExecutionCount: this.executionLogs.filter(l => l.Status === 'Error').length,
+                        LogStatusFilter: f.logStatus ?? 'all',
+                        SortColumn: this.LogsSortColumn,
+                        SortDirection: this.LogsSortAscending ? 'asc' : 'desc',
+                        VisibleLogLabels: this.filteredLogs.map(l => this.logLabel(l)),
+                        SelectedLogId: this.SelectedLog?.ID ?? null,
+                        SelectedLogName: this.SelectedLog?.ToolName ?? null,
+                        DetailPanelOpen: this.ShowLogDetailPanel,
+                    },
+                };
+            }
+            case 'servers':
+            default: {
+                const selected = this.servers.find(s => this.ExpandedServerID && UUIDsEqual(s.ID, this.ExpandedServerID)) ?? null;
+                return {
+                    Tab: 'servers',
+                    Data: {
+                        ServerCount: this.servers.length,
+                        FilteredServerCount: this.filteredServers.length,
+                        ActiveServerCount: this.stats.activeServers,
+                        ServerStatusFilter: f.serverStatus ?? 'all',
+                        VisibleServerNames: this.filteredServers.map(s => s.Name),
+                        SelectedServerId: selected?.ID ?? null,
+                        SelectedServerName: selected?.Name ?? null,
+                    },
+                };
+            }
+        }
+    }
+
+    /**
+     * Build a non-secret display label for a log row: the tool name plus its
+     * status (e.g. "github_search · Error"). NEVER includes InputArgs or Result.
+     */
+    private logLabel(log: MCPExecutionLogData): string {
+        const tool = log.ToolName || '(unknown tool)';
+        return log.Status ? `${tool} · ${log.Status}` : tool;
+    }
+
+    // ----------------------------------------------------------------
+    // Mode-scoped client-tool registration
+    // ----------------------------------------------------------------
+
+    /**
+     * Register the safe client-tool set for the ACTIVE tab. `SetAgentClientTools`
+     * replaces the registered set wholesale, so we only re-register on a tab
+     * transition (guarded by {@link lastRegisteredToolMode}). Common tools are
+     * always present; per-tab tools swap so e.g. a logs-only SelectLog is never
+     * visible while Servers is open.
+     *
+     * 🔒 SAFETY: every tool below is read / filter / sort / select / navigate /
+     * favorite-toggle / refresh. No tool creates, edits, deletes, executes an MCP
+     * tool, or returns a secret. See the SAFETY BOUNDARY comment above.
+     */
+    private syncAgentToolsForMode(): void {
+        const tab = this.ActiveTab;
+        if (this.lastRegisteredToolMode === tab) {
+            return;
+        }
+        this.lastRegisteredToolMode = tab;
+        this.navigationService.SetAgentClientTools(this, this.buildToolsForMode(tab));
+    }
+
+    /** Compose the safe tool list for a given tab: common tools + per-tab tools. */
+    private buildToolsForMode(tab: MCPDashboardTab): MCPAgentTool[] {
+        const tools: MCPAgentTool[] = [...this.buildCommonMCPTools()];
+        switch (tab) {
+            case 'servers':
+                tools.push(...this.buildServersTools());
+                break;
+            case 'connections':
+                tools.push(...this.buildConnectionsTools());
+                break;
+            case 'tools':
+                tools.push(...this.buildToolsTabTools());
+                break;
+            case 'logs':
+                tools.push(...this.buildLogsTools());
+                break;
+        }
+        return tools;
+    }
+
+    /** Tools available on EVERY tab: tab switch, search, refresh, clear filters. */
+    private buildCommonMCPTools(): MCPAgentTool[] {
+        return [
+            {
+                Name: 'SwitchMCPTab',
+                Description: 'Switch the active MCP dashboard tab. Valid tabs: servers, connections, tools, logs.',
+                ParameterSchema: { type: 'object', properties: { tab: { type: 'string', enum: ['servers', 'connections', 'tools', 'logs'] } }, required: ['tab'] },
+                Handler: async (params: Record<string, unknown>) => this.toolSwitchTab(params),
+            },
+            {
+                Name: 'SearchMCPTools',
+                Description: 'Set the free-text search term applied to the current MCP tab (filters servers/connections/tools/logs by name/description).',
+                ParameterSchema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] },
+                Handler: async (params: Record<string, unknown>) => this.toolSearch(params),
+            },
+            {
+                Name: 'RefreshMCPData',
+                Description: 'Reload all MCP dashboard data. Read-only — does not create, modify, or execute anything.',
+                ParameterSchema: { type: 'object', properties: { forceRefresh: { type: 'boolean' } } },
+                Handler: async (params: Record<string, unknown>) => this.toolRefresh(params),
+            },
+            {
+                Name: 'ClearMCPFilters',
+                Description: 'Reset all MCP dashboard filters (search, status, server, category, favorites, recent) to their defaults.',
+                ParameterSchema: { type: 'object', properties: {} },
+                Handler: async () => {
+                    this.resetAllFilters();
+                    this.publishAgentContext();
+                    return { Success: true };
+                },
+            },
+        ];
+    }
+
+    /** Servers-tab tools: filter by status, select/open a server. */
+    private buildServersTools(): MCPAgentTool[] {
+        return [
+            {
+                Name: 'FilterServersByStatus',
+                Description: 'Restrict the Servers tab to a status, or "all" to clear.',
+                ParameterSchema: { type: 'object', properties: { status: { type: 'string' } }, required: ['status'] },
+                Handler: async (params: Record<string, unknown>) => this.toolFilterByStatus('server', params),
+            },
+            {
+                Name: 'SelectServer',
+                Description: 'Select (expand) an MCP server by its ID or name, revealing its details panel. Read-only navigation — does not edit or execute.',
+                ParameterSchema: { type: 'object', properties: { server: { type: 'string' } }, required: ['server'] },
+                Handler: async (params: Record<string, unknown>) => this.toolSelectServer(params),
+            },
+            {
+                Name: 'OpenServerRecord',
+                Description: 'Open the selected MCP server\'s record in a new tab for VIEWING (read-only). Pass a server ID or name, or omit to open the currently selected server.',
+                ParameterSchema: { type: 'object', properties: { server: { type: 'string' } } },
+                Handler: async (params: Record<string, unknown>) => this.toolOpenServerRecord(params),
+            },
+        ];
+    }
+
+    /** Connections-tab tools: filter by status, select/open a connection, navigate to its server. */
+    private buildConnectionsTools(): MCPAgentTool[] {
+        return [
+            {
+                Name: 'FilterConnectionsByStatus',
+                Description: 'Restrict the Connections tab to a status, or "all" to clear.',
+                ParameterSchema: { type: 'object', properties: { status: { type: 'string' } }, required: ['status'] },
+                Handler: async (params: Record<string, unknown>) => this.toolFilterByStatus('connection', params),
+            },
+            {
+                Name: 'SelectConnection',
+                Description: 'Select (expand) an MCP connection by its ID or name, revealing its details panel. Read-only navigation.',
+                ParameterSchema: { type: 'object', properties: { connection: { type: 'string' } }, required: ['connection'] },
+                Handler: async (params: Record<string, unknown>) => this.toolSelectConnection(params),
+            },
+            {
+                Name: 'OpenConnectionRecord',
+                Description: 'Open an MCP connection\'s record in a new tab for VIEWING (read-only). Pass a connection ID or name, or omit to open the currently selected connection.',
+                ParameterSchema: { type: 'object', properties: { connection: { type: 'string' } } },
+                Handler: async (params: Record<string, unknown>) => this.toolOpenConnectionRecord(params),
+            },
+            {
+                Name: 'NavigateToConnectionServer',
+                Description: 'Open the parent MCP server record for a connection (by connection ID or name, or the selected one) in a new tab for VIEWING. Related-record navigation, read-only.',
+                ParameterSchema: { type: 'object', properties: { connection: { type: 'string' } } },
+                Handler: async (params: Record<string, unknown>) => this.toolNavigateToConnectionServer(params),
+            },
+        ];
+    }
+
+    /** Tools-tab tools: filter (status/server/category/favorites/recent), view-mode, favorite toggle, select/open. */
+    private buildToolsTabTools(): MCPAgentTool[] {
+        return [
+            {
+                Name: 'FilterToolsByStatus',
+                Description: 'Restrict the Tools tab to a tool status, or "all" to clear.',
+                ParameterSchema: { type: 'object', properties: { status: { type: 'string' } }, required: ['status'] },
+                Handler: async (params: Record<string, unknown>) => this.toolFilterByStatus('tool', params),
+            },
+            {
+                Name: 'FilterMCPToolsByServer',
+                Description: 'Restrict the Tools tab to a single MCP server by its ID or name, or "all" to clear the server filter.',
+                ParameterSchema: { type: 'object', properties: { server: { type: 'string' } }, required: ['server'] },
+                Handler: async (params: Record<string, unknown>) => this.toolFilterByServer(params),
+            },
+            {
+                Name: 'FilterToolsByCategory',
+                Description: 'Restrict the Tools tab to a category (the snake_case prefix of tool names), or "all" to clear.',
+                ParameterSchema: { type: 'object', properties: { category: { type: 'string' } }, required: ['category'] },
+                Handler: async (params: Record<string, unknown>) => this.toolFilterByCategory(params),
+            },
+            {
+                Name: 'ToggleToolsFavoritesOnly',
+                Description: 'Toggle (or set) restricting the Tools tab to favorited tools only.',
+                ParameterSchema: { type: 'object', properties: { enabled: { type: 'boolean' } } },
+                Handler: async (params: Record<string, unknown>) => this.toolToggleFavoritesOnly(params),
+            },
+            {
+                Name: 'SetToolsViewMode',
+                Description: 'Set the Tools tab view mode. Valid modes: card, list.',
+                ParameterSchema: { type: 'object', properties: { mode: { type: 'string', enum: ['card', 'list'] } }, required: ['mode'] },
+                Handler: async (params: Record<string, unknown>) => this.toolSetToolsViewMode(params),
+            },
+            {
+                Name: 'ToggleMCPToolFavorite',
+                Description: 'Toggle the favorite flag for an MCP tool (by ID or name) for the current user. Read/navigational preference only — does NOT execute or modify the tool.',
+                ParameterSchema: { type: 'object', properties: { tool: { type: 'string' } }, required: ['tool'] },
+                Handler: async (params: Record<string, unknown>) => this.toolToggleFavorite(params),
+            },
+            {
+                Name: 'SelectTool',
+                Description: 'Select (expand) an MCP tool by its ID or name, revealing its details. Read-only navigation — does NOT execute the tool.',
+                ParameterSchema: { type: 'object', properties: { tool: { type: 'string' } }, required: ['tool'] },
+                Handler: async (params: Record<string, unknown>) => this.toolSelectTool(params),
+            },
+            {
+                Name: 'OpenToolRecord',
+                Description: 'Open an MCP tool\'s record in a new tab for VIEWING (read-only). Pass a tool ID or name, or omit to open the currently selected tool. Does NOT execute the tool.',
+                ParameterSchema: { type: 'object', properties: { tool: { type: 'string' } } },
+                Handler: async (params: Record<string, unknown>) => this.toolOpenToolRecord(params),
+            },
+        ];
+    }
+
+    /** Logs-tab tools: filter by status, sort, select/open a log. */
+    private buildLogsTools(): MCPAgentTool[] {
+        return [
+            {
+                Name: 'FilterLogsByStatus',
+                Description: 'Restrict the Logs tab to an execution status, or "all" to clear.',
+                ParameterSchema: { type: 'object', properties: { status: { type: 'string' } }, required: ['status'] },
+                Handler: async (params: Record<string, unknown>) => this.toolFilterByStatus('log', params),
+            },
+            {
+                Name: 'SortLogs',
+                Description: 'Sort the execution-logs table by a column. Columns: status, server, tool, connection, started, duration, error. Clicking the same column again toggles direction.',
+                ParameterSchema: { type: 'object', properties: { column: { type: 'string', enum: ['status', 'server', 'tool', 'connection', 'started', 'duration', 'error'] } }, required: ['column'] },
+                Handler: async (params: Record<string, unknown>) => this.toolSortLogs(params),
+            },
+            {
+                Name: 'SelectLog',
+                Description: 'Select an execution log by its ID (or a tool-name match) to open its detail panel for VIEWING. Read-only navigation. Note: the panel never exposes credentials.',
+                ParameterSchema: { type: 'object', properties: { log: { type: 'string' } }, required: ['log'] },
+                Handler: async (params: Record<string, unknown>) => this.toolSelectLog(params),
+            },
+            {
+                Name: 'OpenLogRecord',
+                Description: 'Open an execution-log record in a new tab for VIEWING (read-only). Pass a log ID, or omit to open the currently selected log.',
+                ParameterSchema: { type: 'object', properties: { log: { type: 'string' } } },
+                Handler: async (params: Record<string, unknown>) => this.toolOpenLogRecord(params),
+            },
+        ];
+    }
+
+    // ----------------------------------------------------------------
+    // Tolerant tool handlers (validate input, never throw)
+    // ----------------------------------------------------------------
+
+    /** Switch the active tab after validating it. */
+    private toolSwitchTab(params: Record<string, unknown>): AgentToolResult {
+        const v = validateEnumParam(params?.['tab'], MCP_TABS, 'tab');
+        if (!v.ok) return v.result;
+        this.setActiveTab(v.value);
+        this.publishAgentContext();
+        return { Success: true };
+    }
+
+    /** Set the dashboard search term. */
+    private toolSearch(params: Record<string, unknown>): AgentToolResult {
+        const v = validateStringParam(params?.['query'], 'query');
+        if (!v.ok) return v.result;
+        this.onSearchChange(v.value);
+        this.publishAgentContext();
+        return { Success: true };
+    }
+
+    /** Set a per-tab status filter ('all' or a status string). Tolerant of any string. */
+    private toolFilterByStatus(kind: 'server' | 'connection' | 'tool' | 'log', params: Record<string, unknown>): AgentToolResult {
+        const v = validateStringParam(params?.['status'], 'status');
+        if (!v.ok) return v.result;
+        this.onStatusFilterChange(kind, v.value || 'all');
+        this.publishAgentContext();
+        return { Success: true };
+    }
+
+    /** Restrict the Tools tab to a single server (by ID or name; 'all' to clear). */
+    private toolFilterByServer(params: Record<string, unknown>): AgentToolResult {
+        const v = validateStringParam(params?.['server'], 'server');
+        if (!v.ok) return v.result;
+        const raw = v.value;
+        // Ensure the Tools tab is active so the filter is meaningful.
+        this.setActiveTab('tools');
+        if (!raw || raw === 'all') {
+            this.onFilterFieldChange('toolsServer', 'all');
+            this.publishAgentContext();
+            return { Success: true };
+        }
+        const candidates: MCPNamedItem[] = this.toolsAvailableServers.map(s => ({ ID: s.ID, Name: s.Name }));
+        const match = resolveMCPItem(raw, candidates);
+        if (!match) {
+            return { Success: false, ErrorMessage: buildMCPNotFoundError(raw, candidates, 'server') };
+        }
+        this.onFilterFieldChange('toolsServer', match.ID);
+        this.publishAgentContext();
+        return { Success: true };
+    }
+
+    /** Restrict the Tools tab to a category prefix ('all' to clear). Tolerant. */
+    private toolFilterByCategory(params: Record<string, unknown>): AgentToolResult {
+        const v = validateStringParam(params?.['category'], 'category');
+        if (!v.ok) return v.result;
+        const cat = v.value || 'all';
+        this.setActiveTab('tools');
+        if (cat !== 'all' && !this.toolsAvailableCategories.some(c => c.category === cat)) {
+            const sample = this.toolsAvailableCategories.slice(0, 6).map(c => c.category).join(', ');
+            return { Success: false, ErrorMessage: `Category "${cat}" is not available. Available categories include: ${sample || '(none)'}.` };
+        }
+        this.onFilterFieldChange('toolsCategory', cat);
+        this.publishAgentContext();
+        return { Success: true };
+    }
+
+    /** Toggle (or explicitly set) the favorites-only filter on the Tools tab. */
+    private toolToggleFavoritesOnly(params: Record<string, unknown>): AgentToolResult {
+        this.setActiveTab('tools');
+        const raw = params?.['enabled'];
+        const enabled = typeof raw === 'boolean' ? raw : !(this.filters$.value.favoritesOnly ?? false);
+        this.onFilterFieldChange('favoritesOnly', enabled);
+        this.publishAgentContext();
+        return { Success: true };
+    }
+
+    /** Toggle a tool's favorite flag for the current user (by ID or name). */
+    private async toolToggleFavorite(params: Record<string, unknown>): Promise<AgentToolResult> {
+        const v = validateStringParam(params?.['tool'], 'tool');
+        if (!v.ok) return v.result;
+        const match = resolveMCPItem(v.value, this.toolCandidates());
+        if (!match) {
+            return { Success: false, ErrorMessage: buildMCPNotFoundError(v.value, this.toolCandidates(), 'tool') };
+        }
+        try {
+            await this.toggleFavorite(match.ID);
+            this.publishAgentContext();
+            return { Success: true };
+        } catch (e) {
+            return { Success: false, ErrorMessage: e instanceof Error ? e.message : 'Toggle favorite failed.' };
+        }
+    }
+
+    /** Reload all dashboard data (read-only). */
+    private async toolRefresh(params: Record<string, unknown>): Promise<AgentToolResult> {
+        const forceRefresh = params?.['forceRefresh'] === true;
+        try {
+            await this.loadAllData(forceRefresh);
+            this.publishAgentContext();
+            return { Success: true };
+        } catch (e) {
+            return { Success: false, ErrorMessage: e instanceof Error ? e.message : 'Refresh failed.' };
+        }
+    }
+
+    /** Switch the Tools tab view mode after validating it. */
+    private toolSetToolsViewMode(params: Record<string, unknown>): AgentToolResult {
+        const v = validateEnumParam(params?.['mode'], MCP_TOOLS_VIEW_MODES, 'mode');
+        if (!v.ok) return v.result;
+        this.setToolsViewMode(v.value);
+        this.publishAgentContext();
+        return { Success: true };
+    }
+
+    /** Sort the logs table by a validated column. */
+    private toolSortLogs(params: Record<string, unknown>): AgentToolResult {
+        const v = validateEnumParam(params?.['column'], MCP_LOG_SORT_COLUMNS, 'column');
+        if (!v.ok) return v.result;
+        this.setActiveTab('logs');
+        this.onLogSortColumn(v.value);
+        this.publishAgentContext();
+        return { Success: true };
+    }
+
+    // --- selection / open helpers ---
+
+    /** Name-and-ID candidates for the tool resolver (tool display name = title || name). */
+    private toolCandidates(): MCPNamedItem[] {
+        return this.tools.map(t => ({ ID: t.ID, Name: t.ToolTitle || t.ToolName }));
+    }
+
+    /** Resolve a server reference (ID or name); returns the row or a tolerant error. */
+    private resolveServerRef(raw: string): { ok: true; server: MCPServerData } | { ok: false; result: AgentToolResult } {
+        const candidates: MCPNamedItem[] = this.servers.map(s => ({ ID: s.ID, Name: s.Name }));
+        const match = resolveMCPItem(raw, candidates);
+        if (!match) {
+            return { ok: false, result: { Success: false, ErrorMessage: buildMCPNotFoundError(raw, candidates, 'server') } };
+        }
+        const server = this.servers.find(s => UUIDsEqual(s.ID, match.ID))!;
+        return { ok: true, server };
+    }
+
+    /** Resolve a connection reference (ID or name); returns the row or a tolerant error. */
+    private resolveConnectionRef(raw: string): { ok: true; connection: MCPConnectionData } | { ok: false; result: AgentToolResult } {
+        const candidates: MCPNamedItem[] = this.connections.map(c => ({ ID: c.ID, Name: c.Name }));
+        const match = resolveMCPItem(raw, candidates);
+        if (!match) {
+            return { ok: false, result: { Success: false, ErrorMessage: buildMCPNotFoundError(raw, candidates, 'connection') } };
+        }
+        const connection = this.connections.find(c => UUIDsEqual(c.ID, match.ID))!;
+        return { ok: true, connection };
+    }
+
+    /** Select (expand) a server by ID or name. */
+    private toolSelectServer(params: Record<string, unknown>): AgentToolResult {
+        const v = validateStringParam(params?.['server'], 'server');
+        if (!v.ok) return v.result;
+        const r = this.resolveServerRef(v.value);
+        if (!r.ok) return r.result;
+        this.setActiveTab('servers');
+        if (!this.isServerExpanded(r.server)) {
+            this.toggleServerExpand(r.server);
+        }
+        this.publishAgentContext();
+        return { Success: true };
+    }
+
+    /** Open a server record in a tab (view-only). Defaults to the selected server. */
+    private toolOpenServerRecord(params: Record<string, unknown>): AgentToolResult {
+        const raw = typeof params?.['server'] === 'string' ? (params['server'] as string) : '';
+        let server: MCPServerData | null = null;
+        if (raw) {
+            const r = this.resolveServerRef(raw);
+            if (!r.ok) return r.result;
+            server = r.server;
+        } else {
+            server = this.servers.find(s => this.ExpandedServerID && UUIDsEqual(s.ID, this.ExpandedServerID)) ?? null;
+            if (!server) return { Success: false, ErrorMessage: 'No server is selected. Pass a server ID or name, or select one first.' };
+        }
+        this.navigationService.OpenEntityRecord('MJ: MCP Servers', CompositeKey.FromID(server.ID));
+        return { Success: true };
+    }
+
+    /** Select (expand) a connection by ID or name. */
+    private toolSelectConnection(params: Record<string, unknown>): AgentToolResult {
+        const v = validateStringParam(params?.['connection'], 'connection');
+        if (!v.ok) return v.result;
+        const r = this.resolveConnectionRef(v.value);
+        if (!r.ok) return r.result;
+        this.setActiveTab('connections');
+        if (!this.isConnectionExpanded(r.connection)) {
+            this.toggleConnectionExpand(r.connection);
+        }
+        this.publishAgentContext();
+        return { Success: true };
+    }
+
+    /** Open a connection record in a tab (view-only). Defaults to the selected connection. */
+    private toolOpenConnectionRecord(params: Record<string, unknown>): AgentToolResult {
+        const raw = typeof params?.['connection'] === 'string' ? (params['connection'] as string) : '';
+        let connection: MCPConnectionData | null = null;
+        if (raw) {
+            const r = this.resolveConnectionRef(raw);
+            if (!r.ok) return r.result;
+            connection = r.connection;
+        } else {
+            connection = this.connections.find(c => this.ExpandedConnectionID && UUIDsEqual(c.ID, this.ExpandedConnectionID)) ?? null;
+            if (!connection) return { Success: false, ErrorMessage: 'No connection is selected. Pass a connection ID or name, or select one first.' };
+        }
+        this.navigationService.OpenEntityRecord('MJ: MCP Server Connections', CompositeKey.FromID(connection.ID));
+        return { Success: true };
+    }
+
+    /** Navigate to the parent server of a connection (related-record, view-only). */
+    private toolNavigateToConnectionServer(params: Record<string, unknown>): AgentToolResult {
+        const raw = typeof params?.['connection'] === 'string' ? (params['connection'] as string) : '';
+        let connection: MCPConnectionData | null = null;
+        if (raw) {
+            const r = this.resolveConnectionRef(raw);
+            if (!r.ok) return r.result;
+            connection = r.connection;
+        } else {
+            connection = this.connections.find(c => this.ExpandedConnectionID && UUIDsEqual(c.ID, this.ExpandedConnectionID)) ?? null;
+            if (!connection) return { Success: false, ErrorMessage: 'No connection is selected. Pass a connection ID or name, or select one first.' };
+        }
+        const server = this.servers.find(s => UUIDsEqual(s.ID, connection!.MCPServerID));
+        if (!server) return { Success: false, ErrorMessage: `The parent server for connection "${connection.Name}" is not loaded.` };
+        this.navigationService.OpenEntityRecord('MJ: MCP Servers', CompositeKey.FromID(server.ID));
+        return { Success: true };
+    }
+
+    /** Select (expand) a tool by ID or name. Does NOT execute the tool. */
+    private toolSelectTool(params: Record<string, unknown>): AgentToolResult {
+        const v = validateStringParam(params?.['tool'], 'tool');
+        if (!v.ok) return v.result;
+        const match = resolveMCPItem(v.value, this.toolCandidates());
+        if (!match) return { Success: false, ErrorMessage: buildMCPNotFoundError(v.value, this.toolCandidates(), 'tool') };
+        const tool = this.tools.find(t => UUIDsEqual(t.ID, match.ID))!;
+        this.setActiveTab('tools');
+        if (!this.isToolExpanded(tool)) {
+            this.toggleToolExpand(tool);
+        }
+        this.publishAgentContext();
+        return { Success: true };
+    }
+
+    /** Open a tool record in a tab (view-only). Defaults to the selected tool. Does NOT execute. */
+    private toolOpenToolRecord(params: Record<string, unknown>): AgentToolResult {
+        const raw = typeof params?.['tool'] === 'string' ? (params['tool'] as string) : '';
+        let tool: MCPToolData | null = null;
+        if (raw) {
+            const match = resolveMCPItem(raw, this.toolCandidates());
+            if (!match) return { Success: false, ErrorMessage: buildMCPNotFoundError(raw, this.toolCandidates(), 'tool') };
+            tool = this.tools.find(t => UUIDsEqual(t.ID, match.ID)) ?? null;
+        } else {
+            tool = this.tools.find(t => this.ExpandedToolId && UUIDsEqual(t.ID, this.ExpandedToolId)) ?? null;
+            if (!tool) return { Success: false, ErrorMessage: 'No tool is selected. Pass a tool ID or name, or select one first.' };
+        }
+        this.navigationService.OpenEntityRecord('MJ: MCP Server Tools', CompositeKey.FromID(tool!.ID));
+        return { Success: true };
+    }
+
+    /** Select a log (open its detail panel) by ID or tool-name match. */
+    private async toolSelectLog(params: Record<string, unknown>): Promise<AgentToolResult> {
+        const v = validateStringParam(params?.['log'], 'log');
+        if (!v.ok) return v.result;
+        const candidates: MCPNamedItem[] = this.filteredLogs.map(l => ({ ID: l.ID, Name: l.ToolName }));
+        const match = resolveMCPItem(v.value, candidates);
+        if (!match) return { Success: false, ErrorMessage: buildMCPNotFoundError(v.value, candidates, 'log') };
+        const log = this.executionLogs.find(l => UUIDsEqual(l.ID, match.ID));
+        if (!log) return { Success: false, ErrorMessage: `Log "${v.value}" is no longer loaded.` };
+        this.setActiveTab('logs');
+        await this.onLogClick(log);
+        this.publishAgentContext();
+        return { Success: true };
+    }
+
+    /** Open a log record in a tab (view-only). Defaults to the selected log. */
+    private toolOpenLogRecord(params: Record<string, unknown>): AgentToolResult {
+        const raw = typeof params?.['log'] === 'string' ? (params['log'] as string) : '';
+        let log: MCPExecutionLogData | null = null;
+        if (raw) {
+            const candidates: MCPNamedItem[] = this.executionLogs.map(l => ({ ID: l.ID, Name: l.ToolName }));
+            const match = resolveMCPItem(raw, candidates);
+            if (!match) return { Success: false, ErrorMessage: buildMCPNotFoundError(raw, candidates, 'log') };
+            log = this.executionLogs.find(l => UUIDsEqual(l.ID, match.ID)) ?? null;
+        } else {
+            log = this.SelectedLog;
+            if (!log) return { Success: false, ErrorMessage: 'No log is selected. Pass a log ID, or select one first.' };
+        }
+        this.navigationService.OpenEntityRecord('MJ: MCP Tool Execution Logs', CompositeKey.FromID(log!.ID));
+        return { Success: true };
     }
 
     override ngOnDestroy(): void {
@@ -683,6 +1385,9 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
             // Apply filters
             this.applyFilters();
 
+            // Refresh the agent context now that counts/stats are recomputed.
+            this.publishAgentContext();
+
             // Load user's favorites (Part 3.6) — fire and forget
             this.loadFavorites();
 
@@ -796,6 +1501,9 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
             )
             .subscribe(() => {
                 this.applyFilters();
+                // Re-emit agent context so search / filter / tab-clear changes are
+                // reflected in the AI agent's view of this surface.
+                this.publishAgentContext();
                 this.cdr.detectChanges();
             });
     }
@@ -1217,6 +1925,10 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         });
 
         this.UpdateQueryParams({ tab: this.ActiveTab });
+        // Mode-scoping: swap the agent's per-tab tool set on the tab transition,
+        // then re-publish the now-tab-scoped deep context.
+        this.syncAgentToolsForMode();
+        this.publishAgentContext();
         this.cdr.detectChanges();
     }
 
@@ -1645,6 +2357,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         } else {
             this.ExpandedToolId = tool.ID;
         }
+        this.publishAgentContext();
         this.cdr.detectChanges();
     }
 
@@ -2635,6 +3348,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
 
         this.SelectedLog = log;
         this.ShowLogDetailPanel = true;
+        this.publishAgentContext();
         this.cdr.detectChanges();
     }
 
@@ -2644,6 +3358,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     public onLogDetailClose(): void {
         this.ShowLogDetailPanel = false;
         this.SelectedLog = null;
+        this.publishAgentContext();
         this.cdr.detectChanges();
     }
 
@@ -2685,6 +3400,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
             // Collapse any expanded connection
             this.ExpandedConnectionID = null;
         }
+        this.publishAgentContext();
         this.cdr.detectChanges();
     }
 
@@ -2699,6 +3415,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
             // Collapse any expanded server
             this.ExpandedServerID = null;
         }
+        this.publishAgentContext();
         this.cdr.detectChanges();
     }
 
