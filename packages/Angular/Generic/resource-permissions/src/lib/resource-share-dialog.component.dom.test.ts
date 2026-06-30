@@ -4,7 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { ComponentFixture } from '@angular/core/testing';
 import { BaseEntity } from '@memberjunction/core';
 import { MJUserEntity } from '@memberjunction/core-entities';
-import { MJWindowComponent, MJWindowTitlebarComponent } from '@memberjunction/ng-ui-components';
+import { MJWindowComponent, MJWindowTitlebarComponent, MJEmptyStateComponent, MJAlertComponent } from '@memberjunction/ng-ui-components';
 import { renderComponentFixture, query, queryAll, text, hasClass, click, capture, useFakeGlobalProvider } from '@memberjunction/ng-test-utils';
 import { GenericShareDialogComponent } from './resource-share-dialog.component';
 import { ResourceSharePermissionModel, ResourceShareContext, ResourceShareAdapter } from './resource-share-adapter';
@@ -53,7 +53,7 @@ const CONTEXT: ResourceShareContext = {
 
 function render(setup: (c: GenericShareDialogComponent) => void): ComponentFixture<GenericShareDialogComponent> {
   return renderComponentFixture(GenericShareDialogComponent, {
-    imports: [CommonModule, FormsModule, MJWindowComponent, MJWindowTitlebarComponent],
+    imports: [CommonModule, FormsModule, MJWindowComponent, MJWindowTitlebarComponent, MJEmptyStateComponent, MJAlertComponent],
     declarations: [GenericShareDialogComponent],
     inputs: { Visible: true },
     setup,
@@ -63,7 +63,7 @@ function render(setup: (c: GenericShareDialogComponent) => void): ComponentFixtu
 describe('GenericShareDialogComponent (DOM)', () => {
   it('does not render the window when Visible is false', () => {
     const f = renderComponentFixture(GenericShareDialogComponent, {
-      imports: [CommonModule, FormsModule, MJWindowComponent, MJWindowTitlebarComponent],
+      imports: [CommonModule, FormsModule, MJWindowComponent, MJWindowTitlebarComponent, MJEmptyStateComponent, MJAlertComponent],
       declarations: [GenericShareDialogComponent],
       inputs: { Visible: false },
     });
@@ -88,7 +88,7 @@ describe('GenericShareDialogComponent (DOM)', () => {
     const f = render(() => {
       /* no shares */
     });
-    expect(query(f, '.share-empty')).not.toBeNull();
+    expect(query(f, 'mj-empty-state')).not.toBeNull();
     expect(queryAll(f, '.share-person:not(.share-owner)').length).toBe(0);
   });
 
@@ -199,7 +199,7 @@ describe('GenericShareDialogComponent (DOM)', () => {
     // Render with Visible=false so ngOnChanges does NOT kick off loadData (no backend here);
     // we set Context/Adapter in setup and drive onSave() directly.
     const f = renderComponentFixture(GenericShareDialogComponent, {
-      imports: [CommonModule, FormsModule, MJWindowComponent, MJWindowTitlebarComponent],
+      imports: [CommonModule, FormsModule, MJWindowComponent, MJWindowTitlebarComponent, MJEmptyStateComponent, MJAlertComponent],
       declarations: [GenericShareDialogComponent],
       inputs: { Visible: false },
       setup: (c) => {
@@ -218,8 +218,8 @@ describe('GenericShareDialogComponent (DOM)', () => {
     const f = render((c) => {
       c.Error = 'Failed to load sharing data.';
     });
-    expect(query(f, '.share-alert-error')).not.toBeNull();
-    expect(text(f, '.share-alert-error')).toContain('Failed to load sharing data.');
+    expect(query(f, 'mj-alert')).not.toBeNull();
+    expect(text(f, 'mj-alert')).toContain('Failed to load sharing data.');
   });
 
   // Drives the REAL load: opening the dialog (Visible + Context + Adapter) calls loadData() ->
@@ -238,7 +238,7 @@ describe('GenericShareDialogComponent (DOM)', () => {
       installProvider({ runViewResults: USERS });
       const context = { ResourceName: 'My Doc', OwnerUserID: ownerUserID } as ResourceShareContext;
       const f = renderComponentFixture(GenericShareDialogComponent, {
-        imports: [CommonModule, FormsModule, MJWindowComponent, MJWindowTitlebarComponent],
+        imports: [CommonModule, FormsModule, MJWindowComponent, MJWindowTitlebarComponent, MJEmptyStateComponent, MJAlertComponent],
         declarations: [GenericShareDialogComponent],
         inputs: { Context: context, Adapter: adapter, Visible: true },
       });

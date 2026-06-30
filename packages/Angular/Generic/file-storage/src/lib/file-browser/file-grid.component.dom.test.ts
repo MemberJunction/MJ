@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ComponentFixture } from '@angular/core/testing';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
+import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 import { renderComponentFixture, query, queryAll, text, capture } from '@memberjunction/ng-test-utils';
 import { FileGridComponent, FileGridItem } from './file-grid.component';
 
@@ -16,7 +17,7 @@ import { FileGridComponent, FileGridItem } from './file-grid.component';
  * [disabled] derived from folderPath, dialog gating, and the folderNavigate emission.
  */
 const MOD = {
-  imports: [CommonModule, FormsModule, SharedGenericModule],
+  imports: [CommonModule, FormsModule, SharedGenericModule, MJEmptyStateComponent],
   declarations: [FileGridComponent],
 };
 
@@ -43,9 +44,10 @@ describe('FileGridComponent (DOM)', () => {
       c.isLoading = false;
       c.errorMessage = 'Failed to load files';
     });
-    expect(query(f, '.error-state')).not.toBeNull();
-    expect(text(f, '.error-message')).toBe('Failed to load files');
-    expect(query(f, '.retry-btn')).not.toBeNull();
+    expect(query(f, 'mj-empty-state')).not.toBeNull();
+    expect(text(f, 'mj-empty-state .mj-empty-state__message')).toBe('Failed to load files');
+    // The error empty-state exposes its retry as the built-in CTA (ActionText="Retry").
+    expect(text(f, 'mj-empty-state .mj-empty-state__actions button')).toContain('Retry');
     expect(query(f, '.breadcrumb-bar')).toBeNull();
   });
 
@@ -54,8 +56,8 @@ describe('FileGridComponent (DOM)', () => {
       c.items = [];
       c.filteredItems = [];
     });
-    expect(query(f, '.empty-state')).not.toBeNull();
-    expect(text(f, '.empty-message')).toBe('This folder is empty');
+    expect(query(f, 'mj-empty-state')).not.toBeNull();
+    expect(text(f, 'mj-empty-state .mj-empty-state__title')).toBe('This folder is empty');
     expect(query(f, '.file-table')).toBeNull();
   });
 

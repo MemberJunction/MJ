@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { CommonModule } from '@angular/common';
+import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 import { renderComponentFixture, query, queryAll, text, click, capture } from '@memberjunction/ng-test-utils';
 import { SearchFilterComponent } from './search-filter.component';
 import { SearchFilter, SearchFilterChangeEvent } from './search-types';
@@ -30,7 +31,7 @@ describe('SearchFilterComponent (DOM)', () => {
 
   const render = (inputs: Record<string, unknown> = {}) =>
     renderComponentFixture(SearchFilterComponent, {
-      imports: [CommonModule],
+      imports: [CommonModule, MJEmptyStateComponent],
       declarations: [SearchFilterComponent],
       inputs: { Filters: FILTERS, ShowRelevanceSlider: false, ...inputs },
     });

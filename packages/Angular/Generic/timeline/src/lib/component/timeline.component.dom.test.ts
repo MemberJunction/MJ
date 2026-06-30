@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { CommonModule } from '@angular/common';
 import { renderComponentFixture } from '@memberjunction/ng-test-utils';
+import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 import { TimelineComponent } from './timeline.component';
 import { TimelineGroup } from '../timeline-group';
 import type { AfterEventClickArgs, BeforeEventClickArgs, AfterActionClickArgs } from '../events';
@@ -50,7 +51,7 @@ function flushMacrotask(): Promise<void> {
 
 async function renderTimeline(inputs: Record<string, unknown>) {
   const fixture = renderComponentFixture(TimelineComponent, {
-    imports: [CommonModule],
+    imports: [CommonModule, MJEmptyStateComponent],
     declarations: [TimelineComponent],
     inputs,
   });
@@ -90,9 +91,9 @@ describe('TimelineComponent (DOM)', () => {
       groups: [makeGroup([])],
       emptyMessage: 'Nothing here',
     });
-    const empty = fixture.nativeElement.querySelector('.mj-timeline__empty');
+    const empty = fixture.nativeElement.querySelector('mj-empty-state');
     expect(empty).not.toBeNull();
-    expect(fixture.nativeElement.querySelector('.mj-timeline__empty-text')?.textContent?.trim()).toBe('Nothing here');
+    expect(fixture.nativeElement.querySelector('mj-empty-state .mj-empty-state__title')?.textContent?.trim()).toBe('Nothing here');
     // No event cards when empty.
     expect(fixture.nativeElement.querySelectorAll('.mj-timeline__event').length).toBe(0);
   });

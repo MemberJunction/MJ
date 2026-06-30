@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ComponentFixture } from '@angular/core/testing';
-import { MJButtonDirective } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { renderComponentFixture, query, text, click, createFakeProvider } from '@memberjunction/ng-test-utils';
 import { DataContextComponent } from './ng-data-context.component';
@@ -25,7 +25,7 @@ describe('DataContextComponent (DOM, data-bound)', () => {
 
   function render(setup?: (c: DataContextComponent) => void): ComponentFixture<DataContextComponent> {
     return renderComponentFixture(DataContextComponent, {
-      imports: [CommonModule, FormsModule, MJButtonDirective, SharedGenericModule],
+      imports: [CommonModule, FormsModule, MJButtonDirective, MJEmptyStateComponent, SharedGenericModule],
       declarations: [DataContextComponent],
       inputs: { Provider: provider() },
       setup: (c) => setup?.(c),
@@ -44,9 +44,9 @@ describe('DataContextComponent (DOM, data-bound)', () => {
     const f = render(); // showLoader defaults false, no items
     expect(query(f, '.data-context-header')).not.toBeNull();
     expect(text(f, '.header-title h2')).toBe('Data Context');
-    // filteredItems is empty -> the no-items block renders
-    expect(query(f, '.no-items')).not.toBeNull();
-    expect(text(f, '.no-items p')).toBe('No items found');
+    // filteredItems is empty -> the empty-state block renders
+    expect(query(f, 'mj-empty-state')).not.toBeNull();
+    expect(text(f, 'mj-empty-state .mj-empty-state__title')).toBe('No items found');
   });
 
   it('renders the record name in the header when a record is loaded', () => {

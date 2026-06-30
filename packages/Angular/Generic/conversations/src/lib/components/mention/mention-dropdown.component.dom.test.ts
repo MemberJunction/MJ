@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { CommonModule } from '@angular/common';
 import { renderComponentFixture, query, queryAll, text } from '@memberjunction/ng-test-utils';
+import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 import { MentionDropdownComponent } from './mention-dropdown.component';
 import type { MentionSuggestion } from '../../services/mention-autocomplete.service';
 
@@ -17,7 +18,7 @@ describe('MentionDropdownComponent (DOM)', () => {
 
   const render = (inputs: Record<string, unknown>) =>
     renderComponentFixture(MentionDropdownComponent, {
-      imports: [CommonModule],
+      imports: [CommonModule, MJEmptyStateComponent],
       declarations: [MentionDropdownComponent],
       inputs: { visible: true, suggestions: [agent, user, entity], ...inputs },
     });
@@ -38,9 +39,9 @@ describe('MentionDropdownComponent (DOM)', () => {
 
   it('renders the empty state when there are no suggestions', () => {
     const f = render({ suggestions: [] });
-    expect(query(f, '.mention-empty-state')).not.toBeNull();
+    expect(query(f, 'mj-empty-state')).not.toBeNull();
     expect(query(f, '.mention-suggestion')).toBeNull();
-    expect(text(f, '.mention-empty-state')).toContain('No matches found');
+    expect(text(f, 'mj-empty-state')).toContain('No matches found');
   });
 
   it('renders the per-type badge for each suggestion', () => {

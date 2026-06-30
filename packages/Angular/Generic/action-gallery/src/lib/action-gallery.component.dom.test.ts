@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
-import { MJButtonDirective } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { renderComponentFixture, query, queryAll, text, attr, hasClass, click, useFakeGlobalProvider } from '@memberjunction/ng-test-utils';
 import { ActionGalleryComponent, ActionGalleryConfig } from './action-gallery.component';
@@ -23,7 +23,7 @@ import type { RunViewParams } from '@memberjunction/core';
  */
 
 const MOD = {
-  imports: [CommonModule, FormsModule, ReactiveFormsModule, MJButtonDirective, SharedGenericModule],
+  imports: [CommonModule, FormsModule, ReactiveFormsModule, MJButtonDirective, MJEmptyStateComponent, SharedGenericModule],
   declarations: [ActionGalleryComponent],
 };
 
@@ -151,7 +151,7 @@ describe('ActionGalleryComponent (DOM — config-driven chrome)', () => {
 
     it('shows the empty state when the provider returns no actions', async () => {
       const f = await renderLoaded(() => []);
-      expect(query(f, '.empty-state')).not.toBeNull();
+      expect(query(f, 'mj-empty-state')).not.toBeNull();
       expect(query(f, '.action-card')).toBeNull();
     });
   });

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
+import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 import { renderComponentFixture, query, queryAll, text, capture, useFakeGlobalProvider } from '@memberjunction/ng-test-utils';
 import { ArchiveRestoreDialogComponent, ArchiveVersion } from './archive-restore-dialog.component';
 
@@ -24,7 +25,7 @@ function makeVersion(id: string): ArchiveVersion {
 describe('ArchiveRestoreDialogComponent (DOM)', () => {
   it('renders nothing when not visible', () => {
     const f = renderComponentFixture(ArchiveRestoreDialogComponent, {
-      imports: [SharedGenericModule],
+      imports: [SharedGenericModule, MJEmptyStateComponent],
       declarations: [ArchiveRestoreDialogComponent],
     });
     expect(query(f, '.restore-dialog')).toBeNull();
@@ -32,7 +33,7 @@ describe('ArchiveRestoreDialogComponent (DOM)', () => {
 
   it('shows the empty state when visible with no versions', () => {
     const f = renderComponentFixture(ArchiveRestoreDialogComponent, {
-      imports: [SharedGenericModule],
+      imports: [SharedGenericModule, MJEmptyStateComponent],
       declarations: [ArchiveRestoreDialogComponent],
       inputs: { Visible: true },
     });
@@ -44,7 +45,7 @@ describe('ArchiveRestoreDialogComponent (DOM)', () => {
   it('renders a timeline node per version and a preview for the selected one', () => {
     const versions = [makeVersion('v1'), makeVersion('v2')];
     const f = renderComponentFixture(ArchiveRestoreDialogComponent, {
-      imports: [SharedGenericModule],
+      imports: [SharedGenericModule, MJEmptyStateComponent],
       declarations: [ArchiveRestoreDialogComponent],
       inputs: { Visible: true },
       setup: (c) => {
@@ -61,7 +62,7 @@ describe('ArchiveRestoreDialogComponent (DOM)', () => {
 
   it('disables the Restore button when no version is selected', () => {
     const f = renderComponentFixture(ArchiveRestoreDialogComponent, {
-      imports: [SharedGenericModule],
+      imports: [SharedGenericModule, MJEmptyStateComponent],
       declarations: [ArchiveRestoreDialogComponent],
       inputs: { Visible: true },
       setup: (c) => {
@@ -77,7 +78,7 @@ describe('ArchiveRestoreDialogComponent (DOM)', () => {
   it('enables the Restore button once a version is selected', () => {
     const versions = [makeVersion('v1')];
     const f = renderComponentFixture(ArchiveRestoreDialogComponent, {
-      imports: [SharedGenericModule],
+      imports: [SharedGenericModule, MJEmptyStateComponent],
       declarations: [ArchiveRestoreDialogComponent],
       inputs: { Visible: true },
       setup: (c) => {
@@ -92,7 +93,7 @@ describe('ArchiveRestoreDialogComponent (DOM)', () => {
 
   it('emits VisibleChange(false) when the close button is clicked', () => {
     const f = renderComponentFixture(ArchiveRestoreDialogComponent, {
-      imports: [SharedGenericModule],
+      imports: [SharedGenericModule, MJEmptyStateComponent],
       declarations: [ArchiveRestoreDialogComponent],
       inputs: { Visible: true },
     });
@@ -118,7 +119,7 @@ describe('ArchiveRestoreDialogComponent (DOM)', () => {
     async function renderOpened(rows: unknown[]) {
       installProvider({ runViewResults: rows });
       const f = renderComponentFixture(ArchiveRestoreDialogComponent, {
-        imports: [SharedGenericModule],
+        imports: [SharedGenericModule, MJEmptyStateComponent],
         declarations: [ArchiveRestoreDialogComponent],
         inputs: { EntityName: 'Users', RecordID: 'r1', Visible: true },
       });

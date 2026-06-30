@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ComponentRef } from '@angular/core';
 import { renderComponentFixture, query, queryAll, text, attr, hasClass, click, capture } from '@memberjunction/ng-test-utils';
+import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 import { TreeComponent } from './tree.component';
 import { createDefaultTreeNode, TreeNode } from '../models/tree-types';
 import { AfterNodeClickEventArgs } from '../events/tree-events';
@@ -18,7 +19,7 @@ import { AfterNodeClickEventArgs } from '../events/tree-events';
  */
 function renderTree(options: { inputs?: Record<string, unknown>; setup?: (i: TreeComponent, r: ComponentRef<TreeComponent>) => void } = {}) {
   return renderComponentFixture(TreeComponent, {
-    imports: [CommonModule, FormsModule],
+    imports: [CommonModule, FormsModule, MJEmptyStateComponent],
     declarations: [TreeComponent],
     inputs: { AutoLoad: false, ...(options.inputs ?? {}) },
     setup: options.setup,
@@ -85,8 +86,8 @@ describe('TreeComponent (DOM)', () => {
           i.IsLoaded = true;
         },
       });
-      expect(text(fixture, '.tree-empty__message')).toBe('Nothing here');
-      expect(attr(fixture, '.tree-empty__icon', 'class')).toContain('fa-ghost');
+      expect(text(fixture, 'mj-empty-state.tree-empty .mj-empty-state__title')).toBe('Nothing here');
+      expect(attr(fixture, 'mj-empty-state.tree-empty .mj-empty-state__icon', 'class')).toContain('fa-ghost');
     });
 
     it('does not show the empty state before load completes', () => {

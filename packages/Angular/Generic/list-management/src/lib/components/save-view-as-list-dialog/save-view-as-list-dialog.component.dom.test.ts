@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { MJButtonDirective, MJDialogComponent, MJDialogActionsComponent } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJDialogComponent, MJDialogActionsComponent, MJAlertComponent } from '@memberjunction/ng-ui-components';
 import { renderComponentFixture, createFakeProvider, query, queryAll, text, capture } from '@memberjunction/ng-test-utils';
 import { SaveViewAsListDialogComponent } from './save-view-as-list-dialog.component';
 
@@ -11,7 +11,7 @@ import { SaveViewAsListDialogComponent } from './save-view-as-list-dialog.compon
 // (no backend). The dialog renders inline through mj-dialog. Everything else is pure
 // @Input/@Output + getter-driven gating.
 
-const IMPORTS = [CommonModule, FormsModule, MJButtonDirective, MJDialogComponent, MJDialogActionsComponent];
+const IMPORTS = [CommonModule, FormsModule, MJButtonDirective, MJDialogComponent, MJDialogActionsComponent, MJAlertComponent];
 const DECLARATIONS = [SaveViewAsListDialogComponent];
 
 const CATEGORIES = [
@@ -42,14 +42,14 @@ describe('SaveViewAsListDialogComponent (DOM)', () => {
   describe('info banner', () => {
     it('shows the record count and view name when provided', () => {
       const fixture = render({ Visible: true, ViewId: 'view-1', ViewName: 'Q4 Donors', RecordCount: 120 });
-      const banner = text(fixture, '.info-banner');
+      const banner = text(fixture, 'mj-alert');
       expect(banner).toContain('120 records');
       expect(banner).toContain('Q4 Donors');
     });
 
     it('shows the generic "view results" copy when no record count is provided', () => {
       const fixture = render({ Visible: true, ViewId: 'view-1' });
-      expect(text(fixture, '.info-banner')).toContain('view results');
+      expect(text(fixture, 'mj-alert')).toContain('view results');
     });
   });
 

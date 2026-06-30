@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
+import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 import { renderComponentFixture, query, queryAll, text, useFakeGlobalProvider } from '@memberjunction/ng-test-utils';
 import { ArchiveRunViewerComponent } from './archive-run-viewer.component';
 
@@ -16,7 +17,7 @@ import { ArchiveRunViewerComponent } from './archive-run-viewer.component';
 describe('ArchiveRunViewerComponent (DOM)', () => {
   it('shows the loading indicator on initial render', () => {
     const f = renderComponentFixture(ArchiveRunViewerComponent, {
-      imports: [SharedGenericModule],
+      imports: [SharedGenericModule, MJEmptyStateComponent],
       declarations: [ArchiveRunViewerComponent],
     });
     // IsLoading starts true; loadRunData is async so the loading branch renders first.
@@ -27,7 +28,7 @@ describe('ArchiveRunViewerComponent (DOM)', () => {
 
   it('shows the empty state after the (empty) load settles with no runs', async () => {
     const f = renderComponentFixture(ArchiveRunViewerComponent, {
-      imports: [SharedGenericModule],
+      imports: [SharedGenericModule, MJEmptyStateComponent],
       declarations: [ArchiveRunViewerComponent],
       autoDetect: true,
     });
@@ -82,7 +83,7 @@ describe('ArchiveRunViewerComponent (DOM)', () => {
     async function renderLoaded(rows: unknown[]) {
       installProvider({ runViewResults: rows });
       const f = renderComponentFixture(ArchiveRunViewerComponent, {
-        imports: [SharedGenericModule],
+        imports: [SharedGenericModule, MJEmptyStateComponent],
         declarations: [ArchiveRunViewerComponent],
       });
       await new Promise((r) => setTimeout(r, 0)); // let loadRunData's RunView settle
@@ -110,7 +111,7 @@ describe('ArchiveRunViewerComponent (DOM)', () => {
   describe('formatting helpers', () => {
     const instance = (): ArchiveRunViewerComponent =>
       renderComponentFixture(ArchiveRunViewerComponent, {
-        imports: [SharedGenericModule],
+        imports: [SharedGenericModule, MJEmptyStateComponent],
         declarations: [ArchiveRunViewerComponent],
       }).componentInstance;
 

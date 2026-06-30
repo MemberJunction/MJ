@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { CommonModule } from '@angular/common';
+import { MJAlertComponent } from '@memberjunction/ng-ui-components';
 import { renderComponentFixture, query, text, hasClass, click, capture } from '@memberjunction/ng-test-utils';
 import { SharedViewWarningDialogComponent, SharedViewAction } from './shared-view-warning-dialog.component';
 
@@ -12,7 +13,7 @@ import { SharedViewWarningDialogComponent, SharedViewAction } from './shared-vie
 describe('SharedViewWarningDialogComponent (DOM)', () => {
   const render = (inputs: Record<string, unknown>) =>
     renderComponentFixture(SharedViewWarningDialogComponent, {
-      imports: [CommonModule],
+      imports: [CommonModule, MJAlertComponent],
       declarations: [SharedViewWarningDialogComponent],
       inputs,
     });

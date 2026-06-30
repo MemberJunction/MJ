@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { MJButtonDirective, MJDialogComponent, MJDialogActionsComponent } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJDialogComponent, MJDialogActionsComponent, MJAlertComponent } from '@memberjunction/ng-ui-components';
 import { renderComponentFixture, query, queryAll, text, hasClass, click, capture } from '@memberjunction/ng-test-utils';
 import type { ListDelta } from '@memberjunction/lists-base';
 import { ListDeltaConfirmComponent } from './list-delta-confirm.component';
@@ -11,7 +11,7 @@ import { ListDeltaConfirmComponent } from './list-delta-confirm.component';
 // and uses mjButton + mj-dialog-actions. It is pure @Input/@Output + getter-driven
 // gating with NO data loading, so it is a high-value, honestly-unit-testable component.
 
-const IMPORTS = [CommonModule, FormsModule, MJButtonDirective, MJDialogComponent, MJDialogActionsComponent];
+const IMPORTS = [CommonModule, FormsModule, MJButtonDirective, MJDialogComponent, MJDialogActionsComponent, MJAlertComponent];
 const DECLARATIONS = [ListDeltaConfirmComponent];
 
 function makeDelta(overrides: Partial<ListDelta> = {}): ListDelta {
@@ -52,8 +52,8 @@ describe('ListDeltaConfirmComponent (DOM)', () => {
   describe('safe operation (no removals)', () => {
     it('shows the safe banner and not the danger banner', () => {
       const fixture = render({ Visible: true, Delta: makeDelta() });
-      expect(query(fixture, '.delta-banner--safe')).not.toBeNull();
-      expect(query(fixture, '.delta-banner--danger')).toBeNull();
+      expect(query(fixture, 'mj-alert.mj-alert--success')).not.toBeNull();
+      expect(query(fixture, 'mj-alert.mj-alert--error')).toBeNull();
     });
 
     it('does not apply the danger modifier to the body', () => {
@@ -92,8 +92,8 @@ describe('ListDeltaConfirmComponent (DOM)', () => {
 
     it('shows the danger banner and the acknowledgement checkbox', () => {
       const fixture = render({ Visible: true, Delta: dropDelta() });
-      expect(query(fixture, '.delta-banner--danger')).not.toBeNull();
-      expect(query(fixture, '.delta-banner--safe')).toBeNull();
+      expect(query(fixture, 'mj-alert.mj-alert--error')).not.toBeNull();
+      expect(query(fixture, 'mj-alert.mj-alert--success')).toBeNull();
       expect(query(fixture, '.delta-banner__ack input[type="checkbox"]')).not.toBeNull();
     });
 

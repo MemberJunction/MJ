@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { CommonModule } from '@angular/common';
 import { ComponentFixture } from '@angular/core/testing';
+import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 import { renderComponentFixture, query, queryAll, createFakeProvider } from '@memberjunction/ng-test-utils';
 import { UserInfo } from '@memberjunction/core';
 import { MJArtifactEntity, MJArtifactVersionEntity } from '@memberjunction/core-entities';
@@ -33,7 +34,7 @@ const USER = { ID: 'me', Name: 'Me' } as unknown as UserInfo;
 describe('ArtifactVersionHistoryComponent (DOM, data-bound)', () => {
   function renderWith(versions: MJArtifactVersionEntity[]): ComponentFixture<ArtifactVersionHistoryComponent> {
     return renderComponentFixture(ArtifactVersionHistoryComponent, {
-      imports: [CommonModule],
+      imports: [CommonModule, MJEmptyStateComponent],
       declarations: [ArtifactVersionHistoryComponent],
       inputs: {
         Provider: createFakeProvider<VersionRow>({ runViewResults: versions as unknown as VersionRow[] }),
@@ -48,13 +49,13 @@ describe('ArtifactVersionHistoryComponent (DOM, data-bound)', () => {
 
   it('shows the empty state when there are no versions', () => {
     const f = renderWith([]);
-    expect(query(f, '.empty-state')).not.toBeNull();
+    expect(query(f, 'mj-empty-state')).not.toBeNull();
     expect(queryAll(f, '.version-item').length).toBe(0);
   });
 
   it('renders one item per version with the version number', () => {
     const f = renderWith(VERSIONS);
-    expect(query(f, '.empty-state')).toBeNull();
+    expect(query(f, 'mj-empty-state')).toBeNull();
     expect(queryAll(f, '.version-item').length).toBe(2);
     expect(query(f, '.version-number')?.textContent?.trim()).toBe('v2');
   });

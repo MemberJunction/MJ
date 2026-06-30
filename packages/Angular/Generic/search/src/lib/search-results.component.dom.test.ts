@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 import { renderComponentFixture, query, queryAll, text, hasClass, click, capture } from '@memberjunction/ng-test-utils';
 import { SearchResultsComponent } from './search-results.component';
 import { SearchResultItem } from './search-types';
@@ -39,7 +40,7 @@ function makeResult(overrides: Partial<SearchResultItem> = {}): SearchResultItem
 describe('SearchResultsComponent (DOM)', () => {
   const render = (inputs: Record<string, unknown> = {}) =>
     renderComponentFixture(SearchResultsComponent, {
-      imports: [CommonModule],
+      imports: [CommonModule, MJEmptyStateComponent],
       declarations: [SearchResultsComponent, StubLoadingComponent],
       inputs,
     });
@@ -53,8 +54,8 @@ describe('SearchResultsComponent (DOM)', () => {
 
   it('renders the empty branch when there are no results and TotalCount is 0', () => {
     const fixture = render({ FlatResults: [], TotalCount: 0, DisplayMode: 'flat' });
-    expect(query(fixture, '.results-empty')).not.toBeNull();
-    expect(text(fixture, '.results-empty-text')).toBe('No results to display');
+    expect(query(fixture, 'mj-empty-state')).not.toBeNull();
+    expect(text(fixture, 'mj-empty-state .mj-empty-state__title')).toBe('No results to display');
   });
 
   it('renders flat result cards and the summary line', () => {

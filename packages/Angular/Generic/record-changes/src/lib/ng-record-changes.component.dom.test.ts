@@ -5,6 +5,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { EntityFieldTSType } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 import { query, queryAll, text, click, capture, createFakeProvider } from '@memberjunction/ng-test-utils';
 import { RecordChangesComponent, RestoreVersionEvent } from './ng-record-changes.component';
 
@@ -126,7 +127,7 @@ function provider(changes = CHANGES) {
 
 async function render(inputs: Record<string, unknown>): Promise<ComponentFixture<RecordChangesComponent>> {
   TestBed.configureTestingModule({
-    imports: [CommonModule, FormsModule],
+    imports: [CommonModule, FormsModule, MJEmptyStateComponent],
     declarations: [RecordChangesComponent, StubSlidePanel, StubLoading, StubRestorePreview, StubLabelCreate],
     providers: [{ provide: MJNotificationService, useValue: { CreateSimpleNotification: () => {} } }],
   });
@@ -160,8 +161,12 @@ describe('RecordChangesComponent (DOM, data-bound)', () => {
 
   it('shows the empty state when no changes exist', async () => {
     const f = await render({ record: fakeRecord(), Provider: provider([]) });
-    expect(query(f, '.rc-empty-state')).not.toBeNull();
-    expect(text(f, '.rc-empty-state-title')).toBe('No Change History');
+    // Two mj-empty-state instances can render (the version-labels one carries .rc-labels-empty);
+    // scope to the main timeline empty state, which has no extra class.
+    const mainEmpty = 'mj-empty-state:not(.rc-labels-empty)';
+    expect(query(f, mainEmpty)).not.toBeNull();
+    expect(text(f, `${mainEmpty} .mj-empty-state__title`)).toBe('No Change History');
+    expect(text(f, `${mainEmpty} .rc-empty-state-hint`)).toContain('Record change tracking is managed at the entity level');
     expect(queryAll(f, '.rc-card').length).toBe(0);
   });
 

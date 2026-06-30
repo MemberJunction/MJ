@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { CommonModule } from '@angular/common';
+import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 import { renderComponentFixture, query, queryAll, text } from '@memberjunction/ng-test-utils';
 import { ExecutionContextComponent } from './execution-context.component';
 
@@ -9,12 +10,15 @@ import { ExecutionContextComponent } from './execution-context.component';
 describe('ExecutionContextComponent (DOM)', () => {
   it('shows the empty state when no data is provided', () => {
     const fixture = renderComponentFixture(ExecutionContextComponent, {
-      imports: [CommonModule],
+      imports: [CommonModule, MJEmptyStateComponent],
       declarations: [ExecutionContextComponent],
       autoDetect: true,
     });
-    expect(query(fixture, '.empty-state')).not.toBeNull();
-    expect(text(fixture, '.empty-state h3')).toBe('No Execution Context');
+    // No data → the canonical <mj-empty-state> placeholder renders, titled
+    // "No Execution Context" (passed via its Title input).
+    const empty = query(fixture, 'mj-empty-state');
+    expect(empty).not.toBeNull();
+    expect(empty!.textContent).toContain('No Execution Context');
   });
 
   it('renders machine name and user values and hides the empty state', () => {
@@ -24,7 +28,7 @@ describe('ExecutionContextComponent (DOM)', () => {
       inputs: { machineName: 'build-box-01', runByUserName: 'Ada Lovelace' },
       autoDetect: true,
     });
-    expect(query(fixture, '.empty-state')).toBeNull();
+    expect(query(fixture, 'mj-empty-state')).toBeNull();
     const values = queryAll(fixture, '.context-value').map((e) => e.textContent?.trim());
     expect(values).toContain('build-box-01');
     expect(values).toContain('Ada Lovelace');

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
+import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 import { renderComponentFixture, query, queryAll, text, hasClass, createFakeProvider } from '@memberjunction/ng-test-utils';
 import { ComponentFixture } from '@angular/core/testing';
 import { ArchiveConfigAdminComponent } from './archive-config-admin.component';
@@ -56,7 +57,7 @@ function providerWithConfigs() {
   });
 }
 
-const MODULES = [CommonModule, FormsModule, SharedGenericModule];
+const MODULES = [CommonModule, FormsModule, SharedGenericModule, MJEmptyStateComponent];
 
 describe('ArchiveConfigAdminComponent (DOM, data-bound)', () => {
   it('shows the loading indicator on initial render', () => {

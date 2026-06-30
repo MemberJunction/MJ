@@ -3,7 +3,7 @@ import { ComponentFixture } from '@angular/core/testing';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { EntityFieldTSType } from '@memberjunction/core';
-import { MjSlidePanelComponent } from '@memberjunction/ng-ui-components';
+import { MjSlidePanelComponent, MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 import { renderComponentFixture, query, queryAll, text, click, capture } from '@memberjunction/ng-test-utils';
 import { RestorePreviewPanelComponent, RestoreCommitEvent, BeforeRestoreCommitEvent } from './restore-preview-panel.component';
 
@@ -79,7 +79,7 @@ function recordChange(snapshot: Record<string, unknown>, overrides: Record<strin
 function render(inputs: Record<string, unknown>): ComponentFixture<RestorePreviewPanelComponent> {
   return renderComponentFixture(RestorePreviewPanelComponent, {
     declarations: [RestorePreviewPanelComponent],
-    imports: [CommonModule, FormsModule, MjSlidePanelComponent],
+    imports: [CommonModule, FormsModule, MjSlidePanelComponent, MJEmptyStateComponent],
     inputs,
   });
 }

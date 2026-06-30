@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { ComponentFixture } from '@angular/core/testing';
 import { renderComponentFixture, query, queryAll, text, attr, hasClass, click, capture, createFakeProvider } from '@memberjunction/ng-test-utils';
 import { BaseEntity, IMetadataProvider } from '@memberjunction/core';
-import { MjSlidePanelComponent } from '@memberjunction/ng-ui-components';
+import { MjSlidePanelComponent, MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
 import { RecordTagsComponent } from './record-tags.component';
@@ -47,7 +47,7 @@ function makeRecord(): BaseEntity {
 }
 
 const DECLARATIONS = [RecordTagsComponent];
-const IMPORTS = [CommonModule, MjSlidePanelComponent, SharedGenericModule, MJWordCloudComponent];
+const IMPORTS = [CommonModule, MjSlidePanelComponent, SharedGenericModule, MJWordCloudComponent, MJEmptyStateComponent];
 
 // Render, then await the component's own async LoadTags() (ngOnInit fire-and-forgets it, and
 // zoneless whenStable() doesn't track that promise), then flush a final CD so the resolved state
@@ -68,8 +68,9 @@ describe('RecordTagsComponent (DOM, data-bound)', () => {
   it('renders the empty state when the record has no tags', async () => {
     const f = await renderWithTags([]);
 
-    expect(query(f, '.mj-record-tags-empty')).not.toBeNull();
-    expect(text(f, '.mj-record-tags-empty p')).toContain('No tags have been applied');
+    expect(query(f, 'mj-empty-state')).not.toBeNull();
+    expect(text(f, 'mj-empty-state .mj-empty-state__message')).toContain('No tags have been applied');
+    expect(text(f, 'mj-empty-state .mj-record-tags-hint')).toContain('autotagging pipeline');
     // populated container must NOT be present
     expect(query(f, '.mj-record-tags-container')).toBeNull();
   });
@@ -77,7 +78,7 @@ describe('RecordTagsComponent (DOM, data-bound)', () => {
   it('renders one pill per tag and the pluralized count in the header', async () => {
     const f = await renderWithTags(TAGS);
 
-    expect(query(f, '.mj-record-tags-empty')).toBeNull();
+    expect(query(f, 'mj-empty-state')).toBeNull();
     expect(queryAll(f, '.mj-record-tag-pill')).toHaveLength(3);
     expect(text(f, '.mj-record-tags-count')).toBe('3 tags');
   });

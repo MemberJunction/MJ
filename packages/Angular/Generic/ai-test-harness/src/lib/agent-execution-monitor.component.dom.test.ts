@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { renderComponentFixture, query, text, queryAll } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, query, text, queryAll, attr } from '@memberjunction/ng-test-utils';
 import { AgentExecutionMonitorComponent } from './agent-execution-monitor.component';
 
 /**
@@ -31,10 +31,15 @@ const makeStats = (overrides: Partial<Stats> = {}): Stats => ({
 
 describe('AgentExecutionMonitorComponent (DOM)', () => {
   it('shows the empty state when there is no run and no live steps', () => {
+    // When there is no run and no live steps, the monitor renders the canonical
+    // <mj-empty-state> placeholder inside the execution tree, carrying the
+    // "Waiting for execution to begin..." title. (The empty-state's own internal
+    // markup is its own concern; here we assert the monitor renders it with the
+    // right message.)
     const f = renderComponentFixture(AgentExecutionMonitorComponent, { inputs: { mode: 'live' } });
-    const empty = query(f, '.empty-state');
+    const empty = query(f, '.execution-tree mj-empty-state');
     expect(empty).not.toBeNull();
-    expect(empty!.textContent).toContain('Waiting for execution to begin');
+    expect(attr(f, '.execution-tree mj-empty-state', 'title')).toContain('Waiting for execution to begin');
   });
 
   it('renders the LIVE indicator only in live mode', () => {

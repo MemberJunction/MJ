@@ -1,8 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { CommonModule } from '@angular/common';
-import { FormsModule } from '@angular/forms';
 import { renderComponentFixture, query, queryAll, text, attr, hasClass } from '@memberjunction/ng-test-utils';
 import { DeepDiffComponent } from './deep-diff.component';
+import { DeepDiffModule } from './module';
 
 /**
  * DOM-level coverage for DeepDiffComponent — the half of the contract that lives in
@@ -23,8 +22,7 @@ const NEW = { name: 'beta', added: 'fresh', count: 1 };
 
 function render(inputs: Record<string, unknown>) {
   return renderComponentFixture(DeepDiffComponent, {
-    imports: [CommonModule, FormsModule],
-    declarations: [DeepDiffComponent],
+    imports: [DeepDiffModule],
     inputs,
     autoDetect: true,
   });
@@ -39,7 +37,7 @@ describe('DeepDiffComponent (DOM)', () => {
   it('shows the empty-state ("No data to compare") when there is no data', () => {
     const fixture = render({});
     expect(query(fixture, '.diff-tree')).toBeNull();
-    const empty = query(fixture, '.empty-state');
+    const empty = query(fixture, 'mj-empty-state');
     expect(empty).not.toBeNull();
     expect(empty?.textContent).toContain('No data to compare');
   });
@@ -106,15 +104,14 @@ describe('DeepDiffComponent (DOM)', () => {
     // Diff with only modifications, then filter to "added" → no matches. filterType is a
     // plain getter/setter (not an @Input), so set it in setup before the first render.
     const fixture = renderComponentFixture(DeepDiffComponent, {
-      imports: [CommonModule, FormsModule],
-      declarations: [DeepDiffComponent],
+      imports: [DeepDiffModule],
       inputs: { oldValue: { a: 1 }, newValue: { a: 2 } },
       setup: (instance) => {
         instance.filterType = 'added';
       },
       autoDetect: true,
     });
-    const empty = query(fixture, '.empty-state');
+    const empty = query(fixture, 'mj-empty-state');
     expect(empty).not.toBeNull();
     expect(empty?.textContent).toContain('No changes match your filter criteria');
   });

@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { CommonModule } from '@angular/common';
 import { NO_ERRORS_SCHEMA } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 import { query, queryAll, text, hasClass, click, capture } from '@memberjunction/ng-test-utils';
 import { ScheduledJobSummaryComponent } from './scheduled-job-summary.component';
 import { ScheduledJobService } from '../../services/scheduled-job.service';
@@ -44,7 +45,7 @@ describe('ScheduledJobSummaryComponent (DOM, data-bound)', () => {
   beforeEach(() => {
     fakeService = new FakeScheduledJobService();
     TestBed.configureTestingModule({
-      imports: [CommonModule],
+      imports: [CommonModule, MJEmptyStateComponent],
       declarations: [ScheduledJobSummaryComponent],
       providers: [{ provide: ScheduledJobService, useValue: fakeService }],
       schemas: [NO_ERRORS_SCHEMA],
@@ -68,7 +69,7 @@ describe('ScheduledJobSummaryComponent (DOM, data-bound)', () => {
     const f = await render(null, []);
     expect(query(f, '.summary-empty')).not.toBeNull();
     expect(query(f, '.summary-card')).toBeNull();
-    expect(text(f, '.summary-empty')).toContain('No schedule configured');
+    expect(text(f, '.summary-empty .mj-empty-state__title')).toContain('No schedule configured');
   });
 
   it('renders the job card with name, status and cron when a job loads', async () => {

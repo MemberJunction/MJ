@@ -1,6 +1,7 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { CommonModule } from '@angular/common';
 import { ComponentFixture } from '@angular/core/testing';
+import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MJButtonDirective, MJDialogComponent, MJDialogActionsComponent } from '@memberjunction/ng-ui-components';
 import { renderComponentFixture, query, hasClass, capture } from '@memberjunction/ng-test-utils';
 import { FileUploadComponent, FileSelectInfo } from './file-upload';
@@ -24,6 +25,10 @@ function render(setup?: (c: FileUploadComponent) => void): ComponentFixture<File
 }
 
 describe('FileUploadComponent (DOM)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('renders the file-select label enabled by default', () => {
     const f = render();
     expect(query(f, '.mj-file-select')).not.toBeNull();
@@ -47,6 +52,13 @@ describe('FileUploadComponent (DOM)', () => {
   });
 
   it('emits uploadStarted when a file is chosen', () => {
+    // OnFileSelected emits uploadStarted synchronously, then kicks off the async
+    // _processUploadQueue() which calls the global GraphQLDataProvider.ExecuteGQL.
+    // Stub that static so the fire-and-forget upload path resolves cleanly instead of
+    // rejecting (no configured provider in jsdom) and surfacing as an unhandled rejection.
+    // We assert only the synchronous uploadStarted emission, which is independent of the result.
+    vi.spyOn(GraphQLDataProvider, 'ExecuteGQL').mockResolvedValue({});
+
     const f = render();
     const started = capture(f.componentInstance.uploadStarted);
 

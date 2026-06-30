@@ -1,9 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { CommonModule } from '@angular/common';
-import { FormsModule } from '@angular/forms';
 import { renderComponentFixture, query, text, hasClass, capture } from '@memberjunction/ng-test-utils';
 import { DeepDiffDialogComponent } from './deep-diff-dialog.component';
-import { DeepDiffComponent } from './deep-diff.component';
+import { DeepDiffModule } from './module';
 
 /**
  * DOM-level coverage for the DeepDiffDialogComponent wrapper: the @if (visible) gating,
@@ -17,8 +15,7 @@ import { DeepDiffComponent } from './deep-diff.component';
 
 function render(inputs: Record<string, unknown>) {
   return renderComponentFixture(DeepDiffDialogComponent, {
-    imports: [CommonModule, FormsModule],
-    declarations: [DeepDiffDialogComponent, DeepDiffComponent],
+    imports: [DeepDiffModule],
     inputs,
     autoDetect: true,
   });

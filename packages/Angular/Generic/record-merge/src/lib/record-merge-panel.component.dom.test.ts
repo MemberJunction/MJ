@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { ComponentFixture } from '@angular/core/testing';
 import { CommonModule } from '@angular/common';
 import { renderComponentFixture, query, queryAll, text, hasClass, click, capture } from '@memberjunction/ng-test-utils';
+import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 import { RecordMergePanelComponent } from './record-merge-panel.component';
 import { FieldComparison, MergeConfig } from './record-merge-types';
 
@@ -40,7 +41,7 @@ function makeField(over: Partial<FieldComparison> = {}): FieldComparison {
 
 function render(fields: FieldComparison[], extra: Record<string, unknown> = {}): ComponentFixture<RecordMergePanelComponent> {
   return renderComponentFixture(RecordMergePanelComponent, {
-    imports: [CommonModule],
+    imports: [CommonModule, MJEmptyStateComponent],
     declarations: [RecordMergePanelComponent],
     inputs: { Config: CONFIG, Fields: fields, ...extra },
   });
@@ -49,12 +50,12 @@ function render(fields: FieldComparison[], extra: Record<string, unknown> = {}):
 describe('RecordMergePanelComponent (DOM)', () => {
   it('renders the empty state when Config is null', () => {
     const f = renderComponentFixture(RecordMergePanelComponent, {
-      imports: [CommonModule],
+      imports: [CommonModule, MJEmptyStateComponent],
       declarations: [RecordMergePanelComponent],
       inputs: { Config: null, Fields: [] },
     });
-    expect(query(f, '.merge-panel-empty')).not.toBeNull();
-    expect(text(f, '.merge-panel-empty p')).toBe('Select two records to compare');
+    expect(query(f, 'mj-empty-state')).not.toBeNull();
+    expect(text(f, 'mj-empty-state .mj-empty-state__title')).toBe('Select two records to compare');
     expect(query(f, '.merge-header')).toBeNull();
   });
 

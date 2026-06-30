@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { ComponentFixture } from '@angular/core/testing';
 import { EntityInfo, IMetadataProvider } from '@memberjunction/core';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
+import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 import { renderComponentFixture, query, queryAll, text, click, hasClass, typeInto, capture, createFakeProvider } from '@memberjunction/ng-test-utils';
 import { MjLabelCreateComponent } from './label-create.component';
 
@@ -44,7 +45,7 @@ function providerWith(rows: Array<Record<string, unknown>>): IMetadataProvider {
 
 function render(rows: Array<Record<string, unknown>> = []): ComponentFixture<MjLabelCreateComponent> {
   return renderComponentFixture(MjLabelCreateComponent, {
-    imports: [CommonModule, FormsModule, SharedGenericModule],
+    imports: [CommonModule, FormsModule, SharedGenericModule, MJEmptyStateComponent],
     declarations: [MjLabelCreateComponent],
     inputs: { Provider: providerWith(rows) },
     autoDetect: true,

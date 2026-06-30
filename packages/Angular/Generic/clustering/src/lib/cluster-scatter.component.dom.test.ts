@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ComponentFixture } from '@angular/core/testing';
 import { MJEntityCardComponent } from '@memberjunction/ng-entity-card';
+import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 import { renderComponentFixture, query, queryAll, text, capture } from '@memberjunction/ng-test-utils';
 import { ClusterScatterComponent } from './cluster-scatter.component';
 import { ClusterPoint, ClusterInfo, ClusterSelectedEvent } from './clustering.types';
@@ -18,7 +19,7 @@ import { ClusterPoint, ClusterInfo, ClusterSelectedEvent } from './clustering.ty
  */
 function renderScatter(inputs: Record<string, unknown> = {}): ComponentFixture<ClusterScatterComponent> {
   return renderComponentFixture(ClusterScatterComponent, {
-    imports: [CommonModule, FormsModule, MJEntityCardComponent],
+    imports: [CommonModule, FormsModule, MJEntityCardComponent, MJEmptyStateComponent],
     declarations: [ClusterScatterComponent],
     inputs,
     autoDetect: true,
@@ -39,8 +40,8 @@ const POINTS: ClusterPoint[] = [
 describe('ClusterScatterComponent (DOM)', () => {
   it('shows the empty state when there are no points and not loading', () => {
     const fixture = renderScatter({ Points: [], IsLoading: false });
-    expect(query(fixture, '.empty-state')).not.toBeNull();
-    expect(text(fixture, '.empty-state p')).toBe('No data to display');
+    expect(query(fixture, 'mj-empty-state')).not.toBeNull();
+    expect(text(fixture, 'mj-empty-state .mj-empty-state__title')).toBe('No data to display');
     expect(query(fixture, 'svg.scatter-svg')).toBeNull();
   });
 
@@ -48,7 +49,7 @@ describe('ClusterScatterComponent (DOM)', () => {
     const fixture = renderScatter({ Points: [], IsLoading: true });
     expect(query(fixture, '.loading-overlay')).not.toBeNull();
     // Empty state is gated by !IsLoading, so it must NOT render while loading.
-    expect(query(fixture, '.empty-state')).toBeNull();
+    expect(query(fixture, 'mj-empty-state')).toBeNull();
   });
 
   it('renders the SVG with one data-point circle per point', () => {

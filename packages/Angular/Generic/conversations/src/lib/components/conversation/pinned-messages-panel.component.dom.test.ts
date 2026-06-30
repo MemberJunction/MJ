@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { CommonModule } from '@angular/common';
 import type { MJConversationDetailEntity } from '@memberjunction/core-entities';
 import { renderComponentFixture, query, queryAll, text } from '@memberjunction/ng-test-utils';
+import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 import { PinnedMessagesPanelComponent } from './pinned-messages-panel.component';
 
 /**
@@ -17,7 +18,7 @@ describe('PinnedMessagesPanelComponent (DOM)', () => {
 
   const render = (pinnedMessages: MJConversationDetailEntity[]) =>
     renderComponentFixture(PinnedMessagesPanelComponent, {
-      imports: [CommonModule],
+      imports: [CommonModule, MJEmptyStateComponent],
       declarations: [PinnedMessagesPanelComponent],
       inputs: { pinnedMessages },
     });
