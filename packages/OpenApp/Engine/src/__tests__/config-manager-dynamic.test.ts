@@ -221,3 +221,33 @@ describe('Remove round-trip leaves valid JS', () => {
         expect(afterRemove).not.toContain('@mj-biz-apps/common-server');
     });
 });
+
+describe('Parse guard (#2975 safety net) — never silently writes a broken config', () => {
+    it('refuses to write and reports failure when string surgery would corrupt the config', () => {
+        // A regex literal containing `}` defeats the brace scanner (a limitation shared with the
+        // existing FindMatchingBracket): the insert lands mid-token and the result is invalid JS.
+        // The guard catches it, so the file is left UNTOUCHED rather than silently corrupted —
+        // turning any string-surgery brittleness into a loud, safe failure.
+        const exotic = [
+            'module.exports = {',
+            '  weird: /}/,',
+            '  openApps: { token: process.env.X }',
+            '};',
+            '',
+        ].join('\n');
+        setupConfigFile(exotic);
+
+        const result = AddServerDynamicPackages(REPO_ROOT, makeServerManifest());
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toMatch(/invalid JavaScript|left unchanged/);
+        expect(mockedWriteFileSync).not.toHaveBeenCalled(); // file untouched on a bad edit
+    });
+
+    it('writes exactly once when the resulting config is valid', () => {
+        setupConfigFile(issueTemplateConfig());
+        const result = AddServerDynamicPackages(REPO_ROOT, makeServerManifest());
+        expect(result.Success).toBe(true);
+        expect(mockedWriteFileSync).toHaveBeenCalledTimes(1);
+    });
+});

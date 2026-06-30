@@ -14,6 +14,7 @@
  */
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { compileFunction } from 'node:vm';
 import type { MJAppManifest } from '../manifest/manifest-schema.js';
 
 /** Config file name. All MJ projects use mj.config.cjs. */
@@ -73,7 +74,7 @@ export function AddServerDynamicPackages(
             content = AddEntryToDynamicArray(content, entry, 'server');
         }
 
-        writeFileSync(configPath, content, 'utf-8');
+        WriteConfigChecked(configPath, content);
         return { Success: true };
     }
     catch (error: unknown) {
@@ -118,7 +119,7 @@ export function AddClientDynamicPackages(
             content = AddEntryToDynamicArray(content, entry, 'client');
         }
 
-        writeFileSync(configPath, content, 'utf-8');
+        WriteConfigChecked(configPath, content);
         return { Success: true };
     }
     catch (error: unknown) {
@@ -148,7 +149,7 @@ export function RemoveServerDynamicPackages(
     try {
         let content = readFileSync(configPath, 'utf-8');
         content = RemoveEntriesForApp(content, appName);
-        writeFileSync(configPath, content, 'utf-8');
+        WriteConfigChecked(configPath, content);
         return { Success: true };
     }
     catch (error: unknown) {
@@ -178,7 +179,7 @@ export function ToggleServerDynamicPackages(
     try {
         let content = readFileSync(configPath, 'utf-8');
         content = ToggleEntriesForApp(content, appName, enabled);
-        writeFileSync(configPath, content, 'utf-8');
+        WriteConfigChecked(configPath, content);
         return { Success: true };
     }
     catch (error: unknown) {
@@ -194,6 +195,31 @@ export function ToggleServerDynamicPackages(
 function resolveConfigPath(repoRoot: string): string | undefined {
     const candidate = resolve(repoRoot, CONFIG_FILE_NAME);
     return existsSync(candidate) ? candidate : undefined;
+}
+
+/**
+ * Writes updated mj.config.cjs content, but ONLY after verifying it still parses as valid
+ * JavaScript. Every edit in this module is string surgery; this post-write parse guard turns a
+ * malformed edit — from this code OR any future change, including config shapes the brace/comment
+ * scanner can't perfectly handle (e.g. regex literals containing braces) — into a LOUD failure
+ * that leaves the file UNTOUCHED, instead of silently shipping a broken config that breaks the
+ * next `require('mj.config.cjs')` (the mj migrate / codegen / build steps an install runs) — #2975.
+ *
+ * `compileFunction` parses the content (throwing SyntaxError on malformed JS) WITHOUT executing
+ * it, so the `require(...)` / `process.env` references in a real config never run. It throws on
+ * failure so the caller's existing try/catch surfaces it as `{ Success: false, ErrorMessage }`.
+ */
+function WriteConfigChecked(configPath: string, content: string): void {
+    try {
+        compileFunction(content);
+    } catch (parseError: unknown) {
+        const message = parseError instanceof Error ? parseError.message : String(parseError);
+        throw new Error(
+            `the edit would produce invalid JavaScript (${message}); the file was left unchanged. ` +
+            `This is a bug in the Open App config editor — please report it with your mj.config.cjs shape.`,
+        );
+    }
+    writeFileSync(configPath, content, 'utf-8');
 }
 
 /**
@@ -560,7 +586,7 @@ export function AddEntityPackageMapping(
         let content = readFileSync(configPath, 'utf-8');
         content = EnsureEntityPackageNameSection(content);
         content = AddEntityPackageEntry(content, schemaName, entityPkg);
-        writeFileSync(configPath, content, 'utf-8');
+        WriteConfigChecked(configPath, content);
         return { Success: true };
     }
     catch (error: unknown) {
@@ -592,7 +618,7 @@ export function RemoveEntityPackageMapping(
     try {
         let content = readFileSync(configPath, 'utf-8');
         content = RemoveEntityPackageEntry(content, schemaName);
-        writeFileSync(configPath, content, 'utf-8');
+        WriteConfigChecked(configPath, content);
         return { Success: true };
     }
     catch (error: unknown) {
