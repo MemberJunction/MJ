@@ -89,7 +89,8 @@ export class MJEntityFormComponent extends BaseFormComponent {
             { sectionKey: 'mJProcessRunDetails', sectionName: 'Process Run Details', isExpanded: false },
             { sectionKey: 'mJProcessRuns', sectionName: 'Process Runs', isExpanded: false },
             { sectionKey: 'mJRecordProcessWatermarks', sectionName: 'Record Process Watermarks', isExpanded: false },
-            { sectionKey: 'mJRecordProcesses', sectionName: 'Record Processes', isExpanded: false }
+            { sectionKey: 'mJRecordProcesses', sectionName: 'Record Processes', isExpanded: false },
+            { sectionKey: 'mJScopedPromptParts', sectionName: 'Scoped Prompt Parts', isExpanded: false }
         ]);
     }
 }
