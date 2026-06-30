@@ -13,7 +13,7 @@ import { DOCUMENT } from '@angular/common';
 import { Router, NavigationEnd } from '@angular/router';
 import { Subject } from 'rxjs';
 import { filter, take, takeUntil } from 'rxjs/operators';
-import { CompositeKey, LogError, Metadata, SetProductionStatus } from '@memberjunction/core';
+import { CompositeKey, EntityInfo, LogError, Metadata, SetProductionStatus } from '@memberjunction/core';
 import { MJAuthBase, StandardUserInfo, AuthErrorType } from '@memberjunction/ng-auth-services';
 import { WorkspaceInitializerService } from '@memberjunction/ng-workspace-initializer';
 import { MJEnvironmentConfig, MJ_ENVIRONMENT } from '@memberjunction/ng-bootstrap';
@@ -405,7 +405,7 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
           Name: currentUser?.Name || '',
           Roles: currentUser?.UserRoles?.map(r => r.Role) || []
         },
-        Capabilities: { Tools: [...this.globalToolManifest] }
+        Capabilities: { Tools: this.currentToolManifest }
       };
       this.navigationService.PublishAppContextSnapshot(this.AppContextSnapshot);
       this.realtimeSession.UpdateAppContext(this.AppContextSnapshot);
@@ -443,9 +443,9 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
         Name: currentUser?.Name || '',
         Roles: currentUser?.UserRoles?.map(r => r.Role) || []
       },
-      // Baseline capability manifest = the always-available global tools (with their schemas).
-      // handleAgentContextUpdate merges the active surface's tools on top of this.
-      Capabilities: { Tools: [...this.globalToolManifest] }
+      // Capability manifest = always-available globals + the active surface's persisted tools, so a
+      // snapshot rebuilt on app/nav change never drops the surface tools (see currentToolManifest).
+      Capabilities: { Tools: this.currentToolManifest }
     };
     // Publish to any embedded chat-area subscribers (Form Builder
     // cockpit, future domain dashboards). The floating overlay sees
@@ -522,25 +522,22 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
         ...update.AgentClientTools.map(t => ({ Name: t.Name, Handler: t.Handler })),
       ]);
 
-      // Populate the LIVE capability manifest on the snapshot — names + schemas only (no handlers),
-      // so the streamed context note tells the co-agent exactly which tools are callable on the
-      // current surface RIGHT NOW. This is the "continually pass available client tools" half: as the
-      // user navigates and the surface re-registers its tools, the manifest (and the streamed note)
-      // updates with it.
+      // PERSIST the active surface's capability manifest (names + schemas, no handlers) so EVERY
+      // snapshot (re)build merges it on top of the globals — not just this immediate update. Without
+      // persisting it, a snapshot rebuilt on a later app/nav change (or one that ran BEFORE the
+      // surface registered its tools) resets Capabilities.Tools to globals-only, and the agent loses
+      // the surface's tools even though their handlers are still registered — so it can't call them
+      // and falls back to a global tool with an invented arg. This is the "continually pass available
+      // client tools" half of client-context delivery.
+      this.activeDashboardToolManifest = update.AgentClientTools.map(t => ({
+        Name: t.Name,
+        Description: t.Description,
+        InputSchema: t.ParameterSchema,
+      }));
       if (this.AppContextSnapshot) {
-        // Merge the global tools (NavigateToApp/NavigateToRecord/etc.) with the active surface's
-        // tools so the streamed note lists EVERY callable action + its params, not just the surface's.
-        const toolManifest: ClientToolMetadata[] = [
-          ...this.globalToolManifest,
-          ...update.AgentClientTools.map(t => ({
-            Name: t.Name,
-            Description: t.Description,
-            InputSchema: t.ParameterSchema,
-          })),
-        ];
         this.AppContextSnapshot = {
           ...this.AppContextSnapshot,
-          Capabilities: { ...this.AppContextSnapshot.Capabilities, Tools: toolManifest },
+          Capabilities: { ...this.AppContextSnapshot.Capabilities, Tools: this.currentToolManifest },
         };
         this.navigationService.PublishAppContextSnapshot(this.AppContextSnapshot);
         this.realtimeSession.UpdateAppContext(this.AppContextSnapshot);
@@ -551,6 +548,20 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
 
   /** Names of currently registered dashboard-specific tools (for cleanup on switch) */
   private activeDashboardToolNames: string[] = [];
+
+  /** Capability manifest (names + schemas) of the active surface's tools, persisted so it can be
+   *  merged into every snapshot (re)build — see handleAgentContextUpdate for why. */
+  private activeDashboardToolManifest: ClientToolMetadata[] = [];
+
+  /** The full client-tool manifest the agent should see: always-available globals + the active
+   *  surface's persisted tools. Used by every AppContextSnapshot build so the surface tools are
+   *  never dropped when the snapshot is rebuilt (the bug this fixes). NOTE: a known follow-up is
+   *  that on cross-app navigation the prior app's surface tools can linger until the new surface
+   *  registers — the proper place to clear/re-register per the tab lifecycle is the
+   *  ComponentCacheManager (it already caches each component's AgentClientTools for that purpose). */
+  private get currentToolManifest(): ClientToolMetadata[] {
+    return [...this.globalToolManifest, ...this.activeDashboardToolManifest];
+  }
 
   /** Register Explorer-specific client tool handlers with the AgentClientService */
   /**
@@ -588,6 +599,24 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
     return undefined;
   }
 
+  /**
+   * Guards the global NavigateToRecord tool, which opens ONE specific record. Returns an actionable
+   * message (so the agent opens the entity list instead) when `recordId` is missing or a sentinel
+   * the model invents to mean "all records" (e.g. "__ALL__", "all", "*"), or `null` when the key is
+   * plausible. Without this, a hallucinated key routes to a broken record-load page yet the tool
+   * still reports success.
+   */
+  private invalidRecordKeyMessage(entityName: string, entityInfo: EntityInfo | undefined, recordId: string): string | null {
+    const sentinels = new Set(['', '__all__', 'all', '*', 'none', 'null', 'undefined', 'list', 'records']);
+    if (sentinels.has(recordId.trim().toLowerCase())) {
+      return `"${recordId || '(empty)'}" is not a specific record key, so NavigateToRecord cannot open it. ` +
+        `NavigateToRecord opens ONE existing record by its primary key. To show ALL records of ` +
+        `"${entityInfo?.Name ?? entityName}", open the entity in Data Explorer with the OpenEntity tool ` +
+        `(or navigate to that app), then filter/sort there.`;
+    }
+    return null;
+  }
+
   private registerClientTools(): void {
     // Register each global tool on BOTH the async agent-client AND capture it for the realtime
     // session (one set of handlers, both agents) + the streamed capability manifest (schemas).
@@ -605,12 +634,14 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
     };
     register({
       Name: 'NavigateToRecord',
-      Description: 'Navigate the user to a specific entity record',
+      Description: 'Open ONE specific, existing entity record by its primary key (the record\'s ID). ' +
+        'Use only when you have a concrete record id/key. Do NOT use this to browse, list, or "see all" ' +
+        'records of an entity — for that, open the entity in Data Explorer with the OpenEntity tool.',
       ParameterSchema: {
         type: 'object',
         properties: {
           EntityName: { type: 'string' },
-          RecordID: { type: 'string' }
+          RecordID: { type: 'string', description: 'The primary key of a single existing record (e.g. a GUID). Not a placeholder like "all".' }
         },
         required: ['EntityName', 'RecordID']
       },
@@ -618,7 +649,14 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
         const entityName = this.readToolParam(params, 'EntityName', 'entity') ?? '';
         const recordId = this.readToolParam(params, 'RecordID', 'recordId', 'id', 'record') ?? '';
         const md = this.ProviderToUse;
-        const entityInfo = md.Entities.find(e => e.Name === entityName);
+        const entityInfo = md.EntityByName(entityName);
+        // Guard: this tool opens ONE record. Reject a missing / sentinel / non-record key (e.g. an
+        // agent inventing "__ALL__" to mean "all records") so we never route to a broken
+        // record-load page — return actionable feedback so the agent opens the entity list instead.
+        const invalid = this.invalidRecordKeyMessage(entityName, entityInfo, recordId);
+        if (invalid) {
+          return { Success: false, ErrorMessage: invalid };
+        }
         const pkey = new CompositeKey();
         if (entityInfo) {
           pkey.LoadFromURLSegment(entityInfo, recordId);

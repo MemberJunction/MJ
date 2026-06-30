@@ -12,7 +12,7 @@ import {
     BuildAppRealtimeOverridesJson,
     RealtimeAllowedAgent,
 } from '../realtime/realtime-coagent-config';
-import { BuildRealtimeAgentFraming, BuildColleaguesClause } from '../realtime/realtime-tool-broker';
+import { BuildRealtimeAgentFraming, BuildColleaguesClause, BuildTourGuidanceClause } from '../realtime/realtime-tool-broker';
 
 const layer = (allowedAgents: unknown, extra: Record<string, unknown> = {}): Record<string, unknown> => ({
     realtime: { allowedAgents, ...extra },
@@ -157,6 +157,21 @@ describe('BuildRealtimeAgentFraming / BuildColleaguesClause', () => {
         expect(a).toBe(b); // byte-identical — additive change is safe for existing callers
         expect(a).toContain('You are the real-time voice for the agent "Sage"');
         expect(a).not.toContain('colleagues');
+    });
+
+    it('every framing carries the tour-guidance play with its pacing rules', () => {
+        const framing = BuildRealtimeAgentFraming('Sage');
+        const tour = BuildTourGuidanceClause();
+        // The clause is appended to the framing (universal across hosts)...
+        expect(framing).toContain(tour);
+        // ...and encodes the deliberate-pacing tour play the co-agent should follow.
+        expect(tour).toContain('GIVING A TOUR');
+        expect(tour).toMatch(/PACE YOURSELF|never rush|one stop at a time/i);
+        expect(tour).toMatch(/DEMONSTRATE/);          // show, don't just describe
+        expect(tour).toMatch(/PAUSE/);                 // let the user absorb / ask
+        expect(tour).toMatch(/depth over breadth/i);   // not a rushed flyover
+        // Deterministic + argument-free (skill-extractable later).
+        expect(BuildTourGuidanceClause()).toBe(tour);
     });
 
     it('appends a colleagues clause with per-target disclosure guidance', () => {

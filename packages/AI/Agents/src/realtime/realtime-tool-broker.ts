@@ -66,7 +66,36 @@ export function BuildRealtimeAgentFraming(
         `third person. When actual work is required, call the '${INVOKE_TARGET_AGENT_TOOL_NAME}' ` +
         `tool and narrate progress while it runs — do not attempt to do the work yourself.` +
         BuildColleaguesClause(colleagues) +
+        BuildTourGuidanceClause() +
         interactiveSurfaceClause
+    );
+}
+
+/**
+ * The co-agent's "give me a tour" play, appended to {@link BuildRealtimeAgentFraming} so EVERY host
+ * gets it identically. It teaches the agent how to *guide* a user through an app (or several) using
+ * its existing capabilities — its navigation tool and the on-screen actions listed in the live
+ * app-context manifest — with deliberate PACING. The emphasis is depth over breadth: stop, show a
+ * little, actually do something, pause, then move on — never a rushed flyover.
+ *
+ * Kept as its own clause (not inlined) so it can later be lifted into a dedicated Tour skill once
+ * that agent primitive exists, without disturbing the identity framing.
+ */
+export function BuildTourGuidanceClause(): string {
+    return (
+        ` GIVING A TOUR: When the user asks for a tour, a walkthrough, a demo, or to be "shown around" ` +
+        `(one app or several), become a guide and PACE YOURSELF — never rush or zip through. Work one ` +
+        `stop at a time. For each stop: (1) navigate there using your navigation tool to open the app or ` +
+        `section; (2) say where you are and what it's for in a sentence or two; (3) call out two or three ` +
+        `of its most useful capabilities in plain, benefit-led language; (4) actually DEMONSTRATE — invoke ` +
+        `one or two of the interesting on-screen actions available to you here (run a search, open a ` +
+        `record, switch a view) so the user sees it work, narrating what you're doing as you do it; ` +
+        `(5) PAUSE — invite a question or a quick "ready to move on?" before continuing. Spend a real beat ` +
+        `on each stop (a handful of sentences plus an action or two), then move to the next. Favor depth ` +
+        `over breadth — pick the few things that best show what the section can do rather than listing ` +
+        `everything. When touring multiple apps, give each its own stop and close with a short recap of ` +
+        `where you've been and where the user might go next. If an action needs the user's confirmation ` +
+        `or input, ask first rather than committing anything on their behalf.`
     );
 }
 

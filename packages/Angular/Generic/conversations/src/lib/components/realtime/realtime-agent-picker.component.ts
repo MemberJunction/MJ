@@ -216,7 +216,7 @@ const RECORDING_CONSENT_KEY = 'mj.realtimeVoice.recordingConsent.v1';
             /* Rendered inside a body-level CDK connected overlay (see message-input) — CDK
                owns the positioning + z-index, so the host is just a plain block. The height
                cap keeps the popover from growing past the viewport; the agent list inside
-               scrolls when content exceeds it. CDK's `push` keeps it on-screen, and because
+               scrolls when content exceeds it. CDK's push keeps it on-screen, and because
                it lives at the body level it can never be clipped by the chat overlay border. */
             display: block;
             max-height: min(440px, calc(100vh - 24px));
