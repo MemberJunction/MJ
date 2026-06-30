@@ -47,7 +47,7 @@ const SIZE_MAP: Record<MjDialogSize, string> = {
     @if (Visible) {
       <div class="mj-dialog-backdrop" (click)="OnBackdropClick($event)">
         <div class="mj-dialog-container"
-          role="dialog"
+          [attr.role]="Role"
           aria-modal="true"
           [attr.aria-labelledby]="Title ? 'mj-dialog-title-' + dialogId : null"
           [style.width]="resolvedWidth"
@@ -108,6 +108,14 @@ export class MJDialogComponent implements OnDestroy {
   @Input() Size: MjDialogSize = 'auto';
   @Input() Closeable = true;
   @Input() MinWidth: number | null = null;
+
+  /**
+   * ARIA role for the dialog container. Defaults to `'dialog'`; pass
+   * `'alertdialog'` for confirmation / destructive prompts that interrupt the
+   * user (per WAI-ARIA, an alertdialog conveys an urgent message requiring a
+   * response). Backward compatible — existing callers keep `'dialog'`.
+   */
+  @Input() Role: 'dialog' | 'alertdialog' = 'dialog';
 
   @Output() Close = new EventEmitter<void>();
 

@@ -5,6 +5,7 @@ export * from './lib/button/button.directive';
 export * from './lib/clickable/clickable.directive';
 export * from './lib/dialog/dialog.component';
 export * from './lib/dialog/dialog.service';
+export * from './lib/confirm-dialog/confirm-dialog.component';
 export * from './lib/dropdown/dropdown.component';
 export * from './lib/switch/switch.component';
 export * from './lib/numeric-input/numeric-input.component';
