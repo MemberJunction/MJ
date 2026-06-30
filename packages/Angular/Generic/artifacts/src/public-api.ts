@@ -43,6 +43,7 @@ export * from './lib/components/plugins/html-artifact-viewer.component';
 export * from './lib/components/plugins/svg-artifact-viewer.component';
 export * from './lib/components/plugins/component-artifact-viewer.component';
 export * from './lib/components/plugins/data-artifact-viewer.component';
+export * from './lib/components/plugins/ml-experiment-results-viewer.component';
 export * from './lib/components/plugins/component-feedback-panel/component-feedback-panel.component';
 
 // File viewer toolbar and plugins

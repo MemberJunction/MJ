@@ -20,7 +20,7 @@
     </mj-mention-editor>
 
     <!-- Attach + voice buttons - Positioned over editor -->
-    @if (enableAttachments || enableVoice) {
+    @if (enableAttachments || enableRealtime) {
       <div class="attach-buttons">
         @if (enableAttachments) {
         <button
@@ -60,12 +60,12 @@
           <i class="fa-solid fa-cube"></i>
         </button>
         }
-        @if (enableVoice) {
+        @if (enableRealtime) {
         <button
           class="attach-button-icon voice-button-icon"
           [class.voice-button-icon--active]="voiceActive"
-          [disabled]="!canStartVoice"
-          (click)="onVoiceClick(); $event.stopPropagation()"
+          [disabled]="!canStartRealtime"
+          (click)="onRealtimeClick(); $event.stopPropagation()"
           [title]="voiceActive ? 'Voice call active' : 'Start a voice call'"
           aria-label="Start a voice call"
           >
@@ -75,8 +75,8 @@
              click away while the plain phone click keeps its instant-start behavior. -->
         <button
           class="attach-button-icon voice-options-button-icon"
-          [disabled]="!canStartVoice"
-          (click)="onVoiceOptionsClick(); $event.stopPropagation()"
+          [disabled]="!canStartRealtime"
+          (click)="onRealtimeOptionsClick(); $event.stopPropagation()"
           title="Voice call options (choose agent and voice model)"
           aria-label="Voice call options"
           >
