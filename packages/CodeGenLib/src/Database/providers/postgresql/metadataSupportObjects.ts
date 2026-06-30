@@ -548,6 +548,18 @@ BEGIN
   WHERE si."ID" IS NULL
     AND ss."SchemaName" NOT IN (SELECT x.schema_name FROM _usi_excluded x);
 
+  -- Backfill the case-stable canonical schema name from the installed Open App record.
+  -- SchemaInfo.SchemaName is the physical (lowercased) name on PG; the app record carries
+  -- the canonical casing (manifest schema.name). Case-insensitive join; only fills NULLs.
+  -- Mirrors the SQL Server proc in migration V202606301331 — keep the two in sync.
+  UPDATE __mj."SchemaInfo" si SET
+    "CanonicalSchemaName" = app."SchemaName",
+    "__mj_UpdatedAt" = now()
+  FROM __mj."OpenApp" app
+  WHERE LOWER(si."SchemaName") = LOWER(app."SchemaName")
+    AND si."CanonicalSchemaName" IS NULL
+    AND app."SchemaName" IS NOT NULL;
+
   RETURN QUERY
   SELECT si.*
   FROM __mj."SchemaInfo" si
