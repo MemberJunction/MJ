@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, inject } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { LogError, RunView, UserInfo } from '@memberjunction/core';
-import { MJEnvironmentEntityExtended, MJMLModelEntity, MJProcessRunDetailEntity } from '@memberjunction/core-entities';
+import { MJConversationEntity, MJEnvironmentEntityExtended, MJMLModelEntity, MJProcessRunDetailEntity } from '@memberjunction/core-entities';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { trustDots, trustEvidenceLine } from '@memberjunction/predictive-studio-core';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
@@ -143,11 +143,14 @@ const MODEL_DEV_AGENT_NAME = 'Model Development Agent';
                 @if (currentUser) {
                   <mj-conversation-chat-area
                     [Provider]="Provider" [environmentId]="chatEnvironmentId" [currentUser]="currentUser"
+                    [conversation]="chatConversation" [conversationId]="chatConversationId" [isNewConversation]="chatIsNewConversation"
                     [suppressNewConversationEmptyState]="true" [allowMentions]="false" [overlayMode]="true"
                     [showExportButton]="false" [showShareButton]="false" [showArtifactIndicator]="false"
                     [showAgentPicker]="false" [showAgentModePicker]="false"
                     [defaultAgentId]="modelDevAgentId" [pendingMessage]="pendingPrompt"
                     [applicationScope]="'Application'" [applicationId]="applicationId" [appContext]="chatAppContext"
+                    (conversationCreated)="onChatConversationCreated($event)"
+                    (pendingMessageConsumed)="onChatPendingMessageConsumed()"
                     emptyStateGreeting="What do you want to predict? Describe it in plain words.">
                   </mj-conversation-chat-area>
                 } @else { <div class="ps-biz-copilot-empty"><mj-loading text="Connecting…" size="small"></mj-loading></div> }
@@ -244,6 +247,17 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
   public chatOpen = false;
   public pendingPrompt: string | null = null;
   private _modelDevAgentId: string | null = null;
+
+  /**
+   * Embedded co-pilot conversation state. The chat-area starts in "new conversation" mode; on the first
+   * send it creates the conversation and emits `conversationCreated`, at which point we capture the live
+   * conversation and flip out of new-mode so subsequent sends append to the same thread. Without this
+   * wiring the suppressed empty-state input has no valid conversation to write into and the first send
+   * silently no-ops (matches the proven Form Builder co-pilot pattern).
+   */
+  public chatConversation: MJConversationEntity | null = null;
+  public chatConversationId: string | null = null;
+  public chatIsNewConversation = true;
 
   /** The ranked at-risk rows for the open prediction's latest run (empty until loaded / when no run yet). */
   public atRiskRows: AtRiskRow[] = [];
@@ -349,6 +363,25 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
 
   public closeChat(): void {
     this.chatOpen = false;
+    this.pendingPrompt = null;
+    this.cdrLocal.detectChanges();
+  }
+
+  /**
+   * The chat-area created its backing conversation after the user's first message — capture the live
+   * conversation, re-feed the pending message in the same change-detection cycle, and leave new-mode so
+   * the thread renders (mirrors the Form Builder co-pilot's atomic state-flip).
+   */
+  public onChatConversationCreated(event: { conversation: MJConversationEntity; pendingMessage?: string }): void {
+    this.pendingPrompt = event.pendingMessage ?? null;
+    this.chatConversation = event.conversation;
+    this.chatConversationId = event.conversation.ID;
+    this.chatIsNewConversation = false;
+    this.cdrLocal.detectChanges();
+  }
+
+  /** The chat-area delivered the seeded prompt — clear the buffer so a re-render doesn't resend it. */
+  public onChatPendingMessageConsumed(): void {
     this.pendingPrompt = null;
     this.cdrLocal.detectChanges();
   }
