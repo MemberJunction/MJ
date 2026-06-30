@@ -48,6 +48,7 @@ import { AIEngine } from '@memberjunction/aiengine';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import { AgentMemoryContextBuilder } from './agent-memory-context-builder';
+import { PromptComponentResolver, injectScopedPromptParts } from './prompt-component-resolver';
 import { AgentPreExecutionRAGResult } from './agent-pre-execution-rag';
 import {
     AIPromptParams,
@@ -1495,6 +1496,16 @@ export class BaseAgent {
                 )
             ]);
 
+            // Inject scope-resolved prompt parts (role-faithful) for this agent's prompt, alongside
+            // memory/RAG. Synchronous — parts are cached on AIEngine. Uses the same run scope.
+            this.InjectScopedPromptParts(
+                params.agent,
+                wrappedParams.conversationMessages,
+                primaryScopeEntityId,
+                primaryScopeRecordId,
+                secondaryScopes
+            );
+
             if (!config.success) {
                 this.logError(`Failed to load agent configuration: ${config.errorMessage}`, {
                     agent: params.agent,
@@ -2827,6 +2838,45 @@ export class BaseAgent {
         this._injectedMemory = result;
 
         return result;
+    }
+
+    /**
+     * Inject this agent's scoped prompt parts into the conversation, role-faithfully.
+     *
+     * Parallels {@link InjectContextMemory}: resolves `MJ: Scoped Prompt Parts` for the agent's
+     * primary prompt under the run's polymorphic scope (the SAME PrimaryScope/SecondaryScopes the
+     * runtime threads for memory), and unshifts the assembled role-tagged messages onto
+     * `conversationMessages`. In-memory + synchronous (parts are cached on `AIEngine`). No-op when
+     * the agent has no active prompt or no parts resolve for the scope.
+     */
+    protected InjectScopedPromptParts(
+        agent: MJAIAgentEntityExtended,
+        conversationMessages: ChatMessage[],
+        primaryScopeEntityId?: string,
+        primaryScopeRecordId?: string,
+        secondaryScopes?: Record<string, SecondaryScopeValue>
+    ): void {
+        try {
+            const prompts = AIEngine.Instance.AgentPrompts
+                .filter(ap => UUIDsEqual(ap.AgentID, agent.ID) && ap.Status === 'Active')
+                .sort((a, b) => (a.ExecutionOrder ?? 0) - (b.ExecutionOrder ?? 0));
+            if (prompts.length === 0) return;
+
+            // Obtain the (possibly downstream-overridden) resolver via the class factory, so any
+            // consumer can plug in custom inclusion/scope logic by subclassing PromptComponentResolver.
+            const resolver =
+                MJGlobal.Instance.ClassFactory.CreateInstance<PromptComponentResolver>(PromptComponentResolver) ??
+                new PromptComponentResolver();
+
+            injectScopedPromptParts(
+                resolver,
+                prompts[0].PromptID,
+                { primaryScopeEntityId, primaryScopeRecordId, secondaryScopes },
+                conversationMessages
+            );
+        } catch (e) {
+            this.logError(e instanceof Error ? e : new Error(String(e)), { category: 'ScopedPromptParts' });
+        }
     }
 
     /**
