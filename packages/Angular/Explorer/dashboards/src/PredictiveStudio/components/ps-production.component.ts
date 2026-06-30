@@ -137,7 +137,7 @@ interface RunDetailVM {
                 @if (selected.deployState === 'idle') {
                   <div class="ps-callout info">
                     <i class="fa-solid fa-circle-info"></i>
-                    <div class="ps-small">This model is published but <strong>not operating</strong> yet — nothing scores with it. Schedule it to run regularly, or bind it to write a column. (Operate actions land next.)</div>
+                    <div class="ps-small">This model is published but <strong>not operating</strong> yet — nothing scores with it. Click <strong>Operate</strong> above to run it now, schedule it to run regularly, or write predictions back to a column.</div>
                   </div>
                 } @else {
                   @if (selectedBindings.length > 0) {

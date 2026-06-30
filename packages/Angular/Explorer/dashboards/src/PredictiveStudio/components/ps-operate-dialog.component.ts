@@ -235,8 +235,8 @@ export class PSOperateDialogComponent extends BaseAngularComponent {
       this.state.scopeMode === 'all'
         ? `every record in <strong>${entity}</strong>`
         : this.state.scopeMode === 'view'
-          ? `the <strong>${this.viewName() ?? 'selected view'}</strong> view of ${entity}`
-          : `the <strong>${this.listName() ?? 'selected list'}</strong> list of ${entity}`;
+          ? `the <strong>${this.viewName() ?? 'selected'}</strong> view of ${entity}`
+          : `the <strong>${this.listName() ?? 'selected'}</strong> list of ${entity}`;
     const output =
       this.state.outputMode === 'writeback'
         ? this.state.outputField.trim()
