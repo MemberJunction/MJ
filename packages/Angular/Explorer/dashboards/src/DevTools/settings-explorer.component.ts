@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, AfterViewInit, ChangeDetectorRef } from '@angular/core';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { RegisterClass } from '@memberjunction/global';
 import {
@@ -8,6 +8,7 @@ import {
     MJInstanceConfigurationEntity
 } from '@memberjunction/core-entities';
 import { DevToolsPrefs } from './dev-tools-prefs';
+import { buildSettingsExplorerAgentContext } from './dev-tools-agent-context';
 
 interface SettingRow {
     key: string;
@@ -36,7 +37,7 @@ type SettingsScope = 'user' | 'instance';
     templateUrl: './settings-explorer.component.html',
     styleUrls: ['./inspector-shared.css', './settings-explorer.component.css']
 })
-export class SettingsExplorerComponent extends BaseResourceComponent implements OnInit, OnDestroy {
+export class SettingsExplorerComponent extends BaseResourceComponent implements OnInit, OnDestroy, AfterViewInit {
 
     public Scope: SettingsScope = 'user';
     public UserRows: SettingRow[] = [];
@@ -59,6 +60,13 @@ export class SettingsExplorerComponent extends BaseResourceComponent implements 
         this.NotifyLoadComplete();
     }
 
+    public ngAfterViewInit(): void {
+        // Publish initial agent context. Re-emit happens in refresh(), OnScopeChange,
+        // and PersistPrefs (search ngModelChange).
+        // 🔒 METADATA-ONLY surface — NO client tools are registered (see SAFETY note below).
+        this.publishAgentContext();
+    }
+
     public override ngOnDestroy(): void {
         DevToolsPrefs.Save('settingsExplorer', { scope: this.Scope, search: this.SearchQuery });
         super.ngOnDestroy();
@@ -66,6 +74,7 @@ export class SettingsExplorerComponent extends BaseResourceComponent implements 
 
     public PersistPrefs(): void {
         DevToolsPrefs.Save('settingsExplorer', { scope: this.Scope, search: this.SearchQuery });
+        this.publishAgentContext();
     }
 
     public override async GetResourceDisplayName(): Promise<string> { return 'Settings Explorer'; }
@@ -97,6 +106,7 @@ export class SettingsExplorerComponent extends BaseResourceComponent implements 
 
         this.LastRefreshed = new Date();
         this.cdr.markForCheck();
+        this.publishAgentContext();
     }
 
     public OnScopeChange(scope: SettingsScope): void {
@@ -197,5 +207,40 @@ export class SettingsExplorerComponent extends BaseResourceComponent implements 
             return `{ ${keys.slice(0, 3).join(', ')}${keys.length > 3 ? ', …' : ''} }`;
         }
         return String(value);
+    }
+
+    // ========================================
+    // AI AGENT CONTEXT (METADATA-ONLY)
+    //
+    // 🔒 SAFETY BOUNDARY — CLASSIFICATION: METADATA-ONLY.
+    // The Settings Explorer browses MJ: User Settings and MJ: Instance
+    // Configurations, whose VALUES can include credentials, API keys, and other
+    // secrets. We therefore expose to the AI agent ONLY metadata: how many
+    // settings exist (per scope) and the search QUERY the user typed — NEVER the
+    // setting values. For the same reason, NO client tools are registered here:
+    // there is no value-returning operation the agent may invoke against this
+    // surface.
+    // ========================================
+
+    /**
+     * Publish METADATA-ONLY context for the Settings Explorer. Reports setting
+     * counts (current scope + per-scope), the active search term, the
+     * post-filter count, and the setting KEY NAMES — never any setting value.
+     * See SAFETY BOUNDARY above.
+     */
+    private publishAgentContext(): void {
+        const currentScopeCount = this.Scope === 'user' ? this.Counts.user : this.Counts.instance;
+        const filtered = this.FilteredRows;
+        const context = buildSettingsExplorerAgentContext({
+            SettingCount: currentScopeCount,
+            UserSettingCount: this.Counts.user,
+            InstanceSettingCount: this.Counts.instance,
+            Scope: this.Scope,
+            SearchTerm: this.SearchQuery,
+            FilteredCount: filtered.length,
+            // 🔒 KEY NAMES only (e.g. "mj.formBuilder.…") — never the .rawValue.
+            SettingKeys: filtered.map(r => r.key),
+        });
+        this.navigationService.SetAgentContext(this, context);
     }
 }

@@ -840,9 +840,7 @@
                 } @else if (record.OutputExample) {
                   <div style="background: var(--mj-bg-surface-sunken); border: 1px solid var(--mj-border-default); border-radius: 4px; padding: 12px; font-family: 'Courier New', monospace; font-size: 0.9em; white-space: pre-wrap; overflow: auto; max-height: 250px;">{{ record.OutputExample }}</div>
                 } @else {
-                  <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 4px; padding: 12px; color: #856404; text-align: center;">
-                    <i class="fa-solid fa-exclamation-triangle"></i> Output example is required when output type is 'object'
-                  </div>
+                  <mj-alert Variant="warning">Output example is required when output type is 'object'</mj-alert>
                 }
               </div>
             </mj-accordion-panel>

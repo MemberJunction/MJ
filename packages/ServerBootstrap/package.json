@@ -116,6 +116,7 @@
     "@memberjunction/integration-connectors": "5.43.0",
     "@memberjunction/integration-engine": "5.43.0",
     "@memberjunction/messaging-adapters": "5.43.0",
+    "@memberjunction/predictive-studio": "5.43.0",
     "@memberjunction/queue": "5.43.0",
     "@memberjunction/react-linter": "5.43.0",
     "@memberjunction/record-comparison": "5.43.0",

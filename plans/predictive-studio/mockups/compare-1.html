@@ -1,0 +1,147 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Predictive Studio — Compare Runs</title>
+<link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  .cmp-grid { display:grid; grid-template-columns:200px repeat(3,1fr); gap:0; }
+  .cmp-grid > .rowhdr { padding:12px 14px; font-size:12.5px; font-weight:650; color:var(--mj-text-secondary); border-bottom:1px solid var(--mj-border-subtle); display:flex; align-items:center; gap:8px; }
+  .cmp-grid > .rowhdr .h { font-size:11px; color:var(--mj-text-muted); font-weight:600; }
+  .cell { padding:12px 14px; border-bottom:1px solid var(--mj-border-subtle); border-left:1px solid var(--mj-border-subtle); text-align:center; font-variant-numeric:tabular-nums; }
+  .cell .v { font-size:18px; font-weight:700; letter-spacing:-.01em; }
+  .cell .v.sm { font-size:15px; }
+  .cell .s { font-size:11.5px; color:var(--mj-text-muted); }
+  .cell.best { background:var(--mj-success-bg); }
+  .cell.best .v { color:var(--mj-success-text); }
+  .cell.best::after { content:"BEST"; display:inline-block; margin-top:3px; font-size:9px; font-weight:800; letter-spacing:.07em; color:var(--mj-success-text); background:#fff; padding:1px 6px; border-radius:5px; border:1px solid #bfe6cf; }
+  .colhead { padding:16px 14px 14px; border-left:1px solid var(--mj-border-subtle); }
+  .colhead.A { border-top:3px solid #2050c8; } .colhead.B { border-top:3px solid #7b3ff0; } .colhead.C { border-top:3px solid #d98213; }
+  .colhead .tag-algo { font-size:11px; }
+  .stub { border-top:3px solid transparent; padding:16px 14px 14px; }
+  .fi-block { padding:12px 14px 16px; border-left:1px solid var(--mj-border-subtle); }
+  .fi-block .fbar { grid-template-columns:104px 1fr 40px; gap:8px; padding:4px 0; font-size:11.5px; }
+  .fi-block .fbar .track { height:11px; }
+  .fi-block .fbar .val { text-align:right; font-variant-numeric:tabular-nums; font-weight:600; }
+  .rh-section { background:var(--mj-bg-surface-sunken); font-weight:700; text-transform:uppercase; font-size:10.5px; letter-spacing:.06em; color:var(--mj-text-muted); padding:8px 14px; }
+  .span4 { grid-column:1 / span 4; }
+</style></head>
+<body><div class="ps-app">
+<aside class="ps-sidebar">
+ <div class="ps-brand"><div class="logo"><i class="fa-solid fa-wand-magic-sparkles"></i></div><div><div class="name">Predictive Studio</div><div class="sub">MemberJunction</div></div></div>
+ <nav class="ps-nav">
+  <div class="group">Build</div>
+  <a><i class="fa-solid fa-gauge-high"></i> Home</a>
+  <a><i class="fa-solid fa-diagram-project"></i> Training Pipelines</a>
+  <a><i class="fa-solid fa-shapes"></i> Algorithm Catalog</a>
+  <div class="group">Run</div>
+  <a><i class="fa-solid fa-flask"></i> Experiments</a>
+  <a><i class="fa-solid fa-cubes"></i> Model Registry</a>
+  <a class="active"><i class="fa-solid fa-chart-column"></i> Compare Runs</a>
+  <div class="group">Assist</div>
+  <a><i class="fa-solid fa-robot"></i> Model Dev Agent</a>
+ </nav>
+ <div class="me"><div class="ps-avatar">AN</div><div class="small"><div style="color:#fff;font-weight:600">Amith N.</div><div style="color:#7e8ca5">Data Studio</div></div></div>
+</aside>
+<main class="ps-main"><div class="ps-topbar">
+  <div><h1>Compare Runs</h1><div class="crumb">Member Renewal Prediction · 3 runs selected · FY25 holdout</div></div>
+  <div class="spacer"></div>
+  <button class="btn ghost sm"><i class="fa-solid fa-table-columns"></i> Side-by-side</button>
+  <button class="btn ghost sm"><i class="fa-solid fa-arrow-up-right-from-square"></i> Export</button>
+  <button class="btn primary"><i class="fa-solid fa-trophy"></i> Promote Winner</button>
+</div><div class="ps-content">
+
+  <div class="callout warn" style="margin-bottom:18px">
+    <i class="fa-solid fa-triangle-exclamation"></i>
+    <div><strong>Overfit watch — Run B (LightGBM, full).</strong> Train AUC 0.930 but Holdout 0.859 → a <strong>0.071 gap</strong>, nearly 2× the others. The extra "full" features add training fit that doesn't generalize. Prefer the run that wins on <strong>Holdout AUC</strong>, the honest number — not Train.</div>
+  </div>
+
+  <div class="card">
+    <div class="card-head"><i class="fa-solid fa-table-columns" style="color:var(--mj-brand-primary)"></i><h3>Side-by-side comparison</h3><div class="spacer"></div><span class="muted small">Best value in each row highlighted</span></div>
+
+    <div class="cmp-grid">
+      <!-- column headers -->
+      <div class="stub"><div class="muted small" style="font-weight:700;text-transform:uppercase;letter-spacing:.05em">Run / Metric</div></div>
+      <div class="colhead A"><div style="font-weight:700;font-size:14px">Run A</div><div class="muted small">XGBoost + engagement/recency</div><div style="margin-top:7px"><span class="badge green"><span class="dot" style="background:var(--mj-success)"></span> Recommended</span></div></div>
+      <div class="colhead B"><div style="font-weight:700;font-size:14px">Run B</div><div class="muted small">LightGBM + full features</div><div style="margin-top:7px"><span class="badge amber"><i class="fa-solid fa-triangle-exclamation" style="font-size:9px"></i> Overfit gap</span></div></div>
+      <div class="colhead C"><div style="font-weight:700;font-size:14px">Run C</div><div class="muted small">Logistic Reg. + core</div><div style="margin-top:7px"><span class="badge blue"><i class="fa-solid fa-eye" style="font-size:9px"></i> Interpretable</span></div></div>
+
+      <!-- PERFORMANCE -->
+      <div class="span4 rh-section">Performance</div>
+
+      <div class="rowhdr">Holdout AUC <span class="h">honest</span></div>
+      <div class="cell best"><div class="v">0.864</div></div>
+      <div class="cell"><div class="v">0.859</div><div class="s">−0.005</div></div>
+      <div class="cell"><div class="v">0.812</div><div class="s">−0.052</div></div>
+
+      <div class="rowhdr">Train AUC <span class="h">in-sample</span></div>
+      <div class="cell"><div class="v sm">0.910</div></div>
+      <div class="cell best"><div class="v sm">0.930</div></div>
+      <div class="cell"><div class="v sm">0.820</div></div>
+
+      <div class="rowhdr">Overfit gap <span class="h">Train − Holdout</span></div>
+      <div class="cell"><div class="v sm" style="color:var(--mj-warning-text)">0.046</div></div>
+      <div class="cell"><div class="v sm" style="color:var(--mj-error-text)">0.071</div></div>
+      <div class="cell best"><div class="v sm">0.008</div></div>
+
+      <div class="rowhdr">F1 score</div>
+      <div class="cell best"><div class="v sm">0.79</div></div>
+      <div class="cell"><div class="v sm">0.78</div></div>
+      <div class="cell"><div class="v sm">0.74</div></div>
+
+      <!-- OPERATIONS -->
+      <div class="span4 rh-section">Operations &amp; interpretability</div>
+
+      <div class="rowhdr">Train time</div>
+      <div class="cell"><div class="v sm">42s</div></div>
+      <div class="cell best"><div class="v sm">28s</div></div>
+      <div class="cell"><div class="v sm">9s</div></div>
+
+      <div class="rowhdr">Training rows</div>
+      <div class="cell"><div class="v sm">18,400</div></div>
+      <div class="cell"><div class="v sm">18,400</div></div>
+      <div class="cell"><div class="v sm">18,400</div></div>
+
+      <div class="rowhdr">Interpretability</div>
+      <div class="cell"><div class="s">SHAP only</div><div style="margin-top:4px"><span class="tag">partial</span></div></div>
+      <div class="cell"><div class="s">SHAP only</div><div style="margin-top:4px"><span class="tag">partial</span></div></div>
+      <div class="cell best"><div class="s">Coefficients</div><div style="margin-top:4px"><span class="badge green" style="font-size:10px">full</span></div></div>
+
+      <!-- FEATURE IMPORTANCE -->
+      <div class="span4 rh-section">Top feature importance</div>
+      <div class="stub" style="border-top:none;padding-top:12px"><div class="muted small">Normalized gain per feature. Bars are per-model; longer = more influence on the prediction.</div></div>
+
+      <div class="fi-block">
+        <div class="fbar"><div class="label">tenure</div><div class="track"><span style="width:78%"></span></div><div class="val">0.31</div></div>
+        <div class="fbar"><div class="label">days_since_act</div><div class="track"><span style="width:68%"></span></div><div class="val">0.27</div></div>
+        <div class="fbar"><div class="label">engagement</div><div class="track"><span style="width:46%"></span></div><div class="val">0.18</div></div>
+        <div class="fbar"><div class="label">events_signup</div><div class="track"><span style="width:30%"></span></div><div class="val">0.12</div></div>
+        <div class="fbar"><div class="label">emb_aggregate</div><div class="track"><span style="width:20%"></span></div><div class="val">0.08</div></div>
+        <div class="fbar"><div class="label">city</div><div class="track"><span style="width:10%"></span></div><div class="val">0.04</div></div>
+      </div>
+
+      <div class="fi-block">
+        <div class="fbar"><div class="label">days_since_act</div><div class="track"><span style="width:90%;background:linear-gradient(90deg,#d98213,#e6a34a)"></span></div><div class="val" style="color:var(--mj-warning-text)">0.63</div></div>
+        <div class="fbar"><div class="label">tenure</div><div class="track"><span style="width:24%;background:linear-gradient(90deg,#7b3ff0,#a06ff5)"></span></div><div class="val">0.17</div></div>
+        <div class="fbar"><div class="label">emb_aggregate</div><div class="track"><span style="width:13%;background:linear-gradient(90deg,#7b3ff0,#a06ff5)"></span></div><div class="val">0.09</div></div>
+        <div class="fbar"><div class="label">engagement</div><div class="track"><span style="width:8%;background:linear-gradient(90deg,#7b3ff0,#a06ff5)"></span></div><div class="val">0.06</div></div>
+        <div class="fbar"><div class="label">events_signup</div><div class="track"><span style="width:5%;background:linear-gradient(90deg,#7b3ff0,#a06ff5)"></span></div><div class="val">0.03</div></div>
+        <div class="fbar"><div class="label">city</div><div class="track"><span style="width:3%;background:linear-gradient(90deg,#7b3ff0,#a06ff5)"></span></div><div class="val">0.02</div></div>
+      </div>
+
+      <div class="fi-block" style="border-bottom:none">
+        <div class="fbar"><div class="label">tenure</div><div class="track"><span style="width:70%;background:linear-gradient(90deg,#137a41,#1f9d57)"></span></div><div class="val">0.34</div></div>
+        <div class="fbar"><div class="label">days_since_act</div><div class="track"><span style="width:60%;background:linear-gradient(90deg,#137a41,#1f9d57)"></span></div><div class="val">0.29</div></div>
+        <div class="fbar"><div class="label">engagement</div><div class="track"><span style="width:42%;background:linear-gradient(90deg,#137a41,#1f9d57)"></span></div><div class="val">0.21</div></div>
+        <div class="fbar"><div class="label">events_signup</div><div class="track"><span style="width:22%;background:linear-gradient(90deg,#137a41,#1f9d57)"></span></div><div class="val">0.11</div></div>
+        <div class="fbar"><div class="label">city</div><div class="track"><span style="width:10%;background:linear-gradient(90deg,#137a41,#1f9d57)"></span></div><div class="val">0.05</div></div>
+        <div class="fbar"><div class="label muted">emb_aggregate</div><div class="track"><span style="width:0%"></span></div><div class="val muted">—</div></div>
+      </div>
+    </div>
+
+    <div class="card-body" style="background:var(--mj-bg-surface-card);border-top:1px solid var(--mj-border-subtle)">
+      <div class="callout info" style="border:none;background:transparent;padding:0">
+        <i class="fa-solid fa-circle-info"></i>
+        <div><strong>Verdict:</strong> Run A wins on Holdout AUC (0.864) and F1 (0.79) with a contained overfit gap. Run B's single feature <span class="mono">days_since_act</span> dominates at <strong>0.63 importance</strong> (&gt; 0.60) — a leakage/over-reliance risk worth auditing before any promotion. Run C is the most honest &amp; fully interpretable, but trades ~0.05 AUC.</div>
+      </div>
+    </div>
+  </div>
+
+</div></main>
+</div></body></html>

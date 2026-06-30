@@ -14,7 +14,7 @@
     <mj-collapsible-panel
         SectionKey="appIdentity"
         SectionName="App Identity"
-        Icon="fa fa-id-card"
+        Icon="fa fa-info-circle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -44,19 +44,28 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="Status"
-            Type="select"
+            FieldName="RepositoryURL"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="URL"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="License"
+            Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
 
-    <!-- Version and Compatibility Section -->
+    <!-- App Lifecycle Section -->
     <mj-collapsible-panel
-        SectionKey="versionAndCompatibility"
-        SectionName="Version and Compatibility"
-        Icon="fa fa-code-branch"
+        SectionKey="appLifecycle"
+        SectionName="App Lifecycle"
+        Icon="fa fa-sync-alt"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -75,6 +84,23 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="InstalledByUserID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Status"
+            Type="select"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
 
     </mj-collapsible-panel>
 
@@ -82,7 +108,7 @@
     <mj-collapsible-panel
         SectionKey="publisherInformation"
         SectionName="Publisher Information"
-        Icon="fa fa-building"
+        Icon="fa fa-user-tie"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -111,31 +137,14 @@
             [FormContext]="formContext"
             LinkType="URL"
         ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="RepositoryURL"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-            LinkType="URL"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="License"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
 
     </mj-collapsible-panel>
 
-    <!-- Technical Configuration Section -->
+    <!-- App Configuration Section -->
     <mj-collapsible-panel
-        SectionKey="technicalConfiguration"
-        SectionName="Technical Configuration"
-        Icon="fa fa-wrench"
+        SectionKey="appConfiguration"
+        SectionName="App Configuration"
+        Icon="fa fa-cogs"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -203,18 +212,9 @@
     <mj-collapsible-panel
         SectionKey="systemMetadata"
         SectionName="System Metadata"
-        Icon="fa fa-cog"
+        Icon="fa fa-database"
         [Form]="this"
         [FormContext]="formContext">
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="InstalledByUserID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-            LinkType="Record"
-        ></mj-form-field>
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"

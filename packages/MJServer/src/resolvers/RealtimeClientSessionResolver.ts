@@ -27,7 +27,7 @@
 import { Resolver, Mutation, Arg, Ctx, Int, Float, ObjectType, Field, PubSub, PubSubEngine } from 'type-graphql';
 import { AppContext, UserPayload } from '../types.js';
 import { AuthorizationEvaluator, UserInfo, IMetadataProvider, LogError, LogStatus, RunView } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { UUIDsEqual, IsValidUUID } from '@memberjunction/global';
 import {
     MJAIAgentEntity,
     MJAIAgentSessionEntity,
@@ -47,13 +47,14 @@ import {
     EvaluateRuntimeOverrideAuthorization,
     ParseRealtimeTypeConfiguration,
     ResolveEffectiveRealtimeConfig,
+    RealtimeAllowedAgent,
     REALTIME_ADVANCED_SESSION_CONTROLS_AUTHORIZATION,
     resolveRecordingStorageAccountID,
     storeRealtimeRecording,
     writeRealtimeRecordingSegment,
     deleteRealtimeRecordingSegments,
 } from '@memberjunction/ai-agents';
-import { AgentExecutionProgressCallback, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import { AgentExecutionProgressCallback, MJAIAgentEntityExtended, AppContextSnapshot } from '@memberjunction/ai-core-plus';
 import { RealtimeToolDefinition } from '@memberjunction/ai';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
@@ -168,6 +169,24 @@ interface RealtimeSessionConfig {
      * sessions. Preserved across config rewrites so the cap survives run-id / feedback updates.
      */
     maxSessionDeadlineIso?: string;
+    /**
+     * The application the session runs in (sourced the app cascade layer + RelevantAgents). Persisted
+     * for observability / continuity; absent when the session carries no app context.
+     */
+    applicationID?: string;
+    /**
+     * The session's effective allowed delegation targets (union from the config cascade, incl. the app's
+     * `RelevantAgents`). Persisted at start so each relayed `invoke-target-agent` call can validate a
+     * model-named colleague against it without re-resolving the cascade. Absent ⇒ single-target behavior.
+     */
+    allowedAgents?: RealtimeAllowedAgent[];
+    /**
+     * Per-session override for the agent's media kit — a `MJ: Collections` id that takes precedence
+     * over the agent's `DefaultMediaCollectionID` when the server-side `MediaChannelServer` resolves
+     * the media manifest at session start. Validated as a UUID at the mutation boundary; absent ⇒ the
+     * agent default kit is used (the common case).
+     */
+    mediaCollectionID?: string;
 }
 
 /**
@@ -384,6 +403,9 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         @Arg('configOverridesJson', () => String, { nullable: true }) configOverridesJson?: string,
         @Arg('recordingStartedAt', () => String, { nullable: true }) recordingStartedAt?: string,
         @Arg('recordingConsent', () => Boolean, { nullable: true }) recordingConsent?: boolean,
+        @Arg('mediaCollectionId', () => String, { nullable: true }) mediaCollectionId?: string,
+        @Arg('applicationId', () => String, { nullable: true }) applicationId?: string,
+        @Arg('appContextJson', () => String, { nullable: true }) appContextJson?: string,
     ): Promise<StartRealtimeClientSessionResult> {
         const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
 
@@ -407,6 +429,20 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         if (maxSessionSeconds) {
             config.maxSessionDeadlineIso = new Date(Date.now() + maxSessionSeconds * 1000).toISOString();
         }
+        // Per-session media-kit override: stored on the session config so the server-side MediaChannelServer
+        // resolves it (over the agent default) at start. Validate the id here — a malformed value is
+        // dropped (logged), never interpolated; the session still starts and falls back to the agent kit.
+        const mediaOverride = mediaCollectionId?.trim();
+        if (mediaOverride) {
+            if (IsValidUUID(mediaOverride)) {
+                config.mediaCollectionID = mediaOverride;
+            } else {
+                LogStatus(
+                    `StartRealtimeClientSession: ignoring malformed mediaCollectionId '${mediaCollectionId}' — ` +
+                        'using the agent default media kit.',
+                );
+            }
+        }
         const session = await this.sessionManager.CreateSession(
             {
                 agentID: coAgentID,
@@ -429,7 +465,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         const priorTranscript = await this.loadPriorTranscript(lastSessionId, contextUser, provider);
         const result = await this.prepareClientSessionOrClose(
             session, coAgentID, effectiveTargetId, contextUser, provider, preferredModelId, clientTools, priorTranscript,
-            configOverridesJson, maxSessionSeconds,
+            configOverridesJson, maxSessionSeconds, applicationId, this.parseAppContext(appContextJson),
         );
         // Best-effort restore of the PRIOR session's persisted channel states (e.g. the whiteboard
         // board). Strictly tolerant — any problem yields a null field, never a failed start.
@@ -463,6 +499,9 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             {
                 AgentSessionID: agentSessionId,
                 TargetAgentID: config.targetAgentID,
+                // Multi-target (Move 4): the session's persisted allowed-agent union — a model-named
+                // colleague in the call is validated against this; absent ⇒ single-target behavior.
+                AllowedAgents: config.allowedAgents,
                 // Nest the delegated target-agent run under the co-agent observability run (when present).
                 ParentRunID: config.coAgentRunID,
                 Call: { CallID: callId, ToolName: toolName, Arguments: argsJson },
@@ -541,6 +580,8 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             pendingFeedbackRunID: pausedRunID,
             // Preserve the server-authoritative voice deadline across config rewrites.
             maxSessionDeadlineIso: config.maxSessionDeadlineIso,
+            applicationID: config.applicationID,
+            allowedAgents: config.allowedAgents,
         };
         session.Config_ = JSON.stringify(next);
         if (!(await session.Save())) {
@@ -1513,6 +1554,8 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         priorTranscript?: string,
         configOverridesJson?: string,
         maxSessionSeconds?: number,
+        applicationId?: string,
+        appContext?: AppContextSnapshot,
     ): Promise<StartRealtimeClientSessionResult> {
         const prep = await this.clientSessionService.PrepareClientSession(
             {
@@ -1536,6 +1579,10 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 PriorTranscript: priorTranscript,
                 // Pre-authorized runtime override layer (assertRuntimeOverridesAuthorized gated it).
                 ConfigOverridesJson: configOverridesJson,
+                // App awareness (Move 1/3/4): the app sources the app cascade layer + RelevantAgents
+                // (allowed-agent union); the snapshot is injected into the system prompt at mint.
+                ApplicationID: applicationId,
+                AppContext: appContext,
             },
             contextUser,
             provider,
@@ -1547,7 +1594,10 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             throw new Error(prep.ErrorMessage ?? 'Failed to prepare the client realtime session.');
         }
 
-        await this.persistObservabilityRunIDs(session, targetAgentId, prep.CoAgentRunID, prep.PromptRunID, prep.CoAgentRunStepID);
+        await this.persistObservabilityRunIDs(
+            session, targetAgentId, prep.CoAgentRunID, prep.PromptRunID, prep.CoAgentRunStepID,
+            applicationId, prep.EffectiveConfig?.realtime?.allowedAgents,
+        );
 
         const cfg = prep.ClientConfig;
         return {
@@ -1577,6 +1627,8 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         coAgentRunID?: string,
         promptRunID?: string,
         coAgentRunStepID?: string,
+        applicationID?: string,
+        allowedAgents?: RealtimeAllowedAgent[],
     ): Promise<void> {
         // Preserve any server-authoritative voice deadline stamped at session start (this rebuilds the
         // full config, so read the existing value forward rather than dropping it).
@@ -1587,6 +1639,8 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             promptRunID,
             coAgentRunStepID,
             maxSessionDeadlineIso: existing?.maxSessionDeadlineIso,
+            applicationID,
+            allowedAgents: allowedAgents && allowedAgents.length > 0 ? allowedAgents : undefined,
         };
         session.Config_ = JSON.stringify(config);
         const saved = await session.Save();
@@ -2218,6 +2272,28 @@ export class RealtimeClientSessionResolver extends ResolverBase {
     }
 
     /**
+     * Tolerantly parses the `appContextJson` mutation arg into an {@link AppContextSnapshot}. Returns
+     * `undefined` for absent/blank/malformed/non-object payloads — app context is best-effort enrichment
+     * and must never fail a session start.
+     *
+     * @param appContextJson The raw JSON string the browser sent, or undefined.
+     * @returns The parsed snapshot, or `undefined`.
+     */
+    private parseAppContext(appContextJson?: string): AppContextSnapshot | undefined {
+        if (!appContextJson || !appContextJson.trim()) {
+            return undefined;
+        }
+        try {
+            const parsed: unknown = JSON.parse(appContextJson);
+            return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+                ? (parsed as AppContextSnapshot)
+                : undefined;
+        } catch {
+            return undefined;
+        }
+    }
+
+    /**
      * Tolerantly parses + validates client-declared UI tool definitions (see the SECURITY NOTE on
      * {@link StartRealtimeClientSession}). Never throws — any rejection logs and returns
      * `undefined` (the session simply minted without client tools):
@@ -2291,6 +2367,8 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                             typeof parsed.pendingFeedbackRunID === 'string' ? parsed.pendingFeedbackRunID : undefined,
                         maxSessionDeadlineIso:
                             typeof parsed.maxSessionDeadlineIso === 'string' ? parsed.maxSessionDeadlineIso : undefined,
+                        applicationID: typeof parsed.applicationID === 'string' ? parsed.applicationID : undefined,
+                        allowedAgents: Array.isArray(parsed.allowedAgents) ? parsed.allowedAgents : undefined,
                     };
                 }
             } catch {

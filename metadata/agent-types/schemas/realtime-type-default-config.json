@@ -1,6 +1,7 @@
 {
   "realtime": {
     "allowUserModelOverride": true,
+    "disclosure": "mention",
     "narration": {
       "paceMs": 8000
     },

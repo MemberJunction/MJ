@@ -21,6 +21,7 @@
     "packages/AI/AgentManager/*",
     "packages/AI/DatabaseDesigner/*",
     "packages/AI/FormBuilder/*",
+    "packages/AI/PredictiveStudio/*",
     "packages/AI/AICLI",
     "packages/Communication/*",
     "packages/Communication/providers/*",
@@ -91,6 +92,7 @@
     "check:ui-buttons": "./.github/scripts/check-mj-btn-override.sh",
     "check:ui:all": "./.github/scripts/check-css-hex-tokens.sh --all && ./.github/scripts/check-mj-btn-override.sh --all",
     "check:ui:adoption": "./scripts/measure-ui-adoption.sh",
+    "check:alerts": "./.github/scripts/check-alerts.sh",
     "change": "changeset",
     "version": "changeset version",
     "mergemain": "node ci/merge_main.mjs",
@@ -102,7 +104,8 @@
     "test:analytics": "node unit-testing/tools/run-all-tests.js",
     "test:aggregate": "node unit-testing/tools/aggregate-results.js ",
     "test:markdown": "node unit-testing/tools/generate-markdown.js ",
-    "test:integration": "tsx packages/MJServer/integration-test-scripts/run-all.ts"
+    "test:integration": "tsx packages/MJServer/integration-test-scripts/run-all.ts",
+    "test:e2e": "playwright test --config e2e/playwright.config.ts"
   },
   "repository": {
     "type": "git",
@@ -118,6 +121,7 @@
     "@analogjs/vite-plugin-angular": "^2.6.1",
     "@angular/build": "21.1.3",
     "@changesets/cli": "^2.27.12",
+    "@playwright/test": "^1.58.1",
     "@typescript-eslint/eslint-plugin": "7.12.0",
     "@typescript-eslint/parser": "7.12.0",
     "@vitest/coverage-v8": "^4.0.18",
@@ -125,6 +129,7 @@
     "browserslist": "4.28.1",
     "caniuse-lite": "^1.0.30001764",
     "cpy-cli": "^5.0.0",
+    "dotenv": "^17.2.4",
     "eslint": "8.56.0",
     "eslint-config-prettier": "9.1.0",
     "eslint-import-resolver-typescript": "~3.5.2",

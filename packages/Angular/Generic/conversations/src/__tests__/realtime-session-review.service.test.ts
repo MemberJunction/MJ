@@ -2,10 +2,10 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { Subject } from 'rxjs';
 import { IMetadataProvider, RunView, RunViewParams } from '@memberjunction/core';
 import type {
-  VoiceCaption,
-  VoiceDelegationNarration,
-  VoiceDelegationProgress,
-  VoiceDelegationResult
+  RealtimeCaption,
+  RealtimeDelegationNarration,
+  RealtimeDelegationProgress,
+  RealtimeDelegationResult
 } from '../lib/services/realtime-session.service';
 import {
   BuildReviewDelegationCard,
@@ -730,12 +730,12 @@ describe('RealtimeSessionState.StartLiveContinuation', () => {
 
   it('resets the caption bookkeeping so the NEW session\'s captions append AFTER the divider', () => {
     const state = loadedState();
-    const captions$ = new Subject<VoiceCaption[]>();
+    const captions$ = new Subject<RealtimeCaption[]>();
     state.Attach({
       Captions$: captions$.asObservable(),
-      DelegationProgress$: new Subject<VoiceDelegationProgress>().asObservable(),
-      DelegationResult$: new Subject<VoiceDelegationResult>().asObservable(),
-      DelegationNarration$: new Subject<VoiceDelegationNarration>().asObservable()
+      DelegationProgress$: new Subject<RealtimeDelegationProgress>().asObservable(),
+      DelegationResult$: new Subject<RealtimeDelegationResult>().asObservable(),
+      DelegationNarration$: new Subject<RealtimeDelegationNarration>().asObservable()
     });
 
     state.StartLiveContinuation();

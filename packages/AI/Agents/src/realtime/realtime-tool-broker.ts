@@ -24,6 +24,7 @@
 
 import { RealtimeToolCall } from '@memberjunction/ai';
 import { AgentExecutionProgressCallback } from '@memberjunction/ai-core-plus';
+import { RealtimeDisclosurePolicy } from './realtime-coagent-config';
 
 /**
  * The stable name of the primary tool every Realtime Co-Agent registers with the realtime provider.
@@ -44,20 +45,107 @@ export const INVOKE_TARGET_AGENT_TOOL_NAME = 'invoke-target-agent';
  * host; that is exactly the drift the convergence removed. See
  * `plans/realtime/realtime-core-host-convergence.md`.
  *
- * @param targetName The TARGET agent's display name (what the agent identifies AS). Callers pass a clear
- *   fallback (e.g. "the configured target agent") when no distinct target is resolved.
+ * @param targetName The LEAD agent's display name (what the co-agent identifies AS — "who the voice is").
+ *   Callers pass a clear fallback (e.g. "the configured target agent") when no distinct lead is resolved.
  * @param interactiveSurfaceClause Optional trailing clause for host UX tools the co-agent drives itself
  *   (browser/whiteboard); empty for pure-voice hosts. Appended verbatim (lead with a space).
+ * @param colleagues Optional set of OTHER agents the lead may delegate to (the union-accumulated
+ *   allowed-agent set; Move 4). When non-empty, a "colleagues" clause is appended naming each and the
+ *   per-target disclosure guidance. Empty/omitted ⇒ the classic single-target framing, byte-identical.
  * @returns The identity framing paragraph.
  */
-export function BuildRealtimeAgentFraming(targetName: string, interactiveSurfaceClause = ''): string {
+export function BuildRealtimeAgentFraming(
+    targetName: string,
+    interactiveSurfaceClause = '',
+    colleagues: RealtimeColleague[] = []
+): string {
     return (
         `You are the real-time voice for the agent "${targetName}". Hold a natural, low-latency ` +
         `conversation with the user, always speaking in the FIRST PERSON as ${targetName} — own the work ` +
         `("I'm pulling that up", "I found three matches"); never refer to ${targetName} or the work in the ` +
         `third person. When actual work is required, call the '${INVOKE_TARGET_AGENT_TOOL_NAME}' ` +
         `tool and narrate progress while it runs — do not attempt to do the work yourself.` +
+        BuildColleaguesClause(colleagues) +
+        BuildTourGuidanceClause() +
         interactiveSurfaceClause
+    );
+}
+
+/**
+ * The co-agent's "give me a tour" play, appended to {@link BuildRealtimeAgentFraming} so EVERY host
+ * gets it identically. It teaches the agent how to *guide* a user through an app (or several) using
+ * its existing capabilities — its navigation tool and the on-screen actions listed in the live
+ * app-context manifest — with deliberate PACING. The emphasis is depth over breadth: stop, show a
+ * little, actually do something, pause, then move on — never a rushed flyover.
+ *
+ * Kept as its own clause (not inlined) so it can later be lifted into a dedicated Tour skill once
+ * that agent primitive exists, without disturbing the identity framing.
+ */
+export function BuildTourGuidanceClause(): string {
+    return (
+        ` GIVING A TOUR: When the user asks for a tour, a walkthrough, a demo, or to be "shown around" ` +
+        `(one app or several), become a guide and PACE YOURSELF — never rush or zip through. Work one ` +
+        `stop at a time. For each stop: (1) navigate there using your navigation tool to open the app or ` +
+        `section; (2) say where you are and what it's for in a sentence or two; (3) call out two or three ` +
+        `of its most useful capabilities in plain, benefit-led language; (4) actually DEMONSTRATE — invoke ` +
+        `one or two of the interesting on-screen actions available to you here (run a search, open a ` +
+        `record, switch a view) so the user sees it work, narrating what you're doing as you do it; ` +
+        `(5) PAUSE — invite a question or a quick "ready to move on?" before continuing. Spend a real beat ` +
+        `on each stop (a handful of sentences plus an action or two), then move to the next. Favor depth ` +
+        `over breadth — pick the few things that best show what the section can do rather than listing ` +
+        `everything. When touring multiple apps, give each its own stop and close with a short recap of ` +
+        `where you've been and where the user might go next. If an action needs the user's confirmation ` +
+        `or input, ask first rather than committing anything on their behalf.`
+    );
+}
+
+/**
+ * A colleague agent the lead co-agent may delegate to (a member of the effective allowed-agent
+ * union), with the disclosure policy that governs how the handoff is narrated.
+ */
+export interface RealtimeColleague {
+    /** The colleague agent's display name, used to address it in `invoke-target-agent` and in narration. */
+    name: string;
+    /** Short description of what the colleague does — helps the model decide when to delegate. */
+    description?: string;
+    /** How to narrate a handoff to THIS colleague (per-target override already resolved). */
+    disclosure: RealtimeDisclosurePolicy;
+}
+
+/**
+ * Builds the trailing "colleagues" clause for {@link BuildRealtimeAgentFraming} from the allowed-agent
+ * union. Names each colleague (+ description), tells the model to pass the colleague's name in the
+ * `invoke-target-agent` arguments when their expertise fits, and encodes the per-target disclosure:
+ * `mention` ⇒ name the handoff aloud; `silent` ⇒ absorb and speak the result as your own;
+ * `hand-voice` ⇒ (reserved) hand the mic over. Returns '' when there are no colleagues.
+ *
+ * @param colleagues The resolved colleague set (empty ⇒ no clause).
+ * @returns The clause text (leads with a space so it appends cleanly), or ''.
+ */
+export function BuildColleaguesClause(colleagues: RealtimeColleague[]): string {
+    if (!colleagues || colleagues.length === 0) {
+        return '';
+    }
+    const lines = colleagues.map((c) => {
+        const desc = c.description ? ` — ${c.description}` : '';
+        let how: string;
+        switch (c.disclosure) {
+            case 'silent':
+                how = 'delegate to them silently and speak their result as your own (do not mention the handoff)';
+                break;
+            case 'hand-voice':
+                how = 'hand the conversation over to them';
+                break;
+            case 'mention':
+            default:
+                how = `briefly say you're bringing them in (e.g. "let me get ${c.name} on this") before delegating`;
+                break;
+        }
+        return `  - "${c.name}"${desc}: ${how}.`;
+    });
+    return (
+        ` You can also call on colleagues when their expertise fits — pass the colleague's name in the ` +
+        `'${INVOKE_TARGET_AGENT_TOOL_NAME}' arguments. Your colleagues:\n${lines.join('\n')}`
     );
 }
 
