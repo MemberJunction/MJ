@@ -138,6 +138,7 @@ export interface GridViewConfig {
       (AddToListRequested)="onAddToListRequested($event)"
       (ForeignKeyClick)="onForeignKeyClick($event)"
       (PageChange)="onPageChange($event)"
+      (ManageColumnsRequested)="configureRequested.emit()"
     >
     </mj-entity-data-grid>
 
@@ -235,6 +236,14 @@ export class GridViewRendererComponent extends BaseAngularComponent implements I
 
   /** Generic data-access channel: ask the host to re-load with different sort / page. */
   @Output() dataRequest = new EventEmitter<ViewDataRequest>();
+
+  /**
+   * Ask the host to open this view's configuration UI. Raised when the grid emits
+   * `ManageColumnsRequested` (its "Manage Columns" toolbar affordance). Part of the generic
+   * {@link IViewRenderer} contract; the container forwards it to the workspace, which opens the
+   * config panel (Columns tab) — the canonical column editor.
+   */
+  @Output() configureRequested = new EventEmitter<void>();
 
   /**
    * NAVIGATION: open a related record on a (possibly different) entity from a foreign-key cell click.
