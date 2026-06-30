@@ -1517,10 +1517,14 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   }
 
   /**
-   * Toggle a section's collapsed state in the Add Pin panel
+   * Set a section's collapsed state in the Add Pin panel from the accordion
+   * panel's (ExpandedChange) output. The accordion reports the EXPANDED state,
+   * which is the inverse of our stored COLLAPSED flag. OnPush component, so
+   * mark for check after mutating the map.
    */
-  TogglePanelSection(section: string): void {
-    this.PanelSectionCollapsed[section] = !this.PanelSectionCollapsed[section];
+  OnPanelSectionExpandedChange(section: string, expanded: boolean): void {
+    this.PanelSectionCollapsed[section] = !expanded;
+    this.cdr.markForCheck();
   }
 
   /**

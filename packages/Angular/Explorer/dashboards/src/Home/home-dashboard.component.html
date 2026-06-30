@@ -356,13 +356,14 @@
           } @else {
             <!-- Apps with Nav Items -->
             @if (FilterApps().length > 0) {
-              <div class="panel-section">
-                <div class="panel-section-title collapsible" (click)="TogglePanelSection('apps')">
+              <mj-accordion-panel class="panel-section" Size="sm" [FlushBody]="true"
+                  [Expanded]="!PanelSectionCollapsed['apps']"
+                  (ExpandedChange)="OnPanelSectionExpandedChange('apps', $event)">
+                <ng-template mjAccordionTitle>
                   <i class="fa-solid fa-grid-2"></i> Applications
                   <span class="panel-count">{{ FilterApps().length }}</span>
-                  <i class="section-chevron fa-solid" [class.fa-chevron-down]="!PanelSectionCollapsed['apps']" [class.fa-chevron-right]="PanelSectionCollapsed['apps']"></i>
-                </div>
-                @if (!PanelSectionCollapsed['apps']) {
+                </ng-template>
+                <ng-template mjAccordionBody>
                   @for (app of FilterApps(); track app.appId) {
                     <div class="panel-app-header" [style.--panel-app-color]="app.color">
                       <div class="panel-app-icon">
@@ -390,19 +391,20 @@
                       </div>
                     }
                   }
-                }
-              </div>
+                </ng-template>
+              </mj-accordion-panel>
             }
 
             <!-- Dashboards (metadata-driven Config type only) -->
             @if (FilterPanelItems(AvailableDashboards).length > 0) {
-              <div class="panel-section">
-                <div class="panel-section-title collapsible" (click)="TogglePanelSection('dashboards')">
+              <mj-accordion-panel class="panel-section" Size="sm" [FlushBody]="true"
+                  [Expanded]="!PanelSectionCollapsed['dashboards']"
+                  (ExpandedChange)="OnPanelSectionExpandedChange('dashboards', $event)">
+                <ng-template mjAccordionTitle>
                   <i class="fa-solid fa-gauge-high"></i> Dashboards
                   <span class="panel-count">{{ FilterPanelItems(AvailableDashboards).length }}</span>
-                  <i class="section-chevron fa-solid" [class.fa-chevron-down]="!PanelSectionCollapsed['dashboards']" [class.fa-chevron-right]="PanelSectionCollapsed['dashboards']"></i>
-                </div>
-                @if (!PanelSectionCollapsed['dashboards']) {
+                </ng-template>
+                <ng-template mjAccordionBody>
                   @for (item of FilterPanelItems(AvailableDashboards); track item.id) {
                     <div class="panel-item">
                       <div class="panel-item-icon" style="background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface-card))">
@@ -422,19 +424,20 @@
                       </div>
                     </div>
                   }
-                }
-              </div>
+                </ng-template>
+              </mj-accordion-panel>
             }
 
             <!-- Views -->
             @if (FilterPanelItems(AvailableViews).length > 0) {
-              <div class="panel-section">
-                <div class="panel-section-title collapsible" (click)="TogglePanelSection('views')">
+              <mj-accordion-panel class="panel-section" Size="sm" [FlushBody]="true"
+                  [Expanded]="!PanelSectionCollapsed['views']"
+                  (ExpandedChange)="OnPanelSectionExpandedChange('views', $event)">
+                <ng-template mjAccordionTitle>
                   <i class="fa-solid fa-table-list"></i> Views
                   <span class="panel-count">{{ FilterPanelItems(AvailableViews).length }}</span>
-                  <i class="section-chevron fa-solid" [class.fa-chevron-down]="!PanelSectionCollapsed['views']" [class.fa-chevron-right]="PanelSectionCollapsed['views']"></i>
-                </div>
-                @if (!PanelSectionCollapsed['views']) {
+                </ng-template>
+                <ng-template mjAccordionBody>
                   @for (item of FilterPanelItems(AvailableViews); track item.id) {
                     <div class="panel-item">
                       <div class="panel-item-icon" style="background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface-card))">
@@ -455,19 +458,20 @@
                       </div>
                     </div>
                   }
-                }
-              </div>
+                </ng-template>
+              </mj-accordion-panel>
             }
 
             <!-- Queries -->
             @if (FilterPanelItems(AvailableQueries).length > 0) {
-              <div class="panel-section">
-                <div class="panel-section-title collapsible" (click)="TogglePanelSection('queries')">
+              <mj-accordion-panel class="panel-section" Size="sm" [FlushBody]="true"
+                  [Expanded]="!PanelSectionCollapsed['queries']"
+                  (ExpandedChange)="OnPanelSectionExpandedChange('queries', $event)">
+                <ng-template mjAccordionTitle>
                   <i class="fa-solid fa-database"></i> Queries
                   <span class="panel-count">{{ FilterPanelItems(AvailableQueries).length }}</span>
-                  <i class="section-chevron fa-solid" [class.fa-chevron-down]="!PanelSectionCollapsed['queries']" [class.fa-chevron-right]="PanelSectionCollapsed['queries']"></i>
-                </div>
-                @if (!PanelSectionCollapsed['queries']) {
+                </ng-template>
+                <ng-template mjAccordionBody>
                   @for (item of FilterPanelItems(AvailableQueries); track item.id) {
                     <div class="panel-item">
                       <div class="panel-item-icon" style="background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface-card))">
@@ -487,19 +491,20 @@
                       </div>
                     </div>
                   }
-                }
-              </div>
+                </ng-template>
+              </mj-accordion-panel>
             }
 
             <!-- Quick Actions -->
             @if (FilterPanelItems(AvailableActions).length > 0) {
-              <div class="panel-section">
-                <div class="panel-section-title collapsible" (click)="TogglePanelSection('actions')">
+              <mj-accordion-panel class="panel-section" Size="sm" [FlushBody]="true"
+                  [Expanded]="!PanelSectionCollapsed['actions']"
+                  (ExpandedChange)="OnPanelSectionExpandedChange('actions', $event)">
+                <ng-template mjAccordionTitle>
                   <i class="fa-solid fa-bolt"></i> Quick Actions
                   <span class="panel-count">{{ FilterPanelItems(AvailableActions).length }}</span>
-                  <i class="section-chevron fa-solid" [class.fa-chevron-down]="!PanelSectionCollapsed['actions']" [class.fa-chevron-right]="PanelSectionCollapsed['actions']"></i>
-                </div>
-                @if (!PanelSectionCollapsed['actions']) {
+                </ng-template>
+                <ng-template mjAccordionBody>
                   @for (item of FilterPanelItems(AvailableActions); track item.id) {
                     <div class="panel-item">
                       <div class="panel-item-icon" style="background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface-card))">
@@ -518,8 +523,8 @@
                       </div>
                     </div>
                   }
-                }
-              </div>
+                </ng-template>
+              </mj-accordion-panel>
             }
           }
         </div>
