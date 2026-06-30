@@ -230,6 +230,7 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
     ngOnDestroy(): void {
         this._destroy$.next();
         this._destroy$.complete();
+        this.cancelDeferredLayoutInit();
         this.destroyLayout();
     }
 
@@ -566,6 +567,22 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
             return;
         }
 
+        const el = this.layoutContainer.nativeElement;
+        const rect = el.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) {
+            // The container has no size yet — typically because Explorer is reattaching
+            // this cached resource component on browser back/forward and the pane hasn't
+            // been laid out. GoldenLayout never fires its 'show' event for a zero-size
+            // container, so each panel's lazy content factory never runs and the panel is
+            // stuck on "Loading…" forever (the React component inside never even mounts).
+            // Defer init until the container actually has a size, then build the layout.
+            this.deferLayoutInitUntilSized(el);
+            return;
+        }
+
+        // We're proceeding with a real init — cancel any pending deferred attempt.
+        this.cancelDeferredLayoutInit();
+
         // Destroy existing layout
         this.destroyLayout();
 
@@ -600,6 +617,35 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
             this._glService?.updateSize();
             this.cdr.detectChanges();
         }, 100);
+    }
+
+    /** ResizeObserver used to wait for a zero-size container to gain a size before init. */
+    private _layoutSizeObserver: ResizeObserver | null = null;
+
+    /**
+     * Wait (via ResizeObserver) until the layout container has a non-zero size, then
+     * (re)initialize. Used when initializeLayout() is called while the container is
+     * still 0×0 — e.g. during a cached-component reattach on browser back/forward —
+     * where GoldenLayout would otherwise bind panels that never receive a 'show' event.
+     */
+    private deferLayoutInitUntilSized(el: HTMLElement): void {
+        this.cancelDeferredLayoutInit();
+        const ro = new ResizeObserver(() => {
+            const r = el.getBoundingClientRect();
+            if (r.width > 0 && r.height > 0) {
+                this.cancelDeferredLayoutInit();
+                this.initializeLayout();
+            }
+        });
+        ro.observe(el);
+        this._layoutSizeObserver = ro;
+    }
+
+    private cancelDeferredLayoutInit(): void {
+        if (this._layoutSizeObserver) {
+            this._layoutSizeObserver.disconnect();
+            this._layoutSizeObserver = null;
+        }
     }
 
     /** Flag to prevent panel removal during layout reinit */
