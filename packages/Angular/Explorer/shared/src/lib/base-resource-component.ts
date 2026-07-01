@@ -138,7 +138,13 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
      */
     protected UpdateQueryParams(params: Record<string, string | null>): void {
         if (this._suppressQueryParamSync) return;
-        this.navigationService.UpdateActiveTabQueryParams(params);
+        const tabId = this.getTabId();
+        if (!tabId) {
+            this.navigationService.UpdateActiveTabQueryParams(params);
+            return;
+        }
+
+        this.navigationService.UpdateTabQueryParams(tabId, params, this.getQueryParamUpdateGuard());
     }
 
     /**
@@ -227,6 +233,23 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
      */
     public getTabId(): string {
         return this.ParentTabId || this.Data?.Configuration?.['tabId'] as string || '';
+    }
+
+    private getQueryParamUpdateGuard(): {
+        resourceType?: string | null;
+        driverClass?: string | null;
+        recordId?: string | null;
+        navItemName?: string | null;
+        entity?: string | null;
+    } {
+        const config = this.Data?.Configuration || {};
+        return {
+            resourceType: config['resourceType'] as string | undefined,
+            driverClass: (config['resourceTypeDriverClass'] || config['driverClass']) as string | undefined,
+            recordId: (this.Data?.ResourceRecordID || config['recordId']) as string | undefined,
+            navItemName: config['navItemName'] as string | undefined,
+            entity: (config['Entity'] || config['entity']) as string | undefined
+        };
     }
 
     protected NotifyLoadComplete() {

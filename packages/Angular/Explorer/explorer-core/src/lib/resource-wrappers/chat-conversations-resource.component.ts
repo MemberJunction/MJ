@@ -572,8 +572,9 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     // (the live-tested "stuck overlay" bug).
     queryParams['realtimeSessionId'] = null;
 
-    // Use NavigationService to update query params properly
-    this.navigationService.UpdateActiveTabQueryParams(queryParams);
+    // Use the resource-scoped helper so a cached conversation component cannot
+    // write conversation params onto a tab that has since been reused for a record.
+    this.UpdateQueryParams(queryParams);
   }
 
   /**
