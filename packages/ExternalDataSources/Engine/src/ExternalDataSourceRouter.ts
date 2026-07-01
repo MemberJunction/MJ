@@ -24,7 +24,11 @@ export interface ResolvedExternalDataSource {
  * neither of which exists in the browser.
  */
 export class ExternalDataSourceRouter extends BaseSingleton<ExternalDataSourceRouter> {
-  private driverCache = new Map<string, ResolvedExternalDataSource>();
+  // Cache the in-flight RESOLUTION promise (not the resolved value) so concurrent first-requests for
+  // one data source share a single driver instead of each building its own and orphaning all but the
+  // last — an orphaned driver's pools (live remote connections for SQL Server) would then leak, since
+  // ClearCache only ever sees the winner. Same cold-start race fix as the per-driver connection cache.
+  private driverCache = new Map<string, Promise<ResolvedExternalDataSource>>();
 
   protected constructor() {
     super();
@@ -44,11 +48,27 @@ export class ExternalDataSourceRouter extends BaseSingleton<ExternalDataSourceRo
     contextUser?: UserInfo,
     provider?: IMetadataProvider,
   ): Promise<ResolvedExternalDataSource> {
-    const cached = this.driverCache.get(dataSourceId);
-    if (cached) {
-      return cached;
+    const existing = this.driverCache.get(dataSourceId);
+    if (existing) {
+      return existing;
     }
+    const creating = this.createResolved(dataSourceId, contextUser, provider);
+    this.driverCache.set(dataSourceId, creating);
+    // Never cache a failed resolution — evict so the next call retries (the rejection still propagates).
+    creating.catch(() => {
+      if (this.driverCache.get(dataSourceId) === creating) {
+        this.driverCache.delete(dataSourceId);
+      }
+    });
+    return creating;
+  }
 
+  /** Load + validate the data source and instantiate its driver — invoked once per source by the race-safe cache. */
+  private async createResolved(
+    dataSourceId: string,
+    contextUser?: UserInfo,
+    provider?: IMetadataProvider,
+  ): Promise<ResolvedExternalDataSource> {
     const md = provider ?? Metadata.Provider;
     if (!md) {
       throw new Error('No metadata provider available to resolve external data source.');
@@ -78,9 +98,7 @@ export class ExternalDataSourceRouter extends BaseSingleton<ExternalDataSourceRo
       );
     }
 
-    const resolved: ResolvedExternalDataSource = { dataSource, dataSourceType, driver };
-    this.driverCache.set(dataSourceId, resolved);
-    return resolved;
+    return { dataSource, dataSourceType, driver };
   }
 
   /** Evict a cached driver (or all of them) — e.g. after editing a data source's config. */
