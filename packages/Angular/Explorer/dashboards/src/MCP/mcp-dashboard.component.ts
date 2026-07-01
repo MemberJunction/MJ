@@ -396,6 +396,10 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     // Log detail panel state
     public ShowLogDetailPanel = false;
     public SelectedLog: MCPExecutionLogData | null = null;
+    // Collapsible state for the log detail sections (Input Args / Result / Error)
+    public LogInputArgsExpanded = true;
+    public LogResultExpanded = true;
+    public LogErrorExpanded = true;
 
     // Expandable server/connection cards
     public ExpandedServerID: string | null = null;

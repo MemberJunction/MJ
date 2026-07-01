@@ -125,11 +125,13 @@ describe('resolveRealtimeUi — defaults & compactness', () => {
 describe('resolveRealtimeUi — per-affordance gating (flag AND runtime)', () => {
   const consoleSig = signals({ containerWidthPx: 1000, textRevealed: true, disclosureShowPanel: true, surfacePanelEarned: true, disclosureShowComposer: true, disclosureShowGear: true });
 
-  it('surface panel needs the flag, console, disclosure permission AND an earned panel', () => {
+  it('surface panel needs the flag + console + an earned panel — but NOT the disclosure level (the on-demand Details/agent door)', () => {
     expect(resolveRealtimeUi(undefined, consoleSig).showSurfacePanel).toBe(true);
     expect(resolveRealtimeUi({ showSurfacePanel: false }, consoleSig).showSurfacePanel).toBe(false);
     expect(resolveRealtimeUi(undefined, { ...consoleSig, surfacePanelEarned: false }).showSurfacePanel).toBe(false);
-    expect(resolveRealtimeUi(undefined, { ...consoleSig, disclosureShowPanel: false }).showSurfacePanel).toBe(false);
+    // A brand-new user (disclosure level 0) who clicks Details — or has the AGENT open the panel — earns it
+    // on demand (surfacePanelEarned) and must see it IMMEDIATELY, without the cross-session level ratchet.
+    expect(resolveRealtimeUi(undefined, { ...consoleSig, disclosureShowPanel: false }).showSurfacePanel).toBe(true);
     // not in orb chrome
     expect(resolveRealtimeUi({ chrome: 'orb' }, consoleSig).showSurfacePanel).toBe(false);
   });
