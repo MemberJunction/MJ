@@ -47,6 +47,10 @@ export class MessageInputBoxComponent {
   @Input() voiceActive: boolean = false;
   /** Whether a voice session can be started right now (mic disabled when false). */
   @Input() canStartRealtime: boolean = true;
+  /** Shows the in-composer Plan Mode toggle button when true. */
+  @Input() enablePlanMode: boolean = false;
+  /** Current Plan Mode toggle state (renders the button in its active state). */
+  @Input() planModeActive: boolean = false;
 
   @Output() textSubmitted = new EventEmitter<string>();
   @Output() valueChange = new EventEmitter<string>();
@@ -62,6 +66,8 @@ export class MessageInputBoxComponent {
    * without adding friction to the plain phone click's instant-start path.
    */
   @Output() voiceOptionsRequested = new EventEmitter<void>();
+  /** Emitted when the user clicks the in-composer Plan Mode toggle button. */
+  @Output() planModeToggle = new EventEmitter<void>();
 
   onRealtimeClick(): void {
     this.voiceRequested.emit();

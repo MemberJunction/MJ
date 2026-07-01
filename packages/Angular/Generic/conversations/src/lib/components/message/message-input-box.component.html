@@ -19,9 +19,22 @@
       (attachmentClicked)="onAttachmentClicked($event)">
     </mj-mention-editor>
 
-    <!-- Attach + voice buttons - Positioned over editor -->
-    @if (enableAttachments || enableRealtime) {
+    <!-- Attach + voice + plan-mode buttons - Positioned over editor -->
+    @if (enableAttachments || enableRealtime || enablePlanMode) {
       <div class="attach-buttons">
+        @if (enablePlanMode) {
+        <button
+          class="attach-button-icon plan-mode-button-icon"
+          [class.plan-mode-button-icon--active]="planModeActive"
+          [disabled]="disabled"
+          [attr.aria-pressed]="planModeActive"
+          (click)="planModeToggle.emit(); $event.stopPropagation()"
+          [title]="planModeActive ? 'Plan Mode ON — the agent presents a plan for your approval before it acts' : 'Plan Mode: have the agent present a plan for your approval before it acts'"
+          aria-label="Toggle Plan Mode"
+          >
+          <i class="fa-solid fa-list-check" aria-hidden="true"></i>
+        </button>
+        }
         @if (enableAttachments) {
         <button
           class="attach-button-icon"
@@ -32,33 +45,16 @@
           <i class="fa-solid fa-paperclip"></i>
         </button>
         <!--
-          TODO: "Attach artifact from library" button is not yet wired.
-
-          Current state (2026-04-15): emits `artifactPickerRequested` but no
-          consumer handles the event (handler was removed by commit 0a4612abf1,
-          orphaned template cleaned up in 7a063fc12a). Button is intentionally
-          visible but disabled so it's obvious what's missing.
-
-          To finish: build a picker modal (suggested approach: wrap the
-          `<mj-tree-dropdown>` used in dashboard-viewer's artifact-config-panel)
-          and on selection, attach the artifact version as a Direction='Input'
-          MJConversationDetailArtifact junction on the outgoing message.
-          The infrastructure for agents reading input artifacts is already in
-          place via AgentRunner.gatherConversationArtifacts().
-
-          See also: packages/Angular/Generic/artifacts/src/lib/services/analyze-artifact.service.ts
-          which does the similar end-to-end flow for standalone Analyze — the
-          attach-to-draft path is a strict subset (no artifact creation, no
-          conversation creation, just the junction).
+          "Attach artifact from library" (fa-cube) button was here but is NOT wired
+          (emits `artifactPickerRequested` with no consumer — see commit 0a4612abf1).
+          Hidden 2026-07-01 because a disabled, no-op button confused users. The
+          method + output are retained for whoever wires the picker. To restore, add
+          back a button that calls `openArtifactPicker()`. Original plan: wrap the
+          `<mj-tree-dropdown>` from dashboard-viewer's artifact-config-panel and, on
+          selection, attach the artifact version as a Direction='Input'
+          MJConversationDetailArtifact junction (agents already read input artifacts
+          via AgentRunner.gatherConversationArtifacts()).
         -->
-        <button
-          class="attach-button-icon attach-artifact-button"
-          [disabled]="true"
-          (click)="openArtifactPicker(); $event.stopPropagation()"
-          title="Attach artifact from library — not yet wired (see message-input-box.component.html TODO)"
-          >
-          <i class="fa-solid fa-cube"></i>
-        </button>
         }
         @if (enableRealtime) {
         <button
