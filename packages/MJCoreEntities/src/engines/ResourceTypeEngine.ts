@@ -39,7 +39,7 @@ export class ResourceTypeEngine extends BaseEngine<ResourceTypeEngine> {
     }
 
     public get ResourceTypes(): MJResourceTypeEntity[] {
-        return this._ResourceTypes;
+        return this.GetConfigData<MJResourceTypeEntity>('_ResourceTypes');
     }
     private _ResourceTypes: MJResourceTypeEntity[] = [];
 

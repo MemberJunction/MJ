@@ -234,11 +234,12 @@
                     <!-- IS-A Field Inspector: shows fields grouped by source entity -->
                     @if (isaFieldGroups.length > 1) {
                       <div class="isa-field-inspector">
-                        <div class="isa-chain-label clickable" (click)="isaFieldInspectorExpanded = !isaFieldInspectorExpanded">
-                          <i class="fa-solid" [ngClass]="isaFieldInspectorExpanded ? 'fa-chevron-down' : 'fa-chevron-right'"></i>
-                          Field Source Inspector
-                        </div>
-                        @if (isaFieldInspectorExpanded) {
+                        <mj-accordion-panel Size="sm" [FlushBody]="true"
+                          [Expanded]="isaFieldInspectorExpanded" (ExpandedChange)="isaFieldInspectorExpanded = $event">
+                          <ng-template mjAccordionTitle>
+                            <span>Field Source Inspector</span>
+                          </ng-template>
+                          <ng-template mjAccordionBody>
                           <div class="isa-inspector-groups">
                             @for (group of isaFieldGroups; track group.EntityName) {
                               <div class="isa-inspector-group" [class.own]="group.Level === 0" [class.inherited]="group.Level > 0">
@@ -264,7 +265,8 @@
                               </div>
                             }
                           </div>
-                        }
+                          </ng-template>
+                        </mj-accordion-panel>
                       </div>
                     }
                     <!-- Sibling Types -->
@@ -431,16 +433,15 @@
               @if (fieldViewMode === 'grouped') {
                 <div class="field-groups">
                   @for (group of getFilteredFieldGroups(); track group) {
-                    <div
-                      class="field-group"
-                      [class.expanded]="isFieldGroupExpanded(group.id)">
-                      <div class="group-header" (click)="toggleFieldGroup(group.id)">
-                        <i class="expand-icon fa-solid" [ngClass]="isFieldGroupExpanded(group.id) ? 'fa-chevron-down' : 'fa-chevron-right'"></i>
+                    <mj-accordion-panel Size="sm" [FlushBody]="true"
+                      [Expanded]="isFieldGroupExpanded(group.id)"
+                      (ExpandedChange)="onFieldGroupExpandedChange(group.id, $event)">
+                      <ng-template mjAccordionTitle>
                         <i [class]="group.icon" class="group-icon"></i>
                         <span class="group-label">{{ group.label }}</span>
-                        <span class="group-count">{{ group.fields.length }}</span>
-                      </div>
-                      @if (isFieldGroupExpanded(group.id)) {
+                        <span class="mj-accordion-badge mj-accordion-badge--right">{{ group.fields.length }}</span>
+                      </ng-template>
+                      <ng-template mjAccordionBody>
                         <div class="group-content">
                           @for (field of group.fields; track field) {
                             <div
@@ -487,8 +488,8 @@
                             </div>
                           }
                         </div>
-                      }
-                    </div>
+                      </ng-template>
+                    </mj-accordion-panel>
                   }
                 </div>
               }

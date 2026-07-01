@@ -117,87 +117,28 @@
   color: var(--mj-text-primary);
 }
 
-/* Collapsible Filter Expression Summary */
-.filter-expression-summary {
-  background: var(--mj-bg-surface-card);
-  border: 1px solid var(--mj-border-default);
-  border-radius: 8px;
-  margin-top: 8px;
-  transition: all 0.2s ease;
-}
+/* Collapsible Filter Expression Summary — chrome (wrapper, toggle button, and
+   chevron) is now owned by <mj-accordion-panel>. Only the projected title icon/
+   label/badge and the body content styles remain. */
 
-.filter-expression-summary.expanded {
-  background: var(--mj-bg-surface);
-  border-color: var(--mj-border-strong);
-}
-
-/* Toggle Button */
-.expression-toggle {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 12px 16px;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--mj-text-muted);
-  text-align: left;
-  transition: all 0.15s ease;
-}
-
-.expression-toggle:hover {
-  background: var(--mj-bg-surface-sunken);
-  color: var(--mj-text-primary);
-}
-
-.expression-toggle i:first-child {
-  font-size: 10px;
-  color: var(--mj-text-disabled);
-  width: 12px;
-  transition: transform 0.2s ease;
-}
-
+/* Title icon (projected into the accordion title slot). Note: the accordion owns
+   title-icon font-size (1em), so only color is set here. */
 .expression-icon {
   color: var(--mj-brand-primary);
-  font-size: 13px;
 }
 
+/* flex:1 pushes the count badge to the far right of the title row. */
 .expression-label {
   flex: 1;
 }
 
-.expression-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 20px;
-  height: 20px;
-  padding: 0 6px;
-  background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
-  color: var(--mj-brand-primary);
-  border-radius: 10px;
-  font-size: 11px;
-  font-weight: 600;
-}
+/* .expression-badge removed — replaced by the standard .mj-accordion-badge--right. */
 
-/* Expression Content */
+/* Expression Content (projected into the accordion body slot; FlushBody removes
+   the body's default padding, so this provides its own). Open/close animation is
+   now handled by the accordion. */
 .expression-content {
   padding: 0 16px 16px 16px;
-  animation: slideDown 0.2s ease;
-}
-
-@keyframes slideDown {
-  from {
-    opacity: 0;
-    transform: translateY(-8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }
 
 .expression-text {
@@ -302,9 +243,7 @@
     justify-content: center;
   }
 
-  .expression-toggle {
-    padding: 10px 12px;
-  }
+  /* .expression-toggle responsive padding removed — header is owned by the accordion. */
 
   .expression-content {
     padding: 0 12px 12px 12px;
