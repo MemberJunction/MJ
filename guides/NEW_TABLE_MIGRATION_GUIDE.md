@@ -1,0 +1,302 @@
+# Adding New Tables to MemberJunction — End-to-End Guide
+
+This guide walks through the complete process of adding a new table (or tables) to the MJ schema, from writing the initial DDL through capturing CodeGen output into a single, replayable migration file.
+
+## Why a Single Replayable Migration?
+
+When a customer or fresh install runs `mj migrate`, every migration file runs in timestamp order. If your DDL and the CodeGen output that follows from it are separate files, the ordering is fragile and the two pieces can drift apart. By consolidating everything into **one migration file**, you get:
+
+- **Guaranteed replay order** — the DDL and its CodeGen output always apply together
+- **Atomic review** — a reviewer sees the full picture in one diff
+- **Consistent state** — any database replaying the migration sequence ends up identical
+
+## Prerequisites
+
+- A **dedicated development database** (e.g., `MJ_<feature_name>`). Never run experimental migrations against a shared database.
+- Your local branch is up to date with `next` (pull latest before starting).
+- `mj` CLI installed and configured (`mj.config.cjs` or `.env` pointing at your dev database).
+
+---
+
+## Step-by-Step Workflow
+
+### 1. Write the Migration DDL
+
+Create a new migration file in `migrations/v5/`:
+
+```bash
+# Generate a timestamp
+date +"%Y%m%d%H%M"
+# e.g., 202607011430
+
+# Find the current version number (look at the most recent migration)
+ls migrations/v5/ | tail -5
+# e.g., latest is v5.44.x → your migration is v5.45.x
+```
+
+Name: `V202607011430__v5.45.x__My_New_Feature.sql`
+
+**Your migration should contain ONLY:**
+
+- `CREATE TABLE` statements (no `__mj_CreatedAt`/`__mj_UpdatedAt` — CodeGen adds those)
+- `ALTER TABLE` statements (consolidated — one `ALTER TABLE` with multiple `ADD` clauses)
+- Constraints (`PRIMARY KEY`, `FOREIGN KEY`, `CHECK`, `UNIQUE`)
+- `sp_addextendedproperty` for every non-PK, non-FK column
+- **NO** views, stored procedures, `EntityField` inserts, or FK indexes (all CodeGen's job)
+
+```sql
+CREATE TABLE ${flyway:defaultSchema}.[Widget] (
+    [ID] UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID(),
+    [Name] NVARCHAR(255) NOT NULL,
+    [Description] NVARCHAR(MAX) NULL,
+    [Status] NVARCHAR(20) NOT NULL DEFAULT 'Active',
+    [CategoryID] UNIQUEIDENTIFIER NOT NULL,
+    CONSTRAINT [PK_Widget] PRIMARY KEY ([ID]),
+    CONSTRAINT [FK_Widget_Category] FOREIGN KEY ([CategoryID])
+        REFERENCES ${flyway:defaultSchema}.[WidgetCategory]([ID]),
+    CONSTRAINT [CK_Widget_Status] CHECK ([Status] IN ('Active', 'Inactive', 'Archived'))
+);
+GO
+
+EXEC sp_addextendedproperty @name=N'MS_Description',
+    @value=N'Display name of the widget',
+    @level0type=N'SCHEMA', @level0name=N'${flyway:defaultSchema}',
+    @level1type=N'TABLE',  @level1name=N'Widget',
+    @level2type=N'COLUMN', @level2name=N'Name';
+-- ... repeat for Description, Status, etc.
+```
+
+> **If you also ALTER the same table later in the migration** (e.g., adding columns after the initial CREATE), consolidate those columns into the original `CREATE TABLE` instead. The migration should reflect the final desired state of the table, not the incremental steps you took to get there.
+
+### 2. Apply the Migration
+
+```bash
+mj migrate --dir ./migrations
+```
+
+> **Important**: The `--dir ./migrations` flag tells the CLI to run YOUR local migration files. Without it, `mj migrate` fetches MJ-core migrations from GitHub instead.
+
+Verify the tables exist in your development database before proceeding.
+
+### 3. Run CodeGen
+
+```bash
+mj codegen
+```
+
+CodeGen reads the updated schema and emits a SQL file:
+```
+migrations/v5/CodeGen_Run_2026-07-01_14-45-30.sql
+```
+
+This file contains everything CodeGen derived from your new tables:
+- `__mj_CreatedAt` / `__mj_UpdatedAt` columns + update triggers
+- Entity and EntityField metadata rows
+- Foreign-key indexes (`IDX_AUTO_MJ_FKEY_*`)
+- Base views with proper joins
+- CRUD stored procedures (`spCreate*`, `spUpdate*`, `spDelete*`)
+
+### 4. Append CodeGen Output to Your Migration
+
+This is the key step that makes the migration replayable. Append the CodeGen output to the **end** of your original migration file:
+
+```bash
+# Add ~50 blank lines as visual separator
+printf '\n%.0s' {1..50} >> migrations/v5/V202607011430__v5.45.x__My_New_Feature.sql
+
+# Add a comment block marking the boundary
+cat >> migrations/v5/V202607011430__v5.45.x__My_New_Feature.sql << 'COMMENT'
+/**************************************************************************************************
+ **************************************************************************************************
+ **                                                                                              **
+ **                          CODEGEN OUTPUT — My New Feature (v5.45.x)                            **
+ **                                                                                              **
+ **  Everything below this banner is generated by `mj codegen` AFTER the hand-authored DDL above **
+ **  was applied and the schema introspected. DO NOT hand-edit below this line.                   **
+ **                                                                                              **
+ **************************************************************************************************
+ **************************************************************************************************/
+COMMENT
+
+# Append the CodeGen SQL
+cat migrations/v5/CodeGen_Run_2026-07-01_14-45-30.sql >> migrations/v5/V202607011430__v5.45.x__My_New_Feature.sql
+```
+
+### 5. Delete the Standalone CodeGen File
+
+Now that the output is consolidated, remove the standalone file:
+
+```bash
+rm migrations/v5/CodeGen_Run_2026-07-01_14-45-30.sql
+```
+
+### 6. Apply the Combined Migration on a Clean Database
+
+To verify replayability, reset your dev database and run the full migration sequence:
+
+```bash
+# Drop and recreate your dev database, then:
+mj migrate --dir ./migrations
+```
+
+This proves that a fresh install running your single combined migration ends up in the correct state.
+
+### 7. Commit
+
+Commit the consolidated migration alongside the generated TypeScript files that CodeGen updated:
+
+- `migrations/v5/V202607011430__v5.45.x__My_New_Feature.sql` (your combined file)
+- `packages/MJCoreEntities/src/generated/entity_subclasses.ts` (updated entity classes)
+- `packages/MJServer/src/generated/generated.ts` (updated server resolvers)
+- `packages/MJExplorer/src/app/generated/generated-forms.module.ts` (updated Angular forms)
+- Any other files CodeGen modified
+
+---
+
+## When You Need a Second CodeGen Pass (Metadata Sync)
+
+Sometimes you need to set metadata that can only be configured **after** CodeGen has created the EntityField rows — for example, setting a `JSONType` on a field so CodeGen emits a strongly-typed accessor. This requires a second CodeGen pass:
+
+### The JSONType Pattern
+
+If a column stores structured JSON (like a `Settings` or `Configuration` column), you can get CodeGen to emit a strongly-typed `*Object` accessor by:
+
+1. **First pass**: Write the migration, run `mj migrate`, run `mj codegen` (creates the EntityField rows)
+2. **Create a JSONType interface** in `metadata/entities/JSONType-interfaces/`:
+
+   ```typescript
+   // metadata/entities/JSONType-interfaces/IWidgetSettings.ts
+   export interface IWidgetSettings {
+       MaxRetries?: number;
+       NotificationEmail?: string | null;
+       Features?: Array<{
+           Name: string;
+           Enabled: boolean;
+       }>;
+   }
+   ```
+
+3. **Create a metadata file** to set the JSONType on the EntityField:
+
+   ```json
+   // metadata/entities/.entity-field-jsontype-widgets.json
+   [
+     {
+       "fields": {
+         "Name": "Widgets"
+       },
+       "relatedEntities": {
+         "MJ: Entity Fields": [
+           {
+             "fields": {
+               "JSONType": "IWidgetSettings",
+               "JSONTypeIsArray": false,
+               "JSONTypeDefinition": "@file:JSONType-interfaces/IWidgetSettings.ts"
+             },
+             "primaryKey": {
+               "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=Widgets&Name=Settings"
+             }
+           }
+         ]
+       },
+       "primaryKey": {
+         "ID": "@lookup:MJ: Entities.Name=Widgets"
+       }
+     }
+   ]
+   ```
+
+4. **Push the metadata and re-run CodeGen**:
+
+   ```bash
+   npx mj sync push --dir=metadata --include="entities"
+   mj codegen
+   ```
+
+5. **Append the second CodeGen output** to the same migration file:
+
+   ```bash
+   # Add separator for the second run
+   cat >> migrations/v5/V202607011430__v5.45.x__My_New_Feature.sql << 'COMMENT'
+
+   /********** CODE GEN RUN #2 - after mj sync push (JSONType metadata) *********/
+   COMMENT
+
+   cat migrations/v5/CodeGen_Run_2026-07-01_15-10-00.sql >> migrations/v5/V202607011430__v5.45.x__My_New_Feature.sql
+   rm migrations/v5/CodeGen_Run_2026-07-01_15-10-00.sql
+   ```
+
+After this, the generated entity class will include a typed accessor like:
+```typescript
+get SettingsObject(): IWidgetSettings | null {
+    return this.Settings ? JSON.parse(this.Settings) : null;
+}
+```
+
+---
+
+## Seeding Lookup/Reference Data
+
+If your new table is a lookup table (e.g., `WidgetCategory`), **do not seed it with SQL `INSERT` statements**. Use mj-sync metadata files instead:
+
+1. Create `metadata/widget-categories/.mj-sync.json` with the entity configuration
+2. Create `metadata/widget-categories/.widget-categories.json` with the seed data
+3. Push: `npx mj sync push --dir=metadata --include="widget-categories"`
+
+See [metadata/CLAUDE.md](../metadata/CLAUDE.md) for the full metadata file format.
+
+---
+
+## Quick Reference Checklist
+
+Before considering your migration complete:
+
+- [ ] Migration file follows naming convention: `V<TIMESTAMP>__v<VERSION>.x__<Description>.sql`
+- [ ] Timestamp is newer than every existing migration in `v5/`
+- [ ] All schema references use `${flyway:defaultSchema}` (no hardcoded `__mj.`)
+- [ ] All `INSERT` UUIDs are hardcoded literals (no `NEWID()`)
+- [ ] No `__mj_CreatedAt` / `__mj_UpdatedAt` in `CREATE TABLE` (CodeGen adds these)
+- [ ] No manual FK indexes (CodeGen creates `IDX_AUTO_MJ_FKEY_*`)
+- [ ] Every non-PK, non-FK column has `sp_addextendedproperty`
+- [ ] Multiple columns on the same table use a single `ALTER TABLE` / `CREATE TABLE`
+- [ ] `ALTER TABLE` additions are consolidated into the `CREATE TABLE` (don't create then immediately alter)
+- [ ] Reference data uses mj-sync metadata files, not SQL `INSERT`
+- [ ] Ran `mj migrate --dir ./migrations` successfully
+- [ ] Ran `mj codegen` and appended output to migration file
+- [ ] Deleted standalone `CodeGen_Run_*.sql` file after appending
+- [ ] Verified on a clean database: drop → `mj migrate --dir ./migrations` → success
+- [ ] Committed migration + all generated TypeScript/Angular files CodeGen updated
+
+---
+
+## Common Mistakes
+
+| Mistake | Why It's Wrong | Fix |
+|---------|---------------|-----|
+| Leaving `CodeGen_Run_*.sql` as a separate file | Ordering is fragile; DDL and CodeGen output can drift apart | Append to your migration, delete the standalone file |
+| Adding `__mj_CreatedAt`/`__mj_UpdatedAt` to `CREATE TABLE` | CodeGen adds these; duplicates cause conflicts | Remove from DDL |
+| Creating FK indexes manually | CodeGen creates `IDX_AUTO_MJ_FKEY_*`; duplicates cause errors | Remove from DDL |
+| Using `NEWID()` for INSERT UUIDs | Different ID on every install; breaks cross-environment references | Use `uuidgen` once, hardcode the result |
+| Writing code before running CodeGen | Entity classes don't have the new fields yet; leads to `.Set()` / `as any` hacks | Always: migration → `mj migrate` → `mj codegen` → then write code |
+| Seeding lookup tables with SQL `INSERT` | Brittle, not idempotent, hard to maintain | Use mj-sync metadata files |
+| Forgetting `--dir ./migrations` on `mj migrate` | Without it, CLI fetches MJ-core migrations from GitHub instead of running yours | Always include `--dir ./migrations` |
+| Editing files in `generated/` folders | CodeGen overwrites them on next run | Fix the input (migration/metadata), not the output |
+
+---
+
+## Reference Examples
+
+For real-world examples of this pattern in the codebase:
+
+- **Large multi-table migration**: [`V202606271601__v5.44.x__Predictive_Studio.sql`](../migrations/v5/V202606271601__v5.44.x__Predictive_Studio.sql) — 10 tables, hand-authored DDL + CodeGen output + a second CodeGen pass after metadata sync
+- **JSONType metadata**: [`metadata/entities/.entity-field-jsontype-agent-settings.json`](../metadata/entities/.entity-field-jsontype-agent-settings.json) + [`JSONType-interfaces/IAgentSettings.ts`](../metadata/entities/JSONType-interfaces/IAgentSettings.ts)
+- **Lookup table seeding via metadata**: [`metadata/resource-types/`](../metadata/resource-types/)
+
+---
+
+## Related Documentation
+
+- [migrations/CLAUDE.md](../migrations/CLAUDE.md) — Migration content rules and checklist
+- [metadata/CLAUDE.md](../metadata/CLAUDE.md) — Metadata file authoring (`@lookup`, `@file`, JSONType)
+- [templates/claude-pack/core/06-codegen-contract.md](../templates/claude-pack/core/06-codegen-contract.md) — What CodeGen owns vs. what you own
+- [templates/claude-pack/core/07-migrations-basics.md](../templates/claude-pack/core/07-migrations-basics.md) — Migration formatting basics
