@@ -968,6 +968,14 @@ The key APIs (see [packages/MJCore/src/generic/baseEngine.ts](packages/MJCore/sr
 
 **Reference implementations**: `ConversationEngine`, `InteractiveFormsEngine`, `ComponentMetadataEngine`, `UserInfoEngine`, `KnowledgeHubMetadataEngine`. Copy the shape — `Config()` declares `BaseEnginePropertyConfig[]`; engine exposes `get Forms` (sync array) and `get Forms$` (RxJS observable). Angular components use `async` pipe on the observable.
 
+**Getter pattern**: Engine getters MUST use `GetConfigData<E>(propertyName)` to return their backing arrays. This method checks the data map for permission denial and throws `PermissionConstrainedError` if the user lacks read access — preventing consumers from silently operating on empty arrays. Example:
+```typescript
+public get Models(): MJAIModelEntityExtended[] {
+    return this.GetConfigData<MJAIModelEntityExtended>('_models');
+}
+```
+Consumers that want graceful degradation check `engine.IsPermissionConstrained` before accessing properties. See [plans/base-engine-permission-constrained.md](plans/base-engine-permission-constrained.md) for the full design.
+
 **Caching boundary**: If the entity has a huge column (e.g., `Specification` text) AND many rows, don't bulk-load — punt to `RunView` with targeted filters (see `ComponentMetadataEngine`'s comment about why `MJ: Components` isn't fully cached there). If the entity is small or you can narrow with `Filter`, do cache it.
 
 See [guides/CACHING_AND_PUBSUB_GUIDE.md § BaseEngine Integration](guides/CACHING_AND_PUBSUB_GUIDE.md#baseengine-integration) for the full pattern + the cross-server invalidation flow.

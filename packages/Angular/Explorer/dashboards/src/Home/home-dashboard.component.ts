@@ -3,7 +3,7 @@ import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { BaseResourceComponent, NavigationService, RecentAccessService, RecentAccessItem, HomeAppPinService, HomeAppPinnedItem, HomeAppPinInput, ActionPinConfiguration } from '@memberjunction/ng-shared';
 import { RegisterClass } from '@memberjunction/global';
-import { Metadata, CompositeKey, EntityRecordNameInput, RunView } from '@memberjunction/core';
+import { Metadata, CompositeKey, EntityRecordNameInput, RunView, PermissionConstrainedError } from '@memberjunction/core';
 import { ResourceData, MJUserFavoriteEntity, MJUserNotificationEntity, UserInfoEngine, DashboardEngine, UserViewEngine, QueryEngine } from '@memberjunction/core-entities';
 import { ActionEngineBase } from '@memberjunction/actions-base';
 import { ApplicationManager, BaseApplication } from '@memberjunction/ng-base-application';
@@ -1440,17 +1440,23 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
       ActionEngineBase.Instance.Config(false, this.ProviderToUse.CurrentUser, this.ProviderToUse)
     ]);
 
-    const cachedDashboards = DashboardEngine.Instance.Dashboards
-      .filter(d => d.Type === 'Config')
-      .sort((a, b) => a.Name.localeCompare(b.Name));
+    const cachedDashboards = DashboardEngine.Instance.IsPermissionConstrained
+      ? []
+      : DashboardEngine.Instance.Dashboards
+          .filter(d => d.Type === 'Config')
+          .sort((a, b) => a.Name.localeCompare(b.Name));
 
-    const cachedViews = UserViewEngine.Instance.GetViewsForCurrentUser()
-      .slice()
-      .sort((a, b) => a.Name.localeCompare(b.Name));
+    const cachedViews = UserViewEngine.Instance.IsPermissionConstrained
+      ? []
+      : UserViewEngine.Instance.GetViewsForCurrentUser()
+          .slice()
+          .sort((a, b) => a.Name.localeCompare(b.Name));
 
-    const cachedQueries = QueryEngine.Instance.Queries
-      .slice()
-      .sort((a, b) => a.Name.localeCompare(b.Name));
+    const cachedQueries = QueryEngine.Instance.IsPermissionConstrained
+      ? []
+      : QueryEngine.Instance.Queries
+          .slice()
+          .sort((a, b) => a.Name.localeCompare(b.Name));
 
     const cachedActions = ActionEngineBase.Instance.Actions
       .filter(a => a.Status === 'Active')
