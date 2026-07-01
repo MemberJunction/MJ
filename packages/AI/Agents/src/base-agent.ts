@@ -10605,13 +10605,19 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
-     * Enables a skill's bundled Actions and sub-agents by pushing `root`-scoped `add` entries onto
-     * `params.actionChanges` / `params.subAgentChanges`. `root` scope means the grant applies only
-     * to the CURRENT agent and is never propagated to sub-agents it may later delegate to — each
-     * agent's own skill activations are its own concern (see {@link filterActionChangesForSubAgent}
-     * / {@link filterSubAgentChangesForSubAgent}). Because `params` is the same object reference
-     * used for the rest of this run, every subsequent turn's `gatherPromptTemplateData()` call picks
-     * up the change automatically — no additional plumbing required.
+     * Enables a skill's bundled Actions and sub-agents by pushing `specific`-scoped `add` entries
+     * (targeted at exactly the activating agent's ID) onto `params.actionChanges` /
+     * `params.subAgentChanges`. `specific`/`[agent.ID]` is the correct scope for "apply to THIS
+     * agent, at whatever depth it runs, and never leak to its sub-agents":
+     *   - {@link doesChangeScopeApply} returns true only when the running agent's ID is in the list,
+     *     so it applies to the activating agent regardless of depth (a sub-agent that activates a
+     *     skill still gets its tools — which a `root`-scoped change would NOT do, since `root` means
+     *     "the depth-0 agent," not "the current agent").
+     *   - {@link filterActionChangesForSubAgent} / {@link filterSubAgentChangesForSubAgent} propagate
+     *     `specific` as-is, and each downstream agent checks `includes(itsOwnID)` → false, so the
+     *     grant never cascades to sub-agents the activating agent later delegates to.
+     * Because `params` is the same object reference used for the rest of this run, every subsequent
+     * turn's `gatherPromptTemplateData()` call picks up the change automatically — no extra plumbing.
      *
      * Override to change propagation scope (e.g. a subclass that wants skill-granted capabilities
      * to cascade to sub-agents could push `scope: 'all-subagents'` instead).
@@ -10619,15 +10625,18 @@ The context is now within limits. Please retry your request with the recovered c
      * @protected
      */
     protected enableSkillCapabilities(skill: MJAISkillEntity, params: ExecuteAgentParams): void {
+        const activatingAgentIds = [params.agent.ID];
+
         const actionIds = AIEngine.Instance.GetSkillActionIDs(skill.ID);
         if (actionIds.length > 0) {
             if (!params.actionChanges) {
                 params.actionChanges = [];
             }
             params.actionChanges.push({
-                scope: 'root',
+                scope: 'specific',
                 mode: 'add',
-                actionIds
+                actionIds,
+                agentIds: activatingAgentIds
             });
         }
 
@@ -10637,9 +10646,10 @@ The context is now within limits. Please retry your request with the recovered c
                 params.subAgentChanges = [];
             }
             params.subAgentChanges.push({
-                scope: 'root',
+                scope: 'specific',
                 mode: 'add',
-                subAgentIds
+                subAgentIds,
+                agentIds: activatingAgentIds
             });
         }
     }

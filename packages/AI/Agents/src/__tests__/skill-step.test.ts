@@ -57,12 +57,15 @@ function findMissingSkills(requested: SkillActivationRequest[], availableSkills:
 }
 
 // Mirrors BaseAgent.enableSkillCapabilities's ActionChange/SubAgentChange construction.
-function buildSkillCapabilityChanges(actionIds: string[], subAgentIds: string[]) {
+// Scope is 'specific' targeted at the activating agent's own ID so it applies to that agent at
+// ANY depth (a 'root'-scoped change would only apply at depth 0) and never cascades to sub-agents.
+function buildSkillCapabilityChanges(actionIds: string[], subAgentIds: string[], activatingAgentId: string) {
+    const agentIds = [activatingAgentId];
     const actionChanges = actionIds.length > 0
-        ? [{ scope: 'root' as const, mode: 'add' as const, actionIds }]
+        ? [{ scope: 'specific' as const, mode: 'add' as const, actionIds, agentIds }]
         : [];
     const subAgentChanges = subAgentIds.length > 0
-        ? [{ scope: 'root' as const, mode: 'add' as const, subAgentIds }]
+        ? [{ scope: 'specific' as const, mode: 'add' as const, subAgentIds, agentIds }]
         : [];
     return { actionChanges, subAgentChanges };
 }
@@ -137,26 +140,29 @@ describe('findMissingSkills (validateSkillNextStep fuzzy matching)', () => {
 });
 
 describe('buildSkillCapabilityChanges (enableSkillCapabilities)', () => {
-    it('produces a root-scoped add ActionChange when the skill bundles actions', () => {
-        const { actionChanges } = buildSkillCapabilityChanges(['act1', 'act2'], []);
-        expect(actionChanges).toEqual([{ scope: 'root', mode: 'add', actionIds: ['act1', 'act2'] }]);
+    it('produces a specific-scoped add ActionChange targeting the activating agent', () => {
+        const { actionChanges } = buildSkillCapabilityChanges(['act1', 'act2'], [], 'agent-1');
+        expect(actionChanges).toEqual([{ scope: 'specific', mode: 'add', actionIds: ['act1', 'act2'], agentIds: ['agent-1'] }]);
     });
 
-    it('produces a root-scoped add SubAgentChange when the skill bundles sub-agents', () => {
-        const { subAgentChanges } = buildSkillCapabilityChanges([], ['sa1']);
-        expect(subAgentChanges).toEqual([{ scope: 'root', mode: 'add', subAgentIds: ['sa1'] }]);
+    it('produces a specific-scoped add SubAgentChange targeting the activating agent', () => {
+        const { subAgentChanges } = buildSkillCapabilityChanges([], ['sa1'], 'agent-1');
+        expect(subAgentChanges).toEqual([{ scope: 'specific', mode: 'add', subAgentIds: ['sa1'], agentIds: ['agent-1'] }]);
     });
 
     it('produces no changes for a skill with neither actions nor sub-agents', () => {
-        const { actionChanges, subAgentChanges } = buildSkillCapabilityChanges([], []);
+        const { actionChanges, subAgentChanges } = buildSkillCapabilityChanges([], [], 'agent-1');
         expect(actionChanges).toEqual([]);
         expect(subAgentChanges).toEqual([]);
     });
 
-    it('uses root scope specifically so activation does NOT propagate to sub-agents', () => {
-        // 'root' scope means: applies only to the activating agent; filterActionChangesForSubAgent
-        // explicitly drops 'root'-scoped changes when propagating to a child agent.
-        const { actionChanges } = buildSkillCapabilityChanges(['act1'], []);
-        expect(actionChanges[0].scope).toBe('root');
+    it('targets the activating agent by ID so activation applies at any depth but never cascades to sub-agents', () => {
+        // 'specific'/[agent.ID] applies to exactly the activating agent (unlike 'root', which only
+        // applies at depth 0 and would silently skip a sub-agent that activates a skill).
+        // filterActionChangesForSubAgent propagates 'specific' as-is; each child checks
+        // includes(itsOwnID) -> false, so the grant never leaks downward.
+        const { actionChanges } = buildSkillCapabilityChanges(['act1'], [], 'sub-agent-7');
+        expect(actionChanges[0].scope).toBe('specific');
+        expect(actionChanges[0].agentIds).toEqual(['sub-agent-7']);
     });
 });

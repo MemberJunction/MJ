@@ -1,5 +1,5 @@
 /**
- * @fileoverview Server implementations of the `Skill.ExportMarkdown` / `Skill.ImportMarkdown`
+ * @fileoverview Server implementations of the `AISkill.ExportMarkdown` / `AISkill.ImportMarkdown`
  * Remote Operations — extend the CodeGen-emitted bases in `@memberjunction/core-entities`
  * (`generated/remote_operations.ts`, from the `MJ: Remote Operations` rows in
  * `metadata/remote-operations/.remote-operations.json`) and delegate to
@@ -10,22 +10,22 @@
 import { RegisterClass } from '@memberjunction/global';
 import { BaseRemotableOperation, IMetadataProvider, UserInfo } from '@memberjunction/core';
 import {
-    SkillExportMarkdownOperation,
-    type SkillExportMarkdownInput,
-    type SkillExportMarkdownOutput,
-    SkillImportMarkdownOperation,
-    type SkillImportMarkdownInput,
-    type SkillImportMarkdownOutput
+    AISkillExportMarkdownOperation,
+    type AISkillExportMarkdownInput,
+    type AISkillExportMarkdownOutput,
+    AISkillImportMarkdownOperation,
+    type AISkillImportMarkdownInput,
+    type AISkillImportMarkdownOutput
 } from '@memberjunction/core-entities';
 import { SkillImportExportService } from '../SkillImportExportService';
 
-@RegisterClass(BaseRemotableOperation, 'Skill.ExportMarkdown')
-export class SkillExportMarkdownServerOperation extends SkillExportMarkdownOperation {
+@RegisterClass(BaseRemotableOperation, 'AISkill.ExportMarkdown')
+export class AISkillExportMarkdownServerOperation extends AISkillExportMarkdownOperation {
     protected async InternalExecute(
-        input: SkillExportMarkdownInput,
+        input: AISkillExportMarkdownInput,
         provider: IMetadataProvider,
         user: UserInfo
-    ): Promise<SkillExportMarkdownOutput> {
+    ): Promise<AISkillExportMarkdownOutput> {
         if (!input?.skillID) {
             throw new Error('skillID is required');
         }
@@ -44,13 +44,13 @@ export class SkillExportMarkdownServerOperation extends SkillExportMarkdownOpera
     }
 }
 
-@RegisterClass(BaseRemotableOperation, 'Skill.ImportMarkdown')
-export class SkillImportMarkdownServerOperation extends SkillImportMarkdownOperation {
+@RegisterClass(BaseRemotableOperation, 'AISkill.ImportMarkdown')
+export class AISkillImportMarkdownServerOperation extends AISkillImportMarkdownOperation {
     protected async InternalExecute(
-        input: SkillImportMarkdownInput,
+        input: AISkillImportMarkdownInput,
         provider: IMetadataProvider,
         user: UserInfo
-    ): Promise<SkillImportMarkdownOutput> {
+    ): Promise<AISkillImportMarkdownOutput> {
         if (!input?.markdownText) {
             throw new Error('markdownText is required');
         }

@@ -1,5 +1,5 @@
-/** Input for `Skill.ImportMarkdown`. */
-export interface SkillImportMarkdownInput {
+/** Input for `AISkill.ImportMarkdown`. */
+export interface AISkillImportMarkdownInput {
     /** The SKILL.md document text to import. */
     markdownText: string;
     /**

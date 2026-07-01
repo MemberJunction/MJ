@@ -3,10 +3,10 @@ import { RegisterClassEx } from '@memberjunction/global';
 import { BaseFormPanel } from '@memberjunction/ng-base-forms';
 import { Metadata, AuthorizationEvaluator } from '@memberjunction/core';
 import { MJAISkillEntity } from '@memberjunction/core-entities';
-// CodeGen-generated Remote Operation classes for Skill.ExportMarkdown / Skill.ImportMarkdown
+// CodeGen-generated Remote Operation classes for AISkill.ExportMarkdown / AISkill.ImportMarkdown
 // (see metadata/remote-operations/.remote-operations.json) — requires `mj codegen` to have run
 // against the migration that seeds them before this file compiles.
-import { SkillExportMarkdownOperation, SkillImportMarkdownOperation } from '@memberjunction/core-entities';
+import { AISkillExportMarkdownOperation, AISkillImportMarkdownOperation } from '@memberjunction/core-entities';
 import {
     ResourceShareContext,
     ResourceShareDialogResult,
@@ -30,7 +30,7 @@ const CAN_SHARE_SKILLS_AUTH_NAME = 'Can Share Skills';
  *   `MJ: Resource Permissions` table like Conversations/Reports/Queries do — no bespoke adapter
  *   needed) and is gated behind the "Can Share Skills" authorization; authoring/using your own
  *   skills never requires it.
- * - Export/Import call the `Skill.ExportMarkdown` / `Skill.ImportMarkdown` Remote Operations
+ * - Export/Import call the `AISkill.ExportMarkdown` / `AISkill.ImportMarkdown` Remote Operations
  *   (typed, provider-routed — see guides/REMOTE_OPERATIONS_GUIDE.md), which wrap
  *   `SkillImportExportService` in `@memberjunction/ai-agents` server-side.
  */
@@ -101,7 +101,7 @@ export class AISkillSharingPanel extends BaseFormPanel<MJAISkillEntity> {
     public async ExportMarkdown(): Promise<void> {
         this.IsExporting = true;
         try {
-            const result = await new SkillExportMarkdownOperation().Execute(
+            const result = await new AISkillExportMarkdownOperation().Execute(
                 { skillID: this.Record.ID },
                 { provider: Metadata.Provider }
             );
@@ -141,7 +141,7 @@ export class AISkillSharingPanel extends BaseFormPanel<MJAISkillEntity> {
         this.IsImporting = true;
         try {
             const markdownText = await file.text();
-            const result = await new SkillImportMarkdownOperation().Execute(
+            const result = await new AISkillImportMarkdownOperation().Execute(
                 { markdownText, updateSkillID: this.Record.ID },
                 { provider: Metadata.Provider }
             );

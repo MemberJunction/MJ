@@ -378,18 +378,18 @@
   },
   {
     "fields": {
-      "Name": "Export Skill Markdown",
-      "OperationKey": "Skill.ExportMarkdown",
-      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Skills",
-      "Description": "Exports an MJ: AI Skills record to the portable SKILL.md format (frontmatter + Instructions body). Bundled Action/sub-agent IDs are resolved to their current Names for cross-instance portability. Implemented by SkillExportMarkdownServerOperation in @memberjunction/ai-agents.",
-      "InputTypeName": "SkillExportMarkdownInput",
-      "InputTypeDefinition": "@file:types/skill-export-markdown.input.ts",
+      "Name": "Export AI Skill Markdown",
+      "OperationKey": "AISkill.ExportMarkdown",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=AI Skills",
+      "Description": "Exports an MJ: AI Skills record to the portable SKILL.md format (frontmatter + Instructions body). Bundled Action/sub-agent IDs are resolved to their current Names for cross-instance portability. Implemented by AISkillExportMarkdownServerOperation in @memberjunction/ai-agents.",
+      "InputTypeName": "AISkillExportMarkdownInput",
+      "InputTypeDefinition": "@file:types/aiskill-export-markdown.input.ts",
       "InputTypeIsArray": false,
-      "OutputTypeName": "SkillExportMarkdownOutput",
-      "OutputTypeDefinition": "@file:types/skill-export-markdown.output.ts",
+      "OutputTypeName": "AISkillExportMarkdownOutput",
+      "OutputTypeDefinition": "@file:types/aiskill-export-markdown.output.ts",
       "OutputTypeIsArray": false,
       "ExecutionMode": "Sync",
-      "RequiredScope": "skill:export",
+      "RequiredScope": "aiskill:manage",
       "RequiresSystemUser": false,
       "GenerationType": "Manual",
       "CodeApprovalStatus": "Approved",
@@ -399,24 +399,24 @@
       "ID": "135B3EB8-E80E-402A-BC9A-07AF8A24FABC"
     },
     "sync": {
-      "lastModified": "2026-07-01T13:37:27.117Z",
-      "checksum": "dff23661d99942169d7d1d9c8bf17d9748f67e1fef560963632e76bec22ddeaf"
+      "lastModified": "2026-07-01T16:04:34.001Z",
+      "checksum": "ef86e8b04059fdf4c8b6ade0d7906897e878c9b2da9b8f0c735036292463746c"
     }
   },
   {
     "fields": {
-      "Name": "Import Skill Markdown",
-      "OperationKey": "Skill.ImportMarkdown",
-      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Skills",
-      "Description": "Imports a SKILL.md document, resolving Action/sub-agent names against this instance's catalog (unresolvable names become non-fatal warnings), and creates or updates the MJ: AI Skills record plus its Action/sub-agent bundling junction rows. Implemented by SkillImportMarkdownServerOperation in @memberjunction/ai-agents.",
-      "InputTypeName": "SkillImportMarkdownInput",
-      "InputTypeDefinition": "@file:types/skill-import-markdown.input.ts",
+      "Name": "Import AI Skill Markdown",
+      "OperationKey": "AISkill.ImportMarkdown",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=AI Skills",
+      "Description": "Imports a SKILL.md document, resolving Action/sub-agent names against this instance's catalog (unresolvable names become non-fatal warnings), and creates or updates the MJ: AI Skills record plus its Action/sub-agent bundling junction rows. Implemented by AISkillImportMarkdownServerOperation in @memberjunction/ai-agents.",
+      "InputTypeName": "AISkillImportMarkdownInput",
+      "InputTypeDefinition": "@file:types/aiskill-import-markdown.input.ts",
       "InputTypeIsArray": false,
-      "OutputTypeName": "SkillImportMarkdownOutput",
-      "OutputTypeDefinition": "@file:types/skill-import-markdown.output.ts",
+      "OutputTypeName": "AISkillImportMarkdownOutput",
+      "OutputTypeDefinition": "@file:types/aiskill-import-markdown.output.ts",
       "OutputTypeIsArray": false,
       "ExecutionMode": "Sync",
-      "RequiredScope": "skill:import",
+      "RequiredScope": "aiskill:manage",
       "RequiresSystemUser": false,
       "GenerationType": "Manual",
       "CodeApprovalStatus": "Approved",
@@ -426,8 +426,8 @@
       "ID": "F4C0E677-1F7E-4835-B374-41EE6918DF3D"
     },
     "sync": {
-      "lastModified": "2026-07-01T13:37:27.146Z",
-      "checksum": "e451cc54231ec2336044cc24fd5a762b3e1b0e370f91fc8ce07ca7107f121885"
+      "lastModified": "2026-07-01T16:04:33.980Z",
+      "checksum": "78dddb644c91a4a7ded6c5a6dce59ee727f9537911165d8df1f9c22610432e88"
     }
   }
 ]

@@ -1,5 +1,5 @@
-/** Output of `Skill.ImportMarkdown`. */
-export interface SkillImportMarkdownOutput {
+/** Output of `AISkill.ImportMarkdown`. */
+export interface AISkillImportMarkdownOutput {
     /** The created/updated `MJ: AI Skills` ID. */
     skillID: string;
     /** The skill's Name, for UI confirmation messaging. */

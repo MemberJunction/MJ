@@ -71,7 +71,7 @@
   },
   {
     "fields": {
-      "Name": "Skills",
+      "Name": "AI Skills",
       "Description": "Portable import/export operations for MJ: AI Skills (SKILL.md format).",
       "ParentID": null
     },
@@ -79,8 +79,8 @@
       "ID": "0C954CD4-DA8B-40DA-B686-446EFC31FF48"
     },
     "sync": {
-      "lastModified": "2026-07-01T13:37:27.053Z",
-      "checksum": "b105e23b31a3a5b07bcdf03609f1e57586ba4a78cb217e91ca0424faa2fd1f7a"
+      "lastModified": "2026-07-01T16:04:33.912Z",
+      "checksum": "41281a9ffed30865a326b932d0c18e7b8f4f8b42d19f79469c676db1005dcf21"
     }
   }
 ]
