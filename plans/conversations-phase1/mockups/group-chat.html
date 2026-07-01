@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Group Chat — MJ Conversations Phase 1 Mockups</title>
+<style>
+/* ============================================================================
+   Shared mockup stylesheet — MemberJunction Conversations Phase 1
+   Static, self-contained design language for the UX mockups. Mirrors MJ's
+   semantic design tokens (--mj-*) so the mockups read like the real product.
+   These mockups are illustrative only; production code uses the real tokens
+   from packages/Angular/Generic/shared/src/lib/_tokens.scss.
+   ============================================================================ */
+
+:root {
+  /* Brand */
+  --mj-brand-primary: #0076b6;
+  --mj-brand-primary-hover: #00659c;
+  --mj-brand-primary-active: #264FAF;
+  /* Text */
+  --mj-text-primary: #1f2933;
+  --mj-text-secondary: #475569;
+  --mj-text-muted: #64748b;
+  --mj-text-disabled: #94a3b8;
+  --mj-text-inverse: #ffffff;
+  --mj-text-link: #0076b6;
+  /* Backgrounds */
+  --mj-bg-page: #f1f5f9;
+  --mj-bg-surface: #ffffff;
+  --mj-bg-surface-card: #f8fafc;
+  --mj-bg-surface-sunken: #f1f5f9;
+  --mj-bg-surface-elevated: #ffffff;
+  --mj-bg-surface-hover: #f1f5f9;
+  --mj-bg-surface-active: #e2e8f0;
+  --mj-bg-overlay: rgba(15, 23, 42, 0.45);
+  /* Borders */
+  --mj-border-subtle: #f1f5f9;
+  --mj-border-default: #e2e8f0;
+  --mj-border-strong: #cbd5e1;
+  --mj-border-focus: #0076b6;
+  /* Status */
+  --mj-status-success: #16a34a;
+  --mj-status-success-bg: #dcfce7;
+  --mj-status-warning: #ea580c;
+  --mj-status-warning-bg: #ffedd5;
+  --mj-status-error: #dc2626;
+  --mj-status-error-bg: #fee2e2;
+  --mj-status-info: #0891b2;
+  --mj-status-info-bg: #cffafe;
+  /* Chat tokens */
+  --mj-chat-bubble-user-bg: var(--mj-brand-primary);
+  --mj-chat-bubble-user-text: var(--mj-text-inverse);
+  --mj-chat-bubble-agent-bg: var(--mj-bg-surface-card);
+  --mj-chat-bubble-agent-text: var(--mj-text-primary);
+  --mj-chat-composer-bg: var(--mj-bg-surface);
+  --mj-chat-composer-border: var(--mj-border-default);
+  /* Shape */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --shadow-md: 0 4px 14px rgba(15, 23, 42, 0.10);
+  --shadow-lg: 0 12px 40px rgba(15, 23, 42, 0.18);
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --mj-text-primary: #e6edf3;
+    --mj-text-secondary: #aebfce;
+    --mj-text-muted: #8b9bab;
+    --mj-text-disabled: #5b6b7b;
+    --mj-text-inverse: #ffffff;
+    --mj-text-link: #4cb3e3;
+    --mj-bg-page: #0d1117;
+    --mj-bg-surface: #161b22;
+    --mj-bg-surface-card: #1c232c;
+    --mj-bg-surface-sunken: #0d1117;
+    --mj-bg-surface-elevated: #21262d;
+    --mj-bg-surface-hover: #21262d;
+    --mj-bg-surface-active: #2d333b;
+    --mj-border-subtle: #21262d;
+    --mj-border-default: #30363d;
+    --mj-border-strong: #444c56;
+    --mj-chat-bubble-agent-bg: #21262d;
+    --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.55);
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: var(--font);
+  color: var(--mj-text-primary);
+  background: var(--mj-bg-page);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* --- Mockup page scaffolding --- */
+.mockup-header {
+  padding: 20px 28px;
+  background: var(--mj-bg-surface);
+  border-bottom: 1px solid var(--mj-border-default);
+}
+.mockup-header h1 { margin: 0 0 4px; font-size: 20px; }
+.mockup-header p { margin: 0; color: var(--mj-text-secondary); font-size: 14px; }
+.mockup-back { display: inline-block; margin-bottom: 10px; font-size: 13px; color: var(--mj-text-link); text-decoration: none; }
+.mockup-back:hover { text-decoration: underline; }
+
+.variant-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+  gap: 20px;
+  padding: 24px 28px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+.variant {
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+}
+.variant-head { padding: 14px 18px; border-bottom: 1px solid var(--mj-border-default); }
+.variant-head .badge { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--mj-brand-primary); }
+.variant-head h2 { margin: 4px 0 0; font-size: 16px; }
+.variant-body { padding: 18px; flex: 1; }
+.variant-notes { padding: 12px 18px; background: var(--mj-bg-surface-card); border-top: 1px solid var(--mj-border-default); font-size: 13px; color: var(--mj-text-secondary); }
+.variant-notes strong { color: var(--mj-text-primary); }
+.variant-notes .tradeoff { color: var(--mj-status-warning); }
+
+/* --- Reusable primitives --- */
+.btn {
+  font: inherit; font-size: 13px; font-weight: 600;
+  padding: 8px 14px; border-radius: var(--radius-sm);
+  border: 1px solid transparent; cursor: pointer;
+  background: var(--mj-brand-primary); color: var(--mj-text-inverse);
+}
+.btn:hover { background: var(--mj-brand-primary-hover); }
+.btn.secondary { background: transparent; color: var(--mj-text-primary); border-color: var(--mj-border-strong); }
+.btn.secondary:hover { background: var(--mj-bg-surface-hover); }
+.btn.ghost { background: transparent; color: var(--mj-text-secondary); }
+.btn.sm { padding: 5px 10px; font-size: 12px; }
+
+.pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600;
+  background: var(--mj-bg-surface-active); color: var(--mj-text-secondary);
+}
+.pill.brand { background: color-mix(in srgb, var(--mj-brand-primary) 14%, transparent); color: var(--mj-brand-primary); }
+.pill.success { background: var(--mj-status-success-bg); color: var(--mj-status-success); }
+.pill.warning { background: var(--mj-status-warning-bg); color: var(--mj-status-warning); }
+.pill.info { background: var(--mj-status-info-bg); color: var(--mj-status-info); }
+
+.card {
+  background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default);
+  border-radius: var(--radius-md); padding: 14px;
+}
+
+.input, .textarea, .select {
+  font: inherit; font-size: 13px; width: 100%;
+  padding: 8px 10px; border-radius: var(--radius-sm);
+  border: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface); color: var(--mj-text-primary);
+}
+.input:focus, .textarea:focus, .select:focus { outline: none; border-color: var(--mj-border-focus); box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 18%, transparent); }
+.label { display: block; font-size: 12px; font-weight: 600; color: var(--mj-text-secondary); margin-bottom: 4px; }
+.field { margin-bottom: 14px; }
+
+/* --- Chat chrome primitives (for in-context mockups) --- */
+.chat { display: flex; flex-direction: column; height: 100%; background: var(--mj-bg-surface); }
+.chat-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--mj-border-default); }
+.chat-title { font-weight: 600; font-size: 15px; }
+.chat-body { flex: 1; overflow: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.msg { max-width: 78%; padding: 10px 14px; border-radius: var(--radius-md); font-size: 14px; }
+.msg.user { align-self: flex-end; background: var(--mj-chat-bubble-user-bg); color: var(--mj-chat-bubble-user-text); border-bottom-right-radius: 3px; }
+.msg.agent { align-self: flex-start; background: var(--mj-chat-bubble-agent-bg); color: var(--mj-chat-bubble-agent-text); border: 1px solid var(--mj-border-default); border-bottom-left-radius: 3px; }
+.msg .who { font-size: 11px; font-weight: 700; opacity: .75; margin-bottom: 3px; }
+.composer { display: flex; gap: 8px; align-items: flex-end; padding: 12px 16px; border-top: 1px solid var(--mj-chat-composer-border); background: var(--mj-chat-composer-bg); }
+.composer .textarea { resize: none; min-height: 42px; }
+
+.avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--mj-brand-primary); color: #fff; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex: none; }
+.muted { color: var(--mj-text-muted); }
+.small { font-size: 12px; }
+.divider { height: 1px; background: var(--mj-border-default); margin: 12px 0; border: 0; }
+.row { display: flex; align-items: center; gap: 8px; }
+.spread { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  </style>
+<style>
+  /* Area-only styles — group-chat specific primitives, all token-based */
+
+  /* Multi-color participant attribution: 5 accent slots derived from semantic tokens.
+     In production these map to a per-participant deterministic color from their UserID. */
+  .acc-1 { --acc: var(--mj-brand-primary); }
+  .acc-2 { --acc: var(--mj-status-success); }
+  .acc-3 { --acc: var(--mj-status-warning); }
+  .acc-4 { --acc: var(--mj-status-info); }
+  .acc-5 { --acc: color-mix(in srgb, var(--mj-brand-primary) 55%, var(--mj-status-error)); }
+  .acc-agent { --acc: color-mix(in srgb, var(--mj-status-info) 70%, var(--mj-brand-primary)); }
+
+  .avatar.tinted { background: var(--acc, var(--mj-brand-primary)); }
+  .avatar.agent  { background: var(--mj-bg-surface);
+                   color: var(--acc, var(--mj-status-info));
+                   border: 1.5px solid var(--acc, var(--mj-status-info)); }
+  .avatar.sm { width: 22px; height: 22px; font-size: 10px; }
+  .avatar.lg { width: 34px; height: 34px; font-size: 13px; }
+
+  /* Presence dot */
+  .presence { width: 9px; height: 9px; border-radius: 50%; flex: none;
+              box-shadow: 0 0 0 2px var(--mj-bg-surface); }
+  .presence.online { background: var(--mj-status-success); }
+  .presence.away   { background: var(--mj-status-warning); }
+  .presence.offline{ background: var(--mj-text-disabled); }
+  .presence.busy   { background: var(--mj-status-error); }
+
+  .avatar-wrap { position: relative; display: inline-flex; }
+  .avatar-wrap .presence { position: absolute; right: -1px; bottom: -1px; }
+
+  /* In-mockup layout shells */
+  .stage { border: 1px solid var(--mj-border-default); border-radius: var(--radius-md);
+           overflow: hidden; background: var(--mj-bg-surface); display: flex; min-height: 430px; }
+  .stage .chat { flex: 1; min-width: 0; }
+  .stage .chat-body { background: var(--mj-bg-surface); }
+
+  /* Roster sidebar (Option A) */
+  .roster { width: 168px; flex: none; border-right: 1px solid var(--mj-border-default);
+            background: var(--mj-bg-surface-card); display: flex; flex-direction: column; }
+  .roster-head { padding: 10px 12px; font-size: 11px; font-weight: 700; letter-spacing: .04em;
+                 text-transform: uppercase; color: var(--mj-text-muted);
+                 border-bottom: 1px solid var(--mj-border-subtle); display: flex;
+                 align-items: center; justify-content: space-between; }
+  .roster-group { padding: 8px 0; }
+  .roster-label { padding: 2px 12px 4px; font-size: 10px; font-weight: 700; letter-spacing: .05em;
+                  text-transform: uppercase; color: var(--mj-text-disabled); }
+  .roster-item { display: flex; align-items: center; gap: 8px; padding: 5px 12px; font-size: 13px; }
+  .roster-item .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .roster-item .rl { margin-left: auto; font-size: 10px; color: var(--mj-text-disabled); }
+  .roster-foot { margin-top: auto; padding: 10px 12px; border-top: 1px solid var(--mj-border-subtle); }
+
+  /* Message rows with attribution rail (A & C) */
+  .mrow { display: flex; gap: 9px; align-items: flex-start; }
+  .mrow .mbody { min-width: 0; }
+  .mrow .mhead { display: flex; align-items: baseline; gap: 7px; margin-bottom: 1px; }
+  .mname { font-size: 13px; font-weight: 700; color: var(--acc, var(--mj-text-primary)); }
+  .mtime { font-size: 11px; color: var(--mj-text-muted); }
+  .mtext { font-size: 13.5px; color: var(--mj-text-primary); }
+  .agent-tag { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em;
+               color: var(--acc); border: 1px solid color-mix(in srgb, var(--acc) 45%, transparent);
+               background: color-mix(in srgb, var(--acc) 10%, transparent);
+               padding: 0 5px; border-radius: 4px; }
+  .mention { color: var(--mj-brand-primary); font-weight: 600;
+             background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
+             padding: 0 3px; border-radius: 3px; }
+
+  /* Typing indicator */
+  .typing { display: inline-flex; align-items: center; gap: 7px; font-size: 12px;
+            color: var(--mj-text-muted); }
+  .typing .dots { display: inline-flex; gap: 3px; }
+  .typing .dots i { width: 5px; height: 5px; border-radius: 50%; background: var(--mj-text-disabled);
+                    display: inline-block; }
+
+  /* Composer mention bar */
+  .mention-bar { display: flex; gap: 6px; flex-wrap: wrap; padding: 0 16px 8px; }
+
+  /* ===== Option B: concurrent-agent lanes ===== */
+  .warroom { display: grid; grid-template-rows: 1fr auto; min-height: 430px; }
+  .wr-top { display: grid; grid-template-columns: 1.3fr 1fr; min-height: 0; }
+  .wr-feed { border-right: 1px solid var(--mj-border-default); display: flex; flex-direction: column;
+             min-width: 0; }
+  .wr-feed-head, .wr-lanes-head { padding: 9px 14px; font-size: 11px; font-weight: 700;
+             letter-spacing: .04em; text-transform: uppercase; color: var(--mj-text-muted);
+             border-bottom: 1px solid var(--mj-border-default);
+             display: flex; align-items: center; justify-content: space-between; }
+  .wr-feed-body { flex: 1; overflow: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 11px; }
+  .wr-lanes { display: flex; flex-direction: column; min-width: 0; background: var(--mj-bg-surface-card); }
+  .wr-lanes-body { flex: 1; overflow: auto; padding: 10px; display: flex; flex-direction: column; gap: 10px; }
+
+  .lane { border: 1px solid color-mix(in srgb, var(--acc) 40%, var(--mj-border-default));
+          border-left: 3px solid var(--acc); border-radius: var(--radius-sm);
+          background: var(--mj-bg-surface); padding: 9px 11px; }
+  .lane-head { display: flex; align-items: center; gap: 7px; margin-bottom: 5px; }
+  .lane-name { font-size: 12.5px; font-weight: 700; color: var(--acc); }
+  .lane-state { margin-left: auto; font-size: 10px; font-weight: 700; text-transform: uppercase;
+                letter-spacing: .03em; }
+  .lane-state.running { color: var(--mj-status-info); }
+  .lane-state.done    { color: var(--mj-status-success); }
+  .lane-state.queued  { color: var(--mj-text-disabled); }
+  .lane-step { font-size: 12px; color: var(--mj-text-secondary); display: flex; align-items: center; gap: 6px; }
+  .lane-step .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--acc); flex: none; }
+  .lane-bar { height: 4px; border-radius: 999px; background: var(--mj-bg-surface-active);
+              margin-top: 7px; overflow: hidden; }
+  .lane-bar > i { display: block; height: 100%; background: var(--acc); border-radius: 999px; }
+  .lane-spin { color: var(--acc); animation: none; }
+
+  /* ===== Option C: threaded minimal ===== */
+  .thread { border-left: 2px solid var(--mj-border-default); margin: 4px 0 4px 16px;
+            padding-left: 12px; display: flex; flex-direction: column; gap: 10px; }
+  .receipts { display: flex; align-items: center; gap: 4px; margin-top: 3px; }
+  .receipts .avatar { box-shadow: 0 0 0 1.5px var(--mj-bg-surface); margin-left: -5px; }
+  .receipts .avatar:first-child { margin-left: 0; }
+  .read-label { font-size: 11px; color: var(--mj-text-muted); margin-left: 4px; }
+  .invite-card { border: 1px dashed var(--mj-border-strong); border-radius: var(--radius-md);
+                 padding: 11px 13px; background: var(--mj-bg-surface-card); }
+  .pref-row { display: flex; align-items: center; justify-content: space-between; gap: 10px;
+              padding: 6px 0; border-bottom: 1px solid var(--mj-border-subtle); font-size: 13px; }
+  .pref-row:last-child { border-bottom: 0; }
+  .toggle { width: 34px; height: 19px; border-radius: 999px; background: var(--mj-bg-surface-active);
+            position: relative; flex: none; }
+  .toggle.on { background: var(--mj-brand-primary); }
+  .toggle > i { position: absolute; top: 2px; left: 2px; width: 15px; height: 15px; border-radius: 50%;
+                background: var(--mj-bg-surface); transition: none; }
+  .toggle.on > i { left: 17px; }
+
+  /* Shared little helpers */
+  .stack { display: flex; flex-direction: column; gap: 12px; }
+  .facepile { display: flex; }
+  .facepile .avatar { margin-left: -7px; box-shadow: 0 0 0 2px var(--mj-bg-surface); }
+  .facepile .avatar:first-child { margin-left: 0; }
+  .sysline { text-align: center; font-size: 11.5px; color: var(--mj-text-muted); padding: 2px 0; }
+  .sysline b { color: var(--mj-text-secondary); }
+
+  @media (max-width: 560px) {
+    .roster { display: none; }
+    .wr-top { grid-template-columns: 1fr; }
+    .wr-feed { border-right: 0; border-bottom: 1px solid var(--mj-border-default); }
+  }
+</style>
+</head>
+<body>
+
+<div class="mockup-header">
+  <a class="mockup-back" href="../index.html">&larr; Back to mockups index</a>
+  <h1>Group Chat</h1>
+  <p>Multiple humans and one or more agents in a single conversation — roster, invites, per-user attribution, presence, and concurrent-agent indicators. Phase 1 adds the <em>Conversation Participants</em> table (Role: Owner/Member/Guest, Status: Invited/Active/Removed) and <em>Conversation.IsGroup</em>; runtime arrives in Phase 2.</p>
+</div>
+
+<div class="variant-grid">
+
+  <!-- ============================================================= -->
+  <!-- OPTION A — Slack-style team room                              -->
+  <!-- ============================================================= -->
+  <div class="variant">
+    <div class="variant-head">
+      <span class="badge">Option A</span>
+      <h2>Slack-style team room</h2>
+    </div>
+    <div class="variant-body">
+      <div class="stage">
+
+        <!-- Roster sidebar with presence -->
+        <aside class="roster">
+          <div class="roster-head"><span>People · 5</span><span class="muted">＋</span></div>
+
+          <div class="roster-group">
+            <div class="roster-label">In channel</div>
+
+            <div class="roster-item acc-1">
+              <span class="avatar-wrap"><span class="avatar tinted sm">AK</span><span class="presence online"></span></span>
+              <span class="nm">Amith K.</span><span class="rl">Owner</span>
+            </div>
+            <div class="roster-item acc-2">
+              <span class="avatar-wrap"><span class="avatar tinted sm">JR</span><span class="presence online"></span></span>
+              <span class="nm">Jordan R.</span>
+            </div>
+            <div class="roster-item acc-3">
+              <span class="avatar-wrap"><span class="avatar tinted sm">PT</span><span class="presence away"></span></span>
+              <span class="nm">Priya T.</span>
+            </div>
+            <div class="roster-item acc-4">
+              <span class="avatar-wrap"><span class="avatar tinted sm">MS</span><span class="presence offline"></span></span>
+              <span class="nm muted">Marcus S.</span><span class="rl">Guest</span>
+            </div>
+          </div>
+
+          <div class="roster-group">
+            <div class="roster-label">Agents</div>
+            <div class="roster-item acc-agent">
+              <span class="avatar-wrap"><span class="avatar agent sm"><i class="fa-solid fa-robot"></i></span><span class="presence busy"></span></span>
+              <span class="nm">Sage</span><span class="rl">active</span>
+            </div>
+          </div>
+
+          <div class="roster-foot">
+            <button class="btn sm" style="width:100%"><i class="fa-solid fa-user-plus"></i>&nbsp; Invite</button>
+          </div>
+        </aside>
+
+        <!-- Chat column -->
+        <div class="chat">
+          <div class="chat-header">
+            <div class="row">
+              <i class="fa-solid fa-hashtag muted"></i>
+              <span class="chat-title">q3-forecast-review</span>
+              <span class="pill brand">Group</span>
+            </div>
+            <div class="facepile">
+              <span class="avatar tinted sm acc-1">AK</span>
+              <span class="avatar tinted sm acc-2">JR</span>
+              <span class="avatar tinted sm acc-3">PT</span>
+              <span class="avatar agent sm acc-agent"><i class="fa-solid fa-robot"></i></span>
+            </div>
+          </div>
+
+          <div class="chat-body">
+            <div class="sysline"><b>Amith K.</b> added <b>Sage</b> and invited <b>Marcus S.</b> (Guest)</div>
+
+            <div class="mrow acc-1">
+              <span class="avatar tinted lg">AK</span>
+              <div class="mbody">
+                <div class="mhead"><span class="mname">Amith K.</span><span class="mtime">9:41 AM</span></div>
+                <div class="mtext">Numbers look off for the West region. <span class="mention">@Sage</span> can you pull the actuals vs. plan?</div>
+              </div>
+            </div>
+
+            <div class="mrow acc-agent">
+              <span class="avatar agent lg"><i class="fa-solid fa-robot"></i></span>
+              <div class="mbody">
+                <div class="mhead"><span class="mname">Sage</span><span class="agent-tag">Agent</span><span class="mtime">9:41 AM</span></div>
+                <div class="mtext">West region is tracking 12% under plan, driven by two slipped deals. Pulling the breakdown now…</div>
+              </div>
+            </div>
+
+            <div class="mrow acc-2">
+              <span class="avatar tinted lg">JR</span>
+              <div class="mbody">
+                <div class="mhead"><span class="mname">Jordan R.</span><span class="mtime">9:42 AM</span></div>
+                <div class="mtext">Both of those should close next week — I'd not panic yet. <span class="mention">@Priya T.</span> agree?</div>
+              </div>
+            </div>
+
+            <hr class="divider">
+            <div class="typing acc-3">
+              <span class="avatar tinted sm">PT</span>
+              <span><b>Priya</b> is typing</span>
+              <span class="dots"><i></i><i></i><i></i></span>
+            </div>
+          </div>
+
+          <div class="mention-bar">
+            <span class="pill"><i class="fa-solid fa-at"></i> mention people &amp; agents</span>
+          </div>
+          <div class="composer">
+            <textarea class="textarea" rows="1" placeholder="Message #q3-forecast-review  ·  @ to mention"></textarea>
+            <button class="btn"><i class="fa-solid fa-paper-plane"></i></button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="variant-notes">
+      <p><strong>What:</strong> A persistent team channel. Roster sidebar shows every human (with online/away/offline presence dots) and agents in their own group; each person owns a stable attribution color used on their avatar, name, and a left rail. <code>@</code>-mention works for humans <em>and</em> agents; an invite button drives the Invited→Active flow.</p>
+      <p><strong>Why world-class:</strong> Borrows the muscle-memory of Slack/Teams — zero learning curve. Color-coded attribution scales to many speakers without losing track of who said what; presence + typing make the room feel live; agents sit naturally beside people as first-class participants.</p>
+      <p class="tradeoff"><strong>Tradeoff:</strong> The roster eats horizontal space and the channel metaphor implies "always-on rooms," which is heavier than MJ's current conversation-per-task model — risk of room sprawl.</p>
+    </div>
+  </div>
+
+  <!-- ============================================================= -->
+  <!-- OPTION B — War room with concurrent-agent lanes              -->
+  <!-- ============================================================= -->
+  <div class="variant">
+    <div class="variant-head">
+      <span class="badge">Option B</span>
+      <h2>War room · concurrent-agent lanes</h2>
+    </div>
+    <div class="variant-body">
+      <div class="stage">
+        <div class="warroom" style="flex:1; min-width:0;">
+          <div class="wr-top">
+
+            <!-- Human conversation feed -->
+            <div class="wr-feed">
+              <div class="wr-feed-head">
+                <span><i class="fa-solid fa-comments"></i>&nbsp; Discussion</span>
+                <span class="facepile">
+                  <span class="avatar tinted sm acc-1">AK</span>
+                  <span class="avatar tinted sm acc-2">JR</span>
+                  <span class="avatar tinted sm acc-5">DL</span>
+                </span>
+              </div>
+              <div class="wr-feed-body">
+                <div class="mrow acc-1">
+                  <span class="avatar tinted lg">AK</span>
+                  <div class="mbody">
+                    <div class="mhead"><span class="mname">Amith K.</span><span class="mtime">10:02</span></div>
+                    <div class="mtext">Incident triage. Let's run all three in parallel — logs, customers, and a fix draft.</div>
+                  </div>
+                </div>
+                <div class="mrow acc-5">
+                  <span class="avatar tinted lg">DL</span>
+                  <div class="mbody">
+                    <div class="mhead"><span class="mname">Dana L.</span><span class="mtime">10:02</span></div>
+                    <div class="mtext">Dispatched <b>3 agents</b> to lanes. I'll watch the customer-impact one.</div>
+                  </div>
+                </div>
+                <div class="mrow acc-2">
+                  <span class="avatar tinted lg">JR</span>
+                  <div class="mbody">
+                    <div class="mhead"><span class="mname">Jordan R.</span><span class="mtime">10:03</span></div>
+                    <div class="mtext">Watching the lanes →</div>
+                  </div>
+                </div>
+                <div class="typing acc-2">
+                  <span class="avatar tinted sm">JR</span><span><b>Jordan</b> is typing</span>
+                  <span class="dots"><i></i><i></i><i></i></span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Concurrent agent lanes -->
+            <div class="wr-lanes">
+              <div class="wr-lanes-head">
+                <span><i class="fa-solid fa-bolt"></i>&nbsp; Agents working · 2 of 3</span>
+                <span class="muted small">parallel</span>
+              </div>
+              <div class="wr-lanes-body">
+
+                <div class="lane acc-agent">
+                  <div class="lane-head">
+                    <span class="avatar agent sm"><i class="fa-solid fa-magnifying-glass"></i></span>
+                    <span class="lane-name">Log Analyst</span>
+                    <span class="lane-state running"><i class="fa-solid fa-circle-notch lane-spin"></i> Running</span>
+                  </div>
+                  <div class="lane-step"><span class="dot"></span> Scanning 4.2M log lines…</div>
+                  <div class="lane-bar"><i style="width:68%"></i></div>
+                </div>
+
+                <div class="lane acc-3">
+                  <div class="lane-head">
+                    <span class="avatar agent sm"><i class="fa-solid fa-users"></i></span>
+                    <span class="lane-name">Impact Mapper</span>
+                    <span class="lane-state running"><i class="fa-solid fa-circle-notch lane-spin"></i> Running</span>
+                  </div>
+                  <div class="lane-step"><span class="dot"></span> 37 accounts affected · scoring tiers</div>
+                  <div class="lane-bar"><i style="width:41%"></i></div>
+                </div>
+
+                <div class="lane acc-2">
+                  <div class="lane-head">
+                    <span class="avatar agent sm"><i class="fa-solid fa-wrench"></i></span>
+                    <span class="lane-name">Fix Drafter</span>
+                    <span class="lane-state queued">Queued</span>
+                  </div>
+                  <div class="lane-step muted"><span class="dot" style="background:var(--mj-text-disabled)"></span> waiting on Log Analyst output</div>
+                  <div class="lane-bar"><i style="width:6%"></i></div>
+                </div>
+
+                <div class="lane acc-1" style="opacity:.92">
+                  <div class="lane-head">
+                    <span class="avatar agent sm"><i class="fa-solid fa-check"></i></span>
+                    <span class="lane-name">Timeline Builder</span>
+                    <span class="lane-state done"><i class="fa-solid fa-circle-check"></i> Done</span>
+                  </div>
+                  <div class="lane-step"><span class="dot"></span> Posted timeline to Discussion ↑</div>
+                  <div class="lane-bar"><i style="width:100%"></i></div>
+                </div>
+
+              </div>
+            </div>
+          </div>
+
+          <div class="composer">
+            <textarea class="textarea" rows="1" placeholder="Direct the room…  ·  @agent to launch a new lane"></textarea>
+            <button class="btn"><i class="fa-solid fa-bolt"></i>&nbsp; Send</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="variant-notes">
+      <p><strong>What:</strong> Humans converse on the left; every dispatched agent gets its own live <em>lane</em> on the right showing real-time state (Running / Queued / Done), current step, and progress. Multiple agents run truly in parallel; finished lanes post results back into the shared discussion.</p>
+      <p><strong>Why world-class:</strong> Makes the Phase-2 concurrency story <em>visible</em> — you see three agents racing at once instead of a single serialized "thinking…" spinner. Dependencies (Fix Drafter waiting on Log Analyst) and parallelism are legible at a glance, which is exactly what a high-stakes triage room needs.</p>
+      <p class="tradeoff"><strong>Tradeoff:</strong> Two-column density is demanding on small screens and for casual chats it's overkill — best reserved for power scenarios where multi-agent fan-out is the point, not the default group view.</p>
+    </div>
+  </div>
+
+  <!-- ============================================================= -->
+  <!-- OPTION C — Minimal threaded group + invites                  -->
+  <!-- ============================================================= -->
+  <div class="variant">
+    <div class="variant-head">
+      <span class="badge">Option C</span>
+      <h2>Minimal threaded group + invites</h2>
+    </div>
+    <div class="variant-body">
+      <div class="stage">
+        <div class="chat">
+          <div class="chat-header">
+            <div class="row">
+              <span class="facepile">
+                <span class="avatar tinted sm acc-1">AK</span>
+                <span class="avatar tinted sm acc-2">JR</span>
+                <span class="avatar tinted sm acc-3">PT</span>
+                <span class="avatar agent sm acc-agent"><i class="fa-solid fa-robot"></i></span>
+              </span>
+              <span class="chat-title">Budget planning</span>
+            </div>
+            <button class="btn secondary sm"><i class="fa-solid fa-user-plus"></i>&nbsp; Invite</button>
+          </div>
+
+          <div class="chat-body">
+
+            <!-- Root message + read receipts -->
+            <div class="mrow acc-1">
+              <span class="avatar tinted lg">AK</span>
+              <div class="mbody">
+                <div class="mhead"><span class="mname">Amith K.</span><span class="mtime">Tue 2:14 PM</span></div>
+                <div class="mtext">Draft budget attached. Two open questions in the thread — please weigh in.</div>
+                <div class="receipts">
+                  <span class="avatar tinted sm acc-2">JR</span>
+                  <span class="avatar tinted sm acc-3">PT</span>
+                  <span class="read-label">Read by 2</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- A thread -->
+            <div class="thread">
+              <div class="mrow acc-3">
+                <span class="avatar tinted lg">PT</span>
+                <div class="mbody">
+                  <div class="mhead"><span class="mname">Priya T.</span><span class="mtime">2:20 PM</span></div>
+                  <div class="mtext">Marketing line feels high. <span class="mention">@Sage</span> what was last year's actual?</div>
+                </div>
+              </div>
+              <div class="mrow acc-agent">
+                <span class="avatar agent lg"><i class="fa-solid fa-robot"></i></span>
+                <div class="mbody">
+                  <div class="mhead"><span class="mname">Sage</span><span class="agent-tag">Agent</span><span class="mtime">2:20 PM</span></div>
+                  <div class="mtext">Last year marketing actual was $182k — this draft is +9%.</div>
+                </div>
+              </div>
+              <div class="typing acc-2">
+                <span class="avatar tinted sm">JR</span><span><b>Jordan</b> is replying</span>
+                <span class="dots"><i></i><i></i><i></i></span>
+              </div>
+            </div>
+
+            <hr class="divider">
+
+            <!-- Lightweight invite / accept card -->
+            <div class="invite-card">
+              <div class="spread" style="margin-bottom:8px">
+                <div class="row">
+                  <span class="avatar tinted lg acc-5">MS</span>
+                  <div>
+                    <div style="font-weight:600; font-size:13px;">Marcus S. <span class="pill warning">Invited</span></div>
+                    <div class="small muted">marcus@partner.co · invited as Guest</div>
+                  </div>
+                </div>
+              </div>
+              <div class="row">
+                <button class="btn sm">Accept</button>
+                <button class="btn secondary sm">Decline</button>
+                <span class="small muted" style="margin-left:auto"><i class="fa-regular fa-clock"></i> awaiting response</span>
+              </div>
+            </div>
+
+            <!-- Per-participant notification prefs -->
+            <div class="card" style="margin-top:12px">
+              <div class="spread" style="margin-bottom:6px">
+                <strong class="small">Your notifications here</strong>
+                <span class="pill info">per-participant</span>
+              </div>
+              <div class="pref-row"><span>All messages</span><span class="toggle"><i></i></span></div>
+              <div class="pref-row"><span>Mentions &amp; agent replies to me</span><span class="toggle on"><i></i></span></div>
+              <div class="pref-row"><span>Nothing (muted)</span><span class="toggle"><i></i></span></div>
+            </div>
+
+          </div>
+
+          <div class="composer">
+            <textarea class="textarea" rows="1" placeholder="Reply in thread…"></textarea>
+            <button class="btn"><i class="fa-solid fa-paper-plane"></i></button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="variant-notes">
+      <p><strong>What:</strong> A calm, document-like group. Messages spawn collapsible threads (agents reply inside the relevant thread, not the main flow). Read receipts show who's seen each message; a lightweight Invite→Accept/Decline card handles guests; each participant tunes their own notification level.</p>
+      <p><strong>Why world-class:</strong> Threading keeps a multi-person + multi-agent conversation from collapsing into noise — the #1 failure mode of group chat. Read receipts and per-person prefs respect attention; it stays closest to MJ's existing focused, task-scoped conversation model while adding just enough group machinery.</p>
+      <p class="tradeoff"><strong>Tradeoff:</strong> Threading adds a navigation layer (reply-here vs. reply-in-thread) some users find fiddly, and concurrent-agent activity is less dramatic here — parallel work shows as multiple typing/thread indicators rather than a dedicated dashboard.</p>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

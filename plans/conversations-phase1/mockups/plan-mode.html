@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Plan Mode — Conversations Mockups</title>
+<style>
+/* ============================================================================
+   Shared mockup stylesheet — MemberJunction Conversations Phase 1
+   Static, self-contained design language for the UX mockups. Mirrors MJ's
+   semantic design tokens (--mj-*) so the mockups read like the real product.
+   These mockups are illustrative only; production code uses the real tokens
+   from packages/Angular/Generic/shared/src/lib/_tokens.scss.
+   ============================================================================ */
+
+:root {
+  /* Brand */
+  --mj-brand-primary: #0076b6;
+  --mj-brand-primary-hover: #00659c;
+  --mj-brand-primary-active: #264FAF;
+  /* Text */
+  --mj-text-primary: #1f2933;
+  --mj-text-secondary: #475569;
+  --mj-text-muted: #64748b;
+  --mj-text-disabled: #94a3b8;
+  --mj-text-inverse: #ffffff;
+  --mj-text-link: #0076b6;
+  /* Backgrounds */
+  --mj-bg-page: #f1f5f9;
+  --mj-bg-surface: #ffffff;
+  --mj-bg-surface-card: #f8fafc;
+  --mj-bg-surface-sunken: #f1f5f9;
+  --mj-bg-surface-elevated: #ffffff;
+  --mj-bg-surface-hover: #f1f5f9;
+  --mj-bg-surface-active: #e2e8f0;
+  --mj-bg-overlay: rgba(15, 23, 42, 0.45);
+  /* Borders */
+  --mj-border-subtle: #f1f5f9;
+  --mj-border-default: #e2e8f0;
+  --mj-border-strong: #cbd5e1;
+  --mj-border-focus: #0076b6;
+  /* Status */
+  --mj-status-success: #16a34a;
+  --mj-status-success-bg: #dcfce7;
+  --mj-status-warning: #ea580c;
+  --mj-status-warning-bg: #ffedd5;
+  --mj-status-error: #dc2626;
+  --mj-status-error-bg: #fee2e2;
+  --mj-status-info: #0891b2;
+  --mj-status-info-bg: #cffafe;
+  /* Chat tokens */
+  --mj-chat-bubble-user-bg: var(--mj-brand-primary);
+  --mj-chat-bubble-user-text: var(--mj-text-inverse);
+  --mj-chat-bubble-agent-bg: var(--mj-bg-surface-card);
+  --mj-chat-bubble-agent-text: var(--mj-text-primary);
+  --mj-chat-composer-bg: var(--mj-bg-surface);
+  --mj-chat-composer-border: var(--mj-border-default);
+  /* Shape */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --shadow-md: 0 4px 14px rgba(15, 23, 42, 0.10);
+  --shadow-lg: 0 12px 40px rgba(15, 23, 42, 0.18);
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --mj-text-primary: #e6edf3;
+    --mj-text-secondary: #aebfce;
+    --mj-text-muted: #8b9bab;
+    --mj-text-disabled: #5b6b7b;
+    --mj-text-inverse: #ffffff;
+    --mj-text-link: #4cb3e3;
+    --mj-bg-page: #0d1117;
+    --mj-bg-surface: #161b22;
+    --mj-bg-surface-card: #1c232c;
+    --mj-bg-surface-sunken: #0d1117;
+    --mj-bg-surface-elevated: #21262d;
+    --mj-bg-surface-hover: #21262d;
+    --mj-bg-surface-active: #2d333b;
+    --mj-border-subtle: #21262d;
+    --mj-border-default: #30363d;
+    --mj-border-strong: #444c56;
+    --mj-chat-bubble-agent-bg: #21262d;
+    --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.55);
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: var(--font);
+  color: var(--mj-text-primary);
+  background: var(--mj-bg-page);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* --- Mockup page scaffolding --- */
+.mockup-header {
+  padding: 20px 28px;
+  background: var(--mj-bg-surface);
+  border-bottom: 1px solid var(--mj-border-default);
+}
+.mockup-header h1 { margin: 0 0 4px; font-size: 20px; }
+.mockup-header p { margin: 0; color: var(--mj-text-secondary); font-size: 14px; }
+.mockup-back { display: inline-block; margin-bottom: 10px; font-size: 13px; color: var(--mj-text-link); text-decoration: none; }
+.mockup-back:hover { text-decoration: underline; }
+
+.variant-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+  gap: 20px;
+  padding: 24px 28px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+.variant {
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+}
+.variant-head { padding: 14px 18px; border-bottom: 1px solid var(--mj-border-default); }
+.variant-head .badge { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--mj-brand-primary); }
+.variant-head h2 { margin: 4px 0 0; font-size: 16px; }
+.variant-body { padding: 18px; flex: 1; }
+.variant-notes { padding: 12px 18px; background: var(--mj-bg-surface-card); border-top: 1px solid var(--mj-border-default); font-size: 13px; color: var(--mj-text-secondary); }
+.variant-notes strong { color: var(--mj-text-primary); }
+.variant-notes .tradeoff { color: var(--mj-status-warning); }
+
+/* --- Reusable primitives --- */
+.btn {
+  font: inherit; font-size: 13px; font-weight: 600;
+  padding: 8px 14px; border-radius: var(--radius-sm);
+  border: 1px solid transparent; cursor: pointer;
+  background: var(--mj-brand-primary); color: var(--mj-text-inverse);
+}
+.btn:hover { background: var(--mj-brand-primary-hover); }
+.btn.secondary { background: transparent; color: var(--mj-text-primary); border-color: var(--mj-border-strong); }
+.btn.secondary:hover { background: var(--mj-bg-surface-hover); }
+.btn.ghost { background: transparent; color: var(--mj-text-secondary); }
+.btn.sm { padding: 5px 10px; font-size: 12px; }
+
+.pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600;
+  background: var(--mj-bg-surface-active); color: var(--mj-text-secondary);
+}
+.pill.brand { background: color-mix(in srgb, var(--mj-brand-primary) 14%, transparent); color: var(--mj-brand-primary); }
+.pill.success { background: var(--mj-status-success-bg); color: var(--mj-status-success); }
+.pill.warning { background: var(--mj-status-warning-bg); color: var(--mj-status-warning); }
+.pill.info { background: var(--mj-status-info-bg); color: var(--mj-status-info); }
+
+.card {
+  background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default);
+  border-radius: var(--radius-md); padding: 14px;
+}
+
+.input, .textarea, .select {
+  font: inherit; font-size: 13px; width: 100%;
+  padding: 8px 10px; border-radius: var(--radius-sm);
+  border: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface); color: var(--mj-text-primary);
+}
+.input:focus, .textarea:focus, .select:focus { outline: none; border-color: var(--mj-border-focus); box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 18%, transparent); }
+.label { display: block; font-size: 12px; font-weight: 600; color: var(--mj-text-secondary); margin-bottom: 4px; }
+.field { margin-bottom: 14px; }
+
+/* --- Chat chrome primitives (for in-context mockups) --- */
+.chat { display: flex; flex-direction: column; height: 100%; background: var(--mj-bg-surface); }
+.chat-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--mj-border-default); }
+.chat-title { font-weight: 600; font-size: 15px; }
+.chat-body { flex: 1; overflow: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.msg { max-width: 78%; padding: 10px 14px; border-radius: var(--radius-md); font-size: 14px; }
+.msg.user { align-self: flex-end; background: var(--mj-chat-bubble-user-bg); color: var(--mj-chat-bubble-user-text); border-bottom-right-radius: 3px; }
+.msg.agent { align-self: flex-start; background: var(--mj-chat-bubble-agent-bg); color: var(--mj-chat-bubble-agent-text); border: 1px solid var(--mj-border-default); border-bottom-left-radius: 3px; }
+.msg .who { font-size: 11px; font-weight: 700; opacity: .75; margin-bottom: 3px; }
+.composer { display: flex; gap: 8px; align-items: flex-end; padding: 12px 16px; border-top: 1px solid var(--mj-chat-composer-border); background: var(--mj-chat-composer-bg); }
+.composer .textarea { resize: none; min-height: 42px; }
+
+.avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--mj-brand-primary); color: #fff; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex: none; }
+.muted { color: var(--mj-text-muted); }
+.small { font-size: 12px; }
+.divider { height: 1px; background: var(--mj-border-default); margin: 12px 0; border: 0; }
+.row { display: flex; align-items: center; gap: 8px; }
+.spread { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  </style>
+<style>
+  /* Area-only styling — uses shared tokens, no hardcoded colors. */
+
+  /* Composer with an in-line agent mention chip */
+  .mention-chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600;
+    background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
+    color: var(--mj-brand-primary);
+    border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 30%, transparent);
+    white-space: nowrap;
+  }
+  .composer-stack { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px;
+    border-top: 1px solid var(--mj-chat-composer-border); background: var(--mj-chat-composer-bg); }
+  .composer-input {
+    border: 1px solid var(--mj-border-default); border-radius: var(--radius-md);
+    background: var(--mj-bg-surface); padding: 9px 11px; font-size: 14px; min-height: 40px;
+    display: flex; align-items: center; flex-wrap: wrap; gap: 6px; color: var(--mj-text-primary);
+  }
+  .composer-input.focused { border-color: var(--mj-border-focus);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 16%, transparent); }
+  .composer-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .composer-tools { display: flex; align-items: center; gap: 4px; color: var(--mj-text-muted); }
+  .icon-btn { width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center;
+    border-radius: var(--radius-sm); border: 1px solid transparent; background: transparent;
+    color: var(--mj-text-muted); cursor: pointer; font-size: 14px; }
+  .icon-btn:hover { background: var(--mj-bg-surface-hover); color: var(--mj-text-primary); }
+
+  /* Tiny inline "Plan first" toggle that hangs off the agent chip (Option A) */
+  .chip-toggle { display: inline-flex; align-items: center; gap: 5px; margin-left: 4px;
+    padding-left: 6px; border-left: 1px solid color-mix(in srgb, var(--mj-brand-primary) 30%, transparent); }
+  .mini-switch { position: relative; width: 28px; height: 16px; border-radius: 999px; flex: none;
+    background: var(--mj-brand-primary); transition: background .15s; }
+  .mini-switch::after { content: ""; position: absolute; top: 2px; left: 14px; width: 12px; height: 12px;
+    border-radius: 50%; background: var(--mj-bg-surface); box-shadow: var(--shadow-sm); }
+  .mini-switch.off { background: var(--mj-border-strong); }
+  .mini-switch.off::after { left: 2px; }
+  .chip-toggle .lbl { font-size: 11px; font-weight: 700; letter-spacing: .01em; }
+
+  /* Full switch for composer (Option B) */
+  .switch { position: relative; width: 38px; height: 22px; border-radius: 999px; flex: none;
+    background: var(--mj-brand-primary); cursor: pointer; }
+  .switch::after { content: ""; position: absolute; top: 2px; left: 18px; width: 18px; height: 18px;
+    border-radius: 50%; background: var(--mj-bg-surface); box-shadow: var(--shadow-sm); transition: left .15s; }
+  .switch.off { background: var(--mj-border-strong); }
+  .switch.off::after { left: 2px; }
+  .switch-row { display: inline-flex; align-items: center; gap: 8px; padding: 4px 10px 4px 6px;
+    border-radius: 999px; background: color-mix(in srgb, var(--mj-brand-primary) 8%, transparent);
+    border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 22%, transparent); }
+  .switch-row .txt { font-size: 12px; font-weight: 700; color: var(--mj-brand-primary); }
+
+  /* Plan card (shared by A) */
+  .plan-card { border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 35%, var(--mj-border-default));
+    border-radius: var(--radius-md); background: var(--mj-bg-surface); overflow: hidden; max-width: 90%; align-self: flex-start; }
+  .plan-card-head { display: flex; align-items: center; gap: 8px; padding: 10px 14px;
+    background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface-card));
+    border-bottom: 1px solid var(--mj-border-default); }
+  .plan-card-head .title { font-weight: 700; font-size: 13px; }
+  .plan-steps { list-style: none; margin: 0; padding: 6px 0; }
+  .plan-step { display: flex; align-items: flex-start; gap: 10px; padding: 8px 14px; font-size: 13px; }
+  .plan-step + .plan-step { border-top: 1px solid var(--mj-border-subtle); }
+  .plan-step .num { width: 20px; height: 20px; flex: none; border-radius: 50%; font-size: 11px; font-weight: 700;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: var(--mj-bg-surface-active); color: var(--mj-text-secondary); margin-top: 1px; }
+  .plan-step .body { flex: 1; }
+  .plan-step .body .edit-hint { color: var(--mj-text-muted); font-size: 11px; margin-top: 2px; opacity: 0; }
+  .plan-step:hover .edit-hint { opacity: 1; }
+  .plan-step .grip { color: var(--mj-text-disabled); cursor: grab; margin-top: 2px; }
+  .plan-card-foot { display: flex; align-items: center; gap: 8px; padding: 10px 14px;
+    border-top: 1px solid var(--mj-border-default); background: var(--mj-bg-surface-card); }
+  .editable { border-bottom: 1px dashed transparent; }
+  .plan-step:hover .editable { border-bottom-color: var(--mj-border-strong); }
+
+  /* Approval modal (Option B) */
+  .modal-stage { position: relative; border-radius: var(--radius-md); overflow: hidden;
+    background: var(--mj-bg-overlay); padding: 18px; min-height: 360px; display: flex; align-items: center; justify-content: center; }
+  .modal { width: 100%; max-width: 340px; background: var(--mj-bg-surface-elevated);
+    border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); overflow: hidden; }
+  .modal-head { padding: 14px 16px; border-bottom: 1px solid var(--mj-border-default); }
+  .modal-head h3 { margin: 0; font-size: 15px; }
+  .modal-head p { margin: 3px 0 0; font-size: 12px; color: var(--mj-text-secondary); }
+  .modal-body { padding: 8px 12px; max-height: 230px; overflow: auto; }
+  .step-row { display: flex; align-items: center; gap: 8px; padding: 8px; border-radius: var(--radius-sm);
+    border: 1px solid var(--mj-border-default); background: var(--mj-bg-surface); margin-bottom: 7px; }
+  .step-row .grip { color: var(--mj-text-disabled); cursor: grab; }
+  .step-row .label { flex: 1; font-size: 13px; }
+  .step-row .reorder { display: flex; flex-direction: column; gap: 1px; }
+  .reorder .icon-btn { width: 20px; height: 16px; font-size: 10px; }
+  .step-row .icon-btn.rm:hover { color: var(--mj-status-error); }
+  .modal-foot { display: flex; align-items: center; gap: 8px; padding: 12px 16px;
+    border-top: 1px solid var(--mj-border-default); background: var(--mj-bg-surface-card); }
+
+  /* Side canvas (Option C) */
+  .canvas-wrap { display: grid; grid-template-columns: 1fr 1.15fr; gap: 0; height: 420px;
+    border: 1px solid var(--mj-border-default); border-radius: var(--radius-md); overflow: hidden; }
+  .canvas-chat { display: flex; flex-direction: column; border-right: 1px solid var(--mj-border-default);
+    background: var(--mj-bg-surface); min-width: 0; }
+  .canvas-side { display: flex; flex-direction: column; background: var(--mj-bg-surface-card); min-width: 0; }
+  .canvas-side-head { display: flex; align-items: center; justify-content: space-between;
+    padding: 11px 14px; border-bottom: 1px solid var(--mj-border-default); background: var(--mj-bg-surface); }
+  .canvas-side-head .title { font-weight: 700; font-size: 13px; display: flex; align-items: center; gap: 7px; }
+  .canvas-side-body { flex: 1; overflow: auto; padding: 12px; }
+  .cstep { display: flex; gap: 10px; padding: 10px; border-radius: var(--radius-sm);
+    background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); margin-bottom: 8px; }
+  .cstep .marker { width: 22px; height: 22px; flex: none; border-radius: 50%; font-size: 11px; font-weight: 700;
+    display: inline-flex; align-items: center; justify-content: center; }
+  .cstep.done .marker { background: var(--mj-status-success-bg); color: var(--mj-status-success); }
+  .cstep.active { border-color: var(--mj-brand-primary);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--mj-brand-primary) 18%, transparent); }
+  .cstep.active .marker { background: var(--mj-brand-primary); color: var(--mj-text-inverse); }
+  .cstep.pending .marker { background: var(--mj-bg-surface-active); color: var(--mj-text-muted); }
+  .cstep .ctext { flex: 1; font-size: 13px; }
+  .cstep .cmeta { font-size: 11px; color: var(--mj-text-muted); margin-top: 2px; }
+  .canvas-side-foot { padding: 12px; border-top: 1px solid var(--mj-border-default); background: var(--mj-bg-surface); }
+  .canvas-chat .chat-body { padding: 12px; }
+  .canvas-mini-composer { display: flex; gap: 6px; padding: 10px 12px; border-top: 1px solid var(--mj-border-default); }
+  .progress-track { height: 5px; border-radius: 999px; background: var(--mj-bg-surface-active); overflow: hidden; margin-top: 4px; }
+  .progress-fill { height: 100%; width: 40%; background: var(--mj-brand-primary); }
+
+  .cap-note { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--mj-text-muted);
+    background: var(--mj-bg-surface-card); border: 1px solid var(--mj-border-default);
+    border-radius: 999px; padding: 3px 9px; }
+  .mini-msg { font-size: 13px; }
+</style>
+</head>
+<body>
+
+<div class="mockup-header">
+  <a class="mockup-back" href="../index.html">← All mockups</a>
+  <h1>Plan Mode</h1>
+  <p>A per-request toggle (default off) — when on, a plan-capable agent returns an editable plan for the user to approve, edit, or reject <em>before</em> it executes. Reuses MJ's <code>AIAgentRequest</code> human-in-the-loop approval.</p>
+</div>
+
+<div class="variant-grid">
+
+  <!-- ============================ OPTION A ============================ -->
+  <div class="variant">
+    <div class="variant-head">
+      <span class="badge">Option A</span>
+      <h2>Agent-pill “Plan first” toggle → inline checklist card</h2>
+    </div>
+    <div class="variant-body">
+      <div class="chat" style="height: 460px; border:1px solid var(--mj-border-default); border-radius: var(--radius-md); overflow:hidden;">
+        <div class="chat-body">
+          <div class="msg user">Migrate the contacts table to the new schema and notify the owners.</div>
+
+          <!-- Returned plan as editable checklist card -->
+          <div class="plan-card">
+            <div class="plan-card-head">
+              <span class="avatar" style="width:22px;height:22px;font-size:10px;">DA</span>
+              <span class="title">Data Agent · Proposed plan</span>
+              <span class="pill brand" style="margin-left:auto;"><i class="fa-solid fa-list-check"></i> 4 steps</span>
+            </div>
+            <ol class="plan-steps">
+              <li class="plan-step"><span class="grip"><i class="fa-solid fa-grip-vertical"></i></span><span class="num">1</span>
+                <div class="body"><span class="editable">Snapshot <code>contacts</code> (backup before migration)</span><div class="edit-hint"><i class="fa-solid fa-pen"></i> click any step to edit</div></div></li>
+              <li class="plan-step"><span class="grip"><i class="fa-solid fa-grip-vertical"></i></span><span class="num">2</span>
+                <div class="body"><span class="editable">Map legacy fields → new schema columns</span></div></li>
+              <li class="plan-step"><span class="grip"><i class="fa-solid fa-grip-vertical"></i></span><span class="num">3</span>
+                <div class="body"><span class="editable">Run migration in a transaction with validation</span></div></li>
+              <li class="plan-step"><span class="grip"><i class="fa-solid fa-grip-vertical"></i></span><span class="num">4</span>
+                <div class="body"><span class="editable">Email record owners a summary of changes</span></div></li>
+            </ol>
+            <div class="plan-card-foot">
+              <button class="btn sm"><i class="fa-solid fa-check"></i> Approve &amp; run</button>
+              <button class="btn secondary sm"><i class="fa-solid fa-pen"></i> Edit</button>
+              <button class="btn ghost sm" style="margin-left:auto;"><i class="fa-solid fa-xmark"></i> Reject</button>
+              <button class="btn ghost sm"><i class="fa-solid fa-plus"></i> Add step</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Composer with agent chip + inline Plan-first toggle -->
+        <div class="composer-stack">
+          <div class="composer-input focused">
+            <span class="mention-chip">
+              <i class="fa-solid fa-robot"></i> Data Agent
+              <span class="chip-toggle" title="Return a plan for approval before running">
+                <span class="lbl">Plan</span>
+                <span class="mini-switch"></span>
+              </span>
+            </span>
+            <span class="muted small">migrate the contacts table…</span>
+          </div>
+          <div class="composer-bar">
+            <div class="composer-tools">
+              <span class="icon-btn"><i class="fa-solid fa-paperclip"></i></span>
+              <span class="cap-note"><i class="fa-solid fa-circle-info"></i> Toggle shows only on plan-capable agents</span>
+            </div>
+            <button class="btn sm"><i class="fa-solid fa-paper-plane"></i> Send</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="variant-notes">
+      <p><strong>What:</strong> The Plan-first switch lives <em>on the agent pill itself</em> inside the composer, so it’s scoped to exactly the agent you @mentioned. The returned plan is an inline, editable checklist card in the thread with drag-to-reorder, click-to-edit steps, and Approve / Edit / Reject (affirmative on the LEFT per MJ convention).</p>
+      <p><strong>Why world-class:</strong> Zero new chrome — it extends the mention model users already know. The decision (“plan or just go”) sits right next to the subject (the agent), and the plan stays in conversational flow so it reads like the rest of the thread.</p>
+      <p><span class="tradeoff">Tradeoff:</span> The toggle is small and per-mention; users who want plan mode “always on” for an agent must re-toggle each request, and a busy composer can hide the affordance.</p>
+    </div>
+  </div>
+
+  <!-- ============================ OPTION B ============================ -->
+  <div class="variant">
+    <div class="variant-head">
+      <span class="badge">Option B</span>
+      <h2>Composer mode switch → focused approval modal</h2>
+    </div>
+    <div class="variant-body">
+      <!-- Composer state first -->
+      <div style="border:1px solid var(--mj-border-default); border-radius: var(--radius-md); overflow:hidden; margin-bottom:14px;">
+        <div class="composer-stack" style="border-top:0;">
+          <div class="composer-input">
+            <span class="mention-chip"><i class="fa-solid fa-robot"></i> Data Agent</span>
+            <span class="muted small">migrate the contacts table and notify owners</span>
+          </div>
+          <div class="composer-bar">
+            <div class="composer-tools">
+              <span class="switch-row" title="When on, submit opens a plan to review first">
+                <span class="switch"></span><span class="txt">Plan mode</span>
+              </span>
+            </div>
+            <button class="btn sm"><i class="fa-solid fa-paper-plane"></i> Review plan</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- The modal that opens on submit -->
+      <div class="modal-stage">
+        <div class="modal">
+          <div class="modal-head">
+            <h3><i class="fa-solid fa-list-check"></i> Review plan before running</h3>
+            <p>Data Agent will execute these steps once you approve. Reorder, edit, or remove any step.</p>
+          </div>
+          <div class="modal-body">
+            <div class="step-row">
+              <span class="grip"><i class="fa-solid fa-grip-vertical"></i></span>
+              <span class="label">Snapshot <code>contacts</code> table</span>
+              <span class="reorder"><span class="icon-btn"><i class="fa-solid fa-chevron-up"></i></span><span class="icon-btn"><i class="fa-solid fa-chevron-down"></i></span></span>
+              <span class="icon-btn rm"><i class="fa-solid fa-trash"></i></span>
+            </div>
+            <div class="step-row">
+              <span class="grip"><i class="fa-solid fa-grip-vertical"></i></span>
+              <span class="label">Map legacy fields → new columns</span>
+              <span class="reorder"><span class="icon-btn"><i class="fa-solid fa-chevron-up"></i></span><span class="icon-btn"><i class="fa-solid fa-chevron-down"></i></span></span>
+              <span class="icon-btn rm"><i class="fa-solid fa-trash"></i></span>
+            </div>
+            <div class="step-row">
+              <span class="grip"><i class="fa-solid fa-grip-vertical"></i></span>
+              <span class="label">Run migration in a transaction</span>
+              <span class="reorder"><span class="icon-btn"><i class="fa-solid fa-chevron-up"></i></span><span class="icon-btn"><i class="fa-solid fa-chevron-down"></i></span></span>
+              <span class="icon-btn rm"><i class="fa-solid fa-trash"></i></span>
+            </div>
+            <div class="step-row">
+              <span class="grip"><i class="fa-solid fa-grip-vertical"></i></span>
+              <span class="label">Email owners a change summary</span>
+              <span class="reorder"><span class="icon-btn"><i class="fa-solid fa-chevron-up"></i></span><span class="icon-btn"><i class="fa-solid fa-chevron-down"></i></span></span>
+              <span class="icon-btn rm"><i class="fa-solid fa-trash"></i></span>
+            </div>
+            <button class="btn ghost sm"><i class="fa-solid fa-plus"></i> Add step</button>
+          </div>
+          <div class="modal-foot">
+            <button class="btn"><i class="fa-solid fa-play"></i> Approve &amp; run</button>
+            <button class="btn ghost" style="margin-left:auto;"><i class="fa-solid fa-xmark"></i> Reject</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="variant-notes">
+      <p><strong>What:</strong> A persistent “Plan mode” switch on the composer (default off). With it on, the send button reads <em>Review plan</em> and submitting opens a focused modal that surfaces the full multi-step plan with drag handles, up/down reorder, per-step remove, add-step, and Approve / Reject.</p>
+      <p><strong>Why world-class:</strong> A dedicated modal gives the plan room to breathe and signals a real decision point — ideal for high-stakes, destructive, or many-step work. The switch is sticky for the session, so a user doing a batch of careful operations sets it once.</p>
+      <p><span class="tradeoff">Tradeoff:</span> A modal interrupts conversational flow and adds a click; the persistent switch can be left on and surprise a user who expected immediate execution.</p>
+    </div>
+  </div>
+
+  <!-- ============================ OPTION C ============================ -->
+  <div class="variant">
+    <div class="variant-head">
+      <span class="badge">Option C</span>
+      <h2>Plan-first side canvas with live step progress</h2>
+    </div>
+    <div class="variant-body">
+      <div class="canvas-wrap">
+        <!-- Left: chat -->
+        <div class="canvas-chat">
+          <div class="chat-header" style="padding:10px 12px;">
+            <span class="chat-title small"><i class="fa-solid fa-comments"></i> Conversation</span>
+            <span class="pill info"><i class="fa-solid fa-diagram-project"></i> Planning</span>
+          </div>
+          <div class="chat-body">
+            <div class="msg user mini-msg">Migrate the contacts table &amp; notify the owners.</div>
+            <div class="msg agent mini-msg"><span class="who">Data Agent</span>I’ve drafted a plan in the panel — review and edit it, then press <strong>Run</strong>. I’ll work through it step by step.</div>
+          </div>
+          <div class="canvas-mini-composer">
+            <span class="composer-input" style="flex:1; min-height:34px; padding:6px 9px;">
+              <span class="muted small">Reply or refine the plan…</span>
+            </span>
+            <button class="btn sm"><i class="fa-solid fa-paper-plane"></i></button>
+          </div>
+        </div>
+
+        <!-- Right: plan side canvas -->
+        <div class="canvas-side">
+          <div class="canvas-side-head">
+            <span class="title"><i class="fa-solid fa-list-check"></i> Plan
+              <span class="pill" style="font-weight:700;">Editable</span>
+            </span>
+            <span class="icon-btn"><i class="fa-solid fa-ellipsis"></i></span>
+          </div>
+          <div class="canvas-side-body">
+            <div class="cstep done">
+              <span class="marker"><i class="fa-solid fa-check"></i></span>
+              <div class="ctext">Snapshot <code>contacts</code> table
+                <div class="cmeta">Done · 1,204 rows backed up</div>
+              </div>
+            </div>
+            <div class="cstep active">
+              <span class="marker">2</span>
+              <div class="ctext">Map legacy fields → new columns
+                <div class="cmeta">Running…</div>
+                <div class="progress-track"><div class="progress-fill"></div></div>
+              </div>
+            </div>
+            <div class="cstep pending">
+              <span class="marker">3</span>
+              <div class="ctext"><span class="editable">Run migration in a transaction</span>
+                <div class="cmeta">Pending</div>
+              </div>
+            </div>
+            <div class="cstep pending">
+              <span class="marker">4</span>
+              <div class="ctext"><span class="editable">Email owners a change summary</span>
+                <div class="cmeta">Pending</div>
+              </div>
+            </div>
+          </div>
+          <div class="canvas-side-foot">
+            <!-- Before approval this shows Run / Discard; here mid-execution it shows controls -->
+            <div class="row">
+              <button class="btn sm"><i class="fa-solid fa-play"></i> Run</button>
+              <button class="btn secondary sm"><i class="fa-solid fa-plus"></i> Add step</button>
+              <button class="btn ghost sm" style="margin-left:auto;"><i class="fa-solid fa-rotate-left"></i> Discard</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="small muted" style="margin:10px 2px 0;"><i class="fa-solid fa-circle-info"></i> Before approval the panel is fully editable and the footer reads <strong>Run / Discard</strong>; after pressing Run the same steps animate through done → active → pending.</p>
+    </div>
+    <div class="variant-notes">
+      <p><strong>What:</strong> A Claude-Code-style side panel docks beside the conversation. The plan appears there for review and editing (reorder, edit, add steps); pressing <em>Run</em> approves it, and the same panel then shows live step-by-step progress (done / active-with-progress / pending) while the chat stays clean.</p>
+      <p><strong>Why world-class:</strong> Separates “the plan” from “the chatter” — the durable artifact gets a persistent home that doubles as the execution dashboard. Plan and progress share one surface, so the user’s mental model is continuous from approval through completion.</p>
+      <p><span class="tradeoff">Tradeoff:</span> Costs horizontal space and added layout complexity; on narrow/mobile widths the side canvas must collapse to a drawer, and the richer surface is overkill for a one-line plan.</p>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

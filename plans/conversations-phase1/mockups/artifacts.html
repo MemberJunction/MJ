@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Artifacts: Edit, Share &amp; Remix — MJ Conversations</title>
+<style>
+/* ============================================================================
+   Shared mockup stylesheet — MemberJunction Conversations Phase 1
+   Static, self-contained design language for the UX mockups. Mirrors MJ's
+   semantic design tokens (--mj-*) so the mockups read like the real product.
+   These mockups are illustrative only; production code uses the real tokens
+   from packages/Angular/Generic/shared/src/lib/_tokens.scss.
+   ============================================================================ */
+
+:root {
+  /* Brand */
+  --mj-brand-primary: #0076b6;
+  --mj-brand-primary-hover: #00659c;
+  --mj-brand-primary-active: #264FAF;
+  /* Text */
+  --mj-text-primary: #1f2933;
+  --mj-text-secondary: #475569;
+  --mj-text-muted: #64748b;
+  --mj-text-disabled: #94a3b8;
+  --mj-text-inverse: #ffffff;
+  --mj-text-link: #0076b6;
+  /* Backgrounds */
+  --mj-bg-page: #f1f5f9;
+  --mj-bg-surface: #ffffff;
+  --mj-bg-surface-card: #f8fafc;
+  --mj-bg-surface-sunken: #f1f5f9;
+  --mj-bg-surface-elevated: #ffffff;
+  --mj-bg-surface-hover: #f1f5f9;
+  --mj-bg-surface-active: #e2e8f0;
+  --mj-bg-overlay: rgba(15, 23, 42, 0.45);
+  /* Borders */
+  --mj-border-subtle: #f1f5f9;
+  --mj-border-default: #e2e8f0;
+  --mj-border-strong: #cbd5e1;
+  --mj-border-focus: #0076b6;
+  /* Status */
+  --mj-status-success: #16a34a;
+  --mj-status-success-bg: #dcfce7;
+  --mj-status-warning: #ea580c;
+  --mj-status-warning-bg: #ffedd5;
+  --mj-status-error: #dc2626;
+  --mj-status-error-bg: #fee2e2;
+  --mj-status-info: #0891b2;
+  --mj-status-info-bg: #cffafe;
+  /* Chat tokens */
+  --mj-chat-bubble-user-bg: var(--mj-brand-primary);
+  --mj-chat-bubble-user-text: var(--mj-text-inverse);
+  --mj-chat-bubble-agent-bg: var(--mj-bg-surface-card);
+  --mj-chat-bubble-agent-text: var(--mj-text-primary);
+  --mj-chat-composer-bg: var(--mj-bg-surface);
+  --mj-chat-composer-border: var(--mj-border-default);
+  /* Shape */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --shadow-md: 0 4px 14px rgba(15, 23, 42, 0.10);
+  --shadow-lg: 0 12px 40px rgba(15, 23, 42, 0.18);
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --mj-text-primary: #e6edf3;
+    --mj-text-secondary: #aebfce;
+    --mj-text-muted: #8b9bab;
+    --mj-text-disabled: #5b6b7b;
+    --mj-text-inverse: #ffffff;
+    --mj-text-link: #4cb3e3;
+    --mj-bg-page: #0d1117;
+    --mj-bg-surface: #161b22;
+    --mj-bg-surface-card: #1c232c;
+    --mj-bg-surface-sunken: #0d1117;
+    --mj-bg-surface-elevated: #21262d;
+    --mj-bg-surface-hover: #21262d;
+    --mj-bg-surface-active: #2d333b;
+    --mj-border-subtle: #21262d;
+    --mj-border-default: #30363d;
+    --mj-border-strong: #444c56;
+    --mj-chat-bubble-agent-bg: #21262d;
+    --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.55);
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: var(--font);
+  color: var(--mj-text-primary);
+  background: var(--mj-bg-page);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* --- Mockup page scaffolding --- */
+.mockup-header {
+  padding: 20px 28px;
+  background: var(--mj-bg-surface);
+  border-bottom: 1px solid var(--mj-border-default);
+}
+.mockup-header h1 { margin: 0 0 4px; font-size: 20px; }
+.mockup-header p { margin: 0; color: var(--mj-text-secondary); font-size: 14px; }
+.mockup-back { display: inline-block; margin-bottom: 10px; font-size: 13px; color: var(--mj-text-link); text-decoration: none; }
+.mockup-back:hover { text-decoration: underline; }
+
+.variant-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+  gap: 20px;
+  padding: 24px 28px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+.variant {
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+}
+.variant-head { padding: 14px 18px; border-bottom: 1px solid var(--mj-border-default); }
+.variant-head .badge { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--mj-brand-primary); }
+.variant-head h2 { margin: 4px 0 0; font-size: 16px; }
+.variant-body { padding: 18px; flex: 1; }
+.variant-notes { padding: 12px 18px; background: var(--mj-bg-surface-card); border-top: 1px solid var(--mj-border-default); font-size: 13px; color: var(--mj-text-secondary); }
+.variant-notes strong { color: var(--mj-text-primary); }
+.variant-notes .tradeoff { color: var(--mj-status-warning); }
+
+/* --- Reusable primitives --- */
+.btn {
+  font: inherit; font-size: 13px; font-weight: 600;
+  padding: 8px 14px; border-radius: var(--radius-sm);
+  border: 1px solid transparent; cursor: pointer;
+  background: var(--mj-brand-primary); color: var(--mj-text-inverse);
+}
+.btn:hover { background: var(--mj-brand-primary-hover); }
+.btn.secondary { background: transparent; color: var(--mj-text-primary); border-color: var(--mj-border-strong); }
+.btn.secondary:hover { background: var(--mj-bg-surface-hover); }
+.btn.ghost { background: transparent; color: var(--mj-text-secondary); }
+.btn.sm { padding: 5px 10px; font-size: 12px; }
+
+.pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600;
+  background: var(--mj-bg-surface-active); color: var(--mj-text-secondary);
+}
+.pill.brand { background: color-mix(in srgb, var(--mj-brand-primary) 14%, transparent); color: var(--mj-brand-primary); }
+.pill.success { background: var(--mj-status-success-bg); color: var(--mj-status-success); }
+.pill.warning { background: var(--mj-status-warning-bg); color: var(--mj-status-warning); }
+.pill.info { background: var(--mj-status-info-bg); color: var(--mj-status-info); }
+
+.card {
+  background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default);
+  border-radius: var(--radius-md); padding: 14px;
+}
+
+.input, .textarea, .select {
+  font: inherit; font-size: 13px; width: 100%;
+  padding: 8px 10px; border-radius: var(--radius-sm);
+  border: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface); color: var(--mj-text-primary);
+}
+.input:focus, .textarea:focus, .select:focus { outline: none; border-color: var(--mj-border-focus); box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 18%, transparent); }
+.label { display: block; font-size: 12px; font-weight: 600; color: var(--mj-text-secondary); margin-bottom: 4px; }
+.field { margin-bottom: 14px; }
+
+/* --- Chat chrome primitives (for in-context mockups) --- */
+.chat { display: flex; flex-direction: column; height: 100%; background: var(--mj-bg-surface); }
+.chat-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--mj-border-default); }
+.chat-title { font-weight: 600; font-size: 15px; }
+.chat-body { flex: 1; overflow: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.msg { max-width: 78%; padding: 10px 14px; border-radius: var(--radius-md); font-size: 14px; }
+.msg.user { align-self: flex-end; background: var(--mj-chat-bubble-user-bg); color: var(--mj-chat-bubble-user-text); border-bottom-right-radius: 3px; }
+.msg.agent { align-self: flex-start; background: var(--mj-chat-bubble-agent-bg); color: var(--mj-chat-bubble-agent-text); border: 1px solid var(--mj-border-default); border-bottom-left-radius: 3px; }
+.msg .who { font-size: 11px; font-weight: 700; opacity: .75; margin-bottom: 3px; }
+.composer { display: flex; gap: 8px; align-items: flex-end; padding: 12px 16px; border-top: 1px solid var(--mj-chat-composer-border); background: var(--mj-chat-composer-bg); }
+.composer .textarea { resize: none; min-height: 42px; }
+
+.avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--mj-brand-primary); color: #fff; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex: none; }
+.muted { color: var(--mj-text-muted); }
+.small { font-size: 12px; }
+.divider { height: 1px; background: var(--mj-border-default); margin: 12px 0; border: 0; }
+.row { display: flex; align-items: center; gap: 8px; }
+.spread { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  </style>
+<style>
+  /* Area-only styles — primitives come from _shared.css */
+  .art-toolbar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 8px 10px; border-bottom: 1px solid var(--mj-border-default); background: var(--mj-bg-surface-card); border-radius: var(--radius-md) var(--radius-md) 0 0; }
+  .art-toolbar .spacer { flex: 1; }
+  .art-render { padding: 14px; background: var(--mj-bg-surface-sunken); border-radius: 0 0 var(--radius-md) var(--radius-md); }
+  .live-tag { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; color: var(--mj-status-success); }
+  .live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--mj-status-success); box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-status-success) 25%, transparent); }
+
+  /* mini "live component" render */
+  .mini-comp { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: var(--radius-sm); padding: 12px; }
+  .mini-comp h4 { margin: 0 0 8px; font-size: 13px; }
+  .bar-row { display: grid; grid-template-columns: 70px 1fr 36px; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 11px; }
+  .bar-track { height: 9px; border-radius: 999px; background: var(--mj-bg-surface-active); overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 999px; background: var(--mj-brand-primary); }
+
+  /* version rail (Option A) */
+  .ver-layout { display: grid; grid-template-columns: 150px 1fr; gap: 0; border: 1px solid var(--mj-border-default); border-radius: var(--radius-md); overflow: hidden; }
+  .ver-rail { background: var(--mj-bg-surface-card); border-right: 1px solid var(--mj-border-default); padding: 10px 8px; }
+  .ver-rail .rail-title { font-size: 10px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--mj-text-muted); padding: 0 4px 8px; }
+  .ver-item { position: relative; padding: 7px 8px 7px 20px; border-radius: var(--radius-sm); cursor: default; margin-bottom: 2px; }
+  .ver-item::before { content: ""; position: absolute; left: 7px; top: 12px; width: 8px; height: 8px; border-radius: 50%; background: var(--mj-border-strong); border: 2px solid var(--mj-bg-surface-card); }
+  .ver-item.active { background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent); }
+  .ver-item.active::before { background: var(--mj-brand-primary); }
+  .ver-item .v-num { font-size: 12px; font-weight: 700; }
+  .ver-item .v-meta { font-size: 10px; color: var(--mj-text-muted); }
+  .ver-line { position: absolute; left: 10px; top: 28px; bottom: 6px; width: 2px; background: var(--mj-border-default); }
+
+  /* dialog mock */
+  .dlg-scrim { background: var(--mj-bg-surface-sunken); border: 1px dashed var(--mj-border-strong); border-radius: var(--radius-md); padding: 14px; position: relative; }
+  .dlg { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: var(--radius-md); box-shadow: var(--shadow-lg); padding: 16px; }
+  .dlg h4 { margin: 0 0 4px; font-size: 14px; }
+  .link-box { display: flex; gap: 6px; align-items: center; }
+  .link-box .input { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
+
+  /* gated state */
+  .gated { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border: 1px dashed var(--mj-border-strong); border-radius: var(--radius-sm); background: var(--mj-bg-surface-card); color: var(--mj-text-muted); font-size: 12px; }
+
+  /* Option B split */
+  .canvas { display: grid; grid-template-columns: 0.85fr 1.15fr; border: 1px solid var(--mj-border-default); border-radius: var(--radius-md); overflow: hidden; min-height: 360px; }
+  .canvas-chat { border-right: 1px solid var(--mj-border-default); display: flex; flex-direction: column; background: var(--mj-bg-surface); }
+  .canvas-art { display: flex; flex-direction: column; background: var(--mj-bg-surface-card); }
+  .canvas-chat .chat-body { padding: 12px; }
+  .editline { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: var(--radius-sm); padding: 8px 10px; color: var(--mj-text-secondary); }
+  .editline .ins { background: color-mix(in srgb, var(--mj-status-success) 22%, transparent); color: var(--mj-status-success); border-radius: 3px; padding: 0 2px; }
+
+  /* Option C gallery */
+  .gallery { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .art-tile { border: 1px solid var(--mj-border-default); border-radius: var(--radius-md); overflow: hidden; background: var(--mj-bg-surface); display: flex; flex-direction: column; }
+  .art-thumb { height: 78px; background: var(--mj-bg-surface-sunken); border-bottom: 1px solid var(--mj-border-default); display: flex; align-items: center; justify-content: center; color: var(--mj-text-disabled); font-size: 22px; position: relative; }
+  .art-thumb .type-pill { position: absolute; top: 6px; left: 6px; }
+  .art-tile-body { padding: 10px; flex: 1; display: flex; flex-direction: column; gap: 6px; }
+  .art-tile-body h4 { margin: 0; font-size: 13px; }
+  .tile-actions { display: flex; gap: 4px; padding: 8px 10px; border-top: 1px solid var(--mj-border-default); }
+  .icon-btn { flex: 1; font-size: 11px; padding: 6px 4px; border-radius: var(--radius-sm); border: 1px solid var(--mj-border-default); background: var(--mj-bg-surface); color: var(--mj-text-secondary); cursor: pointer; text-align: center; }
+  .icon-btn:hover { background: var(--mj-bg-surface-hover); color: var(--mj-text-primary); }
+  .gallery-filters { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+
+<div class="mockup-header">
+  <a class="mockup-back" href="../index.html">&larr; Back to mockups index</a>
+  <h1>Artifacts: Edit, Share &amp; Remix</h1>
+  <p>Three divergent models for adding in-UI editing (new version, agent stays collaborator), public Magic-Link sharing (privilege-gated), and remix-into-new-conversation on top of MJ's existing live-component artifact runtime.</p>
+</div>
+
+<div class="variant-grid">
+
+  <!-- ============================== OPTION A ============================== -->
+  <section class="variant">
+    <div class="variant-head">
+      <span class="badge">Option A</span>
+      <h2>Inline Card + Version Timeline</h2>
+    </div>
+    <div class="variant-body">
+      <!-- in-thread context -->
+      <div class="msg agent" style="max-width:100%; margin-bottom:12px;">
+        <div class="who">Skip</div>
+        I built a Q3 revenue breakdown component — open it to edit, share, or remix.
+      </div>
+
+      <!-- the expanded artifact card -->
+      <div class="ver-layout">
+        <!-- version rail -->
+        <aside class="ver-rail" style="position:relative;">
+          <div class="rail-title">Versions</div>
+          <div class="ver-line"></div>
+          <div class="ver-item active">
+            <div class="v-num">v3 <span class="pill brand sm" style="padding:1px 7px;font-size:9px;">current</span></div>
+            <div class="v-meta">You · just now</div>
+          </div>
+          <div class="ver-item">
+            <div class="v-num">v2</div>
+            <div class="v-meta">Skip · 2h ago</div>
+          </div>
+          <div class="ver-item">
+            <div class="v-num">v1</div>
+            <div class="v-meta">Skip · 2h ago</div>
+          </div>
+        </aside>
+
+        <!-- editor pane -->
+        <div>
+          <div class="art-toolbar">
+            <span class="pill info" style="font-size:11px;">Revenue Report</span>
+            <span class="live-tag"><span class="live-dot"></span>Live</span>
+            <span class="spacer"></span>
+            <button class="btn sm">Edit</button>
+            <button class="btn secondary sm">Share</button>
+            <button class="btn secondary sm">Remix</button>
+          </div>
+          <div class="art-render">
+            <div class="mini-comp">
+              <h4>Q3 Revenue by Region <span class="muted small">(editing)</span></h4>
+              <div class="bar-row"><span>Americas</span><div class="bar-track"><div class="bar-fill" style="width:82%"></div></div><span>$4.2M</span></div>
+              <div class="bar-row"><span>EMEA</span><div class="bar-track"><div class="bar-fill" style="width:61%"></div></div><span>$3.1M</span></div>
+              <div class="bar-row"><span>APAC</span><div class="bar-track"><div class="bar-fill" style="width:44%"></div></div><span>$2.2M</span></div>
+              <input class="input sm" style="margin-top:8px;font-size:11px;" value="Title: Q3 Revenue by Region" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <hr class="divider">
+
+      <!-- privilege-gated share dialog (HAS privilege) -->
+      <div class="small muted" style="margin-bottom:6px;font-weight:600;">Share dialog — user <em>has</em> "Can Publish Artifacts Publicly"</div>
+      <div class="dlg-scrim">
+        <div class="dlg">
+          <div class="spread">
+            <h4>Share this artifact</h4>
+            <span class="muted small">v3</span>
+          </div>
+          <hr class="divider">
+          <div class="label">People &amp; roles (internal)</div>
+          <div class="row" style="margin-bottom:12px;">
+            <span class="avatar" style="width:24px;height:24px;font-size:10px;">JD</span>
+            <span class="small">Jordan D.</span>
+            <span class="spacer" style="flex:1;"></span>
+            <span class="pill sm">Can edit</span>
+          </div>
+          <hr class="divider">
+          <div class="spread" style="margin-bottom:6px;">
+            <div class="label" style="margin:0;">Public Magic Link</div>
+            <span class="pill success">Read-only</span>
+          </div>
+          <div class="link-box">
+            <input class="input" readonly value="https://app.mj.dev/a/9f3a…2c1 (read-only)" />
+            <button class="btn sm">Copy</button>
+          </div>
+          <div class="small muted" style="margin-top:6px;">Server-minted single-artifact link · expires in 30 days · no login required.</div>
+        </div>
+      </div>
+
+      <!-- gated state (NO privilege) -->
+      <div class="small muted" style="margin:12px 0 6px;font-weight:600;">Same dialog — user <em>lacks</em> the privilege</div>
+      <div class="dlg" style="box-shadow:none;">
+        <div class="label">People &amp; roles (internal)</div>
+        <div class="row" style="margin-bottom:10px;">
+          <span class="avatar" style="width:24px;height:24px;font-size:10px;">JD</span>
+          <span class="small">Jordan D. · Can view</span>
+        </div>
+        <div class="gated"><span>🔒</span> Public link sharing isn't available on your account. The Magic-Link section is hidden entirely.</div>
+      </div>
+    </div>
+    <div class="variant-notes">
+      <p><strong>What:</strong> The artifact lives <strong>in the thread</strong>. Clicking it expands an inline editor with a left version-timeline rail and an Edit / Share / Remix toolbar. Saving an edit writes a <strong>new version</strong> (v3) authored by the user; the agent remains a collaborator on earlier versions.</p>
+      <p><strong>Why world-class:</strong> Zero context switch — edit, branch history, and provenance sit exactly where the conversation produced them. The version rail makes "who changed what" legible, which is the hard part of co-editing with an agent.</p>
+      <p><strong>Magic Link &amp; privilege:</strong> The Share dialog mints a <strong>server-side read-only single-artifact Magic Link</strong> (RS256, expiring). The whole Magic-Link section is rendered only when the user holds <strong>"Can Publish Artifacts Publicly"</strong> — absent it, the section is omitted (not just disabled).</p>
+      <p class="tradeoff"><strong>Tradeoff:</strong> An inline editor competes for vertical space inside the chat; complex artifacts feel cramped versus a dedicated surface.</p>
+    </div>
+  </section>
+
+  <!-- ============================== OPTION B ============================== -->
+  <section class="variant">
+    <div class="variant-head">
+      <span class="badge">Option B</span>
+      <h2>Canvas Split View</h2>
+    </div>
+    <div class="variant-body">
+      <div class="canvas">
+        <!-- left: chat -->
+        <div class="canvas-chat">
+          <div class="chat-header"><span class="chat-title small">Pricing model</span></div>
+          <div class="chat-body" style="gap:10px;">
+            <div class="msg user" style="max-width:90%;">Make APAC stand out and add a total row.</div>
+            <div class="msg agent" style="max-width:95%;">
+              <div class="who">Skip</div>
+              Done — highlighted APAC and added the total. <span class="muted small">→ canvas updated to v4</span>
+            </div>
+          </div>
+          <div class="composer" style="padding:10px 12px;">
+            <textarea class="textarea" placeholder="Ask, or edit directly →">↳ or edit on the right</textarea>
+            <button class="btn sm">Send</button>
+          </div>
+        </div>
+
+        <!-- right: live artifact canvas -->
+        <div class="canvas-art">
+          <div class="art-toolbar" style="border-radius:0;">
+            <span class="pill info" style="font-size:11px;">Live Component</span>
+            <span class="live-tag"><span class="live-dot"></span>Preview</span>
+            <span class="spacer"></span>
+            <button class="btn sm">Publish</button>
+            <button class="btn secondary sm">Remix</button>
+            <span class="pill sm">v4</span>
+          </div>
+          <div style="padding:12px; flex:1; overflow:auto;">
+            <div class="mini-comp" style="margin-bottom:10px;">
+              <h4>Q3 Revenue by Region</h4>
+              <div class="bar-row"><span>Americas</span><div class="bar-track"><div class="bar-fill" style="width:82%"></div></div><span>$4.2M</span></div>
+              <div class="bar-row"><span>EMEA</span><div class="bar-track"><div class="bar-fill" style="width:61%"></div></div><span>$3.1M</span></div>
+              <div class="bar-row"><span style="color:var(--mj-brand-primary);font-weight:700;">APAC</span><div class="bar-track"><div class="bar-fill" style="width:44%;background:var(--mj-brand-primary-active)"></div></div><span>$2.2M</span></div>
+              <hr class="divider" style="margin:8px 0;">
+              <div class="bar-row" style="font-weight:700;"><span>Total</span><span class="muted" style="grid-column:2;text-align:right;">$9.5M</span><span></span></div>
+            </div>
+            <div class="label">Direct edit</div>
+            <div class="editline">title = <span class="ins">"Q3 Revenue by Region"</span></div>
+            <div class="editline" style="margin-top:6px;">highlight = <span class="ins">"APAC"</span></div>
+          </div>
+
+          <!-- inline publish popover -->
+          <div style="padding:12px;border-top:1px solid var(--mj-border-default);">
+            <div class="dlg" style="box-shadow:none;border-style:dashed;">
+              <div class="spread"><h4 style="margin:0;">Publish to web</h4><span class="pill success">Magic Link · read-only</span></div>
+              <div class="link-box" style="margin-top:8px;">
+                <input class="input" readonly value="https://app.mj.dev/a/7b2e…aa9" />
+                <button class="btn sm">Copy</button>
+              </div>
+              <div class="small muted" style="margin-top:6px;">Publish is shown only with <strong>Can Publish Artifacts Publicly</strong>; otherwise just Remix &amp; internal share appear.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="variant-notes">
+      <p><strong>What:</strong> The ChatGPT/Gemini <strong>Canvas</strong> paradigm adapted to MJ's live runtime — chat on the left, the artifact rendered <strong>live</strong> on the right with direct editing, a Publish (Magic Link) button, and Remix. Agent edits and human edits both flow into the same canvas, each producing a version.</p>
+      <p><strong>Why world-class:</strong> Tight conversational loop: you can talk <em>or</em> tinker, and the live preview reflects both instantly. Best surface for rich/interactive, data-aware "form-role" components that need room to breathe.</p>
+      <p><strong>Magic Link &amp; privilege:</strong> <strong>Publish</strong> mints the server-side read-only single-artifact Magic Link inline. The Publish button is conditionally rendered on <strong>"Can Publish Artifacts Publicly"</strong>; without it the toolbar shows only Remix + internal share.</p>
+      <p class="tradeoff"><strong>Tradeoff:</strong> The split needs width — degrades on narrow screens, and the dual-pane layout is heavier to build/maintain than an inline card.</p>
+    </div>
+  </section>
+
+  <!-- ============================== OPTION C ============================== -->
+  <section class="variant">
+    <div class="variant-head">
+      <span class="badge">Option C</span>
+      <h2>Artifact Hub / Library</h2>
+    </div>
+    <div class="variant-body">
+      <div class="gallery-filters">
+        <span class="pill brand">All</span>
+        <span class="pill">Mine</span>
+        <span class="pill success">Published</span>
+        <span class="pill">Private</span>
+      </div>
+
+      <div class="gallery">
+        <!-- published tile -->
+        <div class="art-tile">
+          <div class="art-thumb"><span class="type-pill pill info sm" style="font-size:10px;">Report</span>📊</div>
+          <div class="art-tile-body">
+            <h4>Q3 Revenue</h4>
+            <div class="spread">
+              <span class="pill success sm" style="font-size:10px;">🌐 Public link</span>
+              <span class="muted small">v3</span>
+            </div>
+            <span class="muted small">Owner: you · 2 viewers</span>
+          </div>
+          <div class="tile-actions">
+            <button class="icon-btn">Edit</button>
+            <button class="icon-btn">Versions</button>
+            <button class="icon-btn">Share</button>
+            <button class="icon-btn">Remix</button>
+          </div>
+        </div>
+
+        <!-- private tile -->
+        <div class="art-tile">
+          <div class="art-thumb"><span class="type-pill pill brand sm" style="font-size:10px;">Component</span>🧩</div>
+          <div class="art-tile-body">
+            <h4>Churn Cohorts</h4>
+            <div class="spread">
+              <span class="pill sm" style="font-size:10px;">🔒 Private</span>
+              <span class="muted small">v1</span>
+            </div>
+            <span class="muted small">From: "Retention" chat</span>
+          </div>
+          <div class="tile-actions">
+            <button class="icon-btn">Edit</button>
+            <button class="icon-btn">Versions</button>
+            <button class="icon-btn">Share</button>
+            <button class="icon-btn">Remix</button>
+          </div>
+        </div>
+
+        <!-- remixed tile -->
+        <div class="art-tile">
+          <div class="art-thumb"><span class="type-pill pill info sm" style="font-size:10px;">HTML</span>🖼️</div>
+          <div class="art-tile-body">
+            <h4>Pricing Page <span class="pill sm" style="font-size:9px;">remix</span></h4>
+            <div class="spread">
+              <span class="pill sm" style="font-size:10px;">🔒 Private</span>
+              <span class="muted small">v1</span>
+            </div>
+            <span class="muted small">Remixed from "Landing v2"</span>
+          </div>
+          <div class="tile-actions">
+            <button class="icon-btn">Edit</button>
+            <button class="icon-btn">Versions</button>
+            <button class="icon-btn">Share</button>
+            <button class="icon-btn">Remix</button>
+          </div>
+        </div>
+
+        <!-- gated tile (no privilege) -->
+        <div class="art-tile">
+          <div class="art-thumb"><span class="type-pill pill info sm" style="font-size:10px;">Table</span>🔢</div>
+          <div class="art-tile-body">
+            <h4>Forecast</h4>
+            <div class="spread">
+              <span class="pill sm" style="font-size:10px;">🔒 Private</span>
+              <span class="muted small">v2</span>
+            </div>
+            <span class="muted small">Owner: you</span>
+          </div>
+          <div class="tile-actions">
+            <button class="icon-btn">Edit</button>
+            <button class="icon-btn">Versions</button>
+            <button class="icon-btn" style="opacity:.45;cursor:not-allowed;" title="Requires Can Publish Artifacts Publicly">Share*</button>
+            <button class="icon-btn">Remix</button>
+          </div>
+        </div>
+      </div>
+
+      <hr class="divider">
+      <div class="dlg" style="box-shadow:none;border-style:dashed;">
+        <div class="spread"><h4 style="margin:0;">Share — "Q3 Revenue"</h4><span class="pill success">Magic Link · read-only</span></div>
+        <div class="link-box" style="margin-top:8px;">
+          <input class="input" readonly value="https://app.mj.dev/a/9f3a…2c1" />
+          <button class="btn sm">Copy</button>
+          <button class="btn secondary sm">Revoke</button>
+        </div>
+        <div class="small muted" style="margin-top:6px;">* The Share action that mints a public link only appears for users with <strong>Can Publish Artifacts Publicly</strong>. Others see internal-share only.</div>
+      </div>
+    </div>
+    <div class="variant-notes">
+      <p><strong>What:</strong> A dedicated <strong>artifact library</strong> (gallery) decoupled from any single thread. Each tile carries Edit / Versions / Share / Remix and a prominent <strong>Published (public link)</strong> vs <strong>Private</strong> badge. Filters pivot by ownership and visibility.</p>
+      <p><strong>Why world-class:</strong> Treats sharing &amp; remixing as <strong>first-class assets</strong>, not chat byproducts. Great for reuse at scale — find a teammate's published artifact, remix it into your own owned copy in a fresh conversation, and republish.</p>
+      <p><strong>Magic Link &amp; privilege:</strong> Share mints the server-side read-only single-artifact Magic Link (with a Revoke control). The link-minting Share action is gated on <strong>"Can Publish Artifacts Publicly"</strong> — hidden/disabled for users without it (see the "Forecast" tile). <strong>Remix</strong> clones into a new user-owned artifact in a new conversation.</p>
+      <p class="tradeoff"><strong>Tradeoff:</strong> Moves artifacts away from their conversational context; users must hop to the hub, and provenance back to the originating chat needs deliberate surfacing.</p>
+    </div>
+  </section>
+
+</div>
+</body>
+</html>

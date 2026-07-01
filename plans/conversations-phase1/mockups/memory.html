@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Memory — MJ Conversations Phase 1 Mockups</title>
+<style>
+/* ============================================================================
+   Shared mockup stylesheet — MemberJunction Conversations Phase 1
+   Static, self-contained design language for the UX mockups. Mirrors MJ's
+   semantic design tokens (--mj-*) so the mockups read like the real product.
+   These mockups are illustrative only; production code uses the real tokens
+   from packages/Angular/Generic/shared/src/lib/_tokens.scss.
+   ============================================================================ */
+
+:root {
+  /* Brand */
+  --mj-brand-primary: #0076b6;
+  --mj-brand-primary-hover: #00659c;
+  --mj-brand-primary-active: #264FAF;
+  /* Text */
+  --mj-text-primary: #1f2933;
+  --mj-text-secondary: #475569;
+  --mj-text-muted: #64748b;
+  --mj-text-disabled: #94a3b8;
+  --mj-text-inverse: #ffffff;
+  --mj-text-link: #0076b6;
+  /* Backgrounds */
+  --mj-bg-page: #f1f5f9;
+  --mj-bg-surface: #ffffff;
+  --mj-bg-surface-card: #f8fafc;
+  --mj-bg-surface-sunken: #f1f5f9;
+  --mj-bg-surface-elevated: #ffffff;
+  --mj-bg-surface-hover: #f1f5f9;
+  --mj-bg-surface-active: #e2e8f0;
+  --mj-bg-overlay: rgba(15, 23, 42, 0.45);
+  /* Borders */
+  --mj-border-subtle: #f1f5f9;
+  --mj-border-default: #e2e8f0;
+  --mj-border-strong: #cbd5e1;
+  --mj-border-focus: #0076b6;
+  /* Status */
+  --mj-status-success: #16a34a;
+  --mj-status-success-bg: #dcfce7;
+  --mj-status-warning: #ea580c;
+  --mj-status-warning-bg: #ffedd5;
+  --mj-status-error: #dc2626;
+  --mj-status-error-bg: #fee2e2;
+  --mj-status-info: #0891b2;
+  --mj-status-info-bg: #cffafe;
+  /* Chat tokens */
+  --mj-chat-bubble-user-bg: var(--mj-brand-primary);
+  --mj-chat-bubble-user-text: var(--mj-text-inverse);
+  --mj-chat-bubble-agent-bg: var(--mj-bg-surface-card);
+  --mj-chat-bubble-agent-text: var(--mj-text-primary);
+  --mj-chat-composer-bg: var(--mj-bg-surface);
+  --mj-chat-composer-border: var(--mj-border-default);
+  /* Shape */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --shadow-md: 0 4px 14px rgba(15, 23, 42, 0.10);
+  --shadow-lg: 0 12px 40px rgba(15, 23, 42, 0.18);
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --mj-text-primary: #e6edf3;
+    --mj-text-secondary: #aebfce;
+    --mj-text-muted: #8b9bab;
+    --mj-text-disabled: #5b6b7b;
+    --mj-text-inverse: #ffffff;
+    --mj-text-link: #4cb3e3;
+    --mj-bg-page: #0d1117;
+    --mj-bg-surface: #161b22;
+    --mj-bg-surface-card: #1c232c;
+    --mj-bg-surface-sunken: #0d1117;
+    --mj-bg-surface-elevated: #21262d;
+    --mj-bg-surface-hover: #21262d;
+    --mj-bg-surface-active: #2d333b;
+    --mj-border-subtle: #21262d;
+    --mj-border-default: #30363d;
+    --mj-border-strong: #444c56;
+    --mj-chat-bubble-agent-bg: #21262d;
+    --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.55);
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: var(--font);
+  color: var(--mj-text-primary);
+  background: var(--mj-bg-page);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* --- Mockup page scaffolding --- */
+.mockup-header {
+  padding: 20px 28px;
+  background: var(--mj-bg-surface);
+  border-bottom: 1px solid var(--mj-border-default);
+}
+.mockup-header h1 { margin: 0 0 4px; font-size: 20px; }
+.mockup-header p { margin: 0; color: var(--mj-text-secondary); font-size: 14px; }
+.mockup-back { display: inline-block; margin-bottom: 10px; font-size: 13px; color: var(--mj-text-link); text-decoration: none; }
+.mockup-back:hover { text-decoration: underline; }
+
+.variant-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+  gap: 20px;
+  padding: 24px 28px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+.variant {
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+}
+.variant-head { padding: 14px 18px; border-bottom: 1px solid var(--mj-border-default); }
+.variant-head .badge { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--mj-brand-primary); }
+.variant-head h2 { margin: 4px 0 0; font-size: 16px; }
+.variant-body { padding: 18px; flex: 1; }
+.variant-notes { padding: 12px 18px; background: var(--mj-bg-surface-card); border-top: 1px solid var(--mj-border-default); font-size: 13px; color: var(--mj-text-secondary); }
+.variant-notes strong { color: var(--mj-text-primary); }
+.variant-notes .tradeoff { color: var(--mj-status-warning); }
+
+/* --- Reusable primitives --- */
+.btn {
+  font: inherit; font-size: 13px; font-weight: 600;
+  padding: 8px 14px; border-radius: var(--radius-sm);
+  border: 1px solid transparent; cursor: pointer;
+  background: var(--mj-brand-primary); color: var(--mj-text-inverse);
+}
+.btn:hover { background: var(--mj-brand-primary-hover); }
+.btn.secondary { background: transparent; color: var(--mj-text-primary); border-color: var(--mj-border-strong); }
+.btn.secondary:hover { background: var(--mj-bg-surface-hover); }
+.btn.ghost { background: transparent; color: var(--mj-text-secondary); }
+.btn.sm { padding: 5px 10px; font-size: 12px; }
+
+.pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600;
+  background: var(--mj-bg-surface-active); color: var(--mj-text-secondary);
+}
+.pill.brand { background: color-mix(in srgb, var(--mj-brand-primary) 14%, transparent); color: var(--mj-brand-primary); }
+.pill.success { background: var(--mj-status-success-bg); color: var(--mj-status-success); }
+.pill.warning { background: var(--mj-status-warning-bg); color: var(--mj-status-warning); }
+.pill.info { background: var(--mj-status-info-bg); color: var(--mj-status-info); }
+
+.card {
+  background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default);
+  border-radius: var(--radius-md); padding: 14px;
+}
+
+.input, .textarea, .select {
+  font: inherit; font-size: 13px; width: 100%;
+  padding: 8px 10px; border-radius: var(--radius-sm);
+  border: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface); color: var(--mj-text-primary);
+}
+.input:focus, .textarea:focus, .select:focus { outline: none; border-color: var(--mj-border-focus); box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 18%, transparent); }
+.label { display: block; font-size: 12px; font-weight: 600; color: var(--mj-text-secondary); margin-bottom: 4px; }
+.field { margin-bottom: 14px; }
+
+/* --- Chat chrome primitives (for in-context mockups) --- */
+.chat { display: flex; flex-direction: column; height: 100%; background: var(--mj-bg-surface); }
+.chat-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--mj-border-default); }
+.chat-title { font-weight: 600; font-size: 15px; }
+.chat-body { flex: 1; overflow: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.msg { max-width: 78%; padding: 10px 14px; border-radius: var(--radius-md); font-size: 14px; }
+.msg.user { align-self: flex-end; background: var(--mj-chat-bubble-user-bg); color: var(--mj-chat-bubble-user-text); border-bottom-right-radius: 3px; }
+.msg.agent { align-self: flex-start; background: var(--mj-chat-bubble-agent-bg); color: var(--mj-chat-bubble-agent-text); border: 1px solid var(--mj-border-default); border-bottom-left-radius: 3px; }
+.msg .who { font-size: 11px; font-weight: 700; opacity: .75; margin-bottom: 3px; }
+.composer { display: flex; gap: 8px; align-items: flex-end; padding: 12px 16px; border-top: 1px solid var(--mj-chat-composer-border); background: var(--mj-chat-composer-bg); }
+.composer .textarea { resize: none; min-height: 42px; }
+
+.avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--mj-brand-primary); color: #fff; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex: none; }
+.muted { color: var(--mj-text-muted); }
+.small { font-size: 12px; }
+.divider { height: 1px; background: var(--mj-border-default); margin: 12px 0; border: 0; }
+.row { display: flex; align-items: center; gap: 8px; }
+.spread { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  </style>
+<style>
+  /* Area-only styling — tokens only, no hardcoded colors */
+  .mem-shell { display: flex; flex-direction: column; gap: 12px; }
+
+  /* Memory item card (shared primitive across variants) */
+  .mem-item {
+    border: 1px solid var(--mj-border-default);
+    border-radius: var(--radius-md);
+    background: var(--mj-bg-surface);
+    padding: 11px 12px;
+  }
+  .mem-item + .mem-item { margin-top: 8px; }
+  .mem-item .mem-text { font-size: 13px; color: var(--mj-text-primary); }
+  .mem-item .mem-meta { font-size: 11px; color: var(--mj-text-muted); margin-top: 5px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .mem-item .mem-actions { display: flex; gap: 6px; margin-top: 9px; opacity: .9; }
+  .icon-btn {
+    font: inherit; font-size: 12px; cursor: pointer;
+    border: 1px solid var(--mj-border-default); background: var(--mj-bg-surface);
+    color: var(--mj-text-secondary); border-radius: var(--radius-sm); padding: 3px 8px;
+  }
+  .icon-btn:hover { background: var(--mj-bg-surface-hover); color: var(--mj-text-primary); }
+  .icon-btn.danger:hover { color: var(--mj-status-error); border-color: var(--mj-status-error); }
+
+  .mem-group-head { display: flex; align-items: center; gap: 8px; margin: 14px 0 8px; font-size: 12px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; color: var(--mj-text-muted); }
+  .mem-group-head:first-child { margin-top: 0; }
+  .mem-group-head .count { font-weight: 600; color: var(--mj-text-disabled); }
+
+  /* Scope chips / filter */
+  .scope-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+  .scope-chip {
+    font: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
+    border: 1px solid var(--mj-border-default); background: var(--mj-bg-surface);
+    color: var(--mj-text-secondary); border-radius: 999px; padding: 4px 11px;
+  }
+  .scope-chip.active { background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent); border-color: var(--mj-brand-primary); color: var(--mj-brand-primary); }
+
+  /* Toggle (temporary chat) */
+  .toggle { display: inline-flex; align-items: center; gap: 9px; cursor: pointer; user-select: none; }
+  .toggle .track { width: 34px; height: 20px; border-radius: 999px; background: var(--mj-border-strong); position: relative; transition: background .15s; flex: none; }
+  .toggle .track::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--mj-bg-surface); box-shadow: var(--shadow-sm); transition: left .15s; }
+  .toggle.on .track { background: var(--mj-brand-primary); }
+  .toggle.on .track::after { left: 16px; }
+
+  /* Variant A panel frame */
+  .panel-frame { border: 1px solid var(--mj-border-default); border-radius: var(--radius-md); overflow: hidden; background: var(--mj-bg-surface); }
+  .panel-top { display: flex; align-items: center; justify-content: space-between; padding: 11px 13px; border-bottom: 1px solid var(--mj-border-default); background: var(--mj-bg-surface-card); }
+  .panel-top .ptitle { font-weight: 700; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+  .panel-inner { padding: 13px; max-height: 460px; overflow: auto; }
+  .panel-foot { padding: 10px 13px; border-top: 1px solid var(--mj-border-default); background: var(--mj-bg-surface-card); }
+
+  /* Variant B — inline chip in chat */
+  .mem-chip {
+    align-self: flex-start; max-width: 82%;
+    border: 1px dashed color-mix(in srgb, var(--mj-brand-primary) 45%, var(--mj-border-default));
+    background: color-mix(in srgb, var(--mj-brand-primary) 7%, var(--mj-bg-surface));
+    border-radius: var(--radius-md); padding: 10px 12px;
+  }
+  .mem-chip .chip-lead { font-size: 12px; font-weight: 700; color: var(--mj-brand-primary); display: flex; align-items: center; gap: 7px; }
+  .mem-chip .chip-body { font-size: 13px; color: var(--mj-text-primary); margin: 6px 0 9px; }
+  .mem-chip .chip-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .mini-select { font: inherit; font-size: 12px; padding: 3px 7px; border-radius: var(--radius-sm); border: 1px solid var(--mj-border-default); background: var(--mj-bg-surface); color: var(--mj-text-secondary); }
+
+  .incognito-banner {
+    display: flex; align-items: center; gap: 9px; padding: 9px 13px;
+    border-bottom: 1px solid var(--mj-border-default);
+    background: var(--mj-bg-surface-sunken); color: var(--mj-text-secondary); font-size: 12px;
+  }
+  .incognito-banner .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--mj-text-muted); flex: none; }
+  .chat.incognito { background: var(--mj-bg-surface-sunken); }
+  .chat.incognito .composer { background: var(--mj-bg-surface-sunken); }
+  .chat-frame { border: 1px solid var(--mj-border-default); border-radius: var(--radius-md); overflow: hidden; height: 430px; }
+
+  /* Variant C — dashboard */
+  .dash-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+  .dash-toolbar .search { flex: 1; min-width: 150px; }
+  .stat-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
+  .stat { border: 1px solid var(--mj-border-default); border-radius: var(--radius-md); padding: 10px 12px; background: var(--mj-bg-surface-card); }
+  .stat .n { font-size: 20px; font-weight: 700; color: var(--mj-text-primary); line-height: 1.1; }
+  .stat .l { font-size: 11px; color: var(--mj-text-muted); margin-top: 2px; }
+  .mem-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .mem-table th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; color: var(--mj-text-muted); font-weight: 700; padding: 8px 10px; border-bottom: 1px solid var(--mj-border-default); }
+  .mem-table td { padding: 10px; border-bottom: 1px solid var(--mj-border-subtle); vertical-align: top; }
+  .mem-table tr:hover td { background: var(--mj-bg-surface-hover); }
+  .incognito-callout {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 11px 13px; border-radius: var(--radius-md); margin-bottom: 14px;
+    border: 1px solid var(--mj-border-strong); background: var(--mj-bg-surface-sunken);
+  }
+  .incognito-callout .ic-text { font-size: 12px; color: var(--mj-text-secondary); }
+  .incognito-callout .ic-text strong { color: var(--mj-text-primary); }
+</style>
+</head>
+<body>
+
+<header class="mockup-header">
+  <a class="mockup-back" href="../index.html">← Back to all mockups</a>
+  <h1>Memory</h1>
+  <p>User-visible control over what the assistant remembers — project-scoped (per conversation folder) and global, plus an incognito / Temporary chat that neither reads nor writes memory. Three divergent models below.</p>
+</header>
+
+<main class="variant-grid">
+
+  <!-- ============================ OPTION A ============================ -->
+  <section class="variant">
+    <div class="variant-head">
+      <span class="badge">Option A</span>
+      <h2>"What I remember" side panel</h2>
+    </div>
+    <div class="variant-body">
+      <div class="mem-shell">
+
+        <label class="toggle on" style="margin-bottom:4px;">
+          <span class="track"></span>
+          <span class="small"><strong>Memory on</strong> for this conversation</span>
+        </label>
+
+        <div class="panel-frame">
+          <div class="panel-top">
+            <span class="ptitle"><i class="fa-solid fa-brain" aria-hidden="true"></i> What I remember</span>
+            <button class="icon-btn"><i class="fa-solid fa-gear" aria-hidden="true"></i></button>
+          </div>
+
+          <div class="panel-inner">
+            <!-- Project filter -->
+            <div class="scope-row">
+              <button class="scope-chip active">Acme Renewal</button>
+              <button class="scope-chip">All projects</button>
+              <button class="scope-chip">Global</button>
+            </div>
+
+            <div class="mem-group-head"><i class="fa-solid fa-folder" aria-hidden="true"></i> Acme Renewal <span class="count">· 2</span></div>
+
+            <div class="mem-item">
+              <div class="mem-text">Stakeholder for this renewal is Dana Cole (VP Ops); cc her on summaries.</div>
+              <div class="mem-meta"><span class="pill brand">Project</span><span><i class="fa-regular fa-clock" aria-hidden="true"></i> Learned 3 days ago</span></div>
+              <div class="mem-actions">
+                <button class="icon-btn"><i class="fa-solid fa-pen" aria-hidden="true"></i> Edit</button>
+                <button class="icon-btn danger"><i class="fa-solid fa-trash" aria-hidden="true"></i> Forget</button>
+              </div>
+            </div>
+
+            <div class="mem-item">
+              <div class="mem-text">Target close date is end of Q3; budget approval pending finance.</div>
+              <div class="mem-meta"><span class="pill brand">Project</span><span><i class="fa-regular fa-clock" aria-hidden="true"></i> Learned yesterday</span></div>
+              <div class="mem-actions">
+                <button class="icon-btn"><i class="fa-solid fa-pen" aria-hidden="true"></i> Edit</button>
+                <button class="icon-btn danger"><i class="fa-solid fa-trash" aria-hidden="true"></i> Forget</button>
+              </div>
+            </div>
+
+            <div class="mem-group-head"><i class="fa-solid fa-globe" aria-hidden="true"></i> Global <span class="count">· 1</span></div>
+
+            <div class="mem-item">
+              <div class="mem-text">Prefers concise bullet summaries over long prose.</div>
+              <div class="mem-meta"><span class="pill">Global</span><span><i class="fa-regular fa-clock" aria-hidden="true"></i> Learned 2 weeks ago</span></div>
+              <div class="mem-actions">
+                <button class="icon-btn"><i class="fa-solid fa-pen" aria-hidden="true"></i> Edit</button>
+                <button class="icon-btn danger"><i class="fa-solid fa-trash" aria-hidden="true"></i> Forget</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel-foot spread">
+            <span class="small muted">Stored to your account · synced across devices</span>
+            <button class="btn sm secondary">+ Add memory</button>
+          </div>
+        </div>
+
+        <div class="card" style="background:var(--mj-bg-surface-sunken); border-style:dashed;">
+          <div class="spread">
+            <div>
+              <div class="small" style="font-weight:700;"><i class="fa-solid fa-user-secret" aria-hidden="true"></i> Temporary chat</div>
+              <div class="small muted">Won't read or save any memory.</div>
+            </div>
+            <label class="toggle"><span class="track"></span></label>
+          </div>
+        </div>
+
+      </div>
+    </div>
+    <div class="variant-notes">
+      <p><strong>What:</strong> A docked "What I remember" panel beside the chat. Memories are grouped by <em>Project (folder)</em> and <em>Global</em>, each row inline-editable and deletable with provenance ("Learned 3 days ago"). A project filter narrows the view; a Temporary-chat toggle opts out entirely.</p>
+      <p><strong>Why world-class:</strong> Mirrors the mental model of best-in-class assistants — memory is a browsable, trustworthy ledger, not a black box. Project grouping maps 1:1 to MJ Projects, so scope is always legible.</p>
+      <p class="tradeoff"><strong>Tradeoff:</strong> Persistent panel competes with chat for horizontal space; on narrow screens it must collapse to a drawer.</p>
+    </div>
+  </section>
+
+  <!-- ============================ OPTION B ============================ -->
+  <section class="variant">
+    <div class="variant-head">
+      <span class="badge">Option B</span>
+      <h2>Inline memory moments</h2>
+    </div>
+    <div class="variant-body">
+      <div class="mem-shell">
+
+        <!-- Normal chat with a learn-moment chip -->
+        <div class="chat-frame">
+          <div class="chat">
+            <div class="chat-header">
+              <span class="chat-title">Acme Renewal</span>
+              <a href="#" class="small" style="color:var(--mj-text-link);"><i class="fa-solid fa-brain" aria-hidden="true"></i> Manage memories</a>
+            </div>
+            <div class="chat-body">
+              <div class="msg user"><div class="who">You</div>Dana Cole is the VP Ops on this — always loop her in on summaries.</div>
+
+              <div class="msg agent"><div class="who">Sage</div>Got it — I'll keep Dana in the loop going forward.</div>
+
+              <!-- Memory moment chip -->
+              <div class="mem-chip">
+                <div class="chip-lead"><i class="fa-solid fa-brain" aria-hidden="true"></i> I'll remember</div>
+                <div class="chip-body">Loop in Dana Cole (VP Ops) on all summaries.</div>
+                <div class="chip-actions">
+                  <button class="btn sm">Keep</button>
+                  <button class="icon-btn">Discard</button>
+                  <select class="mini-select" aria-label="Memory scope">
+                    <option>This project</option>
+                    <option>Global</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div class="composer">
+              <textarea class="textarea" placeholder="Message Sage…"></textarea>
+              <button class="btn"><i class="fa-solid fa-paper-plane" aria-hidden="true"></i></button>
+            </div>
+          </div>
+        </div>
+
+        <div class="small muted" style="text-align:center;">— or start an incognito chat —</div>
+
+        <!-- Incognito chat state -->
+        <div class="chat-frame">
+          <div class="chat incognito">
+            <div class="incognito-banner">
+              <span class="dot"></span>
+              <span><strong>Temporary chat</strong> · nothing here is remembered, and memory won't be used.</span>
+            </div>
+            <div class="chat-body">
+              <div class="msg agent"><div class="who">Sage</div>This is a temporary chat. I won't recall anything from your memory, and nothing you say will be saved.</div>
+              <div class="msg user"><div class="who">You</div>Good — just brainstorming.</div>
+            </div>
+            <div class="composer">
+              <textarea class="textarea" placeholder="Message (not saved)…"></textarea>
+              <button class="btn"><i class="fa-solid fa-paper-plane" aria-hidden="true"></i></button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+    <div class="variant-notes">
+      <p><strong>What:</strong> Memory surfaces <em>in the flow</em>. The moment the agent learns something, a subtle "I'll remember:" chip appears that the user can Keep / Discard, and re-scope (This project ↔ Global) before it's committed. A "Manage memories" link opens the full list; incognito is a visually distinct chat state.</p>
+      <p><strong>Why world-class:</strong> Consent happens at the point of learning, when context is freshest — no after-the-fact auditing required. Provisional → Active maps onto the existing Agent Memory lifecycle: a chip is a Provisional note awaiting the user's Keep.</p>
+      <p class="tradeoff"><strong>Tradeoff:</strong> Chips can feel noisy if the agent learns often; needs batching/quieting rules and a clear path to bulk-manage later.</p>
+    </div>
+  </section>
+
+  <!-- ============================ OPTION C ============================ -->
+  <section class="variant">
+    <div class="variant-head">
+      <span class="badge">Option C</span>
+      <h2>Memory manager dashboard</h2>
+    </div>
+    <div class="variant-body">
+      <div class="mem-shell">
+
+        <div class="incognito-callout">
+          <div class="ic-text"><strong>Incognito</strong> — start a Temporary chat that ignores and never writes memory.</div>
+          <label class="toggle"><span class="track"></span><span class="small">Off</span></label>
+        </div>
+
+        <div class="stat-row">
+          <div class="stat"><div class="n">24</div><div class="l">Active</div></div>
+          <div class="stat"><div class="n">3</div><div class="l">Provisional</div></div>
+          <div class="stat"><div class="n">6</div><div class="l">Projects</div></div>
+        </div>
+
+        <div class="dash-toolbar">
+          <input class="input search" type="search" placeholder="Search memories…">
+          <select class="select" style="width:auto;">
+            <option>All projects</option>
+            <option>Acme Renewal</option>
+            <option>Global</option>
+          </select>
+          <select class="select" style="width:auto;">
+            <option>All states</option>
+            <option>Active</option>
+            <option>Provisional</option>
+          </select>
+        </div>
+
+        <table class="mem-table">
+          <thead>
+            <tr><th>Memory</th><th>Scope</th><th>State</th><th></th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Loop in Dana Cole (VP Ops) on all summaries.<div class="small muted" style="margin-top:3px;">Learned 3 days ago</div></td>
+              <td><span class="pill brand">Acme Renewal</span></td>
+              <td><span class="pill success">Active</span></td>
+              <td>
+                <button class="icon-btn"><i class="fa-solid fa-pen" aria-hidden="true"></i></button>
+                <button class="icon-btn danger"><i class="fa-solid fa-trash" aria-hidden="true"></i></button>
+              </td>
+            </tr>
+            <tr>
+              <td>Target close date is end of Q3.<div class="small muted" style="margin-top:3px;">Learned yesterday · awaiting confirmation</div></td>
+              <td><span class="pill brand">Acme Renewal</span></td>
+              <td><span class="pill warning">Provisional</span></td>
+              <td>
+                <button class="icon-btn"><i class="fa-solid fa-check" aria-hidden="true"></i></button>
+                <button class="icon-btn danger"><i class="fa-solid fa-trash" aria-hidden="true"></i></button>
+              </td>
+            </tr>
+            <tr>
+              <td>Prefers concise bullet summaries.<div class="small muted" style="margin-top:3px;">Learned 2 weeks ago</div></td>
+              <td><span class="pill">Global</span></td>
+              <td><span class="pill success">Active</span></td>
+              <td>
+                <button class="icon-btn"><i class="fa-solid fa-pen" aria-hidden="true"></i></button>
+                <button class="icon-btn danger"><i class="fa-solid fa-trash" aria-hidden="true"></i></button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="spread" style="margin-top:12px;">
+          <span class="small muted">3 of 27 shown</span>
+          <button class="btn sm secondary"><i class="fa-solid fa-plus" aria-hidden="true"></i> Add memory</button>
+        </div>
+
+      </div>
+    </div>
+    <div class="variant-notes">
+      <p><strong>What:</strong> A dedicated management surface — searchable, filterable by Project and lifecycle state (Active / Provisional), with at-a-glance counts and a prominent incognito toggle. Provisional rows offer a one-click confirm (✓) to promote them to Active.</p>
+      <p><strong>Why world-class:</strong> Treats memory as first-class data the user owns and governs. Exposes the real server-side Agent Memory lifecycle (Active/Provisional, scoped by Project/User/Company) directly, giving power users full transparency and bulk control.</p>
+      <p class="tradeoff"><strong>Tradeoff:</strong> A separate destination means memory review is opt-in — without inline nudges, many users may never visit it, so it pairs best with a lightweight in-chat entry point.</p>
+    </div>
+  </section>
+
+</main>
+
+</body>
+</html>

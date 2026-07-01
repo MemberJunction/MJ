@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>User Routines — Mockups</title>
+<style>
+/* ============================================================================
+   Shared mockup stylesheet — MemberJunction Conversations Phase 1
+   Static, self-contained design language for the UX mockups. Mirrors MJ's
+   semantic design tokens (--mj-*) so the mockups read like the real product.
+   These mockups are illustrative only; production code uses the real tokens
+   from packages/Angular/Generic/shared/src/lib/_tokens.scss.
+   ============================================================================ */
+
+:root {
+  /* Brand */
+  --mj-brand-primary: #0076b6;
+  --mj-brand-primary-hover: #00659c;
+  --mj-brand-primary-active: #264FAF;
+  /* Text */
+  --mj-text-primary: #1f2933;
+  --mj-text-secondary: #475569;
+  --mj-text-muted: #64748b;
+  --mj-text-disabled: #94a3b8;
+  --mj-text-inverse: #ffffff;
+  --mj-text-link: #0076b6;
+  /* Backgrounds */
+  --mj-bg-page: #f1f5f9;
+  --mj-bg-surface: #ffffff;
+  --mj-bg-surface-card: #f8fafc;
+  --mj-bg-surface-sunken: #f1f5f9;
+  --mj-bg-surface-elevated: #ffffff;
+  --mj-bg-surface-hover: #f1f5f9;
+  --mj-bg-surface-active: #e2e8f0;
+  --mj-bg-overlay: rgba(15, 23, 42, 0.45);
+  /* Borders */
+  --mj-border-subtle: #f1f5f9;
+  --mj-border-default: #e2e8f0;
+  --mj-border-strong: #cbd5e1;
+  --mj-border-focus: #0076b6;
+  /* Status */
+  --mj-status-success: #16a34a;
+  --mj-status-success-bg: #dcfce7;
+  --mj-status-warning: #ea580c;
+  --mj-status-warning-bg: #ffedd5;
+  --mj-status-error: #dc2626;
+  --mj-status-error-bg: #fee2e2;
+  --mj-status-info: #0891b2;
+  --mj-status-info-bg: #cffafe;
+  /* Chat tokens */
+  --mj-chat-bubble-user-bg: var(--mj-brand-primary);
+  --mj-chat-bubble-user-text: var(--mj-text-inverse);
+  --mj-chat-bubble-agent-bg: var(--mj-bg-surface-card);
+  --mj-chat-bubble-agent-text: var(--mj-text-primary);
+  --mj-chat-composer-bg: var(--mj-bg-surface);
+  --mj-chat-composer-border: var(--mj-border-default);
+  /* Shape */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --shadow-md: 0 4px 14px rgba(15, 23, 42, 0.10);
+  --shadow-lg: 0 12px 40px rgba(15, 23, 42, 0.18);
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --mj-text-primary: #e6edf3;
+    --mj-text-secondary: #aebfce;
+    --mj-text-muted: #8b9bab;
+    --mj-text-disabled: #5b6b7b;
+    --mj-text-inverse: #ffffff;
+    --mj-text-link: #4cb3e3;
+    --mj-bg-page: #0d1117;
+    --mj-bg-surface: #161b22;
+    --mj-bg-surface-card: #1c232c;
+    --mj-bg-surface-sunken: #0d1117;
+    --mj-bg-surface-elevated: #21262d;
+    --mj-bg-surface-hover: #21262d;
+    --mj-bg-surface-active: #2d333b;
+    --mj-border-subtle: #21262d;
+    --mj-border-default: #30363d;
+    --mj-border-strong: #444c56;
+    --mj-chat-bubble-agent-bg: #21262d;
+    --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.55);
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: var(--font);
+  color: var(--mj-text-primary);
+  background: var(--mj-bg-page);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* --- Mockup page scaffolding --- */
+.mockup-header {
+  padding: 20px 28px;
+  background: var(--mj-bg-surface);
+  border-bottom: 1px solid var(--mj-border-default);
+}
+.mockup-header h1 { margin: 0 0 4px; font-size: 20px; }
+.mockup-header p { margin: 0; color: var(--mj-text-secondary); font-size: 14px; }
+.mockup-back { display: inline-block; margin-bottom: 10px; font-size: 13px; color: var(--mj-text-link); text-decoration: none; }
+.mockup-back:hover { text-decoration: underline; }
+
+.variant-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+  gap: 20px;
+  padding: 24px 28px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+.variant {
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+}
+.variant-head { padding: 14px 18px; border-bottom: 1px solid var(--mj-border-default); }
+.variant-head .badge { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--mj-brand-primary); }
+.variant-head h2 { margin: 4px 0 0; font-size: 16px; }
+.variant-body { padding: 18px; flex: 1; }
+.variant-notes { padding: 12px 18px; background: var(--mj-bg-surface-card); border-top: 1px solid var(--mj-border-default); font-size: 13px; color: var(--mj-text-secondary); }
+.variant-notes strong { color: var(--mj-text-primary); }
+.variant-notes .tradeoff { color: var(--mj-status-warning); }
+
+/* --- Reusable primitives --- */
+.btn {
+  font: inherit; font-size: 13px; font-weight: 600;
+  padding: 8px 14px; border-radius: var(--radius-sm);
+  border: 1px solid transparent; cursor: pointer;
+  background: var(--mj-brand-primary); color: var(--mj-text-inverse);
+}
+.btn:hover { background: var(--mj-brand-primary-hover); }
+.btn.secondary { background: transparent; color: var(--mj-text-primary); border-color: var(--mj-border-strong); }
+.btn.secondary:hover { background: var(--mj-bg-surface-hover); }
+.btn.ghost { background: transparent; color: var(--mj-text-secondary); }
+.btn.sm { padding: 5px 10px; font-size: 12px; }
+
+.pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600;
+  background: var(--mj-bg-surface-active); color: var(--mj-text-secondary);
+}
+.pill.brand { background: color-mix(in srgb, var(--mj-brand-primary) 14%, transparent); color: var(--mj-brand-primary); }
+.pill.success { background: var(--mj-status-success-bg); color: var(--mj-status-success); }
+.pill.warning { background: var(--mj-status-warning-bg); color: var(--mj-status-warning); }
+.pill.info { background: var(--mj-status-info-bg); color: var(--mj-status-info); }
+
+.card {
+  background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default);
+  border-radius: var(--radius-md); padding: 14px;
+}
+
+.input, .textarea, .select {
+  font: inherit; font-size: 13px; width: 100%;
+  padding: 8px 10px; border-radius: var(--radius-sm);
+  border: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface); color: var(--mj-text-primary);
+}
+.input:focus, .textarea:focus, .select:focus { outline: none; border-color: var(--mj-border-focus); box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 18%, transparent); }
+.label { display: block; font-size: 12px; font-weight: 600; color: var(--mj-text-secondary); margin-bottom: 4px; }
+.field { margin-bottom: 14px; }
+
+/* --- Chat chrome primitives (for in-context mockups) --- */
+.chat { display: flex; flex-direction: column; height: 100%; background: var(--mj-bg-surface); }
+.chat-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--mj-border-default); }
+.chat-title { font-weight: 600; font-size: 15px; }
+.chat-body { flex: 1; overflow: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.msg { max-width: 78%; padding: 10px 14px; border-radius: var(--radius-md); font-size: 14px; }
+.msg.user { align-self: flex-end; background: var(--mj-chat-bubble-user-bg); color: var(--mj-chat-bubble-user-text); border-bottom-right-radius: 3px; }
+.msg.agent { align-self: flex-start; background: var(--mj-chat-bubble-agent-bg); color: var(--mj-chat-bubble-agent-text); border: 1px solid var(--mj-border-default); border-bottom-left-radius: 3px; }
+.msg .who { font-size: 11px; font-weight: 700; opacity: .75; margin-bottom: 3px; }
+.composer { display: flex; gap: 8px; align-items: flex-end; padding: 12px 16px; border-top: 1px solid var(--mj-chat-composer-border); background: var(--mj-chat-composer-bg); }
+.composer .textarea { resize: none; min-height: 42px; }
+
+.avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--mj-brand-primary); color: #fff; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex: none; }
+.muted { color: var(--mj-text-muted); }
+.small { font-size: 12px; }
+.divider { height: 1px; background: var(--mj-border-default); margin: 12px 0; border: 0; }
+.row { display: flex; align-items: center; gap: 8px; }
+.spread { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  </style>
+<style>
+  /* Area-only styles for the Routines mockups */
+  .rt-list { display: flex; flex-direction: column; gap: 10px; }
+  .rt-card { display: flex; flex-direction: column; gap: 8px; }
+  .rt-card .spread { align-items: flex-start; }
+  .rt-name { font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+  .rt-when { font-size: 12.5px; color: var(--mj-text-secondary); }
+  .rt-when .fa-clock, .rt-when i { color: var(--mj-brand-primary); }
+  .rt-meta { display: flex; flex-wrap: wrap; gap: 14px; font-size: 11.5px; color: var(--mj-text-muted); }
+  .rt-meta b { color: var(--mj-text-secondary); font-weight: 600; }
+  .rt-target { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--mj-text-secondary); }
+  .rt-icon { width: 24px; height: 24px; border-radius: 7px; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; color: var(--mj-text-inverse); flex: none; }
+  .rt-icon.agent { background: var(--mj-brand-primary); }
+  .rt-icon.action { background: var(--mj-status-info); }
+  .rt-icon.prompt { background: color-mix(in srgb, var(--mj-brand-primary) 60%, var(--mj-status-info)); }
+
+  .seg { display: inline-flex; border: 1px solid var(--mj-border-default); border-radius: var(--radius-sm); overflow: hidden; }
+  .seg button { font: inherit; font-size: 12px; font-weight: 600; padding: 6px 12px; border: 0; background: var(--mj-bg-surface); color: var(--mj-text-secondary); cursor: pointer; border-right: 1px solid var(--mj-border-default); }
+  .seg button:last-child { border-right: 0; }
+  .seg button.active { background: var(--mj-brand-primary); color: var(--mj-text-inverse); }
+
+  .day-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .day-chips span { width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--mj-border-default); display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; color: var(--mj-text-secondary); }
+  .day-chips span.on { background: var(--mj-brand-primary); color: var(--mj-text-inverse); border-color: var(--mj-brand-primary); }
+
+  .chk { display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 5px 0; }
+  .chk .box { width: 16px; height: 16px; border-radius: 4px; border: 1.5px solid var(--mj-border-strong); flex: none; display: inline-flex; align-items: center; justify-content: center; font-size: 9px; color: var(--mj-text-inverse); }
+  .chk .box.on { background: var(--mj-brand-primary); border-color: var(--mj-brand-primary); }
+  .radio { width: 15px; height: 15px; border-radius: 50%; border: 1.5px solid var(--mj-border-strong); flex: none; position: relative; }
+  .radio.on { border-color: var(--mj-brand-primary); }
+  .radio.on::after { content: ""; position: absolute; inset: 3px; border-radius: 50%; background: var(--mj-brand-primary); }
+
+  .rt-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .rt-table th { text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--mj-text-muted); font-weight: 700; padding: 6px 8px; border-bottom: 1px solid var(--mj-border-default); }
+  .rt-table td { padding: 7px 8px; border-bottom: 1px solid var(--mj-border-subtle); color: var(--mj-text-secondary); }
+  .dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+  .dot.ok { background: var(--mj-status-success); }
+  .dot.fail { background: var(--mj-status-error); }
+  .dot.run { background: var(--mj-status-info); }
+
+  /* Option C — timeline */
+  .tl { position: relative; padding-left: 20px; }
+  .tl::before { content: ""; position: absolute; left: 6px; top: 4px; bottom: 4px; width: 2px; background: var(--mj-border-default); }
+  .tl-group { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--mj-text-muted); margin: 14px 0 8px; position: relative; }
+  .tl-item { position: relative; padding: 8px 0; }
+  .tl-item::before { content: ""; position: absolute; left: -17px; top: 14px; width: 9px; height: 9px; border-radius: 50%; background: var(--mj-brand-primary); border: 2px solid var(--mj-bg-surface); }
+  .tl-item.mon::before { background: var(--mj-status-warning); }
+  .tl-time { font-size: 11px; color: var(--mj-text-muted); font-variant-numeric: tabular-nums; }
+  .tl-card { margin-top: 4px; display: flex; align-items: center; gap: 10px; }
+
+  .alert-feed { display: flex; flex-direction: column; gap: 8px; }
+  .alert { display: flex; gap: 10px; padding: 10px; border-radius: var(--radius-md); border: 1px solid var(--mj-border-default); background: var(--mj-bg-surface); }
+  .alert .ic { width: 28px; height: 28px; border-radius: 8px; flex: none; display: inline-flex; align-items: center; justify-content: center; color: var(--mj-text-inverse); background: var(--mj-status-warning); font-size: 12px; }
+  .alert.new { border-left: 3px solid var(--mj-status-warning); }
+  .alert-t { font-size: 13px; font-weight: 600; }
+  .alert-d { font-size: 12px; color: var(--mj-text-secondary); }
+
+  .stat-row { display: flex; gap: 10px; margin-bottom: 14px; }
+  .stat { flex: 1; text-align: center; padding: 10px; border-radius: var(--radius-md); background: var(--mj-bg-surface-card); border: 1px solid var(--mj-border-default); }
+  .stat .n { font-size: 20px; font-weight: 700; color: var(--mj-text-primary); }
+  .stat .l { font-size: 10.5px; text-transform: uppercase; letter-spacing: .03em; color: var(--mj-text-muted); }
+
+  .slidein { border: 1px solid var(--mj-border-default); border-radius: var(--radius-lg); background: var(--mj-bg-surface); box-shadow: var(--shadow-lg); overflow: hidden; }
+  .slidein-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--mj-border-default); background: var(--mj-bg-surface-card); }
+  .slidein-head .t { font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+  .slidein-body { padding: 14px; }
+  .from-msg { font-size: 12px; color: var(--mj-text-secondary); background: var(--mj-bg-surface-sunken); border-radius: var(--radius-sm); padding: 8px 10px; margin-bottom: 14px; border-left: 3px solid var(--mj-brand-primary); }
+  .scrim { position: relative; }
+  .scrim .chat-body { filter: saturate(.7) opacity(.9); }
+  .mini { font-size: 11.5px; }
+  .summary-line { font-size: 12px; color: var(--mj-text-secondary); background: color-mix(in srgb, var(--mj-brand-primary) 7%, transparent); border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 22%, transparent); border-radius: var(--radius-sm); padding: 8px 10px; margin-top: 10px; }
+  .summary-line b { color: var(--mj-text-primary); }
+</style>
+</head>
+<body>
+
+<div class="mockup-header">
+  <a class="mockup-back" href="../index.html">&larr; Back to all mockups</a>
+  <h1>User Routines</h1>
+  <p>User-authored prompts &amp; agent runs that fire on a schedule you control, with notifications — delivered as a dedicated Routines app and a reusable widget embeddable in chat.</p>
+</div>
+
+<div class="variant-grid">
+
+  <!-- ===================== OPTION A ===================== -->
+  <section class="variant">
+    <div class="variant-head">
+      <span class="badge">Option A</span>
+      <h2>Routines App &amp; Dashboard</h2>
+    </div>
+    <div class="variant-body">
+
+      <div class="spread" style="margin-bottom:14px;">
+        <div class="seg">
+          <button class="active">My routines</button>
+          <button>Shared with me</button>
+        </div>
+        <button class="btn sm"><i class="fa-solid fa-plus"></i> New routine</button>
+      </div>
+
+      <!-- Cards -->
+      <div class="rt-list">
+        <div class="card rt-card">
+          <div class="spread">
+            <div>
+              <div class="rt-name">
+                <span class="rt-icon agent"><i class="fa-solid fa-robot"></i></span>
+                Morning sales digest
+                <span class="pill success sm">Active</span>
+              </div>
+              <div class="rt-when" style="margin-top:6px;"><i class="fa-solid fa-clock"></i> Every weekday at 7:30&nbsp;AM (America/New_York)</div>
+            </div>
+            <span class="pill brand">Scheduled</span>
+          </div>
+          <div class="rt-meta">
+            <span class="rt-target"><i class="fa-solid fa-robot"></i> Revenue Analyst Agent</span>
+            <span><b>Last:</b> Today 7:30&nbsp;AM <span class="dot ok"></span>ok</span>
+            <span><b>Next:</b> Tomorrow 7:30&nbsp;AM</span>
+            <span><i class="fa-solid fa-bell"></i> In-app + email</span>
+          </div>
+        </div>
+
+        <div class="card rt-card">
+          <div class="spread">
+            <div>
+              <div class="rt-name">
+                <span class="rt-icon prompt"><i class="fa-solid fa-wand-magic-sparkles"></i></span>
+                Competitor pricing watch
+                <span class="pill warning sm">Paused</span>
+              </div>
+              <div class="rt-when" style="margin-top:6px;"><i class="fa-solid fa-clock"></i> Every 4 hours</div>
+            </div>
+            <span class="pill info">Monitoring</span>
+          </div>
+          <div class="rt-meta">
+            <span class="rt-target"><i class="fa-solid fa-wand-magic-sparkles"></i> "Summarize pricing changes" prompt</span>
+            <span><b>Notify:</b> On change only</span>
+            <span><b>Last:</b> 3:00&nbsp;PM <span class="dot ok"></span></span>
+          </div>
+        </div>
+      </div>
+
+      <hr class="divider">
+
+      <!-- Create / edit form with friendly cron builder -->
+      <div class="spread" style="margin-bottom:10px;">
+        <strong style="font-size:13px;">Edit routine</strong>
+        <span class="muted small">Morning sales digest</span>
+      </div>
+
+      <div class="field">
+        <label class="label">Run schedule</label>
+        <div class="seg" style="margin-bottom:10px;">
+          <button>Daily</button>
+          <button class="active">Weekly</button>
+          <button>Custom (cron)</button>
+        </div>
+        <div class="day-chips" style="margin-bottom:10px;">
+          <span>Su</span><span class="on">M</span><span class="on">T</span><span class="on">W</span><span class="on">Th</span><span class="on">F</span><span>Sa</span>
+        </div>
+        <div class="row">
+          <div style="flex:1;">
+            <label class="label">At time</label>
+            <input class="input" value="7:30 AM">
+          </div>
+          <div style="flex:1.4;">
+            <label class="label">Timezone</label>
+            <select class="select"><option>America/New_York (ET)</option><option>UTC</option></select>
+          </div>
+        </div>
+        <div class="summary-line"><i class="fa-solid fa-calendar-check"></i> Runs <b>every weekday at 7:30&nbsp;AM ET</b> &middot; next <b>tomorrow</b>.</div>
+      </div>
+
+      <div class="field">
+        <label class="label">Notify me</label>
+        <div class="chk"><span class="radio on"></span> Always (every run)</div>
+        <div class="chk"><span class="radio"></span> Only on success</div>
+        <div class="chk"><span class="radio"></span> Only on failure</div>
+        <div class="row" style="margin-top:8px;">
+          <span class="pill brand"><i class="fa-solid fa-bell"></i> In-app</span>
+          <span class="pill brand"><i class="fa-solid fa-envelope"></i> Email</span>
+          <span class="pill"><i class="fa-solid fa-plus"></i> Add recipient</span>
+        </div>
+      </div>
+
+      <hr class="divider">
+
+      <!-- Run history -->
+      <strong style="font-size:13px;">Run history</strong>
+      <table class="rt-table" style="margin-top:8px;">
+        <thead><tr><th>When</th><th>Status</th><th>Duration</th><th>Result</th></tr></thead>
+        <tbody>
+          <tr><td>Today 7:30&nbsp;AM</td><td><span class="dot ok"></span>Success</td><td>8.2s</td><td><a href="#" style="color:var(--mj-text-link)">View digest</a></td></tr>
+          <tr><td>Yesterday 7:30&nbsp;AM</td><td><span class="dot ok"></span>Success</td><td>7.9s</td><td><a href="#" style="color:var(--mj-text-link)">View digest</a></td></tr>
+          <tr><td>Wed 7:30&nbsp;AM</td><td><span class="dot fail"></span>Failed</td><td>2.1s</td><td><span class="muted">Timeout</span></td></tr>
+        </tbody>
+      </table>
+
+      <div class="row" style="margin-top:14px;">
+        <button class="btn sm">Save changes</button>
+        <button class="btn sm secondary">Run now</button>
+        <button class="btn sm ghost">Pause</button>
+      </div>
+
+    </div>
+    <div class="variant-notes">
+      <p><strong>What:</strong> A full Routines dashboard — card list (plain-English schedule, last/next run, status), an editor with a Daily / Weekly / Custom cron builder + timezone + notification config, and a run-history table.</p>
+      <p><strong>Why world-class:</strong> Mirrors MJ chrome and the "tasks" visual language; the friendly schedule builder hides cron behind segmented controls + day chips while keeping a Custom escape hatch, and a live summary line de-risks "did I set this right?".</p>
+      <p class="tradeoff"><strong>Tradeoff:</strong> A dedicated destination users must remember to visit — discovery depends on good entry points (B and C help here).</p>
+    </div>
+  </section>
+
+  <!-- ===================== OPTION B ===================== -->
+  <section class="variant">
+    <div class="variant-head">
+      <span class="badge">Option B</span>
+      <h2>"Turn this into a routine" — in-chat slide-in</h2>
+    </div>
+    <div class="variant-body">
+
+      <!-- Chat context behind -->
+      <div class="card scrim" style="padding:0; overflow:hidden; margin-bottom:14px;">
+        <div class="chat" style="height:auto;">
+          <div class="chat-header"><span class="chat-title">Revenue Analyst</span><span class="muted small">Conversation</span></div>
+          <div class="chat-body" style="max-height:150px;">
+            <div class="msg user"><div class="who">You</div>Summarize yesterday's closed-won deals and flag anything over $50k.</div>
+            <div class="msg agent"><div class="who">Revenue Analyst</div>Here's your closed-won summary. 3 deals totaling $182k; one flagged: Acme Corp ($72k)…</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Slide-in builder -->
+      <div class="slidein">
+        <div class="slidein-head">
+          <span class="t"><i class="fa-solid fa-clock-rotate-left" style="color:var(--mj-brand-primary)"></i> Make this a routine</span>
+          <button class="btn ghost sm"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="slidein-body">
+          <div class="from-msg"><i class="fa-solid fa-quote-left muted"></i> Summarize yesterday's closed-won deals and flag anything over $50k.</div>
+
+          <div class="field" style="margin-bottom:10px;">
+            <label class="label">Runs against</label>
+            <span class="rt-target"><span class="rt-icon agent" style="width:20px;height:20px;font-size:9px;"><i class="fa-solid fa-robot"></i></span> Revenue Analyst Agent <span class="pill sm" style="margin-left:4px;">prefilled</span></span>
+          </div>
+
+          <div class="field">
+            <label class="label">How often</label>
+            <div class="seg" style="width:100%;">
+              <button style="flex:1;">Hourly</button>
+              <button class="active" style="flex:1;">Daily</button>
+              <button style="flex:1;">Weekly</button>
+            </div>
+            <div class="row" style="margin-top:8px;">
+              <input class="input" value="8:00 AM" style="flex:1;">
+              <select class="select" style="flex:1.4;"><option>America/New_York (ET)</option></select>
+            </div>
+            <div class="summary-line mini"><i class="fa-solid fa-calendar-check"></i> <b>Every day at 8:00 AM ET.</b></div>
+          </div>
+
+          <div class="field">
+            <label class="label">Tell me when</label>
+            <div class="row" style="flex-wrap:wrap; gap:6px;">
+              <span class="pill brand">Always</span>
+              <span class="pill">On success</span>
+              <span class="pill">On failure</span>
+              <span class="pill">On change</span>
+            </div>
+            <div class="row" style="margin-top:8px;">
+              <div class="chk"><span class="box on"><i class="fa-solid fa-check"></i></span> Notify in chat</div>
+              <div class="chk"><span class="box"></span> Email me</div>
+            </div>
+          </div>
+
+          <div class="row" style="margin-top:6px;">
+            <button class="btn sm" style="flex:1;"><i class="fa-solid fa-bolt"></i> Create routine</button>
+            <button class="btn sm secondary">Cancel</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Resulting confirmation chip -->
+      <div class="card" style="margin-top:12px; display:flex; align-items:center; gap:10px; border-color:color-mix(in srgb, var(--mj-status-success) 40%, var(--mj-border-default));">
+        <span class="rt-icon" style="background:var(--mj-status-success)"><i class="fa-solid fa-check"></i></span>
+        <div style="flex:1;">
+          <div class="rt-name" style="font-size:13px;">Routine created</div>
+          <div class="rt-when">Runs every day at 8:00 AM ET — you'll get it right here in chat.</div>
+        </div>
+        <button class="btn ghost sm">Manage</button>
+      </div>
+
+    </div>
+    <div class="variant-notes">
+      <p><strong>What:</strong> A compact builder that slides in from a chat message you liked — target prefilled from the conversation, a one-glance schedule, and notify settings. Confirms back as an in-chat chip via the reusable <code>ng-user-routines</code> widget.</p>
+      <p><strong>Why world-class:</strong> Captures intent at the exact moment of value ("do this every morning") with near-zero friction — the ChatGPT/Gemini "promote-a-prompt-to-a-schedule" pattern, but native to MJ's conversation surface and zero context-switch.</p>
+      <p class="tradeoff"><strong>Tradeoff:</strong> Minimal surface trades power for speed — advanced cron, multi-recipient, and monitoring conditions push users over to the full app (A).</p>
+    </div>
+  </section>
+
+  <!-- ===================== OPTION C ===================== -->
+  <section class="variant">
+    <div class="variant-head">
+      <span class="badge">Option C</span>
+      <h2>Agenda &amp; Alerts — proactive timeline</h2>
+    </div>
+    <div class="variant-body">
+
+      <div class="stat-row">
+        <div class="stat"><div class="n">6</div><div class="l">Scheduled</div></div>
+        <div class="stat"><div class="n">3</div><div class="l">Monitoring</div></div>
+        <div class="stat"><div class="n">2</div><div class="l">New alerts</div></div>
+      </div>
+
+      <div class="seg" style="margin-bottom:6px;">
+        <button class="active">Upcoming</button>
+        <button>Alerts <span class="pill warning sm" style="margin-left:4px;">2</span></button>
+        <button>Calendar</button>
+      </div>
+
+      <!-- Timeline of upcoming runs -->
+      <div class="tl">
+        <div class="tl-group">Today</div>
+        <div class="tl-item">
+          <div class="tl-time">3:00 PM &middot; in 40 min</div>
+          <div class="card tl-card">
+            <span class="rt-icon prompt"><i class="fa-solid fa-wand-magic-sparkles"></i></span>
+            <div style="flex:1;"><div class="rt-name" style="font-size:13px;">Competitor pricing watch</div><div class="rt-when">Monitoring &middot; notify on change</div></div>
+            <button class="btn ghost sm">Skip</button>
+          </div>
+        </div>
+        <div class="tl-item">
+          <div class="tl-time">5:30 PM &middot; in 3 hrs</div>
+          <div class="card tl-card">
+            <span class="rt-icon action"><i class="fa-solid fa-bolt"></i></span>
+            <div style="flex:1;"><div class="rt-name" style="font-size:13px;">EOD inventory sync</div><div class="rt-when">Scheduled &middot; notify on failure</div></div>
+            <button class="btn ghost sm">Run now</button>
+          </div>
+        </div>
+
+        <div class="tl-group">Tomorrow</div>
+        <div class="tl-item">
+          <div class="tl-time">7:30 AM</div>
+          <div class="card tl-card">
+            <span class="rt-icon agent"><i class="fa-solid fa-robot"></i></span>
+            <div style="flex:1;"><div class="rt-name" style="font-size:13px;">Morning sales digest</div><div class="rt-when">Scheduled &middot; in-app + email</div></div>
+            <span class="pill brand sm">Weekday</span>
+          </div>
+        </div>
+      </div>
+
+      <hr class="divider">
+
+      <!-- Monitoring alerts feed -->
+      <div class="spread" style="margin-bottom:8px;">
+        <strong style="font-size:13px;"><i class="fa-solid fa-bell" style="color:var(--mj-status-warning)"></i> Alerts feed</strong>
+        <span class="muted small">OnChange results</span>
+      </div>
+      <div class="alert-feed">
+        <div class="alert new">
+          <span class="ic"><i class="fa-solid fa-arrow-trend-up"></i></span>
+          <div style="flex:1;">
+            <div class="alert-t">Competitor pricing watch — change detected</div>
+            <div class="alert-d">Acme dropped Pro plan from $99 → $79. 2 other SKUs changed.</div>
+            <div class="row" style="margin-top:6px;"><button class="btn sm secondary">View</button><span class="muted small" style="margin-left:6px;">11 min ago</span></div>
+          </div>
+        </div>
+        <div class="alert new">
+          <span class="ic" style="background:var(--mj-status-error)"><i class="fa-solid fa-triangle-exclamation"></i></span>
+          <div style="flex:1;">
+            <div class="alert-t">EOD inventory sync — failed</div>
+            <div class="alert-d">Connection timeout. Will retry on next schedule.</div>
+            <div class="row" style="margin-top:6px;"><button class="btn sm secondary">Retry now</button><span class="muted small" style="margin-left:6px;">1 hr ago</span></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+    <div class="variant-notes">
+      <p><strong>What:</strong> A time-first surface — an agenda timeline of upcoming scheduled runs (skip / run-now inline) plus a monitoring "Alerts" feed that streams OnChange results, with a calendar view for the week.</p>
+      <p><strong>Why world-class:</strong> Reframes routines as a <em>proactive agentic companion</em> rather than config — you see what your agents are about to do and what they just noticed, which is the emotional payoff of automation and drives ongoing engagement.</p>
+      <p class="tradeoff"><strong>Tradeoff:</strong> Optimized for at-a-glance awareness, not authoring — creating/editing a routine still hands off to the form in A; risks alert fatigue without good grouping.</p>
+    </div>
+  </section>
+
+</div>
+
+</body>
+</html>
