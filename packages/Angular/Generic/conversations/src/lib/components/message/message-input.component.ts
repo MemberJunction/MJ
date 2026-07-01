@@ -69,8 +69,28 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * always shown and the server enforces the `AIAgent.SupportsPlanMode` capability — a plan-mode
    * request to an agent that doesn't support it simply no-ops the gate (see resolvePlanModeGate),
    * so we don't need to resolve "the current agent" client-side just to hide the pill.
+   *
+   * IMPORTANT: this is a GETTER over `UserInfoEngine`'s cached setting, NOT a local field. The
+   * composer is mounted in multiple places at once (empty-state, chat-area, thread panel), and a
+   * local boolean per instance goes stale the moment another instance toggles — the exact bug where
+   * turning plan mode off "didn't stick" across the new-conversation transition. `GetSetting` is a
+   * synchronous cache hit with read-after-write freshness (pending debounced writes are consulted
+   * first), so every instance converges on the same value every change-detection pass.
    */
-  public PlanModeEnabled = false;
+  public get PlanModeEnabled(): boolean {
+    try {
+      const raw = UserInfoEngine.Instance.GetSetting(MessageInputComponent.PlanModePrefKey);
+      if (raw === this._planModeRawCache) return this._planModeParsedCache;
+      this._planModeRawCache = raw;
+      this._planModeParsedCache = raw ? (JSON.parse(raw) as { enabled?: boolean }).enabled === true : false;
+      return this._planModeParsedCache;
+    } catch {
+      return this._planModeParsedCache; // engine not configured yet or malformed payload — last known (default off)
+    }
+  }
+  /** Memoization for the PlanModeEnabled getter (avoids JSON.parse on every CD pass). */
+  private _planModeRawCache: string | undefined = undefined;
+  private _planModeParsedCache = false;
 
   /**
    * Skill IDs the user requested via `/skill-name` mentions in the message being routed. Collected
@@ -304,8 +324,9 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
     this.converationManagerAgent = await this.agentService.getConversationManagerAgent();
 
-    // Restore the sticky Plan Mode toggle (persists across component recreation + sessions).
-    await this.loadPersistedPlanMode();
+    // Warm UserInfoEngine so the PlanModeEnabled getter has the cached settings available
+    // (no-op when already loaded; failure just leaves the toggle at its default OFF).
+    UserInfoEngine.Instance.Config().catch(() => { /* getter falls back to default */ });
 
     // Initialize mention autocomplete (needed for parsing mentions in messages)
     await this.mentionAutocomplete.initialize(this.currentUser);
@@ -871,32 +892,20 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   }
 
   /**
-   * Toggle sticky Plan Mode. Applies to subsequent user-initiated sends and persists
-   * server-side (MJ: User Settings) so it survives component recreation — e.g. the
-   * new-conversation flow, navigation, and new sessions — until the user turns it off.
+   * Toggle sticky Plan Mode. Writes through to `MJ: User Settings` (debounced) — the
+   * {@link PlanModeEnabled} getter reads the same cached setting, so ALL live composer
+   * instances (empty-state, chat-area, thread panel) flip together, and the value survives
+   * component recreation, navigation, and new sessions until the user turns it off.
    */
   public TogglePlanMode(): void {
-    this.PlanModeEnabled = !this.PlanModeEnabled;
     try {
+      const next = !this.PlanModeEnabled;
       UserInfoEngine.Instance.SetSettingDebounced(
         MessageInputComponent.PlanModePrefKey,
-        JSON.stringify({ enabled: this.PlanModeEnabled })
+        JSON.stringify({ enabled: next })
       );
     } catch (error) {
       console.warn('[MessageInput] Failed to persist Plan Mode preference:', error);
-    }
-  }
-
-  /** Restores the persisted Plan Mode toggle. Defensive: any failure resolves to OFF. */
-  private async loadPersistedPlanMode(): Promise<void> {
-    try {
-      await UserInfoEngine.Instance.Config();
-      const raw = UserInfoEngine.Instance.GetSetting(MessageInputComponent.PlanModePrefKey);
-      if (!raw) return;
-      const parsed = JSON.parse(raw) as { enabled?: boolean };
-      this.PlanModeEnabled = parsed.enabled === true;
-    } catch {
-      // leave default (off)
     }
   }
 
