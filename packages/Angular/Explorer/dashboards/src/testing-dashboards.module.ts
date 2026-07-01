@@ -18,7 +18,9 @@ import {
   MJLeftNavComponent,
   MJLeftNavContentComponent,
   MjSlidePanelComponent,
-  MJEmptyStateComponent
+  MJEmptyStateComponent,
+  MJAlertComponent,
+  MJAccordionModule
 } from '@memberjunction/ng-ui-components';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { TestingModule } from '@memberjunction/ng-testing';
@@ -88,6 +90,8 @@ import { TestingInstrumentationService } from './Testing/services/testing-instru
     TestingModule,
     MjSlidePanelComponent,
     MJEmptyStateComponent,
+    MJAlertComponent,
+    MJAccordionModule,
     SharedGenericModule,
     SharedDashboardWidgetsModule,
     SharedPipesModule

@@ -26,7 +26,8 @@ export class MJFileFormComponent extends BaseFormComponent {
             { sectionKey: 'mJAIAgentRunMedias', sectionName: 'AI Agent Run Medias', isExpanded: false },
             { sectionKey: 'mJArtifactVersions', sectionName: 'Artifact Versions', isExpanded: false },
             { sectionKey: 'mJAIAgentSessions', sectionName: 'AI Agent Sessions', isExpanded: false },
-            { sectionKey: 'mJConversations', sectionName: 'Conversations', isExpanded: false }
+            { sectionKey: 'mJConversations', sectionName: 'Conversations', isExpanded: false },
+            { sectionKey: 'mJMLModels', sectionName: 'ML Models', isExpanded: false }
         ]);
     }
 }

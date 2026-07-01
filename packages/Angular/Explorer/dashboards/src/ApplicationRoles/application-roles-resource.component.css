@@ -16,29 +16,6 @@
   padding: var(--mj-space-6);
 }
 
-/* Messages */
-.message {
-  padding: 10px 14px;
-  border-radius: 6px;
-  margin-bottom: 16px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 14px;
-}
-
-.error-message {
-  background: var(--mj-status-error-bg);
-  color: var(--mj-status-error-text);
-  border: 1px solid var(--mj-status-error-border);
-}
-
-.success-message {
-  background: var(--mj-status-success-bg);
-  color: var(--mj-status-success-text);
-  border: 1px solid var(--mj-status-success-border);
-}
-
 /* Description */
 .description {
   color: var(--mj-text-secondary);
@@ -54,44 +31,7 @@
   gap: 8px;
 }
 
-.app-group {
-  border: 1px solid var(--mj-border-default);
-  border-radius: 8px;
-  overflow: hidden;
-  background: var(--mj-bg-surface);
-}
-
-.app-group.expanded {
-  border-color: var(--mj-border-strong);
-}
-
-.app-group-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 16px;
-  cursor: pointer;
-  user-select: none;
-  background: var(--mj-bg-surface-card);
-  transition: background 0.15s;
-}
-
-.app-group-header:hover {
-  background: var(--mj-bg-surface-hover);
-}
-
-.app-header-left {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.app-header-left > i {
-  font-size: 12px;
-  color: var(--mj-text-muted);
-  width: 14px;
-  text-align: center;
-}
+/* App group card chrome + header/chevron now owned by <mj-accordion-panel>. */
 
 .app-name {
   font-weight: 600;
@@ -112,10 +52,10 @@
   color: var(--mj-status-success-text);
 }
 
-/* Expanded Content */
+/* Expanded Content — body padding here because the panel uses [FlushBody].
+   The header/body separator is now owned by <mj-accordion-panel>. */
 .app-group-content {
   padding: 16px;
-  border-top: 1px solid var(--mj-border-subtle);
 }
 
 /* Table */

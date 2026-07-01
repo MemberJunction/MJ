@@ -1,6 +1,6 @@
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, LogError, LogStatus, Metadata, RunView, UserInfo } from "@memberjunction/core";
 import { UUIDsEqual, NormalizeUUID } from "@memberjunction/global";
-import { MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgentNoteTypeEntity,
+import { MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgentNoteTypeEntity, MJScopedPromptPartEntity,
          MJAIModelActionEntity,
          MJAIPromptModelEntity, MJAIPromptTypeEntity, MJAIResultCacheEntity, MJAIVendorTypeDefinitionEntity,
          MJArtifactTypeEntity, MJEntityAIActionEntity, MJVectorDatabaseEntity,
@@ -30,6 +30,10 @@ import { MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgent
          MJAIAgentCategoryEntity,
          MJAIAgentCoAgentEntity,
          MJAIAgentChannelEntity,
+         MJAISkillEntity,
+         MJAISkillActionEntity,
+         MJAISkillSubAgentEntity,
+         MJAIAgentSkillEntity,
          ArtifactMetadataEngine} from "@memberjunction/core-entities";
 import { AIAgentPermissionHelper, EffectiveAgentPermissions } from "./AIAgentPermissionHelper";
 import { TemplateEngineBase } from "@memberjunction/templates-base-types";
@@ -89,6 +93,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     private _agentPrompts: MJAIAgentPromptEntity[] = [];
     private _agentNoteTypes: MJAIAgentNoteTypeEntity[] = [];
     private _agentNotes: MJAIAgentNoteEntity[] = [];
+    private _scopedPromptParts: MJScopedPromptPartEntity[] = [];
     private _agentExamples: MJAIAgentExampleEntity[] = [];
     private _agentDataSources: MJAIAgentDataSourceEntity[] = [];
     private _agents: MJAIAgentEntityExtended[] = [];
@@ -115,6 +120,10 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     private _agentCategories: MJAIAgentCategoryEntity[] = [];
     private _agentCoAgents: MJAIAgentCoAgentEntity[] = [];
     private _agentChannels: MJAIAgentChannelEntity[] = [];
+    private _skills: MJAISkillEntity[] = [];
+    private _skillActions: MJAISkillActionEntity[] = [];
+    private _skillSubAgents: MJAISkillSubAgentEntity[] = [];
+    private _agentSkills: MJAIAgentSkillEntity[] = [];
 
     /**
      * Cache for configuration inheritance chains.
@@ -196,6 +205,11 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             {
                 PropertyName: '_agentNotes',
                 EntityName: 'MJ: AI Agent Notes',
+                CacheLocal: true
+            },
+            {
+                PropertyName: '_scopedPromptParts',
+                EntityName: 'MJ: Scoped Prompt Parts',
                 CacheLocal: true
             },
             {
@@ -323,6 +337,26 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
                 EntityName: 'MJ: AI Agent Categories',
                 CacheLocal: true
             },
+            {
+                PropertyName: '_skills',
+                EntityName: 'MJ: AI Skills',
+                CacheLocal: true
+            },
+            {
+                PropertyName: '_skillActions',
+                EntityName: 'MJ: AI Skill Actions',
+                CacheLocal: true
+            },
+            {
+                PropertyName: '_skillSubAgents',
+                EntityName: 'MJ: AI Skill Sub Agents',
+                CacheLocal: true
+            },
+            {
+                PropertyName: '_agentSkills',
+                EntityName: 'MJ: AI Agent Skills',
+                CacheLocal: true
+            },
             // NOTE: the realtime registry datasets below are CONDITIONAL — appended by
             // appendRealtimeRegistryConfigs() only when their entities exist in metadata.
             // They are NEW in the v5.41 schema, and CodeGen itself boots this engine for
@@ -447,7 +481,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * @param contextUser required on the server side
      * @returns 
      */
-    public async GetHighestPowerModel(vendorName: string, modelType: string, contextUser?: UserInfo): Promise<MJAIModelEntityExtended> {
+    public async GetHighestPowerModel(vendorName: string, modelType: string, contextUser?: UserInfo): Promise<MJAIModelEntityExtended | undefined> {
         try {
             await AIEngineBase.Instance.Config(false, contextUser); // most of the time this is already loaded, but just in case it isn't we will load it here
             const models = AIEngineBase.Instance.Models.filter(m => {
@@ -460,6 +494,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
                 return mModelType === targetType &&
                        (targetVendor === '' || mVendor === targetVendor);
             });
+            if (models.length === 0) return undefined;
             // next, sort the models by the PowerRank field so that the highest power rank model is the first array element
             models.sort((a, b) => b.PowerRank - a.PowerRank); // highest power rank first
             return models[0];
@@ -476,7 +511,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * @param contextUser 
      * @returns 
      */
-    public async GetHighestPowerLLM(vendorName?: string, contextUser?: UserInfo): Promise<MJAIModelEntityExtended> {
+    public async GetHighestPowerLLM(vendorName?: string, contextUser?: UserInfo): Promise<MJAIModelEntityExtended | undefined> {
         return await this.GetHighestPowerModel(vendorName, 'LLM', contextUser);
     }
 
@@ -512,11 +547,11 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
  
 
     public get Agents(): MJAIAgentEntityExtended[] {
-        return this._agents;
+        return this.GetConfigData<MJAIAgentEntityExtended>('_agents');
     }
 
     public get AgentRelationships(): MJAIAgentRelationshipEntity[] {
-        return this._agentRelationships;
+        return this.GetConfigData<MJAIAgentRelationshipEntity>('_agentRelationships');
     }
 
     /**
@@ -567,13 +602,13 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     }
 
     public get AgentTypes(): MJAIAgentTypeEntity[] {
-        return this._agentTypes;
+        return this.GetConfigData<MJAIAgentTypeEntity>('_agentTypes');
     }
 
     /** All agent categories, cached during Config(). Used for hierarchical resolution of
      *  assignment strategies and default storage accounts (category → parent → root). */
     public get AgentCategories(): MJAIAgentCategoryEntity[] {
-        return this._agentCategories;
+        return this.GetConfigData<MJAIAgentCategoryEntity>('_agentCategories');
     }
 
     public GetAgentByName(agentName: string): MJAIAgentEntityExtended {
@@ -585,11 +620,86 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     }
 
     public get AgentActions(): MJAIAgentActionEntity[] {
-        return this._agentActions;
+        return this.GetConfigData<MJAIAgentActionEntity>('_agentActions');
+    }
+
+    /** All AI Skills (capability bundles), cached during Config(). Filter by Status yourself
+     *  or use {@link GetSkillsForAgent} for the full agent-gating resolution. */
+    public get Skills(): MJAISkillEntity[] {
+        return this._skills;
+    }
+
+    /** Skill → Action bundling rows ("MJ: AI Skill Actions"), cached during Config(). */
+    public get SkillActions(): MJAISkillActionEntity[] {
+        return this._skillActions;
+    }
+
+    /** Skill → sub-agent bundling rows ("MJ: AI Skill Sub Agents"), cached during Config(). */
+    public get SkillSubAgents(): MJAISkillSubAgentEntity[] {
+        return this._skillSubAgents;
+    }
+
+    /** Agent ↔ Skill grant rows ("MJ: AI Agent Skills"), used when an agent's AcceptsSkills is 'Limited'. */
+    public get AgentSkills(): MJAIAgentSkillEntity[] {
+        return this._agentSkills;
+    }
+
+    /**
+     * Resolves the set of skills a given agent may activate, honoring the three-layer
+     * gate: {@link MJAIAgentEntityExtended.AcceptsSkills} on the agent, {@link MJAISkillEntity.Status}
+     * on the catalog entry, and (when AcceptsSkills is 'Limited') {@link MJAIAgentSkillEntity.Status}
+     * on the grant.
+     *
+     * - `AcceptsSkills = 'None'` (default) → no skills, regardless of catalog or grants.
+     * - `AcceptsSkills = 'All'` → every `Active` skill in the catalog.
+     * - `AcceptsSkills = 'Limited'` → only `Active` skills with an `Active` `MJ: AI Agent Skills` grant for this agent.
+     *
+     * @param agent - The agent to resolve available skills for.
+     * @returns MJAISkillEntity[] - Active skills the agent may activate (empty if AcceptsSkills is 'None').
+     */
+    public GetSkillsForAgent(agent: MJAIAgentEntityExtended): MJAISkillEntity[] {
+        if (!agent || agent.AcceptsSkills === 'None') {
+            return [];
+        }
+
+        const activeSkills = this._skills.filter(s => s.Status === 'Active');
+
+        if (agent.AcceptsSkills === 'All') {
+            return activeSkills;
+        }
+
+        // 'Limited' — only skills with an Active grant for this agent
+        const grantedSkillIDs = new Set(
+            this._agentSkills
+                .filter(gs => UUIDsEqual(gs.AgentID, agent.ID) && gs.Status === 'Active')
+                .map(gs => NormalizeUUID(gs.SkillID))
+        );
+        return activeSkills.filter(s => grantedSkillIDs.has(NormalizeUUID(s.ID)));
+    }
+
+    /**
+     * Returns the ActionIDs bundled into a skill (via "MJ: AI Skill Actions"). Callers resolve
+     * the full `MJActionEntity` objects from their own Action cache (e.g. `ActionEngineServer`)
+     * to avoid a cross-package dependency here.
+     */
+    public GetSkillActionIDs(skillID: string): string[] {
+        return this._skillActions
+            .filter(sa => UUIDsEqual(sa.SkillID, skillID))
+            .map(sa => sa.ActionID);
+    }
+
+    /**
+     * Returns the sub-agent IDs bundled into a skill (via "MJ: AI Skill Sub Agents"). Callers
+     * resolve the full `MJAIAgentEntityExtended` objects via `this.Agents` / `GetAgentByID`.
+     */
+    public GetSkillSubAgentIDs(skillID: string): string[] {
+        return this._skillSubAgents
+            .filter(sa => UUIDsEqual(sa.SkillID, skillID))
+            .map(sa => sa.SubAgentID);
     }
 
     public get AgentPrompts(): MJAIAgentPromptEntity[] {
-        return this._agentPrompts;
+        return this.GetConfigData<MJAIAgentPromptEntity>('_agentPrompts');
     }
 
     /**
@@ -597,7 +707,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * These define semantic presets for agents (e.g., "Fast", "High Quality").
      */
     public get AgentConfigurations(): MJAIAgentConfigurationEntity[] {
-        return this._agentConfigurations;
+        return this.GetConfigData<MJAIAgentConfigurationEntity>('_agentConfigurations');
     }
 
     /**
@@ -641,7 +751,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     }
 
     public get AgentNoteTypes(): MJAIAgentNoteTypeEntity[] {
-        return this._agentNoteTypes;
+        return this.GetConfigData<MJAIAgentNoteTypeEntity>('_agentNoteTypes');
     }
 
     /**
@@ -658,7 +768,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * Config()); on a clean-install CodeGen bootstrap this is [] until the entity exists.
      */
     public get AgentCoAgents(): MJAIAgentCoAgentEntity[] {
-        return this._agentCoAgents;
+        return this.GetConfigData<MJAIAgentCoAgentEntity>('_agentCoAgents');
     }
 
     /**
@@ -669,11 +779,11 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * issuing RunViews.
      */
     public get AgentChannels(): MJAIAgentChannelEntity[] {
-        return this._agentChannels;
+        return this.GetConfigData<MJAIAgentChannelEntity>('_agentChannels');
     }
 
     public get AgentPermissions(): MJAIAgentPermissionEntity[] {
-        return this._agentPermissions;
+        return this.GetConfigData<MJAIAgentPermissionEntity>('_agentPermissions');
     }
 
     public AgenteNoteTypeIDByName(agentNoteTypeName: string): string {
@@ -681,15 +791,24 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     }
 
     public get AgentNotes(): MJAIAgentNoteEntity[] {
-        return this._agentNotes;
+        return this.GetConfigData<MJAIAgentNoteEntity>('_agentNotes');
+    }
+
+    /**
+     * All scoped prompt parts (MJ: Scoped Prompt Parts). Cached like AgentNotes;
+     * resolved by scope + assembled into role-faithful messages by the
+     * ScopedPromptPartInjector. See plans/scoped-prompt-components.
+     */
+    public get ScopedPromptParts(): MJScopedPromptPartEntity[] {
+        return this._scopedPromptParts;
     }
 
     public get AgentExamples(): MJAIAgentExampleEntity[] {
-        return this._agentExamples;
+        return this.GetConfigData<MJAIAgentExampleEntity>('_agentExamples');
     }
 
     public get VendorTypeDefinitions(): MJAIVendorTypeDefinitionEntity[] {
-        return this._vendorTypeDefinitions;
+        return this.GetConfigData<MJAIVendorTypeDefinitionEntity>('_vendorTypeDefinitions');
     }
 
     /**
@@ -816,15 +935,15 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     }
 
     public get Vendors(): MJAIVendorEntity[] {
-        return this._vendors;
+        return this.GetConfigData<MJAIVendorEntity>('_vendors');
     }
 
     public get ModelVendors(): MJAIModelVendorEntity[] {
-        return this._modelVendors;
+        return this.GetConfigData<MJAIModelVendorEntity>('_modelVendors');
     }
 
     public get CredentialBindings(): MJAICredentialBindingEntity[] {
-        return this._credentialBindings;
+        return this.GetConfigData<MJAICredentialBindingEntity>('_credentialBindings');
     }
 
     /**
@@ -871,27 +990,27 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     }
 
     public get ModelTypes(): MJAIModelTypeEntity[] {
-        return this._modelTypes;
+        return this.GetConfigData<MJAIModelTypeEntity>('_modelTypes');
     }
 
     public get Prompts(): MJAIPromptEntityExtended[] {
-        return this._prompts;
+        return this.GetConfigData<MJAIPromptEntityExtended>('_prompts');
     }
 
     public get PromptModels(): MJAIPromptModelEntity[] {
-        return this._promptModels;
+        return this.GetConfigData<MJAIPromptModelEntity>('_promptModels');
     }
 
     public get PromptTypes(): MJAIPromptTypeEntity[] {
-        return this._promptTypes;
+        return this.GetConfigData<MJAIPromptTypeEntity>('_promptTypes');
     }
 
     public get PromptCategories(): MJAIPromptCategoryEntityExtended[] {
-        return this._promptCategories;
+        return this.GetConfigData<MJAIPromptCategoryEntityExtended>('_promptCategories');
     }
 
     public get Models(): MJAIModelEntityExtended[] {
-        return this._models;
+        return this.GetConfigData<MJAIModelEntityExtended>('_models');
     }
 
     public get ArtifactTypes(): MJArtifactTypeEntity[] {
@@ -906,27 +1025,27 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     }
 
     public get VectorDatabases(): MJVectorDatabaseEntity[] {
-        return this._vectorDatabases;
+        return this.GetConfigData<MJVectorDatabaseEntity>('_vectorDatabases');
     }
 
     public get ModelCosts(): MJAIModelCostEntity[] {
-        return this._modelCosts;
+        return this.GetConfigData<MJAIModelCostEntity>('_modelCosts');
     }
 
     public get ModelPriceTypes(): MJAIModelPriceTypeEntity[] {
-        return this._modelPriceTypes;
+        return this.GetConfigData<MJAIModelPriceTypeEntity>('_modelPriceTypes');
     }
 
     public get ModelPriceUnitTypes(): MJAIModelPriceUnitTypeEntity[] {
-        return this._modelPriceUnitTypes;
+        return this.GetConfigData<MJAIModelPriceUnitTypeEntity>('_modelPriceUnitTypes');
     }
 
     public get Configurations(): MJAIConfigurationEntity[] {
-        return this._configurations;
+        return this.GetConfigData<MJAIConfigurationEntity>('_configurations');
     }
 
     public get ConfigurationParams(): MJAIConfigurationParamEntity[] {
-        return this._configurationParams;
+        return this.GetConfigData<MJAIConfigurationParamEntity>('_configurationParams');
     }
 
     /**
@@ -1062,15 +1181,15 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     }
 
     public get AgentDataSources(): MJAIAgentDataSourceEntity[] {
-        return this._agentDataSources;
+        return this.GetConfigData<MJAIAgentDataSourceEntity>('_agentDataSources');
     }
 
     public get AgentSteps(): MJAIAgentStepEntity[] {
-        return this._agentSteps;
+        return this.GetConfigData<MJAIAgentStepEntity>('_agentSteps');
     }
 
     public get AgentStepPaths(): MJAIAgentStepPathEntity[] {
-        return this._agentStepPaths;
+        return this.GetConfigData<MJAIAgentStepPathEntity>('_agentStepPaths');
     }
 
     // ==========================================
@@ -1081,35 +1200,35 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * Gets all AI modalities (Text, Image, Audio, Video, File, Embedding, etc.)
      */
     public get Modalities(): MJAIModalityEntity[] {
-        return this._modalities;
+        return this.GetConfigData<MJAIModalityEntity>('_modalities');
     }
 
     /**
      * Gets all agent-modality mappings
      */
     public get AgentModalities(): MJAIAgentModalityEntity[] {
-        return this._agentModalities;
+        return this.GetConfigData<MJAIAgentModalityEntity>('_agentModalities');
     }
 
     /**
      * Gets all model-modality mappings
      */
     public get ModelModalities(): MJAIModelModalityEntity[] {
-        return this._modelModalities;
+        return this.GetConfigData<MJAIModelModalityEntity>('_modelModalities');
     }
 
     /**
      * Gets all client tool definitions (the catalog of reusable tools).
      */
     public get ClientToolDefinitions(): MJAIClientToolDefinitionEntity[] {
-        return this._clientToolDefinitions;
+        return this.GetConfigData<MJAIClientToolDefinitionEntity>('_clientToolDefinitions');
     }
 
     /**
      * Gets all agent-to-client-tool junction records.
      */
     public get AgentClientTools(): MJAIAgentClientToolEntity[] {
-        return this._agentClientTools;
+        return this.GetConfigData<MJAIAgentClientToolEntity>('_agentClientTools');
     }
 
     /**

@@ -29,7 +29,9 @@ import {
   QuickSaveAdvancedEvent,
   DataLoadedEvent,
   FilteredCountChangedEvent,
-  EntityViewerConfig
+  EntityViewerConfig,
+  SortState,
+  SortDirection
 } from '../types';
 import { EntityViewerComponent } from '../entity-viewer/entity-viewer.component';
 import { ViewRelatedRecordNavigation } from '../view-types';
@@ -611,6 +613,73 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     this.defaultSaveAsNew = false;
     this.isConfigPanelOpen = true;
     this.cdr.detectChanges();
+  }
+
+  // ========================================
+  // PROGRAMMATIC GRID CONTROL (passthrough to the inner entity viewer)
+  // ========================================
+  // Thin public passthroughs so a parent (e.g. the Data Explorer dashboard driving
+  // the AI agent) can page/sort the grid and read its live pagination/sort state
+  // without reaching into the protected child reference. All return null/false when
+  // the viewer isn't mounted yet (e.g. at the home level before an entity is selected).
+
+  /** Live pagination/sort snapshot from the inner viewer, or null when not mounted. */
+  public GetGridState(): { CurrentPage: number; PageSize: number; TotalRecords: number; TotalPages: number; Sort: SortState | null } | null {
+    const v = this.entityViewerRef;
+    if (!v) {
+      return null;
+    }
+    return {
+      CurrentPage: v.CurrentPageNumber,
+      PageSize: v.CurrentPageSize,
+      TotalRecords: v.TotalRecords,
+      TotalPages: v.TotalPageCount,
+      Sort: v.CurrentSortState,
+    };
+  }
+
+  /** Navigate to a 1-based page on the inner grid. Returns the page applied, or null. */
+  public GoToPage(pageNumber: number): number | null {
+    return this.entityViewerRef?.GoToPageNumber(pageNumber) ?? null;
+  }
+
+  /** Advance the inner grid to the next page. Returns the new 1-based page, or null. */
+  public NextPage(): number | null {
+    return this.entityViewerRef?.NextPage() ?? null;
+  }
+
+  /** Move the inner grid to the previous page. Returns the new 1-based page, or null. */
+  public PreviousPage(): number | null {
+    return this.entityViewerRef?.PreviousPage() ?? null;
+  }
+
+  /** Set the inner grid's server-side page size (reloads from page 1). Returns the size applied, or null. */
+  public SetPageSize(pageSize: number): number | null {
+    return this.entityViewerRef?.SetServerPageSize(pageSize) ?? null;
+  }
+
+  /** Apply a server-side sort to the inner grid. Returns true when applied, false otherwise. */
+  public SetSort(field: string, direction: SortDirection): boolean {
+    return this.entityViewerRef?.ApplySort(field, direction) ?? false;
+  }
+
+  /**
+   * Programmatically select a record in the inner grid — highlights the row and emits
+   * {@link RecordSelected} for the host (the no-UI equivalent of a user row-click). Returns
+   * false when the viewer isn't mounted or has no entity context. The record must be one of
+   * the loaded rows; the host resolves it (e.g. from {@link loadedRecords}).
+   */
+  public SelectRecord(record: Record<string, unknown>): boolean {
+    return this.entityViewerRef?.SelectRecord(record) ?? false;
+  }
+
+  /**
+   * Export the current view's records via the inner viewer's active renderer. Returns false
+   * when the viewer isn't mounted or the active view type doesn't support export. The grid
+   * renderer downloads the file itself.
+   */
+  public async ExportRecords(format?: 'csv' | 'excel' | 'json'): Promise<boolean> {
+    return this.entityViewerRef ? this.entityViewerRef.ExportRecords(format) : false;
   }
 
   /** Handle the selector's "save view" request — open the config panel in the requested mode. */

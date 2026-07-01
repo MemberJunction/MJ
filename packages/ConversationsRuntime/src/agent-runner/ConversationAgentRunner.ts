@@ -67,6 +67,12 @@ export interface ProcessMessageInput {
      */
     onProgress?: AgentExecutionProgressCallback;
     /**
+     * Per-request Plan Mode toggle. When true (and the resolved agent's SupportsPlanMode
+     * capability is on), the root agent must present a plan for human approval before it
+     * may execute Actions/Sub-Agents. Defaults off — no behavior change unless set.
+     */
+    planMode?: boolean;
+    /**
      * Optional explicit agent ID. When set, wins over the {@link DefaultAgentResolver}
      * chain. Mirrors the widget's `[DefaultAgentId]` input.
      */
@@ -89,9 +95,14 @@ export interface ProcessMessageInput {
 export class ConversationAgentRunner {
     private readonly session: AgentClientSession;
     private readonly _isProcessing$ = new BehaviorSubject<boolean>(false);
+    /** Reference count of in-flight runs. This runner is a process-wide singleton that may
+     *  service multiple conversations concurrently, so a plain boolean would be flipped to
+     *  `false` by the first run to finish while others are still running. The counter keeps
+     *  `isProcessing$` accurate as "is ANY run in flight". */
+    private _activeRunCount = 0;
     private _provider: IMetadataProvider | null = null;
 
-    /** Emits `true` while an agent run is in flight, `false` otherwise. */
+    /** Emits `true` while one or more agent runs are in flight, `false` otherwise. */
     public readonly isProcessing$: Observable<boolean> = this._isProcessing$.asObservable();
 
     /**
@@ -138,6 +149,7 @@ export class ConversationAgentRunner {
         if (!agent) return null;
 
         try {
+            this._activeRunCount++;
             this._isProcessing$.next(true);
 
             const currentUser = this.Provider.CurrentUser;
@@ -185,6 +197,7 @@ export class ConversationAgentRunner {
                             InputSchema: t.ParameterSchema,
                         })),
                 },
+                ...(input.planMode ? { PlanMode: true } : {}),
                 CreateArtifacts: true,
                 CreateNotification: true,
                 OnProgress: input.onProgress
@@ -225,7 +238,8 @@ export class ConversationAgentRunner {
             this.context.Notification.Notify('error', errorMsg, 5_000);
             return null;
         } finally {
-            this._isProcessing$.next(false);
+            this._activeRunCount = Math.max(0, this._activeRunCount - 1);
+            this._isProcessing$.next(this._activeRunCount > 0);
         }
     }
 

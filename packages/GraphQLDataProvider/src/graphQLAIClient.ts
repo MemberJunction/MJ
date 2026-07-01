@@ -543,6 +543,7 @@ export class GraphQLAIClient {
                 $lastRunId: String,
                 $autoPopulateLastRunPayload: Boolean,
                 $configurationId: String,
+                $planMode: Boolean,
                 $createArtifacts: Boolean,
                 $createNotification: Boolean,
                 $sourceArtifactId: String,
@@ -559,6 +560,7 @@ export class GraphQLAIClient {
                     lastRunId: $lastRunId,
                     autoPopulateLastRunPayload: $autoPopulateLastRunPayload,
                     configurationId: $configurationId,
+                    planMode: $planMode,
                     createArtifacts: $createArtifacts,
                     createNotification: $createNotification,
                     sourceArtifactId: $sourceArtifactId,
@@ -597,6 +599,7 @@ export class GraphQLAIClient {
         if (params.lastRunId !== undefined) variables.lastRunId = params.lastRunId;
         if (params.autoPopulateLastRunPayload !== undefined) variables.autoPopulateLastRunPayload = params.autoPopulateLastRunPayload;
         if (params.configurationId !== undefined) variables.configurationId = params.configurationId;
+        if (params.planMode !== undefined) variables.planMode = params.planMode;
         if (params.createArtifacts !== undefined) variables.createArtifacts = params.createArtifacts;
         if (params.createNotification !== undefined) variables.createNotification = params.createNotification;
         if (params.sourceArtifactId !== undefined) variables.sourceArtifactId = params.sourceArtifactId;
@@ -1748,6 +1751,11 @@ export interface RunAIAgentFromConversationDetailParams {
      * Configuration ID to use
      */
     configurationId?: string;
+
+    /**
+     * Whether Plan Mode is requested for this run (requires the agent's SupportsPlanMode capability)
+     */
+    planMode?: boolean;
 
     /**
      * Whether to create artifacts from the agent's payload

@@ -98,13 +98,13 @@ const RECORDING_CONSENT_KEY = 'mj.realtimeVoice.recordingConsent.v1';
             </div>
             @if (ShowCoAgentSelect) {
                 <div class="mj-voice-picker__select-row">
-                    <label class="mj-voice-picker__select-label" for="mjVoiceCoAgentSelect">
+                    <label class="mj-voice-picker__select-label" for="mjRealtimeCoAgentSelect">
                         <i class="fa-solid fa-headset"></i>
                         <span>Co-agent</span>
                     </label>
                     <select
                         #coAgentSelect
-                        id="mjVoiceCoAgentSelect"
+                        id="mjRealtimeCoAgentSelect"
                         class="mj-voice-picker__select"
                         [value]="SelectedCoAgentId ?? ''"
                         (change)="OnCoAgentChange(coAgentSelect.value)">
@@ -150,13 +150,13 @@ const RECORDING_CONSENT_KEY = 'mj.realtimeVoice.recordingConsent.v1';
             </div>
             @if (CanOverrideSessionConfig && Models.length > 0) {
                 <div class="mj-voice-picker__select-row mj-voice-picker__select-row--model">
-                    <label class="mj-voice-picker__select-label" for="mjVoiceModelSelect">
+                    <label class="mj-voice-picker__select-label" for="mjRealtimeModelSelect">
                         <i class="fa-solid fa-microchip"></i>
                         <span>Voice model</span>
                     </label>
                     <select
                         #modelSelect
-                        id="mjVoiceModelSelect"
+                        id="mjRealtimeModelSelect"
                         class="mj-voice-picker__select"
                         [value]="SelectedModelId ?? ''"
                         (change)="OnModelChange(modelSelect.value)">
@@ -168,13 +168,13 @@ const RECORDING_CONSENT_KEY = 'mj.realtimeVoice.recordingConsent.v1';
                 </div>
                 @if (SelectedModelVoices.length) {
                     <div class="mj-voice-picker__select-row mj-voice-picker__select-row--model">
-                        <label class="mj-voice-picker__select-label" for="mjVoiceVoiceSelect">
+                        <label class="mj-voice-picker__select-label" for="mjRealtimeVoiceSelect">
                             <i class="fa-solid fa-waveform-lines"></i>
                             <span>Voice</span>
                         </label>
                         <select
                             #voiceSelect
-                            id="mjVoiceVoiceSelect"
+                            id="mjRealtimeVoiceSelect"
                             class="mj-voice-picker__select"
                             [value]="SelectedVoiceId ?? ''"
                             (change)="OnVoiceChange(voiceSelect.value)">
@@ -213,14 +213,21 @@ const RECORDING_CONSENT_KEY = 'mj.realtimeVoice.recordingConsent.v1';
     `,
     styles: [`
         :host {
-            position: absolute;
-            bottom: calc(100% + 8px);
-            right: 8px;
-            z-index: 60;
+            /* Rendered inside a body-level CDK connected overlay (see message-input) — CDK
+               owns the positioning + z-index, so the host is just a plain block. The height
+               cap keeps the popover from growing past the viewport; the agent list inside
+               scrolls when content exceeds it. CDK's push keeps it on-screen, and because
+               it lives at the body level it can never be clipped by the chat overlay border. */
+            display: block;
+            max-height: min(440px, calc(100vh - 24px));
         }
         .mj-voice-picker {
             width: 300px;
+            max-width: calc(100vw - 24px);
             display: flex; flex-direction: column;
+            /* Match the host cap so the inner flex column knows its bound and lets the agent
+               list ('mj-voice-picker__list') take the remaining space + scroll. */
+            max-height: min(440px, calc(100vh - 120px));
             background: var(--mj-bg-surface-elevated);
             border: 1px solid var(--mj-border-default);
             border-radius: 8px;
@@ -252,11 +259,23 @@ const RECORDING_CONSENT_KEY = 'mj.realtimeVoice.recordingConsent.v1';
         .mj-voice-picker__search input::placeholder { color: var(--mj-text-disabled); }
         .mj-voice-picker__search:focus-within { border-color: var(--mj-border-focus); }
         .mj-voice-picker__list {
+            /* The agent list is the flexible region: it scrolls internally and gives way
+               first when the whole popup is capped to the overlay height. min-height:0 lets
+               it actually shrink inside the flex column; the 220px max keeps it tidy when
+               there's plenty of room. */
+            flex: 1 1 auto;
+            min-height: 0;
             max-height: 220px; overflow-y: auto;
             border-top: 1px solid var(--mj-border-subtle);
             border-bottom: 1px solid var(--mj-border-subtle);
             padding: 4px 0;
         }
+        /* Keep the chrome around the list from collapsing when the popup is height-capped. */
+        .mj-voice-picker__header,
+        .mj-voice-picker__search,
+        .mj-voice-picker__select-row,
+        .mj-voice-picker__record-row,
+        .mj-voice-picker__footer { flex-shrink: 0; }
         .mj-voice-picker__item {
             display: flex; align-items: center; gap: 8px; width: 100%;
             padding: 7px 12px;

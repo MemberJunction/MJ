@@ -26,7 +26,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (383 classes)
+// @memberjunction/core-entities (399 classes)
 import {
     AIAgentPermissionProvider,
     AccessControlRuleProvider,
@@ -64,6 +64,7 @@ import {
     MJAIAgentSessionBridgeParticipantEntity,
     MJAIAgentSessionChannelEntity,
     MJAIAgentSessionEntity,
+    MJAIAgentSkillEntity,
     MJAIAgentStepEntity,
     MJAIAgentStepPathEntity,
     MJAIAgentTypeEntity,
@@ -93,6 +94,10 @@ import {
     MJAIPromptTypeEntity,
     MJAIRemoteBrowserProviderEntity,
     MJAIResultCacheEntity,
+    MJAISkillActionEntity,
+    MJAISkillEntity,
+    MJAISkillPermissionEntity,
+    MJAISkillSubAgentEntity,
     MJAIVendorEntity,
     MJAIVendorTypeDefinitionEntity,
     MJAIVendorTypeEntity,
@@ -239,6 +244,9 @@ import {
     MJEnvironmentEntity,
     MJEnvironmentEntityExtended,
     MJErrorLogEntity,
+    MJExperimentEntity,
+    MJExperimentSessionEntity,
+    MJExperimentSessionIterationEntity,
     MJExplorerNavigationItemEntity,
     MJExternalDataSourceEntity,
     MJExternalDataSourceTypeEntity,
@@ -272,6 +280,13 @@ import {
     MJMCPServerToolEntity,
     MJMCPToolExecutionLogEntity,
     MJMCPToolFavoriteEntity,
+    MJMLAlgorithmEntity,
+    MJMLAlgorithmUseCaseEntity,
+    MJMLAlgorithmUseCaseRankingEntity,
+    MJMLModelEntity,
+    MJMLModelScoringBindingEntity,
+    MJMLTrainingPipelineEntity,
+    MJMLTrainingRunEntity,
     MJMagicLinkInviteAllowedDomainEntity,
     MJMagicLinkInviteAllowedPathEntity,
     MJMagicLinkInviteApplicationEntity,
@@ -339,6 +354,7 @@ import {
     MJScheduledJobRunEntity,
     MJScheduledJobTypeEntity,
     MJSchemaInfoEntity,
+    MJScopedPromptPartEntity,
     MJSearchExecutionLogEntity,
     MJSearchProviderEntity,
     MJSearchScopeEntity,
@@ -449,7 +465,7 @@ import {
     MJEntityCommunicationMessageTypeEntityExtended,
 } from '@memberjunction/entity-communications-base';
 
-// @memberjunction/ng-artifacts (13 classes)
+// @memberjunction/ng-artifacts (14 classes)
 import {
     AudioArtifactViewerComponent,
     CodeArtifactViewerComponent,
@@ -459,6 +475,7 @@ import {
     HtmlArtifactViewerComponent,
     ImageArtifactViewerComponent,
     JsonArtifactViewerComponent,
+    MLExperimentResultsViewerComponent,
     MarkdownArtifactViewerComponent,
     PdfArtifactViewerComponent,
     SvgArtifactViewerComponent,
@@ -466,17 +483,19 @@ import {
     XlsxArtifactViewerComponent,
 } from '@memberjunction/ng-artifacts';
 
-// @memberjunction/ng-auth-services (5 classes)
+// @memberjunction/ng-auth-services (6 classes)
 import {
     MJAuth0Provider,
     MJCognitoProvider,
     MJMSALProvider,
     MJMagicLinkProvider,
     MJOktaProvider,
+    MJWorkOSProvider,
 } from '@memberjunction/ng-auth-services';
 
-// @memberjunction/ng-conversations (4 classes)
+// @memberjunction/ng-conversations (5 classes)
 import {
+    ClientContextChannel,
     RealtimeMediaChannel,
     RealtimeWhiteboardChannel,
     RemoteBrowserChannel,
@@ -599,6 +618,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAIAgentSessionBridgeParticipantEntity,
     MJAIAgentSessionChannelEntity,
     MJAIAgentSessionEntity,
+    MJAIAgentSkillEntity,
     MJAIAgentStepEntity,
     MJAIAgentStepPathEntity,
     MJAIAgentTypeEntity,
@@ -628,6 +648,10 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAIPromptTypeEntity,
     MJAIRemoteBrowserProviderEntity,
     MJAIResultCacheEntity,
+    MJAISkillActionEntity,
+    MJAISkillEntity,
+    MJAISkillPermissionEntity,
+    MJAISkillSubAgentEntity,
     MJAIVendorEntity,
     MJAIVendorTypeDefinitionEntity,
     MJAIVendorTypeEntity,
@@ -774,6 +798,9 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJEnvironmentEntity,
     MJEnvironmentEntityExtended,
     MJErrorLogEntity,
+    MJExperimentEntity,
+    MJExperimentSessionEntity,
+    MJExperimentSessionIterationEntity,
     MJExplorerNavigationItemEntity,
     MJExternalDataSourceEntity,
     MJExternalDataSourceTypeEntity,
@@ -807,6 +834,13 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJMCPServerToolEntity,
     MJMCPToolExecutionLogEntity,
     MJMCPToolFavoriteEntity,
+    MJMLAlgorithmEntity,
+    MJMLAlgorithmUseCaseEntity,
+    MJMLAlgorithmUseCaseRankingEntity,
+    MJMLModelEntity,
+    MJMLModelScoringBindingEntity,
+    MJMLTrainingPipelineEntity,
+    MJMLTrainingRunEntity,
     MJMagicLinkInviteAllowedDomainEntity,
     MJMagicLinkInviteAllowedPathEntity,
     MJMagicLinkInviteApplicationEntity,
@@ -874,6 +908,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJScheduledJobRunEntity,
     MJScheduledJobTypeEntity,
     MJSchemaInfoEntity,
+    MJScopedPromptPartEntity,
     MJSearchExecutionLogEntity,
     MJSearchProviderEntity,
     MJSearchScopeEntity,
@@ -970,6 +1005,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     HtmlArtifactViewerComponent,
     ImageArtifactViewerComponent,
     JsonArtifactViewerComponent,
+    MLExperimentResultsViewerComponent,
     MarkdownArtifactViewerComponent,
     PdfArtifactViewerComponent,
     SvgArtifactViewerComponent,
@@ -980,6 +1016,8 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJMSALProvider,
     MJMagicLinkProvider,
     MJOktaProvider,
+    MJWorkOSProvider,
+    ClientContextChannel,
     RealtimeMediaChannel,
     RealtimeWhiteboardChannel,
     RemoteBrowserChannel,
@@ -1033,7 +1071,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 471;
+export const CLASS_REGISTRATIONS_COUNT = 490;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

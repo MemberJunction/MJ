@@ -254,6 +254,30 @@ export class LoopAgentType extends BaseAgentType {
                         }));
                     }
                     break;
+                case 'Skill':
+                    if (!response.nextStep.skills || response.nextStep.skills.length === 0) {
+                        retVal.step = 'Retry';
+                        retVal.message = 'When nextStep.type == "Skill", 1 or more skills must be specified in nextStep.skills array';
+                        retVal.errorMessage = 'Skills not specified for Skill type';
+                    }
+                    else {
+                        retVal.step = 'Skill' as BaseAgentNextStep['step'];
+                        retVal.skillActivations = response.nextStep.skills.map(skill => ({
+                            name: skill.name
+                        }));
+                    }
+                    break;
+                case 'Plan':
+                    if (!response.nextStep.plan || response.nextStep.plan.trim().length === 0) {
+                        retVal.step = 'Retry';
+                        retVal.message = 'When nextStep.type == "Plan", nextStep.plan must contain the proposed plan text';
+                        retVal.errorMessage = 'Plan text not specified for Plan type';
+                    }
+                    else {
+                        retVal.step = 'Plan' as BaseAgentNextStep['step'];
+                        retVal.planDetails = { plan: response.nextStep.plan };
+                    }
+                    break;
                 case 'ForEach':
                     if (!response.nextStep.forEach) {
                         retVal.step = 'Retry';
@@ -375,7 +399,7 @@ export class LoopAgentType extends BaseAgentType {
 
         // Validate nextStep structure if present
         if (response.nextStep) {
-            const validStepTypes = ['actions', 'sub-agent', 'chat', 'retry', 'foreach', 'while', 'clienttools', 'pipeline'];
+            const validStepTypes = ['actions', 'sub-agent', 'chat', 'retry', 'foreach', 'while', 'clienttools', 'pipeline', 'skill', 'plan'];
             let lcaseType = response.nextStep.type?.toLowerCase().trim();
             // allow the AI to mess up the case, but we need to validate it
 
@@ -398,6 +422,12 @@ export class LoopAgentType extends BaseAgentType {
             } else if (!lcaseType && response.nextStep.pipeline?.steps?.length) {
                 response.nextStep.type = 'Pipeline'; // update the data structure to have the correct type
                 lcaseType = 'pipeline';
+            } else if (!lcaseType && response.nextStep.skills && response.nextStep.skills.length > 0) {
+                response.nextStep.type = 'Skill'; // update the data structure to have the correct type
+                lcaseType = 'skill';
+            } else if (!lcaseType && response.nextStep.plan) {
+                response.nextStep.type = 'Plan'; // update the data structure to have the correct type
+                lcaseType = 'plan';
             }
 
             if (!validStepTypes.includes(lcaseType)) {

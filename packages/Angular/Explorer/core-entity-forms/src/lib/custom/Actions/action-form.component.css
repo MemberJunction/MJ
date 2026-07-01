@@ -4,6 +4,9 @@
     height: 100%;
 }
 
+/* positions the Runtime-action approval alert (mj-alert is margin-less but for bottom) */
+.approval-required-alert { margin-top: 16px; }
+
 .record-form-container {
     display: flex;
     flex-direction: column;

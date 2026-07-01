@@ -798,10 +798,10 @@
 
 .quick-access-panel {
   position: fixed;
-  top: 0;
+  top: 60px;
   right: 0;
   width: 320px;
-  height: 100%;
+  height: calc(100% - 60px);
   background: var(--mj-bg-surface);
   border-left: 1px solid var(--mj-border-default);
   z-index: 50;
@@ -846,53 +846,6 @@
 .qa-body {
   flex: 1;
   overflow-y: auto;
-}
-
-.qa-section {
-  border-bottom: 1px solid var(--mj-border-default);
-}
-
-.qa-section-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.8px;
-  color: var(--mj-text-muted);
-  cursor: pointer;
-  user-select: none;
-}
-
-.qa-section-header .qa-section-icon {
-  font-size: 12px;
-}
-
-.qa-section-header .qa-section-count {
-  background: var(--mj-bg-surface-card);
-  padding: 0 6px;
-  border-radius: 8px;
-  font-size: 10px;
-  margin-left: auto;
-}
-
-.qa-section-header .qa-section-chevron {
-  font-size: 10px;
-  transition: transform 0.15s;
-}
-
-.qa-section.collapsed .qa-section-chevron {
-  transform: rotate(-90deg);
-}
-
-.qa-section-body {
-  padding: 0 8px 8px;
-}
-
-.qa-section.collapsed .qa-section-body {
-  display: none;
 }
 
 .qa-item {

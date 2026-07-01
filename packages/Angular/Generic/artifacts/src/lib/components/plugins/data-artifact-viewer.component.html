@@ -137,11 +137,10 @@
         @if (IsLoading) {
           <mj-loading text="Loading data..."></mj-loading>
         } @else if (HasError && HasData) {
-          <div class="error-banner">
-            <i class="fas fa-exclamation-triangle"></i>
-            <span>{{ ErrorMessage }}</span>
+          <mj-alert Variant="warning" Size="sm" class="data-artifact-alert-pos">
+            {{ ErrorMessage }}
             <span class="fallback-note">(Showing cached data)</span>
-          </div>
+          </mj-alert>
           <mj-query-data-grid
             [ColumnConfigs]="GridColumnConfigs"
             [Data]="GridData"

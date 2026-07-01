@@ -88,55 +88,10 @@
     transform: translateX(16px);
 }
 
-/* Parameters Section */
+/* Spacing between the Inputs panel and the action buttons below it (layout,
+   not accordion chrome). */
 .parameters-section {
     margin-bottom: 20px;
-    width: 100%;
-    overflow-x: auto;
-    border: 1px solid var(--mj-border-default);
-    border-radius: 6px;
-    background: var(--mj-bg-surface-card);
-}
-
-.parameters-section.collapsed {
-    margin-bottom: 12px;
-}
-
-.parameters-section h4.section-header {
-    margin: 0;
-    padding: 12px 16px;
-    color: var(--mj-text-secondary);
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    background: var(--mj-bg-surface-elevated);
-    border-radius: 6px 6px 0 0;
-}
-
-.parameters-section.collapsed h4.section-header {
-    border-radius: 6px;
-}
-
-.section-header.clickable {
-    cursor: pointer;
-    user-select: none;
-}
-
-.section-header.clickable:hover {
-    background: var(--mj-bg-surface-hover);
-}
-
-.param-count {
-    color: var(--mj-text-muted);
-    font-weight: 400;
-    font-size: 0.9em;
-}
-
-.collapse-icon {
-    margin-left: auto;
-    color: var(--mj-text-muted);
-    font-size: 0.85em;
-    transition: transform 0.2s ease;
 }
 
 .no-params {
@@ -390,53 +345,11 @@ textarea.param-input {
     gap: 6px;
 }
 
-/* Error Result */
-.error-result {
-    padding: 20px;
-    background: color-mix(in srgb, var(--mj-status-error) 10%, var(--mj-bg-surface));
-    display: flex;
-    gap: 16px;
-    align-items: flex-start;
-}
-
-.error-result > i {
-    font-size: 1.5em;
-    color: var(--mj-status-error);
-    flex-shrink: 0;
-}
-
-.error-content h5 {
-    margin: 0 0 8px 0;
-    color: var(--mj-status-error);
-}
-
-.error-content p {
-    margin: 0;
-    color: var(--mj-status-error);
-}
-
 /* Success Result */
 .success-result {
     background: var(--mj-bg-surface-card);
 }
 
-.success-result.failure .status-banner {
-    background: var(--mj-status-error) !important;
-}
-
-.status-banner {
-    padding: 16px 20px;
-    color: var(--mj-text-inverse);
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    font-weight: 600;
-    font-size: 1.1em;
-}
-
-.status-banner i {
-    font-size: 1.2em;
-}
 
 .result-code {
     margin-left: auto;

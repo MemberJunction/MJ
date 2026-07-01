@@ -6,6 +6,20 @@ import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-sha
 import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
 import { Subject, BehaviorSubject, combineLatest } from 'rxjs';
 import { debounceTime, takeUntil, distinctUntilChanged } from 'rxjs/operators';
+import { validateEnumParam, boundNameList } from '../../shared/agent-tool-validation';
+import { findByIdOrError, findByIdOrNameOrError } from '../agent-tool-helpers';
+
+/** The two agent-tool modes for the execution monitor: the log list, or a single
+ *  selected execution. Drives the mode-scoped tool re-registration. */
+type MonitorToolMode = 'list' | 'detail';
+
+/** A tool definition in the shape NavigationService.SetAgentClientTools accepts. */
+interface MonitorAgentTool {
+  Name: string;
+  Description: string;
+  ParameterSchema: Record<string, unknown>;
+  Handler: (params: Record<string, unknown>) => Promise<unknown>;
+}
 interface ExecutionMetrics {
   totalExecutions: number;
   successfulExecutions: number;
@@ -75,6 +89,19 @@ export class ActionExecutionMonitoringComponent extends BaseResourceComponent im
     { text: 'All Actions', value: 'all' }
   ];
 
+  /** Allowed result-filter values (mirrors `resultOptions`). */
+  private readonly resultFilterValues = ['all', 'Success', 'Failed', 'Error', 'Running'] as const;
+  /** Allowed time-range values (mirrors `timeRangeOptions`). */
+  private readonly timeRangeValues = ['24hours', '7days', '30days', '90days'] as const;
+
+  /** The currently selected execution (set when the agent/user opens one) — surfaced in context + drives the tool mode. */
+  private selectedExecution: MJActionExecutionLogEntity | null = null;
+  /**
+   * Tracks which mode's tool set is currently registered so {@link syncAgentToolsForMode}
+   * only calls into NavigationService on the list↔detail transition, not on every filter change.
+   */
+  private lastRegisteredToolMode: MonitorToolMode | null = null;
+
   protected override destroy$ = new Subject<void>();
 
   constructor(private cdr: ChangeDetectorRef) {
@@ -84,6 +111,7 @@ export class ActionExecutionMonitoringComponent extends BaseResourceComponent im
   ngOnInit(): void {
     super.ngOnInit();
     this.setupFilters();
+    this.syncAgentToolsForMode();
     this.loadData();
   }
 
@@ -103,7 +131,235 @@ export class ActionExecutionMonitoringComponent extends BaseResourceComponent im
       takeUntil(this.destroy$)
     ).subscribe(() => {
       this.applyFilters();
+      this.syncAgentToolsForMode();
+      this.publishAgentContext();
     });
+  }
+
+  // ================================================================
+  // AI Agent context + client tools
+  //
+  // 🚨 SAFETY BOUNDARY: This is the Actions app. Executing an action has real
+  // side effects. This monitor is VIEW-ONLY run history — it exposes only
+  // search / filter / sort / navigate / select / refresh tools to the agent. No
+  // action execution (RunAction / re-run) is wired anywhere. Every Handler is
+  // tolerant (never throws; returns a structured failure on bad input).
+  //
+  // MODE-SCOPED TOOLS: the monitor has two contexts — the LOG LIST (no execution
+  // selected) and a SELECTED EXECUTION (detail). Detail-only tools (open the
+  // selected execution, jump to its action, clear the selection) are only
+  // registered while an execution is selected, so the agent never sees a tool
+  // that can't apply. COMMON tools (search/filter/refresh) are always present.
+  // ================================================================
+
+  /** Publish the current monitor state to the agent. Called on load and on every filter change.
+   *  Deep context: execution metrics, success rate, all filter state, the selected execution
+   *  (id + action NAME + result), and the bounded list of filtered action names in view. */
+  private publishAgentContext(): void {
+    this.navigationService.SetAgentContext(this, {
+      // Execution metrics
+      TotalExecutionCount: this.metrics.totalExecutions,
+      SuccessfulExecutionCount: this.metrics.successfulExecutions,
+      FailedExecutionCount: this.metrics.failedExecutions,
+      CurrentlyRunningCount: this.metrics.currentlyRunning,
+      ExecutionsTodayCount: this.metrics.executionsToday,
+      ExecutionsThisWeekCount: this.metrics.executionsThisWeek,
+      AverageDurationSeconds: this.metrics.averageDuration,
+      OverallSuccessRate: this.getSuccessRate(),
+      // What's in view after filtering
+      FilteredExecutionCount: this.filteredExecutions.length,
+      VisibleActionNames: boundNameList(this.distinctVisibleActionNames()),
+      // Filter / search state
+      CurrentSearchTerm: this.searchTerm$.value,
+      CurrentResultFilter: this.selectedResult$.value,
+      CurrentTimeRangeFilter: this.selectedTimeRange$.value,
+      CurrentActionFilter: this.selectedAction$.value,
+      // Mode + selection (id + action NAME + result)
+      ToolMode: this.currentToolMode(),
+      SelectedExecutionId: this.selectedExecution?.ID ?? null,
+      SelectedExecutionActionName: this.selectedExecution ? this.getActionName(this.selectedExecution.ActionID!) : null,
+      SelectedExecutionResult: this.selectedExecution?.ResultCode ?? null,
+    });
+  }
+
+  /** Distinct action names among the currently-filtered executions (for context). */
+  private distinctVisibleActionNames(): string[] {
+    const seen = new Set<string>();
+    const names: string[] = [];
+    for (const e of this.filteredExecutions) {
+      const name = this.actions.get(e.ActionID!)?.Name;
+      if (name && !seen.has(name)) {
+        seen.add(name);
+        names.push(name);
+      }
+    }
+    return names;
+  }
+
+  /** The current tool mode: 'detail' when an execution is selected, else 'list'. */
+  private currentToolMode(): MonitorToolMode {
+    return this.selectedExecution ? 'detail' : 'list';
+  }
+
+  /**
+   * Re-scope the agent's client tools to the CURRENT mode (list vs. selected-execution
+   * detail). Guarded on {@link lastRegisteredToolMode} so it only calls NavigationService on
+   * the mode flip — `publishAgentContext` fires on every filter change but the tool set only
+   * changes when an execution is selected/deselected.
+   */
+  private syncAgentToolsForMode(): void {
+    const mode = this.currentToolMode();
+    if (mode === this.lastRegisteredToolMode) {
+      return;
+    }
+    this.lastRegisteredToolMode = mode;
+    this.navigationService.SetAgentClientTools(this, [
+      ...this.buildCommonTools(),
+      ...(mode === 'detail' ? this.buildDetailTools() : this.buildListTools()),
+    ]);
+  }
+
+  /** COMMON tools — available in BOTH modes (search, filter, sort, refresh, select-by-id/name). */
+  private buildCommonTools(): MonitorAgentTool[] {
+    return [
+      {
+        Name: 'SearchExecutions',
+        Description: 'Search the execution log by a free-text term (matches action name, result code, user).',
+        ParameterSchema: { type: 'object', properties: { searchTerm: { type: 'string' } }, required: ['searchTerm'] },
+        Handler: async (params) => {
+          const term = typeof params['searchTerm'] === 'string' ? params['searchTerm'] : '';
+          this.onSearchChange(term);
+          return { Success: true };
+        },
+      },
+      {
+        Name: 'FilterExecutionsByResult',
+        Description: 'Filter executions by result. Allowed: all, Success, Failed, Error, Running.',
+        ParameterSchema: { type: 'object', properties: { result: { type: 'string', enum: [...this.resultFilterValues] } }, required: ['result'] },
+        Handler: async (params) => {
+          const v = validateEnumParam(params['result'], this.resultFilterValues, 'result');
+          if (!v.ok) return v.result;
+          this.onResultFilterChange(v.value);
+          return { Success: true };
+        },
+      },
+      {
+        Name: 'FilterExecutionsByTimeRange',
+        Description: 'Filter executions by time range. Allowed: 24hours, 7days, 30days, 90days.',
+        ParameterSchema: { type: 'object', properties: { timeRange: { type: 'string', enum: [...this.timeRangeValues] } }, required: ['timeRange'] },
+        Handler: async (params) => {
+          const v = validateEnumParam(params['timeRange'], this.timeRangeValues, 'timeRange');
+          if (!v.ok) return v.result;
+          this.onTimeRangeChange(v.value);
+          return { Success: true };
+        },
+      },
+      {
+        Name: 'FilterExecutionsByAction',
+        Description: 'Filter executions to a single action by its id OR name (case-insensitive), or "all" to clear the action filter.',
+        ParameterSchema: { type: 'object', properties: { action: { type: 'string' } }, required: ['action'] },
+        Handler: async (params) => {
+          const raw = params['action'];
+          if (typeof raw !== 'string' || raw.trim() === '') {
+            return { Success: false, ErrorMessage: 'A non-empty action id or name is required (use "all" to clear).' };
+          }
+          if (raw.trim().toLowerCase() === 'all') {
+            this.onActionFilterChange('all');
+            return { Success: true };
+          }
+          const found = findByIdOrNameOrError(raw, Array.from(this.actions.values()), 'action');
+          if (!found.ok) return found.result;
+          this.onActionFilterChange(found.value.ID);
+          return { Success: true, Data: { Id: found.value.ID, Name: found.value.Name } };
+        },
+      },
+      {
+        Name: 'ClearMonitorFilters',
+        Description: 'Reset all execution-monitor filters (result, time range, action) to their defaults.',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => {
+          this.resetFilters();
+          return { Success: true };
+        },
+      },
+      {
+        Name: 'RefreshMonitorData',
+        Description: 'Reload the execution monitoring data (logs, metrics, trends).',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => {
+          this.refreshData();
+          return { Success: true };
+        },
+      },
+    ];
+  }
+
+  /** LIST-mode tools — only when NO execution is selected: select an execution (which flips to detail mode). */
+  private buildListTools(): MonitorAgentTool[] {
+    return [
+      {
+        Name: 'SelectExecution',
+        Description: 'Select an execution-log entry by its id and open its detail record (view-only run history). Selecting it reveals the detail tools.',
+        ParameterSchema: { type: 'object', properties: { executionId: { type: 'string' } }, required: ['executionId'] },
+        Handler: async (params) => {
+          const found = findByIdOrError(params['executionId'], this.filteredExecutions.length ? this.filteredExecutions : this.executions, 'execution');
+          if (!found.ok) return found.result;
+          this.selectExecution(found.value);
+          return { Success: true, Data: { Id: found.value.ID, ActionName: this.getActionName(found.value.ActionID!) } };
+        },
+      },
+    ];
+  }
+
+  /** DETAIL-mode tools — only when an execution IS selected: open it, jump to its action, clear the selection. */
+  private buildDetailTools(): MonitorAgentTool[] {
+    return [
+      {
+        Name: 'OpenSelectedExecutionLog',
+        Description: 'Open the detail record for the currently selected execution (view-only run history).',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => {
+          if (!this.selectedExecution) return { Success: false, ErrorMessage: 'No execution is currently selected.' };
+          this.openExecution(this.selectedExecution);
+          return { Success: true };
+        },
+      },
+      {
+        Name: 'OpenSelectedExecutionAction',
+        Description: 'Open the action record that the currently selected execution ran (related-record navigation — does NOT run the action).',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => {
+          const actionId = this.selectedExecution?.ActionID;
+          if (!actionId) return { Success: false, ErrorMessage: 'No execution is selected, or it has no associated action.' };
+          this.openAction(actionId);
+          return { Success: true, Data: { ActionName: this.getActionName(actionId) } };
+        },
+      },
+      {
+        Name: 'ClearExecutionSelection',
+        Description: 'Clear the current execution selection and return to the log-list tools.',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => {
+          this.clearExecutionSelection();
+          return { Success: true };
+        },
+      },
+    ];
+  }
+
+  /** Select an execution (sets selection, re-scopes tools to detail mode, re-publishes context). */
+  private selectExecution(execution: MJActionExecutionLogEntity): void {
+    this.selectedExecution = execution;
+    this.syncAgentToolsForMode();
+    this.publishAgentContext();
+    this.openExecution(execution);
+  }
+
+  /** Clear the execution selection (re-scopes tools back to list mode). */
+  private clearExecutionSelection(): void {
+    this.selectedExecution = null;
+    this.syncAgentToolsForMode();
+    this.publishAgentContext();
   }
 
   private async loadData(): Promise<void> {
@@ -135,6 +391,7 @@ export class ActionExecutionMonitoringComponent extends BaseResourceComponent im
       this.calculateMetrics();
       this.generateExecutionTrends();
       this.applyFilters();
+      this.publishAgentContext();
 
     } catch (error) {
       LogError('Failed to load execution monitoring data', undefined, error);

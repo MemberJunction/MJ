@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { IMetadataProvider } from '@memberjunction/core';
 import { JSONObject } from '@memberjunction/ai';
-import { RealtimeSessionService, VoiceCaption, VoiceConnectionState } from '../lib/services/realtime-session.service';
+import { RealtimeSessionService, RealtimeCaption, RealtimeConnectionState } from '../lib/services/realtime-session.service';
 
 /**
  * Provider-agnostic POLICY surfaces of the voice session service that no other suite
@@ -50,8 +50,8 @@ function internals(service: RealtimeSessionService): RealtimeSessionPolicyIntern
   return service as unknown as RealtimeSessionPolicyInternals;
 }
 
-function latestState(service: RealtimeSessionService): VoiceConnectionState {
-  let state: VoiceConnectionState = 'closed';
+function latestState(service: RealtimeSessionService): RealtimeConnectionState {
+  let state: RealtimeConnectionState = 'closed';
   service.ConnectionState$.subscribe(s => (state = s)).unsubscribe();
   return state;
 }
@@ -77,7 +77,7 @@ describe('RealtimeSessionService — SendText (typed turn injection)', () => {
     await vi.waitFor(() => expect(executeGQL).toHaveBeenCalled());
 
     expect(client.TextsSent).toEqual(['hello there']);
-    let captions: VoiceCaption[] = [];
+    let captions: RealtimeCaption[] = [];
     service.Captions$.subscribe(c => (captions = c)).unsubscribe();
     expect(captions).toEqual([{ Role: 'User', Text: 'hello there' }]);
     expect(executeGQL).toHaveBeenCalledWith(
@@ -120,7 +120,7 @@ describe('RealtimeSessionService — SendText (typed turn injection)', () => {
     await Promise.resolve(); // let the relay microtask settle
 
     expect(client.TextsSent).toEqual(['typed while minting']);
-    let captions: VoiceCaption[] = [];
+    let captions: RealtimeCaption[] = [];
     service.Captions$.subscribe(c => (captions = c)).unsubscribe();
     expect(captions).toEqual([{ Role: 'User', Text: 'typed while minting' }]);
     expect(executeGQL).not.toHaveBeenCalled();
@@ -224,7 +224,7 @@ describe('RealtimeSessionService — parseSessionConfig resilience', () => {
   });
 });
 
-describe('RealtimeSessionService — EndVoiceSession / teardown lifecycle', () => {
+describe('RealtimeSessionService — EndRealtimeSession / teardown lifecycle', () => {
   let service: RealtimeSessionService;
   let client: FakeRealtimeClient;
   let executeGQL: ReturnType<typeof vi.fn>;
@@ -237,7 +237,7 @@ describe('RealtimeSessionService — EndVoiceSession / teardown lifecycle', () =
   });
 
   it('is a safe no-op when no session is active and none was minted', async () => {
-    await service.EndVoiceSession();
+    await service.EndRealtimeSession();
     expect(executeGQL).not.toHaveBeenCalled();
     expect(latestState(service)).toBe('closed');
   });
@@ -251,7 +251,7 @@ describe('RealtimeSessionService — EndVoiceSession / teardown lifecycle', () =
     internals(service).onClientStateChange('listening');
     service.SetMinimized(true);
 
-    await service.EndVoiceSession();
+    await service.EndRealtimeSession();
 
     expect(executeGQL).toHaveBeenCalledWith(expect.stringContaining('CloseAgentSession'), { agentSessionId: 'sess-9' });
     expect(disconnect).toHaveBeenCalledTimes(1);
@@ -267,7 +267,7 @@ describe('RealtimeSessionService — EndVoiceSession / teardown lifecycle', () =
     const handler = vi.fn(() => '{"success":true}');
     service.RegisterClientToolHandler('Whiteboard_', handler);
 
-    await service.EndVoiceSession();
+    await service.EndRealtimeSession();
 
     // After teardown the prefix no longer routes locally — the registry was cleared.
     internals(service).client = client;
@@ -282,7 +282,7 @@ describe('RealtimeSessionService — EndVoiceSession / teardown lifecycle', () =
     executeGQL.mockRejectedValueOnce(new Error('server gone'));
     internals(service).agentSessionId = 'sess-9';
 
-    await service.EndVoiceSession();
+    await service.EndRealtimeSession();
 
     expect(service.CurrentAgentSessionId).toBeNull();
     expect(error).toHaveBeenCalledWith(expect.stringContaining('Failed to close server session'), expect.any(Error));
@@ -292,7 +292,7 @@ describe('RealtimeSessionService — EndVoiceSession / teardown lifecycle', () =
     internals(service).agentSessionId = 'sess-9';
     internals(service).onClientStateChange('error');
 
-    await service.EndVoiceSession();
+    await service.EndRealtimeSession();
 
     expect(latestState(service)).toBe('error');
   });
@@ -361,8 +361,8 @@ describe('RealtimeSessionService — transcript correction (ReplacesPrevious)', 
     return s as unknown as TranscriptInternals;
   }
 
-  function captionsOf(s: RealtimeSessionService): VoiceCaption[] {
-    let captions: VoiceCaption[] = [];
+  function captionsOf(s: RealtimeSessionService): RealtimeCaption[] {
+    let captions: RealtimeCaption[] = [];
     s.Captions$.subscribe(c => (captions = c)).unsubscribe();
     return captions;
   }

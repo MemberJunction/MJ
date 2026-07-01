@@ -2,7 +2,7 @@ import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
-import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
+import { MJEmptyStateComponent, MJAccordionModule } from '@memberjunction/ng-ui-components';
 import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { ExportServiceModule } from '@memberjunction/ng-export-service';
@@ -32,6 +32,7 @@ import { ExplorerStateService } from './DataExplorer/services/explorer-state.ser
     ReactiveFormsModule,
     ContainerDirectivesModule,
     MJEmptyStateComponent,
+    MJAccordionModule,
     EntityViewerModule,
     SharedGenericModule,
     ExportServiceModule,

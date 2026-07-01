@@ -12,7 +12,9 @@ import {
   MJViewToggleComponent,
   MJStatBadgeComponent,
   MJRefreshButtonComponent,
-  MJEmptyStateComponent
+  MJEmptyStateComponent,
+  MJAlertComponent,
+  MJAccordionModule
 } from '@memberjunction/ng-ui-components';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
@@ -56,6 +58,8 @@ import { GroupByPipe } from './Credentials/pipes/group-by.pipe';
     MJStatBadgeComponent,
     MJRefreshButtonComponent,
     MJEmptyStateComponent,
+    MJAlertComponent,
+    MJAccordionModule,
     ContainerDirectivesModule,
     SharedGenericModule,
     CredentialsModule

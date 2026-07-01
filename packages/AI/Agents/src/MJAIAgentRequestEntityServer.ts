@@ -15,7 +15,7 @@
 
 import { BaseEntity, EntitySaveOptions, LogError, LogStatus, Metadata, IMetadataProvider } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
-import { MJAIAgentRequestEntity, MJAIAgentRunEntity } from '@memberjunction/core-entities';
+import { MJAIAgentRequestEntity, MJAIAgentRunEntity, MJAIAgentRunStepEntity } from '@memberjunction/core-entities';
 import { AgentResponseForm, ConversationUtility, MJAIAgentEntityExtended, ExecuteAgentParams } from '@memberjunction/ai-core-plus';
 import { ChatMessage } from '@memberjunction/ai';
 import { AgentRunner } from './AgentRunner';
@@ -97,6 +97,13 @@ export class MJAIAgentRequestEntityServer extends MJAIAgentRequestEntity {
             });
         }
 
+        // Plan Mode resumes must re-enable plan mode so the framework's gate re-engages and can
+        // distinguish an approved plan (proceed) from a rejected one (present a revised plan). Only
+        // do this when the request originated from a 'Plan' run-step — regular Chat-clarification
+        // resumes stay exactly as they were (planMode left undefined). resolvePlanModeGate then reads
+        // this run's request status to decide approved-vs-rejected; see base-agent.ts.
+        const isPlanResume = await this.isPlanStepResume(md, contextUser);
+
         // Run the agent with lastRunId to continue the conversation
         const runner = new AgentRunner();
         const params: ExecuteAgentParams = {
@@ -104,7 +111,8 @@ export class MJAIAgentRequestEntityServer extends MJAIAgentRequestEntity {
             conversationMessages,
             contextUser,
             lastRunId: this.OriginatingAgentRunID!,
-            autoPopulateLastRunPayload: true
+            autoPopulateLastRunPayload: true,
+            ...(isPlanResume ? { planMode: true } : {})
         };
 
         LogStatus(`🔄 Resuming agent "${agentEntity.Name}" for feedback request ${this.ID}`);
@@ -123,6 +131,24 @@ export class MJAIAgentRequestEntityServer extends MJAIAgentRequestEntity {
             } else {
                 LogError(`Failed to save ResumingAgentRunID for request ${this.ID}`);
             }
+        }
+    }
+
+    /**
+     * Returns true when this request originated from a Plan Mode 'Plan' run-step, meaning the
+     * resumed run should re-enable plan mode (so approved-vs-rejected is honored). Fails safe to
+     * false (regular resume, plan mode off) if the originating step can't be loaded — the worst case
+     * is that an approved plan proceeds, which is the desired outcome anyway.
+     */
+    private async isPlanStepResume(md: IMetadataProvider, contextUser: BaseEntity['ContextCurrentUser']): Promise<boolean> {
+        if (!this.OriginatingAgentRunStepID) return false;
+        try {
+            const step = await md.GetEntityObject<MJAIAgentRunStepEntity>('MJ: AI Agent Run Steps', contextUser);
+            if (!(await step.Load(this.OriginatingAgentRunStepID))) return false;
+            return step.StepType === 'Plan';
+        } catch (error) {
+            LogError(`isPlanStepResume: failed to load originating step ${this.OriginatingAgentRunStepID}: ${(error as Error).message}`);
+            return false;
         }
     }
 

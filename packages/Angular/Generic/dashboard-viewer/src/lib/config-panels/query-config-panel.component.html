@@ -52,24 +52,13 @@
     <span class="form-hint">Leave empty to use query name as title</span>
   </div>
 
-  <!-- Advanced Options (Collapsible) -->
-  <div class="collapsible-section">
-    <button
-      type="button"
-      class="collapsible-header"
-      (click)="toggleAdvancedOptions()"
-      [attr.aria-expanded]="showAdvancedOptions">
-      <span class="collapsible-title">
-        <i class="fa-solid fa-sliders"></i>
-        Display Options
-      </span>
-      <i class="collapsible-chevron fa-solid"
-        [class.fa-chevron-down]="!showAdvancedOptions"
-      [class.fa-chevron-up]="showAdvancedOptions"></i>
-    </button>
-
-    @if (showAdvancedOptions) {
-      <div class="collapsible-content">
+  <!-- Display Options -->
+  <mj-accordion-panel [(Expanded)]="showAdvancedOptions" Size="sm">
+    <ng-template mjAccordionTitle>
+      <i class="fa-solid fa-sliders"></i>
+      Display Options
+    </ng-template>
+    <div class="config-section-body">
         <!-- Parameter Layout -->
         <div class="form-group">
           <label>Parameter Layout</label>
@@ -154,7 +143,6 @@
             </label>
           </div>
         </div>
-      </div>
-    }
-  </div>
+    </div>
+  </mj-accordion-panel>
 </div>

@@ -1354,7 +1354,10 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    */
   public async onCommandExecuted(command: ActionableCommand): Promise<void> {
     try {
-      await this.uiCommandHandler.executeActionableCommand(command);
+      await this.uiCommandHandler.executeActionableCommand(command, {
+        conversationId: this.message.ConversationID,
+        conversationDetailId: this.message.ID
+      });
     } catch (error) {
       console.error('Failed to execute command:', command, error);
     }

@@ -10,6 +10,7 @@ export * from "./generic/baseEngine";
 export * from "./views/runView";
 export * from "./generic/runReport";
 export * from "./generic/runQuery";
+export * from "./generic/queryResultEnricher";
 export * from "./generic/interfaces";
 export * from "./generic/scoring/ReciprocalRankFusion";
 export * from "./generic/baseEntity";

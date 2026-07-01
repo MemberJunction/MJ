@@ -243,10 +243,7 @@
         </div>
         <div class="modal-body" id="delete-dialog-desc">
           <p>Are you sure you want to delete the role <strong>{{ selectedRole.Name }}</strong>?</p>
-          <p class="text-warning">
-            <i class="fa-solid fa-warning" aria-hidden="true"></i>
-            This will affect all users assigned to this role.
-          </p>
+          <mj-alert Variant="warning" Message="This will affect all users assigned to this role." />
         </div>
         <div class="modal-footer">
           <!-- Primary action (Delete) on LEFT per MD3 design guide -->

@@ -16,7 +16,7 @@ import { NgTreesModule } from '@memberjunction/ng-trees';
 import { BaseFormsModule } from '@memberjunction/ng-base-forms';
 // Generic media player — embedded by the audio/video artifact viewer plugins (standalone component).
 import { MJMediaPlayerComponent } from '@memberjunction/ng-media-player';
-import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
+import { MJEmptyStateComponent, MJAlertComponent, MJButtonDirective } from '@memberjunction/ng-ui-components';
 
 // Import plugin components (note: base component is abstract and NOT declared)
 import { JsonArtifactViewerComponent } from './components/plugins/json-artifact-viewer.component';
@@ -26,6 +26,7 @@ import { HtmlArtifactViewerComponent } from './components/plugins/html-artifact-
 import { SvgArtifactViewerComponent } from './components/plugins/svg-artifact-viewer.component';
 import { ComponentArtifactViewerComponent } from './components/plugins/component-artifact-viewer.component';
 import { DataArtifactViewerComponent } from './components/plugins/data-artifact-viewer.component';
+import { MLExperimentResultsViewerComponent } from './components/plugins/ml-experiment-results-viewer.component';
 import { SaveQueryPanelComponent } from './components/plugins/save-query-dialog.component';
 import { DataRequirementsViewerComponent } from './components/plugins/data-requirements-viewer/data-requirements-viewer.component';
 import { ComponentFeedbackPanelComponent } from './components/plugins/component-feedback-panel/component-feedback-panel.component';
@@ -78,6 +79,7 @@ import { ArtifactMessageCardComponent } from './components/artifact-message-card
     SvgArtifactViewerComponent,
     ComponentArtifactViewerComponent,
     DataArtifactViewerComponent,
+    MLExperimentResultsViewerComponent,
     SaveQueryPanelComponent,
 
     // Custom tab components (used by plugins via dynamic component tabs)
@@ -112,6 +114,8 @@ import { ArtifactMessageCardComponent } from './components/artifact-message-card
     MJMediaPlayerComponent,
     AgGridModule,
     MJEmptyStateComponent,
+    MJAlertComponent,
+    MJButtonDirective,
   ],
   exports: [
     // Export artifact type plugin viewer
@@ -130,6 +134,7 @@ import { ArtifactMessageCardComponent } from './components/artifact-message-card
     SvgArtifactViewerComponent,
     ComponentArtifactViewerComponent,
     DataArtifactViewerComponent,
+    MLExperimentResultsViewerComponent,
 
     // File viewer toolbar and plugins
     FileArtifactToolbarComponent,
@@ -161,6 +166,7 @@ export class ArtifactsModule {
       SvgArtifactViewerComponent,
       ComponentArtifactViewerComponent,
       DataArtifactViewerComponent,
+      MLExperimentResultsViewerComponent,
       PdfArtifactViewerComponent,
       XlsxArtifactViewerComponent,
       DocxArtifactViewerComponent,

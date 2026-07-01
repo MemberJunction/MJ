@@ -15,6 +15,7 @@ import { GraphQLDataProvider, PACKAGE_VERSION } from '@memberjunction/graphql-da
 import { MJAuthBase } from '@memberjunction/ng-auth-services';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { ThemeService } from '@memberjunction/ng-shared';
+import { MJAccordionModule } from '@memberjunction/ng-ui-components';
 import { Subscription } from 'rxjs';
 import { ServerConnectivityService } from '../services/server-connectivity.service';
 
@@ -32,7 +33,7 @@ import { ServerConnectivityService } from '../services/server-connectivity.servi
 @Component({
     selector: 'mj-about-dialog',
     standalone: true,
-    imports: [CommonModule],
+    imports: [CommonModule, MJAccordionModule],
     template: `
 <div class="mj-about" role="document">
     <button class="mj-about__close" type="button" aria-label="Close" (click)="OnCloseClick()">
@@ -89,16 +90,13 @@ import { ServerConnectivityService } from '../services/server-connectivity.servi
             </div>
         </div>
 
-        <button class="mj-about__diag-toggle" type="button" [class.mj-about__diag-toggle--open]="DiagnosticsOpen"
-                (click)="ToggleDiagnostics()">
-            <span class="mj-about__diag-toggle-left">
-                <i class="fa-solid fa-stethoscope"></i>
-                {{ DiagnosticsOpen ? 'Hide diagnostics' : 'Show diagnostics' }}
-            </span>
-            <i class="fa-solid fa-chevron-down mj-about__diag-chev"></i>
-        </button>
-
-        <div class="mj-about__diag-panel" [class.mj-about__diag-panel--open]="DiagnosticsOpen">
+        <mj-accordion-panel class="mj-about__diag" Size="sm" [(Expanded)]="DiagnosticsOpen">
+          <ng-template mjAccordionTitle>
+            <i class="fa-solid fa-stethoscope"></i>
+            Diagnostics
+          </ng-template>
+          <ng-template mjAccordionBody>
+            <div class="mj-about__diag-panel">
             <div class="mj-about__diag-section">
                 <h5><i class="fa-solid fa-cube"></i> Build</h5>
                 <div class="mj-about__diag-row"><span class="k">Version</span><span class="v">{{ Version }}</span></div>
@@ -127,7 +125,9 @@ import { ServerConnectivityService } from '../services/server-connectivity.servi
                 <i class="fa-solid" [class.fa-clipboard]="!CopyConfirmed" [class.fa-check]="CopyConfirmed"></i>
                 {{ CopyConfirmed ? 'Copied!' : 'Copy diagnostics' }}
             </button>
-        </div>
+            </div>
+          </ng-template>
+        </mj-accordion-panel>
     </div>
 
     <div class="mj-about__footer">
@@ -341,48 +341,7 @@ img.mj-about__user-avatar { background: var(--mj-bg-surface-card); }
     background: color-mix(in srgb, var(--mj-status-error) 12%, transparent);
 }
 
-.mj-about__diag-toggle {
-    width: 100%;
-    background: transparent;
-    border: 1px solid var(--mj-border-default);
-    border-radius: 10px;
-    padding: 12px 14px;
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--mj-text-secondary);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    transition: background 0.15s, border-color 0.15s, color 0.15s;
-    font-family: inherit;
-}
-.mj-about__diag-toggle:hover {
-    background: var(--mj-bg-surface-hover);
-    border-color: var(--mj-border-strong);
-    color: var(--mj-text-primary);
-}
-.mj-about__diag-toggle-left {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-}
-.mj-about__diag-chev {
-    transition: transform 0.25s;
-    color: var(--mj-text-muted);
-}
-.mj-about__diag-toggle--open .mj-about__diag-chev { transform: rotate(180deg); }
-
-.mj-about__diag-panel {
-    max-height: 0;
-    overflow: hidden;
-    transition: max-height 0.35s ease-out, margin-top 0.25s;
-}
-.mj-about__diag-panel--open {
-    max-height: 800px;
-    margin-top: 12px;
-}
+/* .mj-about__diag-toggle / -panel collapse chrome is now owned by <mj-accordion-panel>. */
 .mj-about__diag-section + .mj-about__diag-section { margin-top: 12px; }
 .mj-about__diag-section {
     background: var(--mj-bg-surface-card);
@@ -661,10 +620,6 @@ export class AboutDialogComponent extends BaseAngularComponent implements OnInit
         const host = this.ApiUrlShort?.split('/')[0] ?? '';
         if (displayName && host) return `${displayName} · ${host}`;
         return displayName || host;
-    }
-
-    public ToggleDiagnostics(): void {
-        this.DiagnosticsOpen = !this.DiagnosticsOpen;
     }
 
     public OnCloseClick(): void {

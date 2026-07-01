@@ -504,11 +504,6 @@
 .prompt-version-control .error-container {
   padding: 1rem;
 }
-.prompt-version-control .error-container .alert {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
 
 @media (max-width: 1200px) {
   .prompt-version-control .version-toolbar .toolbar-section {

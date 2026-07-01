@@ -1769,30 +1769,6 @@ mj-empty-state {
    Sync Result Banner
    --------------------------------------------------------------------------- */
 
-.sync-result-banner {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
-  border-radius: 6px;
-  font-size: 13px;
-  font-weight: 500;
-  margin-bottom: 12px;
-  animation: fadeIn 200ms ease;
-}
-
-.sync-result-banner.sync-success {
-  background: var(--mj-status-success-bg);
-  border: 1px solid var(--mj-status-success-border);
-  color: var(--mj-status-success-text);
-}
-
-.sync-result-banner.sync-failure {
-  background: var(--mj-status-error-bg);
-  border: 1px solid var(--mj-status-error-border);
-  color: var(--mj-status-error-text);
-}
-
 /* ---------------------------------------------------------------------------
    Auto-Map Schema Panel
    --------------------------------------------------------------------------- */
@@ -2103,24 +2079,6 @@ mj-empty-state {
 }
 
 /* DDL Preview */
-.ddl-warnings {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.ddl-warning {
-  font-size: 12px;
-  color: var(--mj-status-warning);
-  background: var(--mj-status-warning-subtle);
-  padding: 6px 10px;
-  border-radius: var(--mj-radius-sm);
-  border-left: 3px solid var(--mj-status-warning);
-}
-
-.ddl-warning i {
-  margin-right: 4px;
-}
 
 .ddl-preview-block {
   border: 1px solid var(--mj-border-default);

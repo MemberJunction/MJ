@@ -214,6 +214,8 @@ export * from './credentials-dashboards.module';
 export * from './data-explorer-dashboards.module';
 export * from './lists-dashboards.module';
 export * from './component-studio-dashboards.module';
+export * from './predictive-studio-dashboards.module';
+export { PredictiveStudioEngine } from './PredictiveStudio/engine/predictive-studio.engine';
 export * from './DatabaseDesigner/database-designer-dashboards.module';
 export { DatabaseDesignerDashboardComponent, LoadDatabaseDesignerDashboard } from './DatabaseDesigner/components/database-designer-dashboard.component';
 export * from './shared/shared-dashboard-widgets.module';

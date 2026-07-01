@@ -1,0 +1,45 @@
+<mj-collapsible-panel
+    SectionKey="aiSkillSharing"
+    SectionName="Sharing &amp; Portability"
+    Icon="fa fa-share-nodes"
+    [Form]="FormComponent"
+    [FormContext]="FormContext">
+
+    @if (!CanExportImport) {
+        <p class="ai-skill-sharing-hint">Save this skill first to share it or export/import SKILL.md.</p>
+    } @else {
+        <div class="ai-skill-sharing-actions">
+            @if (CanShareSkills) {
+                <button mjButton variant="secondary" size="sm" (click)="OpenShareDialog()">
+                    <i class="fa-solid fa-share-nodes"></i> Share
+                </button>
+            }
+
+            <button mjButton variant="secondary" size="sm" [disabled]="IsExporting" (click)="ExportMarkdown()">
+                @if (IsExporting) {
+                    <i class="fa-solid fa-spinner fa-spin"></i> Exporting…
+                } @else {
+                    <i class="fa-solid fa-file-export"></i> Export SKILL.md
+                }
+            </button>
+
+            <button mjButton variant="secondary" size="sm" [disabled]="IsImporting" (click)="TriggerImport()">
+                @if (IsImporting) {
+                    <i class="fa-solid fa-spinner fa-spin"></i> Importing…
+                } @else {
+                    <i class="fa-solid fa-file-import"></i> Import SKILL.md
+                }
+            </button>
+            <input #importFileInput type="file" accept=".md,.SKILL.md,text/markdown" class="ai-skill-sharing-file-input" (change)="OnImportFileSelected($event)" />
+        </div>
+    }
+</mj-collapsible-panel>
+
+@if (ShareContext) {
+    <mj-resource-share-dialog
+        [Visible]="ShareDialogVisible"
+        [Context]="ShareContext"
+        [Adapter]="ShareAdapter"
+        (Result)="OnShareDialogResult($event)">
+    </mj-resource-share-dialog>
+}

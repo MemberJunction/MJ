@@ -189,16 +189,27 @@ export class FormPanelSlotComponent implements OnInit, OnChanges, OnDestroy {
         this.remountDepth--;
     }
 
-    /** Find registrations whose metadata declares this exact entity + slot. */
+    /**
+     * Find registrations whose metadata declares this exact entity (or the
+     * `'*'` wildcard) + slot. A panel registered with `entity: '*'` is
+     * entity-agnostic — it mounts on EVERY entity's form. Such panels are
+     * expected to self-hide (render nothing) when they don't apply to the
+     * current record, so the cross-cutting registration stays unobtrusive.
+     */
     private findRegistrations(slot: FormPanelSlot): ClassRegistration[] {
         return MJGlobal.Instance.ClassFactory.GetAllRegistrationsByMetadata(
             BaseFormPanel,
             (metadata) => {
                 if (!metadata) return false;
                 const meta = metadata as Partial<FormPanelRegistrationMetadata>;
-                return meta.entity === this.Entity && meta.slot === slot;
+                return this.entityMatches(meta.entity) && meta.slot === slot;
             },
         );
+    }
+
+    /** True when a registration's `entity` matches this slot's entity, or is the `'*'` wildcard. */
+    private entityMatches(registeredEntity: string | undefined): boolean {
+        return registeredEntity === '*' || registeredEntity === this.Entity;
     }
 
     /**
@@ -217,7 +228,7 @@ export class FormPanelSlotComponent implements OnInit, OnChanges, OnDestroy {
             (metadata) => {
                 if (!metadata) return false;
                 const meta = metadata as Partial<FormPanelRegistrationMetadata>;
-                return meta.entity === this.Entity && meta.slot != null && meta.slot !== this.Slot;
+                return this.entityMatches(meta.entity) && meta.slot != null && meta.slot !== this.Slot;
             },
         );
 
