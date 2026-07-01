@@ -91,7 +91,7 @@ module/imports.
 
 ## Before-screenshots
 
-Baseline captures live in `plans/collapsible-section-screenshots/before/`.
+Baseline captures live in `plans/complete/collapsible-section-screenshots/before/`.
 This dev environment is data-sparse (0 saved queries, 0 MCP logs, no integration
 connections), so several deeply-nested panels can't be opened here — those are best
 captured before/after **at migration time** (the per-component workflow we already use).

@@ -4,12 +4,12 @@
 # accordions in both themes, forcing the section expand flags via the Angular
 # debug API. Prereq: playwright-cli with the Edit Application dialog open.
 #
-# Usage: scripts/app-dialog-shot.sh <out-basename>
-# Writes: plans/collapsible-section-screenshots/app-dialog/<out>-light.png and -dark.png
+# Usage: e2e/visual-capture/app-dialog-shot.sh <out-basename>
+# Writes: plans/complete/collapsible-section-screenshots/app-dialog/<out>-light.png and -dark.png
 
 set -eu
 OUT="${1:?usage: app-dialog-shot.sh <out>}"
-DIR="plans/collapsible-section-screenshots/app-dialog"
+DIR="plans/complete/collapsible-section-screenshots/app-dialog"
 mkdir -p "$DIR"
 
 FORCE="var el=document.querySelector('mj-application-dialog'); if(el){var c=ng.getComponent(el); c.sectionExpanded.basicInfo=true; c.sectionExpanded.entities=true; c.sectionExpanded.systemInfo=true; ng.applyChanges(c);}"

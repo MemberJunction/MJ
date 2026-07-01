@@ -12,7 +12,7 @@ Tackle **one section at a time**, each section as its own reviewable unit:
    ±CTA, occupies area) vs `SKIP` (BEM `--empty`/state modifier · inline cell/field marker like `cell-empty —`
    or `(empty)` · `-empty-fill`/`-empty-hint` helper · dropdown/typeahead popup row · table `empty-row` colspan
    cell · AG-Grid `overlayNoRowsTemplate` · code comment/JSDoc).
-2. **Migrate** the genuine ones to `<mj-empty-state>` per `plans/empty-state-migration.md` (variant by intent,
+2. **Migrate** the genuine ones to `<mj-empty-state>` per `plans/complete/empty-state-migration.md` (variant by intent,
    FA normalize, getters for dynamic text, flex-fill helper kept, dead CSS removed, module/standalone wiring).
 3. **Build** the affected package(s).
 4. **Screenshot** each migrated state (light+dark) via the reachable surface / forced-state.
