@@ -22,16 +22,15 @@
  */
 
 /**
- * Value type for a single secondary-scope dimension. Mirrors
- * `SecondaryScopeValue` in `@memberjunction/ai-core-plus`: strings, numbers,
- * booleans, and string arrays (for multi-valued dimensions).
- */
-export type AISecondaryScopeValue = string | number | boolean | string[];
-
-/**
  * Open map of secondary-scope dimension name → value.
+ *
+ * The value union is written inline (rather than as a separate named type) so
+ * CodeGen emits a single prefixed type per entity — mirrors the
+ * `SecondaryScopeValue` shape in `@memberjunction/ai-core-plus`: strings,
+ * numbers, booleans, and string arrays (for multi-valued dimensions).
+ *
  * @example { "ChannelID": "c-123", "Region": "EMEA" }
  */
 export interface IAISecondaryScopes {
-    [dimension: string]: AISecondaryScopeValue;
+    [dimension: string]: string | number | boolean | string[];
 }
