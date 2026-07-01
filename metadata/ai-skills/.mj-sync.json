@@ -18,7 +18,20 @@
     "ignoreNullFields": true,
     "ignoreVirtualFields": true,
     "lookupFields": {
+      "CreatedByUserID": {
+        "entity": "MJ: Users",
+        "field": "Name"
+      }
     },
-    "relatedEntities": {}
+    "relatedEntities": {
+      "MJ: AI Skill Actions": {
+        "entity": "MJ: AI Skill Actions",
+        "foreignKey": "SkillID"
+      },
+      "MJ: AI Skill Sub Agents": {
+        "entity": "MJ: AI Skill Sub Agents",
+        "foreignKey": "SkillID"
+      }
+    }
   }
 }

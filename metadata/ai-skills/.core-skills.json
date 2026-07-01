@@ -1,0 +1,162 @@
+[
+  {
+    "fields": {
+      "Name": "Web Research",
+      "Description": "Search the web, evaluate source credibility, and extract summarized findings with proper citations",
+      "Instructions": "@file:templates/web-research.skill.md",
+      "Status": "Active",
+      "Category": "Research",
+      "IconClass": "fa-solid fa-globe",
+      "Color": "#2563EB",
+      "CreatedByUserID": "@lookup:MJ: Users.Name=System"
+    },
+    "relatedEntities": {
+      "MJ: AI Skill Actions": [
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Google Custom Search"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Summarize Content"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Web Page Content"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=URL Metadata Extractor"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=URL Link Validator"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Data Analysis & Queries",
+      "Description": "Find and run saved queries, compose or write read-only SQL against entity base views, and aggregate results",
+      "Instructions": "@file:templates/data-analysis-queries.skill.md",
+      "Status": "Active",
+      "Category": "Data",
+      "IconClass": "fa-solid fa-database",
+      "Color": "#7C3AED",
+      "CreatedByUserID": "@lookup:MJ: Users.Name=System"
+    },
+    "relatedEntities": {
+      "MJ: AI Skill Actions": [
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Search Query Catalog"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Run Stored Query"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Run Ad-hoc Query"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Get Entity Details"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Aggregate Data"
+          }
+        }
+      ],
+      "MJ: AI Skill Sub Agents": [
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "SubAgentID": "@lookup:MJ: AI Agents.Name=Query Strategist"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Data Visualization",
+      "Description": "Create publication-quality SVG charts, diagrams, networks, word clouds, and composed infographics, plus Mermaid diagrams",
+      "Instructions": "@file:templates/data-visualization.skill.md",
+      "Status": "Active",
+      "Category": "Visualization",
+      "IconClass": "fa-solid fa-chart-pie",
+      "Color": "#EA580C",
+      "CreatedByUserID": "@lookup:MJ: Users.Name=System"
+    },
+    "relatedEntities": {
+      "MJ: AI Skill Actions": [
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Create SVG Chart"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Create SVG Diagram"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Create SVG Network"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Create SVG Word Cloud"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Create SVG Infographic"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Create Mermaid Diagram"
+          }
+        }
+      ],
+      "MJ: AI Skill Sub Agents": [
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "SubAgentID": "@lookup:MJ: AI Agents.Name=Infographic Agent"
+          }
+        }
+      ]
+    }
+  }
+]
