@@ -1,10 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { ComponentFixture } from '@angular/core/testing';
-import { renderComponentFixture } from '@memberjunction/ng-test-utils';
-
-// Local query helpers (this branch's ng-test-utils exposes only renderComponentFixture).
-const query = <T>(f: ComponentFixture<T>, sel: string): HTMLElement | null => f.nativeElement.querySelector(sel);
-const queryAll = <T>(f: ComponentFixture<T>, sel: string): HTMLElement[] => Array.from(f.nativeElement.querySelectorAll(sel));
+import { renderComponentFixture, query, queryAll } from '@memberjunction/ng-test-utils';
 import { LiveKitDeviceMenuComponent } from './livekit-device-menu.component';
 import type { LiveKitDeviceLists } from '../models';
 

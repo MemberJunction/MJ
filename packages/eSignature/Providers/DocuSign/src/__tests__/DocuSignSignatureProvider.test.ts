@@ -220,7 +220,7 @@ describe('DocuSignSignatureProvider', () => {
             expect(result.ErrorMessage).toContain('No documents');
         });
 
-        it('builds a base64 envelope with sign-here tabs and returns the envelope id', async () => {
+        it('builds a base64 envelope and returns the envelope id', async () => {
             await provider.initialize(VALID_CONFIG);
             fetchMock
                 .mockResolvedValueOnce(jsonResponse({ access_token: 'tok' })) // OAuth
@@ -248,8 +248,120 @@ describe('DocuSignSignatureProvider', () => {
             expect(body.documents[0].documentId).toBe('1');
             expect(body.recipients.signers[0].email).toBe('signer@x.com');
             expect(body.recipients.signers[0].routingOrder).toBe('2');
-            expect(body.recipients.signers[0].tabs.signHereTabs[0].documentId).toBe('1');
             expect(body.customFields.textCustomFields[0]).toMatchObject({ name: 'caseId', value: '42' });
+        });
+
+        it('emits NO tabs when a recipient specifies no fields (provider applies its own default)', async () => {
+            await provider.initialize(VALID_CONFIG);
+            fetchMock
+                .mockResolvedValueOnce(jsonResponse({ access_token: 'tok' }))
+                .mockResolvedValueOnce(jsonResponse({ envelopeId: 'ENV-1', status: 'sent' }));
+
+            await provider.CreateEnvelope({
+                title: 'Doc',
+                documents: [{ bytes: Buffer.from('x'), filename: 'a.pdf', contentType: 'application/pdf' }],
+                recipients: [{ email: 'a@b.com' }],
+            });
+
+            const body = JSON.parse(fetchMock.mock.calls[1][1].body as string);
+            // The old behavior hardcoded a signHere tab at (100,100). The fix removes that: no fields → no tabs.
+            expect(body.recipients.signers[0].tabs).toBeUndefined();
+        });
+
+        it('places a sign-here tab by anchor string when a field supplies an anchor', async () => {
+            await provider.initialize(VALID_CONFIG);
+            fetchMock
+                .mockResolvedValueOnce(jsonResponse({ access_token: 'tok' }))
+                .mockResolvedValueOnce(jsonResponse({ envelopeId: 'ENV-2', status: 'sent' }));
+
+            await provider.CreateEnvelope({
+                title: 'Doc',
+                documents: [{ bytes: Buffer.from('x'), filename: 'a.pdf', contentType: 'application/pdf' }],
+                recipients: [
+                    {
+                        email: 'a@b.com',
+                        fields: [
+                            { type: 'signature', anchor: 'Signature:', anchorYOffset: -6 },
+                            { type: 'dateSigned', anchor: 'Date:' },
+                        ],
+                    },
+                ],
+            });
+
+            const body = JSON.parse(fetchMock.mock.calls[1][1].body as string);
+            const tabs = body.recipients.signers[0].tabs;
+            expect(tabs.signHereTabs[0]).toMatchObject({
+                documentId: '1',
+                anchorString: 'Signature:',
+                anchorYOffset: '-6',
+                anchorIgnoreIfNotPresent: 'true',
+                optional: 'false',
+            });
+            expect(tabs.dateSignedTabs[0]).toMatchObject({ documentId: '1', anchorString: 'Date:' });
+        });
+
+        it('places a sign-here tab by absolute position when a field supplies normalized coordinates (Letter fallback)', async () => {
+            await provider.initialize(VALID_CONFIG);
+            fetchMock
+                .mockResolvedValueOnce(jsonResponse({ access_token: 'tok' }))
+                .mockResolvedValueOnce(jsonResponse({ envelopeId: 'ENV-3', status: 'sent' }));
+
+            await provider.CreateEnvelope({
+                title: 'Doc',
+                documents: [{ bytes: Buffer.from('x'), filename: 'a.pdf', contentType: 'application/pdf' }],
+                recipients: [{ email: 'a@b.com', fields: [{ type: 'signature', page: 2, xPercent: 50, yPercent: 80, required: false }] }],
+            });
+
+            const body = JSON.parse(fetchMock.mock.calls[1][1].body as string);
+            const tab = body.recipients.signers[0].tabs.signHereTabs[0];
+            // No page dims → US-Letter points (612 × 792): 50%→306; 80%→634, -10pt signature y-nudge →624.
+            expect(tab).toMatchObject({ documentId: '1', pageNumber: '2', xPosition: '306', yPosition: '624', optional: 'true' });
+        });
+
+        it('converts coordinates against the ACTUAL page size when pageWidthPt/pageHeightPt are supplied (e.g. A4)', async () => {
+            await provider.initialize(VALID_CONFIG);
+            fetchMock
+                .mockResolvedValueOnce(jsonResponse({ access_token: 'tok' }))
+                .mockResolvedValueOnce(jsonResponse({ envelopeId: 'ENV-3b', status: 'sent' }));
+
+            await provider.CreateEnvelope({
+                title: 'Doc',
+                documents: [{ bytes: Buffer.from('x'), filename: 'a.pdf', contentType: 'application/pdf' }],
+                // A4 is 595 × 842 pt. A placer that renders the real page passes those, so the % maps
+                // to the A4 page — NOT the Letter fallback.
+                recipients: [
+                    {
+                        email: 'a@b.com',
+                        fields: [{ type: 'signature', page: 1, xPercent: 50, yPercent: 80, pageWidthPt: 595, pageHeightPt: 842 }],
+                    },
+                ],
+            });
+
+            const body = JSON.parse(fetchMock.mock.calls[1][1].body as string);
+            const tab = body.recipients.signers[0].tabs.signHereTabs[0];
+            // 50% of 595 = 298; 80% of 842 = 674, -10pt signature y-nudge → 664 (A4 dims, not Letter).
+            expect(tab).toMatchObject({ pageNumber: '1', xPosition: '298', yPosition: '664' });
+        });
+
+        it('targets a single document when documentIndex is set', async () => {
+            await provider.initialize(VALID_CONFIG);
+            fetchMock
+                .mockResolvedValueOnce(jsonResponse({ access_token: 'tok' }))
+                .mockResolvedValueOnce(jsonResponse({ envelopeId: 'ENV-4', status: 'sent' }));
+
+            await provider.CreateEnvelope({
+                title: 'Doc',
+                documents: [
+                    { bytes: Buffer.from('x'), filename: 'a.pdf', contentType: 'application/pdf' },
+                    { bytes: Buffer.from('y'), filename: 'b.pdf', contentType: 'application/pdf' },
+                ],
+                recipients: [{ email: 'a@b.com', fields: [{ type: 'signature', anchor: 'Sign', documentIndex: 2 }] }],
+            });
+
+            const body = JSON.parse(fetchMock.mock.calls[1][1].body as string);
+            const signHere = body.recipients.signers[0].tabs.signHereTabs;
+            expect(signHere).toHaveLength(1);
+            expect(signHere[0].documentId).toBe('2');
         });
 
         it('sets status=created when sendImmediately is false', async () => {
