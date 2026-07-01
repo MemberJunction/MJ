@@ -11,7 +11,7 @@
  * @since 2.49.0
  */
 
-import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, FileStorageEngineBase } from '@memberjunction/core-entities';
+import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, FileStorageEngineBase, MJAISkillEntity } from '@memberjunction/core-entities';
 import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended, MJAIAgentEntityExtended, MJAIModelEntityExtended, MJAIPromptRunEntityExtended } from "@memberjunction/ai-core-plus";
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider, DatabaseProviderBase } from '@memberjunction/core';
 import { AgentRunWatchdog } from './agent-run-watchdog';
@@ -89,7 +89,8 @@ import {
     AgentPipelineRequest,
     initAgentRunStep,
     finalizeAgentRunStep,
-    AgentRunStepSaveQueue
+    AgentRunStepSaveQueue,
+    AgentSkillActivationRequest
 } from '@memberjunction/ai-core-plus';
 import { MJActionEntityExtended, ActionResult, ActionParam, AIDirective } from '@memberjunction/actions-base';
 import { AgentRunner } from './AgentRunner';
@@ -881,6 +882,41 @@ export class BaseAgent {
      * @since 2.123.0
      */
     private _effectiveActions: MJActionEntityExtended[] = [];
+
+    /**
+     * Effective sub-agents available to this agent after applying subAgentChanges — the sub-agent
+     * counterpart of {@link _effectiveActions}. Populated during gatherPromptTemplateData() and used
+     * for validation in {@link validateSubAgentNextStep} via {@link getEffectiveSubAgentsForValidation}.
+     * Without this, a sub-agent added at runtime (e.g. by Skill activation) would be advertised in the
+     * prompt catalog but rejected as "not found" when the agent tried to actually use it.
+     * @private
+     */
+    private _effectiveSubAgents: MJAIAgentEntityExtended[] = [];
+
+    /**
+     * IDs of skills already activated during this run. Prevents re-activation from re-appending
+     * the same instructions to context / re-pushing duplicate actionChanges/subAgentChanges entries
+     * when the LLM references an already-active skill again.
+     * @private
+     */
+    private _activatedSkillIDs: string[] = [];
+
+    /**
+     * Whether Plan Mode is active for this run — resolved once in {@link initializeAgentRun} via
+     * {@link resolvePlanModeGate}. True only when `agent.SupportsPlanMode` (capability, default ON)
+     * AND `params.planMode` (per-request, default OFF) are both true AND this is a root agent.
+     * @private
+     */
+    private _planModeActive: boolean = false;
+
+    /**
+     * Whether Plan Mode's approval gate has already been satisfied for this run — either because
+     * Plan Mode isn't active, or because a prior linked run's Plan step was approved. When active
+     * and NOT yet approved, `validateNextStep` blocks Actions/Sub-Agent steps until a Plan step
+     * has been presented and approved.
+     * @private
+     */
+    private _planApproved: boolean = false;
 
     /**
      * Counts only prompt (LLM) executions, NOT all agent steps.
@@ -3508,6 +3544,21 @@ export class BaseAgent {
         agentRun: MJAIAgentRunEntityExtended,
         currentStep: MJAIAgentRunStepEntityExtended
     ): Promise<BaseAgentNextStep<P>> {
+        // Plan Mode enforcement: while active and not yet approved, block Actions/Sub-Agent so the
+        // agent cannot skip straight to execution — it must present a Plan first. Chat, Retry,
+        // Skill activation, ForEach/While, and ClientTools are all still allowed (e.g. asking a
+        // clarifying question, or loading a skill's instructions, before forming the plan).
+        if (this._planModeActive && !this._planApproved && (nextStep.step === 'Actions' || nextStep.step === 'Sub-Agent')) {
+            // nextStep.step is narrowed to 'Actions' | 'Sub-Agent' here, so it can never already be
+            // 'Retry' — always increment (we're demoting it to Retry from a non-retry step).
+            this._generalValidationRetryCount++;
+            return {
+                step: 'Retry',
+                terminate: false,
+                errorMessage: 'Plan mode is active for this request. Present your plan first via a "Plan" next step and wait for approval before executing actions or sub-agents.'
+            };
+        }
+
         // for next step, let's do a little quick validation here for sub-agent and actions to ensure requests are valid
         switch (nextStep.step) {
             case 'Sub-Agent':           
@@ -3528,6 +3579,15 @@ export class BaseAgent {
             case 'While':
                 // While loops are valid - no additional validation needed
                 return nextStep;
+            // Type assertion required because 'Skill' is not part of the BaseAgentNextStep step
+            // union (it's non-terminal, like 'ClientTools' — see the type's doc comment).
+            case 'Skill' as typeof nextStep.step:
+                return this.validateSkillNextStep<P>(params, nextStep, currentPayload, agentRun, currentStep);
+            // Type assertion required because 'Plan' is not part of the BaseAgentNextStep step
+            // union (it's non-terminal — the terminal step it produces is 'Chat', see
+            // executePlanStep's doc comment for why).
+            case 'Plan' as typeof nextStep.step:
+                return this.validatePlanNextStep<P>(params, nextStep, currentPayload, agentRun, currentStep);
             case 'ClientTools' as typeof nextStep.step:
                 // Client tools are valid - execution handled by executeClientToolsStep
                 return nextStep;
@@ -3579,7 +3639,7 @@ export class BaseAgent {
         agentRun: MJAIAgentRunEntityExtended,
         currentStep: MJAIAgentRunStepEntityExtended
     ): Promise<BaseAgentNextStep<P>> {
-        const curAgentSubAgents = AIEngine.Instance.GetSubAgents(params.agent.ID, 'Active');
+        const curAgentSubAgents = this.getEffectiveSubAgentsForValidation(params.agent.ID);
 
         // Collect requested sub-agents. Prefer plural `subAgents` (parallel fan-out);
         // fall back to singular `subAgent` for the classic single-sub-agent next step.
@@ -3796,6 +3856,118 @@ export class BaseAgent {
         return ActionEngineServer.Instance.Actions.filter(a =>
             agentActions.some(aa => UUIDsEqual(aa.ActionID, a.ID)) && a.Status === 'Active'
         );
+    }
+
+    /**
+     * Gets the effective sub-agents for validation, using runtime subAgentChanges if available.
+     * Falls back to the database-configured relationship set if _effectiveSubAgents is empty.
+     * Mirrors {@link getEffectiveActionsForValidation}.
+     *
+     * @param agentId - The ID of the agent to get sub-agents for
+     * @returns Array of effective sub-agents available to the agent
+     * @protected
+     */
+    protected getEffectiveSubAgentsForValidation(agentId: string): MJAIAgentEntityExtended[] {
+        if (this._effectiveSubAgents.length > 0) {
+            return this._effectiveSubAgents;
+        }
+
+        // Fallback: compute from database configuration (ParentID children + AgentRelationships)
+        return AIEngine.Instance.GetSubAgents(agentId, 'Active');
+    }
+
+    /**
+     * Validates that the requested skill(s) are known and allowed for this agent (resolved via
+     * {@link AIEngine.GetSkillsForAgent}, which enforces the agent's AcceptsSkills gate + the
+     * catalog/grant Status chain). Subclasses can override to implement custom validation logic.
+     *
+     * Mirrors {@link validateActionsNextStep}'s fuzzy-name-matching UX: an exact case-insensitive
+     * match is tried first, falling back to a CONTAINS match when exactly one candidate matches.
+     *
+     * @protected
+     */
+    protected async validateSkillNextStep<P>(
+        params: ExecuteAgentParams,
+        nextStep: BaseAgentNextStep<P>,
+        currentPayload: P,
+        agentRun: MJAIAgentRunEntityExtended,
+        currentStep: MJAIAgentRunStepEntityExtended
+    ): Promise<BaseAgentNextStep<P>> {
+        const requested = nextStep.skillActivations ?? [];
+        if (requested.length === 0) {
+            if (nextStep.step !== 'Retry') {
+                this._generalValidationRetryCount++;
+            }
+            return {
+                step: 'Retry',
+                terminate: false,
+                errorMessage: 'When activating a skill, 1 or more skills must be specified'
+            };
+        }
+
+        const availableSkills = AIEngine.Instance.GetSkillsForAgent(params.agent);
+
+        const missingSkills = requested.filter(req => {
+            const requestedName = req.name.trim().toLowerCase();
+
+            const exactMatch = availableSkills.find(s => s.Name.trim().toLowerCase() === requestedName);
+            if (exactMatch) return false;
+
+            const containsMatches = availableSkills.filter(s => s.Name.trim().toLowerCase().includes(requestedName));
+            if (containsMatches.length === 1) {
+                this.logStatus(`Skill name fuzzy matched: '${req.name}' → '${containsMatches[0].Name}'`, true, params);
+                req.name = containsMatches[0].Name;
+                return false;
+            }
+
+            return true;
+        });
+
+        if (missingSkills.length > 0) {
+            const missingNames = missingSkills.map(s => s.name).join(', ');
+            const availableNames = availableSkills.map(s => s.Name).join(', ') || '(none)';
+            this.logError(`Skill(s) '${missingNames}' not found or not available for agent '${params.agent.Name}'. Available: ${availableNames}`, {
+                agent: params.agent,
+                category: 'SkillExecution'
+            });
+            if (nextStep.step !== 'Retry') {
+                this._generalValidationRetryCount++;
+            }
+            return {
+                step: 'Retry',
+                terminate: false,
+                errorMessage: `Skill(s) '${missingNames}' not found or not available. Available: ${availableNames}`
+            };
+        }
+
+        return nextStep;
+    }
+
+    /**
+     * Validates that a 'Plan' next step (Plan Mode) has plan text to present. Subclasses can
+     * override to add additional plan-quality checks (e.g. minimum length, required sections).
+     *
+     * @protected
+     */
+    protected async validatePlanNextStep<P>(
+        params: ExecuteAgentParams,
+        nextStep: BaseAgentNextStep<P>,
+        currentPayload: P,
+        agentRun: MJAIAgentRunEntityExtended,
+        currentStep: MJAIAgentRunStepEntityExtended
+    ): Promise<BaseAgentNextStep<P>> {
+        if (!nextStep.planDetails?.plan || nextStep.planDetails.plan.trim().length === 0) {
+            if (nextStep.step !== 'Retry') {
+                this._generalValidationRetryCount++;
+            }
+            return {
+                step: 'Retry',
+                terminate: false,
+                errorMessage: 'Plan text is required when presenting a Plan for approval'
+            };
+        }
+
+        return nextStep;
     }
 
     /**
@@ -5649,6 +5821,8 @@ The context is now within limits. Please retry your request with the recovered c
             }
             // Store for later validation in executeActionsStep
             this._effectiveActions = activeActions;
+            // Store for later validation in validateSubAgentNextStep (see getEffectiveSubAgentsForValidation)
+            this._effectiveSubAgents = uniqueActiveSubAgents;
 
             // Agent type prompt params: reuse cached base merge unless a runtime override is present.
             const runtimePromptParamOverrides = extraData?.__agentTypePromptParams as Record<string, unknown> | undefined;
@@ -5670,6 +5844,11 @@ The context is now within limits. Please retry your request with the recovered c
             // Build app context section if provided in extraData
             const appContext = this.buildAppContextSection(extraData);
 
+            // Skill catalog (name + description only — progressive disclosure). Empty for
+            // AcceptsSkills='None' since GetSkillsForAgent already returns [] in that case.
+            const availableSkills = engine.GetSkillsForAgent(agent);
+            const skillsCatalog = this.formatSkillsCatalog(availableSkills);
+
             const contextData: AgentContextData = {
                 agentName: agent.Name,
                 agentDescription: agent.Description,
@@ -5679,6 +5858,10 @@ The context is now within limits. Please retry your request with the recovered c
                 actionCount: activeActions.length,
                 actionDetails: actionDetails,
                 clientToolDetails: clientToolDetails,
+                skillCount: availableSkills.length,
+                skillsCatalog: skillsCatalog,
+                planModeActive: this._planModeActive,
+                planApproved: this._planApproved,
                 appContext: appContext,
             };
 
@@ -6294,6 +6477,18 @@ The context is now within limits. Please retry your request with the recovered c
             }
             return line;
         }).join('\n');
+    }
+
+    /**
+     * Formats the skill CATALOG as compact markdown — name + description ONLY. This is
+     * progressive disclosure by design: the LLM sees just enough to decide whether to activate a
+     * skill (via a 'Skill' next step), but never sees `Instructions` until it does. Instructions
+     * are appended separately in {@link buildSkillActivationMessage} on activation.
+     *
+     * @private
+     */
+    private formatSkillsCatalog(skills: MJAISkillEntity[]): string {
+        return skills.map(s => `- **${s.Name}** — ${s.Description ?? '(no description)'}`).join('\n');
     }
 
     /**
@@ -7145,6 +7340,13 @@ The context is now within limits. Please retry your request with the recovered c
         this._depth = params.parentDepth !== undefined ? params.parentDepth + 1 : 0;
         this._parentStepCounts = params.parentStepCounts || [];
 
+        // Resolve Plan Mode gate state for this run (must happen before the main loop starts —
+        // gatherPromptTemplateData/validateNextStep both read _planModeActive/_planApproved — and
+        // after _depth is set above, since the gate only applies to root agents).
+        const planModeGate = await this.resolvePlanModeGate(params);
+        this._planModeActive = planModeGate.active;
+        this._planApproved = planModeGate.approved;
+
         // Reset execution chain and progress tracking
         this._allProgressSteps = [];
         
@@ -7157,8 +7359,74 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
+     * Resolves whether Plan Mode is active for this run, and whether its approval gate is already
+     * satisfied. Called once from {@link initializeAgentRun}, after `_depth` is set.
+     *
+     * - `active`: `agent.SupportsPlanMode` (capability, default ON/opt-out) AND `params.planMode`
+     *   (per-request, default OFF) AND this is a root agent (`_depth === 0`). Sub-agents never gate
+     *   on Plan Mode — only the top-level agent the user/caller invoked does.
+     * - `approved`: only meaningful when `active`. True when `params.lastRunId` points to a prior
+     *   run whose Plan step's `MJ: AI Agent Requests` row resolved to `Approved` or `Responded`
+     *   (a `Rejected` plan — or no matching request at all — leaves the gate unsatisfied, sending
+     *   the agent back to present a revised plan).
+     *
+     * Override to change Plan Mode eligibility rules (e.g. gate on a specific agent category).
+     *
+     * @protected
+     */
+    protected async resolvePlanModeGate(
+        params: ExecuteAgentParams
+    ): Promise<{ active: boolean; approved: boolean }> {
+        const active = !!(params.agent.SupportsPlanMode && params.planMode === true && this._depth === 0);
+        if (!active) {
+            return { active: false, approved: false };
+        }
+
+        if (!params.lastRunId) {
+            return { active: true, approved: false };
+        }
+
+        const rv = new RunView();
+        const requestResult = await rv.RunView<{ Status: string; OriginatingAgentRunStepID: string | null }>({
+            EntityName: 'MJ: AI Agent Requests',
+            ExtraFilter: `OriginatingAgentRunID='${params.lastRunId}'`,
+            Fields: ['Status', 'OriginatingAgentRunStepID'],
+            OrderBy: '__mj_CreatedAt DESC',
+            MaxRows: 1,
+            ResultType: 'simple'
+        }, params.contextUser);
+
+        if (!requestResult.Success || requestResult.Results.length === 0) {
+            return { active: true, approved: false };
+        }
+
+        const request = requestResult.Results[0];
+        const resolved = request.Status === 'Approved' || request.Status === 'Responded';
+        if (!resolved || !request.OriginatingAgentRunStepID) {
+            return { active: true, approved: false };
+        }
+
+        // Confirm the request actually originated from a Plan step — a resolved request from an
+        // unrelated Chat clarification (asked before the agent could even form a plan) must NOT
+        // satisfy the Plan Mode gate.
+        const stepResult = await rv.RunView<{ StepType: string }>({
+            EntityName: 'MJ: AI Agent Run Steps',
+            ExtraFilter: `ID='${request.OriginatingAgentRunStepID}'`,
+            Fields: ['StepType'],
+            MaxRows: 1,
+            ResultType: 'simple'
+        }, params.contextUser);
+
+        const approved = stepResult.Success
+            && stepResult.Results.length > 0
+            && stepResult.Results[0].StepType === 'Plan';
+
+        return { active: true, approved };
+    }
+
+    /**
      * Validates the agent with tracking.
-     * 
+     *
      * @private
      * @param {MJAIAgentEntityExtended} agent - The agent to validate
      * @returns {Promise<ExecuteAgentResult | null>} - Failure result if validation fails, null if successful
@@ -7565,6 +7833,16 @@ The context is now within limits. Please retry your request with the recovered c
                 return await this.processSubAgentStep<P, P>(params, previousDecision!, undefined, undefined, stepCount);
             case 'Actions':
                 return await this.executeActionsStep(params, previousDecision, undefined, true, stepCount);
+            // Type assertion required because 'Skill' is not part of the BaseAgentNextStep step
+            // union (non-terminal, like 'ClientTools') — LoopAgentType.DetermineNextStep() emits it
+            // when the LLM chooses to activate a skill.
+            case 'Skill' as typeof previousDecision.step:
+                return await this.executeSkillStep(params, config, previousDecision, stepCount);
+            // Type assertion required because 'Plan' is not part of the BaseAgentNextStep step
+            // union — LoopAgentType.DetermineNextStep() emits it when the LLM presents a plan
+            // (Plan Mode). executePlanStep's terminal return is 'Chat'-shaped (see its doc comment).
+            case 'Plan' as typeof previousDecision.step:
+                return await this.executePlanStep(params, previousDecision);
             // Type assertion required because 'ClientTools' is not part of the BaseAgentNextStep
             // step union — LoopAgentType.DetermineNextStep() emits it when the LLM chooses client tools.
             case 'ClientTools' as typeof previousDecision.step:
@@ -10277,6 +10555,286 @@ The context is now within limits. Please retry your request with the recovered c
         });
 
         return `${header}\n${lines.join('\n')}`;
+    }
+
+    /**
+     * Executes a 'Skill' next step: activates one or more skills the LLM requested by name.
+     * Activating a skill (1) appends its full `Instructions` to the conversation so they take
+     * effect for the remainder of the run, and (2) enables its bundled Actions/sub-agents by
+     * pushing `root`-scoped `add` entries onto `params.actionChanges`/`params.subAgentChanges` —
+     * the same runtime tool-surface-extension mechanism `ExecuteAgentParams` already exposes to
+     * external callers. This is NOT a nested agent run; it never terminates the loop itself.
+     *
+     * Already-activated skills (tracked in `_activatedSkillIDs`) are skipped — re-requesting an
+     * active skill is a harmless no-op rather than re-appending duplicate instructions.
+     *
+     * Decomposed into {@link resolveSkillActivations}, {@link buildSkillActivationMessage},
+     * {@link enableSkillCapabilities}, and {@link recordSkillActivationStep} — override any of
+     * those for fine-grained control (e.g. custom instruction formatting, additional side effects
+     * on activation) without re-implementing the whole step.
+     *
+     * @protected
+     */
+    protected async executeSkillStep(
+        params: ExecuteAgentParams,
+        config: AgentConfiguration,
+        previousDecision: BaseAgentNextStep,
+        stepCount: number = 0
+    ): Promise<BaseAgentNextStep> {
+        const requested: AgentSkillActivationRequest[] = previousDecision.skillActivations ?? [];
+        if (requested.length === 0) {
+            // Nothing to activate — continue with next prompt
+            return await this.executePromptStep(params, config, previousDecision, stepCount);
+        }
+
+        const resolvedSkills = this.resolveSkillActivations(requested, params.agent);
+        const newlyActivated = resolvedSkills.filter(
+            skill => !this._activatedSkillIDs.some(id => UUIDsEqual(id, skill.ID))
+        );
+
+        if (newlyActivated.length === 0) {
+            // All requested skills are already active this run — no-op, just continue
+            return await this.executePromptStep(params, config, previousDecision, stepCount);
+        }
+
+        const currentPayload = previousDecision?.newPayload || previousDecision?.previousPayload || params.payload;
+
+        for (const skill of newlyActivated) {
+            await this.recordSkillActivationStep(skill, currentPayload, params);
+            this.enableSkillCapabilities(skill, params);
+            this._activatedSkillIDs.push(skill.ID);
+        }
+
+        const activationMessage = this.buildSkillActivationMessage(newlyActivated);
+        params.conversationMessages.push({
+            role: 'user',
+            content: activationMessage,
+            metadata: {
+                turnAdded: this._promptTurnCount,
+                messageType: 'skill-activation'
+            }
+        } as AgentChatMessage);
+
+        return await this.executePromptStep(params, config, previousDecision, stepCount);
+    }
+
+    /**
+     * Resolves the LLM's requested skill names to `MJ: AI Skills` entities, restricted to what
+     * {@link AIEngine.GetSkillsForAgent} allows for this agent (the AcceptsSkills gate + Status
+     * chain). Names that don't resolve are silently dropped here — {@link validateSkillNextStep}
+     * is responsible for rejecting unknown/disallowed names before execution ever reaches this
+     * point, so by the time `executeSkillStep` runs, every requested name is expected to match.
+     *
+     * Override to change resolution semantics (e.g. resolve by ID instead of Name).
+     *
+     * @protected
+     */
+    protected resolveSkillActivations(
+        requested: AgentSkillActivationRequest[],
+        agent: MJAIAgentEntityExtended
+    ): MJAISkillEntity[] {
+        const availableSkills = AIEngine.Instance.GetSkillsForAgent(agent);
+        const resolved: MJAISkillEntity[] = [];
+
+        for (const req of requested) {
+            const requestedName = req.name.trim().toLowerCase();
+            const match = availableSkills.find(s => s.Name.trim().toLowerCase() === requestedName);
+            if (match && !resolved.some(s => UUIDsEqual(s.ID, match.ID))) {
+                resolved.push(match);
+            }
+        }
+
+        return resolved;
+    }
+
+    /**
+     * Builds the message appended to `conversationMessages` when skill(s) activate — this is what
+     * actually puts each skill's `Instructions` into effect for the rest of the run. Override to
+     * change formatting (e.g. a more compact representation for a high skill-activation-count agent).
+     *
+     * @protected
+     */
+    protected buildSkillActivationMessage(skills: MJAISkillEntity[]): string {
+        const sections = skills.map(s => `## Skill Activated: ${s.Name}\n\n${s.Instructions}`);
+        return `The following skill(s) have been activated. Their instructions are now in effect ` +
+            `for the remainder of this run:\n\n${sections.join('\n\n')}`;
+    }
+
+    /**
+     * Enables a skill's bundled Actions and sub-agents by pushing `specific`-scoped `add` entries
+     * (targeted at exactly the activating agent's ID) onto `params.actionChanges` /
+     * `params.subAgentChanges`. `specific`/`[agent.ID]` is the correct scope for "apply to THIS
+     * agent, at whatever depth it runs, and never leak to its sub-agents":
+     *   - {@link doesChangeScopeApply} returns true only when the running agent's ID is in the list,
+     *     so it applies to the activating agent regardless of depth (a sub-agent that activates a
+     *     skill still gets its tools — which a `root`-scoped change would NOT do, since `root` means
+     *     "the depth-0 agent," not "the current agent").
+     *   - {@link filterActionChangesForSubAgent} / {@link filterSubAgentChangesForSubAgent} propagate
+     *     `specific` as-is, and each downstream agent checks `includes(itsOwnID)` → false, so the
+     *     grant never cascades to sub-agents the activating agent later delegates to.
+     * Because `params` is the same object reference used for the rest of this run, every subsequent
+     * turn's `gatherPromptTemplateData()` call picks up the change automatically — no extra plumbing.
+     *
+     * Override to change propagation scope (e.g. a subclass that wants skill-granted capabilities
+     * to cascade to sub-agents could push `scope: 'all-subagents'` instead).
+     *
+     * @protected
+     */
+    protected enableSkillCapabilities(skill: MJAISkillEntity, params: ExecuteAgentParams): void {
+        const activatingAgentIds = [params.agent.ID];
+
+        const actionIds = AIEngine.Instance.GetSkillActionIDs(skill.ID);
+        if (actionIds.length > 0) {
+            if (!params.actionChanges) {
+                params.actionChanges = [];
+            }
+            params.actionChanges.push({
+                scope: 'specific',
+                mode: 'add',
+                actionIds,
+                agentIds: activatingAgentIds
+            });
+        }
+
+        const subAgentIds = AIEngine.Instance.GetSkillSubAgentIDs(skill.ID);
+        if (subAgentIds.length > 0) {
+            if (!params.subAgentChanges) {
+                params.subAgentChanges = [];
+            }
+            params.subAgentChanges.push({
+                scope: 'specific',
+                mode: 'add',
+                subAgentIds,
+                agentIds: activatingAgentIds
+            });
+        }
+    }
+
+    /**
+     * Creates and immediately finalizes the `AIAgentRunStep` (StepType='Skill') that records this
+     * skill activation for observability/audit. Activation is not itself a failure mode today — it
+     * always finalizes as successful — but subclasses can override to add richer InputData/OutputData
+     * or to make activation conditionally fail (e.g. a licensing check).
+     *
+     * @protected
+     */
+    protected async recordSkillActivationStep(
+        skill: MJAISkillEntity,
+        currentPayload: unknown,
+        params: ExecuteAgentParams
+    ): Promise<void> {
+        const stepEntity = await this.createStepEntity({
+            stepType: 'Skill',
+            stepName: `Skill: ${skill.Name}`,
+            targetId: skill.ID,
+            inputData: { skillName: skill.Name },
+            contextUser: params.contextUser,
+            payloadAtStart: currentPayload,
+            payloadAtEnd: currentPayload
+        });
+
+        await this.finalizeStepEntity(stepEntity, true, undefined, {
+            skillId: skill.ID,
+            skillName: skill.Name
+        });
+    }
+
+    /**
+     * Executes a 'Plan' next step (Plan Mode): records a `Plan` run-step, raises the standard
+     * `MJ: AI Agent Requests` HITL request with an editable plan-approval `AgentResponseForm`, and
+     * terminates this run awaiting the human's response — reusing the exact same pause/resume
+     * infrastructure `executeChatStep` uses (`createFeedbackRequest` + the existing
+     * `MJAIAgentRequestEntityServer.Save()` auto-resume-on-status-change hook). A rejected or
+     * edited-and-resubmitted plan resumes as a new linked run via the normal run-chain mechanism;
+     * `resolvePlanModeGate` re-checks approval on that new run so a rejection sends the agent back
+     * to present a revised plan rather than through to execution.
+     *
+     * **Important**: the RETURNED `BaseAgentNextStep.step` is `'Chat'`, not `'Plan'` — 'Plan' is
+     * only ever an intermediate classification (used for the `AIAgentRunStep.StepType` audit
+     * record, which the UI reads to render a plan-approval card instead of a generic chat bubble).
+     * The step returned to the framework must stay within `AIAgentRun.FinalStep`'s DB-CHECK-
+     * constrained, terminal-only vocabulary — `'Plan'` is deliberately not part of it (see the
+     * `BaseAgentNextStep.step` doc comment) — so a plan-approval pause is represented as the same
+     * terminal shape `executeChatStep` already uses.
+     *
+     * @protected
+     */
+    protected async executePlanStep(
+        params: ExecuteAgentParams,
+        previousDecision: BaseAgentNextStep
+    ): Promise<BaseAgentNextStep> {
+        const planText = previousDecision.planDetails?.plan ?? '';
+
+        const stepEntity = await this.createStepEntity({
+            stepType: 'Plan',
+            stepName: 'Plan Presented for Approval',
+            contextUser: params.contextUser,
+            inputData: { plan: planText }
+        });
+        await this.finalizeStepEntity(stepEntity, true, undefined, { plan: planText });
+
+        const responseForm = this.buildPlanApprovalForm(planText);
+        const planPresentation: BaseAgentNextStep = {
+            step: 'Plan' as BaseAgentNextStep['step'],
+            terminate: true,
+            message: previousDecision.message || 'Please review the proposed plan before I proceed.',
+            reasoning: previousDecision.reasoning,
+            confidence: previousDecision.confidence,
+            responseForm
+        };
+
+        // For root agents, create a persistent AIAgentRequest so the request is tracked in the
+        // dashboard and can be responded to outside a conversation (mirrors executeChatStep).
+        if (this._depth === 0) {
+            await this.createFeedbackRequest(params, stepEntity, planPresentation);
+        }
+
+        return {
+            step: 'Chat',
+            terminate: true,
+            message: planPresentation.message,
+            reasoning: previousDecision.reasoning,
+            confidence: previousDecision.confidence,
+            previousPayload: previousDecision.previousPayload,
+            newPayload: previousDecision.newPayload || previousDecision.previousPayload,
+            responseForm
+        };
+    }
+
+    /**
+     * Builds the editable plan-approval `AgentResponseForm`: a pre-filled textarea (so the human
+     * can edit the plan before approving) plus an Approve/Reject button group. Override to change
+     * the card's layout (e.g. split the plan into per-step checkboxes instead of one textarea).
+     *
+     * @protected
+     */
+    protected buildPlanApprovalForm(planText: string): AgentResponseForm {
+        return {
+            title: 'Review Plan',
+            description: 'Review the proposed plan below. Edit it if needed, then approve to proceed or reject to have the agent reconsider.',
+            submitLabel: 'Submit',
+            questions: [
+                {
+                    id: 'plan',
+                    label: 'Plan',
+                    type: { type: 'textarea' },
+                    defaultValue: planText,
+                    required: true
+                },
+                {
+                    id: 'decision',
+                    label: 'Decision',
+                    type: {
+                        type: 'buttongroup',
+                        options: [
+                            { value: 'approve', label: 'Approve' },
+                            { value: 'reject', label: 'Reject' }
+                        ]
+                    },
+                    required: true
+                }
+            ]
+        };
     }
 
     private async executeChatStep(

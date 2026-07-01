@@ -2332,31 +2332,6 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Scoped Prompt Parts Section -->
-    <mj-collapsible-panel
-        SectionKey="mJScopedPromptParts"
-        SectionName="Scoped Prompt Parts"
-        Icon="fa fa-comment-dots"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJScopedPromptParts')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Scoped Prompt Parts','PrimaryScopeEntityID')"
-                [NewRecordValues]="NewRecordValues('MJ: Scoped Prompt Parts')"
-                [AllowLoad]="IsSectionExpanded('mJScopedPromptParts')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJScopedPromptParts', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
     <!-- ML Model Scoring Bindings Section -->
     <mj-collapsible-panel
         SectionKey="mJMLModelScoringBindings"
@@ -2376,6 +2351,31 @@
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJMLModelScoringBindings', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Scoped Prompt Parts Section -->
+    <mj-collapsible-panel
+        SectionKey="mJScopedPromptParts"
+        SectionName="Scoped Prompt Parts"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJScopedPromptParts')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Scoped Prompt Parts','PrimaryScopeEntityID')"
+                [NewRecordValues]="NewRecordValues('MJ: Scoped Prompt Parts')"
+                [AllowLoad]="IsSectionExpanded('mJScopedPromptParts')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJScopedPromptParts', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
