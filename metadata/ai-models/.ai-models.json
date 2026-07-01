@@ -16420,7 +16420,7 @@
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
             "Priority": 1,
             "Status": "Active",
-            "DriverClass": "GeminiEmbedding2",
+            "DriverClass": "GeminiEmbedding",
             "APIName": "gemini-embedding-2",
             "MaxInputTokens": 8192,
             "SupportedResponseFormats": "Any",

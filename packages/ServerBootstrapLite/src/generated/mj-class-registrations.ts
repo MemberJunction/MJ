@@ -67,7 +67,7 @@ import {
 
 // @memberjunction/ai-gemini (4 classes)
 import {
-    GeminiEmbedding2,
+    GeminiEmbedding,
     GeminiImageGenerator,
     GeminiLLM,
     GeminiRealtime,
@@ -1149,7 +1149,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     ElevenLabsAudioGenerator,
     ElevenLabsRealtime,
     FireworksLLM,
-    GeminiEmbedding2,
+    GeminiEmbedding,
     GeminiImageGenerator,
     GeminiLLM,
     GeminiRealtime,
