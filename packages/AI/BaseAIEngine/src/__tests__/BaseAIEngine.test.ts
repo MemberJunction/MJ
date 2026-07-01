@@ -387,6 +387,90 @@ describe('AIEngineBase', () => {
     });
 
     // -----------------------------------------------
+    // GetSkillsForAgent
+    // -----------------------------------------------
+    describe('GetSkillsForAgent', () => {
+        it("returns [] when the agent's AcceptsSkills is 'None' (default)", () => {
+            set('_skills', [{ ID: 's1', Status: 'Active' }]);
+            set('_agentSkills', []);
+            expect(AIEngineBase.Instance.GetSkillsForAgent({ ID: 'a1', AcceptsSkills: 'None' } as never)).toHaveLength(0);
+        });
+
+        it("returns [] when AcceptsSkills is undefined (never touched the column)", () => {
+            set('_skills', [{ ID: 's1', Status: 'Active' }]);
+            set('_agentSkills', []);
+            expect(AIEngineBase.Instance.GetSkillsForAgent({ ID: 'a1' } as never)).toHaveLength(0);
+        });
+
+        it("'All' returns every Active skill regardless of grants", () => {
+            set('_skills', [
+                { ID: 's1', Status: 'Active' },
+                { ID: 's2', Status: 'Active' },
+                { ID: 's3', Status: 'Deprecated' },
+            ]);
+            set('_agentSkills', []);
+            const result = AIEngineBase.Instance.GetSkillsForAgent({ ID: 'a1', AcceptsSkills: 'All' } as never);
+            expect(result).toHaveLength(2);
+            expect(result.map((s: { ID: string }) => s.ID).sort()).toEqual(['s1', 's2']);
+        });
+
+        it("'Limited' returns only skills with an Active grant for this agent", () => {
+            set('_skills', [
+                { ID: 's1', Status: 'Active' },
+                { ID: 's2', Status: 'Active' },
+            ]);
+            set('_agentSkills', [
+                { AgentID: 'a1', SkillID: 's1', Status: 'Active' },
+                { AgentID: 'a1', SkillID: 's2', Status: 'Revoked' },
+                { AgentID: 'a2', SkillID: 's2', Status: 'Active' }, // different agent's grant
+            ]);
+            const result = AIEngineBase.Instance.GetSkillsForAgent({ ID: 'a1', AcceptsSkills: 'Limited' } as never);
+            expect(result).toHaveLength(1);
+            expect(result[0].ID).toBe('s1');
+        });
+
+        it("'Limited' excludes a granted skill whose catalog Status is not Active", () => {
+            set('_skills', [{ ID: 's1', Status: 'Deprecated' }]);
+            set('_agentSkills', [{ AgentID: 'a1', SkillID: 's1', Status: 'Active' }]);
+            expect(AIEngineBase.Instance.GetSkillsForAgent({ ID: 'a1', AcceptsSkills: 'Limited' } as never)).toHaveLength(0);
+        });
+
+        it('returns [] for a null/undefined agent', () => {
+            set('_skills', [{ ID: 's1', Status: 'Active' }]);
+            expect(AIEngineBase.Instance.GetSkillsForAgent(null as never)).toHaveLength(0);
+        });
+    });
+
+    // -----------------------------------------------
+    // GetSkillActionIDs / GetSkillSubAgentIDs
+    // -----------------------------------------------
+    describe('GetSkillActionIDs', () => {
+        it('returns the ActionIDs bundled into a skill', () => {
+            set('_skillActions', [
+                { SkillID: 's1', ActionID: 'act1' },
+                { SkillID: 's1', ActionID: 'act2' },
+                { SkillID: 's2', ActionID: 'act3' },
+            ]);
+            expect(AIEngineBase.Instance.GetSkillActionIDs('s1').sort()).toEqual(['act1', 'act2']);
+        });
+
+        it('returns [] when the skill bundles no actions', () => {
+            set('_skillActions', []);
+            expect(AIEngineBase.Instance.GetSkillActionIDs('s1')).toEqual([]);
+        });
+    });
+
+    describe('GetSkillSubAgentIDs', () => {
+        it('returns the sub-agent IDs bundled into a skill', () => {
+            set('_skillSubAgents', [
+                { SkillID: 's1', SubAgentID: 'sa1' },
+                { SkillID: 's2', SubAgentID: 'sa2' },
+            ]);
+            expect(AIEngineBase.Instance.GetSkillSubAgentIDs('s1')).toEqual(['sa1']);
+        });
+    });
+
+    // -----------------------------------------------
     // Agent Configuration Presets
     // -----------------------------------------------
     describe('GetAgentConfigurationPresets', () => {
