@@ -27,8 +27,14 @@ vi.mock('@memberjunction/core', () => {
     class MockBaseEngine {
         protected _loaded = false;
         private _contextUser: unknown = null;
+        private _isPermissionConstrained = false;
         get Loaded() { return this._loaded; }
         get ContextUser() { return this._contextUser; }
+        get IsPermissionConstrained() { return this._isPermissionConstrained; }
+        protected GetConfigData<E>(propertyName: string): E[] {
+            // Mirrors real BaseEngine.GetConfigData — returns the backing field array
+            return ((this as Record<string, unknown>)[propertyName] as E[]) ?? [];
+        }
         async Load(
             _params: unknown[],
             _provider?: unknown,

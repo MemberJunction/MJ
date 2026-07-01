@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, inject } from '@angular/core';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { LogError, RunView, UserInfo } from '@memberjunction/core';
 import { MJConversationEntity, MJEnvironmentEntityExtended, MJMLModelEntity, MJProcessRunDetailEntity } from '@memberjunction/core-entities';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
@@ -295,7 +295,7 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
 
   /** Load the open prediction's plain-language drivers + its latest run's ranked at-risk rows. */
   private async loadAtRisk(c: BusinessPredictionCard): Promise<void> {
-    const model = this.engine.PublishedModels.find((m) => m.ID === c.modelId);
+    const model = this.engine.PublishedModels.find((m) => UUIDsEqual(m.ID, c.modelId));
     this.drivers = topGlobalDrivers(model?.FeatureImportance ?? null, 3);
     this.atRiskLoading = true;
     this.cdrLocal.detectChanges();
