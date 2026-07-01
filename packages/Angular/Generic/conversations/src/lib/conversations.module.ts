@@ -5,7 +5,7 @@ import { RouterModule } from '@angular/router';
 import { OverlayModule } from '@angular/cdk/overlay';
 
 // MJ UI Components
-import { MJButtonDirective, MJDatepickerComponent, MJDialogComponent, MJDialogActionsComponent, MJEmptyStateComponent, MJAlertComponent } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJDatepickerComponent, MJDialogComponent, MJDialogActionsComponent, MJEmptyStateComponent, MJAlertComponent, MJAccordionModule } from '@memberjunction/ng-ui-components';
 
 // MemberJunction modules
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
@@ -178,6 +178,7 @@ const COMPONENTS = [
     MJDialogActionsComponent,
     MJEmptyStateComponent,
     MJAlertComponent,
+    MJAccordionModule,
     ContainerDirectivesModule,
     CodeEditorModule,
     ArtifactsModule,

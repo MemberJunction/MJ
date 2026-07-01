@@ -351,8 +351,24 @@ export function resolveRealtimeUi(
 
   const showComposer = isConsole && allowTextReveal && signals.disclosureShowComposer && !signals.isReviewing;
 
+  // The surface/Details panel opens ON DEMAND when earned (the Details peek, the agent's
+  // OpenSurfacePanel, content auto-reveal — all set surfacePanelEarned). It is an INDEPENDENT
+  // right-hand peek that rides ALONGSIDE whatever the main column shows — it must NOT require the
+  // cross-session disclosure ratchet (disclosureShowPanel = SessionLevel >= 2), and it must NOT
+  // require the user to have revealed text.
+  //
+  // It was previously gated on `isConsole`, which bundled TWO things: "there's room" (legitimate —
+  // don't cram a side panel into a narrow overlay) AND "the user revealed text" (wrong for a peek).
+  // The text-reveal coupling meant opening Details with captions OFF flipped the whole left column
+  // from the hero orb to an empty transcript (the orb vanished), and toggling captions back off
+  // yanked the panel out from under an open peek. The design intent (see the auto-reveal comment in
+  // the overlay component: "the left column stays exactly as it was, pure audio included") is a peek
+  // beside the orb. So we keep only the ROOM half: the panel shows when earned and either the chrome
+  // is already a console (incl. review / forced-console at any width) OR the container is at least as
+  // wide as the console breakpoint — never in a cramped narrow overlay, and never dependent on text.
+  const roomForSurfacePanel = isConsole || signals.containerWidthPx >= cfg.consoleBreakpointPx;
   const showSurfacePanel =
-    cfg.showSurfacePanel && isConsole && signals.disclosureShowPanel && signals.surfacePanelEarned && !signals.channelFocus;
+    cfg.showSurfacePanel && signals.surfacePanelEarned && !signals.channelFocus && roomForSurfacePanel;
 
   const showActivityTab = cfg.showActivityRail && (signals.hasActivity || signals.isReviewing) && isConsole;
 

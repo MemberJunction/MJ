@@ -1,11 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
-import { ComponentFixture } from '@angular/core/testing';
-import { renderComponentFixture } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, query } from '@memberjunction/ng-test-utils';
 import type { LiveKitParticipantView } from '@memberjunction/livekit-room-core';
 import { LiveKitParticipantTileComponent } from './livekit-participant-tile.component';
-
-// Local query helpers (this branch's ng-test-utils exposes only renderComponentFixture).
-const query = <T>(f: ComponentFixture<T>, sel: string): HTMLElement | null => f.nativeElement.querySelector(sel);
 
 /**
  * DOM spec for <mj-livekit-participant-tile> — the worked example of the §7 media split.

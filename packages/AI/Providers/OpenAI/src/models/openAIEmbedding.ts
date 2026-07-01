@@ -21,6 +21,11 @@ export class OpenAIEmbedding extends BaseEmbeddings {
         return this._openAI;
     }
 
+    /** Native batch endpoint: OpenAI embeds an array of inputs in one request. */
+    public override get SupportsBatchEmbeddings(): boolean {
+        return true;
+    }
+
     public async EmbedText(params: EmbedTextParams): Promise<EmbedTextResult> {
         let body: OpenAI.Embeddings.EmbeddingCreateParams = {
             input: params.text,
@@ -52,7 +57,7 @@ export class OpenAIEmbedding extends BaseEmbeddings {
         }
     }
 
-    public async EmbedTexts(params: EmbedTextsParams): Promise<EmbedTextsResult> {
+    protected override async embedBatch(params: EmbedTextsParams): Promise<EmbedTextsResult> {
         let body: OpenAI.Embeddings.EmbeddingCreateParams = {
             input: params.texts,
             model: params.model || "text-embedding-3-small"

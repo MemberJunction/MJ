@@ -1,0 +1,22 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["vitest/globals", "node"]
+  },
+  "include": [
+    "src/lib/models/evaluation.types.ts",
+    "src/lib/services/evaluation-preferences.service.ts",
+    "src/lib/components/widgets/test-status-badge.component.ts",
+    "src/lib/components/widgets/score-indicator.component.ts",
+    "src/lib/components/widgets/cost-display.component.ts",
+    "src/lib/components/widgets/evaluation-badge.component.ts",
+    "src/lib/components/widgets/review-status-indicator.component.ts",
+    "src/lib/components/widgets/execution-context.component.ts",
+    "src/lib/components/widgets/evaluation-mode-toggle.component.ts",
+    "src/lib/components/widgets/**/*.dom.test.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
+}

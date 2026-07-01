@@ -65,10 +65,14 @@ export class SearchFilterComponent {
         this.cdr.detectChanges();
     }
 
-    /** Toggle category collapse */
-    public ToggleCategory(category: string): void {
+    /**
+     * Apply the expand/collapse state emitted by a category's accordion panel.
+     * Inverse mapping: an expanded panel means the category is NOT collapsed.
+     * No-op when filtering is not collapsible.
+     */
+    public OnCategoryExpandedChange(category: string, expanded: boolean): void {
         if (!this.Collapsible) return;
-        if (this.CollapsedCategories.has(category)) {
+        if (expanded) {
             this.CollapsedCategories.delete(category);
         } else {
             this.CollapsedCategories.add(category);
