@@ -90,55 +90,28 @@
     gap: 8px;
 }
 
-.group {
-    border-bottom: 1px solid var(--mj-border-subtle);
-}
-
-.group:last-child {
-    border-bottom: none;
-}
-
-.group-header {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    width: 100%;
-    padding: 10px 16px;
-    background: transparent;
-    border: none;
-    color: var(--mj-text-primary);
-    font-weight: 600;
-    font-size: 13px;
-    cursor: pointer;
-    text-align: left;
-}
-
-.group-header:hover {
-    background: var(--mj-bg-surface-hover);
-}
-
-.group-header i:first-child {
+/* Domain groups are now rendered with <mj-accordion-panel>, which owns the panel
+   chrome (border, hover, chevron) and the disclosure toggle. The former
+   .group / .group-header / .chevron rules were removed as dead. The title-slot
+   icon + name + count styles below remain — they style content projected into
+   <ng-template mjAccordionTitle>. */
+.group-icon i {
     color: var(--mj-brand-primary);
     width: 18px;
     text-align: center;
 }
 
-.group-header .group-name {
+.group-name {
     flex: 1;
 }
 
-.group-header .count {
+.count {
     padding: 2px 8px;
     background: var(--mj-bg-surface-sunken);
     border-radius: 10px;
     font-size: 11px;
     color: var(--mj-text-secondary);
     font-weight: 600;
-}
-
-.group-header .chevron {
-    color: var(--mj-text-muted);
-    font-size: 12px;
 }
 
 .rows {

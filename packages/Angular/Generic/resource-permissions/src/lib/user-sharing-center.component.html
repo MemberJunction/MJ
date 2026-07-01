@@ -41,14 +41,15 @@
                 Title="Nothing has been shared directly with you yet." />
         } @else {
             @for (group of SharedWithMe; track TrackByDomain($index, group)) {
-                <div class="group">
-                    <button class="group-header" (click)="ToggleGroup(group)">
-                        <i [class]="group.Icon"></i>
+                <mj-accordion-panel Size="sm" [FlushBody]="true"
+                    [Expanded]="group.Expanded"
+                    (ExpandedChange)="OnGroupExpandedChange(group, $event)">
+                    <ng-template mjAccordionTitle>
+                        <span class="group-icon"><i [class]="group.Icon"></i></span>
                         <span class="group-name">{{ group.DomainName }}</span>
                         <span class="count">{{ group.Rows.length }}</span>
-                        <i class="fa-solid chevron" [class.fa-chevron-down]="group.Expanded" [class.fa-chevron-right]="!group.Expanded"></i>
-                    </button>
-                    @if (group.Expanded) {
+                    </ng-template>
+                    <ng-template mjAccordionBody>
                         <div class="rows">
                             @for (row of group.Rows; track TrackByRow($index, row)) {
                                 <button class="row" (click)="OnRowClick(row)">
@@ -61,8 +62,8 @@
                                 </button>
                             }
                         </div>
-                    }
-                </div>
+                    </ng-template>
+                </mj-accordion-panel>
             }
         }
     } @else {
@@ -77,14 +78,15 @@
                 Title="You haven't shared anything with others yet." />
         } @else {
             @for (group of SharedByMe; track TrackByDomain($index, group)) {
-                <div class="group">
-                    <button class="group-header" (click)="ToggleGroup(group)">
-                        <i [class]="group.Icon"></i>
+                <mj-accordion-panel Size="sm" [FlushBody]="true"
+                    [Expanded]="group.Expanded"
+                    (ExpandedChange)="OnGroupExpandedChange(group, $event)">
+                    <ng-template mjAccordionTitle>
+                        <span class="group-icon"><i [class]="group.Icon"></i></span>
                         <span class="group-name">{{ group.DomainName }}</span>
                         <span class="count">{{ group.Rows.length }}</span>
-                        <i class="fa-solid chevron" [class.fa-chevron-down]="group.Expanded" [class.fa-chevron-right]="!group.Expanded"></i>
-                    </button>
-                    @if (group.Expanded) {
+                    </ng-template>
+                    <ng-template mjAccordionBody>
                         <div class="rows">
                             @for (row of group.Rows; track TrackByRow($index, row)) {
                                 <div class="row editable">
@@ -104,8 +106,8 @@
                                 </div>
                             }
                         </div>
-                    }
-                </div>
+                    </ng-template>
+                </mj-accordion-panel>
             }
         }
     }

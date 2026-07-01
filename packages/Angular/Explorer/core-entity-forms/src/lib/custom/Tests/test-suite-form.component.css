@@ -856,31 +856,11 @@
 }
 
 /* Collapsible filters */
-.analytics-filters {
-  background: var(--test-surface);
-  border-radius: var(--test-radius-lg);
-  margin-bottom: 16px;
-  box-shadow: var(--test-shadow-sm);
-  overflow: hidden;
-}
-
-.analytics-filters.collapsed {
-  margin-bottom: 12px;
-}
-
-.filters-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 16px;
-  cursor: pointer;
-  user-select: none;
-  transition: background 0.15s ease;
-}
-
-.filters-header:hover {
-  background: var(--test-bg);
-}
+/* Filters disclosure migrated to <mj-accordion-panel>. The bespoke
+   .analytics-filters wrapper card chrome, the .filters-header bar (+ hover),
+   and the .filters-header > i chevron are now owned by the accordion and were
+   removed. The title-slot styling (.filters-title / .filter-summary) and the
+   body content (.filters-content) are kept below. */
 
 .filters-title {
   display: flex;
@@ -899,11 +879,6 @@
   font-weight: 400;
   color: var(--test-text-muted);
   margin-left: 8px;
-}
-
-.filters-header > i {
-  color: var(--test-text-muted);
-  font-size: 12px;
 }
 
 .filters-content {

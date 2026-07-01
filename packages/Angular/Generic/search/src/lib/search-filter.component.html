@@ -16,30 +16,22 @@
     </div>
 
     @for (filter of Filters; track filter.Category) {
-        <div class="filter-category">
-            <div class="filter-category-header-row">
-                <div
-                    class="filter-category-header"
-                    (click)="ToggleCategory(filter.Category)"
-                    [class.filter-category-collapsed]="IsCategoryCollapsed(filter.Category)"
-                >
-                    <span class="filter-category-name">{{ filter.Category }}</span>
-                    @if (Collapsible) {
-                        <i class="fa-solid filter-category-chevron"
-                           [class.fa-chevron-down]="IsCategoryCollapsed(filter.Category)"
-                           [class.fa-chevron-up]="!IsCategoryCollapsed(filter.Category)"></i>
-                    }
-                </div>
-                @if (!IsCategoryCollapsed(filter.Category) && filter.Options.length > 1) {
+        <mj-accordion-panel Size="sm" [FlushBody]="true"
+            [Expanded]="Collapsible ? !IsCategoryCollapsed(filter.Category) : true"
+            (ExpandedChange)="OnCategoryExpandedChange(filter.Category, $event)">
+            <ng-template mjAccordionTitle>
+                <span class="filter-category-name">{{ filter.Category }}</span>
+            </ng-template>
+            <ng-template mjAccordionActions>
+                @if (Collapsible && !IsCategoryCollapsed(filter.Category) && filter.Options.length > 1) {
                     <button class="filter-select-all"
                             (click)="SelectAll(filter.Category); $event.stopPropagation()"
                             [title]="IsAllSelected(filter.Category) ? 'Clear all' : 'Select all'">
                         {{ IsAllSelected(filter.Category) ? 'Clear' : 'All' }}
                     </button>
                 }
-            </div>
-
-            @if (!IsCategoryCollapsed(filter.Category)) {
+            </ng-template>
+            <ng-template mjAccordionBody>
                 <div class="filter-options">
                     @for (option of filter.Options; track option.Value) {
                         @if (filter.Options.length === 1) {
@@ -67,8 +59,8 @@
                         }
                     }
                 </div>
-            }
-        </div>
+            </ng-template>
+        </mj-accordion-panel>
     }
 
     <!-- Relevance Threshold Slider -->

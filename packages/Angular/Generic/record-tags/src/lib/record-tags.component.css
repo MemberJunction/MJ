@@ -102,27 +102,13 @@
 
 /* ── Related Records Section ──────────────────────── */
 
+/* Section spacing only — the separator border + header/chevron are now owned by
+   <mj-accordion-panel>. */
 .mj-related-records-section {
-    border-top: 1px solid var(--mj-border-default);
     margin-top: 16px;
-    padding-top: 12px;
 }
 
-.mj-related-header {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 16px;
-    cursor: pointer;
-    color: var(--mj-text-secondary);
-    font-size: 0.82rem;
-    font-weight: 600;
-}
-
-.mj-related-header:hover {
-    color: var(--mj-text-primary);
-}
-
+/* flex:1 pushes the count badge to the far right of the accordion title row. */
 .mj-related-title {
     flex: 1;
 }

@@ -497,8 +497,9 @@
             </div>
           </div>
           <!-- Collapsible Filters (shared by both views) -->
-          <div class="analytics-filters" [class.collapsed]="filtersCollapsed">
-            <div class="filters-header" (click)="toggleFilters()">
+          <mj-accordion-panel Size="sm" [FlushBody]="true"
+            [Expanded]="!filtersCollapsed" (ExpandedChange)="onFiltersExpandedChange($event)">
+            <ng-template mjAccordionTitle>
               <span class="filters-title">
                 <i class="fas fa-filter"></i>
                 Filters
@@ -511,9 +512,8 @@
                   </span>
                 }
               </span>
-              <i class="fas" [ngClass]="filtersCollapsed ? 'fa-chevron-down' : 'fa-chevron-up'"></i>
-            </div>
-            @if (!filtersCollapsed) {
+            </ng-template>
+            <ng-template mjAccordionBody>
               <div class="filters-content">
                 <div class="filter-group">
                   <label>Time Range</label>
@@ -549,8 +549,8 @@
                   </div>
                 }
               </div>
-            }
-          </div>
+            </ng-template>
+          </mj-accordion-panel>
           <!-- Summary View -->
           @if (analyticsView === 'summary') {
             <!-- KPI Cards -->

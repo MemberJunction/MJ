@@ -62,61 +62,67 @@
             }
         </div>
 
-        <!-- Related Records Section -->
+        <!-- Related Records Section — migrated to <mj-accordion-panel>. The bespoke
+             .mj-related-header / chevron and the @if(ShowRelated) body gate are
+             replaced by the accordion header/chevron and lazy/animated body.
+             The ShowRelated flip is pure + Default CD, so two-way [(Expanded)] is used. -->
         <div class="mj-related-records-section">
-            <div class="mj-related-header" (click)="ShowRelated = !ShowRelated">
-                <i class="fa-solid" [class.fa-chevron-down]="ShowRelated" [class.fa-chevron-right]="!ShowRelated"></i>
-                <span class="mj-related-title">Related Records</span>
-                @if (RelatedRecords.length > 0) {
-                    <span class="mj-related-count">{{ RelatedRecords.length }}</span>
-                }
-            </div>
-
-            @if (ShowRelated) {
-                @if (IsLoadingRelated) {
-                    <div class="mj-related-loading">
-                        <mj-loading text="Finding related records..." size="small"></mj-loading>
-                    </div>
-                } @else if (RelatedRecords.length === 0) {
-                    <mj-empty-state class="mj-related-empty" Size="compact"
-                        Icon="" Title="No related records found via shared tags." />
-                } @else {
-                    <div class="mj-related-list">
-                        @for (related of RelatedRecords; track related.RecordID) {
-                            <div class="mj-related-item" (click)="OnRelatedRecordClick(related)">
-                                <div class="mj-related-item-icon">
-                                    <i [class]="related.EntityIcon"></i>
-                                </div>
-                                <div class="mj-related-item-content">
-                                    <div class="mj-related-item-name">{{ related.DisplayName }}</div>
-                                    <div class="mj-related-item-entity">{{ related.EntityName }}</div>
-                                    <div class="mj-related-item-tags">
-                                        @for (tag of related.SharedTags.slice(0, 3); track tag) {
-                                            <span class="mj-related-shared-tag">{{ tag }}</span>
+            <mj-accordion-panel
+                Size="sm"
+                [FlushBody]="true"
+                [(Expanded)]="ShowRelated">
+                <ng-template mjAccordionTitle>
+                    <span class="mj-related-title">Related Records</span>
+                    @if (RelatedRecords.length > 0) {
+                        <span class="mj-related-count">{{ RelatedRecords.length }}</span>
+                    }
+                </ng-template>
+                <ng-template mjAccordionBody>
+                    @if (IsLoadingRelated) {
+                        <div class="mj-related-loading">
+                            <mj-loading text="Finding related records..." size="small"></mj-loading>
+                        </div>
+                    } @else if (RelatedRecords.length === 0) {
+                        <mj-empty-state class="mj-related-empty" Size="compact"
+                            Icon="" Title="No related records found via shared tags." />
+                    } @else {
+                        <div class="mj-related-list">
+                            @for (related of RelatedRecords; track related.RecordID) {
+                                <div class="mj-related-item" (click)="OnRelatedRecordClick(related)">
+                                    <div class="mj-related-item-icon">
+                                        <i [class]="related.EntityIcon"></i>
+                                    </div>
+                                    <div class="mj-related-item-content">
+                                        <div class="mj-related-item-name">{{ related.DisplayName }}</div>
+                                        <div class="mj-related-item-entity">{{ related.EntityName }}</div>
+                                        <div class="mj-related-item-tags">
+                                            @for (tag of related.SharedTags.slice(0, 3); track tag) {
+                                                <span class="mj-related-shared-tag">{{ tag }}</span>
+                                            }
+                                            @if (related.SharedTags.length > 3) {
+                                                <span class="mj-related-tag-more">+{{ related.SharedTags.length - 3 }}</span>
+                                            }
+                                        </div>
+                                    </div>
+                                    <div class="mj-related-item-meta">
+                                        <span class="mj-related-item-score">{{ FormatScore(related.Score) }}</span>
+                                        @if (related.Source === 'both') {
+                                            <span class="mj-related-source-badge mj-related-source-both" title="Found via tags and vector similarity">both</span>
+                                        } @else if (related.Source === 'vectors') {
+                                            <span class="mj-related-source-badge mj-related-source-vectors" title="Found via vector similarity">vector</span>
                                         }
-                                        @if (related.SharedTags.length > 3) {
-                                            <span class="mj-related-tag-more">+{{ related.SharedTags.length - 3 }}</span>
+                                        @if (ShowOpenRecordButton) {
+                                            <button class="mj-related-open-btn" (click)="OnRelatedRecordClick(related); $event.stopPropagation()" title="Open record">
+                                                <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                                            </button>
                                         }
                                     </div>
                                 </div>
-                                <div class="mj-related-item-meta">
-                                    <span class="mj-related-item-score">{{ FormatScore(related.Score) }}</span>
-                                    @if (related.Source === 'both') {
-                                        <span class="mj-related-source-badge mj-related-source-both" title="Found via tags and vector similarity">both</span>
-                                    } @else if (related.Source === 'vectors') {
-                                        <span class="mj-related-source-badge mj-related-source-vectors" title="Found via vector similarity">vector</span>
-                                    }
-                                    @if (ShowOpenRecordButton) {
-                                        <button class="mj-related-open-btn" (click)="OnRelatedRecordClick(related); $event.stopPropagation()" title="Open record">
-                                            <i class="fa-solid fa-arrow-up-right-from-square"></i>
-                                        </button>
-                                    }
-                                </div>
-                            </div>
-                        }
-                    </div>
-                }
-            }
+                            }
+                        </div>
+                    }
+                </ng-template>
+            </mj-accordion-panel>
         </div>
     }
 
