@@ -16,33 +16,75 @@
           "fields": {
             "SkillID": "@parent:ID",
             "ActionID": "@lookup:MJ: Actions.Name=Google Custom Search"
+          },
+          "primaryKey": {
+            "ID": "4CD2ADEA-A42F-493E-9A1A-C98FB666E2D3"
+          },
+          "sync": {
+            "lastModified": "2026-07-01T23:25:37.263Z",
+            "checksum": "110eeb21526fbe58eead37a646520815fb791bd6b495ebd34f46ef44a088548c"
           }
         },
         {
           "fields": {
             "SkillID": "@parent:ID",
             "ActionID": "@lookup:MJ: Actions.Name=Summarize Content"
+          },
+          "primaryKey": {
+            "ID": "7C32B759-37B8-4C4D-A513-68FF87FBA625"
+          },
+          "sync": {
+            "lastModified": "2026-07-01T23:25:37.279Z",
+            "checksum": "ba482a14cf7ab43e8651714ec2e379bcdb3f55dc2cf55719d477deb7970a4f9e"
           }
         },
         {
           "fields": {
             "SkillID": "@parent:ID",
             "ActionID": "@lookup:MJ: Actions.Name=Web Page Content"
+          },
+          "primaryKey": {
+            "ID": "CEBA6E46-FD3E-4852-9322-9C6F49679ABA"
+          },
+          "sync": {
+            "lastModified": "2026-07-01T23:25:37.295Z",
+            "checksum": "25ba8309329b236910731121cb45c9b153ccd40d9bf9fac8cb567323a7c77378"
           }
         },
         {
           "fields": {
             "SkillID": "@parent:ID",
             "ActionID": "@lookup:MJ: Actions.Name=URL Metadata Extractor"
+          },
+          "primaryKey": {
+            "ID": "B88B80AF-D417-4721-9C51-168B89903DC5"
+          },
+          "sync": {
+            "lastModified": "2026-07-01T23:25:37.309Z",
+            "checksum": "268fab3a190114e58464588b8d0c1be9348e56cd548c9595b64e4da46b144507"
           }
         },
         {
           "fields": {
             "SkillID": "@parent:ID",
             "ActionID": "@lookup:MJ: Actions.Name=URL Link Validator"
+          },
+          "primaryKey": {
+            "ID": "6408EEB0-4FFD-40D9-A314-46A76F894A6B"
+          },
+          "sync": {
+            "lastModified": "2026-07-01T23:25:37.324Z",
+            "checksum": "86b2b241c67c589ba11983eceb4dcfe7eb704ccd250d6f4e94018d38ff3fe315"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "6FBC5823-3418-4788-A75F-5AC6E0654DB1"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T23:25:37.209Z",
+      "checksum": "577c848d64323b02ec02b8088b98048e7d63e019ab1770f4cbea4a5afb676c7e"
     }
   },
   {
@@ -62,30 +104,65 @@
           "fields": {
             "SkillID": "@parent:ID",
             "ActionID": "@lookup:MJ: Actions.Name=Search Query Catalog"
+          },
+          "primaryKey": {
+            "ID": "32DEDF3A-CDFB-4A6D-B92E-B071E4143A96"
+          },
+          "sync": {
+            "lastModified": "2026-07-01T23:25:37.336Z",
+            "checksum": "36a567c9a34c6fed0c18d6e2641cb2721c34989a33a528d8a2dcf0aac8e864ec"
           }
         },
         {
           "fields": {
             "SkillID": "@parent:ID",
             "ActionID": "@lookup:MJ: Actions.Name=Run Stored Query"
+          },
+          "primaryKey": {
+            "ID": "2ABC2730-A0FE-4D44-909E-BCCF1F687CA8"
+          },
+          "sync": {
+            "lastModified": "2026-07-01T23:25:37.349Z",
+            "checksum": "b37435dacc27208289fcf0f3eab07dd9fe4815b9b81a336778a3237c81e3bedf"
           }
         },
         {
           "fields": {
             "SkillID": "@parent:ID",
             "ActionID": "@lookup:MJ: Actions.Name=Run Ad-hoc Query"
+          },
+          "primaryKey": {
+            "ID": "EF391CEE-1A5F-46EE-8F0D-EE369087702F"
+          },
+          "sync": {
+            "lastModified": "2026-07-01T23:25:37.362Z",
+            "checksum": "8ee9942b466a692c6a75ad75ff40f884080f37c941947212614abb5353330a40"
           }
         },
         {
           "fields": {
             "SkillID": "@parent:ID",
             "ActionID": "@lookup:MJ: Actions.Name=Get Entity Details"
+          },
+          "primaryKey": {
+            "ID": "1703074E-1C24-45DB-BD49-BA84ABE9D6F0"
+          },
+          "sync": {
+            "lastModified": "2026-07-01T23:25:37.376Z",
+            "checksum": "3a85f6221891256f6c91b993d7a90cf395bd3c7d5e58b9701eacd28f45cfc9e7"
           }
         },
         {
           "fields": {
             "SkillID": "@parent:ID",
             "ActionID": "@lookup:MJ: Actions.Name=Aggregate Data"
+          },
+          "primaryKey": {
+            "ID": "9CAFBF36-7F56-4834-85AE-71ADF8302181"
+          },
+          "sync": {
+            "lastModified": "2026-07-01T23:25:37.388Z",
+            "checksum": "0b3aa6f964ea3d3e8304f72b66ebe007e0dadf458b4f93d78d62fb88ea1afd74"
           }
         }
       ],
@@ -94,9 +171,23 @@
           "fields": {
             "SkillID": "@parent:ID",
             "SubAgentID": "@lookup:MJ: AI Agents.Name=Query Strategist"
+          },
+          "primaryKey": {
+            "ID": "A772D698-37AD-449A-BC17-B5217CD0233B"
+          },
+          "sync": {
+            "lastModified": "2026-07-01T23:25:37.406Z",
+            "checksum": "e093e5bff3faeede11e02dd167621002625cd8ee2535b050d11a5e32918ee290"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "1D34B15B-D65D-46FE-8DF1-5921D58BB292"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T23:25:37.243Z",
+      "checksum": "3b55de53f81b6aa824d7c8782d5807aaf5a92b9a661cfd7e46d12eca4cc0e0ec"
     }
   },
   {
@@ -116,36 +207,78 @@
           "fields": {
             "SkillID": "@parent:ID",
             "ActionID": "@lookup:MJ: Actions.Name=Create SVG Chart"
+          },
+          "primaryKey": {
+            "ID": "EF0F9E6A-1A11-4043-B455-1BE2C128B804"
+          },
+          "sync": {
+            "lastModified": "2026-07-01T23:25:37.418Z",
+            "checksum": "48f2cdca894225424d5420a6a620a254cca4cfb72e1bc843b14fb0be9f47286c"
           }
         },
         {
           "fields": {
             "SkillID": "@parent:ID",
             "ActionID": "@lookup:MJ: Actions.Name=Create SVG Diagram"
+          },
+          "primaryKey": {
+            "ID": "3CFF896F-95B3-4B42-9F5C-0672E85C33A2"
+          },
+          "sync": {
+            "lastModified": "2026-07-01T23:25:37.431Z",
+            "checksum": "80329878996f2dec4c55f7502c10de76685f89645fcf00568c36f69e8e9f5ea9"
           }
         },
         {
           "fields": {
             "SkillID": "@parent:ID",
             "ActionID": "@lookup:MJ: Actions.Name=Create SVG Network"
+          },
+          "primaryKey": {
+            "ID": "F63A9491-39A3-46D0-B9E8-5293301C83E7"
+          },
+          "sync": {
+            "lastModified": "2026-07-01T23:25:37.443Z",
+            "checksum": "fa8bef7291a649b095428fbe20c5408a01e947a73056159aa1a9c48bf0b8ab7d"
           }
         },
         {
           "fields": {
             "SkillID": "@parent:ID",
             "ActionID": "@lookup:MJ: Actions.Name=Create SVG Word Cloud"
+          },
+          "primaryKey": {
+            "ID": "C86EA5C6-56AB-42EA-8611-957D728A3DC8"
+          },
+          "sync": {
+            "lastModified": "2026-07-01T23:25:37.456Z",
+            "checksum": "d6530cd8e5fe66aef5700a22f4edea86c5159d5e06aaffe0761e50681235f51c"
           }
         },
         {
           "fields": {
             "SkillID": "@parent:ID",
             "ActionID": "@lookup:MJ: Actions.Name=Create SVG Infographic"
+          },
+          "primaryKey": {
+            "ID": "46A57BF1-6798-4020-922E-E2A21737F0F1"
+          },
+          "sync": {
+            "lastModified": "2026-07-01T23:25:37.468Z",
+            "checksum": "5898371fc37421b5bdfa1b7c15c7acacbd453bcf7e71896c350def62f7809bd5"
           }
         },
         {
           "fields": {
             "SkillID": "@parent:ID",
             "ActionID": "@lookup:MJ: Actions.Name=Create Mermaid Diagram"
+          },
+          "primaryKey": {
+            "ID": "4EB6D948-0056-4567-8861-66374448C7D0"
+          },
+          "sync": {
+            "lastModified": "2026-07-01T23:25:37.480Z",
+            "checksum": "34614b6405af9d1018b02d5180c95146f7ae26f4c5f3427f330e2efd5ef3d06c"
           }
         }
       ],
@@ -154,9 +287,23 @@
           "fields": {
             "SkillID": "@parent:ID",
             "SubAgentID": "@lookup:MJ: AI Agents.Name=Infographic Agent"
+          },
+          "primaryKey": {
+            "ID": "C94773AF-B396-41D7-9AEF-53CECD62147F"
+          },
+          "sync": {
+            "lastModified": "2026-07-01T23:25:37.492Z",
+            "checksum": "aef1700888857619aad272dd0e57e454d841ad37ab154fee95116f0000a497a4"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "9C6B8B20-6083-414C-BC08-820BD1CE1DC2"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T23:25:37.227Z",
+      "checksum": "372b93838b00fce7590e66eb147d39013f6b0128154d5ba58cdbc20fb210cdd8"
     }
   }
 ]
