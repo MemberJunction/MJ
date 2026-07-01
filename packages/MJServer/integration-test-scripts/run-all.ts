@@ -33,6 +33,9 @@ const SCRIPTS = [
     // GraphQL wire and additionally SKIP unless a live MJAPI is reachable. See README.md.
     'ps-inproc-scored-query.ts',
     'ps-inproc-scheduled-scoring.ts',
+    'ps-inproc-operate-flow.ts',
+    'ps-inproc-agent-builder.ts',
+    'ps-inproc-agent-run.ts',
     'ps-live-recordprocess-scoring.ts',
     'ps-live-modelaction-generation.ts',
     'ps-live-renewal-lifecycle.ts',
