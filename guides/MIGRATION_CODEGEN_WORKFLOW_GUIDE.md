@@ -1,6 +1,16 @@
-# Adding New Tables to MemberJunction — End-to-End Guide
+# MemberJunction Migration Guide — End-to-End CodeGen Workflow
 
-This guide walks through the complete process of adding a new table (or tables) to the MJ schema, from writing the initial DDL through capturing CodeGen output into a single, replayable migration file.
+Every schema change in MemberJunction — whether you're creating new tables, adding columns, modifying constraints, or altering existing structures — follows the same end-to-end workflow: write DDL, apply it, run CodeGen, and consolidate the output into one replayable migration file. This guide covers that process for **any** migration type.
+
+## What Kinds of Changes Require This Workflow?
+
+- **New tables** — `CREATE TABLE` for entirely new entities
+- **New columns** — `ALTER TABLE ... ADD` on existing tables
+- **Constraint changes** — adding/modifying `CHECK`, `FOREIGN KEY`, or `UNIQUE` constraints
+- **Column modifications** — changing types, defaults, nullability
+- **Extended properties** — adding or updating `sp_addextendedproperty` descriptions
+
+Any DDL that changes what CodeGen sees in the schema requires the full migrate → codegen → append cycle.
 
 ## Why a Single Replayable Migration?
 
@@ -39,10 +49,12 @@ Name: `V202607011430__v5.45.x__My_New_Feature.sql`
 **Your migration should contain ONLY:**
 
 - `CREATE TABLE` statements (no `__mj_CreatedAt`/`__mj_UpdatedAt` — CodeGen adds those)
-- `ALTER TABLE` statements (consolidated — one `ALTER TABLE` with multiple `ADD` clauses)
+- `ALTER TABLE` statements (consolidated — one `ALTER TABLE` with multiple `ADD` clauses per table)
 - Constraints (`PRIMARY KEY`, `FOREIGN KEY`, `CHECK`, `UNIQUE`)
 - `sp_addextendedproperty` for every non-PK, non-FK column
 - **NO** views, stored procedures, `EntityField` inserts, or FK indexes (all CodeGen's job)
+
+#### Example: New Table
 
 ```sql
 CREATE TABLE ${flyway:defaultSchema}.[Widget] (
@@ -66,7 +78,39 @@ EXEC sp_addextendedproperty @name=N'MS_Description',
 -- ... repeat for Description, Status, etc.
 ```
 
-> **If you also ALTER the same table later in the migration** (e.g., adding columns after the initial CREATE), consolidate those columns into the original `CREATE TABLE` instead. The migration should reflect the final desired state of the table, not the incremental steps you took to get there.
+#### Example: Adding Columns to an Existing Table
+
+```sql
+-- Consolidate multiple columns into a single ALTER TABLE
+ALTER TABLE ${flyway:defaultSchema}.[Order] ADD
+    Priority INT NOT NULL DEFAULT 3,
+    EstimatedDelivery DATE NULL,
+    InternalNotes NVARCHAR(MAX) NULL;
+GO
+
+EXEC sp_addextendedproperty @name=N'MS_Description',
+    @value=N'Priority level (1=highest, 5=lowest) for fulfillment ordering.',
+    @level0type=N'SCHEMA', @level0name=N'${flyway:defaultSchema}',
+    @level1type=N'TABLE',  @level1name=N'Order',
+    @level2type=N'COLUMN', @level2name=N'Priority';
+-- ... repeat for EstimatedDelivery, InternalNotes
+```
+
+#### Example: Modifying a CHECK Constraint (Value List Change)
+
+```sql
+-- Drop the old CHECK and add the new one in the same migration
+ALTER TABLE ${flyway:defaultSchema}.[Widget]
+    DROP CONSTRAINT [CK_Widget_Status];
+GO
+
+ALTER TABLE ${flyway:defaultSchema}.[Widget]
+    ADD CONSTRAINT [CK_Widget_Status]
+    CHECK ([Status] IN ('Active', 'Inactive', 'Archived', 'Draft'));
+GO
+```
+
+> **If you also ALTER the same table you just created** (e.g., adding columns after the initial CREATE), consolidate those columns into the original `CREATE TABLE` instead. The migration should reflect the final desired state of the table, not the incremental steps you took to get there.
 
 ### 2. Apply the Migration
 
@@ -76,7 +120,7 @@ mj migrate --dir ./migrations
 
 > **Important**: The `--dir ./migrations` flag tells the CLI to run YOUR local migration files. Without it, `mj migrate` fetches MJ-core migrations from GitHub instead.
 
-Verify the tables exist in your development database before proceeding.
+Verify the changes took effect in your development database before proceeding.
 
 ### 3. Run CodeGen
 
@@ -89,12 +133,13 @@ CodeGen reads the updated schema and emits a SQL file:
 migrations/v5/CodeGen_Run_2026-07-01_14-45-30.sql
 ```
 
-This file contains everything CodeGen derived from your new tables:
-- `__mj_CreatedAt` / `__mj_UpdatedAt` columns + update triggers
-- Entity and EntityField metadata rows
-- Foreign-key indexes (`IDX_AUTO_MJ_FKEY_*`)
-- Base views with proper joins
-- CRUD stored procedures (`spCreate*`, `spUpdate*`, `spDelete*`)
+This file contains everything CodeGen derived from your schema changes:
+- `__mj_CreatedAt` / `__mj_UpdatedAt` columns + update triggers (for new tables)
+- Entity and EntityField metadata rows (new or updated)
+- Foreign-key indexes (`IDX_AUTO_MJ_FKEY_*`) for any new FK columns
+- Base views with proper joins (created or refreshed)
+- CRUD stored procedures (`spCreate*`, `spUpdate*`, `spDelete*`) — created or refreshed
+- Value-list metadata (`EntityFieldValue` rows) synced from CHECK constraints
 
 ### 4. Append CodeGen Output to Your Migration
 
