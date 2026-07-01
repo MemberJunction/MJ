@@ -56,6 +56,9 @@ export class SkillImportExportService {
         provider?: IMetadataProvider
     ): Promise<ExportSkillResult> {
         const md = provider ?? Metadata.Provider;
+        // Name resolution below reads the AI/Action engine caches — ensure they're loaded (idempotent
+        // no-op when already configured). Without this, a cold caller resolves every ID to no name.
+        await this.ensureEnginesConfigured(contextUser, md);
         const skill = await md.GetEntityObject<MJAISkillEntity>('MJ: AI Skills', contextUser);
         const loaded = await skill.Load(skillId);
         if (!loaded) {
@@ -110,6 +113,10 @@ export class SkillImportExportService {
         const parsed = SkillMarkdownConverter.Parse(markdownText);
         const warnings: string[] = [];
         const md = provider ?? Metadata.Provider;
+        // Name→ID resolution below reads the AI/Action engine caches — ensure they're loaded
+        // (idempotent). Without this, every bundled Action/sub-agent name would falsely resolve to a
+        // "not found" warning on a cold server.
+        await this.ensureEnginesConfigured(contextUser, md);
 
         const resolvedActionIDs = this.resolveNames(
             parsed.frontmatter.actions ?? [],
@@ -151,6 +158,16 @@ export class SkillImportExportService {
         return { skill, warnings };
     }
 
+    /**
+     * Loads the AI + Action engine caches that name/ID resolution depends on. Both `Config()` calls
+     * are idempotent — a no-op when the engine is already loaded (the common server case) — so this
+     * is cheap insurance against a cold caller producing empty resolutions.
+     */
+    private static async ensureEnginesConfigured(contextUser: UserInfo, provider: IMetadataProvider): Promise<void> {
+        await AIEngine.Instance.Config(false, contextUser, provider);
+        await ActionEngineServer.Instance.Config(false, contextUser, provider);
+    }
+
     /** Resolves a list of names against a cached entity array (by ID+Name), collecting a warning for each miss. */
     private static resolveNames(
         names: string[],
@@ -188,7 +205,10 @@ export class SkillImportExportService {
 
         if (existing.Success) {
             for (const row of existing.Results) {
-                await row.Delete();
+                const deleted = await row.Delete();
+                if (!deleted) {
+                    throw new Error(`Failed to remove existing ${entityName} row during skill re-sync: ${row.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+                }
             }
         }
 
@@ -197,7 +217,10 @@ export class SkillImportExportService {
             junctionRow.NewRecord();
             junctionRow.SkillID = skillId;
             (junctionRow as unknown as Record<string, string>)[idFieldName] = id;
-            await junctionRow.Save();
+            const saved = await junctionRow.Save();
+            if (!saved) {
+                throw new Error(`Failed to create ${entityName} row during skill re-sync: ${junctionRow.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            }
         }
     }
 }
