@@ -437,11 +437,11 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
     }
 
     // Apply inline styles directly — color by mention type. Skills carry their own accent Color
-    // (AISkill.Color UX metadata); when present it drives the chip so each skill reads distinctly.
+    // (AISkill.Color UX metadata); when present it drives the chip, otherwise the standard skill
+    // green (--mj-status-success). Same color logic as the saved-message badge — keep in sync with
+    // message-item's renderMentionHTML.
     const skillPalette = suggestion.type === 'skill'
-      ? (suggestion.color
-          ? { bg: suggestion.color, border: 'rgba(255, 255, 255, 0.35)' }
-          : { bg: 'linear-gradient(135deg, #8E2DE2 0%, #4A00E0 100%)', border: 'rgba(142, 45, 226, 0.4)' })
+      ? { bg: suggestion.color || 'var(--mj-status-success)', border: 'rgba(255, 255, 255, 0.35)' }
       : null;
     const palette =
       skillPalette
@@ -453,13 +453,16 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
           : suggestion.type === 'query'
             ? { bg: 'linear-gradient(135deg, #FF6A00 0%, #FF9E2C 100%)', border: 'rgba(255, 106, 0, 0.4)' }
             : { bg: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', border: 'rgba(102, 126, 234, 0.4)' };
+    // Skills render as a sharp-cornered rectangle (vs. the rounded pill for agents/users/entities)
+    // — the shape is the at-a-glance differentiator. Same shape in the saved-message badge.
+    const chipRadius = suggestion.type === 'skill' ? '4px' : '16px';
     chip.style.cssText = `
       display: inline-flex;
       align-items: center;
       gap: 5px;
       padding: 4px 12px;
       margin: 0 3px;
-      border-radius: 16px;
+      border-radius: ${chipRadius};
       font-size: 13px;
       font-weight: 600;
       cursor: default;

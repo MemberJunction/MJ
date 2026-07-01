@@ -515,6 +515,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     let iconClass = '';
     let logoURL = '';
     let configPresetName = '';
+    let inlineStyle = '';
 
     // Look up actual name and icon if ID provided
     if (content.type === 'agent' && agents) {
@@ -553,6 +554,11 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       const skill = AIEngineBase.Instance?.Skills?.find(s => UUIDsEqual(s.ID, content.id));
       if (skill) name = skill.Name;
       iconClass = this.normalizeIconClass(skill?.IconClass || 'fa-solid fa-wand-magic-sparkles');
+      // Per-skill accent color (AISkill.Color) overrides the standard skill green — same
+      // logic as the composer chip (mention-editor's createMentionChip). Keep in sync.
+      if (skill?.Color) {
+        inlineStyle = ` style="background: ${this.escapeHtml(skill.Color)}; border-color: rgba(255, 255, 255, 0.35);"`;
+      }
     }
 
     const escapedName = this.escapeHtml(name);
@@ -566,11 +572,11 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
     // Generate HTML based on whether we have an icon
     if (logoURL) {
-      return `<span class="mention-badge ${typeClass}"><img src="${this.escapeHtml(logoURL)}" alt="" />${escapedName}${presetIndicator}</span>`;
+      return `<span class="mention-badge ${typeClass}"${inlineStyle}><img src="${this.escapeHtml(logoURL)}" alt="" />${escapedName}${presetIndicator}</span>`;
     } else if (iconClass) {
-      return `<span class="mention-badge ${typeClass}"><i class="${this.escapeHtml(iconClass)}" aria-hidden="true"></i>${escapedName}${presetIndicator}</span>`;
+      return `<span class="mention-badge ${typeClass}"${inlineStyle}><i class="${this.escapeHtml(iconClass)}" aria-hidden="true"></i>${escapedName}${presetIndicator}</span>`;
     } else {
-      return `<span class="mention-badge ${typeClass}">${escapedName}${presetIndicator}</span>`;
+      return `<span class="mention-badge ${typeClass}"${inlineStyle}>${escapedName}${presetIndicator}</span>`;
     }
   }
 

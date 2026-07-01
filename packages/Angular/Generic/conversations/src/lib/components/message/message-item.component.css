@@ -127,10 +127,14 @@
   box-shadow: var(--mj-shadow-md);
 }
 
+/* Skills: standard green fallback (AISkill.Color overrides via inline style) + sharp-cornered
+   rectangle — the shape differentiates skills from the rounded agent/user/entity pills.
+   Keep color + shape in sync with the composer chip (mention-editor's createMentionChip). */
 :host ::ng-deep .mention-badge.skill {
-  background: var(--mj-brand-primary);
+  background: var(--mj-status-success);
   color: var(--mj-text-inverse);
-  border: 2px solid color-mix(in srgb, var(--mj-brand-primary) 40%, transparent);
+  border: 2px solid color-mix(in srgb, var(--mj-text-inverse) 35%, transparent);
+  border-radius: 4px;
   box-shadow: var(--mj-shadow-md);
 }
 

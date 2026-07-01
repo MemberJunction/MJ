@@ -304,6 +304,9 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
     this.converationManagerAgent = await this.agentService.getConversationManagerAgent();
 
+    // Restore the sticky Plan Mode toggle (persists across component recreation + sessions).
+    await this.loadPersistedPlanMode();
+
     // Initialize mention autocomplete (needed for parsing mentions in messages)
     await this.mentionAutocomplete.initialize(this.currentUser);
 
@@ -436,6 +439,8 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * string | null}` — `null` is an explicit "Auto" choice that overwrites an older pick.
    */
   private static readonly CoAgentPrefKey = 'mj.realtimeVoice.coAgent.v1';
+  /** Server-persisted Plan Mode toggle — survives component recreation (new-convo flow) and sessions. */
+  private static readonly PlanModePrefKey = 'mj.conversations.planMode.v1';
 
   /**
    * The persisted co-agent preference, loaded just before the picker opens (and read by
@@ -865,9 +870,34 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     }
   }
 
-  /** Toggle the sticky Plan Mode pill. Applies to subsequent user-initiated sends. */
+  /**
+   * Toggle sticky Plan Mode. Applies to subsequent user-initiated sends and persists
+   * server-side (MJ: User Settings) so it survives component recreation — e.g. the
+   * new-conversation flow, navigation, and new sessions — until the user turns it off.
+   */
   public TogglePlanMode(): void {
     this.PlanModeEnabled = !this.PlanModeEnabled;
+    try {
+      UserInfoEngine.Instance.SetSettingDebounced(
+        MessageInputComponent.PlanModePrefKey,
+        JSON.stringify({ enabled: this.PlanModeEnabled })
+      );
+    } catch (error) {
+      console.warn('[MessageInput] Failed to persist Plan Mode preference:', error);
+    }
+  }
+
+  /** Restores the persisted Plan Mode toggle. Defensive: any failure resolves to OFF. */
+  private async loadPersistedPlanMode(): Promise<void> {
+    try {
+      await UserInfoEngine.Instance.Config();
+      const raw = UserInfoEngine.Instance.GetSetting(MessageInputComponent.PlanModePrefKey);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as { enabled?: boolean };
+      this.PlanModeEnabled = parsed.enabled === true;
+    } catch {
+      // leave default (off)
+    }
   }
 
   async onSend(): Promise<void> {
@@ -1083,9 +1113,14 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     mentionResult: MentionParseResult,
     isFirstMessage: boolean
   ): Promise<void> {
-    // Snapshot user-requested skills (from /skill chips) once, before any routing branch, so every
-    // invocation path forwards the same set for this message.
-    this._pendingRequestedSkillIDs = this.collectRequestedSkillIDs();
+    // Snapshot user-requested skills once, before any routing branch, so every invocation path
+    // forwards the same set for this message. Derived from the SAVED MESSAGE TEXT via the shared
+    // MentionParser (`@{"type":"skill",…}` JSON mentions — same encoding as @agent/#entity), so the
+    // source of truth is the message itself, not composer DOM state. Chip-DOM read is the fallback
+    // for any path where the parsed result isn't available.
+    this._pendingRequestedSkillIDs = mentionResult.skillMentions?.length
+      ? mentionResult.skillMentions.map(m => m.id)
+      : this.collectRequestedSkillIDs();
 
     // Priority 1: Direct @mention
     if (mentionResult.agentMention) {
@@ -1535,7 +1570,9 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         this.conversationHistory,
         conversationManagerMessage.ID,
         this.createProgressCallback(conversationManagerMessage, 'Sage'),
-        this.appContext
+        this.appContext,
+        this.PlanModeEnabled, // per-request Plan Mode toggle
+        this._pendingRequestedSkillIDs, // user-requested skills (/skill mentions)
       );
 
       // Emit afterAgentTurn on the happy path only — the error/failure branch
@@ -2505,7 +2542,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     const agent = AIEngineBase.Instance.Agents.find(a => UUIDsEqual(a.ID, agentId));
     if (!agent) {
       console.warn('⚠️ Could not load agent for continuation - falling back to Sage');
-      await this.processMessageThroughAgent(userMessage, { mentions: [], agentMention: null, userMentions: [], entityMentions: [] });
+      await this.processMessageThroughAgent(userMessage, { mentions: [], agentMention: null, userMentions: [], entityMentions: [], skillMentions: [] });
       return;
     }
 
