@@ -17,9 +17,9 @@ the two TS references to those columns only compile once the entity is regenerat
 | Phase | Status | Notes |
 |---|---|---|
 | W0 — spike & guardrails | ✅ **Done** | Live test confirmed the unfiltered-agent footgun; pinning + constrained principal required and works. |
-| W1 — guest-session backend | ✅ **Done** | `packages/MJServer/src/widget/` — mint/refresh/upgrade routes, `mj_widget_id` claim, config block, pre-auth mount, unit tests. |
+| W1 — guest-session backend | ✅ **Done** | `packages/MJServer/src/realtimeWidget/` — mint/refresh/upgrade routes, `mj_widget_id` claim, config block, pre-auth mount, unit tests. |
 | W2 — widget-instance metadata | ✅ **Done** | `MJ: Widget Instances` migration + CodeGen + seed; `Widget Guest` restricted role + entity permissions. |
-| W3 — embeddable bundle (text) | ✅ **Done** | `packages/Web/Widget/` shadow-DOM `<mj-support-widget>`, loader, runtime transport reusing `GraphQLDataProvider` + `ConversationsRuntime`. Now **code-split** (thin `embed.ts` entry; transport/voice/runtime in lazy chunks). 71 tests. |
+| W3 — embeddable bundle (text) | ✅ **Done** | `packages/Web/RealtimeWidget/` shadow-DOM `<mj-support-widget>`, loader, runtime transport reusing `GraphQLDataProvider` + `ConversationsRuntime`. Now **code-split** (thin `embed.ts` entry; transport/voice/runtime in lazy chunks). 71 tests. |
 | W4 — voice (client-direct) | ✅ **Done** | Mic → realtime mint → driver. **Server-authoritative hard cap added**: `MaxSessionSeconds` threaded `PrepareClientSession → RealtimeSessionParams`; the resolver stamps an absolute deadline on the session (`Config_.maxSessionDeadlineIso`) and `SessionJanitor.RunMaxDurationSweep` hard-closes past it. |
 | W5 — upgrade + host identity | ✅ **Done** | Magic-link upgrade ✅. Host identity is now a `HostIdentityProvider extends BaseAuthProvider` (`@RegisterClass(BaseAuthProvider,'host-identity')`, `@memberjunction/auth-providers`); `host-identity.ts` delegates to it; key read from the new `WidgetInstance.HostPublicKey` column (config map kept as fallback). |
 | W6 — hardening & embed polish | ✅ **Mostly done** | Origin allowlist ✅, short-TTL + refresh ✅, **per-instance dynamic rate-limit** ✅, **bot/UA heuristics** ✅, **CSP recipe** ✅ (README), **bundle code-split** ✅ (~2.9 MB → 34 KB entry; voice + runtime load on demand). Remaining: the Express `cors()` middleware is still permissive (mint is fail-closed on origin; tighten CORS before public). |
@@ -116,7 +116,7 @@ Third-party site
      <div id="mj-support" data-widget-key="pk_live_xxx"></div>
         │  (web component, shadow DOM — no CSS/JS bleed)
         ▼
-  <mj-support-widget>  (new package: @memberjunction/web-widget)
+  <mj-support-widget>  (new package: @memberjunction/realtime-widget)
      ├─ bootstraps ConversationsRuntime (guest adapters + CSS tokens)
      ├─ text:  AgentRunner.processMessage({ explicitAgentId: <pinned> })
      ├─ voice: BaseRealtimeClient (client-direct) via minted ephemeral config
@@ -154,7 +154,7 @@ All three converge on the **same** `AuthProviderFactory` validation + `buildMagi
 - [x] **Acceptance:** documented confirmation that pinning + constrained principal is required and works.
 
 ### Phase W1 — Guest-session backend (foundation)
-Reuse magic-link `anonymous-embed`. **New files** under `packages/MJServer/src/widget/`: ✅ **all done**
+Reuse magic-link `anonymous-embed`. **New files** under `packages/MJServer/src/realtimeWidget/`: ✅ **all done**
 - [x] `WidgetSessionConfig` type + config block in `mj.config.cjs` (`widget: { enabled, signingReuse: 'magic-link', defaultGuestRoleName, sessionTtlMinutes, rateLimit..., allowedOrigins... }`).
 - [x] `WidgetSessionService.MintGuestSession(widgetKey, origin, audit)` — _`WidgetSessionService.ts`; validates key → resolves app/agent/role/origins, mints via the magic-link tail, returns token + conversation._
 - [x] `WidgetRouter.ts` — `POST /widget/session` (public, mounted BEFORE `createUnifiedAuthMiddleware`), `POST /widget/session/refresh`. Mirror `MagicLinkRouter.ts` structure and rate-limiting. — _Plus `/widget/upgrade`._
@@ -170,7 +170,7 @@ Reuse magic-link `anonymous-embed`. **New files** under `packages/MJServer/src/w
 - [x] **Acceptance:** a widget key resolves through metadata to app+agent+role+origins; the guest role cannot read arbitrary entities (verify with a denied RunView). — _Conversation/session isolation verified via RLS (TESTING.md step 5); run-entity scoping is the open debt._
 
 ### Phase W3 — Embeddable bundle (text MVP)
-New package `packages/Web/Widget/` → `@memberjunction/web-widget`: ✅ **all done**
+New package `packages/Web/RealtimeWidget/` → `@memberjunction/realtime-widget`: ✅ **all done**
 - [x] Web component `<mj-support-widget>` rendered in **shadow DOM** (`attachShadow` + `all: initial` on `:host`); no Angular Explorer shell.
 - [x] Loader script `mj-widget.js`: reads `data-widget-key` + `data-api-url`, calls `POST /widget/session`, mounts the component.
 - [x] Bootstrap mirrors `conversations-runtime-bootstrap.service.ts`: adapters registered, `--mj-chat-*` tokens scoped to the shadow root.

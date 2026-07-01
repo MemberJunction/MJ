@@ -2,7 +2,7 @@
  * @fileoverview In-memory voice controller for unit tests + the offline demo. Drives a
  * scripted state/transcript sequence without real audio or a network.
  *
- * @module @memberjunction/web-widget
+ * @module @memberjunction/realtime-widget
  */
 
 import type { IVoiceController, VoiceControllerCallbacks } from './voice-controller.js';

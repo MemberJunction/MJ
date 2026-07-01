@@ -69,14 +69,14 @@ renamed entity):
 
 - `packages/MJServer/src/agentSessions/ReturningVisitorRecap.ts` — recap scope resolver (resolved branch).
 - `packages/AI/Agents/src/AgentRunner.ts` — returning-visitor memory-scope derivation.
-- `packages/MJServer/src/widget/visitorIdentity.ts` — identity merge (write/compare the linked pair).
+- `packages/MJServer/src/realtimeWidget/visitorIdentity.ts` — identity merge (write/compare the linked pair).
 - `packages/MJServer/src/agentSessions/SessionManager.ts` — stamp `Conversation.LinkedEntityID/RecordID`
   and the new `AIAgentSession.LinkedEntityID/RecordID` from the visitor context.
 - `packages/MJServer/src/context.ts` + `packages/MJCore/src/generic/securityInfo.ts` — visitor-context
   field names + token claim names.
-- `packages/MJServer/src/widget/{widgetCore,WidgetSessionService,widgetGuestElevation}.ts` — entity-name
+- `packages/MJServer/src/realtimeWidget/{widgetCore,WidgetSessionService,widgetGuestElevation}.ts` — entity-name
   constant + entity type.
-- `packages/Web/Widget/src/{types.ts, transport/runtime-widget-transport.ts, session/widget-session-client.ts}`
+- `packages/Web/RealtimeWidget/src/{types.ts, transport/runtime-widget-transport.ts, session/widget-session-client.ts}`
   — `resolvedEntityId/recordId` → `linkedEntityId/recordId`.
 - Metadata: rename `metadata/widget-instances/` → `metadata/conversation-widget-instances/`; update its
   `.mj-sync.json` entity name + the seed.
@@ -96,7 +96,7 @@ renamed entity):
 
 ## Verification
 
-- Affected packages build clean; the Web/Widget and MJServer widget/elevation/host-identity/session test
+- Affected packages build clean; the Web/RealtimeWidget and MJServer widget/elevation/host-identity/session test
   suites pass.
 - Schema sanity: `ConversationWidgetInstance` table + view exist; `Conversation` has `VisitorKey` +
   `LastConversationID` and **no** `ResolvedEntityID/RecordID`; `AIAgentSession` has

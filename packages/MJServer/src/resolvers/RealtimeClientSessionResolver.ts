@@ -60,7 +60,7 @@ import { ResolverBase } from '../generic/ResolverBase.js';
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
 import { GetReadWriteProvider } from '../util.js';
 import { SessionManager } from '../agentSessions/index.js';
-import { resolveWidgetGuestRunContext } from '../widget/widgetGuestElevation.js';
+import { resolveWidgetGuestRunContext } from '../realtimeWidget/widgetGuestElevation.js';
 
 /**
  * Progress steps worth narrating to the realtime model — mirrors the normal agent-run path's filter

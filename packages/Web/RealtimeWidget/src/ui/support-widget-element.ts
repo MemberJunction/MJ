@@ -5,7 +5,7 @@
  * injected `IWidgetTransport` (which reuses ConversationsRuntime). Voice is layered on
  * in W4 via the same element.
  *
- * @module @memberjunction/web-widget
+ * @module @memberjunction/realtime-widget
  */
 
 import type { WidgetChatMessage, WidgetSession } from '../types.js';

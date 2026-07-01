@@ -1,4 +1,4 @@
-# @memberjunction/web-widget
+# @memberjunction/realtime-widget
 
 A **droppable, embeddable public customer-support widget** (text today; voice in W4) for any
 third-party website. A single `<script>` tag plus one mount element opens a support
@@ -29,7 +29,7 @@ mounts `<mj-support-widget>` **inside a shadow DOM** so host CSS cannot bleed in
 ### Programmatic mount
 
 ```ts
-import { mountWidget } from '@memberjunction/web-widget';
+import { mountWidget } from '@memberjunction/realtime-widget';
 await mountWidget({ widgetKey: 'pk_live_xxx', apiUrl: 'https://api.yourco.com', mountTarget: '#support' });
 ```
 

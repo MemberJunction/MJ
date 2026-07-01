@@ -13,7 +13,7 @@
  * call, with no widget-core changes. Which channels a given widget may attach is gated by the widget
  * instance's `EnabledChannels`.
  *
- * @module @memberjunction/web-widget
+ * @module @memberjunction/realtime-widget
  */
 
 /** A client-executed tool a channel exposes to the realtime model (declared at session start). */

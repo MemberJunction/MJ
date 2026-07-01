@@ -9,7 +9,7 @@
  * The cookie is scoped per widget key so two widgets on the same origin don't share a
  * visitor identity. The value is the opaque base64url key the server returns.
  *
- * @module @memberjunction/web-widget
+ * @module @memberjunction/realtime-widget
  */
 
 /** Cookie name prefix; the (sanitized) widget key is appended to scope it per deployment. */

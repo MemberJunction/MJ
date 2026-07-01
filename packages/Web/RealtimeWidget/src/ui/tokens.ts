@@ -9,7 +9,7 @@
  * (CLAUDE design-token rule). Defaults here are the token values; a host can override
  * by setting these custom properties on the mount element.
  *
- * @module @memberjunction/web-widget
+ * @module @memberjunction/realtime-widget
  */
 
 /** The `:host`-scoped token defaults + component CSS for the widget shadow root. */

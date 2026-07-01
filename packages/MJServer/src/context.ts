@@ -15,7 +15,7 @@ import { GetReadOnlyDataSource, GetReadWriteDataSource } from './util.js';
 import { v4 as uuidv4 } from 'uuid';
 import e from 'express';
 import type { RequestHandler, Request, Response, NextFunction } from 'express';
-import { DatabaseProviderBase, UserInfo, type MagicLinkScope, type WidgetVisitorContext, type WidgetGuestContext } from '@memberjunction/core';
+import { DatabaseProviderBase, UserInfo, type MagicLinkScope, type ReturningVisitorContext, type WidgetGuestContext } from '@memberjunction/core';
 import { SQLServerDataProvider, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { Metadata } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
@@ -244,7 +244,7 @@ function buildMagicLinkSessionUser(userRecord: UserInfo, payload: jwt.JwtPayload
 
   // Returning-visitor context (RV1/RV2/RV4): carried on a widget guest token so the voice path
   // (server-created conversation) stamps the same returning-visitor anchor + resolved identity.
-  const visitorContext = extractWidgetVisitorContext(payload);
+  const visitorContext = extractReturningVisitorContext(payload);
 
   // Widget-instance identity (mj_widget_id): present on every public web-widget guest token. The
   // privileged agent-dispatch path reads it to resolve the AUTHORITATIVE pinned agent for the guest
@@ -265,7 +265,7 @@ function buildMagicLinkSessionUser(userRecord: UserInfo, payload: jwt.JwtPayload
     sessionUser.MagicLinkScope = scope;
   }
   if (visitorContext) {
-    sessionUser.WidgetVisitorContext = visitorContext;
+    sessionUser.ReturningVisitorContext = visitorContext;
   }
   if (widgetGuestContext) {
     sessionUser.WidgetGuestContext = widgetGuestContext;
@@ -283,7 +283,7 @@ function buildMagicLinkSessionUser(userRecord: UserInfo, payload: jwt.JwtPayload
  * undefined when the token carries no VisitorKey (the default, remembering-off case). Used so the
  * voice path can stamp the conversation with the same anchor/identity the text path stamps client-side.
  */
-function extractWidgetVisitorContext(payload: jwt.JwtPayload): WidgetVisitorContext | undefined {
+function extractReturningVisitorContext(payload: jwt.JwtPayload): ReturningVisitorContext | undefined {
   const visitorKey = payload['mj_visitor_key'];
   if (typeof visitorKey !== 'string' || !visitorKey) {
     return undefined;

@@ -12,7 +12,7 @@ import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
 import { startLivenessPulse } from '../generic/FireAndForgetHeartbeat.js';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { GetReadWriteProvider } from '../util.js';
-import { resolveWidgetGuestRunContext, elevateUserPayload } from '../widget/widgetGuestElevation.js';
+import { resolveWidgetGuestRunContext, elevateUserPayload } from '../realtimeWidget/widgetGuestElevation.js';
 import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import { GetAttachmentService } from '@memberjunction/aiengine';
 import { NotificationEngine } from '@memberjunction/notifications';

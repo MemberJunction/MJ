@@ -9,9 +9,9 @@
 
 ## TL;DR for the next person
 
-1. Run `npm install` at repo root (re-links Web/Widget, which I bumped 5.42.0→5.43.0 to match the merged workspace — see [Gotcha 1](#gotcha-1-web-widget-version-skew)).
+1. Run `npm install` at repo root (re-links Web/RealtimeWidget, which I bumped 5.42.0→5.43.0 to match the merged workspace — see [Gotcha 1](#gotcha-1-web-widget-version-skew)).
 2. Run `npx mj sync push --dir=metadata --include="prompts"` (lands the new `Returning-Visitor Recap` prompt the recap service loads by name).
-3. `cd packages/Web/Widget && npm run build` should now pass.
+3. `cd packages/Web/RealtimeWidget && npm run build` should now pass.
 4. Continue with **RV3 → RV4 → RV5** and finish RV2's triggers — exact hook points below.
 
 ---
@@ -35,15 +35,15 @@
 
 | File | Change |
 |---|---|
-| `packages/Web/Widget/src/session/visitor-key-cookie.ts` | **New.** `readVisitorKey/writeVisitorKey/clearVisitorKey` — durable first-party cookie, scoped per widget key. |
-| `packages/Web/Widget/src/types.ts` | `WidgetSessionResponse` + `WidgetSession` gain `rememberReturningVisitors/visitorKey/previousConversationId`. |
-| `packages/Web/Widget/src/session/widget-session-client.ts` | `Mint(visitorKey?)` / `Refresh(visitorKey?)` send the key; `toSession` maps the new fields. |
-| `packages/Web/Widget/src/loader.ts` | Reads cookie before mint, writes it after (gated), passes key on refresh. |
-| `packages/Web/Widget/src/transport/runtime-widget-transport.ts` | `createConversation` stamps `VisitorKey` + `PreviousConversationID` (gated). |
-| `packages/MJServer/src/widget/WidgetSessionService.ts` | `MintGuestSessionInput.visitorKey`; result fields; `resolveReturningVisitor()` + `findPreviousConversationByVisitorKey()` (app-scoped, base64url-validated key). |
-| `packages/MJServer/src/widget/WidgetRouter.ts` | `handleMint` parses `visitorKey` from the body. |
+| `packages/Web/RealtimeWidget/src/session/visitor-key-cookie.ts` | **New.** `readVisitorKey/writeVisitorKey/clearVisitorKey` — durable first-party cookie, scoped per widget key. |
+| `packages/Web/RealtimeWidget/src/types.ts` | `WidgetSessionResponse` + `WidgetSession` gain `rememberReturningVisitors/visitorKey/previousConversationId`. |
+| `packages/Web/RealtimeWidget/src/session/widget-session-client.ts` | `Mint(visitorKey?)` / `Refresh(visitorKey?)` send the key; `toSession` maps the new fields. |
+| `packages/Web/RealtimeWidget/src/loader.ts` | Reads cookie before mint, writes it after (gated), passes key on refresh. |
+| `packages/Web/RealtimeWidget/src/transport/runtime-widget-transport.ts` | `createConversation` stamps `VisitorKey` + `PreviousConversationID` (gated). |
+| `packages/MJServer/src/realtimeWidget/WidgetSessionService.ts` | `MintGuestSessionInput.visitorKey`; result fields; `resolveReturningVisitor()` + `findPreviousConversationByVisitorKey()` (app-scoped, base64url-validated key). |
+| `packages/MJServer/src/realtimeWidget/WidgetRouter.ts` | `handleMint` parses `visitorKey` from the body. |
 
-**Gap (deferred to RV1-voice / RV4):** the *voice* path creates its conversation server-side in `SessionManager.createConversation` (`packages/MJServer/src/agentSessions/SessionManager.ts:~307`), which does **not** yet stamp `VisitorKey`/`PreviousConversationID`. The text path is complete. To wire voice: embed the visitor key as a JWT claim in `buildWidgetGuestClaims` (`packages/MJServer/src/widget/widgetCore.ts`), surface it on `UserInfo` in `buildMagicLinkSessionUser` (`packages/MJServer/src/context.ts:202`), and stamp it in `createConversation`.
+**Gap (deferred to RV1-voice / RV4):** the *voice* path creates its conversation server-side in `SessionManager.createConversation` (`packages/MJServer/src/agentSessions/SessionManager.ts:~307`), which does **not** yet stamp `VisitorKey`/`PreviousConversationID`. The text path is complete. To wire voice: embed the visitor key as a JWT claim in `buildWidgetGuestClaims` (`packages/MJServer/src/realtimeWidget/widgetCore.ts`), surface it on `UserInfo` in `buildMagicLinkSessionUser` (`packages/MJServer/src/context.ts:202`), and stamp it in `createConversation`.
 
 ### RV2 — Recap on close ◑ (mechanism built + compiles; triggers partial)
 
@@ -77,12 +77,12 @@ These line numbers came from a code map on this branch; re-confirm before editin
 - **Acceptance:** a verified visitor's prior anonymous context attributes to the resolved record; the next visit pulls memory via the resolved pair, not the cookie.
 
 ### RV5 — Privacy controls ⬜
-- Visitor-facing notice in the widget UI when `rememberReturningVisitors` is on (`packages/Web/Widget/src/ui/…`).
+- Visitor-facing notice in the widget UI when `rememberReturningVisitors` is on (`packages/Web/RealtimeWidget/src/ui/…`).
 - **"Forget me":** a public widget endpoint (sibling to `/widget/session` in `WidgetRouter.ts`/`WidgetSessionService.ts`) that, given the `VisitorKey`, archives (`Status='Archived'`) the visitor's notes and clears the linkage; client calls `clearVisitorKey(widgetKey)` (already exported).
 - **Acceptance:** "forget me" leaves no Active memory and no resolvable cookie linkage.
 
 ### RV-final ⬜
-- Build all touched packages (`Web/Widget`, `MJServer`, `AI/Agents`) and run/refresh unit tests. Web/Widget has a vitest suite (mock transport + session client) — add cases for the cookie + the gated stamping.
+- Build all touched packages (`Web/RealtimeWidget`, `MJServer`, `AI/Agents`) and run/refresh unit tests. Web/RealtimeWidget has a vitest suite (mock transport + session client) — add cases for the cookie + the gated stamping.
 
 ---
 
@@ -101,7 +101,7 @@ The plan's R5 proposed `ScopeEntityID/ScopeRecordID` on AIAgentNote. But the age
 ## Gotchas
 
 <a name="gotcha-1-web-widget-version-skew"></a>
-**Gotcha 1 — Web/Widget version skew.** `@memberjunction/web-widget` was the lone package still at 5.42.0 (pinning 5.42.0 deps) after the merge bumped the workspace to 5.43.0, so npm installed a **stale 5.42.0 `core-entities`** under `packages/Web/Widget/node_modules` that lacks the new columns → `tsc` "Property 'VisitorKey' does not exist". I bumped its `package.json` (version + 7 `@memberjunction/*` deps) to 5.43.0; **a root `npm install` re-links it to the workspace.** (Its code is type-correct; MJServer compiles the same getters fine.)
+**Gotcha 1 — Web/RealtimeWidget version skew.** `@memberjunction/realtime-widget` was the lone package still at 5.42.0 (pinning 5.42.0 deps) after the merge bumped the workspace to 5.43.0, so npm installed a **stale 5.42.0 `core-entities`** under `packages/Web/RealtimeWidget/node_modules` that lacks the new columns → `tsc` "Property 'VisitorKey' does not exist". I bumped its `package.json` (version + 7 `@memberjunction/*` deps) to 5.43.0; **a root `npm install` re-links it to the workspace.** (Its code is type-correct; MJServer compiles the same getters fine.)
 
 <a name="gotcha-2-the-recordingfile-sequence-collision--the-two-pass-migrate"></a>
 **Gotcha 2 — the `RecordingFile` sequence collision (critical migration lesson).** A single-pass fresh migrate of the consolidated migration **fails** with `UNIQUE KEY UQ_EntityField_EntityID_Sequence` at `(Conversation, 100063)`. Cause: `next`'s `Meeting_Room_Recording` migration hardcodes the virtual `RecordingFile` field at Seq 100063, but `R__RefreshMetadata` (repeatable, runs at migrate-end) renumbers it to a low value — so codegen, run *after* that renumber, assigned our `PreviousConversationID` the now-free 100063, which collides on a fresh replay before R runs. **Fix (do NOT hand-edit sequences):** the two-pass migrate — blank DB → migrate *without* our file (R renumbers RecordingFile off 100063) → move our file back → migrate again. This is the validation gate; a single-pass-from-baseline still collides (acceptable per the team's release model — `mj bump`/new baselines absorb it). `RecordingFile` is never touched by our migration; the many `RecordingFile` mentions in the appended codegen are just the existing column appearing in regenerated views/SPs/cascade-cursors.
@@ -125,7 +125,7 @@ sqlcmd -S localhost,1451 -U sa -P 'MjParallel99!' -C -Q \
 
 # builds
 cd packages/MJServer && npm run build          # ✓ passes (RV1+RV2)
-cd packages/Web/Widget && npm run build         # passes AFTER root `npm install`
+cd packages/Web/RealtimeWidget && npm run build         # passes AFTER root `npm install`
 cd packages/AI/Agents && npm run build          # for RV3
 
 # metadata push (recap prompt)
@@ -133,7 +133,7 @@ npx mj sync push --dir=metadata --include="prompts"
 ```
 
 ## Open items needing a human
-- ~~`npm install` at root~~ ✅ done (also pruned a stale nested `core-entities@5.42.0` under Web/Widget — see Completion).
+- ~~`npm install` at root~~ ✅ done (also pruned a stale nested `core-entities@5.42.0` under Web/RealtimeWidget — see Completion).
 - ~~`mj sync push` the recap prompt~~ ✅ done.
 - Decide whether to also seed/enable `RememberReturningVisitors` on a widget instance in `metadata/widget-instances/` for live testing (default is off).
 
@@ -146,28 +146,28 @@ All phases implemented in this session. **Net new behavior since the handoff was
 ### Per-phase
 - **RV2 ✓** — text path: **lazy-recap-at-mint** in `WidgetSessionService.recapPriorConversationIfNeeded` (recaps the prior conversation when the visitor returns; idempotent, awaited so it's ready for RV3). **Retention**: `writeReturningVisitorRecap(retentionDays)` → `note.ExpiresAt` from the widget's `VisitorMemoryRetentionDays`.
 - **RV3 ✓** — `realtime-client-session-service.ts`: `assembleMemoryContext` now takes the provider and threads a resolved scope pair (`resolveConversationMemoryScope`: resolved pair → else `(Conversations, PreviousConversationID)` → else none) into the existing `AgentMemoryContextBuilder.InjectContextMemory`.
-- **RV4 ✓** — new `packages/MJServer/src/widget/visitorIdentity.ts` (`resolveIdentityByEmail` via the deployment-configurable `widget.identityResolution` target, default `Users`/`Email`; `mergeVisitorIdentity` back-fills conversations + re-keys anonymous notes onto the resolved pair). Wired at TWO moments: **host-identity at mint** (`resolveHostIdentityIfApplicable`, surfaces the resolved pair → client stamps the new conversation) and **magic-link verify** via a new AUTHENTICATED `POST /widget/resolve-identity` (reads the verified email from `req.userPayload`).
+- **RV4 ✓** — new `packages/MJServer/src/realtimeWidget/visitorIdentity.ts` (`resolveIdentityByEmail` via the deployment-configurable `widget.identityResolution` target, default `Users`/`Email`; `mergeVisitorIdentity` back-fills conversations + re-keys anonymous notes onto the resolved pair). Wired at TWO moments: **host-identity at mint** (`resolveHostIdentityIfApplicable`, surfaces the resolved pair → client stamps the new conversation) and **magic-link verify** via a new AUTHENTICATED `POST /widget/resolve-identity` (reads the verified email from `req.userPayload`).
 - **RV5 ✓** — public `POST /widget/forget` → `forgetVisitor` (archives auto-generated recaps by `SourceConversationID`, clears `VisitorKey` linkage); client `WidgetSessionClient.Forget` + loader handler calls `clearVisitorKey`; visitor-facing notice + "Forget me" control in `<mj-support-widget>` (gated on remembering + a wired handler).
 - **Voice path ✓ (was the deferred gap)** — the returning-visitor anchor + resolved identity now ride the widget guest JWT as claims (`mj_visitor_key` / `mj_previous_conversation_id` / `mj_resolved_entity_id` / `mj_resolved_record_id` in `buildWidgetGuestClaims`), surfaced on `UserInfo.WidgetVisitorContext` (new field in `@memberjunction/core` `securityInfo.ts`, mirrors `MagicLinkScope`) by `buildMagicLinkSessionUser`, and stamped by `SessionManager.createConversation`. **No client voice changes** — the voice realtime mint already presents the same guest token. RV2's recap-on-close + RV3 injection then work for voice exactly as for text.
 
 ### Build + tests
 - Full ordered build: **281/284 packages** build. The 3 failures — `@memberjunction/cli`, `@memberjunction/ng-record-merge`, `@memberjunction/record-comparison` — are a **pre-existing** break unrelated to this work: `core-entities` is missing the `RecordComparison*` remote-operation types from PR #2805 (dupe-detection), never generated on this branch. All returning-visitor-touched packages (`core`, `server`, `ai-agents`, `web-widget`) build clean.
-- Unit tests: **MJCore 1407/1407 ✓**, **AI/Agents 1458/1458 ✓**, **Web/Widget 58/58 ✓** (15 new — cookie round-trip/scoping/clear, gated cookie-write in the loader, `Mint`-with-visitorKey + returning-visitor mapping, `Forget`, `ResolveIdentity`, and the RV5 notice + forget control). **MJServer 466 passed**; 6 test *files* fail to **collect** — all from the same pre-existing RecordComparison break (`Class extends value undefined` → `RecordComparison/src/index.ts`), none touching returning-visitor code.
+- Unit tests: **MJCore 1407/1407 ✓**, **AI/Agents 1458/1458 ✓**, **Web/RealtimeWidget 58/58 ✓** (15 new — cookie round-trip/scoping/clear, gated cookie-write in the loader, `Mint`-with-visitorKey + returning-visitor mapping, `Forget`, `ResolveIdentity`, and the RV5 notice + forget control). **MJServer 466 passed**; 6 test *files* fail to **collect** — all from the same pre-existing RecordComparison break (`Class extends value undefined` → `RecordComparison/src/index.ts`), none touching returning-visitor code.
 
 ### Files changed this session
 - `packages/MJCore/src/generic/securityInfo.ts` — `WidgetVisitorContext` interface + field on `UserInfo`.
 - `packages/MJServer/src/auth/magicLink/types.ts` — 4 `mj_*` returning-visitor claims.
-- `packages/MJServer/src/widget/widgetCore.ts` — `buildWidgetGuestClaims` emits the claims.
-- `packages/MJServer/src/widget/WidgetSessionService.ts` — lazy recap, host-identity resolve+merge, `ResolveVisitorIdentity`, `ForgetVisitor`, returning-visitor claims in `mintToken`.
-- `packages/MJServer/src/widget/visitorIdentity.ts` — **new** (resolve/merge/forget core).
-- `packages/MJServer/src/widget/WidgetRouter.ts` — `/forget` (public) + `/resolve-identity` (authenticated) + `authenticatedRouter`.
+- `packages/MJServer/src/realtimeWidget/widgetCore.ts` — `buildWidgetGuestClaims` emits the claims.
+- `packages/MJServer/src/realtimeWidget/WidgetSessionService.ts` — lazy recap, host-identity resolve+merge, `ResolveVisitorIdentity`, `ForgetVisitor`, returning-visitor claims in `mintToken`.
+- `packages/MJServer/src/realtimeWidget/visitorIdentity.ts` — **new** (resolve/merge/forget core).
+- `packages/MJServer/src/realtimeWidget/WidgetRouter.ts` — `/forget` (public) + `/resolve-identity` (authenticated) + `authenticatedRouter`.
 - `packages/MJServer/src/agentSessions/ReturningVisitorRecap.ts` — `retentionDays` → `ExpiresAt`.
 - `packages/MJServer/src/agentSessions/SessionManager.ts` — voice conversation stamps `WidgetVisitorContext`.
 - `packages/MJServer/src/context.ts` — `extractWidgetVisitorContext` → `UserInfo.WidgetVisitorContext`.
 - `packages/MJServer/src/index.ts` — mount the widget authenticated router after auth mw.
 - `packages/MJServer/src/config.ts` — optional `widget.identityResolution` target.
 - `packages/AI/Agents/src/realtime/realtime-client-session-service.ts` — RV3 scope threading.
-- `packages/Web/Widget/src/{types,session/widget-session-client,transport/runtime-widget-transport,loader,ui/support-widget-element,ui/tokens}.ts` — resolved-pair mapping/stamping, `Forget`/`ResolveIdentity`, notice + forget control + styles.
+- `packages/Web/RealtimeWidget/src/{types,session/widget-session-client,transport/runtime-widget-transport,loader,ui/support-widget-element,ui/tokens}.ts` — resolved-pair mapping/stamping, `Forget`/`ResolveIdentity`, notice + forget control + styles.
 - Tests: `widget-session-client.test.ts`, `loader.test.ts`, `support-widget-element.test.ts` (added), `visitor-key-cookie.test.ts` (new).
 
 ### Known follow-ups (out of scope here)

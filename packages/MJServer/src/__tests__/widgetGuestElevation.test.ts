@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { DatabaseProviderBase, UserInfo } from '@memberjunction/core';
-import { resolveWidgetGuestRunContext, elevateUserPayload } from '../widget/widgetGuestElevation.js';
+import { resolveWidgetGuestRunContext, elevateUserPayload } from '../realtimeWidget/widgetGuestElevation.js';
 import type { UserPayload } from '../types.js';
 
 /** A provider stub — the guard paths under test return before ever touching the provider. */

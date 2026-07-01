@@ -1,6 +1,6 @@
 /**
  * @fileoverview Shared types for the public web widget bundle.
- * @module @memberjunction/web-widget
+ * @module @memberjunction/realtime-widget
  */
 
 /** Modalities a widget instance may expose (mirrors the WidgetInstance.Modality column). */

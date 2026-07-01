@@ -62,7 +62,7 @@ export interface MagicLinkScope {
  * identity the text path stamps client-side, so cross-session memory works uniformly across modalities.
  * Not a database/GraphQL field — an in-memory, per-session carrier.
  */
-export interface WidgetVisitorContext {
+export interface ReturningVisitorContext {
     /** Durable, opaque returning-visitor anchor (stamped on Conversation.VisitorKey). */
     VisitorKey?: string;
     /** The prior conversation this visit chains from (stamped on Conversation.LastConversationID). */
@@ -228,7 +228,7 @@ export class UserInfo extends BaseInfo {
         this._MagicLinkScope = value;
     }
 
-    private _WidgetVisitorContext?: WidgetVisitorContext = undefined;
+    private _ReturningVisitorContext?: ReturningVisitorContext = undefined;
 
     /**
      * Returning-visitor context for a public web-widget guest session. Set at request time from the
@@ -237,11 +237,11 @@ export class UserInfo extends BaseInfo {
      * path) so it carries the same returning-visitor anchor + resolved identity the text path stamps
      * client-side. Same getter/setter (non-enumerable) rationale as MagicLinkScope — not a DB/GraphQL field.
      */
-    public get WidgetVisitorContext(): WidgetVisitorContext | undefined {
-        return this._WidgetVisitorContext;
+    public get ReturningVisitorContext(): ReturningVisitorContext | undefined {
+        return this._ReturningVisitorContext;
     }
-    public set WidgetVisitorContext(value: WidgetVisitorContext | undefined) {
-        this._WidgetVisitorContext = value;
+    public set ReturningVisitorContext(value: ReturningVisitorContext | undefined) {
+        this._ReturningVisitorContext = value;
     }
 
     private _WidgetGuestContext?: WidgetGuestContext = undefined;

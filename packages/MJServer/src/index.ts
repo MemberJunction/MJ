@@ -42,7 +42,7 @@ import { createOAuthCallbackHandler } from './rest/OAuthCallbackHandler.js';
 import { createSignatureWebhookHandler } from './rest/SignatureWebhookHandler.js';
 import { createMediaStreamRouter } from './rest/MediaStreamHandler.js';
 import { createMagicLinkHandler, createMagicLinkJwksRouter, registerMagicLinkAuthProvider, MAGIC_LINK_MOUNT_PATH } from './auth/magicLink/index.js';
-import { createWidgetHandler, WIDGET_MOUNT_PATH } from './widget/index.js';
+import { createWidgetHandler, WIDGET_MOUNT_PATH } from './realtimeWidget/index.js';
 import { createTwilioTelephonyHandler, TWILIO_TELEPHONY_MOUNT_PATH, SetTwilioTelephonyService } from './telephony/index.js';
 import { createVonageTelephonyHandler, VONAGE_TELEPHONY_MOUNT_PATH, SetVonageTelephonyService } from './telephony/index.js';
 import { RingCentralTelephonyService, SetRingCentralTelephonyService } from './telephony/index.js';

@@ -41,11 +41,11 @@ Your phone rings; you talk to Sage.
   If it isn't, point the Sage agent-identity row at a number you own for the outbound test.
 
 ### 3. Widget — two-guest page (text + shadow-DOM isolation)
-Bundle is already built (`packages/Web/Widget/dist/mj-widget.js`). Serve the host page on the
+Bundle is already built (`packages/Web/RealtimeWidget/dist/mj-widget.js`). Serve the host page on the
 whitelisted origin and open the harness:
 ```bash
 # from repo root — static server rooted at the Widget package so the page can reach ../dist
-npx http-server packages/Web/Widget -p 8080 -c-1
+npx http-server packages/Web/RealtimeWidget -p 8080 -c-1
 # then open:
 open http://localhost:8080/examples/two-widgets.html
 ```

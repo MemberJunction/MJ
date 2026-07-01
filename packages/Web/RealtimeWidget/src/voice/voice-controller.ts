@@ -4,7 +4,7 @@
  * + mint wiring. The real implementation (`RealtimeVoiceController`) reuses
  * `@memberjunction/ai-realtime-client` (client-direct topology) — no new driver.
  *
- * @module @memberjunction/web-widget
+ * @module @memberjunction/realtime-widget
  */
 
 /** Coarse voice UI state surfaced to the widget. */

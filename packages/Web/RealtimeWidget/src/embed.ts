@@ -12,7 +12,7 @@
  * The npm public API (with static exports for programmatic consumers) remains `index.ts`; this module
  * is purely the self-running browser bundle entry.
  *
- * @module @memberjunction/web-widget
+ * @module @memberjunction/realtime-widget
  */
 
 import { defineSupportWidgetElement } from './ui/support-widget-element.js';

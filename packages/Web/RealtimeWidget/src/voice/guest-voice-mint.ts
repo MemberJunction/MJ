@@ -9,7 +9,7 @@
  * a running MJAPI). Unit tests use MockVoiceController, so this is type-checked but not
  * exercised offline.
  *
- * @module @memberjunction/web-widget
+ * @module @memberjunction/realtime-widget
  */
 
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';

@@ -1,5 +1,5 @@
 {
-  "name": "@memberjunction/web-widget",
+  "name": "@memberjunction/realtime-widget",
   "type": "module",
   "version": "5.43.0",
   "description": "MemberJunction: Droppable, embeddable public customer-support widget (text + voice). A shadow-DOM web component that reuses ConversationsRuntime + the realtime client stack against MJAPI with a guest session JWT. No MJ login required.",

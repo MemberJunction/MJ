@@ -8,7 +8,7 @@ import {
   evaluateWidgetMint,
   buildWidgetGuestClaims,
   looksLikeBot,
-} from '../widget/widgetCore.js';
+} from '../realtimeWidget/widgetCore.js';
 import { MagicLinkKeyManager } from '../auth/magicLink/MagicLinkKeys.js';
 
 describe('widget core — parseAllowedOrigins', () => {

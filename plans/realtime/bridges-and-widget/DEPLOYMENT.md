@@ -270,7 +270,7 @@ curl -s -X POST http://localhost:4008/widget/session \
   -d '{"widgetKey":"pk_test_example_support_widget"}' | head -c 300
 
 # Then the browser eyeball (serve a host page on a whitelisted origin):
-npx http-server packages/Web/Widget -p 8080 -c-1
+npx http-server packages/Web/RealtimeWidget -p 8080 -c-1
 open http://localhost:8080/examples/two-widgets.html
 ```
 

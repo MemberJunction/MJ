@@ -10,7 +10,7 @@
  * by W4's acceptance (gated on Auth0/MJAPI boot). Unit tests cover the abuse guard and
  * the widget UI via `MockVoiceController`.
  *
- * @module @memberjunction/web-widget
+ * @module @memberjunction/realtime-widget
  */
 
 import { MJGlobal } from '@memberjunction/global';

@@ -11,7 +11,7 @@
  * NOTE: this path requires a live MJAPI; it is exercised by W3's acceptance (gated on
  * Auth0/MJAPI boot). Unit tests cover the UI + session client via the mock transport.
  *
- * @module @memberjunction/web-widget
+ * @module @memberjunction/realtime-widget
  */
 
 import { Metadata, RunView, type UserInfo } from '@memberjunction/core';

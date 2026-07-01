@@ -11,7 +11,7 @@
  * pure function — unit-testable without a real browser and without leaking the DOM's
  * own ambient types into the call sites.
  *
- * @module @memberjunction/web-widget
+ * @module @memberjunction/realtime-widget
  */
 
 /** The minimal slice of `navigator` the voice capability probe inspects. */

@@ -5,7 +5,7 @@
  * the widget, and schedules token refresh. This is the single entry point the
  * `mj-widget.js` bundle auto-runs.
  *
- * @module @memberjunction/web-widget
+ * @module @memberjunction/realtime-widget
  */
 
 import type { WidgetMountOptions, WidgetSession } from './types.js';

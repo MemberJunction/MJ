@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import jwt from 'jsonwebtoken';
 import { generateKeyPairSync } from 'node:crypto';
-import { verifyHostAssertion, extractHostIdentity } from '../widget/host-identity.js';
-import { buildWidgetGuestClaims } from '../widget/widgetCore.js';
+import { verifyHostAssertion, extractHostIdentity } from '../realtimeWidget/host-identity.js';
+import { buildWidgetGuestClaims } from '../realtimeWidget/widgetCore.js';
 
 /** A throwaway RSA keypair for signing test host assertions. */
 function keypair(): { privatePem: string; publicPem: string } {

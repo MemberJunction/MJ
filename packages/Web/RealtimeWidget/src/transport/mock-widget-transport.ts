@@ -3,7 +3,7 @@
  * page. It echoes a canned support reply so the widget UI can be exercised without a
  * live MJAPI. NOT used in production (the loader wires RuntimeWidgetTransport).
  *
- * @module @memberjunction/web-widget
+ * @module @memberjunction/realtime-widget
  */
 
 import type { WidgetSession } from '../types.js';

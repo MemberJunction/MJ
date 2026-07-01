@@ -11,7 +11,7 @@
  * An empty `enabledChannels` (the default for every widget) yields an inert host: no tools, no surface,
  * no behavior change — so channels are strictly opt-in per widget instance.
  *
- * @module @memberjunction/web-widget
+ * @module @memberjunction/realtime-widget
  */
 
 import { MJGlobal } from '@memberjunction/global';

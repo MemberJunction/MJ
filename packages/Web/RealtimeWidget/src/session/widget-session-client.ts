@@ -4,7 +4,7 @@
  * so holding it in memory / sessionStorage is acceptable (CLAUDE rule 9) — but this
  * client keeps it only in memory and refreshes before expiry.
  *
- * @module @memberjunction/web-widget
+ * @module @memberjunction/realtime-widget
  */
 
 import type { WidgetModality, WidgetSession, WidgetSessionResponse } from '../types.js';

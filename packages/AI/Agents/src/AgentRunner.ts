@@ -407,10 +407,10 @@ export class AgentRunner {
                 onProgress: wrappedOnProgress
             };
 
-            // Returning-visitor memory (RV3): when the caller supplied no explicit memory scope, derive it
-            // from THIS conversation's resolved identity / prior-conversation chain so the existing note
-            // injection surfaces the recap a prior session left for a returning visitor. No-op for ordinary
-            // conversations (no resolved identity, no prior link) — scope stays unset, behavior unchanged.
+            // Returning-visitor memory (RV3): for a public web-widget guest with remembering on, derive the
+            // memory scope from THIS conversation's resolved identity / prior-conversation chain so the
+            // existing note injection surfaces the recap a prior session left. Returns immediately (no DB
+            // read) for every ordinary agent run — see the ReturningVisitorContext hot-path guard in the method.
             await this.applyReturningVisitorMemoryScope(modifiedParams, conversationId, contextUser, md);
 
             const agentResult = await this.RunAgent<C, R>(modifiedParams);
@@ -1565,6 +1565,13 @@ export class AgentRunner {
      * Mutates `params.PrimaryScopeEntityName` / `params.PrimaryScopeRecordID`, which `BaseAgent` already
      * threads into note injection. An explicit caller-supplied scope always wins. Best-effort — a failure
      * here never blocks the agent run (the visitor just gets no prior context this turn).
+     *
+     * HOT-PATH GUARD: this only ever applies to a public web-widget GUEST session that has
+     * returning-visitor remembering turned on — those (and only those) carry a `ReturningVisitorContext`
+     * lifted from the verified session token. Every ordinary agent run has no such context, so we bail
+     * BEFORE touching the database and add zero latency to the common path (no conversation Load on the
+     * hot path). Only the widget-guest case pays the one extra read, which is correct since the
+     * conversation is the source of truth for an identity that may have been resolved mid-session.
      */
     private async applyReturningVisitorMemoryScope<C>(
         params: ExecuteAgentParams<C>,
@@ -1573,8 +1580,12 @@ export class AgentRunner {
         md: IMetadataProvider
     ): Promise<void> {
         try {
-            // Explicit scope (top-level or via data bag) always wins — don't override it.
-            if (params.PrimaryScopeRecordID || (params.data?.PrimaryScopeRecordID as string | undefined)) {
+            // Gate 1 (cheap, in-memory): not a returning-visitor widget guest → nothing to do, no DB read.
+            if (!contextUser?.ReturningVisitorContext) {
+                return;
+            }
+            // Gate 2: need a conversation to read from, and an explicit caller scope always wins.
+            if (!conversationId || params.PrimaryScopeRecordID || (params.data?.PrimaryScopeRecordID as string | undefined)) {
                 return;
             }
             const convo = await md.GetEntityObject<MJConversationEntity>('MJ: Conversations', contextUser);
@@ -1593,7 +1604,11 @@ export class AgentRunner {
             if (entityName && recordId) {
                 params.PrimaryScopeEntityName = entityName;
                 params.PrimaryScopeRecordID = recordId;
-                LogStatus(`[ReturningVisitor] derived memory scope ${entityName}/${recordId} for conversation ${conversationId}`);
+                LogStatusEx({
+                    message: `derived memory scope ${entityName}/${recordId} for conversation ${conversationId}`,
+                    category: 'ReturningVisitor',
+                    verboseOnly: true
+                });
             }
         } catch (e) {
             LogError(`[ReturningVisitor] failed to derive memory scope for conversation ${conversationId}: ${e instanceof Error ? e.message : String(e)}`);

@@ -7,7 +7,7 @@
  * `@memberjunction/graphql-dataprovider` against MJAPI with the guest token — it does
  * NOT reimplement chat or agent dispatch (anti-drift checklist).
  *
- * @module @memberjunction/web-widget
+ * @module @memberjunction/realtime-widget
  */
 
 import type { WidgetSession } from '../types.js';

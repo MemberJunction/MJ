@@ -5,7 +5,7 @@
  * enforced server-side (SessionJanitor TTL + model-cost ceiling). This guard is pure
  * and unit-tested; the controller polls it and aborts when it trips.
  *
- * @module @memberjunction/web-widget
+ * @module @memberjunction/realtime-widget
  */
 
 /** Configurable ceilings for one voice session. */

@@ -6,7 +6,7 @@
  * uses) and the result fed back to the model. Reuses the configured guest GraphQLDataProvider; no new
  * endpoint. Live-only — exercised under a running MJAPI, not in unit tests.
  *
- * @module @memberjunction/web-widget
+ * @module @memberjunction/realtime-widget
  */
 
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';

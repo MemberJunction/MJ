@@ -8,7 +8,7 @@
  * Angular host component — so it mounts inside the widget's shadow DOM with zero framework weight. The
  * coordinate space is a fixed 1000×600 viewBox the SVG scales to its container.
  *
- * @module @memberjunction/web-widget
+ * @module @memberjunction/realtime-widget
  */
 
 import { RegisterClass } from '@memberjunction/global';

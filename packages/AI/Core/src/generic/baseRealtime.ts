@@ -558,6 +558,11 @@ export interface RealtimeSessionParams {
      * drivers that don't simply ignore it. Independently, the server stamps the absolute deadline on
      * the session and the session janitor hard-closes (finalizing runs) at the cap regardless of
      * driver support, so this is enforced server-side even when the provider can't be told.
+     *
+     * When unset (`undefined`/null) there is NO MJ-imposed duration cap: drivers apply no `min(...)`
+     * bound and the janitor stamps no extra deadline, so the session runs under the provider's own
+     * default session/token limits and MJ's normal session lifecycle (manual end, disconnect, idle
+     * cleanup). This is the default for authenticated/internal sessions, which don't need an abuse cap.
      */
     MaxSessionSeconds?: number;
 }

@@ -1,9 +1,9 @@
 /**
- * @fileoverview Public API for @memberjunction/web-widget + auto-bootstrap when loaded
+ * @fileoverview Public API for @memberjunction/realtime-widget + auto-bootstrap when loaded
  * as a browser bundle. Only exports symbols defined in this package (no cross-package
  * re-exports — CLAUDE rule 5).
  *
- * @module @memberjunction/web-widget
+ * @module @memberjunction/realtime-widget
  */
 
 export * from './types.js';
