@@ -1,6 +1,6 @@
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, LogError, LogStatus, Metadata, RunView, UserInfo } from "@memberjunction/core";
 import { UUIDsEqual, NormalizeUUID } from "@memberjunction/global";
-import { MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgentNoteTypeEntity,
+import { MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgentNoteTypeEntity, MJScopedPromptPartEntity,
          MJAIModelActionEntity,
          MJAIPromptModelEntity, MJAIPromptTypeEntity, MJAIResultCacheEntity, MJAIVendorTypeDefinitionEntity,
          MJArtifactTypeEntity, MJEntityAIActionEntity, MJVectorDatabaseEntity,
@@ -89,6 +89,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     private _agentPrompts: MJAIAgentPromptEntity[] = [];
     private _agentNoteTypes: MJAIAgentNoteTypeEntity[] = [];
     private _agentNotes: MJAIAgentNoteEntity[] = [];
+    private _scopedPromptParts: MJScopedPromptPartEntity[] = [];
     private _agentExamples: MJAIAgentExampleEntity[] = [];
     private _agentDataSources: MJAIAgentDataSourceEntity[] = [];
     private _agents: MJAIAgentEntityExtended[] = [];
@@ -196,6 +197,11 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             {
                 PropertyName: '_agentNotes',
                 EntityName: 'MJ: AI Agent Notes',
+                CacheLocal: true
+            },
+            {
+                PropertyName: '_scopedPromptParts',
+                EntityName: 'MJ: Scoped Prompt Parts',
                 CacheLocal: true
             },
             {
@@ -683,6 +689,15 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
 
     public get AgentNotes(): MJAIAgentNoteEntity[] {
         return this.GetConfigData<MJAIAgentNoteEntity>('_agentNotes');
+    }
+
+    /**
+     * All scoped prompt parts (MJ: Scoped Prompt Parts). Cached like AgentNotes;
+     * resolved by scope + assembled into role-faithful messages by the
+     * ScopedPromptPartInjector. See plans/scoped-prompt-components.
+     */
+    public get ScopedPromptParts(): MJScopedPromptPartEntity[] {
+        return this._scopedPromptParts;
     }
 
     public get AgentExamples(): MJAIAgentExampleEntity[] {

@@ -13,7 +13,7 @@ import { BaseEntity, BaseEntityEvent, BaseEngineRegistry, LogError, Metadata, Us
 import { BaseSingleton, MJGlobal, MJEventType, MJLruCache, UUIDsEqual } from "@memberjunction/global";
 import { createHash } from "crypto";
 import { MJAIActionEntity, MJActionEntity,
-         MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgentNoteTypeEntity,
+         MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgentNoteTypeEntity, MJScopedPromptPartEntity,
          MJAIModelActionEntity, MJAIPromptModelEntity, MJAIPromptTypeEntity,
          MJAIResultCacheEntity, MJAIVendorTypeDefinitionEntity, MJArtifactTypeEntity,
          MJEntityAIActionEntity, MJVectorDatabaseEntity, MJAIAgentPromptEntity,
@@ -256,6 +256,7 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
     public get AgentNoteTypes(): MJAIAgentNoteTypeEntity[] { return this.Base.AgentNoteTypes; }
     public get AgentPermissions(): MJAIAgentPermissionEntity[] { return this.Base.AgentPermissions; }
     public get AgentNotes(): MJAIAgentNoteEntity[] { return this.Base.AgentNotes; }
+    public get ScopedPromptParts(): MJScopedPromptPartEntity[] { return this.Base.ScopedPromptParts; }
     public get AgentExamples(): MJAIAgentExampleEntity[] { return this.Base.AgentExamples; }
     public get VendorTypeDefinitions(): MJAIVendorTypeDefinitionEntity[] { return this.Base.VendorTypeDefinitions; }
     public get InferenceProviderTypeID(): string | undefined { return this.Base.InferenceProviderTypeID; }
