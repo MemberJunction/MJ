@@ -100,7 +100,7 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
   private mentionStartIndex: number = -1;
   private mentionQuery: string = '';
   /** Mention trigger characters: '@' for agents/users, '#' for entities */
-  private static readonly MENTION_TRIGGERS = ['@', '#'];
+  private static readonly MENTION_TRIGGERS = ['@', '#', '/'];
   /** The trigger char that opened the current mention dropdown */
   private activeTrigger: string = '@';
   private onChange: (value: string) => void = () => {};
@@ -436,9 +436,17 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
       }
     }
 
-    // Apply inline styles directly — color by mention type
+    // Apply inline styles directly — color by mention type. Skills carry their own accent Color
+    // (AISkill.Color UX metadata); when present it drives the chip so each skill reads distinctly.
+    const skillPalette = suggestion.type === 'skill'
+      ? (suggestion.color
+          ? { bg: suggestion.color, border: 'rgba(255, 255, 255, 0.35)' }
+          : { bg: 'linear-gradient(135deg, #8E2DE2 0%, #4A00E0 100%)', border: 'rgba(142, 45, 226, 0.4)' })
+      : null;
     const palette =
-      suggestion.type === 'user'
+      skillPalette
+        ? skillPalette
+        : suggestion.type === 'user'
         ? { bg: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)', border: 'rgba(240, 147, 251, 0.4)' }
         : suggestion.type === 'entity'
           ? { bg: 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)', border: 'rgba(17, 153, 142, 0.4)' }
@@ -492,6 +500,8 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
         icon.className = this.getIconClasses(suggestion.icon || 'fa-solid fa-table');
       } else if (suggestion.type === 'query') {
         icon.className = this.getIconClasses(suggestion.icon || 'fa-solid fa-database');
+      } else if (suggestion.type === 'skill') {
+        icon.className = this.getIconClasses(suggestion.icon || 'fa-solid fa-wand-magic-sparkles');
       } else {
         icon.className = 'fa-solid fa-robot';
       }

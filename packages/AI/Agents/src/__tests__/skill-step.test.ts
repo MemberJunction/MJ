@@ -166,3 +166,36 @@ describe('buildSkillCapabilityChanges (enableSkillCapabilities)', () => {
         expect(actionChanges[0].agentIds).toEqual(['sub-agent-7']);
     });
 });
+
+// Mirrors BaseAgent.preActivateRequestedSkills's guard: intersect the caller's requested skill IDs
+// with the set GetSkillsForAgent(agent, user) already narrowed (agent-accepted ∩ user-run-permitted),
+// then drop any already active this run. `allowedSkills` stands in for that pre-guarded set, so a
+// requested ID absent from it (agent doesn't accept it OR the user can't run it) is silently dropped.
+function selectPreActivations(requestedIds: string[], allowedSkills: MockSkill[], alreadyActivatedIds: string[]): MockSkill[] {
+    return allowedSkills.filter(
+        s => requestedIds.includes(s.ID) && !alreadyActivatedIds.includes(s.ID)
+    );
+}
+
+describe('preActivateRequestedSkills (requested-skill guard)', () => {
+    it('activates a requested skill that is in the agent-accepted ∩ user-permitted set', () => {
+        const result = selectPreActivations(['s1'], SKILLS, []);
+        expect(result.map(s => s.ID)).toEqual(['s1']);
+    });
+
+    it('silently drops a requested ID not in the allowed set (agent rejects it OR user lacks Run permission)', () => {
+        // 's9' is requested but not present in the guarded `allowedSkills` — never surfaced.
+        const result = selectPreActivations(['s1', 's9'], SKILLS, []);
+        expect(result.map(s => s.ID)).toEqual(['s1']);
+    });
+
+    it('drops a requested ID for a skill that is already active this run (no duplicate activation)', () => {
+        const result = selectPreActivations(['s1', 's2'], SKILLS, ['s1']);
+        expect(result.map(s => s.ID)).toEqual(['s2']);
+    });
+
+    it('returns nothing when no requested IDs survive the guard', () => {
+        expect(selectPreActivations(['s9'], SKILLS, [])).toHaveLength(0);
+        expect(selectPreActivations([], SKILLS, [])).toHaveLength(0);
+    });
+});

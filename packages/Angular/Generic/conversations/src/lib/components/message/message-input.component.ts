@@ -73,6 +73,24 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   public PlanModeEnabled = false;
 
   /**
+   * Skill IDs the user requested via `/skill-name` mentions in the message being routed. Collected
+   * once per send from the composer's mention chips and forwarded to every agent-invocation path so
+   * whichever agent handles the message receives them as `RequestedSkillIDs`. The server intersects
+   * them with the agent's accepted skills AND the user's Run permission before any activate, so a
+   * skill the user can't run (or the agent doesn't accept) is silently dropped. Reset each send.
+   */
+  private _pendingRequestedSkillIDs: string[] = [];
+
+  /**
+   * Collects the skill IDs from `/skill` mention chips currently in the composer. Called at the
+   * start of routing so the value is stable for the whole message dispatch.
+   */
+  private collectRequestedSkillIDs(): string[] {
+    const chipData = this.inputBox?.getMentionChipsData() || [];
+    return chipData.filter(chip => chip.type === 'skill').map(chip => chip.id);
+  }
+
+  /**
    * Optional default agent ID for the conversation. When set, the FIRST
    * message routes directly to this agent — skipping Sage's default
    * delegation — provided the user did not @mention a different agent
@@ -1073,6 +1091,10 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     mentionResult: MentionParseResult,
     isFirstMessage: boolean
   ): Promise<void> {
+    // Snapshot user-requested skills (from /skill chips) once, before any routing branch, so every
+    // invocation path forwards the same set for this message.
+    this._pendingRequestedSkillIDs = this.collectRequestedSkillIDs();
+
     // Priority 1: Direct @mention
     if (mentionResult.agentMention) {
       await this.handleDirectMention(messageDetail, mentionResult.agentMention, isFirstMessage);
@@ -2007,6 +2029,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         undefined, // configurationPresetId not used in this path
         this.appContext, // Embedder-supplied app/form context
         this.PlanModeEnabled, // per-request Plan Mode toggle
+        this._pendingRequestedSkillIDs, // user-requested skills (/skill mentions)
       );
 
       // Task will be removed automatically in markMessageComplete() when status changes to Complete/Error
@@ -2110,6 +2133,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         configurationPresetId, // Pass configuration from previous @mention for continuity
         this.appContext, // Embedder-supplied app/form context
         this.PlanModeEnabled, // per-request Plan Mode toggle
+        this._pendingRequestedSkillIDs, // user-requested skills (/skill mentions)
       );
 
       // Task will be removed automatically in markMessageComplete() when status changes to Complete/Error
@@ -2155,6 +2179,8 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
           artifactInfo?.versionId,
           configurationPresetId, // Pass same config as first attempt
           this.appContext, // Embedder-supplied app/form context
+          this.PlanModeEnabled, // per-request Plan Mode toggle
+          this._pendingRequestedSkillIDs, // user-requested skills (/skill mentions)
         );
 
         if (retryResult && retryResult.success) {
@@ -2291,6 +2317,8 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         previousArtifactInfo?.versionId,
         undefined, // configurationPresetId not used in this path
         this.appContext, // Embedder-supplied app/form context
+        this.PlanModeEnabled, // per-request Plan Mode toggle
+        this._pendingRequestedSkillIDs, // user-requested skills (/skill mentions)
       );
 
       // Remove from active tasks
@@ -2411,6 +2439,8 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         artifactInfo?.versionId,
         agentMention.configurationId, // Pass configuration preset ID
         this.appContext, // Embedder-supplied app/form context
+        this.PlanModeEnabled, // per-request Plan Mode toggle
+        this._pendingRequestedSkillIDs, // user-requested skills (/skill mentions)
       );
 
       // Remove from active tasks
@@ -2688,6 +2718,8 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         previousArtifactInfo?.versionId,
         configurationId, // Pass configuration for continuity
         this.appContext, // Embedder-supplied app/form context
+        this.PlanModeEnabled, // per-request Plan Mode toggle
+        this._pendingRequestedSkillIDs, // user-requested skills (/skill mentions)
       );
 
       // Remove from active tasks

@@ -544,6 +544,7 @@ export class GraphQLAIClient {
                 $autoPopulateLastRunPayload: Boolean,
                 $configurationId: String,
                 $planMode: Boolean,
+                $requestedSkillIDs: [String!],
                 $createArtifacts: Boolean,
                 $createNotification: Boolean,
                 $sourceArtifactId: String,
@@ -561,6 +562,7 @@ export class GraphQLAIClient {
                     autoPopulateLastRunPayload: $autoPopulateLastRunPayload,
                     configurationId: $configurationId,
                     planMode: $planMode,
+                    requestedSkillIDs: $requestedSkillIDs,
                     createArtifacts: $createArtifacts,
                     createNotification: $createNotification,
                     sourceArtifactId: $sourceArtifactId,
@@ -600,6 +602,7 @@ export class GraphQLAIClient {
         if (params.autoPopulateLastRunPayload !== undefined) variables.autoPopulateLastRunPayload = params.autoPopulateLastRunPayload;
         if (params.configurationId !== undefined) variables.configurationId = params.configurationId;
         if (params.planMode !== undefined) variables.planMode = params.planMode;
+        if (params.requestedSkillIDs !== undefined) variables.requestedSkillIDs = params.requestedSkillIDs;
         if (params.createArtifacts !== undefined) variables.createArtifacts = params.createArtifacts;
         if (params.createNotification !== undefined) variables.createNotification = params.createNotification;
         if (params.sourceArtifactId !== undefined) variables.sourceArtifactId = params.sourceArtifactId;
@@ -1756,6 +1759,12 @@ export interface RunAIAgentFromConversationDetailParams {
      * Whether Plan Mode is requested for this run (requires the agent's SupportsPlanMode capability)
      */
     planMode?: boolean;
+
+    /**
+     * Skill IDs the user requested via `/skill-name` mentions. The server intersects these with the
+     * agent's accepted skills AND the user's Run permission before any are activated.
+     */
+    requestedSkillIDs?: string[];
 
     /**
      * Whether to create artifacts from the agent's payload

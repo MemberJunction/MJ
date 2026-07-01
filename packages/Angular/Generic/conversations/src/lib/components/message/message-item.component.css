@@ -127,6 +127,13 @@
   box-shadow: var(--mj-shadow-md);
 }
 
+:host ::ng-deep .mention-badge.skill {
+  background: var(--mj-brand-primary);
+  color: var(--mj-text-inverse);
+  border: 2px solid color-mix(in srgb, var(--mj-brand-primary) 40%, transparent);
+  box-shadow: var(--mj-shadow-md);
+}
+
 :host ::ng-deep .mention-badge i {
   font-size: 12px;
   opacity: 0.95;

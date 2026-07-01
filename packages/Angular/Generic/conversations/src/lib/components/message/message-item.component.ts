@@ -549,11 +549,15 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       const query = this.mentionAutocomplete.getAvailableQueries().find(q => UUIDsEqual(q.ID, content.id));
       if (query) name = query.Name;
       iconClass = this.normalizeIconClass(this.mentionAutocomplete.getQueriesEntityIcon());
+    } else if (content.type === 'skill') {
+      const skill = AIEngineBase.Instance?.Skills?.find(s => UUIDsEqual(s.ID, content.id));
+      if (skill) name = skill.Name;
+      iconClass = this.normalizeIconClass(skill?.IconClass || 'fa-solid fa-wand-magic-sparkles');
     }
 
     const escapedName = this.escapeHtml(name);
     const typeClass =
-      content.type === 'agent' || content.type === 'entity' || content.type === 'query' ? content.type : 'user';
+      content.type === 'agent' || content.type === 'entity' || content.type === 'query' || content.type === 'skill' ? content.type : 'user';
 
     // Build preset indicator HTML if present
     const presetIndicator = configPresetName

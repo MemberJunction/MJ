@@ -378,7 +378,10 @@ export class RunAIAgentResolver extends ResolverBase {
          *  (used by the fire-and-forget liveness pulse to enrich heartbeats with the run id/status). */
         runRef?: { current: MJAIAgentRunEntityExtended | null },
         /** Per-request Plan Mode toggle — threaded into ExecuteAgentParams.planMode (root-agent HITL gate). */
-        planMode?: boolean
+        planMode?: boolean,
+        /** Skill IDs the user requested (via `/skill-name`) — threaded into ExecuteAgentParams.requestedSkillIDs.
+         *  The framework intersects them with the agent's accepted skills AND the user's Run permission. */
+        requestedSkillIDs?: string[]
     ): Promise<AIAgentRunResult> {
         const startTime = Date.now();
         
@@ -431,6 +434,7 @@ export class RunAIAgentResolver extends ResolverBase {
                 autoPopulateLastRunPayload: autoPopulateLastRunPayload,
                 configurationId: configurationId,
                 planMode: planMode,
+                requestedSkillIDs: requestedSkillIDs,
                 data: parsedData,
                 context: {
                     dataSource: dataSource
@@ -936,7 +940,8 @@ export class RunAIAgentResolver extends ResolverBase {
         @Arg('sourceArtifactId', { nullable: true }) sourceArtifactId?: string,
         @Arg('sourceArtifactVersionId', { nullable: true }) sourceArtifactVersionId?: string,
         @Arg('fireAndForget', { nullable: true }) fireAndForget?: boolean,
-        @Arg('planMode', { nullable: true }) planMode?: boolean
+        @Arg('planMode', { nullable: true }) planMode?: boolean,
+        @Arg('requestedSkillIDs', () => [String], { nullable: true }) requestedSkillIDs?: string[]
     ): Promise<AIAgentRunResult> {
         // Check API key scope authorization for agent execution
         await this.CheckAPIKeyScopeAuthorization('agent:execute', agentId, userPayload);
@@ -985,7 +990,7 @@ export class RunAIAgentResolver extends ResolverBase {
                     p, dataSource, agentId, userPayload, messagesJson, sessionId, pubSub,
                     data, payload, lastRunId, autoPopulateLastRunPayload, configurationId,
                     conversationDetailId, createArtifacts || false, createNotification || false,
-                    sourceArtifactId, sourceArtifactVersionId, conversationId, planMode
+                    sourceArtifactId, sourceArtifactVersionId, conversationId, planMode, requestedSkillIDs
                 );
 
                 LogStatus(`🔥 Fire-and-forget: Agent ${agentId} execution started in background for session ${sessionId}`);
@@ -1018,7 +1023,8 @@ export class RunAIAgentResolver extends ResolverBase {
                 sourceArtifactVersionId,
                 conversationId, // LATENCY OPT #2: pass pre-resolved conversationId
                 undefined, // runRef
-                planMode
+                planMode,
+                requestedSkillIDs
             );
         } catch (error) {
             const errorMessage = (error as Error).message || 'Unknown error loading conversation history';
@@ -1235,7 +1241,9 @@ export class RunAIAgentResolver extends ResolverBase {
         /** LATENCY OPT #2: Pre-resolved conversationId avoids redundant DB load in AgentRunner */
         conversationId?: string,
         /** Per-request Plan Mode toggle — threaded through to ExecuteAgentParams.planMode. */
-        planMode?: boolean
+        planMode?: boolean,
+        /** Skill IDs the user requested — threaded through to ExecuteAgentParams.requestedSkillIDs. */
+        requestedSkillIDs?: string[]
     ): void {
         // Ref the liveness pulse reads to enrich heartbeats once the run is created.
         const runRef: { current: MJAIAgentRunEntityExtended | null } = { current: null };
@@ -1253,7 +1261,7 @@ export class RunAIAgentResolver extends ResolverBase {
             p, dataSource, agentId, userPayload, messagesJson, sessionId, pubSub,
             data, payload, undefined, lastRunId, autoPopulateLastRunPayload,
             configurationId, conversationDetailId, createArtifacts, createNotification,
-            sourceArtifactId, sourceArtifactVersionId, conversationId, runRef, planMode
+            sourceArtifactId, sourceArtifactVersionId, conversationId, runRef, planMode, requestedSkillIDs
         ).catch((error: unknown) => {
             // Background execution failed unexpectedly (executeAIAgent has its own try-catch,
             // so this would only fire for truly unexpected errors).

@@ -3905,7 +3905,7 @@ export class BaseAgent {
             };
         }
 
-        const availableSkills = AIEngine.Instance.GetSkillsForAgent(params.agent);
+        const availableSkills = AIEngine.Instance.GetSkillsForAgent(params.agent, params.contextUser);
 
         const missingSkills = requested.filter(req => {
             const requestedName = req.name.trim().toLowerCase();
@@ -5846,7 +5846,10 @@ The context is now within limits. Please retry your request with the recovered c
 
             // Skill catalog (name + description only — progressive disclosure). Empty for
             // AcceptsSkills='None' since GetSkillsForAgent already returns [] in that case.
-            const availableSkills = engine.GetSkillsForAgent(agent);
+            // Filtered by the acting user's Run permission (open-by-default) so the agent is
+            // never even offered a skill the user isn't entitled to — the permission boundary
+            // is enforced at the catalog, not just at activation.
+            const availableSkills = engine.GetSkillsForAgent(agent, _contextUser);
             const skillsCatalog = this.formatSkillsCatalog(availableSkills);
 
             const contextData: AgentContextData = {
@@ -7346,6 +7349,10 @@ The context is now within limits. Please retry your request with the recovered c
         const planModeGate = await this.resolvePlanModeGate(params);
         this._planModeActive = planModeGate.active;
         this._planApproved = planModeGate.approved;
+
+        // Pre-activate any user-requested skills (from a `/skill-name` composer mention). Must run
+        // after _depth is set (root-only) and after the run is persisted (records a Skill step).
+        await this.preActivateRequestedSkills(params);
 
         // Reset execution chain and progress tracking
         this._allProgressSteps = [];
@@ -10587,7 +10594,7 @@ The context is now within limits. Please retry your request with the recovered c
             return await this.executePromptStep(params, config, previousDecision, stepCount);
         }
 
-        const resolvedSkills = this.resolveSkillActivations(requested, params.agent);
+        const resolvedSkills = this.resolveSkillActivations(requested, params.agent, params.contextUser);
         const newlyActivated = resolvedSkills.filter(
             skill => !this._activatedSkillIDs.some(id => UUIDsEqual(id, skill.ID))
         );
@@ -10619,6 +10626,64 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
+     * Pre-activates skills the caller explicitly requested via {@link ExecuteAgentParams.requestedSkillIDs}
+     * (typically an end user's `/skill-name` composer mentions), at run start — so their Instructions
+     * and bundled Actions/sub-agents take effect from the first turn rather than waiting for the model
+     * to discover and activate them through the catalog.
+     *
+     * **Root-agent only** (skills never cascade to sub-agents), and each requested skill activates
+     * **only if it survives the guard**: it must be in the set {@link AIEngine.GetSkillsForAgent}
+     * allows for this agent (the AcceptsSkills gate) AND the acting user must have Run permission on it
+     * — both enforced by passing `params.contextUser` to `GetSkillsForAgent`. Requested IDs that fail
+     * either check are silently dropped, so a client can never force-activate a skill the user or agent
+     * isn't entitled to. Reuses the same {@link recordSkillActivationStep} / {@link enableSkillCapabilities}
+     * / {@link buildSkillActivationMessage} machinery as the model-initiated `Skill` step, so activation
+     * is recorded and takes effect identically. Plan Mode is unaffected — pre-activation widens the tool
+     * surface, but the plan-approval gate still blocks executing those tools until the plan is approved.
+     *
+     * @protected
+     */
+    protected async preActivateRequestedSkills(params: ExecuteAgentParams): Promise<void> {
+        if (this._depth !== 0) {
+            return; // skills are root-agent only; never pre-activate on sub-agents
+        }
+        const requestedIds = params.requestedSkillIDs;
+        if (!requestedIds || requestedIds.length === 0) {
+            return;
+        }
+
+        // Guard: intersect the requested IDs with the agent-accepted ∩ user-permitted set.
+        const allowed = AIEngine.Instance.GetSkillsForAgent(params.agent, params.contextUser);
+        const newlyActivated = allowed.filter(
+            s => requestedIds.some(id => UUIDsEqual(id, s.ID)) &&
+                 !this._activatedSkillIDs.some(id => UUIDsEqual(id, s.ID))
+        );
+        if (newlyActivated.length === 0) {
+            return;
+        }
+
+        const currentPayload = params.payload;
+        for (const skill of newlyActivated) {
+            await this.recordSkillActivationStep(skill, currentPayload, params);
+            this.enableSkillCapabilities(skill, params);
+            this._activatedSkillIDs.push(skill.ID);
+        }
+
+        const activationMessage = this.buildSkillActivationMessage(newlyActivated);
+        if (!params.conversationMessages) {
+            params.conversationMessages = [];
+        }
+        params.conversationMessages.push({
+            role: 'user',
+            content: activationMessage,
+            metadata: {
+                turnAdded: this._promptTurnCount,
+                messageType: 'skill-activation'
+            }
+        } as AgentChatMessage);
+    }
+
+    /**
      * Resolves the LLM's requested skill names to `MJ: AI Skills` entities, restricted to what
      * {@link AIEngine.GetSkillsForAgent} allows for this agent (the AcceptsSkills gate + Status
      * chain). Names that don't resolve are silently dropped here — {@link validateSkillNextStep}
@@ -10631,9 +10696,10 @@ The context is now within limits. Please retry your request with the recovered c
      */
     protected resolveSkillActivations(
         requested: AgentSkillActivationRequest[],
-        agent: MJAIAgentEntityExtended
+        agent: MJAIAgentEntityExtended,
+        contextUser?: UserInfo
     ): MJAISkillEntity[] {
-        const availableSkills = AIEngine.Instance.GetSkillsForAgent(agent);
+        const availableSkills = AIEngine.Instance.GetSkillsForAgent(agent, contextUser);
         const resolved: MJAISkillEntity[] = [];
 
         for (const req of requested) {
