@@ -1,7 +1,8 @@
-import { Component, Input, OnInit, OnChanges, SimpleChanges } from '@angular/core';
+import { Component, Input, OnInit, OnChanges, SimpleChanges, inject } from '@angular/core';
 import { MJTemplateEntity, MJTemplateParamEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { MJConfirmService } from '@memberjunction/ng-ui-components';
 import {
     ColDef,
     GridReadyEvent,
@@ -49,6 +50,8 @@ interface ParamRowData {
 export class TemplateParamsGridComponent extends BaseAngularComponent implements OnInit, OnChanges {
     @Input() template: MJTemplateEntity | null = null;
     @Input() editMode: boolean = false;
+
+    private confirmService = inject(MJConfirmService);
 
     public templateParams: ParamRowData[] = [];
     public isLoading = false;
@@ -232,7 +235,7 @@ export class TemplateParamsGridComponent extends BaseAngularComponent implements
         const rowData = params.data as ParamRowData;
         const entity = rowData.Entity;
 
-        if (!confirm(`Are you sure you want to delete the parameter "${rowData.Name}"?`)) {
+        if (!(await this.confirmService.ConfirmDelete({ title: 'Delete Parameter', message: `Delete the parameter "${rowData.Name}"?` }))) {
             return;
         }
 

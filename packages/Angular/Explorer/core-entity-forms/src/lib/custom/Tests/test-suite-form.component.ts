@@ -9,6 +9,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { SharedService, NavigationService } from '@memberjunction/ng-shared';
 import { ApplicationManager } from '@memberjunction/ng-base-application';
+import { MJConfirmService } from '@memberjunction/ng-ui-components';
 import { MJTestSuiteFormComponent } from '../../generated/Entities/MJTestSuite/mjtestsuite.form.component';
 import {
   TestingDialogService,
@@ -121,6 +122,7 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
   private evalPrefsService = inject(EvaluationPreferencesService);
   private viewContainerRef = inject(ViewContainerRef);
   private appManager = inject(ApplicationManager);
+  private confirmService = inject(MJConfirmService);
 
   async ngOnInit() {
     await super.ngOnInit();
@@ -2036,9 +2038,9 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
   }
 
   /** Discard all pending field changes on the suite. */
-  discardChanges(): void {
+  async discardChanges(): Promise<void> {
     if (!this.isDirty) return;
-    if (!confirm('Discard your unsaved changes?')) return;
+    if (!(await this.confirmService.Confirm('Discard your unsaved changes?'))) return;
     this.record.Revert();
     this.tagDraft = '';
     this.cdr.markForCheck();
