@@ -5,7 +5,7 @@ import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-sha
 import { RunView, Metadata } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { CredentialTypeEditPanelComponent } from '@memberjunction/ng-credentials';
-import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
+import { FilterFieldConfig, MJConfirmService } from '@memberjunction/ng-ui-components';
 interface FieldSchemaProperty {
     name: string;
     type: string;
@@ -81,7 +81,8 @@ export class CredentialsTypesResourceComponent extends BaseResourceComponent imp
     }
 
     constructor(
-        private cdr: ChangeDetectorRef) {
+        private cdr: ChangeDetectorRef,
+        private confirm: MJConfirmService) {
         super();
     }
 
@@ -264,7 +265,11 @@ export class CredentialsTypesResourceComponent extends BaseResourceComponent imp
             return;
         }
 
-        const confirmed = confirm(`Are you sure you want to delete "${type.Name}"? This action cannot be undone.`);
+        const confirmed = await this.confirm.ConfirmDelete({
+            title: 'Delete credential type',
+            message: `Delete "${type.Name}"?`,
+            detail: 'This action cannot be undone.',
+        });
         if (!confirmed) return;
 
         try {

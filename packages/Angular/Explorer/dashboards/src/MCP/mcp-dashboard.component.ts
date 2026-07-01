@@ -13,6 +13,7 @@ import { Component, OnDestroy, ChangeDetectorRef, AfterViewInit, OnInit } from '
 import { Subject, BehaviorSubject, Subscription } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { RunView, Metadata, CompositeKey } from '@memberjunction/core';
+import { MJConfirmService } from '@memberjunction/ng-ui-components';
 import { BaseDashboard } from '@memberjunction/ng-shared';
 import {
     ResourceData,
@@ -427,7 +428,8 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
 
     constructor(
         private cdr: ChangeDetectorRef,
-        private mcpToolsService: MCPToolsService
+        private mcpToolsService: MCPToolsService,
+        private confirm: MJConfirmService
     ) {
         super();
 
@@ -1977,10 +1979,12 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
                 parts.push(`${relatedTools.length} tool(s)`);
             }
 
-            if (!confirm(
-                `Server "${server.Name}" has ${parts.join(' and ')}.\n\n` +
-                `All related records will be deleted. Are you sure you want to proceed?`
-            )) {
+            const confirmed = await this.confirm.ConfirmDelete({
+                title: 'Delete server',
+                message: `Delete server "${server.Name}"? It has ${parts.join(' and ')}.`,
+                detail: 'All related records will be deleted. This cannot be undone.',
+            });
+            if (!confirmed) {
                 return;
             }
 
@@ -2006,7 +2010,11 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
                 }
             }
         } else {
-            if (!confirm(`Are you sure you want to delete server "${server.Name}"?`)) {
+            const confirmed = await this.confirm.ConfirmDelete({
+                title: 'Delete server',
+                message: `Delete server "${server.Name}"?`,
+            });
+            if (!confirmed) {
                 return;
             }
         }
@@ -2313,14 +2321,20 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         const relatedLogs = this.executionLogs.filter(l => UUIDsEqual(l.ConnectionID, connection.ID));
 
         if (relatedLogs.length > 0) {
-            if (!confirm(
-                `Connection "${connection.Name}" has ${relatedLogs.length} execution log(s).\n\n` +
-                `All related logs will be deleted. Are you sure you want to proceed?`
-            )) {
+            const confirmed = await this.confirm.ConfirmDelete({
+                title: 'Delete connection',
+                message: `Delete connection "${connection.Name}"? It has ${relatedLogs.length} execution log(s).`,
+                detail: 'All related logs will be deleted. This cannot be undone.',
+            });
+            if (!confirmed) {
                 return;
             }
         } else {
-            if (!confirm(`Are you sure you want to delete connection "${connection.Name}"?`)) {
+            const confirmed = await this.confirm.ConfirmDelete({
+                title: 'Delete connection',
+                message: `Delete connection "${connection.Name}"?`,
+            });
+            if (!confirmed) {
                 return;
             }
         }
