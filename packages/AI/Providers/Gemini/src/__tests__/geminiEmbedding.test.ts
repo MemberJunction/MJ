@@ -8,7 +8,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const embedContentMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@google/genai', () => ({
-  // Class (not vi.fn) so `new GoogleGenAI()` in the GeminiEmbedding2 constructor works; every
+  // Class (not vi.fn) so `new GoogleGenAI()` in the GeminiEmbedding constructor works; every
   // instance shares the hoisted embedContentMock, which each test configures.
   GoogleGenAI: class {
     models = { embedContent: embedContentMock };
@@ -22,7 +22,7 @@ vi.mock('@memberjunction/global', () => ({
   RegisterClass: () => (_target: unknown) => {},
 }));
 
-// The Gemini package's index.ts (loaded transitively when importing GeminiEmbedding2) pulls in the
+// The Gemini package's index.ts (loaded transitively when importing GeminiEmbedding) pulls in the
 // LLM/image/realtime classes, so the @memberjunction/ai mock must provide every base class they
 // extend. Mirrors the mock surface used by GeminiLLM.test.ts.
 vi.mock('@memberjunction/ai', () => {
@@ -77,7 +77,14 @@ vi.mock('@memberjunction/ai', () => {
   };
 });
 
-import { GeminiEmbedding2 } from '../index';
+import { GeminiEmbedding } from '../index';
+
+// Zero backoff delay so retry paths don't wait on real timers in tests.
+class TestGemini extends GeminiEmbedding {
+    protected override get embedRetryBaseDelayMs(): number {
+        return 0;
+    }
+}
 
 /** Build an embedContent response carrying a single embedding vector (the correct single-text shape). */
 const embeddingResponse = (values: number[]) => ({ embeddings: [{ values }] });
@@ -85,12 +92,12 @@ const embeddingResponse = (values: number[]) => ({ embeddings: [{ values }] });
 /* ------------------------------------------------------------------ */
 /*  Tests                                                              */
 /* ------------------------------------------------------------------ */
-describe('GeminiEmbedding2.EmbedTexts', () => {
-  let embedder: GeminiEmbedding2;
+describe('GeminiEmbedding.EmbedTexts', () => {
+  let embedder: GeminiEmbedding;
 
   beforeEach(() => {
     embedContentMock.mockReset();
-    embedder = new GeminiEmbedding2('test-gemini-key');
+    embedder = new TestGemini('test-gemini-key');
   });
 
   it('returns one vector per input text, in order, without collapsing the batch', async () => {
@@ -177,5 +184,35 @@ describe('GeminiEmbedding2.EmbedTexts', () => {
     );
 
     stub.mockRestore();
+  });
+
+  it('retries a transient embedContent failure, then succeeds (batch not degraded)', async () => {
+    // Drive fail-then-succeed with a LOCAL counter (immune to shared-mock residue): the first
+    // invocation of this impl rejects, the next succeeds.
+    let attempt = 0;
+    embedContentMock.mockImplementation(() => {
+      attempt++;
+      return attempt === 1
+        ? Promise.reject(new Error('429 rate limit'))
+        : Promise.resolve(embeddingResponse([0.1, 0.2, 0.3]));
+    });
+
+    const result = await embedder.EmbedTexts({ texts: ['solo'], model: null });
+
+    // Recovery is the key behavior: a first-call failure that yields a non-empty batch PROVES a retry
+    // happened (without retry, one failure degrades the whole batch to []).
+    expect(result.vectors).toEqual([[0.1, 0.2, 0.3]]); // recovered — not the empty degrade
+    expect(attempt).toBeGreaterThanOrEqual(2); // failed at least once, then retried & succeeded
+    // (exact retry count is asserted deterministically by the "gives up after exhausting retries" test;
+    //  the shared hoisted embedContentMock makes exact per-test counts brittle here.)
+  });
+
+  it('gives up after exhausting retries and degrades to [] (call count proves the retries happened)', async () => {
+    embedContentMock.mockRejectedValue(new Error('persistent 500'));
+
+    const result = await embedder.EmbedTexts({ texts: ['solo'], model: null });
+
+    expect(result.vectors).toEqual([]);
+    expect(embedContentMock).toHaveBeenCalledTimes(3); // 1 initial + 2 retries
   });
 });

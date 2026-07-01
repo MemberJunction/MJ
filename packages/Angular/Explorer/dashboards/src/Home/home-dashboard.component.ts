@@ -983,9 +983,7 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
         const dashboardId = config['dashboardId'] as string;
         if (!dashboardId) break;
         if (deApp) {
-          this.navigationService.SwitchToApp(deApp.ID, 'Dashboards').then(() => {
-            this.navigationService.UpdateActiveTabQueryParams({ dashboard: dashboardId });
-          });
+          void this.navigationService.SwitchToApp(deApp.ID, 'Dashboards', { dashboard: dashboardId });
         } else {
           this.navigationService.OpenDashboard(dashboardId, pin.DisplayName);
         }
@@ -1008,9 +1006,7 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
         const queryId = config['queryId'] as string;
         if (!queryId) break;
         if (deApp) {
-          this.navigationService.SwitchToApp(deApp.ID, 'Queries').then(() => {
-            this.navigationService.UpdateActiveTabQueryParams({ queryId: queryId });
-          });
+          void this.navigationService.SwitchToApp(deApp.ID, 'Queries', { queryId: queryId });
         } else {
           this.navigationService.OpenQuery(queryId, pin.DisplayName);
         }

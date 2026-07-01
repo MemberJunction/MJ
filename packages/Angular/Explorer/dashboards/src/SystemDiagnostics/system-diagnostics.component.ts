@@ -4216,8 +4216,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
             search: this.searchQuery.trim() || null
         };
 
-        // Use NavigationService to update query params properly
-        this.navigationService.UpdateActiveTabQueryParams(queryParams);
+        this.UpdateQueryParams(queryParams);
     }
 
     // === User Preferences Persistence ===
