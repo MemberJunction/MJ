@@ -295,6 +295,8 @@ The `/guides/` folder contains comprehensive best practices guides for specific 
   - Angular template binding patterns
   - Automated enforcement tests
 
+- **[PostgreSQL Schema Casing Guide](guides/POSTGRES_SCHEMA_CASING_GUIDE.md)**: Why entity `ClassName`/`CodeName` and GraphQL type names go lowercase-broken on PostgreSQL (unquoted DDL folds schema names to lowercase, so `__mj_BizAppsCommon` → `mjbizappscommon…Entity` instead of the published `mjBizAppsCommon…Entity` → TS2724 build break), and how MJ fixes it with a case-stable `SchemaInfo.CanonicalSchemaName` (sourced from `mj-app.json` `schema.name` via the `OpenApp` record, backfilled by CodeGen's metadata-sync proc) preferred via `COALESCE`/`??` in BOTH the `vwEntities` SQL view and the runtime GraphQL prefix. Net-zero on SQL Server. **Read before touching schema-prefixed identifiers, the OpenApp install path, or `spUpdateSchemaInfoFromDatabase` — and note that proc lives in TWO synced copies (SS baseline/migration + PG `metadataSupportObjects.ts`).** Includes the remediation runbook for existing PG installs (seed the `OpenApp` row).
+
 - **[Dashboard Best Practices](guides/DASHBOARD_BEST_PRACTICES.md)**: Comprehensive patterns for building MJ dashboards including:
   - Architecture and naming conventions
   - State management with getter/setters
