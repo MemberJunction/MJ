@@ -44,7 +44,7 @@ record-changes rc-empty-state-hint (projected into an existing empty-state), Com
 section-drop-empty (drag-drop hint). Branch still UNPUSHED.
 
 ## CONVENTIONS (read before starting)
-- `plans/empty-state-migration.md` — full rulebook incl. **rule 6c** (proactively center kept-bespoke-class hosts) + the flex/grid-parent gotcha.
+- `plans/complete/empty-state-migration.md` — full rulebook incl. **rule 6c** (proactively center kept-bespoke-class hosts) + the flex/grid-parent gotcha.
 - Memory `project_empty_state_migration` — REQUIRED working method (classify→migrate→build→screenshot→present→WAIT for explicit "commit"), the centering gotcha, and the **standardization target** (per-class width/grid fixes are a BRIDGE; eventually standardize the parent host slot → delete all bespoke `*-empty` classes in one sweep — so DON'T invest in per-file CSS hygiene/dead-rule trimming).
 - Memory `project_ui_adoption_marker_widening` — markers under-count; widen before trusting %.
 

@@ -53,7 +53,7 @@ light/dark token adaptation). So the residual risk on the 🔲 items below is **
 bespoke-class CSS interaction** (centering/width in its specific host) — the component itself is
 now visually proven across the full matrix.
 
-## ✅ Visually tested (light + dark) — `plans/empty-state-screenshots/wave2-dashtail/`
+## ✅ Visually tested (light + dark) — `plans/complete/empty-state-screenshots/wave2-dashtail/`
 
 | Instance | Component | Surface |
 |---|---|---|
@@ -151,5 +151,5 @@ Deeply embedded — mount only inside specific workflows. Need a fixture harness
   handlers/bindings AOT-typechecked, `Icon=""` no-icon contract verified). The residual
   risk these items carry is **cosmetic** (centering/padding/icon) + dynamic-copy wording.
 - The canonical `<mj-empty-state>` itself is proven across the ✅ captures + the broader
-  screenshot library (`plans/empty-state-screenshots/`), so the per-instance risk is the
+  screenshot library (`plans/complete/empty-state-screenshots/`), so the per-instance risk is the
   bespoke-class CSS interaction, not the component.

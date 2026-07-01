@@ -15,14 +15,14 @@
 #
 # Usage:
 #   scripts/visual-shot-dual.sh <out-basename> [force-js]
-# Writes: plans/alert-screenshots/migrated/<out>-light.png  and  -dark.png
+# Writes: plans/complete/alert-screenshots/migrated/<out>-light.png  and  -dark.png
 #
 # Prereq: dev server up, playwright-cli already navigated to the target page/state.
 
 set -eu
 OUT="${1:?usage: visual-shot-dual.sh <out-basename> [force-js]}"
 FORCE="${2:-}"
-DIR="plans/alert-screenshots/migrated"
+DIR="plans/complete/alert-screenshots/migrated"
 mkdir -p "$DIR"
 
 shoot() { # $1 = theme on|off  $2 = filename

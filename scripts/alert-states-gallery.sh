@@ -8,7 +8,7 @@
 # static page, using the component's OWN styles extracted from source + the real
 # design tokens — so it never drifts from the component and needs no running app.
 #
-# Output: plans/alert-screenshots/alert-states.html  (open it, or screenshot for
+# Output: plans/complete/alert-screenshots/alert-states.html  (open it, or screenshot for
 # a visual-regression baseline). Regenerate after any change to mj-alert.
 #
 # Usage: scripts/alert-states-gallery.sh
@@ -17,7 +17,7 @@ set -eu
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 COMP="$ROOT/packages/Angular/Generic/ui-components/src/lib/alert/alert.component.ts"
 TOKENS_SCSS="$ROOT/packages/Angular/Generic/shared/src/lib/_tokens.scss"
-OUT="$ROOT/plans/alert-screenshots/alert-states.html"
+OUT="$ROOT/plans/complete/alert-screenshots/alert-states.html"
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 
 # 1. Real design tokens (light :root + [data-theme=dark]).

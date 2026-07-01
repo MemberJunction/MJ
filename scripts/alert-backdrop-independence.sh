@@ -14,14 +14,14 @@
 # the component's OWN styles extracted from source + real tokens — no drift, no
 # running app, deterministic.
 #
-# Output: plans/alert-screenshots/backdrop-independence.html
+# Output: plans/complete/alert-screenshots/backdrop-independence.html
 # Usage:  scripts/alert-backdrop-independence.sh
 
 set -eu
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 COMP="$ROOT/packages/Angular/Generic/ui-components/src/lib/alert/alert.component.ts"
 TOKENS_SCSS="$ROOT/packages/Angular/Generic/shared/src/lib/_tokens.scss"
-OUT="$ROOT/plans/alert-screenshots/backdrop-independence.html"
+OUT="$ROOT/plans/complete/alert-screenshots/backdrop-independence.html"
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 
 # Real design tokens (light :root + [data-theme=dark]).
