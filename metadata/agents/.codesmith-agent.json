@@ -6,6 +6,7 @@
       "Description": "Expert code generator and executor for data analysis and transformations. Generates JavaScript code, tests it in a secure sandbox, and iteratively refines it until successful. Supports lodash, date-fns, mathjs, papaparse, uuid, and validator libraries. Perfect for data manipulation, calculations, and analysis tasks.",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
       "Status": "Active",
+      "AcceptsSkills": "All",
       "ModelSelectionMode": "Agent",
       "ExposeAsAction": true,
       "InvocationMode": "Any",

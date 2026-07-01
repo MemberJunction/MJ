@@ -6,6 +6,7 @@
       "Description": "AI assistant specialized in knowledge management: semantic search, vectorization, duplicate detection, content navigation, and index configuration",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
       "Status": "Active",
+      "AcceptsSkills": "All",
       "ExecutionOrder": 10,
       "ModelSelectionMode": "Agent",
       "ArtifactCreationMode": "Never",

@@ -6,6 +6,7 @@
       "Description": "Ambient agent in MJ that is always present in all conversations to help the user navigate functionality in MJ, handle basic requests, and bring in other agents to delegate work to",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
       "Status": "Active",
+      "AcceptsSkills": "All",
       "ExecutionOrder": 0,
       "ModelSelectionMode": "Agent",
       "ArtifactCreationMode": "System Only",

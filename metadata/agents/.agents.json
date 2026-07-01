@@ -535,6 +535,7 @@
       "Description": "Strategic orchestrator for marketing content creation workflows, managing sub-agents to deliver high-quality marketing materials. Good at writing blog post.",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
       "Status": "Active",
+      "AcceptsSkills": "All",
       "ExecutionOrder": 1,
       "ExposeAsAction": true,
       "DefaultArtifactTypeID": "@lookup:MJ: Artifact Types.Name=Marketing Content",
