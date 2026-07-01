@@ -107,6 +107,15 @@ export class AggregatePanelComponent implements OnInit {
   }
 
   /**
+   * Handle the accordion panel's ExpandedChange. Accordion `Expanded` is the
+   * inverse of our `IsCollapsed`; preserves the CollapsedChange emit side-effect.
+   */
+  OnPanelExpandedChange(expanded: boolean): void {
+    this.IsCollapsed = !expanded;
+    this.CollapsedChange.emit(this.IsCollapsed);
+  }
+
+  /**
    * Handle click on an aggregate card
    */
   OnAggregateClick(agg: ViewGridAggregate): void {

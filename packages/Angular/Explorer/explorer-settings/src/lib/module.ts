@@ -15,7 +15,8 @@ import {
   MJStatBadgeComponent,
   MJViewToggleComponent,
   MJEmptyStateComponent,
-  MJAlertComponent
+  MJAlertComponent,
+  MJAccordionModule
 } from '@memberjunction/ng-ui-components';
 
 import { EntityPermissionsModule } from '@memberjunction/ng-entity-permissions';
@@ -103,7 +104,8 @@ import { ApplicationDialogComponent } from './application-management/application
     MJStatBadgeComponent,
     MJViewToggleComponent,
     MJEmptyStateComponent,
-    MJAlertComponent
+    MJAlertComponent,
+    MJAccordionModule
   ],
   exports: [
     // Main settings container

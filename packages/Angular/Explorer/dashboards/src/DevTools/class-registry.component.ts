@@ -139,8 +139,8 @@ export class ClassRegistryInspectorComponent extends BaseResourceComponent imple
         this.cdr.markForCheck();
     }
 
-    public ToggleGroup(group: RegistrationGroup): void {
-        group.expanded = !group.expanded;
+    public OnGroupExpandedChange(group: RegistrationGroup, expanded: boolean): void {
+        group.expanded = expanded;
         this.savePrefs();
     }
 

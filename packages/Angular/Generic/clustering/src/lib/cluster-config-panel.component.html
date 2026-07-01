@@ -46,25 +46,30 @@
         <!-- Multi-entity source selector -->
         @if (HasMultiSourceOptions) {
             <div class="form-group multi-source">
-                <button type="button" class="multi-source-toggle" (click)="ToggleMultiSource()">
-                    <i class="fa-solid" [class.fa-chevron-down]="!ShowMultiSource" [class.fa-chevron-up]="ShowMultiSource"></i>
-                    Multiple sources
-                    @if (IsMultiEntity) {
-                        <span class="multi-source-badge">{{ SelectedDocIDs.length }}</span>
-                    }
-                </button>
-                @if (ShowMultiSource) {
-                    <div class="multi-source-list">
-                        <div class="multi-source-hint">Select 2+ documents to cluster them together. All must use the same embedding model.</div>
-                        @for (doc of AllEntityDocOptions; track doc.ID) {
-                            <label class="multi-source-item">
-                                <input type="checkbox" [checked]="IsDocSelected(doc.ID)" (change)="ToggleDoc(doc.ID)">
-                                <span class="multi-source-name">{{ doc.Name }}</span>
-                                @if (doc.EntityName) { <span class="multi-source-entity">{{ doc.EntityName }}</span> }
-                            </label>
+                <mj-accordion-panel
+                    Size="sm"
+                    [FlushBody]="true"
+                    [Expanded]="ShowMultiSource"
+                    (ExpandedChange)="OnMultiSourceExpandedChange($event)">
+                    <ng-template mjAccordionTitle>
+                        Multiple sources
+                        @if (IsMultiEntity) {
+                            <span class="mj-accordion-badge mj-accordion-badge--right">{{ SelectedDocIDs.length }}</span>
                         }
-                    </div>
-                }
+                    </ng-template>
+                    <ng-template mjAccordionBody>
+                        <div class="multi-source-list">
+                            <div class="multi-source-hint">Select 2+ documents to cluster them together. All must use the same embedding model.</div>
+                            @for (doc of AllEntityDocOptions; track doc.ID) {
+                                <label class="multi-source-item">
+                                    <input type="checkbox" [checked]="IsDocSelected(doc.ID)" (change)="ToggleDoc(doc.ID)">
+                                    <span class="multi-source-name">{{ doc.Name }}</span>
+                                    @if (doc.EntityName) { <span class="multi-source-entity">{{ doc.EntityName }}</span> }
+                                </label>
+                            }
+                        </div>
+                    </ng-template>
+                </mj-accordion-panel>
             </div>
         }
 
