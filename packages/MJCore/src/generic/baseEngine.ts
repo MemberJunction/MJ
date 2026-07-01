@@ -1435,10 +1435,10 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
 
         // Determine the user to check permissions for — on the client side contextUser
         // may be undefined, so fall back to the current logged-in user from Metadata.
-        const user = contextUser || new Metadata().CurrentUser;
+        const user = contextUser || this.ProviderToUse?.CurrentUser;
         if (!user) return configs; // Can't check without a user — proceed with normal loading
 
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const deniedEntities: string[] = [];
 
         for (const config of configs) {

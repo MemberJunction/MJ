@@ -7206,7 +7206,7 @@ The context is now within limits. Please retry your request with the recovered c
         // self-referencing FK_AIAgentRunStep_ParentID constraint — without this, a child INSERT that
         // races the parent INSERT hits an FK violation (especially under large-payload parent INSERTs).
         const parentStepEntity = params.parentId && this._agentRun?.Steps
-            ? this._agentRun.Steps.find(s => s.ID === params.parentId)
+            ? this._agentRun.Steps.find(s => UUIDsEqual(s.ID, params.parentId))
             : undefined;
         this._stepSaveQueue.Insert(stepEntity, parentStepEntity);
 
