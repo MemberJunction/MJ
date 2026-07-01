@@ -1,0 +1,252 @@
+/* ============================================================================
+   MemberJunction login — shared base
+
+   BRAND-NEUTRAL BY DESIGN: no product-specific messaging and no background logos.
+   Branding is host-supplied — a single foreground logo (MJ mark shown only as a
+   placeholder) plus generic copy — so any application can adopt these surfaces and
+   drop in its own logo/name/brand color (color via the themeable --mj-* tokens).
+
+   Tokens pasted from packages/Angular/Generic/shared/src/lib/_tokens.scss.
+   Everything that maps to a token uses a --mj-* token; the only literals left are
+   genuinely design-specific: external-provider brand-chip colors (categorical),
+   white text/overlays on the always-dark brand panels (theme-independent), and a
+   couple of 1px hairlines / blur radii with no token equivalent.
+   ============================================================================ */
+:root {
+  color-scheme: light;
+
+  /* --- primitives --- */
+  --mj-color-brand-300: #4dabd5;
+  --mj-color-brand-400: #2699cc;
+  --mj-color-brand-500: #0076b6;
+  --mj-color-brand-600: #006aa3;
+  --mj-color-brand-700: #005a8a;
+  --mj-color-brand-900: #092340;
+  --mj-color-accent-400: #5cc0ed;
+  --mj-color-accent-500: #38a9d9;
+  --mj-color-tertiary-400: #22d3ee;
+  --mj-color-neutral-0: #ffffff;
+  --mj-color-neutral-50: #f8fafc;
+  --mj-color-neutral-100: #f1f5f9;
+  --mj-color-neutral-200: #e2e8f0;
+  --mj-color-neutral-300: #cbd5e1;
+  --mj-color-neutral-400: #94a3b8;
+  --mj-color-neutral-500: #64748b;
+  --mj-color-neutral-600: #475569;
+  --mj-color-neutral-700: #334155;
+  --mj-color-neutral-800: #1e293b;
+  --mj-color-neutral-900: #0f172a;
+  --mj-color-neutral-950: #020617;
+
+  /* --- semantic color --- */
+  --mj-bg-page: var(--mj-color-neutral-50);
+  --mj-bg-surface: var(--mj-color-neutral-0);
+  --mj-bg-surface-sunken: var(--mj-color-neutral-100);
+  --mj-bg-surface-active: var(--mj-color-neutral-200);
+
+  --mj-text-primary: var(--mj-color-neutral-800);
+  --mj-text-secondary: var(--mj-color-neutral-600);
+  --mj-text-muted: var(--mj-color-neutral-500);
+  --mj-text-inverse: var(--mj-color-neutral-0);
+
+  --mj-border-default: var(--mj-color-neutral-200);
+  --mj-border-strong: var(--mj-color-neutral-300);
+
+  --mj-brand-primary: var(--mj-color-brand-500);
+  --mj-brand-primary-hover: var(--mj-color-brand-600);
+  --mj-brand-on-primary: var(--mj-color-neutral-0);
+  --mj-brand-accent: var(--mj-color-accent-400);
+  --mj-brand-secondary: var(--mj-color-brand-900);
+
+  /* --- typography --- */
+  --mj-font-family: 'Montserrat', sans-serif;
+  --mj-text-xs: 0.75rem;
+  --mj-text-sm: 0.875rem;
+  --mj-text-base: 1rem;
+  --mj-text-lg: 1.125rem;
+  --mj-text-xl: 1.25rem;
+  --mj-text-2xl: 1.5rem;
+  --mj-text-3xl: 1.875rem;
+  --mj-text-4xl: 2.25rem;
+  --mj-text-5xl: 3rem;
+  --mj-font-medium: 500;
+  --mj-font-semibold: 600;
+  --mj-font-bold: 700;
+  --mj-leading-tight: 1.25;
+  --mj-leading-normal: 1.5;
+  --mj-leading-relaxed: 1.625;
+  --mj-tracking-wide: 0.025em;
+  --mj-tracking-wider: 0.05em;
+
+  /* --- spacing (4px scale) --- */
+  --mj-space-0-5: 0.125rem;
+  --mj-space-1: 0.25rem;
+  --mj-space-2: 0.5rem;
+  --mj-space-2-5: 0.625rem;
+  --mj-space-3: 0.75rem;
+  --mj-space-3-5: 0.875rem;
+  --mj-space-4: 1rem;
+  --mj-space-5: 1.25rem;
+  --mj-space-6: 1.5rem;
+  --mj-space-7: 1.75rem;
+  --mj-space-8: 2rem;
+  --mj-space-9: 2.25rem;
+  --mj-space-10: 2.5rem;
+  --mj-space-11: 2.75rem;
+  --mj-space-12: 3rem;
+  --mj-space-14: 3.5rem;
+  --mj-space-16: 4rem;
+  --mj-space-20: 5rem;
+  --mj-space-24: 6rem;
+
+  /* --- radius --- */
+  --mj-radius-sm: 4px;
+  --mj-radius-md: 8px;
+  --mj-radius-lg: 12px;
+  --mj-radius-xl: 16px;
+  --mj-radius-2xl: 24px;
+  --mj-radius-full: 9999px;
+
+  /* --- shadows --- */
+  --mj-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+  --mj-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+  --mj-shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  --mj-shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+
+  /* --- effects --- */
+  --mj-focus-ring: 0 0 0 var(--mj-space-0-5, 2px) var(--mj-bg-surface), 0 0 0 4px var(--mj-brand-primary);
+  --mj-transition-base: 200ms ease;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --mj-bg-page: var(--mj-color-neutral-900);
+  --mj-bg-surface: var(--mj-color-neutral-800);
+  --mj-bg-surface-sunken: var(--mj-color-neutral-950);
+  --mj-bg-surface-active: var(--mj-color-neutral-600);
+
+  --mj-text-primary: var(--mj-color-neutral-100);
+  --mj-text-secondary: var(--mj-color-neutral-300);
+  --mj-text-muted: var(--mj-color-neutral-400);
+
+  --mj-border-default: var(--mj-color-neutral-700);
+  --mj-border-strong: var(--mj-color-neutral-600);
+
+  --mj-brand-primary: var(--mj-color-brand-400);
+  --mj-brand-primary-hover: var(--mj-color-brand-300);
+
+  /* shadows deepen on dark, exactly like _tokens.scss */
+  --mj-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
+  --mj-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -4px rgba(0, 0, 0, 0.3);
+  --mj-shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
+  --mj-shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  font-family: var(--mj-font-family);
+  background: var(--mj-bg-page);
+  color: var(--mj-text-primary);
+}
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+/* --- top-right demo controls (theme + provider count) --- */
+.controls { position: fixed; top: var(--mj-space-4); right: var(--mj-space-5); z-index: 20; display: flex; gap: var(--mj-space-2); }
+.mj-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--mj-space-2);
+  padding: var(--mj-space-2-5) var(--mj-space-5); min-height: var(--mj-space-11);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md);
+  background: var(--mj-bg-surface-sunken);
+  color: var(--mj-text-primary);
+  font-family: var(--mj-font-family); font-size: var(--mj-text-sm); font-weight: var(--mj-font-semibold);
+  cursor: pointer; white-space: nowrap; text-decoration: none;
+  user-select: none; -webkit-user-select: none;
+  transition: color var(--mj-transition-base), background var(--mj-transition-base), border-color var(--mj-transition-base), box-shadow var(--mj-transition-base), transform var(--mj-transition-base);
+}
+.mj-btn:hover { background: var(--mj-bg-surface-active); border-color: var(--mj-border-strong); }
+/* The accessibility guarantee — the exact focus ring + 44px target the real mjButton
+   directive gives every button/anchor it's applied to. */
+.mj-btn:focus-visible { outline: none; box-shadow: var(--mj-focus-ring); }
+.controls .mj-btn { background: color-mix(in srgb, var(--mj-bg-surface) 70%, transparent); backdrop-filter: blur(6px); }
+
+/* mjButton variants — mirror packages/Angular/Generic/ui-components/src/lib/button/button.scss.
+   Real impl: <button mjButton variant="secondary"> (rows) / variant="primary" (single CTA). */
+.mj-btn--secondary {
+  background: var(--mj-bg-surface-sunken); color: var(--mj-text-primary); border-color: var(--mj-border-default);
+}
+.mj-btn--secondary:hover { background: var(--mj-bg-surface-active); border-color: var(--mj-border-strong); }
+.mj-btn--primary {
+  background: var(--mj-brand-primary); color: var(--mj-brand-on-primary); border-color: var(--mj-brand-primary);
+}
+.mj-btn--primary:hover { background: var(--mj-brand-primary-hover); border-color: var(--mj-brand-primary-hover); }
+
+/* --- provider row: a LAYOUT modifier on top of .mj-btn (secondary) ---
+   Real impl is <button mjButton variant="secondary">. The a11y (focus ring, 44px+
+   target, keyboard semantics) is inherited from .mj-btn — not re-implemented here. */
+.provider-list { display: flex; flex-direction: column; gap: var(--mj-space-3); }
+.provider-btn {
+  justify-content: flex-start;
+  gap: var(--mj-space-3-5); width: 100%; min-height: var(--mj-space-14); padding: var(--mj-space-3) var(--mj-space-4);
+  font-size: var(--mj-text-base); text-align: left;
+}
+.provider-btn:hover { border-color: var(--mj-brand-primary); transform: translateY(-1px); }
+.provider-btn .ico {
+  width: 34px; height: 34px; flex: 0 0 34px;   /* fixed chip dimensions — component internal, no size token */
+  display: grid; place-items: center; font-size: var(--mj-text-lg); font-weight: var(--mj-font-bold); border-radius: var(--mj-radius-md);
+}
+/* Allow the long labels to wrap and the flex item to shrink, so the row (and the
+   whole card) can scale down on narrow screens instead of forcing a min width. */
+.provider-btn .label { flex: 1; min-width: 0; white-space: normal; }
+.provider-btn .chev { color: var(--mj-text-muted); font-size: var(--mj-text-sm); }
+.provider-btn.is-default { border-color: var(--mj-brand-primary); }
+.default-pill {
+  margin-left: var(--mj-space-2-5); font-size: var(--mj-text-xs); font-weight: var(--mj-font-bold);
+  letter-spacing: var(--mj-tracking-wider); text-transform: uppercase;
+  color: var(--mj-brand-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
+  padding: var(--mj-space-1) var(--mj-space-2); border-radius: var(--mj-radius-full); vertical-align: middle;
+}
+/* --- Provider iconography standard --------------------------------------------
+   1. A recognizable brand MARK on a brand-colored chip where one exists (Microsoft,
+      Google, Apple, GitHub, …) — a Font Awesome brand glyph here; an official brand
+      SVG in production, per each provider's brand guidelines.
+   2. A MONOGRAM chip (the DisplayName's initial, on the brand color) as the fallback
+      for providers with no standard mark (WorkOS, Okta, custom OIDC).
+   Every chip is 34px with the same radius, so the row rhythm is identical either way.
+   Chip fills are categorical external-brand colors (the documented token exception);
+   a hairline border keeps each chip's edge visible on BOTH light and dark cards. */
+.ico.microsoft { background: color-mix(in srgb, #000 4%, var(--mj-bg-surface)); color: #0a0a0a; border: 1px solid var(--mj-border-default); }
+.ico.google    { background: var(--mj-bg-surface); color: #4285f4; border: 1px solid var(--mj-border-default); }
+.ico.workos    { background: #111827; color: #fff; border: 1px solid rgba(255, 255, 255, 0.14); }
+.ico.okta      { background: #007dc1; color: #fff; border: 1px solid rgba(255, 255, 255, 0.18); }
+[data-theme="dark"] .ico.microsoft { color: #f3f3f3; }
+
+/* --- single-provider primary CTA: a LAYOUT modifier on .mj-btn--primary --- */
+.provider-btn--primary { justify-content: center; font-size: var(--mj-text-base); }
+.provider-btn--primary .ico { background: rgba(255, 255, 255, 0.16); color: #fff; border: 0; }
+
+.caption { font-size: var(--mj-text-xs); color: var(--mj-text-muted); line-height: var(--mj-leading-normal); }
+.caption code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: .92em; background: var(--mj-bg-surface-sunken); padding: 1px var(--mj-space-1); border-radius: var(--mj-radius-sm); }
+
+/* Respect a reduced-motion preference: drop the hover lift/transform. Colour, border
+   and the focus ring still provide feedback, so nothing is lost for these users. */
+@media (prefers-reduced-motion: reduce) {
+  .provider-btn:hover, .mj-btn:hover { transform: none; }
+}
+
+/* "Powered by MemberJunction" — shown on EVERY login surface regardless of the host
+   app's own branding. Lives at the bottom of the form/card so it's always visible
+   (desktop + mobile, even when a brand panel collapses). */
+.powered-by { margin-top: var(--mj-space-6); text-align: center; font-size: var(--mj-text-xs); color: var(--mj-text-muted); }
+.powered-by strong { font-weight: var(--mj-font-semibold); color: var(--mj-text-secondary); }
+
+/* single vs multi provider toggling */
+body.mode-single .provider-list,
+body.mode-single .multi-only { display: none; }
+body:not(.mode-single) .single-wrap { display: none; }
