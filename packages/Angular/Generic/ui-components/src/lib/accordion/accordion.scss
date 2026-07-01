@@ -132,7 +132,7 @@
 
 /* Muted title icons — opt in via [TitleIconMuted]="true" instead of per-consumer
    CSS. (Status/brand-colored icons are still set per-instance inline.) */
-.mj-accordion-panel--muted-icon .mj-accordion-title i {
+.mj-accordion-panel--muted-icon > .mj-accordion-header-row > .mj-accordion-header .mj-accordion-title i {
   color: var(--mj-text-muted);
 }
 
@@ -168,16 +168,18 @@
 .mj-accordion-badge--warning { background: var(--mj-status-warning-bg); color: var(--mj-status-warning-text); }
 .mj-accordion-badge--info    { background: var(--mj-status-info-bg);    color: var(--mj-status-info-text); }
 
-.mj-accordion-panel--disabled .mj-accordion-header-row { opacity: 0.5; }
-.mj-accordion-panel--disabled .mj-accordion-header,
-.mj-accordion-panel--disabled .mj-accordion-chevron { cursor: not-allowed; }
+.mj-accordion-panel--disabled > .mj-accordion-header-row { opacity: 0.5; }
+.mj-accordion-panel--disabled > .mj-accordion-header-row > .mj-accordion-header,
+.mj-accordion-panel--disabled > .mj-accordion-header-row > .mj-accordion-chevron { cursor: not-allowed; }
 
-/* ── Density (Size="sm") — tighter padding + smaller text for dense contexts ── */
+/* ── Density (Size="sm") — tighter padding + smaller text for dense contexts.
+   Child-combinator-scoped so a default panel nested inside a Size="sm" panel
+   doesn't inherit the dense styling. ── */
 .mj-accordion-panel--sm {
-  .mj-accordion-header { padding: 8px 12px; font-size: var(--mj-text-xs); }
-  .mj-accordion-actions { padding-right: 4px; }
-  .mj-accordion-chevron { padding: 0 12px; }
-  .mj-accordion-body { padding: 10px 12px; }
+  > .mj-accordion-header-row > .mj-accordion-header { padding: 8px 12px; font-size: var(--mj-text-xs); }
+  > .mj-accordion-header-row > .mj-accordion-actions { padding-right: 4px; }
+  > .mj-accordion-header-row > .mj-accordion-chevron { padding: 0 12px; }
+  > .mj-accordion-body-outer > .mj-accordion-body-clip > .mj-accordion-body { padding: 10px 12px; }
 }
 
 /* ── Bare — drop the box (border + header background) so the panel sits cleanly

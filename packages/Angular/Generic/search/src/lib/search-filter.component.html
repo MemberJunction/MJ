@@ -23,7 +23,7 @@
                 <span class="filter-category-name">{{ filter.Category }}</span>
             </ng-template>
             <ng-template mjAccordionActions>
-                @if (Collapsible && !IsCategoryCollapsed(filter.Category) && filter.Options.length > 1) {
+                @if ((!Collapsible || !IsCategoryCollapsed(filter.Category)) && filter.Options.length > 1) {
                     <button class="filter-select-all"
                             (click)="SelectAll(filter.Category); $event.stopPropagation()"
                             [title]="IsAllSelected(filter.Category) ? 'Clear all' : 'Select all'">

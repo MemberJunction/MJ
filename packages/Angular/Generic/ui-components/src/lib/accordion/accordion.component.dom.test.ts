@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { Component, Input } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { MJAccordionPanelComponent, MJAccordionActionsDirective, MJAccordionBodyDirective } from './accordion.component';
+import { MJAccordionPanelComponent, MJAccordionActionsDirective, MJAccordionBodyDirective, MJAccordionModule } from './accordion.component';
 
 /**
  * DOM-level spec for `<mj-accordion-panel>`. Focuses on the WAI-ARIA accordion
@@ -228,5 +228,38 @@ describe('MJAccordionPanelComponent header actions slot (DOM)', () => {
     expect(row.lastElementChild).toBe(chevron);
     // ... and it comes AFTER the actions slot in document order
     expect(actions.compareDocumentPosition(chevron) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+});
+
+/**
+ * MJAccordionModule bundles the panel + all three slot directives so consumers
+ * import ONE symbol. This proves the module's imports/exports actually expose
+ * every declarable — a broken imports/exports list would fail to resolve the
+ * slot directives here (the direct-import DOM tests above would NOT catch that).
+ */
+describe('MJAccordionModule (DOM)', () => {
+  it('exposes the panel + mjAccordionTitle/Actions/Body via a single module import', () => {
+    @Component({
+      standalone: true,
+      imports: [MJAccordionModule],
+      template: `
+        <mj-accordion-panel [Expanded]="true">
+          <ng-template mjAccordionTitle><span class="t-title">Title</span></ng-template>
+          <ng-template mjAccordionActions><button class="t-action">A</button></ng-template>
+          <ng-template mjAccordionBody><p class="t-body">Body</p></ng-template>
+        </mj-accordion-panel>
+      `,
+    })
+    class HostComponent {}
+
+    const fixture = TestBed.createComponent(HostComponent);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+
+    expect(el.querySelector('mj-accordion-panel')).not.toBeNull();
+    // each slot directive resolved through the module → its projected content rendered
+    expect(el.querySelector('.mj-accordion-title .t-title')?.textContent).toContain('Title');
+    expect(el.querySelector('.mj-accordion-actions .t-action')).not.toBeNull();
+    expect(el.querySelector('.mj-accordion-body .t-body')).not.toBeNull();
   });
 });

@@ -173,7 +173,7 @@ export class MJAccordionPanelComponent {
     if (value) this._everExpanded = true;
   }
   get Expanded(): boolean { return this._expanded; }
-  get hasBeenExpanded(): boolean { return this._everExpanded; }
+  protected get hasBeenExpanded(): boolean { return this._everExpanded; }
   @Input() Disabled = false;
   /**
    * Emphasis variant for visual hierarchy:

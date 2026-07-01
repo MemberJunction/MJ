@@ -533,8 +533,19 @@
 }
 
 .severity-info .insight-icon { color: var(--mj-brand-primary); }
-.severity-warning .insight-icon { color: var(--mj-color-warning-500); }
+.severity-warning .insight-icon { color: var(--mj-status-warning); }
 .severity-optimization .insight-icon { color: var(--mj-status-success); }
+
+/* Per-severity tint restored onto the accordion (card background + header tint +
+   left-accent stripe). The accordion owns its chrome, so reach the inner panel /
+   header row via ::ng-deep — same pattern the selected-run tint uses. Semantic,
+   dark-mode-safe tokens replace the old primitive tints. */
+mj-accordion-panel.severity-info ::ng-deep .mj-accordion-panel { border-left: 4px solid var(--mj-status-info); background: var(--mj-status-info-bg); }
+mj-accordion-panel.severity-info ::ng-deep .mj-accordion-header-row { background: var(--mj-status-info-bg); }
+mj-accordion-panel.severity-warning ::ng-deep .mj-accordion-panel { border-left: 4px solid var(--mj-status-warning); background: var(--mj-status-warning-bg); }
+mj-accordion-panel.severity-warning ::ng-deep .mj-accordion-header-row { background: var(--mj-status-warning-bg); }
+mj-accordion-panel.severity-optimization ::ng-deep .mj-accordion-panel { border-left: 4px solid var(--mj-status-success); background: var(--mj-status-success-bg); }
+mj-accordion-panel.severity-optimization ::ng-deep .mj-accordion-header-row { background: var(--mj-status-success-bg); }
 
 .insight-title {
     font-weight: 600;
