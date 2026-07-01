@@ -21,6 +21,11 @@ import {
     AssemblyAIRealtime,
 } from '@memberjunction/ai-assemblyai';
 
+// @memberjunction/ai-huggingface (1 classes)
+import {
+    HuggingFaceRealtime,
+} from '@memberjunction/ai-huggingface';
+
 // @memberjunction/ai-azure (2 classes)
 import {
     AzureEmbedding,
@@ -1329,6 +1334,7 @@ import {
 export const CLASS_REGISTRATIONS: any[] = [
     AnthropicLLM,
     AssemblyAIRealtime,
+    HuggingFaceRealtime,
     AzureEmbedding,
     AzureLLM,
     BedrockEmbedding,
@@ -2281,6 +2287,7 @@ export const CLASS_REGISTRATIONS_COUNT = 942;
 export const CLASS_REGISTRATIONS_PACKAGES = [
     '@memberjunction/ai-anthropic',
     '@memberjunction/ai-assemblyai',
+    '@memberjunction/ai-huggingface',
     '@memberjunction/ai-azure',
     '@memberjunction/ai-bedrock',
     '@memberjunction/ai-betty-bot',

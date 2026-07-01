@@ -8,3 +8,4 @@ export * from './drivers/geminiRealtimeClient';
 export * from './drivers/elevenLabsRealtimeClient';
 export * from './drivers/assemblyAIRealtimeClient';
 export * from './drivers/xaiRealtimeClient';
+export * from './drivers/huggingFaceRealtimeClient';

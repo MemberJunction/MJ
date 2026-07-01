@@ -26,6 +26,7 @@ import { BuildSchemaOptions, buildSchemaSync, GraphQLTimestamp, PubSubEngine } f
 import { PubSub } from 'graphql-subscriptions';
 import sql from 'mssql';
 import { WebSocketServer } from 'ws';
+import { RealtimeProxyServer } from './realtimeProxy/RealtimeProxyServer.js';
 import buildApolloServer from './apolloServer/index.js';
 import { configInfo, configFilePath, dbDatabase, dbHost, dbPort, dbUsername, graphqlPort, graphqlRootPath, mj_core_schema, websiteRunFromPackage, RESTApiOptions } from './config.js';
 import { default as jwt } from 'jsonwebtoken';
@@ -853,7 +854,31 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
 
   const httpServer = createServer(app);
 
-  const webSocketServer = new WebSocketServer({ server: httpServer, path: graphqlRootPath });
+  // `noServer` so we own the HTTP `upgrade` routing ourselves (below) and can dispatch by path between
+  // the graphql-ws server and the realtime proxy. (In `{ server, path }` mode, ws destroys any socket whose
+  // path doesn't match, which would kill the proxy's `/realtime-proxy` upgrades — hence the explicit router.)
+  const webSocketServer = new WebSocketServer({ noServer: true });
+
+  // Single upgrade router: the realtime proxy claims its own path first (an authenticated byte-tunnel that
+  // lets self-hosted realtime providers — e.g. HuggingFace speech-to-speech — run the shipped client-direct
+  // audio topology without the internal endpoint ever being exposed to the browser); everything on the
+  // graphql path goes to graphql-ws; anything else is rejected. Must be registered before httpServer.listen().
+  httpServer.on('upgrade', (request, socket, head) => {
+    if (RealtimeProxyServer.Instance.TryHandleUpgrade(request, socket, head as Buffer)) {
+      return;
+    }
+    let pathname = graphqlRootPath;
+    try {
+      pathname = new URL(request.url ?? graphqlRootPath, 'http://internal').pathname;
+    } catch {
+      /* unparseable — fall through to the graphql-path check, which will reject it */
+    }
+    if (pathname === graphqlRootPath) {
+      webSocketServer.handleUpgrade(request, socket, head, (ws) => webSocketServer.emit('connection', ws, request));
+    } else {
+      socket.destroy();
+    }
+  });
 
   // Track per-connection expiry timers so we can clean them up on close
   const expiryTimers = new WeakMap<object, ReturnType<typeof setTimeout>>();

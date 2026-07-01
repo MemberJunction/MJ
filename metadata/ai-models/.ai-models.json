@@ -17845,5 +17845,35 @@
       "lastModified": "2026-06-16T01:17:10.887Z",
       "checksum": "e59100304928f6e1ba56997f557c913a900607e00df1088f9522321c8371affd"
     }
+  },
+  {
+    "fields": {
+      "Name": "HuggingFace Speech-to-Speech",
+      "PowerRank": 3,
+      "Description": "Hugging Face's open-source, self-hosted speech-to-speech stack treated as a realtime model: a cascaded VAD -> STT -> LLM -> TTS pipeline (Silero VAD, Parakeet/Whisper ASR, any OpenAI-compatible or local LLM, Qwen3-TTS/Kokoro/ChatTTS) exposing an OpenAI-Realtime-compatible /v1/realtime websocket. Private-by-design (audio never leaves owned infrastructure) and cost-free (no per-minute billing); component models are swappable. Reaches the browser through MJAPI's realtime proxy (client-direct topology) so the internal endpoint is never exposed and MJAPI stays the single ingress. Per-session prompt/tool/voice config is supplied natively via session.update; no server-side agent object and no token-usage events. Endpoint + optional auth are deployment config (HUGGINGFACE_REALTIME_URL / AI_VENDOR_API_KEY__HuggingFaceRealtime); set the key to a sentinel like 'none' for a keyless endpoint. DriverClass HuggingFaceRealtime. Low PowerRank so it is opt-in, not the default realtime provider.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Realtime",
+      "IsActive": true,
+      "SpeedRank": 5,
+      "CostRank": 0,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Hugging Face",
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "DriverClass": "HuggingFaceRealtime",
+            "APIName": "speech-to-speech",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true
+          }
+        }
+      ]
+    }
   }
 ]

@@ -372,5 +372,12 @@
       "lastModified": "2026-06-16T01:17:09.223Z",
       "checksum": "f778175ea41a178814c7e66627508b37ba065f47c0b258b76e1978732fd43cf4"
     }
+  },
+  {
+    "fields": {
+      "Name": "Hugging Face",
+      "Description": "Hugging Face's open-source speech-to-speech stack (github.com/huggingface/speech-to-speech) \u2014 a self-hosted, cascaded VAD -> STT -> LLM -> TTS realtime voice pipeline (Silero VAD, Parakeet/Whisper ASR, any OpenAI-compatible or local LLM, Qwen3-TTS/Kokoro/ChatTTS). Runs on-prem or on any server the deployment owns; can expose an OpenAI-Realtime-compatible /v1/realtime websocket. Private-by-design and cost-free (no per-minute cloud billing); component models are swappable. Drives the Realtime agent type / Voice Co-Agent via BaseRealtimeModel (DriverClass HuggingFaceRealtime), reaching the browser through MJAPI's realtime proxy so the internal endpoint is never exposed.",
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key"
+    }
   }
 ]

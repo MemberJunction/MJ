@@ -45,6 +45,7 @@
     "@memberjunction/ai-agents": "5.43.0",
     "@memberjunction/ai-anthropic": "5.43.0",
     "@memberjunction/ai-assemblyai": "5.43.0",
+    "@memberjunction/ai-huggingface": "5.43.0",
     "@memberjunction/ai-azure": "5.43.0",
     "@memberjunction/ai-bedrock": "5.43.0",
     "@memberjunction/ai-betty-bot": "5.43.0",
