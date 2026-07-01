@@ -266,7 +266,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="PayloadDownstreamPaths"
-            Type="textarea"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -274,7 +274,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="PayloadUpstreamPaths"
-            Type="textarea"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -282,7 +282,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="PayloadSelfReadPaths"
-            Type="textarea"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -290,7 +290,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="PayloadSelfWritePaths"
-            Type="textarea"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -529,6 +529,22 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
             LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="SupportsPlanMode"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="AcceptsSkills"
+            Type="select"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [Record]="record"
@@ -1572,6 +1588,31 @@
         }
     </mj-collapsible-panel>
 
+    <!-- AI Agent Skills Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAIAgentSkills"
+        SectionName="AI Agent Skills"
+        Icon="fa fa-brain"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentSkills')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Skills','AgentID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Skills')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentSkills')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentSkills', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <!-- Conversation Widget Instances Section -->
     <mj-collapsible-panel
         SectionKey="mJConversationWidgetInstances"
@@ -1591,6 +1632,31 @@
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJConversationWidgetInstances', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- AI Skill Sub Agents Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAISkillSubAgents"
+        SectionName="AI Skill Sub Agents"
+        Icon="fa fa-network-wired"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAISkillSubAgents')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Skill Sub Agents','SubAgentID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Skill Sub Agents')"
+                [AllowLoad]="IsSectionExpanded('mJAISkillSubAgents')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAISkillSubAgents', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

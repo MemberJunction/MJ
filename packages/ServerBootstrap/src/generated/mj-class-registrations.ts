@@ -188,7 +188,7 @@ import {
     MagicLinkProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (392 classes)
+// @memberjunction/core-entities (398 classes)
 import {
     AIAgentPermissionProvider,
     AccessControlRuleProvider,
@@ -226,6 +226,7 @@ import {
     MJAIAgentSessionBridgeParticipantEntity,
     MJAIAgentSessionChannelEntity,
     MJAIAgentSessionEntity,
+    MJAIAgentSkillEntity,
     MJAIAgentStepEntity,
     MJAIAgentStepPathEntity,
     MJAIAgentTypeEntity,
@@ -255,6 +256,10 @@ import {
     MJAIPromptTypeEntity,
     MJAIRemoteBrowserProviderEntity,
     MJAIResultCacheEntity,
+    MJAISkillActionEntity,
+    MJAISkillEntity,
+    MJAISkillPermissionEntity,
+    MJAISkillSubAgentEntity,
     MJAIVendorEntity,
     MJAIVendorTypeDefinitionEntity,
     MJAIVendorTypeEntity,
@@ -510,6 +515,7 @@ import {
     MJScheduledJobRunEntity,
     MJScheduledJobTypeEntity,
     MJSchemaInfoEntity,
+    MJScopedPromptPartEntity,
     MJSearchExecutionLogEntity,
     MJSearchProviderEntity,
     MJSearchScopeEntity,
@@ -1433,6 +1439,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAIAgentSessionBridgeParticipantEntity,
     MJAIAgentSessionChannelEntity,
     MJAIAgentSessionEntity,
+    MJAIAgentSkillEntity,
     MJAIAgentStepEntity,
     MJAIAgentStepPathEntity,
     MJAIAgentTypeEntity,
@@ -1462,6 +1469,10 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAIPromptTypeEntity,
     MJAIRemoteBrowserProviderEntity,
     MJAIResultCacheEntity,
+    MJAISkillActionEntity,
+    MJAISkillEntity,
+    MJAISkillPermissionEntity,
+    MJAISkillSubAgentEntity,
     MJAIVendorEntity,
     MJAIVendorTypeDefinitionEntity,
     MJAIVendorTypeEntity,
@@ -1717,6 +1728,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJScheduledJobRunEntity,
     MJScheduledJobTypeEntity,
     MJSchemaInfoEntity,
+    MJScopedPromptPartEntity,
     MJSearchExecutionLogEntity,
     MJSearchProviderEntity,
     MJSearchScopeEntity,
@@ -2301,7 +2313,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 947;
+export const CLASS_REGISTRATIONS_COUNT = 953;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

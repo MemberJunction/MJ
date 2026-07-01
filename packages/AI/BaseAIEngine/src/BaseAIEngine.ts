@@ -1,6 +1,6 @@
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, LogError, LogStatus, Metadata, RunView, UserInfo } from "@memberjunction/core";
 import { UUIDsEqual, NormalizeUUID } from "@memberjunction/global";
-import { MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgentNoteTypeEntity,
+import { MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgentNoteTypeEntity, MJScopedPromptPartEntity,
          MJAIModelActionEntity,
          MJAIPromptModelEntity, MJAIPromptTypeEntity, MJAIResultCacheEntity, MJAIVendorTypeDefinitionEntity,
          MJArtifactTypeEntity, MJEntityAIActionEntity, MJVectorDatabaseEntity,
@@ -30,6 +30,10 @@ import { MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgent
          MJAIAgentCategoryEntity,
          MJAIAgentCoAgentEntity,
          MJAIAgentChannelEntity,
+         MJAISkillEntity,
+         MJAISkillActionEntity,
+         MJAISkillSubAgentEntity,
+         MJAIAgentSkillEntity,
          ArtifactMetadataEngine} from "@memberjunction/core-entities";
 import { AIAgentPermissionHelper, EffectiveAgentPermissions } from "./AIAgentPermissionHelper";
 import { TemplateEngineBase } from "@memberjunction/templates-base-types";
@@ -89,6 +93,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     private _agentPrompts: MJAIAgentPromptEntity[] = [];
     private _agentNoteTypes: MJAIAgentNoteTypeEntity[] = [];
     private _agentNotes: MJAIAgentNoteEntity[] = [];
+    private _scopedPromptParts: MJScopedPromptPartEntity[] = [];
     private _agentExamples: MJAIAgentExampleEntity[] = [];
     private _agentDataSources: MJAIAgentDataSourceEntity[] = [];
     private _agents: MJAIAgentEntityExtended[] = [];
@@ -115,6 +120,10 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     private _agentCategories: MJAIAgentCategoryEntity[] = [];
     private _agentCoAgents: MJAIAgentCoAgentEntity[] = [];
     private _agentChannels: MJAIAgentChannelEntity[] = [];
+    private _skills: MJAISkillEntity[] = [];
+    private _skillActions: MJAISkillActionEntity[] = [];
+    private _skillSubAgents: MJAISkillSubAgentEntity[] = [];
+    private _agentSkills: MJAIAgentSkillEntity[] = [];
 
     /**
      * Cache for configuration inheritance chains.
@@ -196,6 +205,11 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             {
                 PropertyName: '_agentNotes',
                 EntityName: 'MJ: AI Agent Notes',
+                CacheLocal: true
+            },
+            {
+                PropertyName: '_scopedPromptParts',
+                EntityName: 'MJ: Scoped Prompt Parts',
                 CacheLocal: true
             },
             {
@@ -321,6 +335,26 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             {
                 PropertyName: '_agentCategories',
                 EntityName: 'MJ: AI Agent Categories',
+                CacheLocal: true
+            },
+            {
+                PropertyName: '_skills',
+                EntityName: 'MJ: AI Skills',
+                CacheLocal: true
+            },
+            {
+                PropertyName: '_skillActions',
+                EntityName: 'MJ: AI Skill Actions',
+                CacheLocal: true
+            },
+            {
+                PropertyName: '_skillSubAgents',
+                EntityName: 'MJ: AI Skill Sub Agents',
+                CacheLocal: true
+            },
+            {
+                PropertyName: '_agentSkills',
+                EntityName: 'MJ: AI Agent Skills',
                 CacheLocal: true
             },
             // NOTE: the realtime registry datasets below are CONDITIONAL — appended by
@@ -589,6 +623,81 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         return this.GetConfigData<MJAIAgentActionEntity>('_agentActions');
     }
 
+    /** All AI Skills (capability bundles), cached during Config(). Filter by Status yourself
+     *  or use {@link GetSkillsForAgent} for the full agent-gating resolution. */
+    public get Skills(): MJAISkillEntity[] {
+        return this._skills;
+    }
+
+    /** Skill → Action bundling rows ("MJ: AI Skill Actions"), cached during Config(). */
+    public get SkillActions(): MJAISkillActionEntity[] {
+        return this._skillActions;
+    }
+
+    /** Skill → sub-agent bundling rows ("MJ: AI Skill Sub Agents"), cached during Config(). */
+    public get SkillSubAgents(): MJAISkillSubAgentEntity[] {
+        return this._skillSubAgents;
+    }
+
+    /** Agent ↔ Skill grant rows ("MJ: AI Agent Skills"), used when an agent's AcceptsSkills is 'Limited'. */
+    public get AgentSkills(): MJAIAgentSkillEntity[] {
+        return this._agentSkills;
+    }
+
+    /**
+     * Resolves the set of skills a given agent may activate, honoring the three-layer
+     * gate: {@link MJAIAgentEntityExtended.AcceptsSkills} on the agent, {@link MJAISkillEntity.Status}
+     * on the catalog entry, and (when AcceptsSkills is 'Limited') {@link MJAIAgentSkillEntity.Status}
+     * on the grant.
+     *
+     * - `AcceptsSkills = 'None'` (default) → no skills, regardless of catalog or grants.
+     * - `AcceptsSkills = 'All'` → every `Active` skill in the catalog.
+     * - `AcceptsSkills = 'Limited'` → only `Active` skills with an `Active` `MJ: AI Agent Skills` grant for this agent.
+     *
+     * @param agent - The agent to resolve available skills for.
+     * @returns MJAISkillEntity[] - Active skills the agent may activate (empty if AcceptsSkills is 'None').
+     */
+    public GetSkillsForAgent(agent: MJAIAgentEntityExtended): MJAISkillEntity[] {
+        if (!agent || agent.AcceptsSkills === 'None') {
+            return [];
+        }
+
+        const activeSkills = this._skills.filter(s => s.Status === 'Active');
+
+        if (agent.AcceptsSkills === 'All') {
+            return activeSkills;
+        }
+
+        // 'Limited' — only skills with an Active grant for this agent
+        const grantedSkillIDs = new Set(
+            this._agentSkills
+                .filter(gs => UUIDsEqual(gs.AgentID, agent.ID) && gs.Status === 'Active')
+                .map(gs => NormalizeUUID(gs.SkillID))
+        );
+        return activeSkills.filter(s => grantedSkillIDs.has(NormalizeUUID(s.ID)));
+    }
+
+    /**
+     * Returns the ActionIDs bundled into a skill (via "MJ: AI Skill Actions"). Callers resolve
+     * the full `MJActionEntity` objects from their own Action cache (e.g. `ActionEngineServer`)
+     * to avoid a cross-package dependency here.
+     */
+    public GetSkillActionIDs(skillID: string): string[] {
+        return this._skillActions
+            .filter(sa => UUIDsEqual(sa.SkillID, skillID))
+            .map(sa => sa.ActionID);
+    }
+
+    /**
+     * Returns the sub-agent IDs bundled into a skill (via "MJ: AI Skill Sub Agents"). Callers
+     * resolve the full `MJAIAgentEntityExtended` objects via `this.Agents` / `GetAgentByID`.
+     */
+    public GetSkillSubAgentIDs(skillID: string): string[] {
+        return this._skillSubAgents
+            .filter(sa => UUIDsEqual(sa.SkillID, skillID))
+            .map(sa => sa.SubAgentID);
+    }
+
     public get AgentPrompts(): MJAIAgentPromptEntity[] {
         return this.GetConfigData<MJAIAgentPromptEntity>('_agentPrompts');
     }
@@ -683,6 +792,15 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
 
     public get AgentNotes(): MJAIAgentNoteEntity[] {
         return this.GetConfigData<MJAIAgentNoteEntity>('_agentNotes');
+    }
+
+    /**
+     * All scoped prompt parts (MJ: Scoped Prompt Parts). Cached like AgentNotes;
+     * resolved by scope + assembled into role-faithful messages by the
+     * ScopedPromptPartInjector. See plans/scoped-prompt-components.
+     */
+    public get ScopedPromptParts(): MJScopedPromptPartEntity[] {
+        return this._scopedPromptParts;
     }
 
     public get AgentExamples(): MJAIAgentExampleEntity[] {

@@ -434,6 +434,31 @@
         }
     </mj-collapsible-panel>
 
+    <!-- AI Skill Permissions Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAISkillPermissions"
+        SectionName="AI Skill Permissions"
+        Icon="fa fa-user-shield"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAISkillPermissions')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Skill Permissions','RoleID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Skill Permissions')"
+                [AllowLoad]="IsSectionExpanded('mJAISkillPermissions')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAISkillPermissions', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <!-- Conversation Widget Instances Section -->
     <mj-collapsible-panel
         SectionKey="mJConversationWidgetInstances"

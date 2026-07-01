@@ -196,5 +196,23 @@
       "lastModified": "2026-06-09T06:31:50.129Z",
       "checksum": "8c7c2243e7df7cfe7c5a4fd6c933265eb34634006bef2eaaf8a154f39ab4012c"
     }
+  },
+  {
+    "fields": {
+      "Name": "AI Skills",
+      "DisplayName": "AI Skills",
+      "Description": "Reusable agent capability bundles (instructions + Actions + sub-agents) that can be shared with other users",
+      "Icon": "fa-solid fa-wand-magic-sparkles",
+      "DriverClass": null,
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: AI Skills",
+      "CategoryEntityID": null
+    },
+    "primaryKey": {
+      "ID": "CA99E9A5-A2A7-4B54-ABCB-10E9FD673EDA"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T17:33:30.343Z",
+      "checksum": "2b51c948aae7de2dc61ed67f7f8679b4c2b34e8a1d2d9fec0d14d2d09f91b919"
+    }
   }
 ]
