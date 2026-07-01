@@ -275,3 +275,15 @@ These would be worth a follow-up cycle to confirm and then mark `IsActive: false
 - [Latest AI Model Releases — AIReleaseTracker](https://aireleasetracker.com/latest)
 - [AI Frontier Model Builders Cheatsheet (Updated June 2026)](https://cheatsheets.davidveksler.com/ai-frontier.html)
 - [A Frontier Model Goes Dark — Alex Merced (dev.to)](https://dev.to/alexmercedcoder/a-frontier-model-goes-dark-ai-week-of-june-16-2026-1gk9)
+
+---
+
+## Addendum — 2026-07-01 (post-review)
+
+Per review request from CaelebB-BC, added **Gemma 4 31B on Cerebras** as an inference-provider vendor association (+ cost row) on the existing *Gemma 4 31B Instruct* model. Not a new model row — extends provider coverage for a model already in inventory.
+
+- **API model id**: `gemma-4-31b` · **DriverClass**: `CerebrasLLM`
+- **Context / output** (paid tier): 131K in / 40K out · multimodal (image input) · streaming
+- **Pricing**: $0.99 input / $1.49 output per 1M tokens (Cerebras Inference, June 2026)
+- Priority 60 (secondary — leaves Vertex AI primary routing unchanged)
+- Source: [Gemma 4 31B — Cerebras Inference Docs](https://inference-docs.cerebras.ai/models/gemma-4-31b)

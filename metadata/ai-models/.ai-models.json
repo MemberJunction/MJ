@@ -14291,6 +14291,22 @@
             "lastModified": "2026-06-16T01:17:10.410Z",
             "checksum": "ad3275f54b333c79a7fbf243c8fc5dcba106e8c851457c5eb42dbcddc16a61cd"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
+            "Priority": 60,
+            "Status": "Active",
+            "DriverClass": "CerebrasLLM",
+            "APIName": "gemma-4-31b",
+            "MaxInputTokens": 131072,
+            "MaxOutputTokens": 40960,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -14316,6 +14332,23 @@
           "sync": {
             "lastModified": "2026-06-03T16:00:05.173Z",
             "checksum": "447d5e42054002a48337ffc06161e975397b4c96067e236ee7863fff13f86e8f"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
+            "StartedAt": "2026-06-29T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.99,
+            "OutputPricePerUnit": 1.49,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Gemma 4 31B Instruct pricing on Cerebras Inference as of June 2026. Paid tier: 131K context, 40K max output, multimodal (image input), 1,800+ TPS. API model id: gemma-4-31b.",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
           }
         }
       ]
