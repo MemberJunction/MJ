@@ -9,7 +9,7 @@ Angular DOM unit-testing — Phase 2 (`Angular/Generic/**` rollout). Extends the
 - **`providers` / `imports` / `declarations`** options on `renderComponentFixture` — inject stub services so service-backed presentational components can be constructed and rendered.
 - **`createFakeProvider`** (+ an `entities` option) — a fake `IMetadataProvider` / `RunView` supplied through a component's `[Provider]` input.
 - **`useFakeGlobalProvider`** — scoped save/restore of the global `RunView.Provider` / `Metadata.Provider` for components that use a bare `new RunView()`.
-- **dom-helpers** — `query` / `queryAll` / `text` / `typeInto` / `captureEmissions`.
+- **dom-helpers** — `query` / `queryAll` / `text` / `attr` / `hasClass` / `typeInto` / `capture`.
 
 Tooling (repo scripts, no package version impact):
 
