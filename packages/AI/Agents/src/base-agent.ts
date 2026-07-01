@@ -11,7 +11,7 @@
  * @since 2.49.0
  */
 
-import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, FileStorageEngineBase } from '@memberjunction/core-entities';
+import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, FileStorageEngineBase, MJAISkillEntity } from '@memberjunction/core-entities';
 import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended, MJAIAgentEntityExtended, MJAIModelEntityExtended, MJAIPromptRunEntityExtended } from "@memberjunction/ai-core-plus";
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider, DatabaseProviderBase } from '@memberjunction/core';
 import { AgentRunWatchdog } from './agent-run-watchdog';
@@ -88,7 +88,8 @@ import {
     AgentPipelineRequest,
     initAgentRunStep,
     finalizeAgentRunStep,
-    AgentRunStepSaveQueue
+    AgentRunStepSaveQueue,
+    AgentSkillActivationRequest
 } from '@memberjunction/ai-core-plus';
 import { MJActionEntityExtended, ActionResult, ActionParam, AIDirective } from '@memberjunction/actions-base';
 import { AgentRunner } from './AgentRunner';
@@ -880,6 +881,24 @@ export class BaseAgent {
      * @since 2.123.0
      */
     private _effectiveActions: MJActionEntityExtended[] = [];
+
+    /**
+     * Effective sub-agents available to this agent after applying subAgentChanges — the sub-agent
+     * counterpart of {@link _effectiveActions}. Populated during gatherPromptTemplateData() and used
+     * for validation in {@link validateSubAgentNextStep} via {@link getEffectiveSubAgentsForValidation}.
+     * Without this, a sub-agent added at runtime (e.g. by Skill activation) would be advertised in the
+     * prompt catalog but rejected as "not found" when the agent tried to actually use it.
+     * @private
+     */
+    private _effectiveSubAgents: MJAIAgentEntityExtended[] = [];
+
+    /**
+     * IDs of skills already activated during this run. Prevents re-activation from re-appending
+     * the same instructions to context / re-pushing duplicate actionChanges/subAgentChanges entries
+     * when the LLM references an already-active skill again.
+     * @private
+     */
+    private _activatedSkillIDs: string[] = [];
 
     /**
      * Counts only prompt (LLM) executions, NOT all agent steps.
@@ -3478,6 +3497,10 @@ export class BaseAgent {
             case 'While':
                 // While loops are valid - no additional validation needed
                 return nextStep;
+            // Type assertion required because 'Skill' is not part of the BaseAgentNextStep step
+            // union (it's non-terminal, like 'ClientTools' — see the type's doc comment).
+            case 'Skill' as typeof nextStep.step:
+                return this.validateSkillNextStep<P>(params, nextStep, currentPayload, agentRun, currentStep);
             case 'ClientTools' as typeof nextStep.step:
                 // Client tools are valid - execution handled by executeClientToolsStep
                 return nextStep;
@@ -3529,7 +3552,7 @@ export class BaseAgent {
         agentRun: MJAIAgentRunEntityExtended,
         currentStep: MJAIAgentRunStepEntityExtended
     ): Promise<BaseAgentNextStep<P>> {
-        const curAgentSubAgents = AIEngine.Instance.GetSubAgents(params.agent.ID, 'Active');
+        const curAgentSubAgents = this.getEffectiveSubAgentsForValidation(params.agent.ID);
 
         // Collect requested sub-agents. Prefer plural `subAgents` (parallel fan-out);
         // fall back to singular `subAgent` for the classic single-sub-agent next step.
@@ -3746,6 +3769,91 @@ export class BaseAgent {
         return ActionEngineServer.Instance.Actions.filter(a =>
             agentActions.some(aa => UUIDsEqual(aa.ActionID, a.ID)) && a.Status === 'Active'
         );
+    }
+
+    /**
+     * Gets the effective sub-agents for validation, using runtime subAgentChanges if available.
+     * Falls back to the database-configured relationship set if _effectiveSubAgents is empty.
+     * Mirrors {@link getEffectiveActionsForValidation}.
+     *
+     * @param agentId - The ID of the agent to get sub-agents for
+     * @returns Array of effective sub-agents available to the agent
+     * @protected
+     */
+    protected getEffectiveSubAgentsForValidation(agentId: string): MJAIAgentEntityExtended[] {
+        if (this._effectiveSubAgents.length > 0) {
+            return this._effectiveSubAgents;
+        }
+
+        // Fallback: compute from database configuration (ParentID children + AgentRelationships)
+        return AIEngine.Instance.GetSubAgents(agentId, 'Active');
+    }
+
+    /**
+     * Validates that the requested skill(s) are known and allowed for this agent (resolved via
+     * {@link AIEngine.GetSkillsForAgent}, which enforces the agent's AcceptsSkills gate + the
+     * catalog/grant Status chain). Subclasses can override to implement custom validation logic.
+     *
+     * Mirrors {@link validateActionsNextStep}'s fuzzy-name-matching UX: an exact case-insensitive
+     * match is tried first, falling back to a CONTAINS match when exactly one candidate matches.
+     *
+     * @protected
+     */
+    protected async validateSkillNextStep<P>(
+        params: ExecuteAgentParams,
+        nextStep: BaseAgentNextStep<P>,
+        currentPayload: P,
+        agentRun: MJAIAgentRunEntityExtended,
+        currentStep: MJAIAgentRunStepEntityExtended
+    ): Promise<BaseAgentNextStep<P>> {
+        const requested = nextStep.skillActivations ?? [];
+        if (requested.length === 0) {
+            if (nextStep.step !== 'Retry') {
+                this._generalValidationRetryCount++;
+            }
+            return {
+                step: 'Retry',
+                terminate: false,
+                errorMessage: 'When activating a skill, 1 or more skills must be specified'
+            };
+        }
+
+        const availableSkills = AIEngine.Instance.GetSkillsForAgent(params.agent);
+
+        const missingSkills = requested.filter(req => {
+            const requestedName = req.name.trim().toLowerCase();
+
+            const exactMatch = availableSkills.find(s => s.Name.trim().toLowerCase() === requestedName);
+            if (exactMatch) return false;
+
+            const containsMatches = availableSkills.filter(s => s.Name.trim().toLowerCase().includes(requestedName));
+            if (containsMatches.length === 1) {
+                this.logStatus(`Skill name fuzzy matched: '${req.name}' → '${containsMatches[0].Name}'`, true, params);
+                req.name = containsMatches[0].Name;
+                return false;
+            }
+
+            return true;
+        });
+
+        if (missingSkills.length > 0) {
+            const missingNames = missingSkills.map(s => s.name).join(', ');
+            const availableNames = availableSkills.map(s => s.Name).join(', ') || '(none)';
+            this.logError(`Skill(s) '${missingNames}' not found or not available for agent '${params.agent.Name}'. Available: ${availableNames}`, {
+                agent: params.agent,
+                category: 'SkillExecution'
+            });
+            if (nextStep.step !== 'Retry') {
+                this._generalValidationRetryCount++;
+            }
+            return {
+                step: 'Retry',
+                terminate: false,
+                errorMessage: `Skill(s) '${missingNames}' not found or not available. Available: ${availableNames}`
+            };
+        }
+
+        return nextStep;
     }
 
     /**
@@ -5599,6 +5707,8 @@ The context is now within limits. Please retry your request with the recovered c
             }
             // Store for later validation in executeActionsStep
             this._effectiveActions = activeActions;
+            // Store for later validation in validateSubAgentNextStep (see getEffectiveSubAgentsForValidation)
+            this._effectiveSubAgents = uniqueActiveSubAgents;
 
             // Agent type prompt params: reuse cached base merge unless a runtime override is present.
             const runtimePromptParamOverrides = extraData?.__agentTypePromptParams as Record<string, unknown> | undefined;
@@ -5620,6 +5730,11 @@ The context is now within limits. Please retry your request with the recovered c
             // Build app context section if provided in extraData
             const appContext = this.buildAppContextSection(extraData);
 
+            // Skill catalog (name + description only — progressive disclosure). Empty for
+            // AcceptsSkills='None' since GetSkillsForAgent already returns [] in that case.
+            const availableSkills = engine.GetSkillsForAgent(agent);
+            const skillsCatalog = this.formatSkillsCatalog(availableSkills);
+
             const contextData: AgentContextData = {
                 agentName: agent.Name,
                 agentDescription: agent.Description,
@@ -5629,6 +5744,8 @@ The context is now within limits. Please retry your request with the recovered c
                 actionCount: activeActions.length,
                 actionDetails: actionDetails,
                 clientToolDetails: clientToolDetails,
+                skillCount: availableSkills.length,
+                skillsCatalog: skillsCatalog,
                 appContext: appContext,
             };
 
@@ -6244,6 +6361,18 @@ The context is now within limits. Please retry your request with the recovered c
             }
             return line;
         }).join('\n');
+    }
+
+    /**
+     * Formats the skill CATALOG as compact markdown — name + description ONLY. This is
+     * progressive disclosure by design: the LLM sees just enough to decide whether to activate a
+     * skill (via a 'Skill' next step), but never sees `Instructions` until it does. Instructions
+     * are appended separately in {@link buildSkillActivationMessage} on activation.
+     *
+     * @private
+     */
+    private formatSkillsCatalog(skills: MJAISkillEntity[]): string {
+        return skills.map(s => `- **${s.Name}** — ${s.Description ?? '(no description)'}`).join('\n');
     }
 
     /**
@@ -7509,6 +7638,11 @@ The context is now within limits. Please retry your request with the recovered c
                 return await this.processSubAgentStep<P, P>(params, previousDecision!, undefined, undefined, stepCount);
             case 'Actions':
                 return await this.executeActionsStep(params, previousDecision, undefined, true, stepCount);
+            // Type assertion required because 'Skill' is not part of the BaseAgentNextStep step
+            // union (non-terminal, like 'ClientTools') — LoopAgentType.DetermineNextStep() emits it
+            // when the LLM chooses to activate a skill.
+            case 'Skill' as typeof previousDecision.step:
+                return await this.executeSkillStep(params, config, previousDecision, stepCount);
             // Type assertion required because 'ClientTools' is not part of the BaseAgentNextStep
             // step union — LoopAgentType.DetermineNextStep() emits it when the LLM chooses client tools.
             case 'ClientTools' as typeof previousDecision.step:
@@ -10221,6 +10355,178 @@ The context is now within limits. Please retry your request with the recovered c
         });
 
         return `${header}\n${lines.join('\n')}`;
+    }
+
+    /**
+     * Executes a 'Skill' next step: activates one or more skills the LLM requested by name.
+     * Activating a skill (1) appends its full `Instructions` to the conversation so they take
+     * effect for the remainder of the run, and (2) enables its bundled Actions/sub-agents by
+     * pushing `root`-scoped `add` entries onto `params.actionChanges`/`params.subAgentChanges` —
+     * the same runtime tool-surface-extension mechanism `ExecuteAgentParams` already exposes to
+     * external callers. This is NOT a nested agent run; it never terminates the loop itself.
+     *
+     * Already-activated skills (tracked in `_activatedSkillIDs`) are skipped — re-requesting an
+     * active skill is a harmless no-op rather than re-appending duplicate instructions.
+     *
+     * Decomposed into {@link resolveSkillActivations}, {@link buildSkillActivationMessage},
+     * {@link enableSkillCapabilities}, and {@link recordSkillActivationStep} — override any of
+     * those for fine-grained control (e.g. custom instruction formatting, additional side effects
+     * on activation) without re-implementing the whole step.
+     *
+     * @protected
+     */
+    protected async executeSkillStep(
+        params: ExecuteAgentParams,
+        config: AgentConfiguration,
+        previousDecision: BaseAgentNextStep,
+        stepCount: number = 0
+    ): Promise<BaseAgentNextStep> {
+        const requested: AgentSkillActivationRequest[] = previousDecision.skillActivations ?? [];
+        if (requested.length === 0) {
+            // Nothing to activate — continue with next prompt
+            return await this.executePromptStep(params, config, previousDecision, stepCount);
+        }
+
+        const resolvedSkills = this.resolveSkillActivations(requested, params.agent);
+        const newlyActivated = resolvedSkills.filter(
+            skill => !this._activatedSkillIDs.some(id => UUIDsEqual(id, skill.ID))
+        );
+
+        if (newlyActivated.length === 0) {
+            // All requested skills are already active this run — no-op, just continue
+            return await this.executePromptStep(params, config, previousDecision, stepCount);
+        }
+
+        const currentPayload = previousDecision?.newPayload || previousDecision?.previousPayload || params.payload;
+
+        for (const skill of newlyActivated) {
+            await this.recordSkillActivationStep(skill, currentPayload, params);
+            this.enableSkillCapabilities(skill, params);
+            this._activatedSkillIDs.push(skill.ID);
+        }
+
+        const activationMessage = this.buildSkillActivationMessage(newlyActivated);
+        params.conversationMessages.push({
+            role: 'user',
+            content: activationMessage,
+            metadata: {
+                turnAdded: this._promptTurnCount,
+                messageType: 'skill-activation'
+            }
+        } as AgentChatMessage);
+
+        return await this.executePromptStep(params, config, previousDecision, stepCount);
+    }
+
+    /**
+     * Resolves the LLM's requested skill names to `MJ: AI Skills` entities, restricted to what
+     * {@link AIEngine.GetSkillsForAgent} allows for this agent (the AcceptsSkills gate + Status
+     * chain). Names that don't resolve are silently dropped here — {@link validateSkillNextStep}
+     * is responsible for rejecting unknown/disallowed names before execution ever reaches this
+     * point, so by the time `executeSkillStep` runs, every requested name is expected to match.
+     *
+     * Override to change resolution semantics (e.g. resolve by ID instead of Name).
+     *
+     * @protected
+     */
+    protected resolveSkillActivations(
+        requested: AgentSkillActivationRequest[],
+        agent: MJAIAgentEntityExtended
+    ): MJAISkillEntity[] {
+        const availableSkills = AIEngine.Instance.GetSkillsForAgent(agent);
+        const resolved: MJAISkillEntity[] = [];
+
+        for (const req of requested) {
+            const requestedName = req.name.trim().toLowerCase();
+            const match = availableSkills.find(s => s.Name.trim().toLowerCase() === requestedName);
+            if (match && !resolved.some(s => UUIDsEqual(s.ID, match.ID))) {
+                resolved.push(match);
+            }
+        }
+
+        return resolved;
+    }
+
+    /**
+     * Builds the message appended to `conversationMessages` when skill(s) activate — this is what
+     * actually puts each skill's `Instructions` into effect for the rest of the run. Override to
+     * change formatting (e.g. a more compact representation for a high skill-activation-count agent).
+     *
+     * @protected
+     */
+    protected buildSkillActivationMessage(skills: MJAISkillEntity[]): string {
+        const sections = skills.map(s => `## Skill Activated: ${s.Name}\n\n${s.Instructions}`);
+        return `The following skill(s) have been activated. Their instructions are now in effect ` +
+            `for the remainder of this run:\n\n${sections.join('\n\n')}`;
+    }
+
+    /**
+     * Enables a skill's bundled Actions and sub-agents by pushing `root`-scoped `add` entries onto
+     * `params.actionChanges` / `params.subAgentChanges`. `root` scope means the grant applies only
+     * to the CURRENT agent and is never propagated to sub-agents it may later delegate to — each
+     * agent's own skill activations are its own concern (see {@link filterActionChangesForSubAgent}
+     * / {@link filterSubAgentChangesForSubAgent}). Because `params` is the same object reference
+     * used for the rest of this run, every subsequent turn's `gatherPromptTemplateData()` call picks
+     * up the change automatically — no additional plumbing required.
+     *
+     * Override to change propagation scope (e.g. a subclass that wants skill-granted capabilities
+     * to cascade to sub-agents could push `scope: 'all-subagents'` instead).
+     *
+     * @protected
+     */
+    protected enableSkillCapabilities(skill: MJAISkillEntity, params: ExecuteAgentParams): void {
+        const actionIds = AIEngine.Instance.GetSkillActionIDs(skill.ID);
+        if (actionIds.length > 0) {
+            if (!params.actionChanges) {
+                params.actionChanges = [];
+            }
+            params.actionChanges.push({
+                scope: 'root',
+                mode: 'add',
+                actionIds
+            });
+        }
+
+        const subAgentIds = AIEngine.Instance.GetSkillSubAgentIDs(skill.ID);
+        if (subAgentIds.length > 0) {
+            if (!params.subAgentChanges) {
+                params.subAgentChanges = [];
+            }
+            params.subAgentChanges.push({
+                scope: 'root',
+                mode: 'add',
+                subAgentIds
+            });
+        }
+    }
+
+    /**
+     * Creates and immediately finalizes the `AIAgentRunStep` (StepType='Skill') that records this
+     * skill activation for observability/audit. Activation is not itself a failure mode today — it
+     * always finalizes as successful — but subclasses can override to add richer InputData/OutputData
+     * or to make activation conditionally fail (e.g. a licensing check).
+     *
+     * @protected
+     */
+    protected async recordSkillActivationStep(
+        skill: MJAISkillEntity,
+        currentPayload: unknown,
+        params: ExecuteAgentParams
+    ): Promise<void> {
+        const stepEntity = await this.createStepEntity({
+            stepType: 'Skill',
+            stepName: `Skill: ${skill.Name}`,
+            targetId: skill.ID,
+            inputData: { skillName: skill.Name },
+            contextUser: params.contextUser,
+            payloadAtStart: currentPayload,
+            payloadAtEnd: currentPayload
+        });
+
+        await this.finalizeStepEntity(stepEntity, true, undefined, {
+            skillId: skill.ID,
+            skillName: skill.Name
+        });
     }
 
     private async executeChatStep(

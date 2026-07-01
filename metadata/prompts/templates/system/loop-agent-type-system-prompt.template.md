@@ -43,9 +43,13 @@ interface LoopAgentResponse {
     /** Next action. Required when taskComplete=false */
     nextStep?: {
         /** Operation type */
-        type: 'Actions' | 'Sub-Agent' | 'Chat' | 'Retry'{% if clientToolDetails %} | 'ClientTools'{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.forEach != false %} | 'ForEach'{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.while != false %} | 'While'{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.pipeline != false and _PIPELINE_TOOLS %} | 'Pipeline'{% endif %};
+        type: 'Actions' | 'Sub-Agent' | 'Chat' | 'Retry'{% if clientToolDetails %} | 'ClientTools'{% endif %}{% if skillCount > 0 %} | 'Skill'{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.forEach != false %} | 'ForEach'{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.while != false %} | 'While'{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.pipeline != false and _PIPELINE_TOOLS %} | 'Pipeline'{% endif %};
         /** Actions to execute — server-side tools (when type='Actions') */
         actions?: Array<{ name: string; params: Record<string, unknown> }>;
+{% if skillCount > 0 %}
+        /** Skill(s) to activate by catalog name (when type='Skill') — see Skills section below */
+        skills?: Array<{ name: string }>;
+{% endif %}
 {% if __agentTypePromptParams.includeResponseTypeDefinition.pipeline != false and _PIPELINE_TOOLS %}
         /** Run a server-side dataflow (when type='Pipeline'); only the final stage's value returns to you (see Agent Pipelines below). Processed inline, zero turn cost. */
         pipeline?: { steps: Array<Record<string, unknown>> };
@@ -111,6 +115,7 @@ Each iteration:
    - Continue reasoning
    {% if subAgentCount > 0 %}- Invoke a single sub-agent (`subAgent`) or fan out to multiple independent sub-agents in parallel (`subAgents`){% endif %}
    {% if actionCount > 0 %}- Execute action(s){% endif %}
+   {% if skillCount > 0 %}- Activate skill(s) — see Skills section below{% endif %}
    - Expand compacted message (if you need full details from a prior result)
 {% if clientToolDetails %}   - Invoke client tool(s) — interact with the user's browser{% endif %}
 4. Loop until done or blocked
@@ -536,7 +541,7 @@ You have {{subAgentCount}} sub-agents. Delegate appropriately.
 Parent: {{ parentAgentName }}. Your results return to parent, not user.
 {% endif -%}
 
-{%- if subAgentCount > 0 or actionCount > 0 %}
+{%- if subAgentCount > 0 or actionCount > 0 or skillCount > 0 %}
 # Capabilities
 {%- if subAgentCount > 0 %}
 ## Sub-Agents ({{subAgentCount}} available)
@@ -549,6 +554,25 @@ Execute one at a time. Their completion ≠ your task completion.
 Actions are **server-side tools** — they run on the server with direct access to databases, APIs, and backend services. Use these for data operations, computations, and integrations. Set `type: "Actions"` to invoke them.
 Execute multiple in parallel if independent. Retry failed actions up to 3x with adjusted parameters.
 {{ actionDetails | safe }}
+{%- endif -%}
+
+{%- if skillCount > 0 %}
+## Skills ({{skillCount}} available)
+Skills are **capability bundles** — activating one appends its full instructions to your context and enables any Actions/sub-agents it bundles, for the rest of this run. Below is the CATALOG: name + description only. You will not see a skill's full instructions until you activate it. Set `type: "Skill"` with `skills: [{ "name": "..." }]` to activate one or more. Activating an already-active skill is a harmless no-op — don't hesitate to re-check the catalog if unsure whether one is active.
+
+{{ skillsCatalog | safe }}
+
+**Example — Activate a skill:**
+```json
+{
+  "taskComplete": false,
+  "reasoning": "This request needs the Report Builder skill's specialized instructions",
+  "nextStep": {
+    "type": "Skill",
+    "skills": [{ "name": "Report Builder" }]
+  }
+}
+```
 {%- endif -%}
 
 {% if actionDetails and 'Create Document' in actionDetails %}
