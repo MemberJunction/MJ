@@ -4,15 +4,15 @@
 # themes, forcing the section expand/collapse state via the Angular debug API so
 # the [Fill] entities tree + capped Favorites/Recent bodies are visible.
 #
-# Usage: scripts/navpanel-shot.sh <out-basename> <fav 0|1> <recent 0|1> <entities 0|1>
-# Writes: plans/collapsible-section-screenshots/nav-panel-fill/<out>-light.png and -dark.png
+# Usage: e2e/visual-capture/navpanel-shot.sh <out-basename> <fav 0|1> <recent 0|1> <entities 0|1>
+# Writes: plans/complete/collapsible-section-screenshots/nav-panel-fill/<out>-light.png and -dark.png
 #
 # Prereq: dev server up, playwright-cli already navigated to a data-explorer entity page.
 
 set -eu
 OUT="${1:?usage: navpanel-shot.sh <out> <fav> <recent> <entities>}"
 FAV="${2:-0}"; REC="${3:-1}"; ENT="${4:-1}"
-DIR="plans/collapsible-section-screenshots/nav-panel-fill"
+DIR="plans/complete/collapsible-section-screenshots/nav-panel-fill"
 mkdir -p "$DIR"
 
 FORCE="var el=document.querySelector('mj-explorer-navigation-panel'); if(el){var c=ng.getComponent(el); c.favoritesSectionExpanded=${FAV}===1; c.recentSectionExpanded=${REC}===1; c.entitiesSectionExpanded=${ENT}===1; ng.applyChanges(c);}"

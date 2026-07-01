@@ -4,12 +4,12 @@
 # in both themes, forcing the section expand flags via the Angular debug API.
 # Prereq: playwright-cli with the MCP log detail panel open (a log row clicked).
 #
-# Usage: scripts/mcp-log-shot.sh <out-basename>
-# Writes: plans/collapsible-section-screenshots/mcp-log-detail/<out>-light.png and -dark.png
+# Usage: e2e/visual-capture/mcp-log-shot.sh <out-basename>
+# Writes: plans/complete/collapsible-section-screenshots/mcp-log-detail/<out>-light.png and -dark.png
 
 set -eu
 OUT="${1:?usage: mcp-log-shot.sh <out>}"
-DIR="plans/collapsible-section-screenshots/mcp-log-detail"
+DIR="plans/complete/collapsible-section-screenshots/mcp-log-detail"
 mkdir -p "$DIR"
 
 FORCE="var el=document.querySelector('mj-mcp-dashboard'); if(el){var c=ng.getComponent(el); c.LogInputArgsExpanded=true; c.LogResultExpanded=true; c.LogErrorExpanded=true; ng.applyChanges(c);}"

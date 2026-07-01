@@ -5,13 +5,13 @@
 # Prereq: playwright-cli on the ERD (Admin > Data & Schema) with an entity selected
 # (mj-entity-details mounted).
 #
-# Usage: scripts/erd-details-shot.sh <out-basename> <fields 0|1> <related 0|1>
-# Writes: plans/collapsible-section-screenshots/erd-entity-details/<out>-light.png and -dark.png
+# Usage: e2e/visual-capture/erd-details-shot.sh <out-basename> <fields 0|1> <related 0|1>
+# Writes: plans/complete/collapsible-section-screenshots/erd-entity-details/<out>-light.png and -dark.png
 
 set -eu
 OUT="${1:?usage: erd-details-shot.sh <out> <fields> <related>}"
 F="${2:-1}"; R="${3:-1}"
-DIR="plans/collapsible-section-screenshots/erd-entity-details"
+DIR="plans/complete/collapsible-section-screenshots/erd-entity-details"
 mkdir -p "$DIR"
 
 FORCE="var el=document.querySelector('mj-entity-details'); if(el){var c=ng.getComponent(el); c.fieldsSectionExpanded=${F}===1; c.relationshipsSectionExpanded=${R}===1; ng.applyChanges(c);}"

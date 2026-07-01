@@ -99,12 +99,12 @@ so **every** visual check covers **both** themes. No single-mode screenshots.
   snippet using the Angular dev API that RE-APPLIES the state in each theme (toggling
   re-renders and can clear it), e.g.
   `const c=ng.getComponent(document.querySelector('mj-role-dialog')); c.error='…'; ng.applyChanges(c)`.
-  Output: `plans/alert-screenshots/migrated/<name>-light.png` + `-dark.png`.
+  Output: `plans/complete/alert-screenshots/migrated/<name>-light.png` + `-dark.png`.
 - Prereq: dev server up + browser navigated to the dialog/state first.
 
 3. **Force-state visual harness** — `scripts/alert-states-gallery.sh` renders `<mj-alert>`
    in every real-world shape (variant × message/title/dismiss/actions/sm), light+dark, using
-   the component's styles **extracted live from source** (no drift) → `plans/alert-screenshots/
+   the component's styles **extracted live from source** (no drift) → `plans/complete/alert-screenshots/
    alert-states.html` + `alert-states-baseline.png`. Server-independent; regenerate after any
    mj-alert change and diff the screenshot. This solves "conditional UI is invisible" for the
    component's appearance.
