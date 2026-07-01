@@ -13,7 +13,6 @@ import { UUIDsEqual } from '@memberjunction/global';
 import {
   MJUserViewEntityExtended,
   UserInfoEngine,
-  UserViewEngine,
   ViewGridState,
   MJUserViewEntity_IGridState,
   MJUserViewEntity_IGridColumnSetting,
@@ -765,7 +764,8 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     if (success) {
       this.isConfigPanelOpen = false;
       this.clearPendingNewViewState();
-      await this.viewSelectorRef?.LoadViews();
+      // The view selector re-derives its lists reactively from UserViewEngine's cache
+      // (BaseEntity save auto-invalidates the engine); we only need to reload the grid data.
       await this.entityViewerRef?.LoadData();
     }
 
@@ -811,10 +811,6 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
       return false;
     }
 
-    // Keep the UserViewEngine cache in sync with the DB write so the subsequent LoadViews()
-    // reflects the just-created view (otherwise it reads a stale cache and the view is missing).
-    await UserViewEngine.Instance.RefreshCache();
-
     this.currentViewEntity = newView;
     this.selectedViewId = newView.ID;
     this.viewModified = false;
@@ -858,10 +854,6 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
       LogError(`[ViewWorkspace] Failed to update view: ${view.LatestResult?.CompleteMessage ?? 'unknown error'}`);
       return false;
     }
-
-    // Keep the UserViewEngine cache in sync with the DB write so the subsequent LoadViews()
-    // reflects the updated view.
-    await UserViewEngine.Instance.RefreshCache();
 
     this.viewModified = false;
     this.currentGridState = this.parseViewGridState(view);
@@ -949,16 +941,13 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
       return;
     }
 
-    // Keep the UserViewEngine cache in sync with the DB delete so the subsequent LoadViews()
-    // no longer returns the removed view.
-    await UserViewEngine.Instance.RefreshCache();
-
     this.currentViewEntity = null;
     this.selectedViewId = null;
     this.viewModified = false;
     this.isConfigPanelOpen = false;
     this.currentGridState = this.loadUserDefaultGridState();
-    await this.viewSelectorRef?.LoadViews();
+    // The view selector re-derives its lists reactively from UserViewEngine's cache
+    // (BaseEntity delete auto-invalidates the engine), so no explicit reload is needed here.
     this.ViewSelected.emit(null);
     this.SelectedViewChange.emit(null);
     this.AfterViewDelete.emit({ ViewID: viewId, ViewName: viewName });
@@ -1174,11 +1163,8 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
       return;
     }
 
-    // Keep the UserViewEngine cache in sync with the DB write so the subsequent LoadViews()
-    // reflects the duplicated view.
-    await UserViewEngine.Instance.RefreshCache();
-
-    await this.viewSelectorRef?.LoadViews();
+    // The view selector re-derives its lists reactively from UserViewEngine's cache
+    // (BaseEntity save auto-invalidates the engine), so no explicit reload is needed here.
     this.AfterViewSave.emit({ View: newView, IsNew: true });
   }
 
