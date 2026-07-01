@@ -187,7 +187,7 @@ import {
     MagicLinkProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (392 classes)
+// @memberjunction/core-entities (397 classes)
 import {
     AIAgentPermissionProvider,
     AccessControlRuleProvider,
@@ -225,6 +225,7 @@ import {
     MJAIAgentSessionBridgeParticipantEntity,
     MJAIAgentSessionChannelEntity,
     MJAIAgentSessionEntity,
+    MJAIAgentSkillEntity,
     MJAIAgentStepEntity,
     MJAIAgentStepPathEntity,
     MJAIAgentTypeEntity,
@@ -254,6 +255,10 @@ import {
     MJAIPromptTypeEntity,
     MJAIRemoteBrowserProviderEntity,
     MJAIResultCacheEntity,
+    MJAISkillActionEntity,
+    MJAISkillEntity,
+    MJAISkillPermissionEntity,
+    MJAISkillSubAgentEntity,
     MJAIVendorEntity,
     MJAIVendorTypeDefinitionEntity,
     MJAIVendorTypeEntity,
@@ -993,8 +998,10 @@ import {
     PromptReasoningProvider,
 } from '@memberjunction/ai-vector-dupe';
 
-// @memberjunction/ai-agents (20 classes)
+// @memberjunction/ai-agents (22 classes)
 import {
+    AISkillExportMarkdownServerOperation,
+    AISkillImportMarkdownServerOperation,
     CSVToolLibrary,
     ClientContextChannelServer,
     DataSnapshotToolLibrary,
@@ -1411,6 +1418,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAIAgentSessionBridgeParticipantEntity,
     MJAIAgentSessionChannelEntity,
     MJAIAgentSessionEntity,
+    MJAIAgentSkillEntity,
     MJAIAgentStepEntity,
     MJAIAgentStepPathEntity,
     MJAIAgentTypeEntity,
@@ -1440,6 +1448,10 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAIPromptTypeEntity,
     MJAIRemoteBrowserProviderEntity,
     MJAIResultCacheEntity,
+    MJAISkillActionEntity,
+    MJAISkillEntity,
+    MJAISkillPermissionEntity,
+    MJAISkillSubAgentEntity,
     MJAIVendorEntity,
     MJAIVendorTypeDefinitionEntity,
     MJAIVendorTypeEntity,
@@ -2013,6 +2025,8 @@ export const CLASS_REGISTRATIONS: any[] = [
     ParallelExecutionCoordinator,
     LLMReranker,
     PromptReasoningProvider,
+    AISkillExportMarkdownServerOperation,
+    AISkillImportMarkdownServerOperation,
     CSVToolLibrary,
     ClientContextChannelServer,
     DataSnapshotToolLibrary,
@@ -2275,7 +2289,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 942;
+export const CLASS_REGISTRATIONS_COUNT = 949;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
