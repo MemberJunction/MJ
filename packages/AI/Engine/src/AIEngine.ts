@@ -338,10 +338,10 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
     }
 
     // Delegate AIEngineBase public methods
-    public async GetHighestPowerModel(vendorName: string, modelType: string, contextUser?: UserInfo): Promise<MJAIModelEntityExtended> {
+    public async GetHighestPowerModel(vendorName: string, modelType: string, contextUser?: UserInfo): Promise<MJAIModelEntityExtended | undefined> {
         return this.Base.GetHighestPowerModel(vendorName, modelType, contextUser);
     }
-    public async GetHighestPowerLLM(vendorName?: string, contextUser?: UserInfo): Promise<MJAIModelEntityExtended> {
+    public async GetHighestPowerLLM(vendorName?: string, contextUser?: UserInfo): Promise<MJAIModelEntityExtended | undefined> {
         return this.Base.GetHighestPowerLLM(vendorName, contextUser);
     }
     public GetActiveModelCost(modelID: string, vendorID: string, processingType: 'Realtime' | 'Batch' = 'Realtime'): MJAIModelCostEntity | null {
@@ -950,7 +950,10 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
         modelToUse: MJAIModelEntityExtended
     }> {
         await AIEngine.Instance.Config(false, contextUser);
-        const modelToUse = model ? model : await this.GetHighestPowerLLM(undefined, contextUser);
+        const modelToUse = model ?? await this.GetHighestPowerLLM(undefined, contextUser);
+        if (!modelToUse) {
+            throw new Error('No active LLM model found. Ensure AI Models are configured and the user has read permissions on MJ: AI Models.');
+        }
         const apiKeyToUse = apiKey ? apiKey : GetAIAPIKey(modelToUse.DriverClass);
         const modelInstance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, modelToUse.DriverClass, apiKeyToUse);
 

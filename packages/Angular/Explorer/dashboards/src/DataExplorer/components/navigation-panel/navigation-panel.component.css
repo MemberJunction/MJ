@@ -65,54 +65,25 @@
   flex-direction: column;
   height: 100%;
   overflow: hidden;
-  padding-top: 48px;
+  padding: 48px 8px 8px 8px;
   min-height: 0; /* Allow flex children to shrink below content size */
 }
 
-.section {
+/* The Favorites/Recent accordions sit at natural height; the Entities accordion
+   uses [Fill] so it claims the leftover rail height (see .nav-accordion--entities). */
+.nav-accordion {
   flex-shrink: 0;
-  border-bottom: 1px solid var(--mj-border-default);
 }
 
-/* Scrollable sections (Favorites, Recent) - allow them to shrink and scroll */
-.section.favorites-section,
-.section.recent-section {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  max-height: 200px; /* Limit height so entities section has room */
-}
-
-.section.entities-section {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  border-bottom: none;
-}
-
-.section-header {
-  display: flex;
-  align-items: center;
-  padding: 14px 16px;
-  cursor: pointer;
-  user-select: none;
-  transition: background 0.15s ease;
-  background: var(--mj-bg-surface-card);
-}
-.section-header:hover {
-  background: var(--mj-bg-surface-sunken);
-}
-
+/* Section label inside the accordion title slot. The accordion title row already
+   provides the flex layout + 8px gap, so the icon needs no extra right-margin. */
 .section-icon {
-  width: 20px;
-  font-size: 13px;
+  width: 18px;
   color: var(--mj-text-secondary);
-  margin-right: 10px;
+  text-align: center;
 }
 
 .section-title {
-  flex: 1;
   font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
@@ -120,71 +91,33 @@
   color: var(--mj-text-muted);
 }
 
-.section-count {
-  font-size: 11px;
-  color: var(--mj-text-muted);
-  margin-right: 8px;
-  font-weight: 500;
-}
-
-.expand-icon {
-  font-size: 10px;
-  color: var(--mj-text-muted);
-  transition: transform 0.15s ease;
-}
-
-.section-content {
-  padding: 8px 12px 12px 12px;
-  background: var(--mj-bg-surface);
-}
-
-/* Scrollable section content for Favorites and Recent */
-.section-content.scrollable-section {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.scrollable-list {
-  flex: 1;
+/* Capped, scrollable list body for Favorites / Recent. */
+.nav-scroll {
+  max-height: 200px;
   overflow-y: auto;
   min-height: 0;
-  padding-right: 4px;
 }
-.scrollable-list::-webkit-scrollbar {
+.nav-scroll::-webkit-scrollbar {
   width: 6px;
 }
-.scrollable-list::-webkit-scrollbar-track {
+.nav-scroll::-webkit-scrollbar-track {
   background: transparent;
 }
-.scrollable-list::-webkit-scrollbar-thumb {
+.nav-scroll::-webkit-scrollbar-thumb {
   background: var(--mj-border-strong);
   border-radius: 3px;
 }
-.scrollable-list::-webkit-scrollbar-thumb:hover {
-  background: var(--mj-border-strong);
-}
 
-.scrollable-list-inner {
-  /* Inner container grows naturally based on content */
-}
-
-.entities-section .section-content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-height: 0; /* Allow content to shrink */
-  overflow: hidden;
-}
-
+/* Entities: the Fill accordion's body is a flex:1 region; this container fills it
+   so the search box stays pinned and the tree scrolls internally. FlushBody gives
+   us the padding budget back, applied here. */
 .entity-tree-container {
   flex: 1;
   display: flex;
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
+  padding: 10px 10px 6px 10px;
 }
 
 .entity-tree-container mj-tree {

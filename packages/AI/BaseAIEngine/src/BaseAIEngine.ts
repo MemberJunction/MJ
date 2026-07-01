@@ -453,7 +453,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * @param contextUser required on the server side
      * @returns 
      */
-    public async GetHighestPowerModel(vendorName: string, modelType: string, contextUser?: UserInfo): Promise<MJAIModelEntityExtended> {
+    public async GetHighestPowerModel(vendorName: string, modelType: string, contextUser?: UserInfo): Promise<MJAIModelEntityExtended | undefined> {
         try {
             await AIEngineBase.Instance.Config(false, contextUser); // most of the time this is already loaded, but just in case it isn't we will load it here
             const models = AIEngineBase.Instance.Models.filter(m => {
@@ -466,6 +466,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
                 return mModelType === targetType &&
                        (targetVendor === '' || mVendor === targetVendor);
             });
+            if (models.length === 0) return undefined;
             // next, sort the models by the PowerRank field so that the highest power rank model is the first array element
             models.sort((a, b) => b.PowerRank - a.PowerRank); // highest power rank first
             return models[0];
@@ -482,7 +483,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * @param contextUser 
      * @returns 
      */
-    public async GetHighestPowerLLM(vendorName?: string, contextUser?: UserInfo): Promise<MJAIModelEntityExtended> {
+    public async GetHighestPowerLLM(vendorName?: string, contextUser?: UserInfo): Promise<MJAIModelEntityExtended | undefined> {
         return await this.GetHighestPowerModel(vendorName, 'LLM', contextUser);
     }
 
@@ -518,11 +519,11 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
  
 
     public get Agents(): MJAIAgentEntityExtended[] {
-        return this._agents;
+        return this.GetConfigData<MJAIAgentEntityExtended>('_agents');
     }
 
     public get AgentRelationships(): MJAIAgentRelationshipEntity[] {
-        return this._agentRelationships;
+        return this.GetConfigData<MJAIAgentRelationshipEntity>('_agentRelationships');
     }
 
     /**
@@ -573,13 +574,13 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     }
 
     public get AgentTypes(): MJAIAgentTypeEntity[] {
-        return this._agentTypes;
+        return this.GetConfigData<MJAIAgentTypeEntity>('_agentTypes');
     }
 
     /** All agent categories, cached during Config(). Used for hierarchical resolution of
      *  assignment strategies and default storage accounts (category → parent → root). */
     public get AgentCategories(): MJAIAgentCategoryEntity[] {
-        return this._agentCategories;
+        return this.GetConfigData<MJAIAgentCategoryEntity>('_agentCategories');
     }
 
     public GetAgentByName(agentName: string): MJAIAgentEntityExtended {
@@ -591,11 +592,11 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     }
 
     public get AgentActions(): MJAIAgentActionEntity[] {
-        return this._agentActions;
+        return this.GetConfigData<MJAIAgentActionEntity>('_agentActions');
     }
 
     public get AgentPrompts(): MJAIAgentPromptEntity[] {
-        return this._agentPrompts;
+        return this.GetConfigData<MJAIAgentPromptEntity>('_agentPrompts');
     }
 
     /**
@@ -603,7 +604,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * These define semantic presets for agents (e.g., "Fast", "High Quality").
      */
     public get AgentConfigurations(): MJAIAgentConfigurationEntity[] {
-        return this._agentConfigurations;
+        return this.GetConfigData<MJAIAgentConfigurationEntity>('_agentConfigurations');
     }
 
     /**
@@ -647,7 +648,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     }
 
     public get AgentNoteTypes(): MJAIAgentNoteTypeEntity[] {
-        return this._agentNoteTypes;
+        return this.GetConfigData<MJAIAgentNoteTypeEntity>('_agentNoteTypes');
     }
 
     /**
@@ -664,7 +665,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * Config()); on a clean-install CodeGen bootstrap this is [] until the entity exists.
      */
     public get AgentCoAgents(): MJAIAgentCoAgentEntity[] {
-        return this._agentCoAgents;
+        return this.GetConfigData<MJAIAgentCoAgentEntity>('_agentCoAgents');
     }
 
     /**
@@ -675,11 +676,11 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * issuing RunViews.
      */
     public get AgentChannels(): MJAIAgentChannelEntity[] {
-        return this._agentChannels;
+        return this.GetConfigData<MJAIAgentChannelEntity>('_agentChannels');
     }
 
     public get AgentPermissions(): MJAIAgentPermissionEntity[] {
-        return this._agentPermissions;
+        return this.GetConfigData<MJAIAgentPermissionEntity>('_agentPermissions');
     }
 
     public AgenteNoteTypeIDByName(agentNoteTypeName: string): string {
@@ -687,7 +688,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     }
 
     public get AgentNotes(): MJAIAgentNoteEntity[] {
-        return this._agentNotes;
+        return this.GetConfigData<MJAIAgentNoteEntity>('_agentNotes');
     }
 
     /**
@@ -700,11 +701,11 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     }
 
     public get AgentExamples(): MJAIAgentExampleEntity[] {
-        return this._agentExamples;
+        return this.GetConfigData<MJAIAgentExampleEntity>('_agentExamples');
     }
 
     public get VendorTypeDefinitions(): MJAIVendorTypeDefinitionEntity[] {
-        return this._vendorTypeDefinitions;
+        return this.GetConfigData<MJAIVendorTypeDefinitionEntity>('_vendorTypeDefinitions');
     }
 
     /**
@@ -831,15 +832,15 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     }
 
     public get Vendors(): MJAIVendorEntity[] {
-        return this._vendors;
+        return this.GetConfigData<MJAIVendorEntity>('_vendors');
     }
 
     public get ModelVendors(): MJAIModelVendorEntity[] {
-        return this._modelVendors;
+        return this.GetConfigData<MJAIModelVendorEntity>('_modelVendors');
     }
 
     public get CredentialBindings(): MJAICredentialBindingEntity[] {
-        return this._credentialBindings;
+        return this.GetConfigData<MJAICredentialBindingEntity>('_credentialBindings');
     }
 
     /**
@@ -886,27 +887,27 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     }
 
     public get ModelTypes(): MJAIModelTypeEntity[] {
-        return this._modelTypes;
+        return this.GetConfigData<MJAIModelTypeEntity>('_modelTypes');
     }
 
     public get Prompts(): MJAIPromptEntityExtended[] {
-        return this._prompts;
+        return this.GetConfigData<MJAIPromptEntityExtended>('_prompts');
     }
 
     public get PromptModels(): MJAIPromptModelEntity[] {
-        return this._promptModels;
+        return this.GetConfigData<MJAIPromptModelEntity>('_promptModels');
     }
 
     public get PromptTypes(): MJAIPromptTypeEntity[] {
-        return this._promptTypes;
+        return this.GetConfigData<MJAIPromptTypeEntity>('_promptTypes');
     }
 
     public get PromptCategories(): MJAIPromptCategoryEntityExtended[] {
-        return this._promptCategories;
+        return this.GetConfigData<MJAIPromptCategoryEntityExtended>('_promptCategories');
     }
 
     public get Models(): MJAIModelEntityExtended[] {
-        return this._models;
+        return this.GetConfigData<MJAIModelEntityExtended>('_models');
     }
 
     public get ArtifactTypes(): MJArtifactTypeEntity[] {
@@ -921,27 +922,27 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     }
 
     public get VectorDatabases(): MJVectorDatabaseEntity[] {
-        return this._vectorDatabases;
+        return this.GetConfigData<MJVectorDatabaseEntity>('_vectorDatabases');
     }
 
     public get ModelCosts(): MJAIModelCostEntity[] {
-        return this._modelCosts;
+        return this.GetConfigData<MJAIModelCostEntity>('_modelCosts');
     }
 
     public get ModelPriceTypes(): MJAIModelPriceTypeEntity[] {
-        return this._modelPriceTypes;
+        return this.GetConfigData<MJAIModelPriceTypeEntity>('_modelPriceTypes');
     }
 
     public get ModelPriceUnitTypes(): MJAIModelPriceUnitTypeEntity[] {
-        return this._modelPriceUnitTypes;
+        return this.GetConfigData<MJAIModelPriceUnitTypeEntity>('_modelPriceUnitTypes');
     }
 
     public get Configurations(): MJAIConfigurationEntity[] {
-        return this._configurations;
+        return this.GetConfigData<MJAIConfigurationEntity>('_configurations');
     }
 
     public get ConfigurationParams(): MJAIConfigurationParamEntity[] {
-        return this._configurationParams;
+        return this.GetConfigData<MJAIConfigurationParamEntity>('_configurationParams');
     }
 
     /**
@@ -1077,15 +1078,15 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     }
 
     public get AgentDataSources(): MJAIAgentDataSourceEntity[] {
-        return this._agentDataSources;
+        return this.GetConfigData<MJAIAgentDataSourceEntity>('_agentDataSources');
     }
 
     public get AgentSteps(): MJAIAgentStepEntity[] {
-        return this._agentSteps;
+        return this.GetConfigData<MJAIAgentStepEntity>('_agentSteps');
     }
 
     public get AgentStepPaths(): MJAIAgentStepPathEntity[] {
-        return this._agentStepPaths;
+        return this.GetConfigData<MJAIAgentStepPathEntity>('_agentStepPaths');
     }
 
     // ==========================================
@@ -1096,35 +1097,35 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * Gets all AI modalities (Text, Image, Audio, Video, File, Embedding, etc.)
      */
     public get Modalities(): MJAIModalityEntity[] {
-        return this._modalities;
+        return this.GetConfigData<MJAIModalityEntity>('_modalities');
     }
 
     /**
      * Gets all agent-modality mappings
      */
     public get AgentModalities(): MJAIAgentModalityEntity[] {
-        return this._agentModalities;
+        return this.GetConfigData<MJAIAgentModalityEntity>('_agentModalities');
     }
 
     /**
      * Gets all model-modality mappings
      */
     public get ModelModalities(): MJAIModelModalityEntity[] {
-        return this._modelModalities;
+        return this.GetConfigData<MJAIModelModalityEntity>('_modelModalities');
     }
 
     /**
      * Gets all client tool definitions (the catalog of reusable tools).
      */
     public get ClientToolDefinitions(): MJAIClientToolDefinitionEntity[] {
-        return this._clientToolDefinitions;
+        return this.GetConfigData<MJAIClientToolDefinitionEntity>('_clientToolDefinitions');
     }
 
     /**
      * Gets all agent-to-client-tool junction records.
      */
     public get AgentClientTools(): MJAIAgentClientToolEntity[] {
-        return this._agentClientTools;
+        return this.GetConfigData<MJAIAgentClientToolEntity>('_agentClientTools');
     }
 
     /**
