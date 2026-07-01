@@ -64,4 +64,21 @@ describe('MJConfirmService (DOM)', () => {
     cancelButton().click();
     return p;
   });
+
+  it('elevates the host above drawer/panel/window overlays (stacking-context z-index)', () => {
+    // Regression: a confirm launched over a high-z-index overlay (bespoke
+    // drawers ~1101, mj-window 10000) rendered UNDER its backdrop and was
+    // unclickable — each swallowed click could re-trigger the caller and
+    // stack another dialog. The service must lift its host into its own
+    // stacking context above those tiers (and below toasts at 100000).
+    const p = svc().Confirm('Proceed?');
+    const host = document.body.querySelector('mj-confirm-dialog') as HTMLElement;
+    expect(host).not.toBeNull();
+    expect(host.style.position).toBe('relative');
+    const z = Number(host.style.zIndex);
+    expect(z).toBeGreaterThan(10000); // above mj-window
+    expect(z).toBeLessThan(100000); // below toasts
+    cancelButton().click();
+    return p;
+  });
 });

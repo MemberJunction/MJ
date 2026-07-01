@@ -77,7 +77,19 @@ export class MJConfirmService {
         environmentInjector: this.appRef.injector,
       });
       this.applyInputs(ref, opts);
-      document.body.appendChild(ref.location.nativeElement);
+      // An imperative confirm must layer above whatever surface launched it —
+      // bespoke drawers/panels go up to ~1101 and mj-window sits at 10000,
+      // all above the shared mj-dialog backdrop (1000). Without this, a
+      // confirm opened from such an overlay renders UNDER its backdrop:
+      // unclickable, and each swallowed click can re-trigger the caller and
+      // stack another dialog. position:relative + z-index forms a stacking
+      // context on the host that lifts the fixed backdrop/dialog inside it
+      // to this level (20000 — above mj-window, below toasts at 100000)
+      // without touching the fixed element's viewport-relative geometry.
+      const host = ref.location.nativeElement as HTMLElement;
+      host.style.position = 'relative';
+      host.style.zIndex = '20000';
+      document.body.appendChild(host);
       this.appRef.attachView(ref.hostView);
 
       let settled = false;
