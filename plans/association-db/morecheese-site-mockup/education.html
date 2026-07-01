@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Education & Certification · MoreCheese</title>
+  <link rel="stylesheet" href="assets/css/tokens.css" />
+  <link rel="stylesheet" href="assets/css/main.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <style>
+    .cert-track { background: var(--mc-bg-surface); border: 1px solid var(--mc-border-subtle); border-radius: var(--mc-radius-lg); overflow: hidden; transition: all var(--mc-dur-base) var(--mc-ease-out); }
+    .cert-track:hover { box-shadow: var(--mc-shadow-lg); }
+    .cert-track-head { padding: var(--mc-space-5); background: linear-gradient(135deg, var(--mc-gold-300), var(--mc-gold-500)); color: var(--mc-rind-700); }
+    .cert-track-head.master { background: linear-gradient(135deg, var(--mc-rind-500), var(--mc-rind-700)); color: var(--mc-cream); }
+    .cert-track-head.specialist { background: linear-gradient(135deg, var(--mc-sage-500), var(--mc-sage-700)); color: var(--mc-cream); }
+    .cert-track-head.educator { background: linear-gradient(135deg, var(--mc-oak-400), var(--mc-oak-600)); color: var(--mc-cream); }
+    .cert-track-tier { font-family: var(--mc-font-mono); font-size: var(--mc-fs-xs); letter-spacing: var(--mc-ls-wider); text-transform: uppercase; opacity: 0.8; }
+    .cert-track-name { font-family: var(--mc-font-display); font-size: var(--mc-fs-2xl); font-weight: var(--mc-fw-semi); margin: var(--mc-space-2) 0; line-height: 1.1; }
+    .cert-track-meta { font-family: var(--mc-font-mono); font-size: var(--mc-fs-xs); letter-spacing: var(--mc-ls-wide); text-transform: uppercase; opacity: 0.85; }
+    .cert-track-body { padding: var(--mc-space-5); }
+    .progress-pill { display: inline-flex; align-items: center; gap: var(--mc-space-2); padding: var(--mc-space-1) var(--mc-space-3); background: rgba(255,255,255,0.18); border-radius: var(--mc-radius-pill); font-size: var(--mc-fs-xs); }
+    .course-row { display: grid; grid-template-columns: 60px 1fr auto auto; gap: var(--mc-space-4); padding: var(--mc-space-4) 0; border-bottom: 1px solid var(--mc-border-subtle); align-items: center; }
+    .course-row:last-child { border-bottom: 0; }
+    .course-icon { width: 44px; height: 44px; border-radius: var(--mc-radius-md); background: var(--mc-bg-surface-warm); color: var(--mc-rind-500); display: grid; place-items: center; font-size: 1.1rem; }
+    .course-title { font-weight: var(--mc-fw-semi); font-size: var(--mc-fs-base); }
+    .course-meta { font-size: var(--mc-fs-sm); color: var(--mc-text-secondary); margin-top: 2px; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: var(--mc-radius-pill); font-family: var(--mc-font-mono); font-size: 10px; letter-spacing: var(--mc-ls-wider); text-transform: uppercase; font-weight: var(--mc-fw-semi); }
+    .badge-gold { background: var(--mc-gold-100); color: var(--mc-gold-700); }
+    .badge-sage { background: var(--mc-sage-100); color: var(--mc-sage-700); }
+    .badge-rind { background: var(--mc-rind-100); color: var(--mc-rind-700); }
+    .badge-oak { background: var(--mc-oak-100); color: var(--mc-oak-700); }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to main content</a>
+
+  <div class="topbar"><div class="container"><div class="topbar-inner">
+    <span class="topbar-tagline">The International Cheese Federation · Est. 1947</span>
+    <div class="topbar-links"><a href="chapters.html"><i class="fa-solid fa-location-dot"></i> Find a chapter</a><span class="topbar-divider">|</span><a href="contact.html">Contact</a><span class="topbar-divider">|</span><a href="portal.html"><i class="fa-solid fa-user"></i> Member login</a></div>
+  </div></div></div>
+
+  <header class="site-header">
+    <div class="site-header-inner">
+      <a class="brand" href="index.html"><span class="brand-mark">MC</span><span><span class="brand-name">MoreCheese</span><span class="brand-fed">International Cheese Federation</span></span></a>
+      <nav class="nav-primary"><a href="index.html">Home</a><a href="membership.html">Membership</a><a href="events.html">Events</a><a href="education.html" class="active">Education</a><a href="standards.html">Standards</a><a href="advocacy.html">Advocacy</a><a href="awards.html">Awards</a><a href="community.html">Community</a><a href="about.html">About</a></nav>
+      <div class="nav-cta"><a href="membership.html#join" class="btn btn-primary btn-sm btn-pill">Join</a><button class="nav-toggle"><i class="fa-solid fa-bars"></i></button></div>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="page-head">
+      <div class="container">
+        <nav class="crumbs"><a href="index.html">Home</a><span>/</span><span>Education</span></nav>
+        <p class="eyebrow">Education</p>
+        <h1>The certifications employers and judges trust.</h1>
+        <p class="lede">Four certification tracks. 50+ continuing-education courses. 47 culinary programs licensed to teach our curriculum. The credential that means something — because the federation that issues it is run by working cheesemakers.</p>
+      </div>
+    </section>
+
+    <!-- CERTIFICATION TRACKS -->
+    <section class="section">
+      <div class="container">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Certifications</p>
+            <h2>Four tracks · One craft</h2>
+          </div>
+          <span class="muted mono upper">413 candidates currently enrolled</span>
+        </div>
+
+        <div class="grid grid-2">
+          <div class="cert-track">
+            <div class="cert-track-head">
+              <span class="cert-track-tier">Foundation</span>
+              <h3 class="cert-track-name">Apprentice Cheesemaker</h3>
+              <span class="cert-track-meta">12 months · 4 courses · 80 mentor hours · $295 enrollment</span>
+              <p class="progress-pill mt-3" style="background: rgba(0,0,0,0.15);"><i class="fa-solid fa-users"></i> 247 currently enrolled</p>
+            </div>
+            <div class="cert-track-body">
+              <p class="muted" style="font-size: var(--mc-fs-sm); margin-bottom: var(--mc-space-4);">For people new to cheesemaking. Covers fundamentals: milk science, basic cultures, beginner techniques, safety. Pairs you with a mentor producer.</p>
+              <a href="#" class="btn btn-secondary btn-sm">Track details <i class="fa-solid fa-arrow-right"></i></a>
+            </div>
+          </div>
+
+          <div class="cert-track">
+            <div class="cert-track-head specialist">
+              <span class="cert-track-tier">Mid-level</span>
+              <h3 class="cert-track-name">Certified Specialist <em style="font-style: italic;">(by style)</em></h3>
+              <span class="cert-track-meta">18 months · 6 courses · 120 hours · per-style enrollment</span>
+              <p class="progress-pill mt-3"><i class="fa-solid fa-users"></i> 88 currently enrolled</p>
+            </div>
+            <div class="cert-track-body">
+              <p class="muted" style="font-size: var(--mc-fs-sm); margin-bottom: var(--mc-space-4);">Specialist tracks: Washed-Rind, Bloomy-Rind, Hard-Aged, Alpine, Blue, Fresh/Pasta Filata, Sheep & Goat. Deep practice in one style with a recognized specialist instructor.</p>
+              <a href="#" class="btn btn-secondary btn-sm">7 specializations <i class="fa-solid fa-arrow-right"></i></a>
+            </div>
+          </div>
+
+          <div class="cert-track">
+            <div class="cert-track-head master">
+              <span class="cert-track-tier">Capstone · 3 years</span>
+              <h3 class="cert-track-name">Master Cheesemaker</h3>
+              <span class="cert-track-meta">3 years · 6 courses · 200 supervised hours · practical exam · $1,450</span>
+              <p class="progress-pill mt-3"><i class="fa-solid fa-users"></i> 62 currently in program</p>
+            </div>
+            <div class="cert-track-body">
+              <p class="muted" style="font-size: var(--mc-fs-sm); margin-bottom: var(--mc-space-4);">The capstone. Requires Specialist completion in at least one style, 5+ years working in production, and 200 supervised hours making cheese under a sitting Master. Final exam includes a blind sensory panel and a live make.</p>
+              <a href="#" class="btn btn-secondary btn-sm">Program details <i class="fa-solid fa-arrow-right"></i></a>
+            </div>
+          </div>
+
+          <div class="cert-track">
+            <div class="cert-track-head educator">
+              <span class="cert-track-tier">Teaching</span>
+              <h3 class="cert-track-name">Certified Educator</h3>
+              <span class="cert-track-meta">12 months · 4 courses · teaching practicum · $495</span>
+              <p class="progress-pill mt-3"><i class="fa-solid fa-users"></i> 16 currently enrolled</p>
+            </div>
+            <div class="cert-track-body">
+              <p class="muted" style="font-size: var(--mc-fs-sm); margin-bottom: var(--mc-space-4);">For culinary instructors, monger-trainers, and academics who want to teach the ICF curriculum at an Institutional-member program. Requires Master Cheesemaker OR equivalent industry credential.</p>
+              <a href="#" class="btn btn-secondary btn-sm">Track details <i class="fa-solid fa-arrow-right"></i></a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- COURSE LIBRARY -->
+    <section class="section section-warm">
+      <div class="container">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Continuing education</p>
+            <h2>Course library · 50+ courses</h2>
+          </div>
+          <span class="muted mono upper">Free for active members</span>
+        </div>
+        <div class="card" style="padding: var(--mc-space-5);">
+
+          <div class="course-row"><div class="course-icon"><i class="fa-solid fa-shield-halved"></i></div>
+            <div><div class="course-title">Food Safety Level 2 — Dairy Specific</div><div class="course-meta">4 weeks · online · 32 CEU · Certification prerequisite</div></div>
+            <span class="badge badge-gold">Foundation</span><a href="#" class="btn btn-secondary btn-sm">View</a></div>
+
+          <div class="course-row"><div class="course-icon"><i class="fa-solid fa-clipboard-check"></i></div>
+            <div><div class="course-title">HACCP for Small Producers</div><div class="course-meta">8 weeks · online · 64 CEU · Master Cheesemaker prerequisite</div></div>
+            <span class="badge badge-gold">Foundation</span><a href="#" class="btn btn-secondary btn-sm">View</a></div>
+
+          <div class="course-row"><div class="course-icon"><i class="fa-solid fa-flask"></i></div>
+            <div><div class="course-title">Sensory Evaluation — Foundation</div><div class="course-meta">6 weeks · hybrid · 48 CEU · Includes judging panel observation</div></div>
+            <span class="badge badge-sage">Specialist</span><a href="#" class="btn btn-secondary btn-sm">View</a></div>
+
+          <div class="course-row"><div class="course-icon"><i class="fa-solid fa-microscope"></i></div>
+            <div><div class="course-title">Dairy Microbiology — Cultures & Defects</div><div class="course-meta">10 weeks · online · 80 CEU · Lab work via partner institutions</div></div>
+            <span class="badge badge-sage">Specialist</span><a href="#" class="btn btn-secondary btn-sm">View</a></div>
+
+          <div class="course-row"><div class="course-icon"><i class="fa-solid fa-temperature-half"></i></div>
+            <div><div class="course-title">Aging-Cave Engineering & Humidity Control</div><div class="course-meta">8 weeks · hybrid · 64 CEU · Includes 2-day cave visit</div></div>
+            <span class="badge badge-sage">Specialist</span><a href="#" class="btn btn-secondary btn-sm">View</a></div>
+
+          <div class="course-row"><div class="course-icon"><i class="fa-solid fa-tags"></i></div>
+            <div><div class="course-title">Labeling, Terroir, & Designation of Origin</div><div class="course-meta">6 weeks · online · 48 CEU · Regulatory + standards focus</div></div>
+            <span class="badge badge-oak">Business</span><a href="#" class="btn btn-secondary btn-sm">View</a></div>
+
+          <div class="course-row"><div class="course-icon"><i class="fa-solid fa-chart-line"></i></div>
+            <div><div class="course-title">Scaling Beyond 50,000 lbs/yr — Operations</div><div class="course-meta">8 weeks · online · 64 CEU · Co-taught by 3 producer-instructors</div></div>
+            <span class="badge badge-oak">Business</span><a href="#" class="btn btn-secondary btn-sm">View</a></div>
+
+          <div class="course-row"><div class="course-icon"><i class="fa-solid fa-language"></i></div>
+            <div><div class="course-title">The Vocabulary of Cheese — A Critical Lexicon</div><div class="course-meta">4 weeks · online · 32 CEU · For mongers, judges, writers</div></div>
+            <span class="badge badge-rind">Communication</span><a href="#" class="btn btn-secondary btn-sm">View</a></div>
+
+          <div class="course-row"><div class="course-icon"><i class="fa-solid fa-trophy"></i></div>
+            <div><div class="course-title">Judge Training & Calibration</div><div class="course-meta">12 weeks · hybrid · 96 CEU · Required for ICF judging panel</div></div>
+            <span class="badge badge-rind">Communication</span><a href="#" class="btn btn-secondary btn-sm">View</a></div>
+
+          <div class="course-row"><div class="course-icon"><i class="fa-solid fa-cow"></i></div>
+            <div><div class="course-title">Dairy Animal Husbandry & Milk Quality</div><div class="course-meta">10 weeks · online · 80 CEU · Sheep / goat / cow tracks</div></div>
+            <span class="badge badge-sage">Specialist</span><a href="#" class="btn btn-secondary btn-sm">View</a></div>
+
+        </div>
+        <div class="center mt-5">
+          <a href="#" class="btn btn-secondary">View all 50+ courses</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- INSTITUTIONAL PARTNERS -->
+    <section class="section">
+      <div class="container-narrow center">
+        <p class="eyebrow">Institutional partners</p>
+        <h2>47 culinary programs and universities teach the ICF curriculum.</h2>
+        <p class="lede">From the Culinary Institute of America to École Nationale Supérieure de Laiterie d'Aurillac to Murray's Cheese University. Become an Institutional member to license the curriculum, co-brand certifications, and access bulk exam scheduling.</p>
+        <div class="flex gap-3 mt-5" style="justify-content: center;">
+          <a href="membership.html#institutional" class="btn btn-rind btn-lg">Institutional membership</a>
+          <a href="contact.html" class="btn btn-secondary btn-lg">Talk to the Education team</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div class="footer-brand"><a class="brand" href="index.html" style="color: var(--mc-cream);"><span class="brand-mark">MC</span><span><span class="brand-name" style="color: var(--mc-cream);">MoreCheese</span><span class="brand-fed" style="color: var(--mc-gold-300);">International Cheese Federation</span></span></a><p>The federation of artisan cheesemakers, mongers, scientists, and educators. Est. 1947.</p></div>
+        <div class="footer-col"><h6>Programs</h6><ul><li><a href="membership.html">Membership</a></li><li><a href="education.html">Education</a></li><li><a href="awards.html">Awards</a></li><li><a href="standards.html">Standards</a></li></ul></div>
+        <div class="footer-col"><h6>Engage</h6><ul><li><a href="events.html">Events</a></li><li><a href="community.html">Community</a></li><li><a href="committees.html">Committees</a></li><li><a href="chapters.html">Chapters</a></li></ul></div>
+        <div class="footer-col"><h6>About</h6><ul><li><a href="about.html">Our story</a></li><li><a href="contact.html">Contact</a></li><li><a href="portal.html">Portal</a></li></ul></div>
+        <div class="footer-news"><h6>The Curd</h6><p>Monthly newsletter.</p><form onsubmit="event.preventDefault();"><input type="email" placeholder="your@email" /><button type="submit" class="btn btn-primary btn-sm">Subscribe</button></form></div>
+      </div>
+      <div class="footer-bottom"><div>© 2026 ICF</div><div class="footer-built"><i class="fa-solid fa-cheese"></i> Built on <a href="https://docs.memberjunction.org" target="_blank" rel="noopener">MemberJunction</a></div></div>
+    </div>
+  </footer>
+
+  <script src="assets/js/betty-widget.js"></script>
+</body>
+</html>

@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Committees · MoreCheese</title>
+  <meta name="description" content="Twelve standing committees, plus working groups. The federation runs on committees — chartered, accountable, and member-led." />
+  <link rel="stylesheet" href="assets/css/tokens.css" />
+  <link rel="stylesheet" href="assets/css/main.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <style>
+    .cmte-type-tabs { display: flex; flex-wrap: wrap; gap: var(--mc-space-3); padding: var(--mc-space-4) 0; border-top: 1px solid var(--mc-border-subtle); border-bottom: 1px solid var(--mc-border-subtle); margin-bottom: var(--mc-space-7); }
+    .cmte-type { padding: var(--mc-space-2) var(--mc-space-4); border-radius: var(--mc-radius-pill); background: var(--mc-bg-surface); border: 1px solid var(--mc-border-default); font-size: var(--mc-fs-sm); transition: all var(--mc-dur-fast); cursor: pointer; }
+    .cmte-type:hover { border-color: var(--mc-gold-500); }
+    .cmte-type.active { background: var(--mc-rind-500); color: var(--mc-cream); border-color: var(--mc-rind-500); }
+    .cmte-type-count { margin-left: var(--mc-space-2); padding: 1px 7px; background: rgba(0,0,0,0.08); border-radius: var(--mc-radius-pill); font-family: var(--mc-font-mono); font-size: 10px; }
+    .cmte-type.active .cmte-type-count { background: rgba(255,255,255,0.18); color: var(--mc-cream); }
+
+    .cmte-card { background: var(--mc-bg-surface); border: 1px solid var(--mc-border-subtle); border-radius: var(--mc-radius-lg); overflow: hidden; transition: all var(--mc-dur-base); }
+    .cmte-card:hover { box-shadow: var(--mc-shadow-md); border-color: var(--mc-gold-300); }
+    .cmte-card-head { padding: var(--mc-space-5); background: linear-gradient(135deg, var(--mc-rind-500), var(--mc-rind-700)); color: var(--mc-cream); display: flex; justify-content: space-between; align-items: flex-start; gap: var(--mc-space-3); }
+    .cmte-card-head.standing { background: linear-gradient(135deg, var(--mc-rind-500), var(--mc-rind-700)); }
+    .cmte-card-head.standards-wg { background: linear-gradient(135deg, var(--mc-gold-600), var(--mc-oak-600)); }
+    .cmte-card-head.adhoc { background: linear-gradient(135deg, var(--mc-sage-500), var(--mc-sage-700)); }
+    .cmte-card-head.workgroup { background: linear-gradient(135deg, var(--mc-oak-500), var(--mc-oak-700)); }
+    .cmte-card-head.board { background: linear-gradient(135deg, var(--mc-rind-700), var(--mc-ink-500)); }
+    .cmte-card-head h3 { color: var(--mc-cream); font-size: var(--mc-fs-xl); margin: 0; }
+    .cmte-card-type-pill { display: inline-block; padding: 2px 8px; background: rgba(255,255,255,0.15); border-radius: var(--mc-radius-pill); font-family: var(--mc-font-mono); font-size: 10px; letter-spacing: var(--mc-ls-wide); text-transform: uppercase; margin-bottom: var(--mc-space-2); }
+    .cmte-card-body { padding: var(--mc-space-5); }
+    .cmte-charter { font-size: var(--mc-fs-sm); color: var(--mc-text-secondary); line-height: var(--mc-lh-relaxed); margin-bottom: var(--mc-space-4); }
+    .cmte-stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: var(--mc-space-3); padding: var(--mc-space-4); background: var(--mc-bg-surface-warm); border-radius: var(--mc-radius-md); }
+    .cmte-stat { text-align: center; }
+    .cmte-stat-num { font-family: var(--mc-font-display); font-size: var(--mc-fs-xl); font-weight: var(--mc-fw-semi); color: var(--mc-rind-500); line-height: 1; }
+    .cmte-stat-label { font-family: var(--mc-font-mono); font-size: 10px; letter-spacing: var(--mc-ls-wide); text-transform: uppercase; color: var(--mc-text-muted); margin-top: 4px; }
+    .cmte-chairs { padding: var(--mc-space-4) var(--mc-space-5); border-top: 1px solid var(--mc-border-subtle); display: flex; gap: var(--mc-space-3); align-items: center; }
+    .cmte-chair-avatar { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, var(--mc-gold-400), var(--mc-rind-400)); color: var(--mc-cream); display: grid; place-items: center; font-family: var(--mc-font-display); font-weight: var(--mc-fw-semi); font-size: var(--mc-fs-xs); flex-shrink: 0; }
+    .cmte-chair-label { font-family: var(--mc-font-mono); font-size: 10px; letter-spacing: var(--mc-ls-wide); text-transform: uppercase; color: var(--mc-text-muted); }
+    .cmte-chair-name { font-weight: var(--mc-fw-semi); font-size: var(--mc-fs-sm); }
+    .cmte-foot { padding: var(--mc-space-4) var(--mc-space-5); display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--mc-border-subtle); font-size: var(--mc-fs-sm); }
+    .open-seats { display: inline-flex; align-items: center; gap: var(--mc-space-2); padding: 2px 10px; background: var(--mc-sage-100); color: var(--mc-sage-700); border-radius: var(--mc-radius-pill); font-family: var(--mc-font-mono); font-size: 10px; letter-spacing: var(--mc-ls-wide); text-transform: uppercase; }
+
+    .cmte-detail-grid { display: grid; grid-template-columns: 1fr 320px; gap: var(--mc-space-7); margin-top: var(--mc-space-7); }
+    @media (max-width: 900px) { .cmte-detail-grid { grid-template-columns: 1fr; } }
+    .cmte-detail-card { background: var(--mc-bg-surface); border: 1px solid var(--mc-border-subtle); border-radius: var(--mc-radius-lg); padding: var(--mc-space-5); margin-bottom: var(--mc-space-4); }
+
+    .meeting-row { display: grid; grid-template-columns: 80px 1fr auto; gap: var(--mc-space-4); padding: var(--mc-space-4) 0; border-bottom: 1px solid var(--mc-border-subtle); align-items: center; }
+    .meeting-row:last-child { border-bottom: 0; }
+    .meeting-date { font-family: var(--mc-font-display); font-weight: var(--mc-fw-semi); line-height: 1; color: var(--mc-rind-500); text-align: center; }
+    .meeting-date-day { font-size: var(--mc-fs-2xl); display: block; }
+    .meeting-date-month { font-family: var(--mc-font-mono); font-size: var(--mc-fs-xs); letter-spacing: var(--mc-ls-wide); text-transform: uppercase; color: var(--mc-text-muted); display: block; margin-top: 2px; }
+    .meeting-title { font-weight: var(--mc-fw-semi); font-size: var(--mc-fs-base); }
+    .meeting-meta { font-size: var(--mc-fs-xs); color: var(--mc-text-muted); margin-top: 2px; }
+    .meeting-pill { padding: 2px 8px; border-radius: var(--mc-radius-pill); font-family: var(--mc-font-mono); font-size: 10px; letter-spacing: var(--mc-ls-wide); text-transform: uppercase; }
+    .meeting-pill.upcoming { background: var(--mc-gold-100); color: var(--mc-gold-700); }
+    .meeting-pill.past { background: var(--mc-ink-100); color: var(--mc-ink-400); }
+
+    .roster-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--mc-space-3); }
+    .roster-cell { display: flex; gap: var(--mc-space-3); align-items: center; padding: var(--mc-space-3); border-radius: var(--mc-radius-md); }
+    .roster-cell.chair { background: var(--mc-gold-50); border: 1px solid var(--mc-gold-300); }
+    .roster-avatar { width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg, var(--mc-sage-400), var(--mc-oak-500)); color: var(--mc-cream); display: grid; place-items: center; font-family: var(--mc-font-display); font-weight: var(--mc-fw-semi); font-size: var(--mc-fs-xs); flex-shrink: 0; }
+    .roster-name { font-weight: var(--mc-fw-semi); font-size: var(--mc-fs-sm); line-height: 1.2; }
+    .roster-role { font-family: var(--mc-font-mono); font-size: 10px; letter-spacing: var(--mc-ls-wide); text-transform: uppercase; color: var(--mc-rind-500); }
+    .roster-tenure { font-size: var(--mc-fs-xs); color: var(--mc-text-muted); }
+
+    .motion-row { padding: var(--mc-space-4); border-left: 3px solid var(--mc-gold-500); background: var(--mc-bg-surface-warm); border-radius: 0 var(--mc-radius-md) var(--mc-radius-md) 0; margin-bottom: var(--mc-space-3); }
+    .motion-meta { font-family: var(--mc-font-mono); font-size: var(--mc-fs-xs); letter-spacing: var(--mc-ls-wide); text-transform: uppercase; color: var(--mc-text-muted); margin-bottom: var(--mc-space-2); }
+    .motion-text { font-size: var(--mc-fs-sm); margin-bottom: var(--mc-space-3); }
+    .motion-result { display: flex; gap: var(--mc-space-4); font-size: var(--mc-fs-sm); align-items: center; }
+    .motion-tally { font-family: var(--mc-font-mono); font-weight: var(--mc-fw-semi); }
+    .motion-passed { color: var(--mc-success); }
+    .motion-failed { color: var(--mc-error); }
+
+    .action-item { display: grid; grid-template-columns: 24px 1fr auto auto; gap: var(--mc-space-3); padding: var(--mc-space-3) 0; align-items: center; border-bottom: 1px solid var(--mc-border-subtle); font-size: var(--mc-fs-sm); }
+    .action-item:last-child { border-bottom: 0; }
+    .action-check { width: 18px; height: 18px; border: 2px solid var(--mc-border-strong); border-radius: 4px; display: grid; place-items: center; color: var(--mc-sage-500); }
+    .action-item.done .action-check { background: var(--mc-sage-500); border-color: var(--mc-sage-500); color: var(--mc-cream); }
+    .action-item.done .action-text { text-decoration: line-through; color: var(--mc-text-muted); }
+    .action-due { font-family: var(--mc-font-mono); font-size: 10px; letter-spacing: var(--mc-ls-wide); text-transform: uppercase; color: var(--mc-text-muted); }
+    .action-due.overdue { color: var(--mc-error); }
+
+    .artifact-row { display: grid; grid-template-columns: 36px 1fr auto auto; gap: var(--mc-space-3); padding: var(--mc-space-3) 0; align-items: center; border-bottom: 1px solid var(--mc-border-subtle); }
+    .artifact-row:last-child { border-bottom: 0; }
+    .artifact-icon { width: 32px; height: 32px; border-radius: var(--mc-radius-md); background: var(--mc-bg-surface-warm); color: var(--mc-rind-500); display: grid; place-items: center; }
+    .artifact-name { font-weight: var(--mc-fw-medium); font-size: var(--mc-fs-sm); }
+    .artifact-meta { font-size: var(--mc-fs-xs); color: var(--mc-text-muted); margin-top: 2px; }
+    .artifact-source { padding: 1px 8px; background: var(--mc-bg-surface-warm); border-radius: var(--mc-radius-pill); font-family: var(--mc-font-mono); font-size: 10px; letter-spacing: var(--mc-ls-wide); text-transform: uppercase; color: var(--mc-text-muted); }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to main content</a>
+
+  <div class="topbar"><div class="container"><div class="topbar-inner">
+    <span class="topbar-tagline">The International Cheese Federation · Est. 1947</span>
+    <div class="topbar-links"><a href="chapters.html"><i class="fa-solid fa-location-dot"></i> Find a chapter</a><span class="topbar-divider">|</span><a href="contact.html">Contact</a><span class="topbar-divider">|</span><a href="portal.html"><i class="fa-solid fa-user"></i> Member login</a></div>
+  </div></div></div>
+
+  <header class="site-header">
+    <div class="site-header-inner">
+      <a class="brand" href="index.html"><span class="brand-mark">MC</span><span><span class="brand-name">MoreCheese</span><span class="brand-fed">International Cheese Federation</span></span></a>
+      <nav class="nav-primary"><a href="index.html">Home</a><a href="membership.html">Membership</a><a href="events.html">Events</a><a href="education.html">Education</a><a href="standards.html">Standards</a><a href="advocacy.html">Advocacy</a><a href="awards.html">Awards</a><a href="community.html">Community</a><a href="about.html">About</a></nav>
+      <div class="nav-cta"><a href="membership.html#join" class="btn btn-primary btn-sm btn-pill">Join</a><button class="nav-toggle"><i class="fa-solid fa-bars"></i></button></div>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="page-head">
+      <div class="container">
+        <nav class="crumbs"><a href="index.html">Home</a><span>/</span><a href="about.html">About</a><span>/</span><span>Committees</span></nav>
+        <p class="eyebrow">Committees · powered by <span class="brand-text">@memberjunction/bizapps-committees</span></p>
+        <h1>The work gets done in committees.</h1>
+        <p class="lede">The Board sets direction. The five committee types — Board, Standing, Standards Working Groups, Ad Hoc, and Workgroup — do the actual work. Charters are public. Meetings are scheduled. Motions are recorded. Votes are tallied. Minutes are published. Open seats are listed openly so members know exactly how to get involved.</p>
+      </div>
+    </section>
+
+    <!-- TYPE TABS -->
+    <section class="section">
+      <div class="container">
+        <div class="cmte-type-tabs">
+          <button class="cmte-type active">All <span class="cmte-type-count">23</span></button>
+          <button class="cmte-type">Board <span class="cmte-type-count">1</span></button>
+          <button class="cmte-type">Standing <span class="cmte-type-count">8</span></button>
+          <button class="cmte-type">Standards Working Groups <span class="cmte-type-count">9</span></button>
+          <button class="cmte-type">Ad Hoc <span class="cmte-type-count">3</span></button>
+          <button class="cmte-type">Workgroups <span class="cmte-type-count">2</span></button>
+          <span style="margin-left: auto; font-family: var(--mc-font-mono); font-size: var(--mc-fs-xs); letter-spacing: var(--mc-ls-wide); text-transform: uppercase; color: var(--mc-text-muted); align-self: center;">11 open seats currently posted</span>
+        </div>
+
+        <!-- COMMITTEE CARDS -->
+        <div class="grid grid-2">
+
+          <article class="cmte-card">
+            <div class="cmte-card-head board">
+              <div>
+                <span class="cmte-card-type-pill">Board · Governing</span>
+                <h3>Board of Directors</h3>
+              </div>
+              <i class="fa-solid fa-landmark" style="font-size: 1.25rem; opacity: 0.4;"></i>
+            </div>
+            <div class="cmte-card-body">
+              <p class="cmte-charter">The governing body of the federation. Sets strategic direction, approves the annual budget, hires the Executive Director, and ratifies positions adopted by Standing committees. Meets quarterly in person plus monthly virtually.</p>
+              <div class="cmte-stats">
+                <div class="cmte-stat"><div class="cmte-stat-num">24</div><div class="cmte-stat-label">Members</div></div>
+                <div class="cmte-stat"><div class="cmte-stat-num">3yr</div><div class="cmte-stat-label">Term length</div></div>
+                <div class="cmte-stat"><div class="cmte-stat-num">12/yr</div><div class="cmte-stat-label">Meetings</div></div>
+              </div>
+            </div>
+            <div class="cmte-chairs"><div class="cmte-chair-avatar">MC</div><div><div class="cmte-chair-label">Chair</div><div class="cmte-chair-name">Maria Castillo, President</div></div></div>
+            <div class="cmte-foot"><a href="about.html#leadership">Full board roster →</a><span class="muted mono upper">Elected · No open seats</span></div>
+          </article>
+
+          <article class="cmte-card">
+            <div class="cmte-card-head standing">
+              <div>
+                <span class="cmte-card-type-pill">Standing</span>
+                <h3>Standards Committee</h3>
+              </div>
+              <i class="fa-solid fa-scale-balanced" style="font-size: 1.25rem; opacity: 0.4;"></i>
+            </div>
+            <div class="cmte-card-body">
+              <p class="cmte-charter">Writes, revises, and maintains the federation's published standards. Coordinates the nine Standards Working Groups. Owns the Annual Plenary voting process. Liaises with FDA, EFSA, FSANZ, CFIA, and Codex Alimentarius.</p>
+              <div class="cmte-stats">
+                <div class="cmte-stat"><div class="cmte-stat-num">23</div><div class="cmte-stat-label">Members</div></div>
+                <div class="cmte-stat"><div class="cmte-stat-num">2yr</div><div class="cmte-stat-label">Term length</div></div>
+                <div class="cmte-stat"><div class="cmte-stat-num">22/yr</div><div class="cmte-stat-label">Meetings</div></div>
+              </div>
+            </div>
+            <div class="cmte-chairs"><div class="cmte-chair-avatar">RK</div><div><div class="cmte-chair-label">Chair</div><div class="cmte-chair-name">Robert Kihm · Treasurer</div></div></div>
+            <div class="cmte-foot"><a href="#detail" class="card-link">View detail ↓</a><span class="open-seats"><i class="fa-solid fa-user-plus"></i> 2 open seats</span></div>
+          </article>
+
+          <article class="cmte-card">
+            <div class="cmte-card-head standing">
+              <div>
+                <span class="cmte-card-type-pill">Standing</span>
+                <h3>Education Committee</h3>
+              </div>
+              <i class="fa-solid fa-graduation-cap" style="font-size: 1.25rem; opacity: 0.4;"></i>
+            </div>
+            <div class="cmte-card-body">
+              <p class="cmte-charter">Owns the four certification tracks (Apprentice, Specialist, Master, Educator) and the 50+ continuing education courses. Reviews and approves curriculum. Manages the Institutional partnership program (47 culinary programs worldwide).</p>
+              <div class="cmte-stats">
+                <div class="cmte-stat"><div class="cmte-stat-num">18</div><div class="cmte-stat-label">Members</div></div>
+                <div class="cmte-stat"><div class="cmte-stat-num">2yr</div><div class="cmte-stat-label">Term length</div></div>
+                <div class="cmte-stat"><div class="cmte-stat-num">12/yr</div><div class="cmte-stat-label">Meetings</div></div>
+              </div>
+            </div>
+            <div class="cmte-chairs"><div class="cmte-chair-avatar">JW</div><div><div class="cmte-chair-label">Chair</div><div class="cmte-chair-name">Jamie Wu · Murray's Cheese</div></div></div>
+            <div class="cmte-foot"><a href="#detail" class="card-link">View detail →</a><span class="open-seats"><i class="fa-solid fa-user-plus"></i> 3 open seats</span></div>
+          </article>
+
+          <article class="cmte-card">
+            <div class="cmte-card-head standing">
+              <div>
+                <span class="cmte-card-type-pill">Standing</span>
+                <h3>Awards Committee</h3>
+              </div>
+              <i class="fa-solid fa-trophy" style="font-size: 1.25rem; opacity: 0.4;"></i>
+            </div>
+            <div class="cmte-card-body">
+              <p class="cmte-charter">Runs the National Cheese Awards. Recruits and certifies judges. Owns the 100-point scoring rubric. Selects category Golds and the 9-judge super-panel that picks Best in Show. Reviews protests.</p>
+              <div class="cmte-stats">
+                <div class="cmte-stat"><div class="cmte-stat-num">12</div><div class="cmte-stat-label">Members</div></div>
+                <div class="cmte-stat"><div class="cmte-stat-num">3yr</div><div class="cmte-stat-label">Term length</div></div>
+                <div class="cmte-stat"><div class="cmte-stat-num">6/yr</div><div class="cmte-stat-label">Meetings</div></div>
+              </div>
+            </div>
+            <div class="cmte-chairs"><div class="cmte-chair-avatar">JH</div><div><div class="cmte-chair-label">Chair</div><div class="cmte-chair-name">John Huisman · Wijngaard Kaas</div></div></div>
+            <div class="cmte-foot"><a href="awards.html">Awards page →</a><span class="muted mono upper">No open seats</span></div>
+          </article>
+
+          <article class="cmte-card">
+            <div class="cmte-card-head standing">
+              <div>
+                <span class="cmte-card-type-pill">Standing</span>
+                <h3>Advocacy Committee</h3>
+              </div>
+              <i class="fa-solid fa-landmark-dome" style="font-size: 1.25rem; opacity: 0.4;"></i>
+            </div>
+            <div class="cmte-card-body">
+              <p class="cmte-charter">Files regulatory positions, organizes member mobilization, manages outside counsel, drafts position papers, and tracks all active legislation that affects cheesemakers across our 7 jurisdictions.</p>
+              <div class="cmte-stats">
+                <div class="cmte-stat"><div class="cmte-stat-num">15</div><div class="cmte-stat-label">Members</div></div>
+                <div class="cmte-stat"><div class="cmte-stat-num">3yr</div><div class="cmte-stat-label">Term length</div></div>
+                <div class="cmte-stat"><div class="cmte-stat-num">24/yr</div><div class="cmte-stat-label">Meetings</div></div>
+              </div>
+            </div>
+            <div class="cmte-chairs"><div class="cmte-chair-avatar">TW</div><div><div class="cmte-chair-label">Chair</div><div class="cmte-chair-name">Tom Whitaker · Whitaker Mountain</div></div></div>
+            <div class="cmte-foot"><a href="advocacy.html">Active positions →</a><span class="open-seats"><i class="fa-solid fa-user-plus"></i> 1 open seat</span></div>
+          </article>
+
+          <article class="cmte-card">
+            <div class="cmte-card-head standing">
+              <div>
+                <span class="cmte-card-type-pill">Standing</span>
+                <h3>Research Council</h3>
+              </div>
+              <i class="fa-solid fa-flask" style="font-size: 1.25rem; opacity: 0.4;"></i>
+            </div>
+            <div class="cmte-card-body">
+              <p class="cmte-charter">Reviews and funds research at 12 university partners. Manages the $1.4M annual research budget. Publishes the Annual Research Review. Liaises with the Standards Committee on science-driven standard revisions.</p>
+              <div class="cmte-stats">
+                <div class="cmte-stat"><div class="cmte-stat-num">14</div><div class="cmte-stat-label">Members</div></div>
+                <div class="cmte-stat"><div class="cmte-stat-num">3yr</div><div class="cmte-stat-label">Term length</div></div>
+                <div class="cmte-stat"><div class="cmte-stat-num">8/yr</div><div class="cmte-stat-label">Meetings</div></div>
+              </div>
+            </div>
+            <div class="cmte-chairs"><div class="cmte-chair-avatar">SH</div><div><div class="cmte-chair-label">Vice-Chair</div><div class="cmte-chair-name">Dr. Sarah Henderson · Cornell</div></div></div>
+            <div class="cmte-foot"><a href="resources.html">Research library →</a><span class="open-seats"><i class="fa-solid fa-user-plus"></i> 2 open seats</span></div>
+          </article>
+
+          <article class="cmte-card">
+            <div class="cmte-card-head standing">
+              <div>
+                <span class="cmte-card-type-pill">Standing</span>
+                <h3>Apprenticeship Committee</h3>
+              </div>
+              <i class="fa-solid fa-hand-holding-heart" style="font-size: 1.25rem; opacity: 0.4;"></i>
+            </div>
+            <div class="cmte-card-body">
+              <p class="cmte-charter">Selects apprentices and pairs them with mentor producers. Manages the $2.1M annual stipend program. Reviews apprentice progress quarterly. Owns the Apprentice Showcase at the Annual.</p>
+              <div class="cmte-stats">
+                <div class="cmte-stat"><div class="cmte-stat-num">10</div><div class="cmte-stat-label">Members</div></div>
+                <div class="cmte-stat"><div class="cmte-stat-num">2yr</div><div class="cmte-stat-label">Term length</div></div>
+                <div class="cmte-stat"><div class="cmte-stat-num">8/yr</div><div class="cmte-stat-label">Meetings</div></div>
+              </div>
+            </div>
+            <div class="cmte-chairs"><div class="cmte-chair-avatar">ER</div><div><div class="cmte-chair-label">Member · liaison</div><div class="cmte-chair-name">Elena Rodriguez · Foggy Valley</div></div></div>
+            <div class="cmte-foot"><a href="#">Program info →</a><span class="muted mono upper">No open seats</span></div>
+          </article>
+
+          <article class="cmte-card">
+            <div class="cmte-card-head standards-wg">
+              <div>
+                <span class="cmte-card-type-pill">Standards Working Group</span>
+                <h3>Labeling WG</h3>
+              </div>
+              <i class="fa-solid fa-tags" style="font-size: 1.25rem; opacity: 0.4;"></i>
+            </div>
+            <div class="cmte-card-body">
+              <p class="cmte-charter">Drafts and revises labeling standards: terroir-of-origin, ingredient disclosure, raw-milk designation, allergen labeling, organic certification, country-of-origin marking. Currently authoring Draft v4 of the labeling standard going to Plenary.</p>
+              <div class="cmte-stats">
+                <div class="cmte-stat"><div class="cmte-stat-num">9</div><div class="cmte-stat-label">Members</div></div>
+                <div class="cmte-stat"><div class="cmte-stat-num">As needed</div><div class="cmte-stat-label">Term length</div></div>
+                <div class="cmte-stat"><div class="cmte-stat-num">14/yr</div><div class="cmte-stat-label">Meetings</div></div>
+              </div>
+            </div>
+            <div class="cmte-chairs"><div class="cmte-chair-avatar">RK</div><div><div class="cmte-chair-label">Chair</div><div class="cmte-chair-name">Robert Kihm · Standards Cmte</div></div></div>
+            <div class="cmte-foot"><a href="#detail">View detail →</a><span class="open-seats"><i class="fa-solid fa-user-plus"></i> 1 open seat</span></div>
+          </article>
+
+          <article class="cmte-card">
+            <div class="cmte-card-head adhoc">
+              <div>
+                <span class="cmte-card-type-pill">Ad Hoc · time-bounded</span>
+                <h3>EU Raw-Milk Joint Position Task Force</h3>
+              </div>
+              <i class="fa-solid fa-users-rays" style="font-size: 1.25rem; opacity: 0.4;"></i>
+            </div>
+            <div class="cmte-card-body">
+              <p class="cmte-charter">Sunset task force co-authoring the EU raw-milk carve-out position paper with Slow Food International and the French Conseil National des Appellations d'Origine Laitières. Dissolves once the EFSA consultation closes (Sep 30, 2026).</p>
+              <div class="cmte-stats">
+                <div class="cmte-stat"><div class="cmte-stat-num">7</div><div class="cmte-stat-label">Members</div></div>
+                <div class="cmte-stat"><div class="cmte-stat-num">Sep '26</div><div class="cmte-stat-label">Sunset</div></div>
+                <div class="cmte-stat"><div class="cmte-stat-num">Biweekly</div><div class="cmte-stat-label">Meetings</div></div>
+              </div>
+            </div>
+            <div class="cmte-chairs"><div class="cmte-chair-avatar">JN</div><div><div class="cmte-chair-label">Chair</div><div class="cmte-chair-name">Jean Naumann · VP</div></div></div>
+            <div class="cmte-foot"><a href="advocacy.html">EU position →</a><span class="muted mono upper">Filled</span></div>
+          </article>
+
+          <article class="cmte-card">
+            <div class="cmte-card-head workgroup">
+              <div>
+                <span class="cmte-card-type-pill">Workgroup · operational</span>
+                <h3>Conference Program Workgroup</h3>
+              </div>
+              <i class="fa-solid fa-calendar-week" style="font-size: 1.25rem; opacity: 0.4;"></i>
+            </div>
+            <div class="cmte-card-body">
+              <p class="cmte-charter">Builds the Annual Conference program: track structure, session selection, speaker invitations, parallel-track scheduling. Reconstitutes each year and dissolves after the Annual.</p>
+              <div class="cmte-stats">
+                <div class="cmte-stat"><div class="cmte-stat-num">11</div><div class="cmte-stat-label">Members</div></div>
+                <div class="cmte-stat"><div class="cmte-stat-num">Annual</div><div class="cmte-stat-label">Cycle</div></div>
+                <div class="cmte-stat"><div class="cmte-stat-num">Weekly</div><div class="cmte-stat-label">Meetings</div></div>
+              </div>
+            </div>
+            <div class="cmte-chairs"><div class="cmte-chair-avatar">MC</div><div><div class="cmte-chair-label">Lead</div><div class="cmte-chair-name">Maria Castillo · President</div></div></div>
+            <div class="cmte-foot"><a href="event-detail.html">Annual Conference →</a><span class="open-seats"><i class="fa-solid fa-user-plus"></i> 2 open seats</span></div>
+          </article>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- ONE COMMITTEE DEEP-DIVE: Standards -->
+    <section class="section section-warm" id="detail">
+      <div class="container">
+        <p class="eyebrow">Committee detail · public view</p>
+        <h2 style="margin-bottom: var(--mc-space-2);">Standards Committee</h2>
+        <p class="muted">Public face of the bizapps-committees data model. Members see the same view at higher fidelity with action-item assignments, motion drafting, and live attendance recording.</p>
+
+        <div class="cmte-detail-grid">
+          <!-- LEFT: Meetings, motions, action items -->
+          <div>
+            <div class="cmte-detail-card">
+              <h3 style="font-size: var(--mc-fs-lg); margin-bottom: var(--mc-space-4);">Meetings · 2026</h3>
+
+              <div class="meeting-row">
+                <div class="meeting-date"><span class="meeting-date-day">19</span><span class="meeting-date-month">Sep</span></div>
+                <div>
+                  <div class="meeting-title">Annual Plenary — Standards votes</div>
+                  <div class="meeting-meta">Madison WI · 8:30 AM CT · Day 2 of Annual Conference · 7 items on agenda · Voting members only</div>
+                </div>
+                <span class="meeting-pill upcoming">Upcoming</span>
+              </div>
+
+              <div class="meeting-row">
+                <div class="meeting-date"><span class="meeting-date-day">11</span><span class="meeting-date-month">Aug</span></div>
+                <div>
+                  <div class="meeting-title">Pre-Plenary review</div>
+                  <div class="meeting-meta">Virtual · 6:00 PM CT · Final review of Plenary agenda items before voting opens Aug 26</div>
+                </div>
+                <span class="meeting-pill upcoming">Upcoming</span>
+              </div>
+
+              <div class="meeting-row">
+                <div class="meeting-date"><span class="meeting-date-day">14</span><span class="meeting-date-month">Jul</span></div>
+                <div>
+                  <div class="meeting-title">Working session — Item 3 (Labeling)</div>
+                  <div class="meeting-meta">Virtual · with Labeling WG · Draft v4 review and committee adoption</div>
+                </div>
+                <span class="meeting-pill upcoming">Upcoming</span>
+              </div>
+
+              <div class="meeting-row">
+                <div class="meeting-date" style="color: var(--mc-text-muted);"><span class="meeting-date-day">12</span><span class="meeting-date-month">Jun</span></div>
+                <div>
+                  <div class="meeting-title">Position adoption — FDA dairy labeling proposal</div>
+                  <div class="meeting-meta">Virtual · 14 of 23 members present · Quorum met · Position adopted 14–0</div>
+                </div>
+                <span class="meeting-pill past">Past · Minutes published</span>
+              </div>
+
+              <div class="meeting-row">
+                <div class="meeting-date" style="color: var(--mc-text-muted);"><span class="meeting-date-day">15</span><span class="meeting-date-month">May</span></div>
+                <div>
+                  <div class="meeting-title">Quarterly working session</div>
+                  <div class="meeting-meta">Virtual · WG status updates from all 9 Standards Working Groups</div>
+                </div>
+                <span class="meeting-pill past">Past · Minutes published</span>
+              </div>
+            </div>
+
+            <div class="cmte-detail-card">
+              <h3 style="font-size: var(--mc-fs-lg); margin-bottom: var(--mc-space-4);">Recent motions & votes</h3>
+
+              <div class="motion-row">
+                <div class="motion-meta">Jun 12, 2026 · Motion #SC-2026-018 · Adopted</div>
+                <div class="motion-text"><strong>Move</strong> that the Standards Committee adopt the "Support with Revisions" position on FDA Docket FDA-2026-N-0418 (Dairy Labeling Proposal), as drafted by the Labeling Working Group and reviewed in working session 14-July-2026.</div>
+                <div class="motion-result">
+                  <span class="motion-tally motion-passed">✓ 14–0 (5 absent)</span>
+                  <span class="muted mono upper">Moved: R. Kihm · Seconded: E. Rodriguez</span>
+                </div>
+              </div>
+
+              <div class="motion-row">
+                <div class="motion-meta">May 15, 2026 · Motion #SC-2026-014 · Adopted</div>
+                <div class="motion-text"><strong>Move</strong> to commission the Cave Engineering Working Group to draft a revised standard on humidity-control documentation requirements for sub-50,000-kg aging facilities, with first reading targeted for the Annual Plenary.</div>
+                <div class="motion-result">
+                  <span class="motion-tally motion-passed">✓ 17–1 (1 abstain)</span>
+                  <span class="muted mono upper">Moved: S. Henderson · Seconded: J. Naumann</span>
+                </div>
+              </div>
+
+              <div class="motion-row">
+                <div class="motion-meta">Apr 10, 2026 · Motion #SC-2026-009 · Failed</div>
+                <div class="motion-text"><strong>Move</strong> to delay publication of the Sheep-Milk Open Standards revision pending additional EU consultation.</div>
+                <div class="motion-result">
+                  <span class="motion-tally motion-failed">✗ 6–14 (3 abstain)</span>
+                  <span class="muted mono upper">Moved: M. Touraine · Failed</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="cmte-detail-card">
+              <h3 style="font-size: var(--mc-fs-lg); margin-bottom: var(--mc-space-4);">Open action items</h3>
+
+              <div class="action-item">
+                <div class="action-check"></div>
+                <div><div>Distribute Labeling WG Draft v4 to all voting members</div><div class="muted" style="font-size: var(--mc-fs-xs);">Owner: R. Kihm · Created from Aug 11 meeting</div></div>
+                <span class="action-due">Due Aug 18</span>
+                <a href="#" class="muted">Open</a>
+              </div>
+
+              <div class="action-item">
+                <div class="action-check"></div>
+                <div><div>Coordinate with Codex CX/MMP 27/1 working group on terroir-of-origin position</div><div class="muted" style="font-size: var(--mc-fs-xs);">Owner: J. Naumann · From May 15 meeting</div></div>
+                <span class="action-due overdue">Overdue · Jul 1</span>
+                <a href="#" class="muted">Open</a>
+              </div>
+
+              <div class="action-item done">
+                <div class="action-check"><i class="fa-solid fa-check" style="font-size: 11px;"></i></div>
+                <div><div class="action-text">Submit FDA position paper via Regulations.gov</div><div class="muted" style="font-size: var(--mc-fs-xs);">Owner: R. Kihm · Done Jun 22</div></div>
+                <span class="action-due">Done</span>
+                <a href="#" class="muted">View</a>
+              </div>
+
+              <div class="action-item done">
+                <div class="action-check"><i class="fa-solid fa-check" style="font-size: 11px;"></i></div>
+                <div><div class="action-text">Coordinate with Advocacy Cmte on member mobilization for FDA docket</div><div class="muted" style="font-size: var(--mc-fs-xs);">Owner: T. Whitaker · Done Jun 14</div></div>
+                <span class="action-due">Done</span>
+                <a href="#" class="muted">View</a>
+              </div>
+            </div>
+
+            <div class="cmte-detail-card">
+              <h3 style="font-size: var(--mc-fs-lg); margin-bottom: var(--mc-space-4);">Artifacts & documents</h3>
+              <p class="muted" style="font-size: var(--mc-fs-sm); margin-bottom: var(--mc-space-4);">Linked from Google Drive, SharePoint, OneDrive, Box, and Dropbox.</p>
+
+              <div class="artifact-row">
+                <div class="artifact-icon"><i class="fa-solid fa-file-pdf"></i></div>
+                <div><div class="artifact-name">Labeling_Draft_v4.pdf</div><div class="artifact-meta">Document · 380 KB · Updated Jul 14</div></div>
+                <span class="artifact-source">SharePoint</span>
+                <a href="#" class="muted"><i class="fa-solid fa-external-link"></i></a>
+              </div>
+
+              <div class="artifact-row">
+                <div class="artifact-icon"><i class="fa-solid fa-file-lines"></i></div>
+                <div><div class="artifact-name">Annual_Plenary_Agenda_2026</div><div class="artifact-meta">Agenda · Updated Jun 27</div></div>
+                <span class="artifact-source">Google Drive</span>
+                <a href="#" class="muted"><i class="fa-solid fa-external-link"></i></a>
+              </div>
+
+              <div class="artifact-row">
+                <div class="artifact-icon"><i class="fa-solid fa-file-lines"></i></div>
+                <div><div class="artifact-name">2026-06-12_Minutes_FDA_Position.md</div><div class="artifact-meta">Minutes · Approved · Published Jun 18</div></div>
+                <span class="artifact-source">Box</span>
+                <a href="#" class="muted"><i class="fa-solid fa-external-link"></i></a>
+              </div>
+
+              <div class="artifact-row">
+                <div class="artifact-icon"><i class="fa-solid fa-table-cells"></i></div>
+                <div><div class="artifact-name">Member_Producer_FDA_Comments_tracker.xlsx</div><div class="artifact-meta">Spreadsheet · Live · 187 producers signed</div></div>
+                <span class="artifact-source">SharePoint</span>
+                <a href="#" class="muted"><i class="fa-solid fa-external-link"></i></a>
+              </div>
+
+              <div class="artifact-row">
+                <div class="artifact-icon"><i class="fa-solid fa-video"></i></div>
+                <div><div class="artifact-name">2026-06-12_Recording.mp4</div><div class="artifact-meta">Recording · 1h 47m · Transcript attached</div></div>
+                <span class="artifact-source">OneDrive</span>
+                <a href="#" class="muted"><i class="fa-solid fa-external-link"></i></a>
+              </div>
+            </div>
+          </div>
+
+          <!-- RIGHT: Roster + how to join -->
+          <aside>
+            <div class="cmte-detail-card">
+              <h3 style="font-size: var(--mc-fs-lg); margin-bottom: var(--mc-space-4);">Current term · 23 members</h3>
+
+              <p style="font-family: var(--mc-font-mono); font-size: var(--mc-fs-xs); letter-spacing: var(--mc-ls-wide); text-transform: uppercase; color: var(--mc-text-muted); margin-bottom: var(--mc-space-2);">Officers</p>
+              <div class="roster-grid mb-5">
+                <div class="roster-cell chair"><div class="roster-avatar">RK</div><div><div class="roster-name">Robert Kihm</div><div class="roster-role">Chair · 2024–2026</div></div></div>
+                <div class="roster-cell chair"><div class="roster-avatar">JN</div><div><div class="roster-name">Jean Naumann</div><div class="roster-role">Vice Chair · 2025–2027</div></div></div>
+                <div class="roster-cell chair"><div class="roster-avatar">SH</div><div><div class="roster-name">Sarah Henderson</div><div class="roster-role">Secretary · 2025–2027</div></div></div>
+              </div>
+
+              <p style="font-family: var(--mc-font-mono); font-size: var(--mc-fs-xs); letter-spacing: var(--mc-ls-wide); text-transform: uppercase; color: var(--mc-text-muted); margin-bottom: var(--mc-space-2);">Voting members</p>
+              <div class="roster-grid">
+                <div class="roster-cell"><div class="roster-avatar">ER</div><div><div class="roster-name">Elena Rodriguez</div><div class="roster-role">Member · 2024–2026</div></div></div>
+                <div class="roster-cell"><div class="roster-avatar">MT</div><div><div class="roster-name">Marcel Touraine</div><div class="roster-role">Member · 2024–2026</div></div></div>
+                <div class="roster-cell"><div class="roster-avatar">JW</div><div><div class="roster-name">Jamie Wu</div><div class="roster-role">Member · 2025–2027</div></div></div>
+                <div class="roster-cell"><div class="roster-avatar">JH</div><div><div class="roster-name">John Huisman</div><div class="roster-role">Member · 2024–2026</div></div></div>
+                <div class="roster-cell"><div class="roster-avatar">+15</div><div><div class="roster-name">15 more</div><div class="roster-tenure">Full roster on request</div></div></div>
+              </div>
+
+              <p style="font-family: var(--mc-font-mono); font-size: var(--mc-fs-xs); letter-spacing: var(--mc-ls-wide); text-transform: uppercase; color: var(--mc-text-muted); margin: var(--mc-space-5) 0 var(--mc-space-2);">Non-voting / Liaison</p>
+              <div class="roster-grid">
+                <div class="roster-cell"><div class="roster-avatar">FDA</div><div><div class="roster-name">FDA Liaison</div><div class="roster-role">Standing observer</div></div></div>
+                <div class="roster-cell"><div class="roster-avatar">EFS</div><div><div class="roster-name">EFSA Liaison</div><div class="roster-role">Standing observer</div></div></div>
+              </div>
+            </div>
+
+            <div class="cmte-detail-card" style="background: linear-gradient(135deg, var(--mc-gold-100), var(--mc-gold-200)); border-color: var(--mc-gold-300);">
+              <h3 style="font-size: var(--mc-fs-lg); margin-bottom: var(--mc-space-3);">2 open seats — apply</h3>
+              <p style="font-size: var(--mc-fs-sm); margin-bottom: var(--mc-space-4);">Producer-tier members in good standing eligible. Looking for: experience in formal standards work, comfort with Robert's Rules, willingness to commit ~20 hr/month including 2 in-person meetings per year.</p>
+              <a href="contact.html" class="btn btn-rind btn-sm">Apply for open seat</a>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <!-- HOW COMMITTEES WORK -->
+    <section class="section">
+      <div class="container-narrow center">
+        <p class="eyebrow">How federation committees work</p>
+        <h2>Chartered. Member-led. Accountable.</h2>
+        <p class="lede">Every committee has a published charter, an elected chair, defined member roles (Chair, Vice Chair, Secretary, Member, Non-Voting Member, Liaison, Advisor), and a recorded process. Motions are made. Votes are tallied. Minutes are drafted, reviewed, approved, and published. Action items are owned and tracked. Nothing about how the federation operates is opaque.</p>
+        <div class="flex gap-3 mt-5" style="justify-content: center; flex-wrap: wrap;">
+          <a href="membership.html" class="btn btn-rind">Become a member</a>
+          <a href="contact.html" class="btn btn-secondary">Express interest in a committee</a>
+        </div>
+        <p class="muted mt-6" style="font-size: var(--mc-fs-xs); font-family: var(--mc-font-mono);">Committee operations powered by <a href="https://docs.memberjunction.org" target="_blank" rel="noopener">@memberjunction/bizapps-committees</a> — open-source committee management on the MJ platform.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div class="footer-brand"><a class="brand" href="index.html" style="color: var(--mc-cream);"><span class="brand-mark">MC</span><span><span class="brand-name" style="color: var(--mc-cream);">MoreCheese</span><span class="brand-fed" style="color: var(--mc-gold-300);">International Cheese Federation</span></span></a><p>The federation of artisan cheesemakers, mongers, scientists, and educators. Est. 1947.</p></div>
+        <div class="footer-col"><h6>Programs</h6><ul><li><a href="membership.html">Membership</a></li><li><a href="education.html">Education</a></li><li><a href="awards.html">Awards</a></li><li><a href="standards.html">Standards</a></li></ul></div>
+        <div class="footer-col"><h6>Engage</h6><ul><li><a href="events.html">Events</a></li><li><a href="community.html">Community</a></li><li><a href="committees.html">Committees</a></li><li><a href="chapters.html">Chapters</a></li></ul></div>
+        <div class="footer-col"><h6>About</h6><ul><li><a href="about.html">Our story</a></li><li><a href="contact.html">Contact</a></li><li><a href="portal.html">Portal</a></li></ul></div>
+        <div class="footer-news"><h6>The Curd</h6><p>Monthly newsletter.</p><form onsubmit="event.preventDefault();"><input type="email" placeholder="your@email" /><button type="submit" class="btn btn-primary btn-sm">Subscribe</button></form></div>
+      </div>
+      <div class="footer-bottom"><div>© 2026 ICF</div><div class="footer-built"><i class="fa-solid fa-cheese"></i> Built on <a href="https://docs.memberjunction.org" target="_blank" rel="noopener">MemberJunction</a></div></div>
+    </div>
+  </footer>
+
+  <script src="assets/js/betty-widget.js"></script>
+</body>
+</html>

@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Contact · MoreCheese</title>
+  <link rel="stylesheet" href="assets/css/tokens.css" />
+  <link rel="stylesheet" href="assets/css/main.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <style>
+    .contact-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--mc-space-7); }
+    @media (max-width: 900px) { .contact-grid { grid-template-columns: 1fr; } }
+    .office { padding: var(--mc-space-5); background: var(--mc-bg-surface); border: 1px solid var(--mc-border-subtle); border-radius: var(--mc-radius-lg); }
+    .office-flag { font-family: var(--mc-font-mono); font-size: var(--mc-fs-xs); letter-spacing: var(--mc-ls-wide); text-transform: uppercase; color: var(--mc-rind-500); margin-bottom: var(--mc-space-2); }
+    .office-name { font-family: var(--mc-font-display); font-size: var(--mc-fs-lg); font-weight: var(--mc-fw-semi); margin-bottom: var(--mc-space-3); }
+    .office-line { font-size: var(--mc-fs-sm); color: var(--mc-text-secondary); line-height: var(--mc-lh-relaxed); }
+    .office-link { display: block; margin-top: var(--mc-space-3); font-size: var(--mc-fs-sm); color: var(--mc-text-link); }
+    .desk { padding: var(--mc-space-5); background: var(--mc-bg-surface); border-radius: var(--mc-radius-lg); border-left: 4px solid var(--mc-gold-500); }
+    .desk-name { font-weight: var(--mc-fw-semi); margin-bottom: var(--mc-space-1); }
+    .desk-purpose { font-size: var(--mc-fs-sm); color: var(--mc-text-secondary); margin-bottom: var(--mc-space-3); }
+    .desk-email { font-family: var(--mc-font-mono); font-size: var(--mc-fs-sm); color: var(--mc-rind-500); }
+    .form-field { display: grid; gap: var(--mc-space-2); }
+    .form-field label { font-family: var(--mc-font-mono); font-size: var(--mc-fs-xs); letter-spacing: var(--mc-ls-wide); text-transform: uppercase; color: var(--mc-text-muted); }
+    .form-field input, .form-field textarea, .form-field select { padding: var(--mc-space-3); border: 1px solid var(--mc-border-default); border-radius: var(--mc-radius-md); font-size: var(--mc-fs-sm); background: var(--mc-bg-surface); font: inherit; }
+    .form-field input:focus, .form-field textarea:focus { border-color: var(--mc-gold-500); outline: none; }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to main content</a>
+  <div class="topbar"><div class="container"><div class="topbar-inner">
+    <span class="topbar-tagline">The International Cheese Federation · Est. 1947</span>
+    <div class="topbar-links"><a href="chapters.html"><i class="fa-solid fa-location-dot"></i> Find a chapter</a><span class="topbar-divider">|</span><a href="contact.html" class="active">Contact</a><span class="topbar-divider">|</span><a href="portal.html"><i class="fa-solid fa-user"></i> Member login</a></div>
+  </div></div></div>
+  <header class="site-header"><div class="site-header-inner">
+    <a class="brand" href="index.html"><span class="brand-mark">MC</span><span><span class="brand-name">MoreCheese</span><span class="brand-fed">International Cheese Federation</span></span></a>
+    <nav class="nav-primary"><a href="index.html">Home</a><a href="membership.html">Membership</a><a href="events.html">Events</a><a href="education.html">Education</a><a href="standards.html">Standards</a><a href="advocacy.html">Advocacy</a><a href="awards.html">Awards</a><a href="community.html">Community</a><a href="about.html">About</a></nav>
+    <div class="nav-cta"><a href="membership.html#join" class="btn btn-primary btn-sm btn-pill">Join</a><button class="nav-toggle"><i class="fa-solid fa-bars"></i></button></div>
+  </div></header>
+
+  <main id="main">
+    <section class="page-head">
+      <div class="container">
+        <nav class="crumbs"><a href="index.html">Home</a><span>/</span><span>Contact</span></nav>
+        <p class="eyebrow">Contact</p>
+        <h1>How to reach us.</h1>
+        <p class="lede">Two offices. Eight functional desks. Fifteen chapter contacts. And Betty — who answers fastest, on the bottom-right of every page, by voice or text, 24 hours a day.</p>
+      </div>
+    </section>
+
+    <!-- Betty CTA -->
+    <section class="section">
+      <div class="container">
+        <div class="section-rind" style="border-radius: var(--mc-radius-lg); padding: var(--mc-space-7); text-align: center;">
+          <p class="eyebrow on-dark">Fastest path · 24/7</p>
+          <h2>Just ask Betty.</h2>
+          <p class="lede" style="color: var(--mc-gold-100); max-width: 36rem; margin: 0 auto var(--mc-space-5);">For most questions — membership info, certifications, events, standards, our position on a piece of legislation — Betty answers immediately with sourced links to the underlying records. By voice or by text. On every page of this site.</p>
+          <div class="flex gap-3" style="justify-content: center; flex-wrap: wrap;">
+            <button class="btn btn-on-dark btn-lg" onclick="document.querySelector('.betty-fab')?.click()"><i class="fa-solid fa-microphone"></i> Talk to Betty now</button>
+            <a href="betty-voice.html" class="btn btn-ghost-on-dark btn-lg">Full-screen voice mode</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- OFFICES -->
+    <section class="section section-warm">
+      <div class="container">
+        <p class="eyebrow">Offices</p>
+        <h2>Two headquarters · one federation.</h2>
+        <div class="contact-grid mt-6">
+          <div class="office">
+            <div class="office-flag"><i class="fa-solid fa-flag-usa"></i> North American Headquarters</div>
+            <div class="office-name">Madison, Wisconsin</div>
+            <p class="office-line">241 W Gilman St · Suite 400 · Madison, WI 53703 · USA<br/>Mon–Fri · 8:00 AM – 5:00 PM Central<br/>Main: <strong>+1 (608) 555-7479</strong></p>
+            <a class="office-link" href="#"><i class="fa-solid fa-up-right-from-square"></i> Get directions · Limited visitor parking, transit recommended</a>
+          </div>
+          <div class="office">
+            <div class="office-flag"><i class="fa-solid fa-flag"></i> European Headquarters</div>
+            <div class="office-name">Annecy, France</div>
+            <p class="office-line">12 Rue du Pâquier · 74000 Annecy · France<br/>Lun–Ven · 9h00 – 17h00 CET / CEST<br/>Standard: <strong>+33 4 50 51 33 21</strong></p>
+            <a class="office-link" href="#"><i class="fa-solid fa-up-right-from-square"></i> Itinéraire · Hôtel partenaires sur demande</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- DESKS -->
+    <section class="section">
+      <div class="container">
+        <div class="section-head">
+          <div><p class="eyebrow">Functional desks</p><h2>Where to write for what.</h2></div>
+          <span class="muted mono upper">Email response · within 2 business days</span>
+        </div>
+        <div class="grid grid-3">
+          <div class="desk"><div class="desk-name">Membership</div><div class="desk-purpose">Join the federation, change tiers, renewals, hardship discounts, student rate.</div><div class="desk-email">membership@morecheese.org</div></div>
+          <div class="desk"><div class="desk-name">Education</div><div class="desk-purpose">Certifications, course questions, Institutional partnerships, curriculum licensing.</div><div class="desk-email">education@morecheese.org</div></div>
+          <div class="desk"><div class="desk-name">Standards</div><div class="desk-purpose">Standards inquiries, Working Group participation, draft feedback, compliance questions.</div><div class="desk-email">standards@morecheese.org</div></div>
+          <div class="desk"><div class="desk-name">Advocacy</div><div class="desk-purpose">Regulatory engagement, policy positions, expert testimony scheduling, amicus briefs.</div><div class="desk-email">advocacy@morecheese.org</div></div>
+          <div class="desk"><div class="desk-name">Awards</div><div class="desk-purpose">Competition entries, judging, gala tickets, awards eligibility, protests.</div><div class="desk-email">awards@morecheese.org</div></div>
+          <div class="desk"><div class="desk-name">Research Council</div><div class="desk-purpose">Grant proposals, research partnership inquiries, dataset access requests.</div><div class="desk-email">research@morecheese.org</div></div>
+          <div class="desk"><div class="desk-name">Press</div><div class="desk-purpose">Media inquiries, interviews with leadership, photography permissions, event credentialing.</div><div class="desk-email">press@morecheese.org</div></div>
+          <div class="desk"><div class="desk-name">Sponsorship</div><div class="desk-purpose">Corporate sponsorship programs, conference exhibitors, named-program sponsors.</div><div class="desk-email">sponsorship@morecheese.org</div></div>
+          <div class="desk"><div class="desk-name">Chapter Development</div><div class="desk-purpose">Starting a new chapter, chapter operations support, founding-member outreach.</div><div class="desk-email">chapters@morecheese.org</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- GENERAL FORM -->
+    <section class="section section-sunken">
+      <div class="container-narrow">
+        <p class="eyebrow center">Or send us a note</p>
+        <h2 class="center mb-6">General contact form</h2>
+        <form style="display: grid; gap: var(--mc-space-5);" onsubmit="event.preventDefault(); alert('Thanks — your message has been queued (mockup).');">
+          <div class="grid" style="grid-template-columns: 1fr 1fr; gap: var(--mc-space-5);">
+            <div class="form-field"><label>Your name</label><input type="text" placeholder="Elena Rodriguez" required /></div>
+            <div class="form-field"><label>Email</label><input type="email" placeholder="elena@example.com" required /></div>
+          </div>
+          <div class="form-field"><label>Topic</label><select><option>General inquiry</option><option>Membership</option><option>Education</option><option>Standards</option><option>Advocacy</option><option>Awards</option><option>Research</option><option>Press</option><option>Sponsorship</option><option>Chapter development</option></select></div>
+          <div class="form-field"><label>Message</label><textarea rows="6" placeholder="Tell us what's on your mind…" required></textarea></div>
+          <div class="form-field"><label style="display: flex; align-items: center; gap: var(--mc-space-2); text-transform: none; font-family: var(--mc-font-body); font-size: var(--mc-fs-sm); color: var(--mc-text-secondary); letter-spacing: 0;"><input type="checkbox" /> Subscribe me to <em>The Curd</em>, our monthly newsletter.</label></div>
+          <div class="flex gap-3" style="justify-content: center; flex-wrap: wrap;">
+            <button type="submit" class="btn btn-rind btn-lg">Send message</button>
+            <button type="button" class="btn btn-secondary btn-lg" onclick="document.querySelector('.betty-fab')?.click()"><i class="fa-solid fa-microphone"></i> Or ask Betty</button>
+          </div>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div class="footer-brand"><a class="brand" href="index.html" style="color: var(--mc-cream);"><span class="brand-mark">MC</span><span><span class="brand-name" style="color: var(--mc-cream);">MoreCheese</span><span class="brand-fed" style="color: var(--mc-gold-300);">International Cheese Federation</span></span></a><p>The federation of artisan cheesemakers, mongers, scientists, and educators. Est. 1947.</p></div>
+        <div class="footer-col"><h6>Programs</h6><ul><li><a href="membership.html">Membership</a></li><li><a href="education.html">Education</a></li><li><a href="awards.html">Awards</a></li><li><a href="standards.html">Standards</a></li></ul></div>
+        <div class="footer-col"><h6>Engage</h6><ul><li><a href="events.html">Events</a></li><li><a href="community.html">Community</a></li><li><a href="committees.html">Committees</a></li><li><a href="chapters.html">Chapters</a></li></ul></div>
+        <div class="footer-col"><h6>About</h6><ul><li><a href="about.html">Our story</a></li><li><a href="contact.html">Contact</a></li><li><a href="portal.html">Portal</a></li></ul></div>
+        <div class="footer-news"><h6>The Curd</h6><p>Monthly newsletter.</p><form onsubmit="event.preventDefault();"><input type="email" placeholder="your@email" /><button type="submit" class="btn btn-primary btn-sm">Subscribe</button></form></div>
+      </div>
+      <div class="footer-bottom"><div>© 2026 ICF</div><div class="footer-built"><i class="fa-solid fa-cheese"></i> Built on <a href="https://docs.memberjunction.org" target="_blank" rel="noopener">MemberJunction</a></div></div>
+    </div>
+  </footer>
+
+  <script src="assets/js/betty-widget.js"></script>
+</body>
+</html>

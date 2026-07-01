@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Resources & Research · MoreCheese</title>
+  <link rel="stylesheet" href="assets/css/tokens.css" />
+  <link rel="stylesheet" href="assets/css/main.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <style>
+    .res-row { display: grid; grid-template-columns: 48px 1fr auto auto; gap: var(--mc-space-4); padding: var(--mc-space-4); align-items: center; background: var(--mc-bg-surface); border: 1px solid var(--mc-border-subtle); border-radius: var(--mc-radius-md); margin-bottom: var(--mc-space-3); transition: all var(--mc-dur-fast); }
+    .res-row:hover { border-color: var(--mc-gold-300); box-shadow: var(--mc-shadow-sm); }
+    .res-icon { width: 44px; height: 44px; border-radius: var(--mc-radius-md); color: var(--mc-cream); display: grid; place-items: center; font-size: 1.1rem; }
+    .res-icon.pdf { background: linear-gradient(135deg, #c4302b, #842220); }
+    .res-icon.video { background: linear-gradient(135deg, var(--mc-rind-500), var(--mc-rind-700)); }
+    .res-icon.dataset { background: linear-gradient(135deg, #1f7244, #145232); }
+    .res-icon.guide { background: linear-gradient(135deg, var(--mc-gold-500), var(--mc-oak-500)); color: var(--mc-rind-700); }
+    .res-icon.research { background: linear-gradient(135deg, var(--mc-sage-500), var(--mc-sage-700)); }
+    .res-name { font-weight: var(--mc-fw-semi); font-size: var(--mc-fs-sm); }
+    .res-meta { font-family: var(--mc-font-mono); font-size: 10px; letter-spacing: var(--mc-ls-wide); text-transform: uppercase; color: var(--mc-text-muted); margin-top: 2px; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: var(--mc-radius-pill); font-family: var(--mc-font-mono); font-size: 10px; letter-spacing: var(--mc-ls-wide); text-transform: uppercase; font-weight: var(--mc-fw-semi); }
+    .badge-open { background: var(--mc-sage-100); color: var(--mc-sage-700); }
+    .badge-member { background: var(--mc-gold-100); color: var(--mc-gold-700); }
+    .badge-producer { background: var(--mc-rind-100); color: var(--mc-rind-700); }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to main content</a>
+  <div class="topbar"><div class="container"><div class="topbar-inner">
+    <span class="topbar-tagline">The International Cheese Federation · Est. 1947</span>
+    <div class="topbar-links"><a href="chapters.html"><i class="fa-solid fa-location-dot"></i> Find a chapter</a><span class="topbar-divider">|</span><a href="contact.html">Contact</a><span class="topbar-divider">|</span><a href="portal.html"><i class="fa-solid fa-user"></i> Member login</a></div>
+  </div></div></div>
+  <header class="site-header"><div class="site-header-inner">
+    <a class="brand" href="index.html"><span class="brand-mark">MC</span><span><span class="brand-name">MoreCheese</span><span class="brand-fed">International Cheese Federation</span></span></a>
+    <nav class="nav-primary"><a href="index.html">Home</a><a href="membership.html">Membership</a><a href="events.html">Events</a><a href="education.html">Education</a><a href="standards.html">Standards</a><a href="advocacy.html">Advocacy</a><a href="awards.html">Awards</a><a href="community.html">Community</a><a href="about.html">About</a></nav>
+    <div class="nav-cta"><a href="membership.html#join" class="btn btn-primary btn-sm btn-pill">Join</a><button class="nav-toggle"><i class="fa-solid fa-bars"></i></button></div>
+  </div></header>
+
+  <main id="main">
+    <section class="page-head">
+      <div class="container">
+        <nav class="crumbs"><a href="index.html">Home</a><span>/</span><span>Resources</span></nav>
+        <p class="eyebrow">Resources & Research Library</p>
+        <h1>The federation's published knowledge — open to all, with member-only deeper layers.</h1>
+        <p class="lede">100+ resources spanning peer-reviewed research, practical guides, video lectures, datasets, and the federation's commissioned white papers. The Research Council funds new work at 12 university partners every year.</p>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container">
+        <div class="section-head">
+          <div><p class="eyebrow">Library</p><h2>Browse · 100+ resources</h2></div>
+          <div class="flex gap-3">
+            <select style="padding: var(--mc-space-2) var(--mc-space-3); border-radius: var(--mc-radius-md); border: 1px solid var(--mc-border-default); font-size: var(--mc-fs-sm); background: var(--mc-bg-surface);"><option>All types</option><option>Research papers</option><option>Practical guides</option><option>Video lectures</option><option>Datasets</option><option>White papers</option></select>
+            <select style="padding: var(--mc-space-2) var(--mc-space-3); border-radius: var(--mc-radius-md); border: 1px solid var(--mc-border-default); font-size: var(--mc-fs-sm); background: var(--mc-bg-surface);"><option>All access</option><option>Open · public</option><option>Member-only</option><option>Producer-only</option></select>
+            <select style="padding: var(--mc-space-2) var(--mc-space-3); border-radius: var(--mc-radius-md); border: 1px solid var(--mc-border-default); font-size: var(--mc-fs-sm); background: var(--mc-bg-surface);"><option>Most recent</option><option>Most downloaded</option><option>Most cited</option></select>
+          </div>
+        </div>
+
+        <div class="res-row">
+          <div class="res-icon research"><i class="fa-solid fa-flask"></i></div>
+          <div><div class="res-name">Backslop B. linens vs commercial-coded strain: genetic drift over 5-year monitoring</div><div class="res-meta">Research paper · S. Henderson, K. Lin (Cornell) · 2026 · JDS pre-print · 47 pages</div></div>
+          <span class="badge badge-open">Open</span>
+          <a href="#" class="btn btn-secondary btn-sm">Download <i class="fa-solid fa-arrow-down"></i></a>
+        </div>
+
+        <div class="res-row">
+          <div class="res-icon guide"><i class="fa-solid fa-book"></i></div>
+          <div><div class="res-name">Aging Caves: A Working Reference (3rd ed., 2024)</div><div class="res-meta">Practical guide · S. Henderson · Cornell University Press · 384 pages · ISBN 978-1-5036-2871-3</div></div>
+          <span class="badge badge-member">Member</span>
+          <a href="#" class="btn btn-secondary btn-sm">Read excerpt</a>
+        </div>
+
+        <div class="res-row">
+          <div class="res-icon pdf"><i class="fa-solid fa-file-pdf"></i></div>
+          <div><div class="res-name">FDA Tier 2 Compliance: A Small-Producer's Field Manual</div><div class="res-meta">Practical guide · R. Kihm + Standards Cmte · 2025 · 64 pages · 23 forms included</div></div>
+          <span class="badge badge-member">Member</span>
+          <a href="#" class="btn btn-secondary btn-sm">Download</a>
+        </div>
+
+        <div class="res-row">
+          <div class="res-icon dataset"><i class="fa-solid fa-database"></i></div>
+          <div><div class="res-name">Federation Member Survey 2025 — Production, Pricing, Distribution Dataset</div><div class="res-meta">Dataset · 2,847 producer responses · 2025 · CSV + DBF + summary report</div></div>
+          <span class="badge badge-producer">Producer</span>
+          <a href="#" class="btn btn-secondary btn-sm">Access</a>
+        </div>
+
+        <div class="res-row">
+          <div class="res-icon video"><i class="fa-solid fa-video"></i></div>
+          <div><div class="res-name">Cave Humidity Engineering Beyond Sensors — Annual Conference 2025 keynote</div><div class="res-meta">Video lecture · S. Henderson · 1h 12m · slides + transcript included</div></div>
+          <span class="badge badge-open">Open</span>
+          <a href="#" class="btn btn-secondary btn-sm">Watch <i class="fa-solid fa-play"></i></a>
+        </div>
+
+        <div class="res-row">
+          <div class="res-icon research"><i class="fa-solid fa-flask"></i></div>
+          <div><div class="res-name">Small-Producer Economics: A Five-Year Longitudinal Study</div><div class="res-meta">Research paper · Federation Research Council + University of Vermont · 2025 · 88 pages</div></div>
+          <span class="badge badge-open">Open</span>
+          <a href="#" class="btn btn-secondary btn-sm">Download</a>
+        </div>
+
+        <div class="res-row">
+          <div class="res-icon pdf"><i class="fa-solid fa-file-pdf"></i></div>
+          <div><div class="res-name">Position Paper: FDA Dairy Labeling Proposal — Support with Revisions</div><div class="res-meta">White paper · Standards Cmte / Labeling WG · Adopted June 12, 2026 · 14 pages</div></div>
+          <span class="badge badge-open">Open</span>
+          <a href="advocacy.html" class="btn btn-secondary btn-sm">View context</a>
+        </div>
+
+        <div class="res-row">
+          <div class="res-icon guide"><i class="fa-solid fa-book"></i></div>
+          <div><div class="res-name">The Affineur's Calendar — A 12-Month Working Guide</div><div class="res-meta">Practical guide · M. Touraine + 14 contributors · 2024 · 156 pages · printed + digital</div></div>
+          <span class="badge badge-member">Member</span>
+          <a href="#" class="btn btn-secondary btn-sm">Read</a>
+        </div>
+
+        <div class="res-row">
+          <div class="res-icon video"><i class="fa-solid fa-video"></i></div>
+          <div><div class="res-name">Master Class · Washed-Rind Backslops with Marcel Touraine (3-part series)</div><div class="res-meta">Video lecture · M. Touraine · 3h 47m total · subtitled in 4 languages</div></div>
+          <span class="badge badge-member">Member</span>
+          <a href="#" class="btn btn-secondary btn-sm">Watch <i class="fa-solid fa-play"></i></a>
+        </div>
+
+        <div class="res-row">
+          <div class="res-icon research"><i class="fa-solid fa-flask"></i></div>
+          <div><div class="res-name">Terroir & Sensory Outcomes: Pasture-Driven Variation in Alpine Cheeses</div><div class="res-meta">Research paper · J. Naumann (with INRAE) · 2024 · 62 pages · peer-reviewed JDR</div></div>
+          <span class="badge badge-open">Open</span>
+          <a href="#" class="btn btn-secondary btn-sm">Download</a>
+        </div>
+
+        <div class="res-row">
+          <div class="res-icon pdf"><i class="fa-solid fa-file-pdf"></i></div>
+          <div><div class="res-name">2025 Annual Research Review</div><div class="res-meta">Federation publication · Research Council · January 2026 · 92 pages</div></div>
+          <span class="badge badge-open">Open</span>
+          <a href="#" class="btn btn-secondary btn-sm">Download</a>
+        </div>
+
+        <div class="res-row">
+          <div class="res-icon dataset"><i class="fa-solid fa-database"></i></div>
+          <div><div class="res-name">79 Years of National Cheese Awards — Historical Winners Dataset</div><div class="res-meta">Dataset · 1947–2025 · 1,247 winners across 12 categories · CSV + searchable archive</div></div>
+          <span class="badge badge-open">Open</span>
+          <a href="awards.html" class="btn btn-secondary btn-sm">Browse</a>
+        </div>
+
+        <div class="center mt-7"><a href="#" class="btn btn-secondary btn-lg">Browse all 100+ resources</a></div>
+      </div>
+    </section>
+
+    <section class="section section-warm">
+      <div class="container-narrow center">
+        <p class="eyebrow">Research Council grants</p>
+        <h2>We fund the science we need.</h2>
+        <p class="lede">$1.4M / year in research grants across 12 university partners. Proposals reviewed quarterly. Open call. Member-producers are co-investigators on most grants — research is for the craft, not just about it.</p>
+        <div class="flex gap-3 mt-5" style="justify-content: center; flex-wrap: wrap;">
+          <a href="#" class="btn btn-rind">Submit a proposal</a>
+          <a href="about.html#leadership" class="btn btn-secondary">Research Council members</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div class="footer-brand"><a class="brand" href="index.html" style="color: var(--mc-cream);"><span class="brand-mark">MC</span><span><span class="brand-name" style="color: var(--mc-cream);">MoreCheese</span><span class="brand-fed" style="color: var(--mc-gold-300);">International Cheese Federation</span></span></a><p>The federation of artisan cheesemakers, mongers, scientists, and educators. Est. 1947.</p></div>
+        <div class="footer-col"><h6>Programs</h6><ul><li><a href="membership.html">Membership</a></li><li><a href="education.html">Education</a></li><li><a href="awards.html">Awards</a></li><li><a href="standards.html">Standards</a></li></ul></div>
+        <div class="footer-col"><h6>Engage</h6><ul><li><a href="events.html">Events</a></li><li><a href="community.html">Community</a></li><li><a href="committees.html">Committees</a></li><li><a href="chapters.html">Chapters</a></li></ul></div>
+        <div class="footer-col"><h6>About</h6><ul><li><a href="about.html">Our story</a></li><li><a href="contact.html">Contact</a></li><li><a href="portal.html">Portal</a></li></ul></div>
+        <div class="footer-news"><h6>The Curd</h6><p>Monthly newsletter.</p><form onsubmit="event.preventDefault();"><input type="email" placeholder="your@email" /><button type="submit" class="btn btn-primary btn-sm">Subscribe</button></form></div>
+      </div>
+      <div class="footer-bottom"><div>© 2026 ICF</div><div class="footer-built"><i class="fa-solid fa-cheese"></i> Built on <a href="https://docs.memberjunction.org" target="_blank" rel="noopener">MemberJunction</a></div></div>
+    </div>
+  </footer>
+
+  <script src="assets/js/betty-widget.js"></script>
+</body>
+</html>

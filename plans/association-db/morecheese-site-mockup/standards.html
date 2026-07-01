@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Standards Library · MoreCheese</title>
+  <link rel="stylesheet" href="assets/css/tokens.css" />
+  <link rel="stylesheet" href="assets/css/main.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <style>
+    .std-card { background: var(--mc-bg-surface); border: 1px solid var(--mc-border-subtle); border-radius: var(--mc-radius-lg); overflow: hidden; transition: all var(--mc-dur-base); }
+    .std-card:hover { box-shadow: var(--mc-shadow-md); border-color: var(--mc-gold-300); }
+    .std-head { padding: var(--mc-space-4) var(--mc-space-5); border-bottom: 1px solid var(--mc-border-subtle); display: flex; justify-content: space-between; align-items: baseline; gap: var(--mc-space-3); }
+    .std-num { font-family: var(--mc-font-mono); font-size: var(--mc-fs-xs); letter-spacing: var(--mc-ls-wide); text-transform: uppercase; color: var(--mc-text-muted); }
+    .std-status { padding: 3px 10px; border-radius: var(--mc-radius-pill); font-family: var(--mc-font-mono); font-size: 10px; letter-spacing: var(--mc-ls-wide); text-transform: uppercase; font-weight: var(--mc-fw-semi); }
+    .std-status.pub { background: var(--mc-sage-100); color: var(--mc-sage-700); }
+    .std-status.draft { background: var(--mc-gold-100); color: var(--mc-gold-700); }
+    .std-status.review { background: rgba(196,121,20,0.15); color: var(--mc-warning); }
+    .std-body { padding: var(--mc-space-5); }
+    .std-title { font-family: var(--mc-font-display); font-size: var(--mc-fs-lg); font-weight: var(--mc-fw-semi); margin: 0 0 var(--mc-space-3); }
+    .std-desc { font-size: var(--mc-fs-sm); color: var(--mc-text-secondary); margin-bottom: var(--mc-space-4); }
+    .std-foot { padding: var(--mc-space-4) var(--mc-space-5); background: var(--mc-bg-surface-warm); display: flex; justify-content: space-between; align-items: center; font-size: var(--mc-fs-sm); }
+
+    .plenary-timeline { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--mc-space-5); margin-top: var(--mc-space-5); }
+    .pl-step { padding: var(--mc-space-5); background: var(--mc-bg-surface); border-radius: var(--mc-radius-lg); border-top: 4px solid var(--mc-gold-500); }
+    .pl-num { font-family: var(--mc-font-display); font-size: var(--mc-fs-2xl); color: var(--mc-rind-500); font-weight: var(--mc-fw-semi); line-height: 1; margin-bottom: var(--mc-space-2); }
+    .pl-title { font-weight: var(--mc-fw-semi); margin-bottom: var(--mc-space-2); font-size: var(--mc-fs-base); }
+    .pl-desc { font-size: var(--mc-fs-sm); color: var(--mc-text-secondary); }
+    @media (max-width: 900px) { .plenary-timeline { grid-template-columns: 1fr 1fr; } }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to main content</a>
+  <div class="topbar"><div class="container"><div class="topbar-inner">
+    <span class="topbar-tagline">The International Cheese Federation · Est. 1947</span>
+    <div class="topbar-links"><a href="chapters.html"><i class="fa-solid fa-location-dot"></i> Find a chapter</a><span class="topbar-divider">|</span><a href="contact.html">Contact</a><span class="topbar-divider">|</span><a href="portal.html"><i class="fa-solid fa-user"></i> Member login</a></div>
+  </div></div></div>
+  <header class="site-header"><div class="site-header-inner">
+    <a class="brand" href="index.html"><span class="brand-mark">MC</span><span><span class="brand-name">MoreCheese</span><span class="brand-fed">International Cheese Federation</span></span></a>
+    <nav class="nav-primary"><a href="index.html">Home</a><a href="membership.html">Membership</a><a href="events.html">Events</a><a href="education.html">Education</a><a href="standards.html" class="active">Standards</a><a href="advocacy.html">Advocacy</a><a href="awards.html">Awards</a><a href="community.html">Community</a><a href="about.html">About</a></nav>
+    <div class="nav-cta"><a href="membership.html#join" class="btn btn-primary btn-sm btn-pill">Join</a><button class="nav-toggle"><i class="fa-solid fa-bars"></i></button></div>
+  </div></header>
+
+  <main id="main">
+    <section class="page-head">
+      <div class="container">
+        <nav class="crumbs"><a href="index.html">Home</a><span>/</span><span>Standards</span></nav>
+        <p class="eyebrow">Standards Library</p>
+        <h1>Industry-wide standards · written by the people who make cheese.</h1>
+        <p class="lede">79 years of published standards. Referenced by FDA, EFSA, FSANZ, CFIA, and Codex Alimentarius. Maintained by the Standards Committee and the nine Standards Working Groups. Adopted via member vote at the Annual Plenary.</p>
+      </div>
+    </section>
+
+    <!-- PROCESS -->
+    <section class="section">
+      <div class="container">
+        <p class="eyebrow">How standards get made</p>
+        <h2>From working-group draft to ratified standard.</h2>
+        <div class="plenary-timeline">
+          <div class="pl-step"><div class="pl-num">01</div><div class="pl-title">WG drafts</div><div class="pl-desc">A Standards Working Group authors a draft over multiple sessions. Public WG members + Standards Committee + outside experts.</div></div>
+          <div class="pl-step"><div class="pl-num">02</div><div class="pl-title">Committee review</div><div class="pl-desc">Standards Committee reviews the draft, may request revisions, votes to advance to the Annual Plenary.</div></div>
+          <div class="pl-step"><div class="pl-num">03</div><div class="pl-title">Plenary vote</div><div class="pl-desc">All Professional / Producer / Lifetime members vote during the Annual Plenary. Simple majority required.</div></div>
+          <div class="pl-step"><div class="pl-num">04</div><div class="pl-title">Publish</div><div class="pl-desc">Adopted standards are published with an effective date, deprecation of any superseded version, and submitted to FDA / EFSA / Codex liaisons.</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PUBLISHED STANDARDS -->
+    <section class="section section-warm">
+      <div class="container">
+        <div class="section-head">
+          <div><p class="eyebrow">Published</p><h2>Currently in force · 47 standards</h2></div>
+          <span class="muted mono upper">Free to view · Members can download PDFs</span>
+        </div>
+
+        <div class="grid grid-2">
+
+          <article class="std-card">
+            <div class="std-head"><span class="std-num">ICF-STD-001 · Rev 8 · 2024</span><span class="std-status pub">Published</span></div>
+            <div class="std-body">
+              <h3 class="std-title">Cheddar-Style — Production, Aging, Grading</h3>
+              <p class="std-desc">The 8-grade cheddar standard. Production parameters, aging requirements, sensory grading criteria, clothbound and waxed-rind sub-types. The federation's longest-maintained standard, first published 1958.</p>
+            </div>
+            <div class="std-foot"><span class="muted mono upper">79 references · 14 jurisdictions adopt</span><a href="#" class="card-link">View / Download <i class="fa-solid fa-arrow-right"></i></a></div>
+          </article>
+
+          <article class="std-card">
+            <div class="std-head"><span class="std-num">ICF-STD-007 · Rev 4 · 2023</span><span class="std-status pub">Published</span></div>
+            <div class="std-body">
+              <h3 class="std-title">Alpine-Style — Cow / Sheep / Goat</h3>
+              <p class="std-desc">Defines the Alpine-style category. Cooked-pressed paste, wheel-form requirements, cave-aging conditions, terroir-of-origin permissible regions. Used in protected-designation harmonization with EU AOP/DOP frameworks.</p>
+            </div>
+            <div class="std-foot"><span class="muted mono upper">42 references · Codex CX/MMP-aligned</span><a href="#" class="card-link">View / Download <i class="fa-solid fa-arrow-right"></i></a></div>
+          </article>
+
+          <article class="std-card">
+            <div class="std-head"><span class="std-num">ICF-STD-012 · Rev 2 · 2025</span><span class="std-status pub">Published</span></div>
+            <div class="std-body">
+              <h3 class="std-title">Aging-Cave Conditions & Documentation</h3>
+              <p class="std-desc">Temperature, humidity, air-exchange, sanitation, and documentation requirements for affinage facilities. Applies to traditional caves and engineered controlled-environment facilities.</p>
+            </div>
+            <div class="std-foot"><span class="muted mono upper">FDA Tier 2-aligned · Sub-50,000-kg producers</span><a href="#" class="card-link">View / Download <i class="fa-solid fa-arrow-right"></i></a></div>
+          </article>
+
+          <article class="std-card">
+            <div class="std-head"><span class="std-num">ICF-STD-015 · Rev 1 · 2022</span><span class="std-status pub">Published</span></div>
+            <div class="std-body">
+              <h3 class="std-title">Sensory Evaluation Rubric (100-point)</h3>
+              <p class="std-desc">The 100-point rubric used in National Cheese Awards judging and in member sensory training. Categories: paste, rind, aroma, flavor, balance, finish, category fidelity. Calibration protocol for judging panels.</p>
+            </div>
+            <div class="std-foot"><span class="muted mono upper">Required for Judge certification · 29 judges trained</span><a href="#" class="card-link">View / Download <i class="fa-solid fa-arrow-right"></i></a></div>
+          </article>
+
+          <article class="std-card">
+            <div class="std-head"><span class="std-num">ICF-STD-019 · Rev 1 · 2024</span><span class="std-status pub">Published</span></div>
+            <div class="std-body">
+              <h3 class="std-title">Raw-Milk Cheese — Aging & Safety Requirements</h3>
+              <p class="std-desc">Production, aging-period, and ongoing-monitoring requirements for raw-milk cheeses. Compatible with FDA 60-day aging requirement and proposed EU traditional carve-out framework.</p>
+            </div>
+            <div class="std-foot"><span class="muted mono upper">FDA-aligned · EU EFSA consultation pending</span><a href="#" class="card-link">View / Download <i class="fa-solid fa-arrow-right"></i></a></div>
+          </article>
+
+          <article class="std-card">
+            <div class="std-head"><span class="std-num">ICF-STD-024 · Rev 3 · 2024</span><span class="std-status pub">Published</span></div>
+            <div class="std-body">
+              <h3 class="std-title">Labeling — Ingredients, Allergens, Origin</h3>
+              <p class="std-desc">Ingredient disclosure, allergen labeling, country-of-origin marking, organic certification claims. Currently under revision (see ICF-STD-024-Draft-v4 in the Drafts section).</p>
+            </div>
+            <div class="std-foot"><span class="muted mono upper">⚠ Revision in Plenary · vote Sep 19</span><a href="#" class="card-link">View / Download <i class="fa-solid fa-arrow-right"></i></a></div>
+          </article>
+
+        </div>
+
+        <div class="center mt-7"><a href="#" class="btn btn-secondary btn-lg">View all 47 published standards</a></div>
+      </div>
+    </section>
+
+    <!-- DRAFTS -->
+    <section class="section">
+      <div class="container">
+        <div class="section-head">
+          <div><p class="eyebrow">In progress</p><h2>Drafts under review · 7 active</h2></div>
+          <span class="muted mono upper">Comments accepted from members</span>
+        </div>
+
+        <div class="grid grid-2">
+          <article class="std-card">
+            <div class="std-head"><span class="std-num">ICF-STD-024 · Draft v4</span><span class="std-status review">Going to Plenary</span></div>
+            <div class="std-body">
+              <h3 class="std-title">Labeling — Major Revision (terroir-of-origin clarity, allergen update)</h3>
+              <p class="std-desc">Draft v4 by the Labeling Working Group. Three new sections on terroir-of-origin labeling. Updates allergen disclosure language. Vote at the Annual Plenary, September 19.</p>
+            </div>
+            <div class="std-foot"><span class="muted mono upper">Chair: R. Kihm · 9 WG members · 14 revisions</span><a href="#" class="card-link">Read draft & comment <i class="fa-solid fa-arrow-right"></i></a></div>
+          </article>
+
+          <article class="std-card">
+            <div class="std-head"><span class="std-num">ICF-STD-031 · Draft v2</span><span class="std-status draft">Drafting</span></div>
+            <div class="std-body">
+              <h3 class="std-title">Humidity-Control Documentation — Sub-50kg Aging Facilities</h3>
+              <p class="std-desc">New standard for sub-50,000-kg facilities. Defines what records must be kept around cave humidity control. Commissioned by Standards Committee motion #SC-2026-014.</p>
+            </div>
+            <div class="std-foot"><span class="muted mono upper">Cave Engineering WG · First reading at Plenary</span><a href="#" class="card-link">Read draft & comment <i class="fa-solid fa-arrow-right"></i></a></div>
+          </article>
+
+          <article class="std-card">
+            <div class="std-head"><span class="std-num">ICF-STD-009 · Draft v3</span><span class="std-status review">Going to Plenary</span></div>
+            <div class="std-body">
+              <h3 class="std-title">Sheep-Milk Open — Standard Revision</h3>
+              <p class="std-desc">Revises the sheep-milk open category. Updates milk-fat requirements and includes new sub-categories for hard-aged sheep cheeses.</p>
+            </div>
+            <div class="std-foot"><span class="muted mono upper">Sheep WG · 7 redlines from EU members</span><a href="#" class="card-link">Read draft & comment <i class="fa-solid fa-arrow-right"></i></a></div>
+          </article>
+
+          <article class="std-card">
+            <div class="std-head"><span class="std-num">ICF-STD-033 · Draft v1</span><span class="std-status draft">Drafting</span></div>
+            <div class="std-body">
+              <h3 class="std-title">Apprentice Qualification Standard</h3>
+              <p class="std-desc">Formalizes the qualification standard for Apprentice-tier candidates. Co-authored by the Education and Apprenticeship committees.</p>
+            </div>
+            <div class="std-foot"><span class="muted mono upper">Education + Apprenticeship WG · 2nd reading</span><a href="#" class="card-link">Read draft & comment <i class="fa-solid fa-arrow-right"></i></a></div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- INTL -->
+    <section class="section section-rind">
+      <div class="container-narrow center">
+        <p class="eyebrow on-dark">International recognition</p>
+        <h2>Codex · FDA · EFSA · FSANZ · CFIA</h2>
+        <p class="lede" style="color: var(--mc-gold-100);">Our standards are referenced by all five major food-regulatory bodies. We are a co-founding member of the Codex Alimentarius Cheese Working Group since 1996, with liaison representation on every active standard.</p>
+        <a href="advocacy.html" class="btn btn-on-dark btn-lg mt-3">See active regulatory engagements</a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div class="footer-brand"><a class="brand" href="index.html" style="color: var(--mc-cream);"><span class="brand-mark">MC</span><span><span class="brand-name" style="color: var(--mc-cream);">MoreCheese</span><span class="brand-fed" style="color: var(--mc-gold-300);">International Cheese Federation</span></span></a><p>The federation of artisan cheesemakers, mongers, scientists, and educators. Est. 1947.</p></div>
+        <div class="footer-col"><h6>Programs</h6><ul><li><a href="membership.html">Membership</a></li><li><a href="education.html">Education</a></li><li><a href="awards.html">Awards</a></li><li><a href="standards.html">Standards</a></li></ul></div>
+        <div class="footer-col"><h6>Engage</h6><ul><li><a href="events.html">Events</a></li><li><a href="community.html">Community</a></li><li><a href="committees.html">Committees</a></li><li><a href="chapters.html">Chapters</a></li></ul></div>
+        <div class="footer-col"><h6>About</h6><ul><li><a href="about.html">Our story</a></li><li><a href="contact.html">Contact</a></li><li><a href="portal.html">Portal</a></li></ul></div>
+        <div class="footer-news"><h6>The Curd</h6><p>Monthly newsletter.</p><form onsubmit="event.preventDefault();"><input type="email" placeholder="your@email" /><button type="submit" class="btn btn-primary btn-sm">Subscribe</button></form></div>
+      </div>
+      <div class="footer-bottom"><div>© 2026 ICF</div><div class="footer-built"><i class="fa-solid fa-cheese"></i> Built on <a href="https://docs.memberjunction.org" target="_blank" rel="noopener">MemberJunction</a></div></div>
+    </div>
+  </footer>
+
+  <script src="assets/js/betty-widget.js"></script>
+</body>
+</html>

@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>My Portal — Elena Rodriguez · MoreCheese</title>
+  <link rel="stylesheet" href="assets/css/tokens.css" />
+  <link rel="stylesheet" href="assets/css/main.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <style>
+    .portal-shell { display: grid; grid-template-columns: 260px 1fr; min-height: calc(100vh - 73px); }
+    .portal-side { background: var(--mc-bg-surface); border-right: 1px solid var(--mc-border-subtle); padding: var(--mc-space-5); position: sticky; top: 73px; height: calc(100vh - 73px); overflow-y: auto; }
+    .portal-side-head { display: flex; gap: var(--mc-space-3); align-items: center; padding: var(--mc-space-3); background: var(--mc-bg-surface-warm); border-radius: var(--mc-radius-md); margin-bottom: var(--mc-space-5); }
+    .portal-avatar { width: 44px; height: 44px; border-radius: 50%; background: linear-gradient(135deg, var(--mc-gold-400), var(--mc-rind-400)); display: grid; place-items: center; color: var(--mc-cream); font-family: var(--mc-font-display); font-weight: var(--mc-fw-bold); }
+    .portal-user-name { font-weight: var(--mc-fw-semi); font-size: var(--mc-fs-sm); }
+    .portal-user-tier { font-family: var(--mc-font-mono); font-size: 10px; letter-spacing: var(--mc-ls-wider); text-transform: uppercase; color: var(--mc-rind-500); }
+    .portal-nav-label { font-family: var(--mc-font-mono); font-size: var(--mc-fs-xs); letter-spacing: var(--mc-ls-wider); text-transform: uppercase; color: var(--mc-text-muted); margin: var(--mc-space-5) var(--mc-space-2) var(--mc-space-2); }
+    .portal-nav { display: flex; flex-direction: column; gap: 2px; }
+    .portal-nav a { padding: var(--mc-space-3) var(--mc-space-3); border-radius: var(--mc-radius-md); font-size: var(--mc-fs-sm); display: flex; align-items: center; gap: var(--mc-space-3); transition: all var(--mc-dur-fast); color: var(--mc-text-primary); }
+    .portal-nav a:hover { background: var(--mc-bg-surface-warm); }
+    .portal-nav a.active { background: var(--mc-rind-500); color: var(--mc-cream); }
+    .portal-nav a i { width: 18px; text-align: center; }
+    .portal-nav-count { margin-left: auto; padding: 1px 7px; background: var(--mc-bg-surface-warm); border-radius: var(--mc-radius-pill); font-size: 10px; font-weight: var(--mc-fw-semi); color: var(--mc-rind-500); }
+    .portal-nav a.active .portal-nav-count { background: rgba(255,255,255,0.15); color: var(--mc-cream); }
+    .portal-main { padding: var(--mc-space-7); background: var(--mc-bg-page); }
+    @media (max-width: 900px) { .portal-shell { grid-template-columns: 1fr; } .portal-side { position: static; height: auto; } }
+
+    .portal-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: var(--mc-space-5); margin-bottom: var(--mc-space-6); }
+    .portal-tile { background: var(--mc-bg-surface); border: 1px solid var(--mc-border-subtle); border-radius: var(--mc-radius-lg); padding: var(--mc-space-5); }
+    .portal-tile-eyebrow { font-family: var(--mc-font-mono); font-size: var(--mc-fs-xs); letter-spacing: var(--mc-ls-wide); text-transform: uppercase; color: var(--mc-text-muted); margin-bottom: var(--mc-space-2); display: flex; align-items: center; gap: var(--mc-space-2); }
+    .portal-tile-num { font-family: var(--mc-font-display); font-size: var(--mc-fs-3xl); font-weight: var(--mc-fw-semi); color: var(--mc-rind-500); line-height: 1; }
+    .portal-tile-label { font-size: var(--mc-fs-sm); color: var(--mc-text-secondary); margin-top: var(--mc-space-2); }
+
+    .portal-section { margin-bottom: var(--mc-space-7); }
+    .portal-section-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: var(--mc-space-4); }
+    .portal-section-head h2 { margin: 0; font-size: var(--mc-fs-xl); }
+
+    .gauge-ring { position: relative; width: 84px; height: 84px; }
+    .gauge-svg { transform: rotate(-90deg); }
+    .gauge-bg { fill: none; stroke: var(--mc-bg-surface-warm); stroke-width: 8; }
+    .gauge-fg { fill: none; stroke: var(--mc-sage-500); stroke-width: 8; stroke-linecap: round; stroke-dasharray: 250.96; }
+    .gauge-num { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--mc-font-display); font-weight: var(--mc-fw-semi); font-size: var(--mc-fs-xl); color: var(--mc-ink-500); }
+
+    .row-list { display: flex; flex-direction: column; }
+    .row-item { padding: var(--mc-space-4) 0; border-bottom: 1px solid var(--mc-border-subtle); display: grid; grid-template-columns: 44px 1fr auto; gap: var(--mc-space-4); align-items: center; }
+    .row-item:last-child { border-bottom: 0; }
+    .row-icon { width: 36px; height: 36px; border-radius: var(--mc-radius-md); background: var(--mc-bg-surface-warm); color: var(--mc-rind-500); display: grid; place-items: center; }
+    .row-title { font-weight: var(--mc-fw-medium); font-size: var(--mc-fs-sm); }
+    .row-meta { font-size: var(--mc-fs-xs); color: var(--mc-text-muted); margin-top: 2px; }
+    .row-action { font-size: var(--mc-fs-sm); color: var(--mc-text-link); font-weight: var(--mc-fw-medium); }
+
+    .signal-bar { display: flex; align-items: center; gap: var(--mc-space-3); margin-bottom: var(--mc-space-3); }
+    .signal-name { font-size: var(--mc-fs-sm); width: 130px; color: var(--mc-text-secondary); }
+    .signal-track { flex: 1; height: 8px; background: var(--mc-bg-surface-warm); border-radius: var(--mc-radius-pill); overflow: hidden; }
+    .signal-fill { height: 100%; background: linear-gradient(90deg, var(--mc-sage-400), var(--mc-sage-600)); border-radius: var(--mc-radius-pill); }
+    .signal-num { font-family: var(--mc-font-mono); font-size: var(--mc-fs-xs); color: var(--mc-text-secondary); width: 40px; text-align: right; }
+
+    .nudge { background: linear-gradient(135deg, var(--mc-rind-500), var(--mc-rind-700)); color: var(--mc-cream); border-radius: var(--mc-radius-lg); padding: var(--mc-space-5); margin-bottom: var(--mc-space-6); display: flex; align-items: center; gap: var(--mc-space-4); }
+    .nudge-icon { width: 48px; height: 48px; border-radius: var(--mc-radius-md); background: rgba(255,255,255,0.15); display: grid; place-items: center; flex-shrink: 0; color: var(--mc-gold-300); }
+    .nudge-text { flex: 1; }
+    .nudge-title { font-weight: var(--mc-fw-semi); }
+    .nudge-body { font-size: var(--mc-fs-sm); opacity: 0.9; margin-top: 2px; }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to main content</a>
+
+  <header class="site-header">
+    <div class="site-header-inner">
+      <a class="brand" href="index.html"><span class="brand-mark">MC</span><span><span class="brand-name">MoreCheese</span><span class="brand-fed">Member portal · Elena Rodriguez</span></span></a>
+      <nav class="nav-primary"><a href="index.html"><i class="fa-solid fa-arrow-left"></i> Public site</a></nav>
+      <div class="nav-cta"><a href="#" class="btn btn-secondary btn-sm">Sign out</a></div>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="portal-shell">
+      <!-- SIDE -->
+      <aside class="portal-side">
+        <div class="portal-side-head">
+          <div class="portal-avatar">ER</div>
+          <div>
+            <div class="portal-user-name">Elena Rodriguez</div>
+            <div class="portal-user-tier">Producer · Active · Member since 2022</div>
+          </div>
+        </div>
+
+        <div class="portal-nav-label">Dashboard</div>
+        <nav class="portal-nav">
+          <a href="portal.html" class="active"><i class="fa-solid fa-house"></i> Overview</a>
+          <a href="#"><i class="fa-solid fa-id-card"></i> Membership</a>
+          <a href="#"><i class="fa-solid fa-graduation-cap"></i> Certifications <span class="portal-nav-count">2</span></a>
+          <a href="#"><i class="fa-solid fa-book-open"></i> Courses <span class="portal-nav-count">1</span></a>
+          <a href="#"><i class="fa-solid fa-calendar"></i> My events <span class="portal-nav-count">3</span></a>
+          <a href="messaging.html"><i class="fa-solid fa-envelope"></i> Messages <span class="portal-nav-count">7</span></a>
+        </nav>
+
+        <div class="portal-nav-label">Engagement</div>
+        <nav class="portal-nav">
+          <a href="#"><i class="fa-solid fa-people-group"></i> Committees</a>
+          <a href="#"><i class="fa-solid fa-comments"></i> Forum activity</a>
+          <a href="#"><i class="fa-solid fa-trophy"></i> My award entries</a>
+          <a href="#"><i class="fa-solid fa-bullhorn"></i> Advocacy actions</a>
+        </nav>
+
+        <div class="portal-nav-label">Account</div>
+        <nav class="portal-nav">
+          <a href="#"><i class="fa-solid fa-user-gear"></i> Profile & preferences</a>
+          <a href="#"><i class="fa-solid fa-credit-card"></i> Billing & dues</a>
+          <a href="#"><i class="fa-solid fa-bell"></i> Notifications</a>
+          <a href="#"><i class="fa-solid fa-key"></i> Security</a>
+        </nav>
+      </aside>
+
+      <!-- MAIN -->
+      <div class="portal-main">
+        <p class="eyebrow">Welcome back</p>
+        <h1 style="font-size: var(--mc-fs-3xl); margin-bottom: var(--mc-space-2);">Hi Elena.</h1>
+        <p class="muted" style="margin-bottom: var(--mc-space-6);">Today is Saturday, June 27, 2026 · Producer-tier · Member #00342</p>
+
+        <!-- Renewal nudge -->
+        <div class="nudge">
+          <div class="nudge-icon"><i class="fa-solid fa-arrow-rotate-right"></i></div>
+          <div class="nudge-text">
+            <div class="nudge-title">Your membership renews in 47 days (August 13, 2026)</div>
+            <div class="nudge-body">Producer tier · $595/yr · Same card on file. Auto-renew is on. Change anything?</div>
+          </div>
+          <a href="#" class="btn btn-on-dark btn-sm">Manage</a>
+        </div>
+
+        <!-- TILES -->
+        <div class="portal-grid">
+          <div class="portal-tile">
+            <div class="portal-tile-eyebrow"><i class="fa-solid fa-id-card"></i> Membership</div>
+            <div class="portal-tile-num">Active</div>
+            <div class="portal-tile-label">Producer · 4 yrs · Renews Aug 13</div>
+          </div>
+          <div class="portal-tile">
+            <div class="portal-tile-eyebrow"><i class="fa-solid fa-graduation-cap"></i> Certifications</div>
+            <div class="portal-tile-num">2</div>
+            <div class="portal-tile-label">Master Cheesemaker · Sensory Eval Specialist</div>
+          </div>
+          <div class="portal-tile">
+            <div class="portal-tile-eyebrow"><i class="fa-solid fa-calendar-check"></i> Upcoming events</div>
+            <div class="portal-tile-num">3</div>
+            <div class="portal-tile-label">Annual Conference + 2 chapter events</div>
+          </div>
+        </div>
+
+        <!-- ENGAGEMENT SCORE (Sonar) -->
+        <div class="portal-section">
+          <div class="portal-section-head">
+            <h2>Your engagement</h2>
+            <span class="muted mono upper">Powered by Sonar</span>
+          </div>
+          <div class="portal-tile" style="display: grid; grid-template-columns: 130px 1fr; gap: var(--mc-space-6); align-items: center;">
+            <div style="text-align: center;">
+              <div class="gauge-ring">
+                <svg class="gauge-svg" width="84" height="84" viewBox="0 0 84 84">
+                  <circle class="gauge-bg" cx="42" cy="42" r="40"></circle>
+                  <circle class="gauge-fg" cx="42" cy="42" r="40" stroke-dashoffset="50"></circle>
+                </svg>
+                <div class="gauge-num">87</div>
+              </div>
+              <div class="mono upper muted mt-2" style="font-size: 10px;">Top 12% · last 12 mo</div>
+            </div>
+            <div>
+              <div class="signal-bar"><span class="signal-name">Event attendance</span><span class="signal-track"><span class="signal-fill" style="width: 92%;"></span></span><span class="signal-num">92</span></div>
+              <div class="signal-bar"><span class="signal-name">Forum activity</span><span class="signal-track"><span class="signal-fill" style="width: 78%;"></span></span><span class="signal-num">78</span></div>
+              <div class="signal-bar"><span class="signal-name">Committee service</span><span class="signal-track"><span class="signal-fill" style="width: 96%;"></span></span><span class="signal-num">96</span></div>
+              <div class="signal-bar"><span class="signal-name">Course completion</span><span class="signal-track"><span class="signal-fill" style="width: 85%;"></span></span><span class="signal-num">85</span></div>
+              <div class="signal-bar"><span class="signal-name">Awards participation</span><span class="signal-track"><span class="signal-fill" style="width: 70%;"></span></span><span class="signal-num">70</span></div>
+              <div class="signal-bar"><span class="signal-name">Mentorship</span><span class="signal-track"><span class="signal-fill" style="width: 90%;"></span></span><span class="signal-num">90</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- UPCOMING -->
+        <div class="portal-section">
+          <div class="portal-section-head">
+            <h2>What's coming up</h2>
+            <a href="events.html" class="row-action">All events <i class="fa-solid fa-arrow-right"></i></a>
+          </div>
+          <div class="portal-tile">
+            <div class="row-list">
+              <div class="row-item">
+                <div class="row-icon"><i class="fa-solid fa-flag"></i></div>
+                <div><div class="row-title">ICF Annual Conference 2026 — Madison, WI</div><div class="row-meta">Sep 18–21 · Confirmation #ANN-1042 · Awards Gala included</div></div>
+                <a href="event-detail.html" class="row-action">Details →</a>
+              </div>
+              <div class="row-item">
+                <div class="row-icon"><i class="fa-solid fa-mountain"></i></div>
+                <div><div class="row-title">Sonoma Valley Sensory Intensive — Point Reyes, CA</div><div class="row-meta">Aug 14–16 · Confirmation #SVI-1042 · Waitlist auto-add</div></div>
+                <a href="event-detail.html" class="row-action">Details →</a>
+              </div>
+              <div class="row-item">
+                <div class="row-icon"><i class="fa-solid fa-users"></i></div>
+                <div><div class="row-title">Pacific Northwest Chapter Quarterly — Seattle</div><div class="row-meta">Jul 19 · You are speaking · Working session 10am–noon</div></div>
+                <a href="#" class="row-action">Agenda →</a>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TWO COLUMN: Certifications + Messages -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--mc-space-5);" class="portal-section">
+          <div class="portal-tile">
+            <div class="portal-section-head">
+              <h2>Certifications in progress</h2>
+              <a href="#" class="row-action">All →</a>
+            </div>
+            <div class="row-list">
+              <div class="row-item">
+                <div class="row-icon"><i class="fa-solid fa-shield-halved"></i></div>
+                <div><div class="row-title">HACCP for Small Producers</div><div class="row-meta">5 of 8 weeks complete · Next deliverable due Jul 12</div></div>
+                <span class="badge badge-sage">62%</span>
+              </div>
+              <div class="row-item">
+                <div class="row-icon"><i class="fa-solid fa-flask"></i></div>
+                <div><div class="row-title">Sensory Evaluation — Advanced</div><div class="row-meta">3 of 6 weeks complete · Judging practicum in August</div></div>
+                <span class="badge badge-sage">50%</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="portal-tile">
+            <div class="portal-section-head">
+              <h2>Recent messages</h2>
+              <a href="messaging.html" class="row-action">Inbox →</a>
+            </div>
+            <div class="row-list">
+              <div class="row-item">
+                <div class="row-icon" style="background: var(--mc-gold-100); color: var(--mc-rind-600);">SC</div>
+                <div><div class="row-title">Standards Committee — Voting deadline reminder</div><div class="row-meta">From: standards@morecheese.org · 2 hours ago · 3 unread</div></div>
+                <span class="badge badge-rind">7</span>
+              </div>
+              <div class="row-item">
+                <div class="row-icon" style="background: var(--mc-sage-100); color: var(--mc-sage-600);">MT</div>
+                <div><div class="row-title">Marcel Touraine — re: B. linens backslops thread</div><div class="row-meta">Direct · Yesterday · Forum follow-up</div></div>
+              </div>
+              <div class="row-item">
+                <div class="row-icon" style="background: var(--mc-oak-100); color: var(--mc-oak-600);">JW</div>
+                <div><div class="row-title">Jamie Wu — Master mentee match?</div><div class="row-meta">Direct · 2 days ago · Education Committee</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- BETTY recommendations -->
+        <div class="portal-section">
+          <div class="portal-section-head">
+            <h2>Betty's recommendations for you</h2>
+            <span class="muted mono upper">Member-aware · Updated daily</span>
+          </div>
+          <div class="grid grid-3">
+            <div class="card" style="padding: var(--mc-space-5);"><p class="eyebrow"><i class="fa-solid fa-microphone"></i> Try this</p><p style="font-size: var(--mc-fs-sm);">"Betty, prep me for the Standards Plenary vote — what are the active items I have a stake in?"</p></div>
+            <div class="card" style="padding: var(--mc-space-5);"><p class="eyebrow"><i class="fa-solid fa-microphone"></i> Try this</p><p style="font-size: var(--mc-fs-sm);">"Betty, who in my chapter is doing washed-rind work? I want to schedule a make day."</p></div>
+            <div class="card" style="padding: var(--mc-space-5);"><p class="eyebrow"><i class="fa-solid fa-microphone"></i> Try this</p><p style="font-size: var(--mc-fs-sm);">"Betty, draft the agenda for the July chapter quarterly — pull from last quarter's parking lot."</p></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </main>
+
+  <script src="assets/js/betty-widget.js"></script>
+</body>
+</html>
