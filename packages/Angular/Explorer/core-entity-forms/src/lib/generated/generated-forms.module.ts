@@ -316,6 +316,7 @@ import { MJScheduledJobRunFormComponent } from "./Entities/MJScheduledJobRun/mjs
 import { MJScheduledJobTypeFormComponent } from "./Entities/MJScheduledJobType/mjscheduledjobtype.form.component";
 import { MJScheduledJobFormComponent } from "./Entities/MJScheduledJob/mjscheduledjob.form.component";
 import { MJSchemaInfoFormComponent } from "./Entities/MJSchemaInfo/mjschemainfo.form.component";
+import { MJScopedPromptPartFormComponent } from "./Entities/MJScopedPromptPart/mjscopedpromptpart.form.component";
 import { MJSearchExecutionLogFormComponent } from "./Entities/MJSearchExecutionLog/mjsearchexecutionlog.form.component";
 import { MJSearchProviderFormComponent } from "./Entities/MJSearchProvider/mjsearchprovider.form.component";
 import { MJSearchScopeEntityFormComponent } from "./Entities/MJSearchScopeEntity/mjsearchscopeentity.form.component";
@@ -913,6 +914,11 @@ declarations: [
     MJScheduledActionFormComponent,
     MJScheduledJobRunFormComponent,
     MJScheduledJobTypeFormComponent,
+    MJScheduledJobFormComponent,
+    MJSchemaInfoFormComponent,
+    MJScopedPromptPartFormComponent,
+    MJSearchExecutionLogFormComponent,
+    MJSearchProviderFormComponent],
     MJScheduledJobFormComponent],
 imports: [
     CommonModule,
@@ -934,6 +940,7 @@ declarations: [
     MJSearchExecutionLogFormComponent,
     MJSearchProviderFormComponent,
     MJSearchScopeEntityFormComponent,
+    MJSearchScopeEntityFormComponent,
     MJSearchScopeExternalIndexFormComponent,
     MJSearchScopePermissionFormComponent,
     MJSearchScopeProviderFormComponent,
@@ -949,6 +956,10 @@ declarations: [
     MJSkillFormComponent,
     MJSQLDialectFormComponent,
     MJStateProvinceFormComponent,
+    MJTagAuditLogFormComponent,
+    MJTagCoOccurrenceFormComponent,
+    MJTagScopeFormComponent,
+    MJTagSuggestionFormComponent],
     MJTagAuditLogFormComponent],
 imports: [
     CommonModule,
@@ -970,6 +981,7 @@ declarations: [
     MJTagScopeFormComponent,
     MJTagSuggestionFormComponent,
     MJTagSynonymFormComponent,
+    MJTagSynonymFormComponent,
     MJTaggedItemFormComponent,
     MJTagFormComponent,
     MJTaskDependencyFormComponent,
@@ -986,6 +998,10 @@ declarations: [
     MJTestRunOutputFormComponent,
     MJTestRunFormComponent,
     MJTestSuiteRunFormComponent],
+    MJTestSuiteRunFormComponent,
+    MJTestSuiteTestFormComponent,
+    MJTestSuiteFormComponent,
+    MJTestTypeFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -1006,6 +1022,7 @@ declarations: [
     MJTestSuiteFormComponent,
     MJTestTypeFormComponent,
     MJTestFormComponent,
+    MJTestFormComponent,
     MJUserApplicationEntityFormComponent,
     MJUserApplicationFormComponent,
     MJUserFavoriteFormComponent,
@@ -1021,7 +1038,10 @@ declarations: [
     MJUserViewFormComponent,
     MJUserFormComponent,
     MJVectorDatabaseFormComponent,
-    MJVectorIndexFormComponent],
+    MJVectorIndexFormComponent,
+    MJVersionInstallationFormComponent,
+    MJVersionLabelItemFormComponent,
+    MJVersionLabelRestoreFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -1041,6 +1061,7 @@ declarations: [
     MJVersionInstallationFormComponent,
     MJVersionLabelItemFormComponent,
     MJVersionLabelRestoreFormComponent,
+    MJVersionLabelFormComponent,
     MJVersionLabelFormComponent,
     MJViewTypeFormComponent,
     MJWorkflowEngineFormComponent,

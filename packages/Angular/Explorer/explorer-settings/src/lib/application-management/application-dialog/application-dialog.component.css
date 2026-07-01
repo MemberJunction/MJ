@@ -203,16 +203,19 @@
   border-bottom: none;
 }
 
-.section-header {
+/* -----------------------------------------------------------------------------
+   Collapsible Sections — now <mj-accordion-panel>. The bespoke fieldset/legend
+   chrome (.section-header / .section-title-row / .chevron-icon) was removed; the
+   title (icon + title + description) is projected into the accordion title slot.
+   ----------------------------------------------------------------------------- */
+.app-dialog-section-title {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
-  margin-bottom: 1.25rem;
-  padding: 0;
-  font-weight: normal;
+  min-width: 0;
 }
 
-.section-header .section-title {
+.app-dialog-section-title .section-title {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -221,44 +224,15 @@
   color: var(--mj-text-primary);
 }
 
-.section-header .section-title i {
+.app-dialog-section-title .section-title i {
   color: var(--mj-brand-primary);
   font-size: 0.875rem;
 }
 
-.section-header .section-description {
+.app-dialog-section-title .section-description {
   font-size: 0.8125rem;
   color: var(--mj-text-secondary);
-}
-
-/* -----------------------------------------------------------------------------
-   Collapsible Sections
-   ----------------------------------------------------------------------------- */
-.collapsible-section .section-header.clickable {
-  cursor: pointer;
-  user-select: none;
-  transition: background-color 0.2s ease;
-  padding: 0.75rem 0;
-  margin: -0.75rem 0 0.75rem 0;
-}
-
-.collapsible-section .section-header.clickable:hover {
-  opacity: 0.8;
-}
-
-.section-title-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  width: 100%;
-  margin-bottom: 0.25rem;
-}
-
-.chevron-icon {
-  color: var(--mj-text-secondary);
-  font-size: 0.875rem;
-  transition: transform 0.2s ease;
-  flex-shrink: 0;
+  font-weight: normal;
 }
 
 .section-content {

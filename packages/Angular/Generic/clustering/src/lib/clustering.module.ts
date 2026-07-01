@@ -8,7 +8,7 @@ import { ClusterViewRendererComponent } from './view-type/cluster-view-renderer.
 import { ClusterViewPropSheetComponent } from './view-type/cluster-view-prop-sheet.component';
 import { LoadClusterViewType } from './view-type/cluster-view-type';
 import { MJEntityCardComponent } from '@memberjunction/ng-entity-card';
-import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
+import { MJEmptyStateComponent, MJAccordionModule } from '@memberjunction/ng-ui-components';
 
 @NgModule({
     declarations: [
@@ -22,6 +22,7 @@ import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
         FormsModule,
         MJEntityCardComponent,
         MJEmptyStateComponent,
+        MJAccordionModule,
     ],
     exports: [
         ClusterScatterComponent,

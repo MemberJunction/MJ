@@ -13,7 +13,7 @@ import { BaseEntity, BaseEntityEvent, BaseEngineRegistry, LogError, Metadata, Us
 import { BaseSingleton, MJGlobal, MJEventType, MJLruCache, UUIDsEqual } from "@memberjunction/global";
 import { createHash } from "crypto";
 import { MJAIActionEntity, MJActionEntity,
-         MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgentNoteTypeEntity,
+         MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgentNoteTypeEntity, MJScopedPromptPartEntity,
          MJAIModelActionEntity, MJAIPromptModelEntity, MJAIPromptTypeEntity,
          MJAIResultCacheEntity, MJAIVendorTypeDefinitionEntity, MJArtifactTypeEntity,
          MJEntityAIActionEntity, MJVectorDatabaseEntity, MJAIAgentPromptEntity,
@@ -264,6 +264,7 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
     public get AgentNoteTypes(): MJAIAgentNoteTypeEntity[] { return this.Base.AgentNoteTypes; }
     public get AgentPermissions(): MJAIAgentPermissionEntity[] { return this.Base.AgentPermissions; }
     public get AgentNotes(): MJAIAgentNoteEntity[] { return this.Base.AgentNotes; }
+    public get ScopedPromptParts(): MJScopedPromptPartEntity[] { return this.Base.ScopedPromptParts; }
     public get AgentExamples(): MJAIAgentExampleEntity[] { return this.Base.AgentExamples; }
     public get VendorTypeDefinitions(): MJAIVendorTypeDefinitionEntity[] { return this.Base.VendorTypeDefinitions; }
     public get InferenceProviderTypeID(): string | undefined { return this.Base.InferenceProviderTypeID; }
@@ -345,10 +346,10 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
     }
 
     // Delegate AIEngineBase public methods
-    public async GetHighestPowerModel(vendorName: string, modelType: string, contextUser?: UserInfo): Promise<MJAIModelEntityExtended> {
+    public async GetHighestPowerModel(vendorName: string, modelType: string, contextUser?: UserInfo): Promise<MJAIModelEntityExtended | undefined> {
         return this.Base.GetHighestPowerModel(vendorName, modelType, contextUser);
     }
-    public async GetHighestPowerLLM(vendorName?: string, contextUser?: UserInfo): Promise<MJAIModelEntityExtended> {
+    public async GetHighestPowerLLM(vendorName?: string, contextUser?: UserInfo): Promise<MJAIModelEntityExtended | undefined> {
         return this.Base.GetHighestPowerLLM(vendorName, contextUser);
     }
     public GetActiveModelCost(modelID: string, vendorID: string, processingType: 'Realtime' | 'Batch' = 'Realtime'): MJAIModelCostEntity | null {
@@ -957,7 +958,10 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
         modelToUse: MJAIModelEntityExtended
     }> {
         await AIEngine.Instance.Config(false, contextUser);
-        const modelToUse = model ? model : await this.GetHighestPowerLLM(undefined, contextUser);
+        const modelToUse = model ?? await this.GetHighestPowerLLM(undefined, contextUser);
+        if (!modelToUse) {
+            throw new Error('No active LLM model found. Ensure AI Models are configured and the user has read permissions on MJ: AI Models.');
+        }
         const apiKeyToUse = apiKey ? apiKey : GetAIAPIKey(modelToUse.DriverClass);
         const modelInstance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, modelToUse.DriverClass, apiKeyToUse);
 

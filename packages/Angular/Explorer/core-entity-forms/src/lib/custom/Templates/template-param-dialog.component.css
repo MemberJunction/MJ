@@ -159,13 +159,6 @@
     color: var(--mj-text-muted);
 }
 
-.dlg-panel-title .count-badge {
-    background: var(--mj-brand-primary);
-    color: var(--mj-text-inverse);
-    padding: 2px 6px;
-    border-radius: 10px;
-    font-size: 0.7em;
-}
 
 /* Info text */
 .dlg-info-text {

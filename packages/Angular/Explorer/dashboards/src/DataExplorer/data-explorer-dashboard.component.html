@@ -278,82 +278,73 @@
               </div>
               <div class="qa-body">
                 <!-- Recent Records (max 3) -->
-                <div class="qa-section" [class.collapsed]="!isQuickAccessSectionExpanded('recentRecords')">
-                  <div class="qa-section-header" (click)="toggleQuickAccessSection('recentRecords')">
+                <mj-accordion-panel [Expanded]="isQuickAccessSectionExpanded('recentRecords')" (ExpandedChange)="toggleQuickAccessSection('recentRecords')">
+                  <ng-template mjAccordionTitle>
                     <i class="fa-solid fa-clock-rotate-left qa-section-icon"></i>
                     <span>Recent Records</span>
-                    <span class="qa-section-count">{{ quickAccessRecentRecords.length }}</span>
-                    <i class="fa-solid fa-chevron-down qa-section-chevron"></i>
-                  </div>
-                  <div class="qa-section-body">
-                    @for (record of quickAccessRecentRecords; track record.entityId + '|' + record.recordId) {
-                      <div class="qa-item" (click)="onRecentRecordClick(record)">
-                        <div class="qa-item-icon">
-                          <i [class]="getEntityIconById(record.entityId)"></i>
-                        </div>
-                        <div class="qa-item-info">
-                          <div class="qa-item-name">{{ record.recordName || record.recordId }}</div>
-                          <div class="qa-item-meta">{{ record.entityName }}</div>
-                        </div>
-                        <span class="qa-item-time">{{ formatRelativeTime(record.latestAt) }}</span>
+                    <span class="mj-accordion-badge mj-accordion-badge--right">{{ quickAccessRecentRecords.length }}</span>
+                  </ng-template>
+                  @for (record of quickAccessRecentRecords; track record.entityId + '|' + record.recordId) {
+                    <div class="qa-item" (click)="onRecentRecordClick(record)">
+                      <div class="qa-item-icon">
+                        <i [class]="getEntityIconById(record.entityId)"></i>
                       </div>
-                    }
-                    @if (quickAccessRecentRecords.length === 0) {
-                      <div class="qa-empty">No recent records</div>
-                    }
-                  </div>
-                </div>
+                      <div class="qa-item-info">
+                        <div class="qa-item-name">{{ record.recordName || record.recordId }}</div>
+                        <div class="qa-item-meta">{{ record.entityName }}</div>
+                      </div>
+                      <span class="qa-item-time">{{ formatRelativeTime(record.latestAt) }}</span>
+                    </div>
+                  }
+                  @if (quickAccessRecentRecords.length === 0) {
+                    <div class="qa-empty">No recent records</div>
+                  }
+                </mj-accordion-panel>
 
                 <!-- Recent Entities (max 3) -->
-                <div class="qa-section" [class.collapsed]="!isQuickAccessSectionExpanded('recentEntities')">
-                  <div class="qa-section-header" (click)="toggleQuickAccessSection('recentEntities')">
+                <mj-accordion-panel [Expanded]="isQuickAccessSectionExpanded('recentEntities')" (ExpandedChange)="toggleQuickAccessSection('recentEntities')">
+                  <ng-template mjAccordionTitle>
                     <i class="fa-solid fa-table qa-section-icon"></i>
                     <span>Recent Entities</span>
-                    <span class="qa-section-count">{{ quickAccessRecentEntities.length }}</span>
-                    <i class="fa-solid fa-chevron-down qa-section-chevron"></i>
-                  </div>
-                  <div class="qa-section-body">
-                    @for (entity of quickAccessRecentEntities; track entity.ID) {
-                      <div class="qa-item" (click)="onEntitySelected(entity)">
-                        <div class="qa-item-icon">
-                          <i [class]="getEntityIcon(entity)"></i>
-                        </div>
-                        <div class="qa-item-info">
-                          <div class="qa-item-name">{{ entity.DisplayNameOrName }}</div>
-                        </div>
+                    <span class="mj-accordion-badge mj-accordion-badge--right">{{ quickAccessRecentEntities.length }}</span>
+                  </ng-template>
+                  @for (entity of quickAccessRecentEntities; track entity.ID) {
+                    <div class="qa-item" (click)="onEntitySelected(entity)">
+                      <div class="qa-item-icon">
+                        <i [class]="getEntityIcon(entity)"></i>
                       </div>
-                    }
-                    @if (quickAccessRecentEntities.length === 0) {
-                      <div class="qa-empty">No recent entities</div>
-                    }
-                  </div>
-                </div>
+                      <div class="qa-item-info">
+                        <div class="qa-item-name">{{ entity.DisplayNameOrName }}</div>
+                      </div>
+                    </div>
+                  }
+                  @if (quickAccessRecentEntities.length === 0) {
+                    <div class="qa-empty">No recent entities</div>
+                  }
+                </mj-accordion-panel>
 
                 <!-- Favorite Records (max 3) -->
-                <div class="qa-section" [class.collapsed]="!isQuickAccessSectionExpanded('favoriteRecords')">
-                  <div class="qa-section-header" (click)="toggleQuickAccessSection('favoriteRecords')">
+                <mj-accordion-panel [Expanded]="isQuickAccessSectionExpanded('favoriteRecords')" (ExpandedChange)="toggleQuickAccessSection('favoriteRecords')">
+                  <ng-template mjAccordionTitle>
                     <i class="fa-solid fa-star qa-section-icon" style="color: var(--mj-status-warning);"></i>
                     <span>Favorite Records</span>
-                    <span class="qa-section-count">{{ quickAccessFavoriteRecords.length }}</span>
-                    <i class="fa-solid fa-chevron-down qa-section-chevron"></i>
-                  </div>
-                  <div class="qa-section-body">
-                    @for (record of quickAccessFavoriteRecords; track record.userFavoriteId) {
-                      <div class="qa-item" (click)="onFavoriteRecordClick(record)">
-                        <div class="qa-item-icon">
-                          <i [class]="getEntityIconById(record.entityId)"></i>
-                        </div>
-                        <div class="qa-item-info">
-                          <div class="qa-item-name">{{ record.recordName || record.recordId }}</div>
-                          <div class="qa-item-meta">{{ record.entityName }}</div>
-                        </div>
+                    <span class="mj-accordion-badge mj-accordion-badge--right">{{ quickAccessFavoriteRecords.length }}</span>
+                  </ng-template>
+                  @for (record of quickAccessFavoriteRecords; track record.userFavoriteId) {
+                    <div class="qa-item" (click)="onFavoriteRecordClick(record)">
+                      <div class="qa-item-icon">
+                        <i [class]="getEntityIconById(record.entityId)"></i>
                       </div>
-                    }
-                    @if (quickAccessFavoriteRecords.length === 0) {
-                      <div class="qa-empty">No favorite records</div>
-                    }
-                  </div>
-                </div>
+                      <div class="qa-item-info">
+                        <div class="qa-item-name">{{ record.recordName || record.recordId }}</div>
+                        <div class="qa-item-meta">{{ record.entityName }}</div>
+                      </div>
+                    </div>
+                  }
+                  @if (quickAccessFavoriteRecords.length === 0) {
+                    <div class="qa-empty">No favorite records</div>
+                  }
+                </mj-accordion-panel>
               </div>
             </div>
           }

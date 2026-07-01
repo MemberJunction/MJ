@@ -9,6 +9,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  min-height: 0; /* let the [Fill] Fields / Related Entities accordions claim height */
 }
 
 .details-panel .panel-header {
@@ -19,28 +20,8 @@
   flex-shrink: 0;
 }
 
-.details-panel .fields-section,
-.details-panel .relationships-section {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  transition: flex 0.3s ease;
-}
-
-.details-panel .fields-section.section-expanded,
-.details-panel .relationships-section.section-expanded {
-  flex: 1;
-}
-
-.details-panel .fields-section.section-collapsed,
-.details-panel .relationships-section.section-collapsed {
-  flex: 0 0 auto;
-}
-
-.details-panel .fields-section:last-child,
-.details-panel .relationships-section:last-child {
-  border-bottom: none;
-}
+/* The Fields / Related Entities accordions claim leftover height via the
+   accordion's own [Fill] mode (mj-accordion-fill-active host class). */
 
 /* Panel Header */
 .panel-header {
@@ -166,75 +147,13 @@
 }
 
 /* Fields and Relationships Sections */
-.fields-section,
-.relationships-section {
-  border-bottom: 1px solid var(--mj-border-default);
-}
-
-.fields-section .section-header,
-.relationships-section .section-header {
-  flex-shrink: 0;
-  padding: 16px 16px 12px 16px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background: var(--mj-bg-surface-sunken);
-  border: none;
-  border-bottom: 1px solid var(--mj-border-default);
-}
-
-.fields-section .section-header .section-title-group,
-.relationships-section .section-header .section-title-group {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.fields-section h4,
-.relationships-section h4 {
-  margin: 0;
-  font-size: 14px;
+/* Fields + Related Entities are now <mj-accordion-panel> with [Fill] (the field
+   filter buttons live in the mjAccordionActions slot). The bespoke .fields-section
+   / .section-header / .section-title-group / .expand-btn chrome was removed. */
+.erd-section-title {
+  font-size: 13px;
   font-weight: 600;
   color: var(--mj-text-primary);
-}
-
-/* Expand Button */
-.expand-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  background: transparent;
-  color: var(--mj-text-secondary);
-  border: none;
-  border-radius: 50%;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.expand-btn:hover {
-  background: var(--mj-bg-surface-active);
-  color: var(--mj-text-primary);
-}
-
-.expand-btn .fa-solid {
-  font-size: 10px;
-  transition: transform 0.2s ease;
-}
-
-.expand-btn.expanded .fa-solid {
-  transform: rotate(90deg);
-}
-
-.section-title-group {
-  cursor: pointer;
-  user-select: none;
-}
-
-.section-title-group:hover {
-  opacity: 0.8;
 }
 
 /* Field Filter Buttons */
