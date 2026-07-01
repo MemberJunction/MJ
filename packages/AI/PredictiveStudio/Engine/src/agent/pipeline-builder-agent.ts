@@ -78,7 +78,7 @@ export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
     if (!user) {
       return this.codeStep<P>('Failed', payload as unknown as P, 'No context user — cannot build the pipeline.');
     }
-    const provider = Metadata.Provider;
+    const provider = params.provider ?? Metadata.Provider;
     if (!provider) {
       return this.codeStep<P>('Failed', payload as unknown as P, 'No metadata provider available — cannot build the pipeline.');
     }

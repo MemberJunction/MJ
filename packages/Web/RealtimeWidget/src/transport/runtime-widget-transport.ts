@@ -14,7 +14,7 @@
  * @module @memberjunction/realtime-widget
  */
 
-import { Metadata, RunView, type UserInfo } from '@memberjunction/core';
+import { RunView, type UserInfo, type IMetadataProvider } from '@memberjunction/core';
 import type { MJConversationEntity, MJConversationDetailEntity } from '@memberjunction/core-entities';
 import { setupGraphQLClient, GraphQLProviderConfigData } from '@memberjunction/graphql-dataprovider';
 import { ConversationsRuntime } from '@memberjunction/conversations-runtime';
@@ -30,6 +30,7 @@ export class RuntimeWidgetTransport implements IWidgetTransport {
     private session: WidgetSession | null = null;
     private conversationId: string | null = null;
     private contextUser: UserInfo | null = null;
+    private provider: IMetadataProvider | null = null;
 
     constructor(private readonly apiUrl: string) {}
 
@@ -39,6 +40,7 @@ export class RuntimeWidgetTransport implements IWidgetTransport {
         this.token = session.token;
 
         const provider = await setupGraphQLClient(this.buildConfig());
+        this.provider = provider;
         this.contextUser = provider.CurrentUser;
         // No-op when already configured for this process; safe to call per mount.
         await ConversationsRuntime.Instance.Config(false, provider.CurrentUser, provider);
@@ -95,6 +97,18 @@ export class RuntimeWidgetTransport implements IWidgetTransport {
 
     // ── helpers ────────────────────────────────────────────────────────────────
 
+    /**
+     * Returns the transport's own GraphQL provider (bound to this widget's guest token), set in
+     * {@link Initialize}. All entity work goes through this instance rather than the process-global
+     * `Metadata.Provider`, so a page hosting multiple widgets against different servers stays isolated.
+     */
+    private requireProvider(): IMetadataProvider {
+        if (!this.provider) {
+            throw new Error('Widget transport not initialized — provider unavailable.');
+        }
+        return this.provider;
+    }
+
     private buildConfig(): GraphQLProviderConfigData {
         const base = this.apiUrl.replace(/\/+$/, '');
         const wsUrl = base.replace(/^http/, 'ws');
@@ -103,7 +117,7 @@ export class RuntimeWidgetTransport implements IWidgetTransport {
 
     /** Creates the conversation row the guest's turns attach to. */
     private async createConversation(): Promise<string> {
-        const md = new Metadata();
+        const md = this.requireProvider();
         const convo = await md.GetEntityObject<MJConversationEntity>(CONVERSATIONS_ENTITY, this.contextUser ?? undefined);
         convo.NewRecord();
         convo.Name = 'Web Widget Support';
@@ -151,7 +165,7 @@ export class RuntimeWidgetTransport implements IWidgetTransport {
 
     /** Saves the visitor's message as a Conversation Detail and returns the entity. */
     private async saveUserMessage(text: string): Promise<MJConversationDetailEntity | null> {
-        const md = new Metadata();
+        const md = this.requireProvider();
         const detail = await md.GetEntityObject<MJConversationDetailEntity>(CONVERSATION_DETAILS_ENTITY, this.contextUser ?? undefined);
         detail.NewRecord();
         detail.ConversationID = this.conversationId!;
@@ -170,7 +184,7 @@ export class RuntimeWidgetTransport implements IWidgetTransport {
      * `conversationDetailId` so the reply lands as an agent turn the widget can read back.
      */
     private async createAgentResponseDetail(): Promise<MJConversationDetailEntity | null> {
-        const md = new Metadata();
+        const md = this.requireProvider();
         const detail = await md.GetEntityObject<MJConversationDetailEntity>(CONVERSATION_DETAILS_ENTITY, this.contextUser ?? undefined);
         detail.NewRecord();
         detail.ConversationID = this.conversationId!;

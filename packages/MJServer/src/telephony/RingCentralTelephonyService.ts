@@ -299,7 +299,7 @@ export class RingCentralTelephonyService {
     /** Resolves the server-side principal + provider for an inbound call (no MJ JWT on a SIP INVITE). */
     private resolveServerContext(): { user: UserInfo; provider: IMetadataProvider } | null {
         const user = UserCache.Instance.GetSystemUser() ?? UserCache.Users.find((u) => u.IsActive && u.Type?.trim().toLowerCase() === 'owner') ?? null;
-        const provider = Metadata.Provider as unknown as IMetadataProvider | undefined;
+        const provider = Metadata.Provider as unknown as IMetadataProvider | undefined; // global-provider-ok: inbound SIP INVITE has no MJ JWT / per-request provider; the server's single default provider is correct
         if (!user || !provider) {
             return null;
         }

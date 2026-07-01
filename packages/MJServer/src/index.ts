@@ -1293,7 +1293,7 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     const teamsMeetingsService = GetTeamsMeetingsService();
     if (teamsMeetingsService) {
       StartCalendarScheduler({
-        Provider: Metadata.Provider,
+        Provider: Metadata.Provider, // global-provider-ok: server-owned background poller under the server's single default provider + system user
         ContextUser: resumeUser,
         TeamsService: teamsMeetingsService,
         TeamsConfig: configInfo.telephony.teams,

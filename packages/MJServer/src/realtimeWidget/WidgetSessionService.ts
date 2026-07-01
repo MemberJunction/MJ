@@ -461,8 +461,7 @@ export class WidgetSessionService {
     if (!widget.RememberReturningVisitors || !hostIdentity?.email || !returningVisitor?.visitorKey) {
       return undefined;
     }
-    // global-provider-ok: server-side mint under the single default provider.
-    const identity = await resolveIdentityByEmail(hostIdentity.email, contextUser, Metadata.Provider, this.config.identityResolution);
+    const identity = await resolveIdentityByEmail(hostIdentity.email, contextUser, Metadata.Provider, this.config.identityResolution); // global-provider-ok: server-side mint under the single default provider
     if (!identity) {
       return undefined;
     }
@@ -471,7 +470,7 @@ export class WidgetSessionService {
       applicationId: widget.ApplicationID,
       identity,
       contextUser,
-      provider: Metadata.Provider,
+      provider: Metadata.Provider, // global-provider-ok: server-side mint under the single default provider
     });
     return identity;
   }
@@ -488,7 +487,7 @@ export class WidgetSessionService {
       if (!gate.ok) {
         return { success: false, errorCode: gate.errorCode, error: gate.error };
       }
-      const identity = await resolveIdentityByEmail(input.verifiedEmail, gate.contextUser, Metadata.Provider, this.config.identityResolution);
+      const identity = await resolveIdentityByEmail(input.verifiedEmail, gate.contextUser, Metadata.Provider, this.config.identityResolution); // global-provider-ok: server-side mint under the single default provider
       if (!identity) {
         // Verified, but no record matches the email under the configured target — nothing to merge.
         return { success: true, mergedConversations: 0 };
@@ -498,7 +497,7 @@ export class WidgetSessionService {
         applicationId: gate.widget.ApplicationID,
         identity,
         contextUser: gate.contextUser,
-        provider: Metadata.Provider,
+        provider: Metadata.Provider, // global-provider-ok: server-side mint under the single default provider
       });
       return { success: true, resolved: identity, mergedConversations };
     } catch (e) {
@@ -522,7 +521,7 @@ export class WidgetSessionService {
         visitorKey: input.visitorKey,
         applicationId: gate.widget.ApplicationID,
         contextUser: gate.contextUser,
-        provider: Metadata.Provider,
+        provider: Metadata.Provider, // global-provider-ok: server-side mint under the single default provider
       });
       return { success: true, notesArchived, conversationsCleared };
     } catch (e) {
@@ -611,7 +610,7 @@ export class WidgetSessionService {
       priorConversationId,
       widget.PinnedAgentID,
       contextUser,
-      Metadata.Provider,
+      Metadata.Provider, // global-provider-ok: server-side mint under the single default provider
       widget.VisitorMemoryRetentionDays,
     );
   }
