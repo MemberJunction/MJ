@@ -4,7 +4,7 @@ import { filter, takeUntil } from "rxjs/operators";
 import { BaseEntity } from "@memberjunction/core";
 import { BaseNavigationComponent } from "./base-navigation-component";
 import { ResourceData } from "@memberjunction/core-entities";
-import { NavigationService } from "./navigation.service";
+import { NavigationService, TabQueryParamUpdateGuard } from "./navigation.service";
 
 @Directive()
 export abstract class BaseResourceComponent extends BaseNavigationComponent implements OnInit, OnDestroy {
@@ -235,13 +235,7 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
         return this.ParentTabId || this.Data?.Configuration?.['tabId'] as string || '';
     }
 
-    private getQueryParamUpdateGuard(): {
-        resourceType?: string | null;
-        driverClass?: string | null;
-        recordId?: string | null;
-        navItemName?: string | null;
-        entity?: string | null;
-    } {
+    private getQueryParamUpdateGuard(): TabQueryParamUpdateGuard {
         const config = this.Data?.Configuration || {};
         return {
             resourceType: config['resourceType'] as string | undefined,

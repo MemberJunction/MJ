@@ -5,7 +5,8 @@
  * - Suppression flag prevents loops
  * - Tab-scoped filtering prevents cross-tab leakage
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { NavigationService, TabQueryParamUpdateGuard } from '../navigation.service';
 
 // Mock Angular dependencies
 vi.mock('@angular/core', () => ({
@@ -353,5 +354,168 @@ describe('Tab-scoped query param filtering', () => {
 
     const received = events.filter(e => e.TabId === componentTabId);
     expect(received).toHaveLength(0);
+  });
+});
+
+// ---- Guarded query param updates ----
+
+describe('UpdateTabQueryParams guard', () => {
+  type TestTab = {
+    id: string;
+    resourceRecordId?: string;
+    configuration: Record<string, unknown>;
+  };
+
+  beforeEach(() => {
+    vi.spyOn(console, 'debug').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function createService(tab: TestTab | null): {
+    service: NavigationService;
+    updateTabConfiguration: ReturnType<typeof vi.fn>;
+  } {
+    const updateTabConfiguration = vi.fn();
+    const workspaceManager = {
+      GetTab: vi.fn(() => tab),
+      UpdateTabConfiguration: updateTabConfiguration
+    };
+    const service = Object.create(NavigationService.prototype) as NavigationService;
+    (service as unknown as { workspaceManager: unknown }).workspaceManager = workspaceManager;
+    return { service, updateTabConfiguration };
+  }
+
+  it('drops writes when the tab resourceType no longer matches', () => {
+    const { service, updateTabConfiguration } = createService({
+      id: 'tab-1',
+      resourceRecordId: 'ID|123',
+      configuration: {
+        resourceType: 'Records',
+        Entity: 'Invoices',
+        recordId: 'ID|123'
+      }
+    });
+
+    const updated = service.UpdateTabQueryParams(
+      'tab-1',
+      { conversationId: 'conversation-1' },
+      { resourceType: 'Custom', navItemName: 'Conversations' }
+    );
+
+    expect(updated).toBe(false);
+    expect(updateTabConfiguration).not.toHaveBeenCalled();
+  });
+
+  it('applies writes when the tab identity matches the guard', () => {
+    const { service, updateTabConfiguration } = createService({
+      id: 'tab-1',
+      resourceRecordId: '',
+      configuration: {
+        resourceType: 'Custom',
+        resourceTypeDriverClass: 'ChatConversationsResource',
+        navItemName: 'Conversations',
+        queryParams: { artifactId: 'artifact-1' }
+      }
+    });
+
+    const updated = service.UpdateTabQueryParams(
+      'tab-1',
+      { conversationId: 'conversation-1' },
+      {
+        resourceType: 'Custom',
+        driverClass: 'ChatConversationsResource',
+        recordId: '',
+        navItemName: 'Conversations'
+      }
+    );
+
+    expect(updated).toBe(true);
+    expect(updateTabConfiguration).toHaveBeenCalledWith('tab-1', {
+      queryParams: {
+        artifactId: 'artifact-1',
+        conversationId: 'conversation-1'
+      }
+    });
+  });
+
+  it('treats an all-undefined guard as permissive', () => {
+    const { service, updateTabConfiguration } = createService({
+      id: 'tab-1',
+      resourceRecordId: 'ID|123',
+      configuration: {
+        resourceType: 'Records',
+        Entity: 'Invoices',
+        recordId: 'ID|123'
+      }
+    });
+
+    const guard: TabQueryParamUpdateGuard = {
+      resourceType: undefined,
+      driverClass: undefined,
+      recordId: undefined,
+      navItemName: undefined,
+      entity: undefined
+    };
+
+    const updated = service.UpdateTabQueryParams('tab-1', { tab: 'related' }, guard);
+
+    expect(updated).toBe(true);
+    expect(updateTabConfiguration).toHaveBeenCalledWith('tab-1', {
+      queryParams: { tab: 'related' }
+    });
+  });
+
+  it('normalizes resourceType and entity but exact-matches canonical fields', () => {
+    const { service, updateTabConfiguration } = createService({
+      id: 'tab-1',
+      resourceRecordId: 'ID|ABC',
+      configuration: {
+        resourceType: 'Records',
+        Entity: 'Invoices',
+        recordId: 'ID|ABC',
+        driverClass: 'RecordResource',
+        navItemName: 'Invoice Record'
+      }
+    });
+
+    const normalizedMatch = service.UpdateTabQueryParams(
+      'tab-1',
+      { tab: 'related' },
+      {
+        resourceType: ' records ',
+        entity: ' invoices ',
+        recordId: 'ID|ABC',
+        driverClass: 'RecordResource',
+        navItemName: 'Invoice Record'
+      }
+    );
+
+    const exactMismatch = service.UpdateTabQueryParams(
+      'tab-1',
+      { tab: 'details' },
+      {
+        resourceType: 'records',
+        entity: 'invoices',
+        recordId: 'id|abc',
+        driverClass: 'RecordResource',
+        navItemName: 'Invoice Record'
+      }
+    );
+
+    expect(normalizedMatch).toBe(true);
+    expect(exactMismatch).toBe(false);
+    expect(updateTabConfiguration).toHaveBeenCalledTimes(1);
+  });
+
+  it('quietly ignores writes to closed or removed tabs', () => {
+    const { service, updateTabConfiguration } = createService(null);
+
+    const updated = service.UpdateTabQueryParams('missing-tab', { conversationId: 'conversation-1' });
+
+    expect(updated).toBe(false);
+    expect(updateTabConfiguration).not.toHaveBeenCalled();
   });
 });

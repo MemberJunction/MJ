@@ -463,8 +463,7 @@ export class NavigationService implements OnDestroy {
       Configuration: {
         resourceType: 'Records',
         Entity: entityName,  // Must use 'Entity' (capital E) - expected by record-resource.component
-        recordId: recordId,  // Also needed in Configuration for tab-container.component to populate ResourceRecordID
-        queryParams: undefined
+        recordId: recordId   // Also needed in Configuration for tab-container.component to populate ResourceRecordID
       },
       ResourceRecordId: recordId,
       IsPinned: options?.pinTab || false
@@ -945,11 +944,22 @@ export class NavigationService implements OnDestroy {
   ): boolean {
     const tab = this.workspaceManager.GetTab(tabId);
     if (!tab) {
-      console.warn('NavigationService.UpdateTabQueryParams: Tab not found:', tabId);
+      console.debug('NavigationService.UpdateTabQueryParams: Tab not found; ignoring stale query-param update:', tabId);
       return false;
     }
 
     if (guard && !this.tabMatchesQueryParamGuard(tab, guard)) {
+      console.debug('NavigationService.UpdateTabQueryParams: Tab identity changed; ignoring stale query-param update:', {
+        tabId,
+        guard,
+        current: {
+          resourceType: tab.configuration?.['resourceType'],
+          driverClass: tab.configuration?.['resourceTypeDriverClass'] || tab.configuration?.['driverClass'],
+          recordId: tab.resourceRecordId || tab.configuration?.['recordId'],
+          navItemName: tab.configuration?.['navItemName'],
+          entity: tab.configuration?.['Entity'] || tab.configuration?.['entity']
+        }
+      });
       return false;
     }
 
@@ -1016,6 +1026,8 @@ export class NavigationService implements OnDestroy {
     const currentRecordId = tab.resourceRecordId || (config['recordId'] as string | undefined) || '';
     const currentEntity = (config['Entity'] || config['entity']) as string | undefined;
 
+    // Resource type and entity names can vary by casing/metadata spelling; class names,
+    // record IDs, and nav labels are canonical tab identity fields and stay exact-match.
     return matches(guard.resourceType, config['resourceType'], true) &&
       matches(guard.driverClass, currentDriverClass) &&
       matches(guard.recordId, currentRecordId) &&
