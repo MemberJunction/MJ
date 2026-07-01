@@ -901,6 +901,23 @@ export class BaseAgent {
     private _activatedSkillIDs: string[] = [];
 
     /**
+     * Whether Plan Mode is active for this run — resolved once in {@link initializeAgentRun} via
+     * {@link resolvePlanModeGate}. True only when `agent.SupportsPlanMode` (capability, default ON)
+     * AND `params.planMode` (per-request, default OFF) are both true AND this is a root agent.
+     * @private
+     */
+    private _planModeActive: boolean = false;
+
+    /**
+     * Whether Plan Mode's approval gate has already been satisfied for this run — either because
+     * Plan Mode isn't active, or because a prior linked run's Plan step was approved. When active
+     * and NOT yet approved, `validateNextStep` blocks Actions/Sub-Agent steps until a Plan step
+     * has been presented and approved.
+     * @private
+     */
+    private _planApproved: boolean = false;
+
+    /**
      * Counts only prompt (LLM) executions, NOT all agent steps.
      * Used for message expiration age calculations so that `expirationTurns`
      * semantically means "number of LLM calls" rather than "number of steps"
@@ -3477,6 +3494,21 @@ export class BaseAgent {
         agentRun: MJAIAgentRunEntityExtended,
         currentStep: MJAIAgentRunStepEntityExtended
     ): Promise<BaseAgentNextStep<P>> {
+        // Plan Mode enforcement: while active and not yet approved, block Actions/Sub-Agent so the
+        // agent cannot skip straight to execution — it must present a Plan first. Chat, Retry,
+        // Skill activation, ForEach/While, and ClientTools are all still allowed (e.g. asking a
+        // clarifying question, or loading a skill's instructions, before forming the plan).
+        if (this._planModeActive && !this._planApproved && (nextStep.step === 'Actions' || nextStep.step === 'Sub-Agent')) {
+            // nextStep.step is narrowed to 'Actions' | 'Sub-Agent' here, so it can never already be
+            // 'Retry' — always increment (we're demoting it to Retry from a non-retry step).
+            this._generalValidationRetryCount++;
+            return {
+                step: 'Retry',
+                terminate: false,
+                errorMessage: 'Plan mode is active for this request. Present your plan first via a "Plan" next step and wait for approval before executing actions or sub-agents.'
+            };
+        }
+
         // for next step, let's do a little quick validation here for sub-agent and actions to ensure requests are valid
         switch (nextStep.step) {
             case 'Sub-Agent':           
@@ -3501,6 +3533,11 @@ export class BaseAgent {
             // union (it's non-terminal, like 'ClientTools' — see the type's doc comment).
             case 'Skill' as typeof nextStep.step:
                 return this.validateSkillNextStep<P>(params, nextStep, currentPayload, agentRun, currentStep);
+            // Type assertion required because 'Plan' is not part of the BaseAgentNextStep step
+            // union (it's non-terminal — the terminal step it produces is 'Chat', see
+            // executePlanStep's doc comment for why).
+            case 'Plan' as typeof nextStep.step:
+                return this.validatePlanNextStep<P>(params, nextStep, currentPayload, agentRun, currentStep);
             case 'ClientTools' as typeof nextStep.step:
                 // Client tools are valid - execution handled by executeClientToolsStep
                 return nextStep;
@@ -3850,6 +3887,33 @@ export class BaseAgent {
                 step: 'Retry',
                 terminate: false,
                 errorMessage: `Skill(s) '${missingNames}' not found or not available. Available: ${availableNames}`
+            };
+        }
+
+        return nextStep;
+    }
+
+    /**
+     * Validates that a 'Plan' next step (Plan Mode) has plan text to present. Subclasses can
+     * override to add additional plan-quality checks (e.g. minimum length, required sections).
+     *
+     * @protected
+     */
+    protected async validatePlanNextStep<P>(
+        params: ExecuteAgentParams,
+        nextStep: BaseAgentNextStep<P>,
+        currentPayload: P,
+        agentRun: MJAIAgentRunEntityExtended,
+        currentStep: MJAIAgentRunStepEntityExtended
+    ): Promise<BaseAgentNextStep<P>> {
+        if (!nextStep.planDetails?.plan || nextStep.planDetails.plan.trim().length === 0) {
+            if (nextStep.step !== 'Retry') {
+                this._generalValidationRetryCount++;
+            }
+            return {
+                step: 'Retry',
+                terminate: false,
+                errorMessage: 'Plan text is required when presenting a Plan for approval'
             };
         }
 
@@ -5746,6 +5810,8 @@ The context is now within limits. Please retry your request with the recovered c
                 clientToolDetails: clientToolDetails,
                 skillCount: availableSkills.length,
                 skillsCatalog: skillsCatalog,
+                planModeActive: this._planModeActive,
+                planApproved: this._planApproved,
                 appContext: appContext,
             };
 
@@ -7224,6 +7290,13 @@ The context is now within limits. Please retry your request with the recovered c
         this._depth = params.parentDepth !== undefined ? params.parentDepth + 1 : 0;
         this._parentStepCounts = params.parentStepCounts || [];
 
+        // Resolve Plan Mode gate state for this run (must happen before the main loop starts —
+        // gatherPromptTemplateData/validateNextStep both read _planModeActive/_planApproved — and
+        // after _depth is set above, since the gate only applies to root agents).
+        const planModeGate = await this.resolvePlanModeGate(params);
+        this._planModeActive = planModeGate.active;
+        this._planApproved = planModeGate.approved;
+
         // Reset execution chain and progress tracking
         this._allProgressSteps = [];
         
@@ -7236,8 +7309,74 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
+     * Resolves whether Plan Mode is active for this run, and whether its approval gate is already
+     * satisfied. Called once from {@link initializeAgentRun}, after `_depth` is set.
+     *
+     * - `active`: `agent.SupportsPlanMode` (capability, default ON/opt-out) AND `params.planMode`
+     *   (per-request, default OFF) AND this is a root agent (`_depth === 0`). Sub-agents never gate
+     *   on Plan Mode — only the top-level agent the user/caller invoked does.
+     * - `approved`: only meaningful when `active`. True when `params.lastRunId` points to a prior
+     *   run whose Plan step's `MJ: AI Agent Requests` row resolved to `Approved` or `Responded`
+     *   (a `Rejected` plan — or no matching request at all — leaves the gate unsatisfied, sending
+     *   the agent back to present a revised plan).
+     *
+     * Override to change Plan Mode eligibility rules (e.g. gate on a specific agent category).
+     *
+     * @protected
+     */
+    protected async resolvePlanModeGate(
+        params: ExecuteAgentParams
+    ): Promise<{ active: boolean; approved: boolean }> {
+        const active = !!(params.agent.SupportsPlanMode && params.planMode === true && this._depth === 0);
+        if (!active) {
+            return { active: false, approved: false };
+        }
+
+        if (!params.lastRunId) {
+            return { active: true, approved: false };
+        }
+
+        const rv = new RunView();
+        const requestResult = await rv.RunView<{ Status: string; OriginatingAgentRunStepID: string | null }>({
+            EntityName: 'MJ: AI Agent Requests',
+            ExtraFilter: `OriginatingAgentRunID='${params.lastRunId}'`,
+            Fields: ['Status', 'OriginatingAgentRunStepID'],
+            OrderBy: '__mj_CreatedAt DESC',
+            MaxRows: 1,
+            ResultType: 'simple'
+        }, params.contextUser);
+
+        if (!requestResult.Success || requestResult.Results.length === 0) {
+            return { active: true, approved: false };
+        }
+
+        const request = requestResult.Results[0];
+        const resolved = request.Status === 'Approved' || request.Status === 'Responded';
+        if (!resolved || !request.OriginatingAgentRunStepID) {
+            return { active: true, approved: false };
+        }
+
+        // Confirm the request actually originated from a Plan step — a resolved request from an
+        // unrelated Chat clarification (asked before the agent could even form a plan) must NOT
+        // satisfy the Plan Mode gate.
+        const stepResult = await rv.RunView<{ StepType: string }>({
+            EntityName: 'MJ: AI Agent Run Steps',
+            ExtraFilter: `ID='${request.OriginatingAgentRunStepID}'`,
+            Fields: ['StepType'],
+            MaxRows: 1,
+            ResultType: 'simple'
+        }, params.contextUser);
+
+        const approved = stepResult.Success
+            && stepResult.Results.length > 0
+            && stepResult.Results[0].StepType === 'Plan';
+
+        return { active: true, approved };
+    }
+
+    /**
      * Validates the agent with tracking.
-     * 
+     *
      * @private
      * @param {MJAIAgentEntityExtended} agent - The agent to validate
      * @returns {Promise<ExecuteAgentResult | null>} - Failure result if validation fails, null if successful
@@ -7643,6 +7782,11 @@ The context is now within limits. Please retry your request with the recovered c
             // when the LLM chooses to activate a skill.
             case 'Skill' as typeof previousDecision.step:
                 return await this.executeSkillStep(params, config, previousDecision, stepCount);
+            // Type assertion required because 'Plan' is not part of the BaseAgentNextStep step
+            // union — LoopAgentType.DetermineNextStep() emits it when the LLM presents a plan
+            // (Plan Mode). executePlanStep's terminal return is 'Chat'-shaped (see its doc comment).
+            case 'Plan' as typeof previousDecision.step:
+                return await this.executePlanStep(params, previousDecision);
             // Type assertion required because 'ClientTools' is not part of the BaseAgentNextStep
             // step union — LoopAgentType.DetermineNextStep() emits it when the LLM chooses client tools.
             case 'ClientTools' as typeof previousDecision.step:
@@ -10527,6 +10671,104 @@ The context is now within limits. Please retry your request with the recovered c
             skillId: skill.ID,
             skillName: skill.Name
         });
+    }
+
+    /**
+     * Executes a 'Plan' next step (Plan Mode): records a `Plan` run-step, raises the standard
+     * `MJ: AI Agent Requests` HITL request with an editable plan-approval `AgentResponseForm`, and
+     * terminates this run awaiting the human's response — reusing the exact same pause/resume
+     * infrastructure `executeChatStep` uses (`createFeedbackRequest` + the existing
+     * `MJAIAgentRequestEntityServer.Save()` auto-resume-on-status-change hook). A rejected or
+     * edited-and-resubmitted plan resumes as a new linked run via the normal run-chain mechanism;
+     * `resolvePlanModeGate` re-checks approval on that new run so a rejection sends the agent back
+     * to present a revised plan rather than through to execution.
+     *
+     * **Important**: the RETURNED `BaseAgentNextStep.step` is `'Chat'`, not `'Plan'` — 'Plan' is
+     * only ever an intermediate classification (used for the `AIAgentRunStep.StepType` audit
+     * record, which the UI reads to render a plan-approval card instead of a generic chat bubble).
+     * The step returned to the framework must stay within `AIAgentRun.FinalStep`'s DB-CHECK-
+     * constrained, terminal-only vocabulary — `'Plan'` is deliberately not part of it (see the
+     * `BaseAgentNextStep.step` doc comment) — so a plan-approval pause is represented as the same
+     * terminal shape `executeChatStep` already uses.
+     *
+     * @protected
+     */
+    protected async executePlanStep(
+        params: ExecuteAgentParams,
+        previousDecision: BaseAgentNextStep
+    ): Promise<BaseAgentNextStep> {
+        const planText = previousDecision.planDetails?.plan ?? '';
+
+        const stepEntity = await this.createStepEntity({
+            stepType: 'Plan',
+            stepName: 'Plan Presented for Approval',
+            contextUser: params.contextUser,
+            inputData: { plan: planText }
+        });
+        await this.finalizeStepEntity(stepEntity, true, undefined, { plan: planText });
+
+        const responseForm = this.buildPlanApprovalForm(planText);
+        const planPresentation: BaseAgentNextStep = {
+            step: 'Plan' as BaseAgentNextStep['step'],
+            terminate: true,
+            message: previousDecision.message || 'Please review the proposed plan before I proceed.',
+            reasoning: previousDecision.reasoning,
+            confidence: previousDecision.confidence,
+            responseForm
+        };
+
+        // For root agents, create a persistent AIAgentRequest so the request is tracked in the
+        // dashboard and can be responded to outside a conversation (mirrors executeChatStep).
+        if (this._depth === 0) {
+            await this.createFeedbackRequest(params, stepEntity, planPresentation);
+        }
+
+        return {
+            step: 'Chat',
+            terminate: true,
+            message: planPresentation.message,
+            reasoning: previousDecision.reasoning,
+            confidence: previousDecision.confidence,
+            previousPayload: previousDecision.previousPayload,
+            newPayload: previousDecision.newPayload || previousDecision.previousPayload,
+            responseForm
+        };
+    }
+
+    /**
+     * Builds the editable plan-approval `AgentResponseForm`: a pre-filled textarea (so the human
+     * can edit the plan before approving) plus an Approve/Reject button group. Override to change
+     * the card's layout (e.g. split the plan into per-step checkboxes instead of one textarea).
+     *
+     * @protected
+     */
+    protected buildPlanApprovalForm(planText: string): AgentResponseForm {
+        return {
+            title: 'Review Plan',
+            description: 'Review the proposed plan below. Edit it if needed, then approve to proceed or reject to have the agent reconsider.',
+            submitLabel: 'Submit',
+            questions: [
+                {
+                    id: 'plan',
+                    label: 'Plan',
+                    type: { type: 'textarea' },
+                    defaultValue: planText,
+                    required: true
+                },
+                {
+                    id: 'decision',
+                    label: 'Decision',
+                    type: {
+                        type: 'buttongroup',
+                        options: [
+                            { value: 'approve', label: 'Approve' },
+                            { value: 'reject', label: 'Reject' }
+                        ]
+                    },
+                    required: true
+                }
+            ]
+        };
     }
 
     private async executeChatStep(

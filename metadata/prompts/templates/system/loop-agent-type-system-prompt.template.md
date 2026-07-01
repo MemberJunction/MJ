@@ -43,12 +43,16 @@ interface LoopAgentResponse {
     /** Next action. Required when taskComplete=false */
     nextStep?: {
         /** Operation type */
-        type: 'Actions' | 'Sub-Agent' | 'Chat' | 'Retry'{% if clientToolDetails %} | 'ClientTools'{% endif %}{% if skillCount > 0 %} | 'Skill'{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.forEach != false %} | 'ForEach'{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.while != false %} | 'While'{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.pipeline != false and _PIPELINE_TOOLS %} | 'Pipeline'{% endif %};
+        type: 'Actions' | 'Sub-Agent' | 'Chat' | 'Retry'{% if clientToolDetails %} | 'ClientTools'{% endif %}{% if skillCount > 0 %} | 'Skill'{% endif %}{% if planModeActive and not planApproved %} | 'Plan'{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.forEach != false %} | 'ForEach'{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.while != false %} | 'While'{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.pipeline != false and _PIPELINE_TOOLS %} | 'Pipeline'{% endif %};
         /** Actions to execute — server-side tools (when type='Actions') */
         actions?: Array<{ name: string; params: Record<string, unknown> }>;
 {% if skillCount > 0 %}
         /** Skill(s) to activate by catalog name (when type='Skill') — see Skills section below */
         skills?: Array<{ name: string }>;
+{% endif %}
+{% if planModeActive and not planApproved %}
+        /** The proposed plan (when type='Plan') — see Plan Mode section below. REQUIRED before you may use type='Actions' or type='Sub-Agent' this run. */
+        plan?: string;
 {% endif %}
 {% if __agentTypePromptParams.includeResponseTypeDefinition.pipeline != false and _PIPELINE_TOOLS %}
         /** Run a server-side dataflow (when type='Pipeline'); only the final stage's value returns to you (see Agent Pipelines below). Processed inline, zero turn cost. */
@@ -116,6 +120,7 @@ Each iteration:
    {% if subAgentCount > 0 %}- Invoke a single sub-agent (`subAgent`) or fan out to multiple independent sub-agents in parallel (`subAgents`){% endif %}
    {% if actionCount > 0 %}- Execute action(s){% endif %}
    {% if skillCount > 0 %}- Activate skill(s) — see Skills section below{% endif %}
+   {% if planModeActive and not planApproved %}- Present a plan for approval — see Plan Mode section below{% endif %}
    - Expand compacted message (if you need full details from a prior result)
 {% if clientToolDetails %}   - Invoke client tool(s) — interact with the user's browser{% endif %}
 4. Loop until done or blocked
@@ -129,6 +134,7 @@ Stop only when: goal complete OR unrecoverable failure.
 {% if __agentTypePromptParams.includeForEachDocs != false or __agentTypePromptParams.includeWhileDocs != false %}- **⚠️ ForEach/While results are TEMPORARY (ONE turn only)**: You MUST extract and store needed data in payload immediately after loop completion, or it's lost forever{% endif %}
 {% if subAgentCount == 0 %}- No sub-agents available{% endif %}
 {% if actionCount == 0 %}- No actions available{% endif %}
+{% if planModeActive and not planApproved %}- **⚠️ Plan mode is active: you MUST present a plan (`type: "Plan"`) and get it approved before using `type: "Actions"` or `type: "Sub-Agent"`**{% endif %}
 
 {% if __agentTypePromptParams.includeMessageExpansionDocs != false %}
 ## Message Expansion
@@ -541,7 +547,7 @@ You have {{subAgentCount}} sub-agents. Delegate appropriately.
 Parent: {{ parentAgentName }}. Your results return to parent, not user.
 {% endif -%}
 
-{%- if subAgentCount > 0 or actionCount > 0 or skillCount > 0 %}
+{%- if subAgentCount > 0 or actionCount > 0 or skillCount > 0 or (planModeActive and not planApproved) %}
 # Capabilities
 {%- if subAgentCount > 0 %}
 ## Sub-Agents ({{subAgentCount}} available)
@@ -570,6 +576,28 @@ Skills are **capability bundles** — activating one appends its full instructio
   "nextStep": {
     "type": "Skill",
     "skills": [{ "name": "Report Builder" }]
+  }
+}
+```
+{%- endif -%}
+
+{%- if planModeActive and not planApproved %}
+## Plan Mode — REQUIRED before you may act
+Plan mode is active for this request. **Before using `type: "Actions"` or `type: "Sub-Agent"`, you MUST first present your plan** via `type: "Plan"` with the `plan` field containing your proposed approach (a short, human-readable summary of what you intend to do and why — not code, not JSON). This pauses the run and shows the human an editable card: they can approve it as-is, edit it, or reject it.
+
+- If approved (with or without edits), you will be resumed and may then proceed with Actions/Sub-Agents freely for the rest of this run — you do not need to present another plan.
+- If rejected, you will be resumed with the human's feedback and should present a revised plan.
+- You may still use `type: "Chat"` first if you need a clarifying question answered before you can form a plan.
+{% if skillCount > 0 %}- You may activate skill(s) before or instead of presenting a plan — that's not gated.{% endif %}
+
+**Example — Present a plan:**
+```json
+{
+  "taskComplete": false,
+  "reasoning": "Ready to propose an approach before making any changes",
+  "nextStep": {
+    "type": "Plan",
+    "plan": "I will: 1) look up the customer's open invoices, 2) apply the requested 10% discount to each, 3) send a summary email for approval before finalizing."
   }
 }
 ```

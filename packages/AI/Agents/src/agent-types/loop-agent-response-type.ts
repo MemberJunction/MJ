@@ -89,7 +89,7 @@ export interface LoopAgentResponse<P = any> {
         /**
          * Operation type: 'Actions' | 'ClientTools' | 'Sub-Agent' | 'Chat' | 'Retry' | 'ForEach' | 'While' | 'Pipeline' | 'Skill'
          */
-        type: 'Actions' | 'ClientTools' | 'Sub-Agent' | 'Chat' | 'Retry' | 'ForEach' | 'While' | 'Pipeline' | 'Skill';
+        type: 'Actions' | 'ClientTools' | 'Sub-Agent' | 'Chat' | 'Retry' | 'ForEach' | 'While' | 'Pipeline' | 'Skill' | 'Plan';
 
         /**
          * Actions to execute (when type='Actions')
@@ -188,6 +188,13 @@ export interface LoopAgentResponse<P = any> {
         skills?: Array<{
             name: string;
         }>;
+
+        /**
+         * The proposed plan (when type='Plan', Plan Mode only). Presenting a plan pauses the run
+         * and asks the human to approve or edit it via a response-form card before you may execute
+         * any Actions or Sub-Agents. See the Plan Mode section for when this is required.
+         */
+        plan?: string;
     };
 }
 

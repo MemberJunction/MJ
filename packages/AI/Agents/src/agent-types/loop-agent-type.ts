@@ -267,6 +267,17 @@ export class LoopAgentType extends BaseAgentType {
                         }));
                     }
                     break;
+                case 'Plan':
+                    if (!response.nextStep.plan || response.nextStep.plan.trim().length === 0) {
+                        retVal.step = 'Retry';
+                        retVal.message = 'When nextStep.type == "Plan", nextStep.plan must contain the proposed plan text';
+                        retVal.errorMessage = 'Plan text not specified for Plan type';
+                    }
+                    else {
+                        retVal.step = 'Plan' as BaseAgentNextStep['step'];
+                        retVal.planDetails = { plan: response.nextStep.plan };
+                    }
+                    break;
                 case 'ForEach':
                     if (!response.nextStep.forEach) {
                         retVal.step = 'Retry';
@@ -388,7 +399,7 @@ export class LoopAgentType extends BaseAgentType {
 
         // Validate nextStep structure if present
         if (response.nextStep) {
-            const validStepTypes = ['actions', 'sub-agent', 'chat', 'retry', 'foreach', 'while', 'clienttools', 'pipeline', 'skill'];
+            const validStepTypes = ['actions', 'sub-agent', 'chat', 'retry', 'foreach', 'while', 'clienttools', 'pipeline', 'skill', 'plan'];
             let lcaseType = response.nextStep.type?.toLowerCase().trim();
             // allow the AI to mess up the case, but we need to validate it
 
@@ -414,6 +425,9 @@ export class LoopAgentType extends BaseAgentType {
             } else if (!lcaseType && response.nextStep.skills && response.nextStep.skills.length > 0) {
                 response.nextStep.type = 'Skill'; // update the data structure to have the correct type
                 lcaseType = 'skill';
+            } else if (!lcaseType && response.nextStep.plan) {
+                response.nextStep.type = 'Plan'; // update the data structure to have the correct type
+                lcaseType = 'plan';
             }
 
             if (!validStepTypes.includes(lcaseType)) {

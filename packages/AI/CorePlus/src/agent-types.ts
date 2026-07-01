@@ -574,6 +574,11 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
      */
     skillActivations?: AgentSkillActivationRequest[];
     /**
+     * The plan text when step is 'Plan' (Plan Mode). Presented to the human for approval/edit
+     * via the standard response-form HITL flow before the agent may execute Actions/Sub-Agents.
+     */
+    planDetails?: { plan: string };
+    /**
      * When true, the agent should terminate after executing the current step.
      * Used by ClientTools: the main loop needs `terminate: false` so it continues
      * to dispatch the tool execution, but `executeClientToolsStep` checks this
@@ -1006,6 +1011,23 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      * bandwidth by avoiding passing large payloads back and forth.
      */
     autoPopulateLastRunPayload?: boolean;
+
+    /**
+     * Per-request Plan Mode toggle. Defaults OFF (undefined/false) — no behavior change unless
+     * explicitly set. When true AND `agent.SupportsPlanMode` is on (the agent-level capability
+     * gate, default ON/opt-out) AND this is a root agent (depth 0), the agent must present a
+     * `Plan` next step and get human approval via the standard `MJ: AI Agent Requests` /
+     * response-form HITL flow before it may execute Actions or Sub-Agents. Ignored entirely for
+     * Realtime/session-driven and Proxy agents (those opt the capability OFF at the agent level).
+     *
+     * On a continuation run (`lastRunId` set, after the user responds to the plan-approval
+     * request), the framework re-resolves whether that prior run's plan was approved — callers
+     * do not need to re-derive or persist this themselves.
+     *
+     * @since 5.44.0
+     */
+    planMode?: boolean;
+
     /**
      * Optional AI Configuration ID to use for this agent execution.
      * When provided, this configuration will be passed to all prompts executed
@@ -1463,6 +1485,10 @@ export type AgentContextData = {
      * on activation (see `executeSkillStep` in `@memberjunction/ai-agents`).
      */
     skillsCatalog?: string;
+    /** Whether Plan Mode is active for this run (SupportsPlanMode + per-request planMode + root agent) */
+    planModeActive?: boolean;
+    /** Whether Plan Mode's gate has already been satisfied (a prior plan was approved on this run chain) */
+    planApproved?: boolean;
     /** Markdown formatted snapshot of the user's current application context */
     appContext?: string;
 }
