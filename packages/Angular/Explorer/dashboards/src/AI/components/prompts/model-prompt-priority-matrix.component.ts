@@ -3,6 +3,7 @@ import { RunView, LogError, LogStatus } from '@memberjunction/core';
 import { MJAIPromptModelEntity } from '@memberjunction/core-entities';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { MJConfirmService } from '@memberjunction/ng-ui-components';
 import { MJAIModelEntityExtended, MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { UUIDsEqual } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
@@ -74,7 +75,7 @@ export class ModelPromptPriorityMatrixComponent extends BaseAngularComponent imp
   
   private destroy$ = new Subject<void>();
   
-  constructor(private notificationService: MJNotificationService) { super(); }
+  constructor(private notificationService: MJNotificationService, private confirmService: MJConfirmService) { super(); }
   
   ngOnInit(): void {
     this.loadData();
@@ -478,11 +479,11 @@ export class ModelPromptPriorityMatrixComponent extends BaseAngularComponent imp
     return this.associations.some(a => a.isNew || a.isModified);
   }
   
-  public discardChanges(): void {
+  public async discardChanges(): Promise<void> {
     if (!this.hasUnsavedChanges()) return;
-    
-    const confirm = window.confirm('Discard all unsaved changes?');
-    if (confirm) {
+
+    const confirmed = await this.confirmService.Confirm('Discard all unsaved changes?');
+    if (confirmed) {
       this.loadData();
     }
   }
