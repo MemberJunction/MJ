@@ -14,6 +14,8 @@ import {
     OperationResult,
     RecipientStatus,
     SignatureDocumentInput,
+    SignatureFieldPlacement,
+    SignatureFieldType,
     SignatureOperation,
     SignatureProviderConfig,
     SignatureRecipientInput,
@@ -38,6 +40,11 @@ interface DocuSignConfig {
 
 /** Header DocuSign Connect uses for the first HMAC signature over the raw request body. */
 const DOCUSIGN_HMAC_HEADER = 'x-docusign-signature-1';
+
+/** US-Letter page in PDF points (1/72") — the fallback when a coordinate field doesn't carry its
+ *  page's real dimensions. DocuSign coordinate tabs are positioned in points. */
+const DOCUSIGN_LETTER_WIDTH_PT = 612;
+const DOCUSIGN_LETTER_HEIGHT_PT = 792;
 
 /** Maps a DocuSign envelope/recipient status string onto our normalized lifecycle. */
 export function mapDocuSignStatus(status: string): EnvelopeStatus {
@@ -358,21 +365,99 @@ export class DocuSignSignatureProvider extends BaseSignatureProvider {
         index: number,
         documentCount: number,
     ): Record<string, unknown> {
-        const recipientId = String(index + 1);
-        // Place a sign-here tab on page 1 of every document for this signer.
-        const signHereTabs = Array.from({ length: documentCount }, (_, d) => ({
-            documentId: String(d + 1),
-            pageNumber: '1',
-            xPosition: '100',
-            yPosition: '100',
-        }));
-        return {
+        const signer: Record<string, unknown> = {
             email: recipient.email,
             name: recipient.name || recipient.email,
-            recipientId,
+            recipientId: String(index + 1),
             routingOrder: String(recipient.routingOrder ?? 1),
-            tabs: { signHereTabs },
         };
+        // Only attach tabs when the caller told us where to place fields. With no fields, we emit no
+        // tabs and let DocuSign apply its own default placement — never a hardcoded corner.
+        const tabs = this.buildTabs(recipient.fields ?? [], documentCount);
+        if (tabs) {
+            signer.tabs = tabs;
+        }
+        return signer;
+    }
+
+    /** DocuSign groups tabs by type. Build the grouped `tabs` object from the caller's field list,
+     *  or return undefined when there's nothing to place (so DocuSign uses its own default). */
+    private buildTabs(fields: SignatureFieldPlacement[], documentCount: number): Record<string, unknown> | undefined {
+        const groups: Record<string, Record<string, unknown>[]> = {};
+        for (const field of fields) {
+            const tabArrayName = this.docuSignTabArrayName(field.type ?? 'signature');
+            for (const tab of this.buildTabsForField(field, documentCount)) {
+                (groups[tabArrayName] ??= []).push(tab);
+            }
+        }
+        return Object.keys(groups).length > 0 ? groups : undefined;
+    }
+
+    /** A single field can target one document (documentIndex) or all documents (default). Each target
+     *  yields one DocuSign tab, placed by anchor string (preferred) or absolute position. A field with
+     *  neither anchor nor coordinates yields nothing — the caller opted out of explicit placement. */
+    private buildTabsForField(field: SignatureFieldPlacement, documentCount: number): Record<string, unknown>[] {
+        const placement = this.tabPlacement(field);
+        if (!placement) {
+            return [];
+        }
+        const docIds =
+            field.documentIndex != null
+                ? [String(field.documentIndex)]
+                : Array.from({ length: documentCount }, (_, d) => String(d + 1));
+        return docIds.map((documentId) => ({ documentId, ...placement, ...this.tabRequired(field) }));
+    }
+
+    /** Resolve a field's placement to DocuSign tab properties: anchor tabbing if an anchor string is
+     *  given, else absolute position from normalized percentages, else null (no placement). */
+    private tabPlacement(field: SignatureFieldPlacement): Record<string, unknown> | null {
+        if (field.anchor) {
+            const anchor: Record<string, unknown> = {
+                anchorString: field.anchor,
+                anchorUnits: field.anchorUnits ?? 'pixels',
+                anchorIgnoreIfNotPresent: String(field.anchorIgnoreIfNotPresent ?? true),
+            };
+            if (field.anchorXOffset != null) anchor.anchorXOffset = String(field.anchorXOffset);
+            if (field.anchorYOffset != null) anchor.anchorYOffset = String(field.anchorYOffset);
+            return anchor;
+        }
+        if (field.page != null && field.xPercent != null && field.yPercent != null) {
+            // DocuSign positions coordinate tabs in points (1/72") from the page's top-left. Convert
+            // the normalized percentages against the field's ACTUAL page size when the caller supplied
+            // it (a drag-and-drop placer knows the rendered page dimensions); otherwise fall back to
+            // US-Letter (612 × 792 pt) — correct for Letter, approximate for A4/legal/landscape.
+            const widthPt = field.pageWidthPt ?? DOCUSIGN_LETTER_WIDTH_PT;
+            const heightPt = field.pageHeightPt ?? DOCUSIGN_LETTER_HEIGHT_PT;
+            return {
+                pageNumber: String(field.page),
+                xPosition: String(Math.round((field.xPercent / 100) * widthPt)),
+                yPosition: String(Math.round((field.yPercent / 100) * heightPt)),
+            };
+        }
+        return null;
+    }
+
+    /** DocuSign marks optionality per tab via a string `optional` flag (default required). */
+    private tabRequired(field: SignatureFieldPlacement): Record<string, unknown> {
+        return { optional: String(field.required === false) };
+    }
+
+    /** Map our portable field type onto the DocuSign tab-array key. */
+    private docuSignTabArrayName(type: SignatureFieldType): string {
+        switch (type) {
+            case 'signature':
+                return 'signHereTabs';
+            case 'initials':
+                return 'initialHereTabs';
+            case 'dateSigned':
+                return 'dateSignedTabs';
+            case 'text':
+                return 'textTabs';
+            case 'checkbox':
+                return 'checkboxTabs';
+            default:
+                return 'signHereTabs';
+        }
     }
 
     private buildCustomFields(metadata?: Record<string, string>): Record<string, unknown> | undefined {
