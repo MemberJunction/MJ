@@ -24,6 +24,9 @@ describe("assertReadOnlyNativeQuery", () => {
         it("T-SQL SELECT TOP with bracketed identifiers (sqlserver)", () => {
             expect(() => assertReadOnlyNativeQuery("SELECT TOP 10 [Name] FROM [dbo].[Orders]", "sqlserver")).not.toThrow();
         });
+        it("a column whose name begins with 'grant' — the DCL backstop is start-anchored, no false-positive", () => {
+            expect(() => assertReadOnlyNativeQuery("SELECT grant_date FROM permits", "ansi")).not.toThrow();
+        });
     });
 
     describe("rejects writes / DDL (read-only enforcement)", () => {
@@ -49,6 +52,14 @@ describe("assertReadOnlyNativeQuery", () => {
         // table — it must still be rejected (caught via StatementKind, not HasWriteStatement).
         it("rejects T-SQL SELECT ... INTO (creates a table) (sqlserver)", () => {
             expect(() => assertReadOnlyNativeQuery("SELECT * INTO new_orders FROM orders", "sqlserver")).toThrow(/INTO|read-only/i);
+        });
+        // DCL: the underlying parser doesn't reliably type GRANT/REVOKE as a write, so a start-anchored
+        // backstop catches them (they'd otherwise slip past HasWriteStatement).
+        it("rejects a GRANT (DCL) statement (sqlserver)", () => {
+            expect(() => assertReadOnlyNativeQuery("GRANT SELECT ON dbo.Orders TO reader", "sqlserver")).toThrow(/GRANT|REVOKE|DENY|read-only/i);
+        });
+        it("rejects a REVOKE (DCL) statement (ansi)", () => {
+            expect(() => assertReadOnlyNativeQuery("REVOKE SELECT ON orders FROM reader", "ansi")).toThrow(/GRANT|REVOKE|DENY|read-only/i);
         });
     });
 

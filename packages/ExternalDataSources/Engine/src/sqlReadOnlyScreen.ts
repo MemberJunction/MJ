@@ -28,13 +28,13 @@ function dialectFor(key: SqlDialectKey): SQLParserDialect {
  *   - contains any write/DDL statement (INSERT/UPDATE/DELETE/MERGE/DROP/EXEC/CALL/… —
  *     `HasWriteStatement`; unparseable data-modifying CTEs are refused by the parse gate above), or
  *   - is a `SELECT ... INTO <newtable>` — it parses as a `select` (so `HasWriteStatement` is false),
- *     but it CREATES a table as a side effect, so it's caught here via `StatementKind`.
+ *     but it CREATES a table as a side effect, so it's caught here via `StatementKind`, or
+ *   - starts with a DCL verb (`GRANT`/`REVOKE`/`DENY`) — a start-anchored backstop, because the
+ *     underlying parser doesn't reliably surface these as a write statement type for every dialect.
  *
- * Known limitations — defense-in-depth, NOT a substitute for a least-privilege source credential:
+ * Known limitation — defense-in-depth, NOT a substitute for a least-privilege source credential:
  *   - A side-effecting routine invoked from a read shape (`SELECT writing_func()`,
  *     `SELECT nextval('s')`) is indistinguishable from a pure read in the AST and is NOT blocked.
- *   - `GRANT`/`REVOKE` are not reliably surfaced as their own statement type by the underlying parser
- *     for every dialect and may pass; they require privileges a read-only source credential lacks.
  * Configure External Data Sources with a read-only/least-privilege credential as the real authority;
  * this screen is the app-level backstop against the common write/DDL/injection vectors.
  */
@@ -43,6 +43,16 @@ export function assertReadOnlyNativeQuery(sql: string, dialectKey: SqlDialectKey
     if (SQLParser.HasStackedStatements(sql, dialect)) {
         throw new Error(
             "External native query rejected: multiple statements are not allowed against a read-only external data source.",
+        );
+    }
+    // DCL backstop: node-sql-parser doesn't reliably surface GRANT/REVOKE/DENY as their own write
+    // statement type for every dialect (they can parse as untyped `assign` nodes), so HasWriteStatement
+    // may miss them. A native query is a single statement (stacked already rejected above), so a
+    // start-anchored match is exact — no legitimate read begins with a DCL verb, and this can't
+    // false-positive on a `grant`/`revoke` identifier appearing mid-statement.
+    if (/^\s*(grant|revoke|deny)\b/i.test(sql)) {
+        throw new Error(
+            "External native query rejected: permission (GRANT/REVOKE/DENY) statements are not permitted — External Data Sources are read-only.",
         );
     }
     const parser = new SQLParser(sql, dialect);
