@@ -158,36 +158,6 @@
     color: var(--mj-status-success);
 }
 
-.error-banner {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 16px;
-    background: var(--mj-color-error-100);
-    border: 1px solid var(--mj-color-error-100);
-    border-radius: var(--mj-radius-md);
-    color: var(--mj-status-error);
-    font-size: 13px;
-    margin-bottom: 16px;
-}
-
-.error-banner i {
-    color: var(--mj-status-error);
-}
-
-.error-banner .dismiss-btn {
-    margin-left: auto;
-    background: transparent;
-    border: none;
-    color: var(--mj-text-muted);
-    cursor: pointer;
-    padding: 4px;
-}
-
-.error-banner .dismiss-btn:hover {
-    color: var(--mj-status-error);
-}
-
 .action-btn {
     background: var(--mj-bg-surface);
     border: none;
@@ -365,40 +335,6 @@
     color: var(--mj-text-primary);
 }
 
-/* Info Banner */
-.info-banner {
-    display: flex;
-    gap: 12px;
-    padding: 16px 20px;
-    background: var(--mj-color-accent-300);
-    border-radius: var(--mj-radius-md);
-    font-size: 13px;
-    color: var(--mj-brand-primary);
-    margin-bottom: 20px;
-}
-
-.info-banner i {
-    margin-top: 2px;
-    flex-shrink: 0;
-}
-
-/* Recommendation Banner */
-.recommendation-banner {
-    display: flex;
-    gap: 12px;
-    padding: 16px 20px;
-    background: var(--mj-color-warning-50);
-    border-radius: var(--mj-radius-md);
-    font-size: 13px;
-    color: var(--mj-color-warning-800);
-    margin-top: 20px;
-}
-
-.recommendation-banner i {
-    margin-top: 2px;
-    flex-shrink: 0;
-    color: var(--mj-color-warning-500);
-}
 
 /* Redundant Loads Table */
 .redundant-loads-table-wrapper {
@@ -493,14 +429,6 @@
 }
 
 /* Performance Section Styles */
-.warning-banner {
-    background: var(--mj-color-warning-50) !important;
-    color: var(--mj-color-warning-800) !important;
-}
-
-.warning-banner i {
-    color: var(--mj-color-warning-500);
-}
 
 .telemetry-summary {
     display: grid;
@@ -598,41 +526,26 @@
     gap: 12px;
 }
 
-.insight-card {
-    padding: 16px;
-    border-radius: var(--mj-radius-md);
-    border-left: 4px solid var(--mj-border-default);
-}
+/* .insight-card wrapper + .insight-header chrome now owned by <mj-accordion-panel>. */
 
-.insight-card.severity-info {
-    background: var(--mj-color-accent-300);
-    border-left-color: var(--mj-brand-primary);
-}
-
-.insight-card.severity-warning {
-    background: var(--mj-color-warning-50);
-    border-left-color: var(--mj-color-warning-500);
-}
-
-.insight-card.severity-optimization {
-    background: var(--mj-color-success-100);
-    border-left-color: var(--mj-status-success);
-}
-
-.insight-header {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 8px;
-}
-
-.insight-header i {
+.insight-icon {
     font-size: 16px;
 }
 
-.severity-info .insight-header i { color: var(--mj-brand-primary); }
-.severity-warning .insight-header i { color: var(--mj-color-warning-500); }
-.severity-optimization .insight-header i { color: var(--mj-status-success); }
+.severity-info .insight-icon { color: var(--mj-brand-primary); }
+.severity-warning .insight-icon { color: var(--mj-status-warning); }
+.severity-optimization .insight-icon { color: var(--mj-status-success); }
+
+/* Per-severity tint restored onto the accordion (card background + header tint +
+   left-accent stripe). The accordion owns its chrome, so reach the inner panel /
+   header row via ::ng-deep — same pattern the selected-run tint uses. Semantic,
+   dark-mode-safe tokens replace the old primitive tints. */
+mj-accordion-panel.severity-info ::ng-deep .mj-accordion-panel { border-left: 4px solid var(--mj-status-info); background: var(--mj-status-info-bg); }
+mj-accordion-panel.severity-info ::ng-deep .mj-accordion-header-row { background: var(--mj-status-info-bg); }
+mj-accordion-panel.severity-warning ::ng-deep .mj-accordion-panel { border-left: 4px solid var(--mj-status-warning); background: var(--mj-status-warning-bg); }
+mj-accordion-panel.severity-warning ::ng-deep .mj-accordion-header-row { background: var(--mj-status-warning-bg); }
+mj-accordion-panel.severity-optimization ::ng-deep .mj-accordion-panel { border-left: 4px solid var(--mj-status-success); background: var(--mj-status-success-bg); }
+mj-accordion-panel.severity-optimization ::ng-deep .mj-accordion-header-row { background: var(--mj-status-success-bg); }
 
 .insight-title {
     font-weight: 600;
@@ -875,24 +788,7 @@
 }
 
 /* Expandable Insight Cards */
-.insight-card.expandable {
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.insight-card.expandable:hover {
-    box-shadow: var(--mj-shadow-md);
-}
-
-.insight-card .expand-icon {
-    color: var(--mj-text-muted);
-    font-size: 12px;
-    margin-left: auto;
-}
-
-.insight-card.expanded {
-    border-width: 2px;
-}
+/* .insight-card expandable/expanded/expand-icon chrome now owned by <mj-accordion-panel>. */
 
 .insight-details {
     margin-top: 16px;
@@ -1444,22 +1340,9 @@
     padding: 20px 24px;
 }
 
-/* Success Banner */
-.success-banner {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 16px 20px;
-    background: var(--mj-color-success-100);
-    border-radius: var(--mj-radius-md);
-    font-size: 13px;
-    color: var(--mj-color-success-800);
+/* Telemetry "no slow ops" alert — positioning only; box chrome owned by <mj-alert> */
+.telemetry-success-alert {
     margin-top: 16px;
-}
-
-.success-banner i {
-    font-size: 18px;
-    color: var(--mj-status-success);
 }
 
 /* Compact Filter Bar */
@@ -2269,22 +2152,10 @@
     margin-top: 4px;
 }
 
-.pattern-warning {
-    margin-top: 12px;
-    padding: 12px;
-    background: var(--mj-color-warning-50);
-    border-radius: var(--mj-radius-md);
-    font-size: 12px;
-    color: var(--mj-color-warning-800);
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
-}
 
-.pattern-warning i {
-    color: var(--mj-color-warning-500);
-    margin-top: 2px;
-}
+/* Position the migrated mj-alerts (component is margin-less apart from its bottom) */
+.recommendation-spacing { margin-top: 20px; }
+.pattern-hint-spacing { margin-top: 12px; }
 
 /* Detail Actions */
 .detail-actions {
@@ -2506,31 +2377,7 @@
     gap: 12px;
 }
 
-.config-item {
-    background: var(--mj-bg-surface-sunken);
-    border-radius: var(--mj-radius-md);
-    border: 1px solid var(--mj-border-default);
-    overflow: hidden;
-    transition: all 0.2s ease;
-}
-
-.config-item.expanded {
-    border-color: var(--mj-status-success);
-    box-shadow: var(--mj-shadow-md);
-}
-
-.config-item-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 12px 16px;
-    cursor: pointer;
-    transition: background 0.2s ease;
-}
-
-.config-item-header:hover {
-    background: rgba(0, 0, 0, 0.02);
-}
+/* .config-item wrapper + .config-item-header chrome now owned by <mj-accordion-panel>. */
 
 .config-item-info {
     display: flex;
@@ -2580,14 +2427,7 @@
     color: var(--mj-text-secondary);
 }
 
-.expand-icon {
-    color: var(--mj-text-muted);
-    transition: transform 0.2s ease;
-}
-
-.config-item.expanded .expand-icon {
-    color: var(--mj-status-success);
-}
+/* .expand-icon chevron now owned by <mj-accordion-panel>. */
 
 .config-item-details {
     padding: 0 16px 16px;

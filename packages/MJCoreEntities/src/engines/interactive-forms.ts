@@ -112,12 +112,12 @@ export class InteractiveFormsEngine extends BaseEngine<InteractiveFormsEngine> {
 
     /** All cached form-role Components. */
     public get Forms(): MJComponentEntity[] {
-        return this._forms ?? [];
+        return this.GetConfigData<MJComponentEntity>('_forms');
     }
 
     /** All cached EntityFormOverride rows (all scopes — caller filters). */
     public get Overrides(): MJEntityFormOverrideEntity[] {
-        return this._overrides ?? [];
+        return this.GetConfigData<MJEntityFormOverrideEntity>('_overrides');
     }
 
     /**

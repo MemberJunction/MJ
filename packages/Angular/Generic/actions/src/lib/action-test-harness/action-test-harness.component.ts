@@ -417,10 +417,6 @@ export class ActionTestHarnessComponent extends BaseAngularComponent implements 
         }
     }
 
-    public ToggleInputsCollapsed(): void {
-        this.InputsCollapsed = !this.InputsCollapsed;
-    }
-
     public ClearResults(): void {
         this.ExecutionResult = null;
         this.ExecutionError = null;
@@ -448,16 +444,6 @@ export class ActionTestHarnessComponent extends BaseAngularComponent implements 
         navigator.clipboard.writeText(resultDataText).catch(() => {
             // Failed to copy to clipboard
         });
-    }
-
-    public GetResultIcon(): string {
-        if (!this.ExecutionResult) return '';
-        return this.ExecutionResult.Success ? 'fa-check-circle' : 'fa-times-circle';
-    }
-
-    public GetResultColor(): string {
-        if (!this.ExecutionResult) return '';
-        return this.ExecutionResult.Success ? '#28a745' : '#dc3545';
     }
 
     public GetOutputParams(): MJActionParamEntity[] {

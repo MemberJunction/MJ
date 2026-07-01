@@ -37,6 +37,7 @@ import '@memberjunction/server-bootstrap/mj-class-registrations';
 import sql from 'mssql';
 import { setupSQLServerClient, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { Metadata, RunView, UserInfo, LogStatus } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { AIAgentRunEntity } from '@memberjunction/core-entities';
 import { AIEngine } from '@memberjunction/aiengine';
 import { MemoryManagerAgent } from '@memberjunction/ai-agents';
@@ -321,7 +322,7 @@ async function seedAndMine(
 
         const since = new Date(Date.now() - 60 * 60 * 1000); // 1h ago
         const failed = await harness.LoadFailed(since, contextUser);
-        const mine = failed.find(f => f.ID === seededRunId);
+        const mine = failed.find(f => UUIDsEqual(f.ID, seededRunId));
         check(`[${label}] selector finds the Failed run`, !!mine, `found ${failed.length} failed run(s)`);
 
         const candidates = mine ? await harness.ExtractFromFailed([mine], contextUser) : [];

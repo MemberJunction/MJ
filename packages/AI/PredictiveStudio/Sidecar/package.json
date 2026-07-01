@@ -1,0 +1,42 @@
+{
+  "name": "@memberjunction/predictive-studio-sidecar",
+  "version": "5.43.0",
+  "description": "Self-managing TypeScript wrapper for the Predictive Studio Python ML sidecar. Spawns a bundled FastAPI microservice as a child process (managed mode) or connects to a remote/containerized instance, exposing a typed /train + /predict + /health client.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist",
+    "/src/python"
+  ],
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "setup:python": "node scripts/setup-python.mjs",
+    "test:python": "node scripts/run-pytest.mjs"
+  },
+  "keywords": [
+    "memberjunction",
+    "predictive-studio",
+    "machine-learning",
+    "sidecar",
+    "fastapi",
+    "xgboost",
+    "lightgbm",
+    "scikit-learn"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  },
+  "license": "ISC",
+  "dependencies": {
+    "@memberjunction/predictive-studio-core": "5.43.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "tsc-alias": "^1.8.10",
+    "vitest": "^4.0.18"
+  }
+}

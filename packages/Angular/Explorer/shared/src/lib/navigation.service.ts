@@ -170,6 +170,20 @@ export class NavigationService implements OnDestroy {
    */
   public readonly AgentContextUpdated$ = new Subject<AgentContextUpdate>();
 
+  /** The client tools currently surfaced to the agent (the most recent SetAgentClientTools set). */
+  private currentAgentTools: NonNullable<AgentContextUpdate['AgentClientTools']> = [];
+
+  /**
+   * Tools captured for each cached resource component at the moment it was DETACHED, keyed by that
+   * component (the one the cache manager tracks). Replayed on reattach. Captured at detach time (vs.
+   * keyed by the registering component) so it works even when a resource WRAPPER component is what's
+   * cached/reattached while an INNER child component is what actually called SetAgentClientTools
+   * (e.g. Data Explorer's resource wrapper hosting its dashboard) — keying by the registerer would
+   * miss on reattach. This keeps the agent's live tool set a function of the CURRENTLY attached
+   * surface, fixing the staleness where a previous app's tools lingered after navigation.
+   */
+  private readonly agentToolsByDetachedResource = new Map<BaseResourceComponent, NonNullable<AgentContextUpdate['AgentClientTools']>>();
+
   /**
    * Latest `AppContextSnapshot` published by the Explorer app shell.
    *
@@ -234,7 +248,45 @@ export class NavigationService implements OnDestroy {
     ParameterSchema: Record<string, unknown>;
     Handler: (params: Record<string, unknown>) => Promise<unknown>;
   }>): void {
+    this.currentAgentTools = tools;
     this.AgentContextUpdated$.next({ Caller: caller, AgentClientTools: tools });
+  }
+
+  /**
+   * Re-publish a cached resource component's tools when its tab is re-focused. Cached components keep
+   * their Angular instance but do NOT re-run `ngAfterViewInit`, so they never re-register on reattach
+   * — the shell calls this so the just-reactivated surface's tools become the agent's active set
+   * again. Replays the set captured for this component at its last detach; no-op (lets a fresh
+   * component register itself) when none was captured (e.g. a component's very first attach).
+   */
+  public NotifyResourceReattached(caller: BaseResourceComponent): void {
+    const tools = this.agentToolsByDetachedResource.get(caller);
+    if (tools === undefined) {
+      return;
+    }
+    this.currentAgentTools = tools;
+    this.AgentContextUpdated$.next({ Caller: caller, AgentClientTools: tools });
+  }
+
+  /**
+   * Capture + clear the active client tools when a resource component's tab is detached (navigated
+   * away from), so the previous surface's tools aren't offered to the agent on the next surface. We
+   * snapshot whatever tools are CURRENTLY active and key them by the detaching component, so
+   * {@link NotifyResourceReattached} can replay them — robust to a wrapper component being the one
+   * cached/reattached while an inner child actually registered the tools (e.g. Data Explorer).
+   */
+  public NotifyResourceDetached(caller: BaseResourceComponent): void {
+    this.agentToolsByDetachedResource.set(caller, this.currentAgentTools);
+    this.currentAgentTools = [];
+    this.AgentContextUpdated$.next({ Caller: caller, AgentClientTools: [] });
+  }
+
+  /**
+   * Drop a destroyed component's captured tools (e.g. on LRU eviction), so the map doesn't retain
+   * references to dead component instances.
+   */
+  public ForgetResource(caller: BaseResourceComponent): void {
+    this.agentToolsByDetachedResource.delete(caller);
   }
 
   ngOnDestroy(): void {

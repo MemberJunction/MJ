@@ -1,4 +1,4 @@
-import { Component, ElementRef, EventEmitter, Input, Output, ViewChild, inject } from '@angular/core';
+import { Component, ElementRef, EventEmitter, HostListener, Input, Output, ViewChild, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RealtimeSessionService } from '../../services/realtime-session.service';
@@ -11,8 +11,9 @@ import { RealtimeSessionService } from '../../services/realtime-session.service'
  *  - **Levels 0–1 (phone-call strip)** — big round call controls, centered: Mute, the
  *    Captions toggle (level 1+, arriving WITH the text it controls), the Details peek
  *    (level 0 paths where the surface panel isn't earned yet — lets the user look at the
- *    Activity/Whiteboard panels on demand), and End call. Level 1 adds the whispered
- *    "press T to type" hint — typing exists, but there's no visible composer yet.
+ *    Activity/Whiteboard panels on demand), the Type control, and End call. There's no visible
+ *    composer yet — the Type control opens it, and so does simply starting to type (the overlay
+ *    captures the first printable keystroke and seeds it via {@link AppendAndFocus}).
  *  - **Level 2+ (the dock)** — mute/captions shrink to compact minis and the in-call text
  *    input docks beside them (one bottom bar, per Redesign A's fused composer+controls).
  *    Submit calls {@link RealtimeSessionService.SendText}, which injects the text as a user
@@ -36,6 +37,15 @@ export class RealtimeComposerComponent {
    */
   @Input() Open = false;
 
+  /**
+   * COMPACT (Calm Orb · overlay) presentation: collapse the phone-call strip to the
+   * mockup's lean dock — **Mute + End + a "•••"** overflow button. The "•••" blooms a small
+   * sheet hosting the secondary actions (Captions / Details / Type). The fused level-2 dock
+   * (minis + text input) is unchanged. Fed from the overlay's resolved `Ui.compact`.
+   * Default `false` (the full 5-button strip is unchanged).
+   */
+  @Input() Compact = false;
+
   /** Emitted when the user opens (Type control / typing) or closes (hide control) the dock. */
   @Output() OpenChanged = new EventEmitter<boolean>();
 
@@ -57,15 +67,22 @@ export class RealtimeComposerComponent {
   /** Emitted when the user ends the call from the strip's End control. */
   @Output() EndRequested = new EventEmitter<void>();
 
+  /** Emitted with the new muted state whenever the user toggles the mic from the dock. */
+  @Output() MuteChanged = new EventEmitter<boolean>();
+
   /** Current draft text in the dock's composer input. */
   public Draft = '';
 
-  /** Local mic mute state, reflected from the service. */
-  public IsMuted = false;
+  /**
+   * The mic mute state. A two-way reflection: the overlay may push it down (e.g. its
+   * `SetMuted()` / focus-pill toggle) so all mute affordances stay in sync, and this
+   * component updates it locally + emits {@link MuteChanged} when its own button is used.
+   */
+  @Input() IsMuted = false;
 
   @ViewChild('dockInput') private dockInput?: ElementRef<HTMLInputElement>;
 
-  private voice = inject(RealtimeSessionService);
+  private realtime = inject(RealtimeSessionService);
 
   /** True when there's non-whitespace text to send. */
   public get CanSend(): boolean {
@@ -77,9 +94,30 @@ export class RealtimeComposerComponent {
     return !this.Open;
   }
 
-  /** Toggle the local microphone mute. */
+  /**
+   * Whether the compact "•••" overflow sheet (Captions / Details / Type) is open. Only used
+   * in {@link Compact} strip mode; any outside click or action selection closes it.
+   */
+  public MoreOpen = false;
+
+  /** Open/close the compact overflow sheet (stops propagation so the outside-click close skips it). */
+  public ToggleMore(event: MouseEvent): void {
+    event.stopPropagation();
+    this.MoreOpen = !this.MoreOpen;
+  }
+
+  /** Any outside click closes the compact overflow sheet. */
+  @HostListener('document:click')
+  public OnDocumentClick(): void {
+    if (this.MoreOpen) {
+      this.MoreOpen = false;
+    }
+  }
+
+  /** Toggle the local microphone mute and surface the new state to the overlay. */
   public ToggleMute(): void {
-    this.IsMuted = this.voice.ToggleMute();
+    this.IsMuted = this.realtime.ToggleMute();
+    this.MuteChanged.emit(this.IsMuted);
   }
 
   /** Toggle captions visibility and notify the overlay. */
@@ -88,9 +126,28 @@ export class RealtimeComposerComponent {
     this.CaptionsToggled.emit(this.CaptionsOn);
   }
 
-  /** Focuses the dock's text input (the overlay's T-to-type hotkey lands here). */
+  /** Focuses the dock's text input (the overlay's Type control lands here). */
   public FocusInput(): void {
     this.dockInput?.nativeElement.focus();
+  }
+
+  /**
+   * TYPE-TO-COMPOSE: the overlay captured a printable keystroke while nothing was focused, so seed
+   * the draft with that character, focus the input, and put the caret at the end — the user just
+   * keeps typing and their first key isn't lost. Appends (rather than replaces) so a leftover draft
+   * is preserved. The native value is synced inline so the caret math is correct before Angular's
+   * next change-detection pass reconciles ngModel.
+   *
+   * @param text the character(s) to seed (typically the single key that opened the composer).
+   */
+  public AppendAndFocus(text: string): void {
+    this.Draft = (this.Draft ?? '') + text;
+    const el = this.dockInput?.nativeElement;
+    if (el) {
+      el.value = this.Draft;
+      el.focus();
+      el.setSelectionRange(this.Draft.length, this.Draft.length);
+    }
   }
 
   /** Send the typed text into the live session, then clear the input. */
@@ -98,7 +155,7 @@ export class RealtimeComposerComponent {
     if (!this.CanSend) {
       return;
     }
-    this.voice.SendText(this.Draft);
+    this.realtime.SendText(this.Draft);
     this.Draft = '';
   }
 

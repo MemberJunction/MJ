@@ -24,6 +24,15 @@ import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-sha
 import { TagCloudScope } from '@memberjunction/tag-engine-base';
 import { TagCloudComponent, TagCloudSelection } from './tag-cloud/tag-cloud.component';
 import { DrilldownRecord, DrilldownOpenRequest } from './record-drilldown/record-drilldown.component';
+import {
+    buildVisualizeAgentContext,
+    resolveDrilldownRecord,
+    capVisualizeList,
+    VISUALIZATION_MODES,
+    VisualizationModeId,
+    DrilldownRecordSummary,
+} from './visualize-agent-context';
+import { validateEnumParam, validateStringParam } from '../../../shared/agent-tool-validation';
 
 /** Visualization modes hosted by this surface. */
 export type VisualizationMode = 'clusters' | 'tagcloud';
@@ -156,6 +165,8 @@ export class VisualizeResourceComponent extends BaseResourceComponent implements
         this.DrilldownRecords = [];
         this.cdr.detectChanges();
 
+        this.emitAgentContext();
+
         try {
             this.DrilldownRecords = await this.loadRecordsForTag(selection.Tag, selection.Scope);
         } catch (error) {
@@ -163,6 +174,7 @@ export class VisualizeResourceComponent extends BaseResourceComponent implements
             this.DrilldownRecords = [];
         } finally {
             this.DrilldownLoading = false;
+            this.emitAgentContext();
             this.cdr.detectChanges();
         }
     }
@@ -176,6 +188,7 @@ export class VisualizeResourceComponent extends BaseResourceComponent implements
         this.DrilldownVisible = false;
         this.DrilldownRecords = [];
         this.DrilldownLoading = false;
+        this.emitAgentContext();
         this.cdr.detectChanges();
     }
 
@@ -283,12 +296,48 @@ export class VisualizeResourceComponent extends BaseResourceComponent implements
     // Agent context + tools
     // ================================================================
 
+    /**
+     * Publish the host's state to the AI agent. Re-emitted whenever the mode
+     * switches or the shared drilldown opens/loads/closes — so the streamed
+     * context tracks what's on screen. Deepened to Data-Explorer depth: the
+     * available modes plus the shared drilldown panel (open/loading state, what
+     * it's showing, and the records it currently lists by id+title).
+     */
     private emitAgentContext(): void {
-        this.navigationService.SetAgentContext(this, {
-            ActiveVisualizationMode: this.ActiveMode,
-        });
+        this.navigationService.SetAgentContext(this, buildVisualizeAgentContext({
+            ActiveMode: this.ActiveMode,
+            AvailableModes: [...VISUALIZATION_MODES],
+            DrilldownVisible: this.DrilldownVisible,
+            DrilldownLoading: this.DrilldownLoading,
+            DrilldownTitle: this.DrilldownTitle,
+            DrilldownSubtitle: this.DrilldownSubtitle,
+            DrilldownRecords: this.buildDrilldownSummaries(),
+        }));
     }
 
+    /** Map the loaded drilldown rows to bounded id+title+subtitle summaries for the agent. */
+    private buildDrilldownSummaries(): DrilldownRecordSummary[] {
+        return this.DrilldownRecords.map(r => ({
+            RecordID: r.RecordID,
+            Title: r.Title,
+            Subtitle: r.Subtitle ?? '',
+        }));
+    }
+
+    /**
+     * 🚨 SAFETY BOUNDARY (Knowledge Hub · Visualize host)
+     * ------------------------------------------------------------------
+     * The agent may SWITCH the visualization mode, OPEN a record currently
+     * listed in the shared drilldown (by id or title), and CLOSE the
+     * drilldown. All are read-only navigations / view-state changes.
+     *
+     * Nothing here mutates, deletes, or re-tags content. The embedded
+     * Clusters child registers its OWN deep tools when it is the standalone
+     * surface; here it is Embedded, so cluster recompute is reached through
+     * the child's UI, not duplicated on the host. Tolerant handlers: every
+     * Handler returns { Success, Data?, ErrorMessage? } and never throws;
+     * drilldown references resolve id→title→contains.
+     */
     private registerAgentTools(): void {
         this.navigationService.SetAgentClientTools(this, [
             {
@@ -296,16 +345,70 @@ export class VisualizeResourceComponent extends BaseResourceComponent implements
                 Description: 'Switch the Visualize surface mode (clusters or tagcloud)',
                 ParameterSchema: {
                     type: 'object',
-                    properties: { mode: { type: 'string', enum: ['clusters', 'tagcloud'] } },
+                    properties: { mode: { type: 'string', enum: [...VISUALIZATION_MODES] } },
                     required: ['mode'],
                 },
                 Handler: async (params: Record<string, unknown>) => {
-                    const mode = params['mode'] as VisualizationMode;
-                    if (mode === 'clusters' || mode === 'tagcloud') {
-                        this.SelectMode(mode);
-                        return { Success: true };
+                    const check = validateEnumParam(params['mode'], VISUALIZATION_MODES, 'mode');
+                    if (!check.ok) {
+                        return check.result;
                     }
-                    return { Success: false };
+                    this.SelectMode(check.value as VisualizationModeId);
+                    return { Success: true, Data: { ActiveMode: this.ActiveMode } };
+                },
+            },
+            {
+                Name: 'OpenDrilldownRecord',
+                Description: 'Open one of the records currently listed in the shared drilldown panel, by record id or title. Only available while the drilldown is open.',
+                ParameterSchema: {
+                    type: 'object',
+                    properties: { reference: { type: 'string', description: 'The record id or its on-screen title.' } },
+                    required: ['reference'],
+                },
+                Handler: async (params: Record<string, unknown>) => {
+                    const check = validateStringParam(params['reference'], 'reference');
+                    if (!check.ok) {
+                        return check.result;
+                    }
+                    if (!this.DrilldownVisible || this.DrilldownRecords.length === 0) {
+                        return { Success: false, ErrorMessage: 'The drilldown panel is empty — select a tag or cluster point first.' };
+                    }
+                    const candidates = this.DrilldownRecords.map(r => ({ RecordID: r.RecordID, Title: r.Title }));
+                    const match = resolveDrilldownRecord(check.value, candidates);
+                    if (!match) {
+                        const titles = capVisualizeList(candidates.map(c => c.Title));
+                        return { Success: false, ErrorMessage: `No drilldown record matches "${check.value}". Listed records include: ${titles.join(', ')}.` };
+                    }
+                    const full = this.DrilldownRecords.find(r => r.RecordID === match.RecordID);
+                    if (full) {
+                        this.openEntityRecord(full.EntityName, full.RecordID);
+                    }
+                    return { Success: true, Data: { Title: match.Title } };
+                },
+            },
+            {
+                Name: 'CloseDrilldown',
+                Description: 'Close the shared drilldown panel.',
+                ParameterSchema: { type: 'object', properties: {} },
+                Handler: async () => {
+                    this.CloseDrilldown();
+                    return { Success: true };
+                },
+            },
+            {
+                Name: 'ListDrilldownRecords',
+                Description: 'List the records currently shown in the shared drilldown panel (bounded).',
+                ParameterSchema: { type: 'object', properties: {} },
+                Handler: async () => {
+                    return {
+                        Success: true,
+                        Data: {
+                            DrilldownVisible: this.DrilldownVisible,
+                            DrilldownTitle: this.DrilldownTitle || null,
+                            Records: capVisualizeList(this.buildDrilldownSummaries()),
+                            TotalCount: this.DrilldownRecords.length,
+                        },
+                    };
                 },
             },
         ]);

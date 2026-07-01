@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // ============================================================================
 // Mocks — must be defined before importing the module under test
@@ -252,6 +252,140 @@ describe('UserInfoEngine — Application Role Enforcement', () => {
 
         it('should return not_installed for open-access apps with no UserApplication record', () => {
             expect(engine.CheckUserApplicationAccess(APP_OPEN)).toBe('not_installed');
+        });
+    });
+
+    // ========================================================================
+    // RegisterApplicationAccessFilter
+    // ========================================================================
+
+    describe('RegisterApplicationAccessFilter', () => {
+        afterEach(() => {
+            // Clean up filter after each test
+            engine.RegisterApplicationAccessFilter(null);
+        });
+
+        it('should call the filter with defaultAccess=true for open-access apps', () => {
+            const filterSpy = vi.fn((_appId: string, defaultAccess: boolean) => defaultAccess);
+            engine.RegisterApplicationAccessFilter(filterSpy);
+
+            engine.UserHasApplicationAccess(APP_OPEN);
+
+            expect(filterSpy).toHaveBeenCalledWith(APP_OPEN, true, mockCurrentUser);
+        });
+
+        it('should allow filter to restrict an open-access app', () => {
+            engine.RegisterApplicationAccessFilter(() => false);
+
+            // Without filter, APP_OPEN returns true (no role records = open)
+            // Filter overrides to false
+            expect(engine.UserHasApplicationAccess(APP_OPEN)).toBe(false);
+        });
+
+        it('should call the filter with the default role-check result', () => {
+            const filterSpy = vi.fn((_appId: string, defaultAccess: boolean) => defaultAccess);
+            engine.RegisterApplicationAccessFilter(filterSpy);
+
+            // UI role does NOT have access to Admin
+            engine.UserHasApplicationAccess(APP_ADMIN);
+            expect(filterSpy).toHaveBeenCalledWith(APP_ADMIN, false, mockCurrentUser);
+
+            filterSpy.mockClear();
+
+            // UI role DOES have access to Home
+            engine.UserHasApplicationAccess(APP_HOME);
+            expect(filterSpy).toHaveBeenCalledWith(APP_HOME, true, mockCurrentUser);
+        });
+
+        it('should allow filter to grant access when default denies it', () => {
+            // UI user has no access to Admin by default
+            expect(engine.UserHasApplicationAccess(APP_ADMIN)).toBe(false);
+
+            // Filter overrides: grant access regardless
+            engine.RegisterApplicationAccessFilter(() => true);
+            expect(engine.UserHasApplicationAccess(APP_ADMIN)).toBe(true);
+        });
+
+        it('should allow filter to deny access when default grants it', () => {
+            // UI user has access to Home by default
+            expect(engine.UserHasApplicationAccess(APP_HOME)).toBe(true);
+
+            // Filter overrides: deny access regardless
+            engine.RegisterApplicationAccessFilter(() => false);
+            expect(engine.UserHasApplicationAccess(APP_HOME)).toBe(false);
+        });
+
+        it('should pass through defaultAccess when filter is a no-op', () => {
+            engine.RegisterApplicationAccessFilter((_appId, defaultAccess) => defaultAccess);
+
+            expect(engine.UserHasApplicationAccess(APP_HOME)).toBe(true);
+            expect(engine.UserHasApplicationAccess(APP_ADMIN)).toBe(false);
+            expect(engine.UserHasApplicationAccess(APP_OPEN)).toBe(true);
+        });
+
+        it('should remove the filter when null is passed', () => {
+            engine.RegisterApplicationAccessFilter(() => false);
+            expect(engine.UserHasApplicationAccess(APP_OPEN)).toBe(false);
+
+            engine.RegisterApplicationAccessFilter(null);
+            expect(engine.UserHasApplicationAccess(APP_OPEN)).toBe(true);
+        });
+
+        it('should replace previous filter when registered again', () => {
+            engine.RegisterApplicationAccessFilter(() => false);
+            expect(engine.UserHasApplicationAccess(APP_OPEN)).toBe(false);
+
+            engine.RegisterApplicationAccessFilter(() => true);
+            expect(engine.UserHasApplicationAccess(APP_OPEN)).toBe(true);
+        });
+
+        it('should integrate with CheckUserApplicationAccess', () => {
+            // Filter denies everything → CheckUserApplicationAccess returns not_authorized
+            engine.RegisterApplicationAccessFilter(() => false);
+            expect(engine.CheckUserApplicationAccess(APP_HOME)).toBe('not_authorized');
+            expect(engine.CheckUserApplicationAccess(APP_OPEN)).toBe('not_authorized');
+        });
+    });
+
+    // ========================================================================
+    // RegisterApplicationAdminFilter
+    // ========================================================================
+
+    describe('RegisterApplicationAdminFilter', () => {
+        afterEach(() => {
+            engine.RegisterApplicationAdminFilter(null);
+        });
+
+        it('should call the filter with defaultCanAdmin=false for open-access apps', () => {
+            const filterSpy = vi.fn((_appId: string, defaultCanAdmin: boolean) => defaultCanAdmin);
+            engine.RegisterApplicationAdminFilter(filterSpy);
+
+            engine.UserCanAdminApplication(APP_OPEN);
+
+            expect(filterSpy).toHaveBeenCalledWith(APP_OPEN, false, mockCurrentUser);
+        });
+
+        it('should allow filter to grant admin on an open-access app', () => {
+            expect(engine.UserCanAdminApplication(APP_OPEN)).toBe(false);
+
+            engine.RegisterApplicationAdminFilter(() => true);
+            expect(engine.UserCanAdminApplication(APP_OPEN)).toBe(true);
+        });
+
+        it('should allow filter to revoke admin when default grants it', () => {
+            mockCurrentUser.UserRoles = [{ UserID: USER_ID, RoleID: ROLE_DEV }];
+            expect(engine.UserCanAdminApplication(APP_ADMIN)).toBe(true);
+
+            engine.RegisterApplicationAdminFilter(() => false);
+            expect(engine.UserCanAdminApplication(APP_ADMIN)).toBe(false);
+        });
+
+        it('should remove the filter when null is passed', () => {
+            engine.RegisterApplicationAdminFilter(() => true);
+            expect(engine.UserCanAdminApplication(APP_OPEN)).toBe(true);
+
+            engine.RegisterApplicationAdminFilter(null);
+            expect(engine.UserCanAdminApplication(APP_OPEN)).toBe(false);
         });
     });
 });

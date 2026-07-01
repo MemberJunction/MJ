@@ -42,11 +42,11 @@ export class MessageInputBoxComponent {
   @Input() acceptedFileTypes: string = 'image/*';
 
   /** Shows the in-composer mic button when true. */
-  @Input() enableVoice: boolean = false;
+  @Input() enableRealtime: boolean = false;
   /** Whether a realtime voice session is currently active (mic renders in its active state). */
   @Input() voiceActive: boolean = false;
   /** Whether a voice session can be started right now (mic disabled when false). */
-  @Input() canStartVoice: boolean = true;
+  @Input() canStartRealtime: boolean = true;
 
   @Output() textSubmitted = new EventEmitter<string>();
   @Output() valueChange = new EventEmitter<string>();
@@ -63,11 +63,11 @@ export class MessageInputBoxComponent {
    */
   @Output() voiceOptionsRequested = new EventEmitter<void>();
 
-  onVoiceClick(): void {
+  onRealtimeClick(): void {
     this.voiceRequested.emit();
   }
 
-  onVoiceOptionsClick(): void {
+  onRealtimeOptionsClick(): void {
     this.voiceOptionsRequested.emit();
   }
 

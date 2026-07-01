@@ -1,0 +1,116 @@
+[
+  {
+    "fields": {
+      "Name": "XGBoost",
+      "Description": "Gradient-boosted decision-tree ensemble that builds trees sequentially to correct prior errors. Reach for it as a strong default on tabular classification and regression problems where accuracy matters; the tradeoff is more hyperparameters to tune and slower training than linear models.",
+      "ProblemTypes": "classification,regression",
+      "DriverClass": "xgboost",
+      "HyperparameterSchema": "@file:schemas/xgboost.schema.json",
+      "DefaultHyperparameters": "{\"n_estimators\":300,\"max_depth\":6,\"learning_rate\":0.1,\"subsample\":0.8,\"colsample_bytree\":0.8,\"min_child_weight\":1}",
+      "SupportsFeatureImportance": true,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "25E83BF9-C5EE-4BDF-A891-D36D871B73E3"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T17:33:30.700Z",
+      "checksum": "a4aed778c9438c3d23778435431c8ff6b4fb23d5651bf6a8b28b952ebb4cf5cb"
+    }
+  },
+  {
+    "fields": {
+      "Name": "LightGBM",
+      "Description": "Histogram-based gradient-boosting framework that grows trees leaf-wise for speed and memory efficiency. Reach for it over XGBoost on large datasets where training time matters; the tradeoff is that leaf-wise growth can overfit smaller datasets without careful regularization.",
+      "ProblemTypes": "classification,regression",
+      "DriverClass": "lightgbm",
+      "HyperparameterSchema": "@file:schemas/lightgbm.schema.json",
+      "DefaultHyperparameters": "{\"n_estimators\":300,\"num_leaves\":31,\"learning_rate\":0.1,\"max_depth\":-1,\"subsample\":0.8,\"colsample_bytree\":0.8}",
+      "SupportsFeatureImportance": true,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "B2FD5E4A-75D4-401A-A1DA-F223A5234FDA"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T17:33:30.719Z",
+      "checksum": "64e1adc09956411d3b31da4f880e01fd035e5606e623a472b6678f2a319b8b5b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Logistic Regression",
+      "Description": "Linear model that estimates class probabilities via the logistic function. Reach for it as a fast, interpretable baseline for classification when relationships are roughly linear; the tradeoff is limited capacity to capture nonlinear interactions without manual feature engineering.",
+      "ProblemTypes": "classification",
+      "DriverClass": "logistic_regression",
+      "HyperparameterSchema": "@file:schemas/logistic_regression.schema.json",
+      "DefaultHyperparameters": "{\"C\":1.0,\"penalty\":\"l2\",\"solver\":\"lbfgs\",\"max_iter\":1000,\"class_weight\":null}",
+      "SupportsFeatureImportance": true,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "B4B84DB7-C255-4118-BE36-7A0489A5AFCE"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T17:33:30.680Z",
+      "checksum": "3c7e61aa636c56d63030b4a24578bf2804643dd621962dfc7058d184faaf5083"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Random Forest",
+      "Description": "Ensemble of decision trees trained on bootstrapped samples with randomized feature splits, averaging their predictions. Reach for it as a robust, low-tuning default that resists overfitting; the tradeoff is larger models and weaker extrapolation than boosted trees on some problems.",
+      "ProblemTypes": "classification,regression",
+      "DriverClass": "random_forest",
+      "HyperparameterSchema": "@file:schemas/random_forest.schema.json",
+      "DefaultHyperparameters": "{\"n_estimators\":200,\"max_depth\":null,\"min_samples_split\":2,\"min_samples_leaf\":1,\"max_features\":\"sqrt\"}",
+      "SupportsFeatureImportance": true,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "F966965D-3A87-4DD6-91E0-4F9D1AF17796"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T17:33:30.738Z",
+      "checksum": "8e590e3be4d63465ebea4f72607c9492ed56cbc94800fa9ea79875697fd849cb"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ridge Regression",
+      "Description": "Linear regression with L2 regularization that shrinks coefficients to reduce variance. Reach for it on regression problems with many correlated features where ordinary least squares overfits; the tradeoff is that it only models linear relationships and never zeroes out features.",
+      "ProblemTypes": "regression",
+      "DriverClass": "ridge",
+      "HyperparameterSchema": "@file:schemas/ridge.schema.json",
+      "DefaultHyperparameters": "{\"alpha\":1.0,\"fit_intercept\":true,\"solver\":\"auto\"}",
+      "SupportsFeatureImportance": true,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "1BA6D93C-2087-411E-9A7F-E72A64DB5106"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T17:33:30.757Z",
+      "checksum": "7b2efdbcb8c968078f58a4c443c9ed417cff8358f6ee3cb7c6235c314c5dd7c2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Multilayer Perceptron",
+      "Description": "Feedforward neural network with one or more hidden layers that learns nonlinear feature representations. Reach for it when complex nonlinear patterns dominate and you have enough data; the tradeoff is sensitivity to scaling and tuning, longer training, and lower interpretability.",
+      "ProblemTypes": "classification,regression",
+      "DriverClass": "mlp",
+      "HyperparameterSchema": "@file:schemas/mlp.schema.json",
+      "DefaultHyperparameters": "{\"hidden_layer_sizes\":\"100\",\"activation\":\"relu\",\"alpha\":0.0001,\"learning_rate_init\":0.001,\"max_iter\":200}",
+      "SupportsFeatureImportance": false,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "482A5EA8-64A7-46AF-8EFF-DB179A9FDD0F"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T17:33:30.776Z",
+      "checksum": "08d05de6c281a50dde9a8148ddedf4aaaed4af70d50df225ca7ae870e5d4f5c2"
+    }
+  }
+]

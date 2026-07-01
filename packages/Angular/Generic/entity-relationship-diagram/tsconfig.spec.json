@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["vitest/globals", "node"]
+  },
+  "include": [
+    "src/lib/components/entity-filter-panel/entity-filter-panel.component.ts",
+    "src/lib/components/entity-filter-panel/entity-filter-panel.component.dom.test.ts",
+    "src/lib/components/entity-details/entity-details.component.ts",
+    "src/lib/components/entity-details/entity-details.component.dom.test.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
+}

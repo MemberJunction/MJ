@@ -13,7 +13,9 @@ import {
   MJViewToggleComponent,
   MJStatBadgeComponent,
   MJRefreshButtonComponent,
-  MJEmptyStateComponent
+  MJEmptyStateComponent,
+  MJAlertComponent,
+  MJAccordionModule
 } from '@memberjunction/ng-ui-components';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
@@ -82,6 +84,8 @@ import {
     MJStatBadgeComponent,
     MJRefreshButtonComponent,
     MJEmptyStateComponent,
+    MJAlertComponent,
+    MJAccordionModule,
     ContainerDirectivesModule,
     CodeEditorModule,
     ActionGalleryModule,

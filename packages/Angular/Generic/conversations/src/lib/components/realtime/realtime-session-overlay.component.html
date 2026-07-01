@@ -18,6 +18,7 @@
       <!-- The UNIFIED APP-BAR: identity + state + every session action (Redesign A). -->
       <mj-realtime-agent-banner
         [State]="state"
+        [Compact]="!IsReviewing && Ui.compact && Ui.chrome === 'orb'"
         [AgentName]="AgentName"
         [ModelName]="IsReviewing ? null : (ModelName$ | async)"
         [DevMode]="DevMode"
@@ -26,20 +27,14 @@
         [ReviewStartedAt]="ReviewStartedAt"
         [ReviewClosedAt]="ReviewClosedAt"
         [ReviewCloseReason]="ReviewCloseReason"
-        [CaptionsOn]="ShowCaptions"
-        [ShowCaptionsControl]="!IsReviewing"
-        [ShowGear]="!IsReviewing && Disclosure.ShowGear"
-        [ShowEnd]="!IsReviewing && Disclosure.ShowComposer"
-        [ShowMinimize]="!IsReviewing"
-        [ShowPureAudio]="!IsReviewing && Disclosure.SessionLevel > 0"
+        [ShowGear]="!IsReviewing && Ui.showGear"
+        [ShowDensityPicker]="Ui.showDensityPicker"
+        [ShowMinimize]="!IsReviewing && Ui.showMinimize"
         [Density]="Disclosure.Milestones.Density"
         (OpenSessionRequested)="OnOpenSessionRequested($event)"
-        (CaptionsToggled)="OnCaptionsToggled($event)"
         (DevModeToggled)="OnDevModeToggled($event)"
         (DensityChanged)="OnDensityChanged($event)"
         (MinimizeRequested)="OnMinimize()"
-        (PureAudioRequested)="OnPureAudio()"
-        (EndRequested)="OnEndCall()"
         (StartLiveRequested)="OnStartLive()"
         (CloseRequested)="OnReviewClose()">
       </mj-realtime-agent-banner>
@@ -94,8 +89,9 @@
       </div>
 
       @if (!IsReviewing) {
-        <!-- Active channels (earned with the console at level 2+) -->
-        @if (Disclosure.ShowComposer) {
+        <!-- Active channels (earned with the console at level 2+, host-gated via [ShowChannels]).
+             The strip component self-hides when there are no active channels. -->
+        @if (ChannelStripVisible) {
           <mj-realtime-channel-strip></mj-realtime-channel-strip>
         }
 
@@ -103,12 +99,15 @@
              two-way toggle (Type opens, hide closes), never level-forced. -->
         <mj-realtime-composer
           [Open]="ComposerOpen"
+          [Compact]="Ui.compact && Ui.chrome === 'orb'"
           (OpenChanged)="OnComposerOpenChanged($event)"
           [CaptionsOn]="ShowCaptions"
+          [IsMuted]="Muted"
           [ShowDetails]="ShowDetailsControl"
           [DetailsOn]="DetailsPeek"
           (CaptionsToggled)="OnCaptionsToggled($event)"
           (DetailsToggled)="OnDetailsToggled()"
+          (MuteChanged)="OnComposerMuteChanged($event)"
           (EndRequested)="OnEndCall()">
         </mj-realtime-composer>
       }

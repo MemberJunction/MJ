@@ -11,10 +11,7 @@
   <mj-page-body>
 
   @if (ErrorMessage) {
-    <div class="message error-message">
-      <i class="fa-solid fa-circle-exclamation"></i>
-      <span>{{ ErrorMessage }}</span>
-    </div>
+    <mj-alert Variant="error">{{ ErrorMessage }}</mj-alert>
   }
 
   <div class="selector-row">
@@ -57,17 +54,13 @@
 
     <div class="domain-groups">
       @for (group of DomainGroups; track TrackByDomain($index, group)) {
-        <div class="domain-group" [class.expanded]="group.Expanded">
-          <button type="button" class="domain-header" (click)="ToggleGroup(group)">
-            <div class="domain-header-left">
-              <i [class]="group.Icon" class="domain-icon"></i>
-              <span class="domain-name">{{ group.DomainName }}</span>
-              <span class="domain-count">{{ group.Count }}</span>
-            </div>
-            <i class="fa-solid fa-chevron-down toggle-icon" [class.rotated]="group.Expanded"></i>
-          </button>
-
-          @if (group.Expanded) {
+        <mj-accordion-panel Size="sm" [FlushBody]="true" [Expanded]="group.Expanded" (ExpandedChange)="onGroupExpandedChange(group, $event)">
+          <ng-template mjAccordionTitle>
+            <i [class]="group.Icon" class="domain-icon"></i>
+            <span class="domain-name">{{ group.DomainName }}</span>
+            <span class="mj-accordion-badge mj-accordion-badge--right">{{ group.Count }}</span>
+          </ng-template>
+          <ng-template mjAccordionBody>
             <div class="domain-body">
               <table class="perms-table">
                 <thead>
@@ -105,8 +98,8 @@
                 </tbody>
               </table>
             </div>
-          }
-        </div>
+          </ng-template>
+        </mj-accordion-panel>
       }
     </div>
   }

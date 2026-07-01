@@ -6,6 +6,10 @@
 # stylesheet defines `.mj-btn` rules. The `mjButton` directive owns the
 # button's appearance — overrides silently fork the styling.
 #
+# Files under any `docs/`, `plans/`, or `guides/` directory are skipped
+# entirely — they hold mockups, prototypes, and documentation snippets,
+# not shipped component styles.
+#
 # Usage:
 #   ./check-mj-btn-override.sh                # check files changed vs origin/next
 #   ./check-mj-btn-override.sh --base <ref>   # check files changed vs <ref>
@@ -84,6 +88,9 @@ get_files_to_check() {
                 \( -name '*.css' -o -name '*.scss' \) \
                 -not -path '*/node_modules/*' \
                 -not -path '*/dist/*' \
+                -not -path '*/docs/*' \
+                -not -path '*/plans/*' \
+                -not -path '*/guides/*' \
                 | sed "s|^$REPO_ROOT/||"
             ;;
         diff)
@@ -92,6 +99,7 @@ get_files_to_check() {
                 | grep -E '\.(css|scss)$' \
                 | grep -v node_modules \
                 | grep -v '/dist/' \
+                | grep -vE '(^|/)(docs|plans|guides)/' \
                 || true
             ;;
     esac

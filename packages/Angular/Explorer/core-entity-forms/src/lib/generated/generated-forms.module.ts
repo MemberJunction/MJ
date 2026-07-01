@@ -54,6 +54,7 @@ import { MJAIAgentSessionBridgeParticipantFormComponent } from "./Entities/MJAIA
 import { MJAIAgentSessionBridgeFormComponent } from "./Entities/MJAIAgentSessionBridge/mjaiagentsessionbridge.form.component";
 import { MJAIAgentSessionChannelFormComponent } from "./Entities/MJAIAgentSessionChannel/mjaiagentsessionchannel.form.component";
 import { MJAIAgentSessionFormComponent } from "./Entities/MJAIAgentSession/mjaiagentsession.form.component";
+import { MJAIAgentSkillFormComponent } from "./Entities/MJAIAgentSkill/mjaiagentskill.form.component";
 import { MJAIAgentStepPathFormComponent } from "./Entities/MJAIAgentStepPath/mjaiagentsteppath.form.component";
 import { MJAIAgentStepFormComponent } from "./Entities/MJAIAgentStep/mjaiagentstep.form.component";
 import { MJAIAgentTypeFormComponent } from "./Entities/MJAIAgentType/mjaiagenttype.form.component";
@@ -84,6 +85,10 @@ import { MJAIPromptTypeFormComponent } from "./Entities/MJAIPromptType/mjaipromp
 import { MJAIPromptFormComponent } from "./Entities/MJAIPrompt/mjaiprompt.form.component";
 import { MJAIRemoteBrowserProviderFormComponent } from "./Entities/MJAIRemoteBrowserProvider/mjairemotebrowserprovider.form.component";
 import { MJAIResultCacheFormComponent } from "./Entities/MJAIResultCache/mjairesultcache.form.component";
+import { MJAISkillActionFormComponent } from "./Entities/MJAISkillAction/mjaiskillaction.form.component";
+import { MJAISkillPermissionFormComponent } from "./Entities/MJAISkillPermission/mjaiskillpermission.form.component";
+import { MJAISkillSubAgentFormComponent } from "./Entities/MJAISkillSubAgent/mjaiskillsubagent.form.component";
+import { MJAISkillFormComponent } from "./Entities/MJAISkill/mjaiskill.form.component";
 import { MJAIVendorTypeDefinitionFormComponent } from "./Entities/MJAIVendorTypeDefinition/mjaivendortypedefinition.form.component";
 import { MJAIVendorTypeFormComponent } from "./Entities/MJAIVendorType/mjaivendortype.form.component";
 import { MJAIVendorFormComponent } from "./Entities/MJAIVendor/mjaivendor.form.component";
@@ -209,6 +214,9 @@ import { MJEntityRelationshipFormComponent } from "./Entities/MJEntityRelationsh
 import { MJEntitySettingFormComponent } from "./Entities/MJEntitySetting/mjentitysetting.form.component";
 import { MJEnvironmentFormComponent } from "./Entities/MJEnvironment/mjenvironment.form.component";
 import { MJErrorLogFormComponent } from "./Entities/MJErrorLog/mjerrorlog.form.component";
+import { MJExperimentSessionIterationFormComponent } from "./Entities/MJExperimentSessionIteration/mjexperimentsessioniteration.form.component";
+import { MJExperimentSessionFormComponent } from "./Entities/MJExperimentSession/mjexperimentsession.form.component";
+import { MJExperimentFormComponent } from "./Entities/MJExperiment/mjexperiment.form.component";
 import { MJExplorerNavigationItemFormComponent } from "./Entities/MJExplorerNavigationItem/mjexplorernavigationitem.form.component";
 import { MJFileCategoryFormComponent } from "./Entities/MJFileCategory/mjfilecategory.form.component";
 import { MJFileEntityRecordLinkFormComponent } from "./Entities/MJFileEntityRecordLink/mjfileentityrecordlink.form.component";
@@ -245,6 +253,13 @@ import { MJMCPServerToolFormComponent } from "./Entities/MJMCPServerTool/mjmcpse
 import { MJMCPServerFormComponent } from "./Entities/MJMCPServer/mjmcpserver.form.component";
 import { MJMCPToolExecutionLogFormComponent } from "./Entities/MJMCPToolExecutionLog/mjmcptoolexecutionlog.form.component";
 import { MJMCPToolFavoriteFormComponent } from "./Entities/MJMCPToolFavorite/mjmcptoolfavorite.form.component";
+import { MJMLAlgorithmUseCaseRankingFormComponent } from "./Entities/MJMLAlgorithmUseCaseRanking/mjmlalgorithmusecaseranking.form.component";
+import { MJMLAlgorithmUseCaseFormComponent } from "./Entities/MJMLAlgorithmUseCase/mjmlalgorithmusecase.form.component";
+import { MJMLAlgorithmFormComponent } from "./Entities/MJMLAlgorithm/mjmlalgorithm.form.component";
+import { MJMLModelScoringBindingFormComponent } from "./Entities/MJMLModelScoringBinding/mjmlmodelscoringbinding.form.component";
+import { MJMLModelFormComponent } from "./Entities/MJMLModel/mjmlmodel.form.component";
+import { MJMLTrainingPipelineFormComponent } from "./Entities/MJMLTrainingPipeline/mjmltrainingpipeline.form.component";
+import { MJMLTrainingRunFormComponent } from "./Entities/MJMLTrainingRun/mjmltrainingrun.form.component";
 import { MJOAuthAuthServerMetadataCacheFormComponent } from "./Entities/MJOAuthAuthServerMetadataCache/mjoauthauthservermetadatacache.form.component";
 import { MJOAuthAuthorizationStateFormComponent } from "./Entities/MJOAuthAuthorizationState/mjoauthauthorizationstate.form.component";
 import { MJOAuthClientRegistrationFormComponent } from "./Entities/MJOAuthClientRegistration/mjoauthclientregistration.form.component";
@@ -302,6 +317,7 @@ import { MJScheduledJobRunFormComponent } from "./Entities/MJScheduledJobRun/mjs
 import { MJScheduledJobTypeFormComponent } from "./Entities/MJScheduledJobType/mjscheduledjobtype.form.component";
 import { MJScheduledJobFormComponent } from "./Entities/MJScheduledJob/mjscheduledjob.form.component";
 import { MJSchemaInfoFormComponent } from "./Entities/MJSchemaInfo/mjschemainfo.form.component";
+import { MJScopedPromptPartFormComponent } from "./Entities/MJScopedPromptPart/mjscopedpromptpart.form.component";
 import { MJSearchExecutionLogFormComponent } from "./Entities/MJSearchExecutionLog/mjsearchexecutionlog.form.component";
 import { MJSearchProviderFormComponent } from "./Entities/MJSearchProvider/mjsearchprovider.form.component";
 import { MJSearchScopeEntityFormComponent } from "./Entities/MJSearchScopeEntity/mjsearchscopeentity.form.component";
@@ -430,7 +446,7 @@ declarations: [
     MJAIAgentSessionBridgeFormComponent,
     MJAIAgentSessionChannelFormComponent,
     MJAIAgentSessionFormComponent,
-    MJAIAgentStepPathFormComponent],
+    MJAIAgentSkillFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -447,6 +463,7 @@ export class GeneratedForms_SubModule_1 { }
 
 @NgModule({
 declarations: [
+    MJAIAgentStepPathFormComponent,
     MJAIAgentStepFormComponent,
     MJAIAgentTypeFormComponent,
     MJAIAgentFormComponent,
@@ -465,8 +482,7 @@ declarations: [
     MJAIModelModalityFormComponent,
     MJAIModelPriceTypeFormComponent,
     MJAIModelPriceUnitTypeFormComponent,
-    MJAIModelTypeFormComponent,
-    MJAIModelVendorFormComponent],
+    MJAIModelTypeFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -483,6 +499,7 @@ export class GeneratedForms_SubModule_2 { }
 
 @NgModule({
 declarations: [
+    MJAIModelVendorFormComponent,
     MJAIModelFormComponent,
     MJAIPromptCategoryFormComponent,
     MJAIPromptModelFormComponent,
@@ -492,17 +509,16 @@ declarations: [
     MJAIPromptFormComponent,
     MJAIRemoteBrowserProviderFormComponent,
     MJAIResultCacheFormComponent,
+    MJAISkillActionFormComponent,
+    MJAISkillPermissionFormComponent,
+    MJAISkillSubAgentFormComponent,
+    MJAISkillFormComponent,
     MJAIVendorTypeDefinitionFormComponent,
     MJAIVendorTypeFormComponent,
     MJAIVendorFormComponent,
     MJAPIApplicationScopeFormComponent,
     MJAPIApplicationFormComponent,
-    MJAPIKeyApplicationFormComponent,
-    MJAPIKeyScopeFormComponent,
-    MJAPIKeyUsageLogFormComponent,
-    MJAPIKeyFormComponent,
-    MJAPIScopeFormComponent,
-    MJApplicationEntityFormComponent],
+    MJAPIKeyApplicationFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -519,6 +535,11 @@ export class GeneratedForms_SubModule_3 { }
 
 @NgModule({
 declarations: [
+    MJAPIKeyScopeFormComponent,
+    MJAPIKeyUsageLogFormComponent,
+    MJAPIKeyFormComponent,
+    MJAPIScopeFormComponent,
+    MJApplicationEntityFormComponent,
     MJApplicationRoleFormComponent,
     MJApplicationSettingFormComponent,
     MJApplicationFormComponent,
@@ -533,12 +554,7 @@ declarations: [
     MJArtifactVersionFormComponent,
     MJArtifactFormComponent,
     MJAuditLogTypeFormComponent,
-    MJAuditLogFormComponent,
-    MJAuthorizationRoleFormComponent,
-    MJAuthorizationFormComponent,
-    MJClusterAnalysisFormComponent,
-    MJClusterAnalysisClusterFormComponent,
-    MJCollectionArtifactFormComponent],
+    MJAuditLogFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -555,6 +571,11 @@ export class GeneratedForms_SubModule_4 { }
 
 @NgModule({
 declarations: [
+    MJAuthorizationRoleFormComponent,
+    MJAuthorizationFormComponent,
+    MJClusterAnalysisFormComponent,
+    MJClusterAnalysisClusterFormComponent,
+    MJCollectionArtifactFormComponent,
     MJCollectionPermissionFormComponent,
     MJCollectionFormComponent,
     MJCommunicationBaseMessageTypeFormComponent,
@@ -569,12 +590,7 @@ declarations: [
     MJCompanyIntegrationRunAPILogFormComponent,
     MJCompanyIntegrationRunDetailFormComponent,
     MJCompanyIntegrationRunFormComponent,
-    MJCompanyIntegrationSyncWatermarkFormComponent,
-    MJCompanyIntegrationFormComponent,
-    MJComponentDependencyFormComponent,
-    MJComponentLibraryFormComponent,
-    MJComponentLibraryLinkFormComponent,
-    MJComponentRegistryFormComponent],
+    MJCompanyIntegrationSyncWatermarkFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -592,6 +608,11 @@ export class GeneratedForms_SubModule_5 { }
 
 @NgModule({
 declarations: [
+    MJCompanyIntegrationFormComponent,
+    MJComponentDependencyFormComponent,
+    MJComponentLibraryFormComponent,
+    MJComponentLibraryLinkFormComponent,
+    MJComponentRegistryFormComponent,
     MJComponentFormComponent,
     MJContentFileTypeFormComponent,
     MJContentItemAttributeFormComponent,
@@ -606,12 +627,7 @@ declarations: [
     MJContentSourceTypeFormComponent,
     MJContentSourceFormComponent,
     MJContentTypeAttributeFormComponent,
-    MJContentTypeFormComponent,
-    MJConversationArtifactPermissionFormComponent,
-    MJConversationArtifactVersionFormComponent,
-    MJConversationArtifactFormComponent,
-    MJConversationDetailArtifactFormComponent,
-    MJConversationDetailAttachmentFormComponent],
+    MJContentTypeFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -628,6 +644,11 @@ export class GeneratedForms_SubModule_6 { }
 
 @NgModule({
 declarations: [
+    MJConversationArtifactPermissionFormComponent,
+    MJConversationArtifactVersionFormComponent,
+    MJConversationArtifactFormComponent,
+    MJConversationDetailArtifactFormComponent,
+    MJConversationDetailAttachmentFormComponent,
     MJConversationDetailRatingFormComponent,
     MJConversationDetailFormComponent,
     MJConversationFormComponent,
@@ -642,12 +663,7 @@ declarations: [
     MJDashboardPermissionFormComponent,
     MJDashboardUserPreferenceFormComponent,
     MJDashboardUserStateFormComponent,
-    MJDashboardFormComponent,
-    MJDataContextItemFormComponent,
-    MJDataContextFormComponent,
-    MJDatasetItemFormComponent,
-    MJDatasetFormComponent,
-    MJDuplicateRunDetailMatchFormComponent],
+    MJDashboardFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -664,6 +680,11 @@ export class GeneratedForms_SubModule_7 { }
 
 @NgModule({
 declarations: [
+    MJDataContextItemFormComponent,
+    MJDataContextFormComponent,
+    MJDatasetItemFormComponent,
+    MJDatasetFormComponent,
+    MJDuplicateRunDetailMatchFormComponent,
     MJDuplicateRunDetailFormComponent,
     MJDuplicateRunFormComponent,
     MJEmployeeCompanyIntegrationFormComponent,
@@ -678,12 +699,7 @@ declarations: [
     MJEntityActionInvocationTypeFormComponent,
     MJEntityActionInvocationFormComponent,
     MJEntityActionParamFormComponent,
-    MJEntityActionFormComponent,
-    MJEntityAIActionFormComponent,
-    MJEntityCommunicationFieldFormComponent,
-    MJEntityCommunicationMessageTypeFormComponent,
-    MJEntityDocumentRunFormComponent,
-    MJEntityDocumentSettingFormComponent],
+    MJEntityActionFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -700,6 +716,11 @@ export class GeneratedForms_SubModule_8 { }
 
 @NgModule({
 declarations: [
+    MJEntityAIActionFormComponent,
+    MJEntityCommunicationFieldFormComponent,
+    MJEntityCommunicationMessageTypeFormComponent,
+    MJEntityDocumentRunFormComponent,
+    MJEntityDocumentSettingFormComponent,
     MJEntityDocumentTypeFormComponent,
     MJEntityDocumentFormComponent,
     MJEntityFieldValueFormComponent,
@@ -714,12 +735,7 @@ declarations: [
     MJEntitySettingFormComponent,
     MJEnvironmentFormComponent,
     MJErrorLogFormComponent,
-    MJExplorerNavigationItemFormComponent,
-    MJFileCategoryFormComponent,
-    MJFileEntityRecordLinkFormComponent,
-    MJFileStorageAccountPermissionFormComponent,
-    MJFileStorageAccountFormComponent,
-    MJFileStorageProviderFormComponent],
+    MJExperimentSessionIterationFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -736,6 +752,14 @@ export class GeneratedForms_SubModule_9 { }
 
 @NgModule({
 declarations: [
+    MJExperimentSessionFormComponent,
+    MJExperimentFormComponent,
+    MJExplorerNavigationItemFormComponent,
+    MJFileCategoryFormComponent,
+    MJFileEntityRecordLinkFormComponent,
+    MJFileStorageAccountPermissionFormComponent,
+    MJFileStorageAccountFormComponent,
+    MJFileStorageProviderFormComponent,
     MJFileFormComponent,
     MJGeneratedCodeCategoryFormComponent,
     MJGeneratedCodeFormComponent,
@@ -747,15 +771,7 @@ declarations: [
     MJIntegrationFormComponent,
     MJKnowledgeHubSavedSearchFormComponent,
     MJLibraryFormComponent,
-    MJLibraryItemFormComponent,
-    MJListCategoryFormComponent,
-    MJListDetailFormComponent,
-    MJListInvitationFormComponent,
-    MJListShareFormComponent,
-    MJListFormComponent,
-    MJMagicLinkInviteAllowedDomainFormComponent,
-    MJMagicLinkInviteAllowedPathFormComponent,
-    MJMagicLinkInviteApplicationFormComponent],
+    MJLibraryItemFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -772,6 +788,14 @@ export class GeneratedForms_SubModule_10 { }
 
 @NgModule({
 declarations: [
+    MJListCategoryFormComponent,
+    MJListDetailFormComponent,
+    MJListInvitationFormComponent,
+    MJListShareFormComponent,
+    MJListFormComponent,
+    MJMagicLinkInviteAllowedDomainFormComponent,
+    MJMagicLinkInviteAllowedPathFormComponent,
+    MJMagicLinkInviteApplicationFormComponent,
     MJMagicLinkInviteRoleFormComponent,
     MJMagicLinkInviteFormComponent,
     MJMagicLinkRedemptionFormComponent,
@@ -782,16 +806,8 @@ declarations: [
     MJMCPServerFormComponent,
     MJMCPToolExecutionLogFormComponent,
     MJMCPToolFavoriteFormComponent,
-    MJOAuthAuthServerMetadataCacheFormComponent,
-    MJOAuthAuthorizationStateFormComponent,
-    MJOAuthClientRegistrationFormComponent,
-    MJOAuthTokenFormComponent,
-    MJOpenAppDependencyFormComponent,
-    MJOpenAppInstallHistoryFormComponent,
-    MJOpenAppFormComponent,
-    MJOutputDeliveryTypeFormComponent,
-    MJOutputFormatTypeFormComponent,
-    MJOutputTriggerTypeFormComponent],
+    MJMLAlgorithmUseCaseRankingFormComponent,
+    MJMLAlgorithmUseCaseFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -808,26 +824,26 @@ export class GeneratedForms_SubModule_11 { }
 
 @NgModule({
 declarations: [
+    MJMLAlgorithmFormComponent,
+    MJMLModelScoringBindingFormComponent,
+    MJMLModelFormComponent,
+    MJMLTrainingPipelineFormComponent,
+    MJMLTrainingRunFormComponent,
+    MJOAuthAuthServerMetadataCacheFormComponent,
+    MJOAuthAuthorizationStateFormComponent,
+    MJOAuthClientRegistrationFormComponent,
+    MJOAuthTokenFormComponent,
+    MJOpenAppDependencyFormComponent,
+    MJOpenAppInstallHistoryFormComponent,
+    MJOpenAppFormComponent,
+    MJOutputDeliveryTypeFormComponent,
+    MJOutputFormatTypeFormComponent,
+    MJOutputTriggerTypeFormComponent,
     MJPermissionDomainFormComponent,
     MJProcessRunDetailFormComponent,
     MJProcessRunFormComponent,
     MJProjectFormComponent,
-    MJPublicLinkFormComponent,
-    MJQueryFormComponent,
-    MJQueryCategoryFormComponent,
-    MJQueryDependencyFormComponent,
-    MJQueryEntityFormComponent,
-    MJQueryFieldFormComponent,
-    MJQueryParameterFormComponent,
-    MJQueryPermissionFormComponent,
-    MJQuerySQLFormComponent,
-    MJQueueTaskFormComponent,
-    MJQueueTypeFormComponent,
-    MJQueueFormComponent,
-    MJRecommendationItemFormComponent,
-    MJRecommendationProviderFormComponent,
-    MJRecommendationRunFormComponent,
-    MJRecommendationFormComponent],
+    MJPublicLinkFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -844,26 +860,26 @@ export class GeneratedForms_SubModule_12 { }
 
 @NgModule({
 declarations: [
+    MJQueryFormComponent,
+    MJQueryCategoryFormComponent,
+    MJQueryDependencyFormComponent,
+    MJQueryEntityFormComponent,
+    MJQueryFieldFormComponent,
+    MJQueryParameterFormComponent,
+    MJQueryPermissionFormComponent,
+    MJQuerySQLFormComponent,
+    MJQueueTaskFormComponent,
+    MJQueueTypeFormComponent,
+    MJQueueFormComponent,
+    MJRecommendationItemFormComponent,
+    MJRecommendationProviderFormComponent,
+    MJRecommendationRunFormComponent,
+    MJRecommendationFormComponent,
     MJRecordChangeReplayRunFormComponent,
     MJRecordChangeFormComponent,
     MJRecordGeoCodeFormComponent,
     MJRecordLinkFormComponent,
-    MJRecordMergeDeletionLogFormComponent,
-    MJRecordMergeLogFormComponent,
-    MJRecordProcessCategoryFormComponent,
-    MJRecordProcessWatermarkFormComponent,
-    MJRecordProcessFormComponent,
-    MJRemoteOperationCategoryFormComponent,
-    MJRemoteOperationFormComponent,
-    MJReportCategoryFormComponent,
-    MJReportSnapshotFormComponent,
-    MJReportUserStateFormComponent,
-    MJReportVersionFormComponent,
-    MJReportFormComponent,
-    MJResourceLinkFormComponent,
-    MJResourcePermissionFormComponent,
-    MJResourceTypeFormComponent,
-    MJRoleFormComponent],
+    MJRecordMergeDeletionLogFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -880,26 +896,26 @@ export class GeneratedForms_SubModule_13 { }
 
 @NgModule({
 declarations: [
+    MJRecordMergeLogFormComponent,
+    MJRecordProcessCategoryFormComponent,
+    MJRecordProcessWatermarkFormComponent,
+    MJRecordProcessFormComponent,
+    MJRemoteOperationCategoryFormComponent,
+    MJRemoteOperationFormComponent,
+    MJReportCategoryFormComponent,
+    MJReportSnapshotFormComponent,
+    MJReportUserStateFormComponent,
+    MJReportVersionFormComponent,
+    MJReportFormComponent,
+    MJResourceLinkFormComponent,
+    MJResourcePermissionFormComponent,
+    MJResourceTypeFormComponent,
+    MJRoleFormComponent,
     MJRowLevelSecurityFilterFormComponent,
     MJScheduledActionParamFormComponent,
     MJScheduledActionFormComponent,
     MJScheduledJobRunFormComponent,
-    MJScheduledJobTypeFormComponent,
-    MJScheduledJobFormComponent,
-    MJSchemaInfoFormComponent,
-    MJSearchExecutionLogFormComponent,
-    MJSearchProviderFormComponent,
-    MJSearchScopeEntityFormComponent,
-    MJSearchScopeExternalIndexFormComponent,
-    MJSearchScopePermissionFormComponent,
-    MJSearchScopeProviderFormComponent,
-    MJSearchScopeStorageAccountFormComponent,
-    MJSearchScopeTestQueryFormComponent,
-    MJSearchScopeFormComponent,
-    MJSignatureAccountFormComponent,
-    MJSignatureProviderFormComponent,
-    MJSignatureRequestDocumentFormComponent,
-    MJSignatureRequestLogFormComponent],
+    MJScheduledJobTypeFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -916,26 +932,26 @@ export class GeneratedForms_SubModule_14 { }
 
 @NgModule({
 declarations: [
+    MJScheduledJobFormComponent,
+    MJSchemaInfoFormComponent,
+    MJScopedPromptPartFormComponent,
+    MJSearchExecutionLogFormComponent,
+    MJSearchProviderFormComponent,
+    MJSearchScopeEntityFormComponent,
+    MJSearchScopeExternalIndexFormComponent,
+    MJSearchScopePermissionFormComponent,
+    MJSearchScopeProviderFormComponent,
+    MJSearchScopeStorageAccountFormComponent,
+    MJSearchScopeTestQueryFormComponent,
+    MJSearchScopeFormComponent,
+    MJSignatureAccountFormComponent,
+    MJSignatureProviderFormComponent,
+    MJSignatureRequestDocumentFormComponent,
+    MJSignatureRequestLogFormComponent,
     MJSignatureRequestRecipientFormComponent,
     MJSignatureRequestFormComponent,
     MJSkillFormComponent,
-    MJSQLDialectFormComponent,
-    MJStateProvinceFormComponent,
-    MJTagAuditLogFormComponent,
-    MJTagCoOccurrenceFormComponent,
-    MJTagScopeFormComponent,
-    MJTagSuggestionFormComponent,
-    MJTagSynonymFormComponent,
-    MJTaggedItemFormComponent,
-    MJTagFormComponent,
-    MJTaskDependencyFormComponent,
-    MJTaskTypeFormComponent,
-    MJTaskFormComponent,
-    MJTemplateCategoryFormComponent,
-    MJTemplateContentTypeFormComponent,
-    MJTemplateContentFormComponent,
-    MJTemplateParamFormComponent,
-    MJTemplateFormComponent],
+    MJSQLDialectFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -952,26 +968,26 @@ export class GeneratedForms_SubModule_15 { }
 
 @NgModule({
 declarations: [
+    MJStateProvinceFormComponent,
+    MJTagAuditLogFormComponent,
+    MJTagCoOccurrenceFormComponent,
+    MJTagScopeFormComponent,
+    MJTagSuggestionFormComponent,
+    MJTagSynonymFormComponent,
+    MJTaggedItemFormComponent,
+    MJTagFormComponent,
+    MJTaskDependencyFormComponent,
+    MJTaskTypeFormComponent,
+    MJTaskFormComponent,
+    MJTemplateCategoryFormComponent,
+    MJTemplateContentTypeFormComponent,
+    MJTemplateContentFormComponent,
+    MJTemplateParamFormComponent,
+    MJTemplateFormComponent,
     MJTestRubricFormComponent,
     MJTestRunFeedbackFormComponent,
     MJTestRunOutputTypeFormComponent,
-    MJTestRunOutputFormComponent,
-    MJTestRunFormComponent,
-    MJTestSuiteRunFormComponent,
-    MJTestSuiteTestFormComponent,
-    MJTestSuiteFormComponent,
-    MJTestTypeFormComponent,
-    MJTestFormComponent,
-    MJUserApplicationEntityFormComponent,
-    MJUserApplicationFormComponent,
-    MJUserFavoriteFormComponent,
-    MJUserNotificationPreferenceFormComponent,
-    MJUserNotificationTypeFormComponent,
-    MJUserNotificationFormComponent,
-    MJUserRecordLogFormComponent,
-    MJUserRoleFormComponent,
-    MJUserSettingFormComponent,
-    MJUserViewCategoryFormComponent],
+    MJTestRunOutputFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -988,10 +1004,42 @@ export class GeneratedForms_SubModule_16 { }
 
 @NgModule({
 declarations: [
+    MJTestRunFormComponent,
+    MJTestSuiteRunFormComponent,
+    MJTestSuiteTestFormComponent,
+    MJTestSuiteFormComponent,
+    MJTestTypeFormComponent,
+    MJTestFormComponent,
+    MJUserApplicationEntityFormComponent,
+    MJUserApplicationFormComponent,
+    MJUserFavoriteFormComponent,
+    MJUserNotificationPreferenceFormComponent,
+    MJUserNotificationTypeFormComponent,
+    MJUserNotificationFormComponent,
+    MJUserRecordLogFormComponent,
+    MJUserRoleFormComponent,
+    MJUserSettingFormComponent,
+    MJUserViewCategoryFormComponent,
     MJUserViewRunDetailFormComponent,
     MJUserViewRunFormComponent,
     MJUserViewFormComponent,
-    MJUserFormComponent,
+    MJUserFormComponent],
+imports: [
+    CommonModule,
+    FormsModule,
+    BaseFormsModule,
+    EntityViewerModule,
+    LinkDirectivesModule
+],
+exports: [
+]
+})
+export class GeneratedForms_SubModule_17 { }
+    
+
+
+@NgModule({
+declarations: [
     MJVectorDatabaseFormComponent,
     MJVectorIndexFormComponent,
     MJVersionInstallationFormComponent,
@@ -1014,7 +1062,7 @@ imports: [
 exports: [
 ]
 })
-export class GeneratedForms_SubModule_17 { }
+export class GeneratedForms_SubModule_18 { }
     
 
 
@@ -1039,7 +1087,8 @@ imports: [
     GeneratedForms_SubModule_14,
     GeneratedForms_SubModule_15,
     GeneratedForms_SubModule_16,
-    GeneratedForms_SubModule_17
+    GeneratedForms_SubModule_17,
+    GeneratedForms_SubModule_18
 ]
 })
 export class CoreGeneratedFormsModule { }
