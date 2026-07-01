@@ -16,12 +16,15 @@ export class MJAISkillFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'skillProfile', sectionName: 'Skill Profile', isExpanded: true },
-            { sectionKey: 'agentConfiguration', sectionName: 'Agent Configuration', isExpanded: true },
+            { sectionKey: 'skillDefinition', sectionName: 'Skill Definition', isExpanded: true },
+            { sectionKey: 'configuration', sectionName: 'Configuration', isExpanded: true },
+            { sectionKey: 'uICustomization', sectionName: 'UI Customization', isExpanded: true },
+            { sectionKey: 'ownershipAndAudit', sectionName: 'Ownership and Audit', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJAISkillSubAgents', sectionName: 'AI Skill Sub Agents', isExpanded: false },
+            { sectionKey: 'mJAIAgentSkills', sectionName: 'AI Agent Skills', isExpanded: false },
             { sectionKey: 'mJAISkillActions', sectionName: 'AI Skill Actions', isExpanded: false },
-            { sectionKey: 'mJAIAgentSkills', sectionName: 'AI Agent Skills', isExpanded: false }
+            { sectionKey: 'mJAISkillPermissions', sectionName: 'AI Skill Permissions', isExpanded: false }
         ]);
     }
 }

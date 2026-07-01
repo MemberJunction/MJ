@@ -2052,10 +2052,11 @@ export const MJAIAgentNoteSchema = z.object({
         * * Display Name: Primary Scope Record ID
         * * SQL Data Type: nvarchar(100)
         * * Description: The record ID within the primary scope entity. NULL means global note. When set with empty SecondaryScopes, indicates primary-scope-only note.`),
-    SecondaryScopes: z.string().nullable().describe(`
+    SecondaryScopes: z.any().nullable().describe(`
         * * Field Name: SecondaryScopes
         * * Display Name: Secondary Scopes
         * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJAIAgentNoteEntity_IAISecondaryScopes
         * * Description: JSON object containing additional scope dimensions. Empty/NULL with PrimaryScopeRecordID set = org-level note. Populated = fully-scoped note.`),
     LastAccessedAt: z.date().nullable().describe(`
         * * Field Name: LastAccessedAt
@@ -3190,10 +3191,11 @@ each time the agent processes a prompt step.`),
         * * Display Name: Primary Scope Record
         * * SQL Data Type: nvarchar(100)
         * * Description: The record ID within the primary scope entity (e.g., the specific OrganizationID). Indexed for fast multi-tenant filtering.`),
-    SecondaryScopes: z.string().nullable().describe(`
+    SecondaryScopes: z.any().nullable().describe(`
         * * Field Name: SecondaryScopes
         * * Display Name: Secondary Scopes
         * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJAIAgentRunEntity_IAISecondaryScopes
         * * Description: JSON object containing additional scope dimensions beyond the primary scope. Example: {"ContactID":"abc-123","TeamID":"team-456"}`),
     ExternalReferenceID: z.string().nullable().describe(`
         * * Field Name: ExternalReferenceID
@@ -4262,22 +4264,22 @@ export const MJAIAgentSchema = z.object({
         * * Description: When true, enables automatic compression of conversation context when the message threshold is reached.`),
     ContextCompressionMessageThreshold: z.number().nullable().describe(`
         * * Field Name: ContextCompressionMessageThreshold
-        * * Display Name: Compression Threshold
+        * * Display Name: Context Compression Message Threshold
         * * SQL Data Type: int
         * * Description: Number of messages that triggers context compression when EnableContextCompression is true.`),
     ContextCompressionPromptID: z.string().nullable().describe(`
         * * Field Name: ContextCompressionPromptID
-        * * Display Name: Compression Prompt
+        * * Display Name: Context Compression Prompt
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)`),
     ContextCompressionMessageRetentionCount: z.number().nullable().describe(`
         * * Field Name: ContextCompressionMessageRetentionCount
-        * * Display Name: Retention Count
+        * * Display Name: Context Compression Message Retention Count
         * * SQL Data Type: int
         * * Description: Number of recent messages to keep uncompressed when context compression is applied.`),
     TypeID: z.string().nullable().describe(`
         * * Field Name: TypeID
-        * * Display Name: Agent Type
+        * * Display Name: Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agent Types (vwAIAgentTypes.ID)
         * * Description: Reference to the AIAgentType that defines the category and system-level behavior for this agent. Cannot be null.`),
@@ -4314,25 +4316,25 @@ export const MJAIAgentSchema = z.object({
         * * Description: Controls whether model selection is driven by the Agent Type's system prompt or the Agent's specific prompt. Default is Agent Type for backward compatibility.`),
     PayloadDownstreamPaths: z.string().describe(`
         * * Field Name: PayloadDownstreamPaths
-        * * Display Name: Downstream Paths
+        * * Display Name: Payload Downstream Paths
         * * SQL Data Type: nvarchar(MAX)
         * * Default Value: ["*"]
         * * Description: JSON array of paths that define which parts of the payload should be sent downstream to sub-agents. Use ["*"] to send entire payload, or specify paths like ["customer.id", "campaign.*", "analysis.sentiment"]`),
     PayloadUpstreamPaths: z.string().describe(`
         * * Field Name: PayloadUpstreamPaths
-        * * Display Name: Upstream Paths
+        * * Display Name: Payload Upstream Paths
         * * SQL Data Type: nvarchar(MAX)
         * * Default Value: ["*"]
         * * Description: JSON array of paths that define which parts of the payload sub-agents are allowed to write back upstream. Use ["*"] to allow all writes, or specify paths like ["analysis.results", "recommendations.*"]`),
     PayloadSelfReadPaths: z.string().nullable().describe(`
         * * Field Name: PayloadSelfReadPaths
-        * * Display Name: Self-Read Paths
+        * * Display Name: Payload Self Read Paths
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON array of paths that specify what parts of the payload the agent's own prompt can read. Controls downstream data 
 flow when the agent executes its own prompt step.`),
     PayloadSelfWritePaths: z.string().nullable().describe(`
         * * Field Name: PayloadSelfWritePaths
-        * * Display Name: Self-Write Paths
+        * * Display Name: Payload Self Write Paths
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON array of paths that specify what parts of the payload the agent's own prompt can write back. Controls upstream 
 data flow when the agent executes its own prompt step.`),
@@ -4343,12 +4345,12 @@ data flow when the agent executes its own prompt step.`),
         * * Description: Defines the scope/path within the parent payload that this sub-agent operates on. When set, the sub-agent receives only this portion of the payload and all change requests are relative to this scope. Format: /path/to/scope (e.g. /PropA/SubProp1)`),
     FinalPayloadValidation: z.string().nullable().describe(`
         * * Field Name: FinalPayloadValidation
-        * * Display Name: Final Validation
+        * * Display Name: Final Payload Validation Schema
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Optional JSON schema or requirements that define the expected structure and content of the agent's final payload. Used to validate the output when the agent declares success. Similar to OutputExample in AI Prompts.`),
     FinalPayloadValidationMode: z.union([z.literal('Fail'), z.literal('Retry'), z.literal('Warn')]).describe(`
         * * Field Name: FinalPayloadValidationMode
-        * * Display Name: Final Validation Mode
+        * * Display Name: Final Payload Validation Mode
         * * SQL Data Type: nvarchar(25)
         * * Default Value: Retry
     * * Value List Type: List
@@ -4359,53 +4361,53 @@ data flow when the agent executes its own prompt step.`),
         * * Description: Determines how to handle validation failures when FinalPayloadValidation is specified. Options: Retry (default) - retry the agent with validation feedback, Fail - fail the agent run immediately, Warn - log a warning but allow success.`),
     FinalPayloadValidationMaxRetries: z.number().describe(`
         * * Field Name: FinalPayloadValidationMaxRetries
-        * * Display Name: Max Retries
+        * * Display Name: Final Payload Validation Max Retries
         * * SQL Data Type: int
         * * Default Value: 3
         * * Description: Maximum number of retry attempts allowed when FinalPayloadValidation fails with
 Retry mode. After reaching this limit, the validation will fail permanently.`),
     MaxCostPerRun: z.number().nullable().describe(`
         * * Field Name: MaxCostPerRun
-        * * Display Name: Max Cost
+        * * Display Name: Max Cost Per Run
         * * SQL Data Type: decimal(10, 4)
         * * Description: Maximum cost in dollars allowed for a single agent run. Run will be terminated
 if this limit is exceeded.`),
     MaxTokensPerRun: z.number().nullable().describe(`
         * * Field Name: MaxTokensPerRun
-        * * Display Name: Max Tokens
+        * * Display Name: Max Tokens Per Run
         * * SQL Data Type: int
         * * Description: Maximum total tokens (input + output) allowed for a single agent run. Run will
 be terminated if this limit is exceeded.`),
     MaxIterationsPerRun: z.number().nullable().describe(`
         * * Field Name: MaxIterationsPerRun
-        * * Display Name: Max Iterations
+        * * Display Name: Max Iterations Per Run
         * * SQL Data Type: int
         * * Description: Maximum number of prompt iterations allowed for a single agent run. Run will be
 terminated if this limit is exceeded.`),
     MaxTimePerRun: z.number().nullable().describe(`
         * * Field Name: MaxTimePerRun
-        * * Display Name: Max Time
+        * * Display Name: Max Time Per Run
         * * SQL Data Type: int
         * * Description: Maximum time in seconds allowed for a single agent run. Run will be terminated
 if this limit is exceeded.`),
     MinExecutionsPerRun: z.number().nullable().describe(`
         * * Field Name: MinExecutionsPerRun
-        * * Display Name: Min Executions
+        * * Display Name: Min Executions Per Run
         * * SQL Data Type: int
         * * Description: When acting as a sub-agent, minimum number of times this agent must be executed per parent agent run`),
     MaxExecutionsPerRun: z.number().nullable().describe(`
         * * Field Name: MaxExecutionsPerRun
-        * * Display Name: Max Executions
+        * * Display Name: Max Executions Per Run
         * * SQL Data Type: int
         * * Description: When acting as a sub-agent, maximum number of times this agent can be executed per parent agent run`),
     StartingPayloadValidation: z.string().nullable().describe(`
         * * Field Name: StartingPayloadValidation
-        * * Display Name: Starting Validation
+        * * Display Name: Starting Payload Validation Schema
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Optional JSON schema validation to apply to the input payload before agent execution begins. Uses the same JSONValidator format as FinalPayloadValidation.`),
     StartingPayloadValidationMode: z.union([z.literal('Fail'), z.literal('Warn')]).describe(`
         * * Field Name: StartingPayloadValidationMode
-        * * Display Name: Starting Validation Mode
+        * * Display Name: Starting Payload Validation Mode
         * * SQL Data Type: nvarchar(25)
         * * Default Value: Fail
     * * Value List Type: List
@@ -4415,12 +4417,12 @@ if this limit is exceeded.`),
         * * Description: Determines how to handle StartingPayloadValidation failures. Fail = reject invalid input, Warn = log warning but proceed.`),
     DefaultPromptEffortLevel: z.number().nullable().describe(`
         * * Field Name: DefaultPromptEffortLevel
-        * * Display Name: Prompt Effort Level
+        * * Display Name: Default Prompt Effort Level
         * * SQL Data Type: int
         * * Description: Default effort level for all prompts executed by this agent (1-100, where 1=minimal effort, 100=maximum effort). Takes precedence over individual prompt EffortLevel settings but can be overridden by runtime parameters. Inherited by sub-agents unless explicitly overridden.`),
     ChatHandlingOption: z.union([z.literal('Failed'), z.literal('Retry'), z.literal('Success')]).nullable().describe(`
         * * Field Name: ChatHandlingOption
-        * * Display Name: Chat Handling
+        * * Display Name: Chat Handling Option
         * * SQL Data Type: nvarchar(30)
     * * Value List Type: List
     * * Possible Values 
@@ -4436,7 +4438,7 @@ if this limit is exceeded.`),
         * * Description: Default artifact type produced by this agent. This is the primary artifact type; additional artifact types can be linked via AIAgentArtifactType junction table. Can be NULL if agent does not produce artifacts by default.`),
     OwnerUserID: z.string().describe(`
         * * Field Name: OwnerUserID
-        * * Display Name: Owner
+        * * Display Name: Owner User
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
         * * Default Value: ECAFCCEC-6A37-EF11-86D4-000D3A4E707E
@@ -4481,13 +4483,13 @@ if this limit is exceeded.`),
         * * Description: When enabled, agent notes will be automatically injected into the agent context based on scoping rules.`),
     MaxNotesToInject: z.number().describe(`
         * * Field Name: MaxNotesToInject
-        * * Display Name: Max Notes
+        * * Display Name: Max Notes To Inject
         * * SQL Data Type: int
         * * Default Value: 5
         * * Description: Maximum number of notes to inject into agent context per request.`),
     NoteInjectionStrategy: z.union([z.literal('All'), z.literal('Recent'), z.literal('Relevant')]).describe(`
         * * Field Name: NoteInjectionStrategy
-        * * Display Name: Note Strategy
+        * * Display Name: Note Injection Strategy
         * * SQL Data Type: nvarchar(20)
         * * Default Value: Relevant
     * * Value List Type: List
@@ -4504,13 +4506,13 @@ if this limit is exceeded.`),
         * * Description: When enabled, agent examples will be automatically injected into the agent context based on scoping rules.`),
     MaxExamplesToInject: z.number().describe(`
         * * Field Name: MaxExamplesToInject
-        * * Display Name: Max Examples
+        * * Display Name: Max Examples To Inject
         * * SQL Data Type: int
         * * Default Value: 3
         * * Description: Maximum number of examples to inject into agent context per request.`),
     ExampleInjectionStrategy: z.union([z.literal('Rated'), z.literal('Recent'), z.literal('Semantic')]).describe(`
         * * Field Name: ExampleInjectionStrategy
-        * * Display Name: Example Strategy
+        * * Display Name: Example Injection Strategy
         * * SQL Data Type: nvarchar(20)
         * * Default Value: Semantic
     * * Value List Type: List
@@ -4544,18 +4546,18 @@ if this limit is exceeded.`),
         * * Description: Maximum number of conversation messages to include when MessageMode is 'Latest' or 'Bookend'. NULL means no limit (ignored for 'None' and 'All' modes). Must be greater than 0 if specified. For 'Latest': keeps most recent N messages. For 'Bookend': keeps first 2 + most recent (N-2) messages.`),
     AttachmentStorageProviderID: z.string().nullable().describe(`
         * * Field Name: AttachmentStorageProviderID
-        * * Display Name: Storage Provider
+        * * Display Name: Attachment Storage Provider
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: File Storage Providers (vwFileStorageProviders.ID)
         * * Description: File storage provider for large attachments. Overrides the default from AIConfiguration. NULL uses system default.`),
     AttachmentRootPath: z.string().nullable().describe(`
         * * Field Name: AttachmentRootPath
-        * * Display Name: Root Path
+        * * Display Name: Attachment Root Path
         * * SQL Data Type: nvarchar(500)
         * * Description: Base path within the storage provider for this agent's attachments. Agent run ID and sequence number are appended to create unique paths. Format: /folder/subfolder`),
     InlineStorageThresholdBytes: z.number().nullable().describe(`
         * * Field Name: InlineStorageThresholdBytes
-        * * Display Name: Inline Threshold
+        * * Display Name: Inline Storage Threshold (Bytes)
         * * SQL Data Type: int
         * * Description: File size threshold for inline storage. Files <= this size are stored as base64 inline, larger files use MJStorage. NULL uses system default (1MB). Set to 0 to always use MJStorage.`),
     AgentTypePromptParams: z.string().nullable().describe(`
@@ -4599,7 +4601,7 @@ if this limit is exceeded.`),
         * * Description: Foreign key to AIAgentCategory. Assigns this agent to an organizational category for grouping, filtering, and inherited assignment strategy resolution.`),
     AllowEphemeralClientTools: z.boolean().describe(`
         * * Field Name: AllowEphemeralClientTools
-        * * Display Name: Allow Ephemeral Tools
+        * * Display Name: Allow Ephemeral Client Tools
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: When true (default), this agent accepts runtime-registered ephemeral client tools that are not defined in metadata. Set to false for agents that require strict tool governance.`),
@@ -4688,51 +4690,51 @@ if this limit is exceeded.`),
         * * SQL Data Type: nvarchar(255)`),
     ContextCompressionPrompt: z.string().nullable().describe(`
         * * Field Name: ContextCompressionPrompt
-        * * Display Name: Context Compression Prompt
+        * * Display Name: Context Compression Prompt Name
         * * SQL Data Type: nvarchar(255)`),
     Type: z.string().nullable().describe(`
         * * Field Name: Type
-        * * Display Name: Type
+        * * Display Name: Type Name
         * * SQL Data Type: nvarchar(100)`),
     DefaultArtifactType: z.string().nullable().describe(`
         * * Field Name: DefaultArtifactType
-        * * Display Name: Default Artifact Type
+        * * Display Name: Default Artifact Type Name
         * * SQL Data Type: nvarchar(100)`),
     OwnerUser: z.string().describe(`
         * * Field Name: OwnerUser
-        * * Display Name: Owner User
+        * * Display Name: Owner User Name
         * * SQL Data Type: nvarchar(100)`),
     AttachmentStorageProvider: z.string().nullable().describe(`
         * * Field Name: AttachmentStorageProvider
-        * * Display Name: Storage Provider
+        * * Display Name: Attachment Storage Provider Name
         * * SQL Data Type: nvarchar(50)`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
-        * * Display Name: Category
+        * * Display Name: Category Name
         * * SQL Data Type: nvarchar(200)`),
     DefaultStorageAccount: z.string().nullable().describe(`
         * * Field Name: DefaultStorageAccount
-        * * Display Name: Default Storage Account
+        * * Display Name: Default Storage Account Name
         * * SQL Data Type: nvarchar(200)`),
     DefaultCoAgent: z.string().nullable().describe(`
         * * Field Name: DefaultCoAgent
-        * * Display Name: Default Co-Agent
+        * * Display Name: Default Co-Agent Name
         * * SQL Data Type: nvarchar(255)`),
     RecordingStorageProvider: z.string().nullable().describe(`
         * * Field Name: RecordingStorageProvider
-        * * Display Name: Recording Storage Provider
+        * * Display Name: Recording Storage Provider Name
         * * SQL Data Type: nvarchar(50)`),
     DefaultMediaCollection: z.string().nullable().describe(`
         * * Field Name: DefaultMediaCollection
-        * * Display Name: Default Media Collection
+        * * Display Name: Default Media Collection Name
         * * SQL Data Type: nvarchar(255)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
-        * * Display Name: Root Parent
+        * * Display Name: Root Parent ID
         * * SQL Data Type: uniqueidentifier`),
     RootDefaultCoAgentID: z.string().nullable().describe(`
         * * Field Name: RootDefaultCoAgentID
-        * * Display Name: Root Default Co-Agent
+        * * Display Name: Root Default Co-Agent ID
         * * SQL Data Type: uniqueidentifier`),
 });
 
@@ -7571,15 +7573,97 @@ export const MJAISkillActionSchema = z.object({
         * * Default Value: getutcdate()`),
     Skill: z.string().describe(`
         * * Field Name: Skill
-        * * Display Name: Skill Name
+        * * Display Name: Skill
         * * SQL Data Type: nvarchar(255)`),
     Action: z.string().describe(`
         * * Field Name: Action
-        * * Display Name: Action Name
+        * * Display Name: Action
         * * SQL Data Type: nvarchar(425)`),
 });
 
 export type MJAISkillActionEntityType = z.infer<typeof MJAISkillActionSchema>;
+
+/**
+ * zod schema definition for the entity MJ: AI Skill Permissions
+ */
+export const MJAISkillPermissionSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    SkillID: z.string().describe(`
+        * * Field Name: SkillID
+        * * Display Name: Skill ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Skills (vwAISkills.ID)
+        * * Description: Skill this permission grant applies to.`),
+    RoleID: z.string().nullable().describe(`
+        * * Field Name: RoleID
+        * * Display Name: Role ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Roles (vwRoles.ID)
+        * * Description: Role this grant is for. Mutually exclusive with UserID — exactly one of the two is set per row.`),
+    UserID: z.string().nullable().describe(`
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: User this grant is for. Mutually exclusive with RoleID — exactly one of the two is set per row.`),
+    CanView: z.boolean().describe(`
+        * * Field Name: CanView
+        * * Display Name: Can View
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Grants viewing the skill in catalogs/pickers. Maps to the normalized Read action.`),
+    CanRun: z.boolean().describe(`
+        * * Field Name: CanRun
+        * * Display Name: Can Run
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Grants requesting/activating the skill at agent runtime. Maps to the normalized Execute action.`),
+    CanEdit: z.boolean().describe(`
+        * * Field Name: CanEdit
+        * * Display Name: Can Edit
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Grants editing the skill definition and its bundled actions/sub-agents. Maps to the normalized Update action.`),
+    CanDelete: z.boolean().describe(`
+        * * Field Name: CanDelete
+        * * Display Name: Can Delete
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Grants deleting the skill. Maps to the normalized Delete action.`),
+    Comments: z.string().nullable().describe(`
+        * * Field Name: Comments
+        * * Display Name: Comments
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional free-text note explaining why the grant exists.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Skill: z.string().describe(`
+        * * Field Name: Skill
+        * * Display Name: Skill
+        * * SQL Data Type: nvarchar(255)`),
+    Role: z.string().nullable().describe(`
+        * * Field Name: Role
+        * * Display Name: Role
+        * * SQL Data Type: nvarchar(50)`),
+    User: z.string().nullable().describe(`
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJAISkillPermissionEntityType = z.infer<typeof MJAISkillPermissionSchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Skill Sub Agents
@@ -7630,7 +7714,7 @@ export type MJAISkillSubAgentEntityType = z.infer<typeof MJAISkillSubAgentSchema
 export const MJAISkillSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
-        * * Display Name: Skill ID
+        * * Display Name: ID
         * * SQL Data Type: uniqueidentifier
         * * Default Value: newsequentialid()`),
     Name: z.string().describe(`
@@ -7664,9 +7748,19 @@ export const MJAISkillSchema = z.object({
         * * Display Name: Category
         * * SQL Data Type: nvarchar(100)
         * * Description: Optional grouping category.`),
+    IconClass: z.string().nullable().describe(`
+        * * Field Name: IconClass
+        * * Display Name: Icon Class
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Optional Font Awesome icon class (e.g. "fa-solid fa-wand-magic-sparkles") shown for this skill in the /skill picker and skill catalog. When null, the UI falls back to a derived default.`),
+    Color: z.string().nullable().describe(`
+        * * Field Name: Color
+        * * Display Name: Color
+        * * SQL Data Type: nvarchar(50)
+        * * Description: Optional accent color (hex or CSS color token) for this skill's chip/badge in the composer and catalog UI. When null, the UI falls back to a derived default.`),
     CreatedByUserID: z.string().describe(`
         * * Field Name: CreatedByUserID
-        * * Display Name: Creator ID
+        * * Display Name: Created By User ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
         * * Description: User who authored the skill (owner). Authoring is open to self by default; sharing requires the Can Share Skills privilege.`),
@@ -7682,7 +7776,7 @@ export const MJAISkillSchema = z.object({
         * * Default Value: getutcdate()`),
     CreatedByUser: z.string().describe(`
         * * Field Name: CreatedByUser
-        * * Display Name: Created By
+        * * Display Name: Created By User
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -26339,7 +26433,7 @@ export const MJScopedPromptPartSchema = z.object({
         * * Description: Chat message role this part renders as: System, User, or Assistant. Drives role-faithful assembly (assembled messages drive the model directly, not flattened into one system blob).`),
     Sort: z.number().describe(`
         * * Field Name: Sort
-        * * Display Name: Sort Order
+        * * Display Name: Sort
         * * SQL Data Type: int
         * * Default Value: 0
         * * Description: Final-assembly ordering (ASC). Controls this part's position in the assembled message list. Not used for specificity tie-breaking.`),
@@ -26363,10 +26457,11 @@ export const MJScopedPromptPartSchema = z.object({
         * * Display Name: Primary Scope Record ID
         * * SQL Data Type: nvarchar(100)
         * * Description: The record ID within the primary scope entity that this part is scoped to. NULL = global (applies regardless of scope). When set with empty SecondaryScopes, the part is primary-scope-only (e.g. org-level).`),
-    SecondaryScopes: z.string().nullable().describe(`
+    SecondaryScopes: z.any().nullable().describe(`
         * * Field Name: SecondaryScopes
         * * Display Name: Secondary Scopes
         * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJScopedPromptPartEntity_IAISecondaryScopes
         * * Description: JSON object of additional scope dimensions (e.g. {"ChannelID":"..."}). Empty/NULL with PrimaryScopeRecordID set = primary-scope-only; populated = fully-scoped. Matched (cascading or strict) against the run's SecondaryScopes.`),
     Status: z.union([z.literal('Active'), z.literal('Archived'), z.literal('Provisional')]).describe(`
         * * Field Name: Status
@@ -26379,16 +26474,6 @@ export const MJScopedPromptPartSchema = z.object({
     *   * Archived
     *   * Provisional
         * * Description: Lifecycle: Active (live), Provisional (staged; eligible but flaggable as not-yet-final), Archived (excluded from resolution). Only Active and Provisional are eligible for resolution.`),
-    __mj_CreatedAt: z.date().describe(`
-        * * Field Name: __mj_CreatedAt
-        * * Display Name: Created At
-        * * SQL Data Type: datetimeoffset
-        * * Default Value: getutcdate()`),
-    __mj_UpdatedAt: z.date().describe(`
-        * * Field Name: __mj_UpdatedAt
-        * * Display Name: Updated At
-        * * SQL Data Type: datetimeoffset
-        * * Default Value: getutcdate()`),
     MergeBehavior: z.union([z.literal('Append'), z.literal('Override')]).describe(`
         * * Field Name: MergeBehavior
         * * Display Name: Merge Behavior
@@ -26405,6 +26490,16 @@ export const MJScopedPromptPartSchema = z.object({
         * * SQL Data Type: int
         * * Default Value: 0
         * * Description: Precedence / tie-break for resolution. Higher wins when two same-Name parts tie on scope specificity; also used as a secondary ordering key after Sort. Default 0.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
     Prompt: z.string().describe(`
         * * Field Name: Prompt
         * * Display Name: Prompt
@@ -36780,6 +36875,43 @@ export class MJAIAgentNoteTypeEntity extends BaseEntity<MJAIAgentNoteTypeEntityT
 
 
 /**
+ * Secondary scope dimensions for AI scoping.
+ *
+ * Stored as a JSON object in the `SecondaryScopes` column of the
+ * `MJ: Scoped Prompt Parts` entity (and shape-compatible with the untyped
+ * `SecondaryScopes` columns on AIAgentRun / AIAgentNote, so the same JSONType
+ * can be reused there). CodeGen emits a strongly-typed `SecondaryScopesObject`
+ * accessor that returns `MJAIAgentNoteEntity_IAISecondaryScopes | null`.
+ *
+ * This is the SAME shape the agent runtime already carries for memory scoping —
+ * `ExecuteAgentParams.SecondaryScopes` (`@memberjunction/ai-core-plus`): an open
+ * map of arbitrary dimension keys (e.g. `ChannelID`, `ContactID`, `Region`) to
+ * scalar or string-array values. A part is matched (cascading or strict) against
+ * the run's SecondaryScopes by the PromptComponentResolver.
+ *
+ * Named with the `AI` prefix (rather than a bare `ISecondaryScopes`) to signal it
+ * is the shared AI-domain scope type and to avoid collisions with unrelated types.
+ *
+ * Open by design: the set of dimensions is owned by the host application
+ * (a multi-tenant layer such as BCSaaS supplies its own), so this is an index
+ * signature rather than a fixed-field interface — no DB change to add a dimension.
+ */
+
+/**
+ * Open map of secondary-scope dimension name → value.
+ *
+ * The value union is written inline (rather than as a separate named type) so
+ * CodeGen emits a single prefixed type per entity — mirrors the
+ * `SecondaryScopeValue` shape in `@memberjunction/ai-core-plus`: strings,
+ * numbers, booleans, and string arrays (for multi-valued dimensions).
+ *
+ * @example { "ChannelID": "c-123", "Region": "EMEA" }
+ */
+export interface MJAIAgentNoteEntity_IAISecondaryScopes {
+    [dimension: string]: string | number | boolean | string[];
+}
+
+/**
  * MJ: AI Agent Notes - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: AIAgentNote
@@ -37078,6 +37210,7 @@ export class MJAIAgentNoteEntity extends BaseEntity<MJAIAgentNoteEntityType> {
     * * Field Name: SecondaryScopes
     * * Display Name: Secondary Scopes
     * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJAIAgentNoteEntity_IAISecondaryScopes
     * * Description: JSON object containing additional scope dimensions. Empty/NULL with PrimaryScopeRecordID set = org-level note. Populated = fully-scoped note.
     */
     get SecondaryScopes(): string | null {
@@ -37085,6 +37218,27 @@ export class MJAIAgentNoteEntity extends BaseEntity<MJAIAgentNoteEntityType> {
     }
     set SecondaryScopes(value: string | null) {
         this.Set('SecondaryScopes', value);
+    }
+
+    private _SecondaryScopesObject_cached: MJAIAgentNoteEntity_IAISecondaryScopes | null | undefined = undefined;
+    private _SecondaryScopesObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for SecondaryScopes — returns parsed JSON as MJAIAgentNoteEntity_IAISecondaryScopes.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get SecondaryScopesObject(): MJAIAgentNoteEntity_IAISecondaryScopes | null {
+        const raw = this.SecondaryScopes;
+        if (raw !== this._SecondaryScopesObject_lastRaw) {
+            this._SecondaryScopesObject_cached = raw ? JSON.parse(raw) : null;
+            this._SecondaryScopesObject_lastRaw = raw;
+        }
+        return this._SecondaryScopesObject_cached!;
+    }
+    set SecondaryScopesObject(value: MJAIAgentNoteEntity_IAISecondaryScopes | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.SecondaryScopes = raw;
+        this._SecondaryScopesObject_cached = value;
+        this._SecondaryScopesObject_lastRaw = raw;
     }
 
     /**
@@ -39364,6 +39518,43 @@ detailed information about what validation rules failed.
 
 
 /**
+ * Secondary scope dimensions for AI scoping.
+ *
+ * Stored as a JSON object in the `SecondaryScopes` column of the
+ * `MJ: Scoped Prompt Parts` entity (and shape-compatible with the untyped
+ * `SecondaryScopes` columns on AIAgentRun / AIAgentNote, so the same JSONType
+ * can be reused there). CodeGen emits a strongly-typed `SecondaryScopesObject`
+ * accessor that returns `MJAIAgentRunEntity_IAISecondaryScopes | null`.
+ *
+ * This is the SAME shape the agent runtime already carries for memory scoping —
+ * `ExecuteAgentParams.SecondaryScopes` (`@memberjunction/ai-core-plus`): an open
+ * map of arbitrary dimension keys (e.g. `ChannelID`, `ContactID`, `Region`) to
+ * scalar or string-array values. A part is matched (cascading or strict) against
+ * the run's SecondaryScopes by the PromptComponentResolver.
+ *
+ * Named with the `AI` prefix (rather than a bare `ISecondaryScopes`) to signal it
+ * is the shared AI-domain scope type and to avoid collisions with unrelated types.
+ *
+ * Open by design: the set of dimensions is owned by the host application
+ * (a multi-tenant layer such as BCSaaS supplies its own), so this is an index
+ * signature rather than a fixed-field interface — no DB change to add a dimension.
+ */
+
+/**
+ * Open map of secondary-scope dimension name → value.
+ *
+ * The value union is written inline (rather than as a separate named type) so
+ * CodeGen emits a single prefixed type per entity — mirrors the
+ * `SecondaryScopeValue` shape in `@memberjunction/ai-core-plus`: strings,
+ * numbers, booleans, and string arrays (for multi-valued dimensions).
+ *
+ * @example { "ChannelID": "c-123", "Region": "EMEA" }
+ */
+export interface MJAIAgentRunEntity_IAISecondaryScopes {
+    [dimension: string]: string | number | boolean | string[];
+}
+
+/**
  * MJ: AI Agent Runs - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: AIAgentRun
@@ -40080,6 +40271,7 @@ each time the agent processes a prompt step.
     * * Field Name: SecondaryScopes
     * * Display Name: Secondary Scopes
     * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJAIAgentRunEntity_IAISecondaryScopes
     * * Description: JSON object containing additional scope dimensions beyond the primary scope. Example: {"ContactID":"abc-123","TeamID":"team-456"}
     */
     get SecondaryScopes(): string | null {
@@ -40087,6 +40279,27 @@ each time the agent processes a prompt step.
     }
     set SecondaryScopes(value: string | null) {
         this.Set('SecondaryScopes', value);
+    }
+
+    private _SecondaryScopesObject_cached: MJAIAgentRunEntity_IAISecondaryScopes | null | undefined = undefined;
+    private _SecondaryScopesObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for SecondaryScopes — returns parsed JSON as MJAIAgentRunEntity_IAISecondaryScopes.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get SecondaryScopesObject(): MJAIAgentRunEntity_IAISecondaryScopes | null {
+        const raw = this.SecondaryScopes;
+        if (raw !== this._SecondaryScopesObject_lastRaw) {
+            this._SecondaryScopesObject_cached = raw ? JSON.parse(raw) : null;
+            this._SecondaryScopesObject_lastRaw = raw;
+        }
+        return this._SecondaryScopesObject_cached!;
+    }
+    set SecondaryScopesObject(value: MJAIAgentRunEntity_IAISecondaryScopes | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.SecondaryScopes = raw;
+        this._SecondaryScopesObject_cached = value;
+        this._SecondaryScopesObject_lastRaw = raw;
     }
 
     /**
@@ -42910,7 +43123,7 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
 
     /**
     * * Field Name: ContextCompressionMessageThreshold
-    * * Display Name: Compression Threshold
+    * * Display Name: Context Compression Message Threshold
     * * SQL Data Type: int
     * * Description: Number of messages that triggers context compression when EnableContextCompression is true.
     */
@@ -42923,7 +43136,7 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
 
     /**
     * * Field Name: ContextCompressionPromptID
-    * * Display Name: Compression Prompt
+    * * Display Name: Context Compression Prompt
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
     */
@@ -42936,7 +43149,7 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
 
     /**
     * * Field Name: ContextCompressionMessageRetentionCount
-    * * Display Name: Retention Count
+    * * Display Name: Context Compression Message Retention Count
     * * SQL Data Type: int
     * * Description: Number of recent messages to keep uncompressed when context compression is applied.
     */
@@ -42949,7 +43162,7 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
 
     /**
     * * Field Name: TypeID
-    * * Display Name: Agent Type
+    * * Display Name: Type
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Agent Types (vwAIAgentTypes.ID)
     * * Description: Reference to the AIAgentType that defines the category and system-level behavior for this agent. Cannot be null.
@@ -43026,7 +43239,7 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
 
     /**
     * * Field Name: PayloadDownstreamPaths
-    * * Display Name: Downstream Paths
+    * * Display Name: Payload Downstream Paths
     * * SQL Data Type: nvarchar(MAX)
     * * Default Value: ["*"]
     * * Description: JSON array of paths that define which parts of the payload should be sent downstream to sub-agents. Use ["*"] to send entire payload, or specify paths like ["customer.id", "campaign.*", "analysis.sentiment"]
@@ -43040,7 +43253,7 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
 
     /**
     * * Field Name: PayloadUpstreamPaths
-    * * Display Name: Upstream Paths
+    * * Display Name: Payload Upstream Paths
     * * SQL Data Type: nvarchar(MAX)
     * * Default Value: ["*"]
     * * Description: JSON array of paths that define which parts of the payload sub-agents are allowed to write back upstream. Use ["*"] to allow all writes, or specify paths like ["analysis.results", "recommendations.*"]
@@ -43054,7 +43267,7 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
 
     /**
     * * Field Name: PayloadSelfReadPaths
-    * * Display Name: Self-Read Paths
+    * * Display Name: Payload Self Read Paths
     * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON array of paths that specify what parts of the payload the agent's own prompt can read. Controls downstream data 
 flow when the agent executes its own prompt step.
@@ -43068,7 +43281,7 @@ flow when the agent executes its own prompt step.
 
     /**
     * * Field Name: PayloadSelfWritePaths
-    * * Display Name: Self-Write Paths
+    * * Display Name: Payload Self Write Paths
     * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON array of paths that specify what parts of the payload the agent's own prompt can write back. Controls upstream 
 data flow when the agent executes its own prompt step.
@@ -43095,7 +43308,7 @@ data flow when the agent executes its own prompt step.
 
     /**
     * * Field Name: FinalPayloadValidation
-    * * Display Name: Final Validation
+    * * Display Name: Final Payload Validation Schema
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Optional JSON schema or requirements that define the expected structure and content of the agent's final payload. Used to validate the output when the agent declares success. Similar to OutputExample in AI Prompts.
     */
@@ -43108,7 +43321,7 @@ data flow when the agent executes its own prompt step.
 
     /**
     * * Field Name: FinalPayloadValidationMode
-    * * Display Name: Final Validation Mode
+    * * Display Name: Final Payload Validation Mode
     * * SQL Data Type: nvarchar(25)
     * * Default Value: Retry
     * * Value List Type: List
@@ -43127,7 +43340,7 @@ data flow when the agent executes its own prompt step.
 
     /**
     * * Field Name: FinalPayloadValidationMaxRetries
-    * * Display Name: Max Retries
+    * * Display Name: Final Payload Validation Max Retries
     * * SQL Data Type: int
     * * Default Value: 3
     * * Description: Maximum number of retry attempts allowed when FinalPayloadValidation fails with
@@ -43142,7 +43355,7 @@ Retry mode. After reaching this limit, the validation will fail permanently.
 
     /**
     * * Field Name: MaxCostPerRun
-    * * Display Name: Max Cost
+    * * Display Name: Max Cost Per Run
     * * SQL Data Type: decimal(10, 4)
     * * Description: Maximum cost in dollars allowed for a single agent run. Run will be terminated
 if this limit is exceeded.
@@ -43156,7 +43369,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: MaxTokensPerRun
-    * * Display Name: Max Tokens
+    * * Display Name: Max Tokens Per Run
     * * SQL Data Type: int
     * * Description: Maximum total tokens (input + output) allowed for a single agent run. Run will
 be terminated if this limit is exceeded.
@@ -43170,7 +43383,7 @@ be terminated if this limit is exceeded.
 
     /**
     * * Field Name: MaxIterationsPerRun
-    * * Display Name: Max Iterations
+    * * Display Name: Max Iterations Per Run
     * * SQL Data Type: int
     * * Description: Maximum number of prompt iterations allowed for a single agent run. Run will be
 terminated if this limit is exceeded.
@@ -43184,7 +43397,7 @@ terminated if this limit is exceeded.
 
     /**
     * * Field Name: MaxTimePerRun
-    * * Display Name: Max Time
+    * * Display Name: Max Time Per Run
     * * SQL Data Type: int
     * * Description: Maximum time in seconds allowed for a single agent run. Run will be terminated
 if this limit is exceeded.
@@ -43198,7 +43411,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: MinExecutionsPerRun
-    * * Display Name: Min Executions
+    * * Display Name: Min Executions Per Run
     * * SQL Data Type: int
     * * Description: When acting as a sub-agent, minimum number of times this agent must be executed per parent agent run
     */
@@ -43211,7 +43424,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: MaxExecutionsPerRun
-    * * Display Name: Max Executions
+    * * Display Name: Max Executions Per Run
     * * SQL Data Type: int
     * * Description: When acting as a sub-agent, maximum number of times this agent can be executed per parent agent run
     */
@@ -43224,7 +43437,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: StartingPayloadValidation
-    * * Display Name: Starting Validation
+    * * Display Name: Starting Payload Validation Schema
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Optional JSON schema validation to apply to the input payload before agent execution begins. Uses the same JSONValidator format as FinalPayloadValidation.
     */
@@ -43237,7 +43450,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: StartingPayloadValidationMode
-    * * Display Name: Starting Validation Mode
+    * * Display Name: Starting Payload Validation Mode
     * * SQL Data Type: nvarchar(25)
     * * Default Value: Fail
     * * Value List Type: List
@@ -43255,7 +43468,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: DefaultPromptEffortLevel
-    * * Display Name: Prompt Effort Level
+    * * Display Name: Default Prompt Effort Level
     * * SQL Data Type: int
     * * Description: Default effort level for all prompts executed by this agent (1-100, where 1=minimal effort, 100=maximum effort). Takes precedence over individual prompt EffortLevel settings but can be overridden by runtime parameters. Inherited by sub-agents unless explicitly overridden.
     */
@@ -43268,7 +43481,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: ChatHandlingOption
-    * * Display Name: Chat Handling
+    * * Display Name: Chat Handling Option
     * * SQL Data Type: nvarchar(30)
     * * Value List Type: List
     * * Possible Values 
@@ -43300,7 +43513,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: OwnerUserID
-    * * Display Name: Owner
+    * * Display Name: Owner User
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     * * Default Value: ECAFCCEC-6A37-EF11-86D4-000D3A4E707E
@@ -43393,7 +43606,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: MaxNotesToInject
-    * * Display Name: Max Notes
+    * * Display Name: Max Notes To Inject
     * * SQL Data Type: int
     * * Default Value: 5
     * * Description: Maximum number of notes to inject into agent context per request.
@@ -43407,7 +43620,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: NoteInjectionStrategy
-    * * Display Name: Note Strategy
+    * * Display Name: Note Injection Strategy
     * * SQL Data Type: nvarchar(20)
     * * Default Value: Relevant
     * * Value List Type: List
@@ -43440,7 +43653,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: MaxExamplesToInject
-    * * Display Name: Max Examples
+    * * Display Name: Max Examples To Inject
     * * SQL Data Type: int
     * * Default Value: 3
     * * Description: Maximum number of examples to inject into agent context per request.
@@ -43454,7 +43667,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: ExampleInjectionStrategy
-    * * Display Name: Example Strategy
+    * * Display Name: Example Injection Strategy
     * * SQL Data Type: nvarchar(20)
     * * Default Value: Semantic
     * * Value List Type: List
@@ -43520,7 +43733,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: AttachmentStorageProviderID
-    * * Display Name: Storage Provider
+    * * Display Name: Attachment Storage Provider
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: File Storage Providers (vwFileStorageProviders.ID)
     * * Description: File storage provider for large attachments. Overrides the default from AIConfiguration. NULL uses system default.
@@ -43534,7 +43747,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: AttachmentRootPath
-    * * Display Name: Root Path
+    * * Display Name: Attachment Root Path
     * * SQL Data Type: nvarchar(500)
     * * Description: Base path within the storage provider for this agent's attachments. Agent run ID and sequence number are appended to create unique paths. Format: /folder/subfolder
     */
@@ -43547,7 +43760,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: InlineStorageThresholdBytes
-    * * Display Name: Inline Threshold
+    * * Display Name: Inline Storage Threshold (Bytes)
     * * SQL Data Type: int
     * * Description: File size threshold for inline storage. Files <= this size are stored as base64 inline, larger files use MJStorage. NULL uses system default (1MB). Set to 0 to always use MJStorage.
     */
@@ -43655,7 +43868,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: AllowEphemeralClientTools
-    * * Display Name: Allow Ephemeral Tools
+    * * Display Name: Allow Ephemeral Client Tools
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: When true (default), this agent accepts runtime-registered ephemeral client tools that are not defined in metadata. Set to false for agents that require strict tool governance.
@@ -43845,7 +44058,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: ContextCompressionPrompt
-    * * Display Name: Context Compression Prompt
+    * * Display Name: Context Compression Prompt Name
     * * SQL Data Type: nvarchar(255)
     */
     get ContextCompressionPrompt(): string | null {
@@ -43854,7 +44067,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: Type
-    * * Display Name: Type
+    * * Display Name: Type Name
     * * SQL Data Type: nvarchar(100)
     */
     get Type(): string | null {
@@ -43863,7 +44076,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: DefaultArtifactType
-    * * Display Name: Default Artifact Type
+    * * Display Name: Default Artifact Type Name
     * * SQL Data Type: nvarchar(100)
     */
     get DefaultArtifactType(): string | null {
@@ -43872,7 +44085,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: OwnerUser
-    * * Display Name: Owner User
+    * * Display Name: Owner User Name
     * * SQL Data Type: nvarchar(100)
     */
     get OwnerUser(): string {
@@ -43881,7 +44094,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: AttachmentStorageProvider
-    * * Display Name: Storage Provider
+    * * Display Name: Attachment Storage Provider Name
     * * SQL Data Type: nvarchar(50)
     */
     get AttachmentStorageProvider(): string | null {
@@ -43890,7 +44103,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: Category
-    * * Display Name: Category
+    * * Display Name: Category Name
     * * SQL Data Type: nvarchar(200)
     */
     get Category(): string | null {
@@ -43899,7 +44112,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: DefaultStorageAccount
-    * * Display Name: Default Storage Account
+    * * Display Name: Default Storage Account Name
     * * SQL Data Type: nvarchar(200)
     */
     get DefaultStorageAccount(): string | null {
@@ -43908,7 +44121,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: DefaultCoAgent
-    * * Display Name: Default Co-Agent
+    * * Display Name: Default Co-Agent Name
     * * SQL Data Type: nvarchar(255)
     */
     get DefaultCoAgent(): string | null {
@@ -43917,7 +44130,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: RecordingStorageProvider
-    * * Display Name: Recording Storage Provider
+    * * Display Name: Recording Storage Provider Name
     * * SQL Data Type: nvarchar(50)
     */
     get RecordingStorageProvider(): string | null {
@@ -43926,7 +44139,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: DefaultMediaCollection
-    * * Display Name: Default Media Collection
+    * * Display Name: Default Media Collection Name
     * * SQL Data Type: nvarchar(255)
     */
     get DefaultMediaCollection(): string | null {
@@ -43935,7 +44148,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: RootParentID
-    * * Display Name: Root Parent
+    * * Display Name: Root Parent ID
     * * SQL Data Type: uniqueidentifier
     */
     get RootParentID(): string | null {
@@ -43944,7 +44157,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: RootDefaultCoAgentID
-    * * Display Name: Root Default Co-Agent
+    * * Display Name: Root Default Co-Agent ID
     * * SQL Data Type: uniqueidentifier
     */
     get RootDefaultCoAgentID(): string | null {
@@ -51883,7 +52096,7 @@ export class MJAISkillActionEntity extends BaseEntity<MJAISkillActionEntityType>
 
     /**
     * * Field Name: Skill
-    * * Display Name: Skill Name
+    * * Display Name: Skill
     * * SQL Data Type: nvarchar(255)
     */
     get Skill(): string {
@@ -51892,11 +52105,213 @@ export class MJAISkillActionEntity extends BaseEntity<MJAISkillActionEntityType>
 
     /**
     * * Field Name: Action
-    * * Display Name: Action Name
+    * * Display Name: Action
     * * SQL Data Type: nvarchar(425)
     */
     get Action(): string {
         return this.Get('Action');
+    }
+}
+
+
+/**
+ * MJ: AI Skill Permissions - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AISkillPermission
+ * * Base View: vwAISkillPermissions
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Skill Permissions')
+export class MJAISkillPermissionEntity extends BaseEntity<MJAISkillPermissionEntityType> {
+    /**
+    * Loads the MJ: AI Skill Permissions record from the database
+    * @param ID: string - primary key value to load the MJ: AI Skill Permissions record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJAISkillPermissionEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: SkillID
+    * * Display Name: Skill ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Skills (vwAISkills.ID)
+    * * Description: Skill this permission grant applies to.
+    */
+    get SkillID(): string {
+        return this.Get('SkillID');
+    }
+    set SkillID(value: string) {
+        this.Set('SkillID', value);
+    }
+
+    /**
+    * * Field Name: RoleID
+    * * Display Name: Role ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Roles (vwRoles.ID)
+    * * Description: Role this grant is for. Mutually exclusive with UserID — exactly one of the two is set per row.
+    */
+    get RoleID(): string | null {
+        return this.Get('RoleID');
+    }
+    set RoleID(value: string | null) {
+        this.Set('RoleID', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: User this grant is for. Mutually exclusive with RoleID — exactly one of the two is set per row.
+    */
+    get UserID(): string | null {
+        return this.Get('UserID');
+    }
+    set UserID(value: string | null) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: CanView
+    * * Display Name: Can View
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Grants viewing the skill in catalogs/pickers. Maps to the normalized Read action.
+    */
+    get CanView(): boolean {
+        return this.Get('CanView');
+    }
+    set CanView(value: boolean) {
+        this.Set('CanView', value);
+    }
+
+    /**
+    * * Field Name: CanRun
+    * * Display Name: Can Run
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Grants requesting/activating the skill at agent runtime. Maps to the normalized Execute action.
+    */
+    get CanRun(): boolean {
+        return this.Get('CanRun');
+    }
+    set CanRun(value: boolean) {
+        this.Set('CanRun', value);
+    }
+
+    /**
+    * * Field Name: CanEdit
+    * * Display Name: Can Edit
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Grants editing the skill definition and its bundled actions/sub-agents. Maps to the normalized Update action.
+    */
+    get CanEdit(): boolean {
+        return this.Get('CanEdit');
+    }
+    set CanEdit(value: boolean) {
+        this.Set('CanEdit', value);
+    }
+
+    /**
+    * * Field Name: CanDelete
+    * * Display Name: Can Delete
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Grants deleting the skill. Maps to the normalized Delete action.
+    */
+    get CanDelete(): boolean {
+        return this.Get('CanDelete');
+    }
+    set CanDelete(value: boolean) {
+        this.Set('CanDelete', value);
+    }
+
+    /**
+    * * Field Name: Comments
+    * * Display Name: Comments
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional free-text note explaining why the grant exists.
+    */
+    get Comments(): string | null {
+        return this.Get('Comments');
+    }
+    set Comments(value: string | null) {
+        this.Set('Comments', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Skill
+    * * Display Name: Skill
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Skill(): string {
+        return this.Get('Skill');
+    }
+
+    /**
+    * * Field Name: Role
+    * * Display Name: Role
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Role(): string | null {
+        return this.Get('Role');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string | null {
+        return this.Get('User');
     }
 }
 
@@ -52042,7 +52457,7 @@ export class MJAISkillEntity extends BaseEntity<MJAISkillEntityType> {
 
     /**
     * * Field Name: ID
-    * * Display Name: Skill ID
+    * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
@@ -52125,8 +52540,34 @@ export class MJAISkillEntity extends BaseEntity<MJAISkillEntityType> {
     }
 
     /**
+    * * Field Name: IconClass
+    * * Display Name: Icon Class
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Optional Font Awesome icon class (e.g. "fa-solid fa-wand-magic-sparkles") shown for this skill in the /skill picker and skill catalog. When null, the UI falls back to a derived default.
+    */
+    get IconClass(): string | null {
+        return this.Get('IconClass');
+    }
+    set IconClass(value: string | null) {
+        this.Set('IconClass', value);
+    }
+
+    /**
+    * * Field Name: Color
+    * * Display Name: Color
+    * * SQL Data Type: nvarchar(50)
+    * * Description: Optional accent color (hex or CSS color token) for this skill's chip/badge in the composer and catalog UI. When null, the UI falls back to a derived default.
+    */
+    get Color(): string | null {
+        return this.Get('Color');
+    }
+    set Color(value: string | null) {
+        this.Set('Color', value);
+    }
+
+    /**
     * * Field Name: CreatedByUserID
-    * * Display Name: Creator ID
+    * * Display Name: Created By User ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     * * Description: User who authored the skill (owner). Authoring is open to self by default; sharing requires the Can Share Skills privilege.
@@ -52160,7 +52601,7 @@ export class MJAISkillEntity extends BaseEntity<MJAISkillEntityType> {
 
     /**
     * * Field Name: CreatedByUser
-    * * Display Name: Created By
+    * * Display Name: Created By User
     * * SQL Data Type: nvarchar(100)
     */
     get CreatedByUser(): string {
@@ -100144,6 +100585,43 @@ export class MJSchemaInfoEntity extends BaseEntity<MJSchemaInfoEntityType> {
 
 
 /**
+ * Secondary scope dimensions for AI scoping.
+ *
+ * Stored as a JSON object in the `SecondaryScopes` column of the
+ * `MJ: Scoped Prompt Parts` entity (and shape-compatible with the untyped
+ * `SecondaryScopes` columns on AIAgentRun / AIAgentNote, so the same JSONType
+ * can be reused there). CodeGen emits a strongly-typed `SecondaryScopesObject`
+ * accessor that returns `MJScopedPromptPartEntity_IAISecondaryScopes | null`.
+ *
+ * This is the SAME shape the agent runtime already carries for memory scoping —
+ * `ExecuteAgentParams.SecondaryScopes` (`@memberjunction/ai-core-plus`): an open
+ * map of arbitrary dimension keys (e.g. `ChannelID`, `ContactID`, `Region`) to
+ * scalar or string-array values. A part is matched (cascading or strict) against
+ * the run's SecondaryScopes by the PromptComponentResolver.
+ *
+ * Named with the `AI` prefix (rather than a bare `ISecondaryScopes`) to signal it
+ * is the shared AI-domain scope type and to avoid collisions with unrelated types.
+ *
+ * Open by design: the set of dimensions is owned by the host application
+ * (a multi-tenant layer such as BCSaaS supplies its own), so this is an index
+ * signature rather than a fixed-field interface — no DB change to add a dimension.
+ */
+
+/**
+ * Open map of secondary-scope dimension name → value.
+ *
+ * The value union is written inline (rather than as a separate named type) so
+ * CodeGen emits a single prefixed type per entity — mirrors the
+ * `SecondaryScopeValue` shape in `@memberjunction/ai-core-plus`: strings,
+ * numbers, booleans, and string arrays (for multi-valued dimensions).
+ *
+ * @example { "ChannelID": "c-123", "Region": "EMEA" }
+ */
+export interface MJScopedPromptPartEntity_IAISecondaryScopes {
+    [dimension: string]: string | number | boolean | string[];
+}
+
+/**
  * MJ: Scoped Prompt Parts - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: ScopedPromptPart
@@ -100233,7 +100711,7 @@ export class MJScopedPromptPartEntity extends BaseEntity<MJScopedPromptPartEntit
 
     /**
     * * Field Name: Sort
-    * * Display Name: Sort Order
+    * * Display Name: Sort
     * * SQL Data Type: int
     * * Default Value: 0
     * * Description: Final-assembly ordering (ASC). Controls this part's position in the assembled message list. Not used for specificity tie-breaking.
@@ -100301,6 +100779,7 @@ export class MJScopedPromptPartEntity extends BaseEntity<MJScopedPromptPartEntit
     * * Field Name: SecondaryScopes
     * * Display Name: Secondary Scopes
     * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJScopedPromptPartEntity_IAISecondaryScopes
     * * Description: JSON object of additional scope dimensions (e.g. {"ChannelID":"..."}). Empty/NULL with PrimaryScopeRecordID set = primary-scope-only; populated = fully-scoped. Matched (cascading or strict) against the run's SecondaryScopes.
     */
     get SecondaryScopes(): string | null {
@@ -100308,6 +100787,27 @@ export class MJScopedPromptPartEntity extends BaseEntity<MJScopedPromptPartEntit
     }
     set SecondaryScopes(value: string | null) {
         this.Set('SecondaryScopes', value);
+    }
+
+    private _SecondaryScopesObject_cached: MJScopedPromptPartEntity_IAISecondaryScopes | null | undefined = undefined;
+    private _SecondaryScopesObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for SecondaryScopes — returns parsed JSON as MJScopedPromptPartEntity_IAISecondaryScopes.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get SecondaryScopesObject(): MJScopedPromptPartEntity_IAISecondaryScopes | null {
+        const raw = this.SecondaryScopes;
+        if (raw !== this._SecondaryScopesObject_lastRaw) {
+            this._SecondaryScopesObject_cached = raw ? JSON.parse(raw) : null;
+            this._SecondaryScopesObject_lastRaw = raw;
+        }
+        return this._SecondaryScopesObject_cached!;
+    }
+    set SecondaryScopesObject(value: MJScopedPromptPartEntity_IAISecondaryScopes | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.SecondaryScopes = raw;
+        this._SecondaryScopesObject_cached = value;
+        this._SecondaryScopesObject_lastRaw = raw;
     }
 
     /**
@@ -100327,26 +100827,6 @@ export class MJScopedPromptPartEntity extends BaseEntity<MJScopedPromptPartEntit
     }
     set Status(value: 'Active' | 'Archived' | 'Provisional') {
         this.Set('Status', value);
-    }
-
-    /**
-    * * Field Name: __mj_CreatedAt
-    * * Display Name: Created At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
-    */
-    get __mj_CreatedAt(): Date {
-        return this.Get('__mj_CreatedAt');
-    }
-
-    /**
-    * * Field Name: __mj_UpdatedAt
-    * * Display Name: Updated At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
-    */
-    get __mj_UpdatedAt(): Date {
-        return this.Get('__mj_UpdatedAt');
     }
 
     /**
@@ -100379,6 +100859,26 @@ export class MJScopedPromptPartEntity extends BaseEntity<MJScopedPromptPartEntit
     }
     set Priority(value: number) {
         this.Set('Priority', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
     }
 
     /**

@@ -24,7 +24,7 @@
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Applications&Name=AgentSettings"
           },
           "sync": {
-            "lastModified": "2026-06-30T23:51:20.316Z",
+            "lastModified": "2026-07-01T17:33:48.663Z",
             "checksum": "7ffc2aad3a90e414abbc7156898f6b68ea5007f679a4fa976dc12600605b12f0"
           }
         }

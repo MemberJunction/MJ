@@ -24,7 +24,7 @@
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agent Channels&Name=UIConfig"
           },
           "sync": {
-            "lastModified": "2026-06-30T23:51:20.372Z",
+            "lastModified": "2026-07-01T17:33:48.714Z",
             "checksum": "a15acd764283cc664237f06864d5e848a20b89fd389c13de69304a354ae98d5c"
           }
         }

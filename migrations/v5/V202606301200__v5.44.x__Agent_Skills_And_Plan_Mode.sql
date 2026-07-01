@@ -8,15 +8,22 @@
 -- project-scoped memory, group chat) are independent migrations landed when built.
 --
 --   New tables (all "MJ: " entity names assigned by CodeGen):
---     AISkill          — reusable capability bundle (Instructions appended to an
---                        accepting agent's system prompt on activation).
---     AISkillAction    — Actions bundled into a skill (enabled while skill active).
---     AISkillSubAgent  — sub-agents bundled into a skill.
---     AIAgentSkill     — agent <-> skill assignment (for AcceptsSkills = Limited).
+--     AISkill           — reusable capability bundle (Instructions appended to an
+--                         accepting agent's system prompt on activation).
+--     AISkillAction     — Actions bundled into a skill (enabled while skill active).
+--     AISkillSubAgent   — sub-agents bundled into a skill.
+--     AIAgentSkill      — agent <-> skill assignment (for AcceptsSkills = Limited).
+--     AISkillPermission — per-user / per-role access to a skill (View / Run / Edit /
+--                         Delete). Mirrors AIAgentPermission — the dedicated-table,
+--                         open-by-default parity model. Backs the AISkillPermissionHelper
+--                         runtime gate and the MJAISkillPermissionProvider unified-engine
+--                         wrapper (see guides/UNIFIED_PERMISSIONS_GUIDE.md).
 --
 --   Additive columns:
 --     AIAgent.SupportsPlanMode  — capability flag (default ON / opt-out).
 --     AIAgent.AcceptsSkills     — None | All | Limited (default None / opt-in).
+--     AISkill.IconClass         — Font Awesome icon class for the /skill picker + catalog.
+--     AISkill.Color             — accent color for the skill's chip/badge in the UI.
 --
 --   AIAgentRunStep.StepType extended with 'Plan' and 'Skill'.
 --
@@ -24,9 +31,11 @@
 --   structurally skip plan mode). Remote Proxy agents get seeded when that type
 --   ships (Phase 2).
 --
---   Permissions (AI Skills resource type + "Can Share Skills" authorization) are
---   seeded via metadata sync AFTER CodeGen registers the MJ: AI Skills entity —
---   not in this migration.
+--   Permissions: skills use dedicated-table parity with agents (AISkillPermission,
+--   above). The "Can Share Skills" authorization is seeded via metadata sync AFTER
+--   CodeGen registers the entities; the MJ: Permission Domains catalog row for
+--   'AI Skill Permissions' -> MJAISkillPermissionProvider is likewise metadata sync,
+--   not this migration.
 -- ============================================================================
 
 
@@ -40,6 +49,8 @@ CREATE TABLE ${flyway:defaultSchema}.AISkill (
     Instructions     NVARCHAR(MAX)    NOT NULL,
     Status           NVARCHAR(20)     NOT NULL CONSTRAINT DF_AISkill_Status DEFAULT ('Active'),
     Category         NVARCHAR(100)    NULL,
+    IconClass        NVARCHAR(100)    NULL,
+    Color            NVARCHAR(50)     NULL,
     CreatedByUserID  UNIQUEIDENTIFIER NOT NULL,
     CONSTRAINT PK_AISkill PRIMARY KEY (ID),
     CONSTRAINT FK_AISkill_CreatedByUser FOREIGN KEY (CreatedByUserID)
@@ -69,6 +80,14 @@ EXEC sp_addextendedproperty @name = N'MS_Description',
     @value = N'Optional grouping category.',
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
     @level1type = N'TABLE',  @level1name = N'AISkill', @level2type = N'COLUMN', @level2name = N'Category';
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Optional Font Awesome icon class (e.g. "fa-solid fa-wand-magic-sparkles") shown for this skill in the /skill picker and skill catalog. When null, the UI falls back to a derived default.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AISkill', @level2type = N'COLUMN', @level2name = N'IconClass';
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Optional accent color (hex or CSS color token) for this skill''s chip/badge in the composer and catalog UI. When null, the UI falls back to a derived default.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AISkill', @level2type = N'COLUMN', @level2name = N'Color';
 EXEC sp_addextendedproperty @name = N'MS_Description',
     @value = N'User who authored the skill (owner). Authoring is open to self by default; sharing requires the Can Share Skills privilege.',
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
@@ -162,6 +181,68 @@ EXEC sp_addextendedproperty @name = N'MS_Description',
 
 
 -- ============================================================================
+-- 4b. AISkillPermission  ("MJ: AI Skill Permissions") — per-user / per-role access
+--     to a skill. Mirrors AIAgentPermission (dedicated-table parity). Exactly one of
+--     UserID / RoleID is set per row (enforced by the entity server validator, matching
+--     AIAgentPermission — not a DB constraint, so a null grantee surfaces as a validation
+--     error rather than a raw constraint violation). Open-by-default semantics live in the
+--     AISkillPermissionHelper runtime gate; this table stores only explicit grants.
+-- ============================================================================
+CREATE TABLE ${flyway:defaultSchema}.AISkillPermission (
+    ID         UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID(),
+    SkillID    UNIQUEIDENTIFIER NOT NULL,
+    RoleID     UNIQUEIDENTIFIER NULL,
+    UserID     UNIQUEIDENTIFIER NULL,
+    CanView    BIT              NOT NULL CONSTRAINT DF_AISkillPermission_CanView   DEFAULT (0),
+    CanRun     BIT              NOT NULL CONSTRAINT DF_AISkillPermission_CanRun    DEFAULT (0),
+    CanEdit    BIT              NOT NULL CONSTRAINT DF_AISkillPermission_CanEdit   DEFAULT (0),
+    CanDelete  BIT              NOT NULL CONSTRAINT DF_AISkillPermission_CanDelete DEFAULT (0),
+    Comments   NVARCHAR(MAX)    NULL,
+    CONSTRAINT PK_AISkillPermission PRIMARY KEY (ID),
+    CONSTRAINT FK_AISkillPermission_Skill FOREIGN KEY (SkillID)
+        REFERENCES ${flyway:defaultSchema}.AISkill (ID),
+    CONSTRAINT FK_AISkillPermission_Role FOREIGN KEY (RoleID)
+        REFERENCES ${flyway:defaultSchema}.Role (ID),
+    CONSTRAINT FK_AISkillPermission_User FOREIGN KEY (UserID)
+        REFERENCES ${flyway:defaultSchema}.[User] (ID)
+);
+GO
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Skill this permission grant applies to.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AISkillPermission', @level2type = N'COLUMN', @level2name = N'SkillID';
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Role this grant is for. Mutually exclusive with UserID — exactly one of the two is set per row.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AISkillPermission', @level2type = N'COLUMN', @level2name = N'RoleID';
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'User this grant is for. Mutually exclusive with RoleID — exactly one of the two is set per row.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AISkillPermission', @level2type = N'COLUMN', @level2name = N'UserID';
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Grants viewing the skill in catalogs/pickers. Maps to the normalized Read action.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AISkillPermission', @level2type = N'COLUMN', @level2name = N'CanView';
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Grants requesting/activating the skill at agent runtime. Maps to the normalized Execute action.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AISkillPermission', @level2type = N'COLUMN', @level2name = N'CanRun';
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Grants editing the skill definition and its bundled actions/sub-agents. Maps to the normalized Update action.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AISkillPermission', @level2type = N'COLUMN', @level2name = N'CanEdit';
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Grants deleting the skill. Maps to the normalized Delete action.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AISkillPermission', @level2type = N'COLUMN', @level2name = N'CanDelete';
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Optional free-text note explaining why the grant exists.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AISkillPermission', @level2type = N'COLUMN', @level2name = N'Comments';
+
+
+-- ============================================================================
 -- 5. ALTER AIAgent — plan-mode capability (default ON / opt-out) + skills
 --    acceptance gate (default None / opt-in). One consolidated ALTER.
 -- ============================================================================
@@ -244,7 +325,15 @@ GO
 
 
 
--- MD refresh here (inefficient til next baseline, but we modified Agent table earlier in 5.44 so we need this here intra-build)
+
+
+
+
+
+
+
+
+-- INCLUDED SINCE WITIN 5.44 we are modifying the same table(s) more than once so this is required between migration applications. CodeGen normally does this each run.
 
 /* SQL text to recompile all views */
 EXEC [${flyway:defaultSchema}].spRecompileAllViews
@@ -266,12 +355,6 @@ EXEC [${flyway:defaultSchema}].spSetDefaultColumnWidthWhereNeeded @ExcludedSchem
 
 /* SQL text to recompile all stored procedures in dependency order */
 EXEC [${flyway:defaultSchema}].spRecompileAllProceduresInDependencyOrder @ExcludedSchemaNames='sys,staging', @LogOutput=0, @ContinueOnError=1
-
-
-
-
-
-
 
 
 
@@ -365,7 +448,7 @@ EXEC [${flyway:defaultSchema}].spRecompileAllProceduresInDependencyOrder @Exclud
          , [__mj_UpdatedAt]
       )
       VALUES (
-         'f3eceda6-0b91-4a0a-86d1-15f8c29ca336',
+         '1d52de84-dd3f-4e46-8d2b-574b70080bb4',
          'MJ: AI Skills',
          'AI Skills',
          NULL,
@@ -391,22 +474,22 @@ EXEC [${flyway:defaultSchema}].spRecompileAllProceduresInDependencyOrder @Exclud
 /* SQL generated to add new entity MJ: AI Skills to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
 INSERT INTO [${flyway:defaultSchema}].[ApplicationEntity]
                                        ([ApplicationID], [EntityID], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', 'f3eceda6-0b91-4a0a-86d1-15f8c29ca336', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
+                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '1d52de84-dd3f-4e46-8d2b-574b70080bb4', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to add new permission for entity MJ: AI Skills for role UI */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('f3eceda6-0b91-4a0a-86d1-15f8c29ca336', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE());
+                                                   ('1d52de84-dd3f-4e46-8d2b-574b70080bb4', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to add new permission for entity MJ: AI Skills for role Developer */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('f3eceda6-0b91-4a0a-86d1-15f8c29ca336', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
+                                                   ('1d52de84-dd3f-4e46-8d2b-574b70080bb4', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to add new permission for entity MJ: AI Skills for role Integration */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('f3eceda6-0b91-4a0a-86d1-15f8c29ca336', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
+                                                   ('1d52de84-dd3f-4e46-8d2b-574b70080bb4', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to create new entity MJ: AI Skill Actions */
 
@@ -434,7 +517,7 @@ INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
          , [__mj_UpdatedAt]
       )
       VALUES (
-         '2cad785e-49de-4b44-afff-9a55033f65f3',
+         '5e3ea927-befa-417e-8fd9-6c114c1c0a2a',
          'MJ: AI Skill Actions',
          'AI Skill Actions',
          NULL,
@@ -460,22 +543,22 @@ INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
 /* SQL generated to add new entity MJ: AI Skill Actions to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
 INSERT INTO [${flyway:defaultSchema}].[ApplicationEntity]
                                        ([ApplicationID], [EntityID], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '2cad785e-49de-4b44-afff-9a55033f65f3', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
+                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '5e3ea927-befa-417e-8fd9-6c114c1c0a2a', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to add new permission for entity MJ: AI Skill Actions for role UI */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('2cad785e-49de-4b44-afff-9a55033f65f3', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE());
+                                                   ('5e3ea927-befa-417e-8fd9-6c114c1c0a2a', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to add new permission for entity MJ: AI Skill Actions for role Developer */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('2cad785e-49de-4b44-afff-9a55033f65f3', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
+                                                   ('5e3ea927-befa-417e-8fd9-6c114c1c0a2a', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to add new permission for entity MJ: AI Skill Actions for role Integration */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('2cad785e-49de-4b44-afff-9a55033f65f3', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
+                                                   ('5e3ea927-befa-417e-8fd9-6c114c1c0a2a', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to create new entity MJ: AI Skill Sub Agents */
 
@@ -503,7 +586,7 @@ INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
          , [__mj_UpdatedAt]
       )
       VALUES (
-         '9829e043-0ae7-44e5-9566-92081e9630af',
+         'aa4add02-7763-44ce-b07d-0cf74708749c',
          'MJ: AI Skill Sub Agents',
          'AI Skill Sub Agents',
          NULL,
@@ -529,22 +612,22 @@ INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
 /* SQL generated to add new entity MJ: AI Skill Sub Agents to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
 INSERT INTO [${flyway:defaultSchema}].[ApplicationEntity]
                                        ([ApplicationID], [EntityID], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '9829e043-0ae7-44e5-9566-92081e9630af', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
+                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', 'aa4add02-7763-44ce-b07d-0cf74708749c', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to add new permission for entity MJ: AI Skill Sub Agents for role UI */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('9829e043-0ae7-44e5-9566-92081e9630af', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE());
+                                                   ('aa4add02-7763-44ce-b07d-0cf74708749c', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to add new permission for entity MJ: AI Skill Sub Agents for role Developer */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('9829e043-0ae7-44e5-9566-92081e9630af', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
+                                                   ('aa4add02-7763-44ce-b07d-0cf74708749c', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to add new permission for entity MJ: AI Skill Sub Agents for role Integration */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('9829e043-0ae7-44e5-9566-92081e9630af', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
+                                                   ('aa4add02-7763-44ce-b07d-0cf74708749c', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to create new entity MJ: AI Agent Skills */
 
@@ -572,7 +655,7 @@ INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
          , [__mj_UpdatedAt]
       )
       VALUES (
-         '63982a61-bb89-4f62-a279-172ecb10da38',
+         '1f1ebdd5-84da-4554-a029-87aff327971d',
          'MJ: AI Agent Skills',
          'AI Agent Skills',
          NULL,
@@ -598,86 +681,91 @@ INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
 /* SQL generated to add new entity MJ: AI Agent Skills to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
 INSERT INTO [${flyway:defaultSchema}].[ApplicationEntity]
                                        ([ApplicationID], [EntityID], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '63982a61-bb89-4f62-a279-172ecb10da38', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
+                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '1f1ebdd5-84da-4554-a029-87aff327971d', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to add new permission for entity MJ: AI Agent Skills for role UI */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('63982a61-bb89-4f62-a279-172ecb10da38', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE());
+                                                   ('1f1ebdd5-84da-4554-a029-87aff327971d', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to add new permission for entity MJ: AI Agent Skills for role Developer */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('63982a61-bb89-4f62-a279-172ecb10da38', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
+                                                   ('1f1ebdd5-84da-4554-a029-87aff327971d', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to add new permission for entity MJ: AI Agent Skills for role Integration */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('63982a61-bb89-4f62-a279-172ecb10da38', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
+                                                   ('1f1ebdd5-84da-4554-a029-87aff327971d', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.AISkill */
-ALTER TABLE [${flyway:defaultSchema}].[AISkill] ADD [__mj_CreatedAt] DATETIMEOFFSET NULL;
-GO
+/* SQL generated to create new entity MJ: AI Skill Permissions */
 
-/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.AISkill */
-UPDATE [${flyway:defaultSchema}].[AISkill] SET [__mj_CreatedAt] = GETUTCDATE() WHERE [__mj_CreatedAt] IS NULL;
-GO
+      INSERT INTO [${flyway:defaultSchema}].[Entity] (
+         [ID],
+         [Name],
+         [DisplayName],
+         [Description],
+         [NameSuffix],
+         [BaseTable],
+         [BaseView],
+         [SchemaName],
+         [IncludeInAPI],
+         [AllowUserSearchAPI],
+         [AllowCaching]
+         , [TrackRecordChanges]
+         , [AuditRecordAccess]
+         , [AuditViewRuns]
+         , [AllowAllRowsAPI]
+         , [AllowCreateAPI]
+         , [AllowUpdateAPI]
+         , [AllowDeleteAPI]
+         , [UserViewMaxRows]
+         , [__mj_CreatedAt]
+         , [__mj_UpdatedAt]
+      )
+      VALUES (
+         '7eedd9fb-3882-4e98-804e-be1e95fac54a',
+         'MJ: AI Skill Permissions',
+         'AI Skill Permissions',
+         NULL,
+         NULL,
+         'AISkillPermission',
+         'vwAISkillPermissions',
+         '${flyway:defaultSchema}',
+         1,
+         1,
+         1
+         , 1
+         , 0
+         , 0
+         , 0
+         , 1
+         , 1
+         , 1
+         , 1000
+         , GETUTCDATE()
+         , GETUTCDATE()
+      );
 
-/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.AISkill */
-ALTER TABLE [${flyway:defaultSchema}].[AISkill] ALTER COLUMN [__mj_CreatedAt] DATETIMEOFFSET NOT NULL;
-GO
+/* SQL generated to add new entity MJ: AI Skill Permissions to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
+INSERT INTO [${flyway:defaultSchema}].[ApplicationEntity]
+                                       ([ApplicationID], [EntityID], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
+                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '7eedd9fb-3882-4e98-804e-be1e95fac54a', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.AISkill */
-ALTER TABLE [${flyway:defaultSchema}].[AISkill] ADD CONSTRAINT [DF___mj_AISkill___mj_CreatedAt] DEFAULT GETUTCDATE() FOR [__mj_CreatedAt];
-GO
+/* SQL generated to add new permission for entity MJ: AI Skill Permissions for role UI */
+INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
+                                                   ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
+                                                   ('7eedd9fb-3882-4e98-804e-be1e95fac54a', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.AISkill */
-ALTER TABLE [${flyway:defaultSchema}].[AISkill] ADD [__mj_UpdatedAt] DATETIMEOFFSET NULL;
-GO
+/* SQL generated to add new permission for entity MJ: AI Skill Permissions for role Developer */
+INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
+                                                   ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
+                                                   ('7eedd9fb-3882-4e98-804e-be1e95fac54a', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.AISkill */
-UPDATE [${flyway:defaultSchema}].[AISkill] SET [__mj_UpdatedAt] = GETUTCDATE() WHERE [__mj_UpdatedAt] IS NULL;
-GO
-
-/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.AISkill */
-ALTER TABLE [${flyway:defaultSchema}].[AISkill] ALTER COLUMN [__mj_UpdatedAt] DATETIMEOFFSET NOT NULL;
-GO
-
-/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.AISkill */
-ALTER TABLE [${flyway:defaultSchema}].[AISkill] ADD CONSTRAINT [DF___mj_AISkill___mj_UpdatedAt] DEFAULT GETUTCDATE() FOR [__mj_UpdatedAt];
-GO
-
-/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.AIAgentSkill */
-ALTER TABLE [${flyway:defaultSchema}].[AIAgentSkill] ADD [__mj_CreatedAt] DATETIMEOFFSET NULL;
-GO
-
-/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.AIAgentSkill */
-UPDATE [${flyway:defaultSchema}].[AIAgentSkill] SET [__mj_CreatedAt] = GETUTCDATE() WHERE [__mj_CreatedAt] IS NULL;
-GO
-
-/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.AIAgentSkill */
-ALTER TABLE [${flyway:defaultSchema}].[AIAgentSkill] ALTER COLUMN [__mj_CreatedAt] DATETIMEOFFSET NOT NULL;
-GO
-
-/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.AIAgentSkill */
-ALTER TABLE [${flyway:defaultSchema}].[AIAgentSkill] ADD CONSTRAINT [DF___mj_AIAgentSkill___mj_CreatedAt] DEFAULT GETUTCDATE() FOR [__mj_CreatedAt];
-GO
-
-/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.AIAgentSkill */
-ALTER TABLE [${flyway:defaultSchema}].[AIAgentSkill] ADD [__mj_UpdatedAt] DATETIMEOFFSET NULL;
-GO
-
-/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.AIAgentSkill */
-UPDATE [${flyway:defaultSchema}].[AIAgentSkill] SET [__mj_UpdatedAt] = GETUTCDATE() WHERE [__mj_UpdatedAt] IS NULL;
-GO
-
-/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.AIAgentSkill */
-ALTER TABLE [${flyway:defaultSchema}].[AIAgentSkill] ALTER COLUMN [__mj_UpdatedAt] DATETIMEOFFSET NOT NULL;
-GO
-
-/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.AIAgentSkill */
-ALTER TABLE [${flyway:defaultSchema}].[AIAgentSkill] ADD CONSTRAINT [DF___mj_AIAgentSkill___mj_UpdatedAt] DEFAULT GETUTCDATE() FOR [__mj_UpdatedAt];
-GO
+/* SQL generated to add new permission for entity MJ: AI Skill Permissions for role Integration */
+INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
+                                                   ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
+                                                   ('7eedd9fb-3882-4e98-804e-be1e95fac54a', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
 
 /* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.AISkillSubAgent */
 ALTER TABLE [${flyway:defaultSchema}].[AISkillSubAgent] ADD [__mj_CreatedAt] DATETIMEOFFSET NULL;
@@ -709,6 +797,38 @@ GO
 
 /* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.AISkillSubAgent */
 ALTER TABLE [${flyway:defaultSchema}].[AISkillSubAgent] ADD CONSTRAINT [DF___mj_AISkillSubAgent___mj_UpdatedAt] DEFAULT GETUTCDATE() FOR [__mj_UpdatedAt];
+GO
+
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.AISkill */
+ALTER TABLE [${flyway:defaultSchema}].[AISkill] ADD [__mj_CreatedAt] DATETIMEOFFSET NULL;
+GO
+
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.AISkill */
+UPDATE [${flyway:defaultSchema}].[AISkill] SET [__mj_CreatedAt] = GETUTCDATE() WHERE [__mj_CreatedAt] IS NULL;
+GO
+
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.AISkill */
+ALTER TABLE [${flyway:defaultSchema}].[AISkill] ALTER COLUMN [__mj_CreatedAt] DATETIMEOFFSET NOT NULL;
+GO
+
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.AISkill */
+ALTER TABLE [${flyway:defaultSchema}].[AISkill] ADD CONSTRAINT [DF___mj_AISkill___mj_CreatedAt] DEFAULT GETUTCDATE() FOR [__mj_CreatedAt];
+GO
+
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.AISkill */
+ALTER TABLE [${flyway:defaultSchema}].[AISkill] ADD [__mj_UpdatedAt] DATETIMEOFFSET NULL;
+GO
+
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.AISkill */
+UPDATE [${flyway:defaultSchema}].[AISkill] SET [__mj_UpdatedAt] = GETUTCDATE() WHERE [__mj_UpdatedAt] IS NULL;
+GO
+
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.AISkill */
+ALTER TABLE [${flyway:defaultSchema}].[AISkill] ALTER COLUMN [__mj_UpdatedAt] DATETIMEOFFSET NOT NULL;
+GO
+
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.AISkill */
+ALTER TABLE [${flyway:defaultSchema}].[AISkill] ADD CONSTRAINT [DF___mj_AISkill___mj_UpdatedAt] DEFAULT GETUTCDATE() FOR [__mj_UpdatedAt];
 GO
 
 /* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.AISkillAction */
@@ -743,9 +863,73 @@ GO
 ALTER TABLE [${flyway:defaultSchema}].[AISkillAction] ADD CONSTRAINT [DF___mj_AISkillAction___mj_UpdatedAt] DEFAULT GETUTCDATE() FOR [__mj_UpdatedAt];
 GO
 
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.AIAgentSkill */
+ALTER TABLE [${flyway:defaultSchema}].[AIAgentSkill] ADD [__mj_CreatedAt] DATETIMEOFFSET NULL;
+GO
+
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.AIAgentSkill */
+UPDATE [${flyway:defaultSchema}].[AIAgentSkill] SET [__mj_CreatedAt] = GETUTCDATE() WHERE [__mj_CreatedAt] IS NULL;
+GO
+
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.AIAgentSkill */
+ALTER TABLE [${flyway:defaultSchema}].[AIAgentSkill] ALTER COLUMN [__mj_CreatedAt] DATETIMEOFFSET NOT NULL;
+GO
+
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.AIAgentSkill */
+ALTER TABLE [${flyway:defaultSchema}].[AIAgentSkill] ADD CONSTRAINT [DF___mj_AIAgentSkill___mj_CreatedAt] DEFAULT GETUTCDATE() FOR [__mj_CreatedAt];
+GO
+
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.AIAgentSkill */
+ALTER TABLE [${flyway:defaultSchema}].[AIAgentSkill] ADD [__mj_UpdatedAt] DATETIMEOFFSET NULL;
+GO
+
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.AIAgentSkill */
+UPDATE [${flyway:defaultSchema}].[AIAgentSkill] SET [__mj_UpdatedAt] = GETUTCDATE() WHERE [__mj_UpdatedAt] IS NULL;
+GO
+
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.AIAgentSkill */
+ALTER TABLE [${flyway:defaultSchema}].[AIAgentSkill] ALTER COLUMN [__mj_UpdatedAt] DATETIMEOFFSET NOT NULL;
+GO
+
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.AIAgentSkill */
+ALTER TABLE [${flyway:defaultSchema}].[AIAgentSkill] ADD CONSTRAINT [DF___mj_AIAgentSkill___mj_UpdatedAt] DEFAULT GETUTCDATE() FOR [__mj_UpdatedAt];
+GO
+
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.AISkillPermission */
+ALTER TABLE [${flyway:defaultSchema}].[AISkillPermission] ADD [__mj_CreatedAt] DATETIMEOFFSET NULL;
+GO
+
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.AISkillPermission */
+UPDATE [${flyway:defaultSchema}].[AISkillPermission] SET [__mj_CreatedAt] = GETUTCDATE() WHERE [__mj_CreatedAt] IS NULL;
+GO
+
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.AISkillPermission */
+ALTER TABLE [${flyway:defaultSchema}].[AISkillPermission] ALTER COLUMN [__mj_CreatedAt] DATETIMEOFFSET NOT NULL;
+GO
+
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.AISkillPermission */
+ALTER TABLE [${flyway:defaultSchema}].[AISkillPermission] ADD CONSTRAINT [DF___mj_AISkillPermission___mj_CreatedAt] DEFAULT GETUTCDATE() FOR [__mj_CreatedAt];
+GO
+
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.AISkillPermission */
+ALTER TABLE [${flyway:defaultSchema}].[AISkillPermission] ADD [__mj_UpdatedAt] DATETIMEOFFSET NULL;
+GO
+
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.AISkillPermission */
+UPDATE [${flyway:defaultSchema}].[AISkillPermission] SET [__mj_UpdatedAt] = GETUTCDATE() WHERE [__mj_UpdatedAt] IS NULL;
+GO
+
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.AISkillPermission */
+ALTER TABLE [${flyway:defaultSchema}].[AISkillPermission] ALTER COLUMN [__mj_UpdatedAt] DATETIMEOFFSET NOT NULL;
+GO
+
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.AISkillPermission */
+ALTER TABLE [${flyway:defaultSchema}].[AISkillPermission] ADD CONSTRAINT [DF___mj_AISkillPermission___mj_UpdatedAt] DEFAULT GETUTCDATE() FOR [__mj_UpdatedAt];
+GO
+
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'd4c35a84-3e2b-446c-9e89-31e6d544de89' OR (EntityID = 'F3ECEDA6-0B91-4A0A-86D1-15F8C29CA336' AND Name = 'ID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '6f06bf51-578f-4879-ad6a-9ec786939be7' OR (EntityID = 'AA4ADD02-7763-44CE-B07D-0CF74708749C' AND Name = 'ID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -778,8 +962,8 @@ GO
          )
          VALUES
          (
-            'd4c35a84-3e2b-446c-9e89-31e6d544de89',
-            'F3ECEDA6-0B91-4A0A-86D1-15F8C29CA336', -- Entity: MJ: AI Skills
+            '6f06bf51-578f-4879-ad6a-9ec786939be7',
+            'AA4ADD02-7763-44CE-B07D-0CF74708749C', -- Entity: MJ: AI Skill Sub Agents
             100001,
             'ID',
             'ID',
@@ -810,7 +994,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '7cdd99cc-c2e9-4b29-83be-3d2153ecb979' OR (EntityID = 'F3ECEDA6-0B91-4A0A-86D1-15F8C29CA336' AND Name = 'Name')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '00059b09-d83b-44e4-8604-dc0102128fa1' OR (EntityID = 'AA4ADD02-7763-44CE-B07D-0CF74708749C' AND Name = 'SkillID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -843,14 +1027,14 @@ GO
          )
          VALUES
          (
-            '7cdd99cc-c2e9-4b29-83be-3d2153ecb979',
-            'F3ECEDA6-0B91-4A0A-86D1-15F8C29CA336', -- Entity: MJ: AI Skills
+            '00059b09-d83b-44e4-8604-dc0102128fa1',
+            'AA4ADD02-7763-44CE-B07D-0CF74708749C', -- Entity: MJ: AI Skill Sub Agents
             100002,
-            'Name',
-            'Name',
-            'Skill name.',
-            'nvarchar',
-            510,
+            'SkillID',
+            'Skill ID',
+            'Skill that bundles this sub-agent.',
+            'uniqueidentifier',
+            16,
             0,
             0,
             0,
@@ -859,14 +1043,14 @@ GO
             1,
             0,
             0,
-            NULL,
-            NULL,
-            1,
-            1,
-            0,
-            1,
+            '1D52DE84-DD3F-4E46-8D2B-574B70080BB4',
+            'ID',
             0,
             0,
+            1,
+            0,
+            0,
+            1,
             'Search',
             GETUTCDATE(),
             GETUTCDATE()
@@ -875,7 +1059,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'e1cf8053-36ac-43fb-8ec3-1c84d6103963' OR (EntityID = 'F3ECEDA6-0B91-4A0A-86D1-15F8C29CA336' AND Name = 'Description')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '7319e9ce-62d0-4dd4-99bd-e48fc866277f' OR (EntityID = 'AA4ADD02-7763-44CE-B07D-0CF74708749C' AND Name = 'SubAgentID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -908,532 +1092,12 @@ GO
          )
          VALUES
          (
-            'e1cf8053-36ac-43fb-8ec3-1c84d6103963',
-            'F3ECEDA6-0B91-4A0A-86D1-15F8C29CA336', -- Entity: MJ: AI Skills
+            '7319e9ce-62d0-4dd4-99bd-e48fc866277f',
+            'AA4ADD02-7763-44CE-B07D-0CF74708749C', -- Entity: MJ: AI Skill Sub Agents
             100003,
-            'Description',
-            'Description',
-            'Short description shown in the skill catalog (used for progressive-disclosure exposure to agents — name + description only are injected until the skill is activated).',
-            'nvarchar',
-            -1,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '8686790a-5ffa-429d-9ba8-81fbc3f22a80' OR (EntityID = 'F3ECEDA6-0B91-4A0A-86D1-15F8C29CA336' AND Name = 'Instructions')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '8686790a-5ffa-429d-9ba8-81fbc3f22a80',
-            'F3ECEDA6-0B91-4A0A-86D1-15F8C29CA336', -- Entity: MJ: AI Skills
-            100004,
-            'Instructions',
-            'Instructions',
-            'Instruction text appended to an accepting agent''s system prompt when the skill is activated.',
-            'nvarchar',
-            -1,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '12ea822e-b901-4526-a801-5178952a1bf3' OR (EntityID = 'F3ECEDA6-0B91-4A0A-86D1-15F8C29CA336' AND Name = 'Status')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '12ea822e-b901-4526-a801-5178952a1bf3',
-            'F3ECEDA6-0B91-4A0A-86D1-15F8C29CA336', -- Entity: MJ: AI Skills
-            100005,
-            'Status',
-            'Status',
-            'Lifecycle status. Only Active skills can be activated by agents. Defaults to Active so a freshly authored skill is usable by its owner immediately; set to Deprecated to retire without deleting.',
-            'nvarchar',
-            40,
-            0,
-            0,
-            0,
-            'Active',
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b4014eb6-d14e-42ec-a811-79c2f09c7ce0' OR (EntityID = 'F3ECEDA6-0B91-4A0A-86D1-15F8C29CA336' AND Name = 'Category')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'b4014eb6-d14e-42ec-a811-79c2f09c7ce0',
-            'F3ECEDA6-0B91-4A0A-86D1-15F8C29CA336', -- Entity: MJ: AI Skills
-            100006,
-            'Category',
-            'Category',
-            'Optional grouping category.',
-            'nvarchar',
-            200,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'df469925-5f2d-4fc6-9deb-f7818b265081' OR (EntityID = 'F3ECEDA6-0B91-4A0A-86D1-15F8C29CA336' AND Name = 'CreatedByUserID')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'df469925-5f2d-4fc6-9deb-f7818b265081',
-            'F3ECEDA6-0B91-4A0A-86D1-15F8C29CA336', -- Entity: MJ: AI Skills
-            100007,
-            'CreatedByUserID',
-            'Created By User ID',
-            'User who authored the skill (owner). Authoring is open to self by default; sharing requires the Can Share Skills privilege.',
-            'uniqueidentifier',
-            16,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            'E1238F34-2837-EF11-86D4-6045BDEE16E6',
-            'ID',
-            0,
-            0,
-            1,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '8e631df3-23b3-45f6-98c2-b12dfe9cb81f' OR (EntityID = 'F3ECEDA6-0B91-4A0A-86D1-15F8C29CA336' AND Name = '__mj_CreatedAt')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '8e631df3-23b3-45f6-98c2-b12dfe9cb81f',
-            'F3ECEDA6-0B91-4A0A-86D1-15F8C29CA336', -- Entity: MJ: AI Skills
-            100008,
-            '__mj_CreatedAt',
-            'Created At',
-            NULL,
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            0,
-            'getutcdate()',
-            0,
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b840cfc0-8e73-47e6-8c08-1d61f88919ad' OR (EntityID = 'F3ECEDA6-0B91-4A0A-86D1-15F8C29CA336' AND Name = '__mj_UpdatedAt')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'b840cfc0-8e73-47e6-8c08-1d61f88919ad',
-            'F3ECEDA6-0B91-4A0A-86D1-15F8C29CA336', -- Entity: MJ: AI Skills
-            100009,
-            '__mj_UpdatedAt',
-            'Updated At',
-            NULL,
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            0,
-            'getutcdate()',
-            0,
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '0520dc26-434d-4d79-a4d5-8a393adc1bdf' OR (EntityID = '63982A61-BB89-4F62-A279-172ECB10DA38' AND Name = 'ID')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '0520dc26-434d-4d79-a4d5-8a393adc1bdf',
-            '63982A61-BB89-4F62-A279-172ECB10DA38', -- Entity: MJ: AI Agent Skills
-            100001,
-            'ID',
-            'ID',
-            NULL,
-            'uniqueidentifier',
-            16,
-            0,
-            0,
-            0,
-            'newsequentialid()',
-            0,
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            1,
-            1,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b34877ec-fafd-46ea-bd9b-f6213bab500e' OR (EntityID = '63982A61-BB89-4F62-A279-172ECB10DA38' AND Name = 'AgentID')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'b34877ec-fafd-46ea-bd9b-f6213bab500e',
-            '63982A61-BB89-4F62-A279-172ECB10DA38', -- Entity: MJ: AI Agent Skills
-            100002,
-            'AgentID',
-            'Agent ID',
-            'Agent the skill is assigned to. Used when the agent''s AcceptsSkills = Limited.',
+            'SubAgentID',
+            'Sub Agent ID',
+            'Sub-agent made available to the agent while the skill is active.',
             'uniqueidentifier',
             16,
             0,
@@ -1460,7 +1124,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '423836ea-f904-4196-9957-2054e368477c' OR (EntityID = '63982A61-BB89-4F62-A279-172ECB10DA38' AND Name = 'SkillID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'eed49c3c-6ef3-4258-b38b-625b2dfb694f' OR (EntityID = 'AA4ADD02-7763-44CE-B07D-0CF74708749C' AND Name = '__mj_CreatedAt')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1493,139 +1157,9 @@ GO
          )
          VALUES
          (
-            '423836ea-f904-4196-9957-2054e368477c',
-            '63982A61-BB89-4F62-A279-172ECB10DA38', -- Entity: MJ: AI Agent Skills
-            100003,
-            'SkillID',
-            'Skill ID',
-            'Skill assigned to the agent.',
-            'uniqueidentifier',
-            16,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            'F3ECEDA6-0B91-4A0A-86D1-15F8C29CA336',
-            'ID',
-            0,
-            0,
-            1,
-            0,
-            0,
-            1,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'dee4fbfe-d1df-4394-aaf2-994588803db3' OR (EntityID = '63982A61-BB89-4F62-A279-172ECB10DA38' AND Name = 'Status')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'dee4fbfe-d1df-4394-aaf2-994588803db3',
-            '63982A61-BB89-4F62-A279-172ECB10DA38', -- Entity: MJ: AI Agent Skills
+            'eed49c3c-6ef3-4258-b38b-625b2dfb694f',
+            'AA4ADD02-7763-44CE-B07D-0CF74708749C', -- Entity: MJ: AI Skill Sub Agents
             100004,
-            'Status',
-            'Status',
-            'Per-assignment status: Active, Pending, or Revoked. Lets an assignment be disabled without unlinking.',
-            'nvarchar',
-            40,
-            0,
-            0,
-            0,
-            'Active',
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '04e9dd13-6924-4994-a4a1-c84908f54de9' OR (EntityID = '63982A61-BB89-4F62-A279-172ECB10DA38' AND Name = '__mj_CreatedAt')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '04e9dd13-6924-4994-a4a1-c84908f54de9',
-            '63982A61-BB89-4F62-A279-172ECB10DA38', -- Entity: MJ: AI Agent Skills
-            100005,
             '__mj_CreatedAt',
             'Created At',
             NULL,
@@ -1655,7 +1189,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '513abfc5-8af6-4ed4-893d-5d3b465e059d' OR (EntityID = '63982A61-BB89-4F62-A279-172ECB10DA38' AND Name = '__mj_UpdatedAt')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '6c692028-511d-4fe4-a475-590724775eb4' OR (EntityID = 'AA4ADD02-7763-44CE-B07D-0CF74708749C' AND Name = '__mj_UpdatedAt')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1688,9 +1222,9 @@ GO
          )
          VALUES
          (
-            '513abfc5-8af6-4ed4-893d-5d3b465e059d',
-            '63982A61-BB89-4F62-A279-172ECB10DA38', -- Entity: MJ: AI Agent Skills
-            100006,
+            '6c692028-511d-4fe4-a475-590724775eb4',
+            'AA4ADD02-7763-44CE-B07D-0CF74708749C', -- Entity: MJ: AI Skill Sub Agents
+            100005,
             '__mj_UpdatedAt',
             'Updated At',
             NULL,
@@ -1720,7 +1254,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '550ef6e6-3f13-4d78-be50-2766b33e5ad1' OR (EntityID = 'CDB135CC-6D3C-480B-90AE-25B7805F82C1' AND Name = 'SupportsPlanMode')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'e8ad66e4-d6eb-4a92-8e9d-bae06162b98d' OR (EntityID = 'CDB135CC-6D3C-480B-90AE-25B7805F82C1' AND Name = 'SupportsPlanMode')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1753,7 +1287,7 @@ GO
          )
          VALUES
          (
-            '550ef6e6-3f13-4d78-be50-2766b33e5ad1',
+            'e8ad66e4-d6eb-4a92-8e9d-bae06162b98d',
             'CDB135CC-6D3C-480B-90AE-25B7805F82C1', -- Entity: MJ: AI Agents
             100160,
             'SupportsPlanMode',
@@ -1785,7 +1319,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '98fd8b10-d9b4-46e3-bb2f-96481446dad8' OR (EntityID = 'CDB135CC-6D3C-480B-90AE-25B7805F82C1' AND Name = 'AcceptsSkills')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '5147944d-e146-47a9-b728-e46bbacdeab5' OR (EntityID = 'CDB135CC-6D3C-480B-90AE-25B7805F82C1' AND Name = 'AcceptsSkills')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1818,7 +1352,7 @@ GO
          )
          VALUES
          (
-            '98fd8b10-d9b4-46e3-bb2f-96481446dad8',
+            '5147944d-e146-47a9-b728-e46bbacdeab5',
             'CDB135CC-6D3C-480B-90AE-25B7805F82C1', -- Entity: MJ: AI Agents
             100161,
             'AcceptsSkills',
@@ -1850,7 +1384,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b4156455-9ccc-4da5-8329-3d842eb9fb76' OR (EntityID = '9829E043-0AE7-44E5-9566-92081E9630AF' AND Name = 'ID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b0738691-8e33-41fc-9e5b-efaf4a13ab01' OR (EntityID = '1D52DE84-DD3F-4E46-8D2B-574B70080BB4' AND Name = 'ID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1883,8 +1417,8 @@ GO
          )
          VALUES
          (
-            'b4156455-9ccc-4da5-8329-3d842eb9fb76',
-            '9829E043-0AE7-44E5-9566-92081E9630AF', -- Entity: MJ: AI Skill Sub Agents
+            'b0738691-8e33-41fc-9e5b-efaf4a13ab01',
+            '1D52DE84-DD3F-4E46-8D2B-574B70080BB4', -- Entity: MJ: AI Skills
             100001,
             'ID',
             'ID',
@@ -1915,7 +1449,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '5115eded-fe0a-4ffc-a9f9-2dab4ba0c3e8' OR (EntityID = '9829E043-0AE7-44E5-9566-92081E9630AF' AND Name = 'SkillID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'bf89fcce-6d4d-4dd0-ac89-f7785be11f27' OR (EntityID = '1D52DE84-DD3F-4E46-8D2B-574B70080BB4' AND Name = 'Name')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1948,14 +1482,14 @@ GO
          )
          VALUES
          (
-            '5115eded-fe0a-4ffc-a9f9-2dab4ba0c3e8',
-            '9829E043-0AE7-44E5-9566-92081E9630AF', -- Entity: MJ: AI Skill Sub Agents
+            'bf89fcce-6d4d-4dd0-ac89-f7785be11f27',
+            '1D52DE84-DD3F-4E46-8D2B-574B70080BB4', -- Entity: MJ: AI Skills
             100002,
-            'SkillID',
-            'Skill ID',
-            'Skill that bundles this sub-agent.',
-            'uniqueidentifier',
-            16,
+            'Name',
+            'Name',
+            'Skill name.',
+            'nvarchar',
+            510,
             0,
             0,
             0,
@@ -1964,14 +1498,14 @@ GO
             1,
             0,
             0,
-            'F3ECEDA6-0B91-4A0A-86D1-15F8C29CA336',
-            'ID',
-            0,
+            NULL,
+            NULL,
+            1,
+            1,
             0,
             1,
             0,
             0,
-            1,
             'Search',
             GETUTCDATE(),
             GETUTCDATE()
@@ -1980,7 +1514,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '95e3080b-9c4d-4d0f-bc6c-d4c2a9cf9cf8' OR (EntityID = '9829E043-0AE7-44E5-9566-92081E9630AF' AND Name = 'SubAgentID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '27eddfe6-8e94-4f90-abb3-bfd7029c3640' OR (EntityID = '1D52DE84-DD3F-4E46-8D2B-574B70080BB4' AND Name = 'Description')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2013,30 +1547,30 @@ GO
          )
          VALUES
          (
-            '95e3080b-9c4d-4d0f-bc6c-d4c2a9cf9cf8',
-            '9829E043-0AE7-44E5-9566-92081E9630AF', -- Entity: MJ: AI Skill Sub Agents
+            '27eddfe6-8e94-4f90-abb3-bfd7029c3640',
+            '1D52DE84-DD3F-4E46-8D2B-574B70080BB4', -- Entity: MJ: AI Skills
             100003,
-            'SubAgentID',
-            'Sub Agent ID',
-            'Sub-agent made available to the agent while the skill is active.',
-            'uniqueidentifier',
-            16,
+            'Description',
+            'Description',
+            'Short description shown in the skill catalog (used for progressive-disclosure exposure to agents — name + description only are injected until the skill is activated).',
+            'nvarchar',
+            -1,
             0,
             0,
-            0,
+            1,
             NULL,
             0,
             1,
             0,
             0,
-            'CDB135CC-6D3C-480B-90AE-25B7805F82C1',
-            'ID',
+            NULL,
+            NULL,
             0,
             0,
-            1,
             0,
             0,
-            1,
+            0,
+            0,
             'Search',
             GETUTCDATE(),
             GETUTCDATE()
@@ -2045,7 +1579,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '9823a987-8d99-48ef-a4bd-ea8105d2ed45' OR (EntityID = '9829E043-0AE7-44E5-9566-92081E9630AF' AND Name = '__mj_CreatedAt')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '4ea0de7b-5bf0-4f2a-a8c4-cc8ae1fe47a7' OR (EntityID = '1D52DE84-DD3F-4E46-8D2B-574B70080BB4' AND Name = 'Instructions')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2078,9 +1612,399 @@ GO
          )
          VALUES
          (
-            '9823a987-8d99-48ef-a4bd-ea8105d2ed45',
-            '9829E043-0AE7-44E5-9566-92081E9630AF', -- Entity: MJ: AI Skill Sub Agents
+            '4ea0de7b-5bf0-4f2a-a8c4-cc8ae1fe47a7',
+            '1D52DE84-DD3F-4E46-8D2B-574B70080BB4', -- Entity: MJ: AI Skills
             100004,
+            'Instructions',
+            'Instructions',
+            'Instruction text appended to an accepting agent''s system prompt when the skill is activated.',
+            'nvarchar',
+            -1,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '58bcaf71-a955-473d-99e4-fa0997cfbe56' OR (EntityID = '1D52DE84-DD3F-4E46-8D2B-574B70080BB4' AND Name = 'Status')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '58bcaf71-a955-473d-99e4-fa0997cfbe56',
+            '1D52DE84-DD3F-4E46-8D2B-574B70080BB4', -- Entity: MJ: AI Skills
+            100005,
+            'Status',
+            'Status',
+            'Lifecycle status. Only Active skills can be activated by agents. Defaults to Active so a freshly authored skill is usable by its owner immediately; set to Deprecated to retire without deleting.',
+            'nvarchar',
+            40,
+            0,
+            0,
+            0,
+            'Active',
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '03bf582c-cbe4-4de3-a5d9-f9b788e0d665' OR (EntityID = '1D52DE84-DD3F-4E46-8D2B-574B70080BB4' AND Name = 'Category')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '03bf582c-cbe4-4de3-a5d9-f9b788e0d665',
+            '1D52DE84-DD3F-4E46-8D2B-574B70080BB4', -- Entity: MJ: AI Skills
+            100006,
+            'Category',
+            'Category',
+            'Optional grouping category.',
+            'nvarchar',
+            200,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '4f38d266-56d2-49de-9912-3c67a28413cc' OR (EntityID = '1D52DE84-DD3F-4E46-8D2B-574B70080BB4' AND Name = 'IconClass')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '4f38d266-56d2-49de-9912-3c67a28413cc',
+            '1D52DE84-DD3F-4E46-8D2B-574B70080BB4', -- Entity: MJ: AI Skills
+            100007,
+            'IconClass',
+            'Icon Class',
+            'Optional Font Awesome icon class (e.g. "fa-solid fa-wand-magic-sparkles") shown for this skill in the /skill picker and skill catalog. When null, the UI falls back to a derived default.',
+            'nvarchar',
+            200,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '9cc2c1ad-8a1d-4dab-bea5-83845f7feec9' OR (EntityID = '1D52DE84-DD3F-4E46-8D2B-574B70080BB4' AND Name = 'Color')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '9cc2c1ad-8a1d-4dab-bea5-83845f7feec9',
+            '1D52DE84-DD3F-4E46-8D2B-574B70080BB4', -- Entity: MJ: AI Skills
+            100008,
+            'Color',
+            'Color',
+            'Optional accent color (hex or CSS color token) for this skill''s chip/badge in the composer and catalog UI. When null, the UI falls back to a derived default.',
+            'nvarchar',
+            100,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'a807d7c3-7083-42e5-baf7-62eeca9c8813' OR (EntityID = '1D52DE84-DD3F-4E46-8D2B-574B70080BB4' AND Name = 'CreatedByUserID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'a807d7c3-7083-42e5-baf7-62eeca9c8813',
+            '1D52DE84-DD3F-4E46-8D2B-574B70080BB4', -- Entity: MJ: AI Skills
+            100009,
+            'CreatedByUserID',
+            'Created By User ID',
+            'User who authored the skill (owner). Authoring is open to self by default; sharing requires the Can Share Skills privilege.',
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            'E1238F34-2837-EF11-86D4-6045BDEE16E6',
+            'ID',
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b0021e00-68ff-4499-b029-d16440781316' OR (EntityID = '1D52DE84-DD3F-4E46-8D2B-574B70080BB4' AND Name = '__mj_CreatedAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'b0021e00-68ff-4499-b029-d16440781316',
+            '1D52DE84-DD3F-4E46-8D2B-574B70080BB4', -- Entity: MJ: AI Skills
+            100010,
             '__mj_CreatedAt',
             'Created At',
             NULL,
@@ -2110,7 +2034,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '3ea7f6ad-fdc9-42d0-b34f-0ceace22b7c1' OR (EntityID = '9829E043-0AE7-44E5-9566-92081E9630AF' AND Name = '__mj_UpdatedAt')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '86ff4d27-32d6-4e3d-9857-da7da9855289' OR (EntityID = '1D52DE84-DD3F-4E46-8D2B-574B70080BB4' AND Name = '__mj_UpdatedAt')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2143,9 +2067,9 @@ GO
          )
          VALUES
          (
-            '3ea7f6ad-fdc9-42d0-b34f-0ceace22b7c1',
-            '9829E043-0AE7-44E5-9566-92081E9630AF', -- Entity: MJ: AI Skill Sub Agents
-            100005,
+            '86ff4d27-32d6-4e3d-9857-da7da9855289',
+            '1D52DE84-DD3F-4E46-8D2B-574B70080BB4', -- Entity: MJ: AI Skills
+            100011,
             '__mj_UpdatedAt',
             'Updated At',
             NULL,
@@ -2175,7 +2099,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '9f6f97ba-7db3-48d7-8fa5-ed336df09d12' OR (EntityID = '2CAD785E-49DE-4B44-AFFF-9A55033F65F3' AND Name = 'ID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '81ab537e-0d9f-4090-9b15-3b372100e402' OR (EntityID = '5E3EA927-BEFA-417E-8FD9-6C114C1C0A2A' AND Name = 'ID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2208,8 +2132,8 @@ GO
          )
          VALUES
          (
-            '9f6f97ba-7db3-48d7-8fa5-ed336df09d12',
-            '2CAD785E-49DE-4B44-AFFF-9A55033F65F3', -- Entity: MJ: AI Skill Actions
+            '81ab537e-0d9f-4090-9b15-3b372100e402',
+            '5E3EA927-BEFA-417E-8FD9-6C114C1C0A2A', -- Entity: MJ: AI Skill Actions
             100001,
             'ID',
             'ID',
@@ -2240,7 +2164,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'd3b82b60-e0fa-42f1-a6d8-47123b8f7a12' OR (EntityID = '2CAD785E-49DE-4B44-AFFF-9A55033F65F3' AND Name = 'SkillID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '39650eae-013a-4e44-a315-0695c32df61d' OR (EntityID = '5E3EA927-BEFA-417E-8FD9-6C114C1C0A2A' AND Name = 'SkillID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2273,8 +2197,8 @@ GO
          )
          VALUES
          (
-            'd3b82b60-e0fa-42f1-a6d8-47123b8f7a12',
-            '2CAD785E-49DE-4B44-AFFF-9A55033F65F3', -- Entity: MJ: AI Skill Actions
+            '39650eae-013a-4e44-a315-0695c32df61d',
+            '5E3EA927-BEFA-417E-8FD9-6C114C1C0A2A', -- Entity: MJ: AI Skill Actions
             100002,
             'SkillID',
             'Skill ID',
@@ -2289,7 +2213,7 @@ GO
             1,
             0,
             0,
-            'F3ECEDA6-0B91-4A0A-86D1-15F8C29CA336',
+            '1D52DE84-DD3F-4E46-8D2B-574B70080BB4',
             'ID',
             0,
             0,
@@ -2305,7 +2229,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '12978c41-2304-4c3d-a8d0-bc23124499da' OR (EntityID = '2CAD785E-49DE-4B44-AFFF-9A55033F65F3' AND Name = 'ActionID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'a96bc379-f67f-475c-a272-5f847ce1f821' OR (EntityID = '5E3EA927-BEFA-417E-8FD9-6C114C1C0A2A' AND Name = 'ActionID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2338,8 +2262,8 @@ GO
          )
          VALUES
          (
-            '12978c41-2304-4c3d-a8d0-bc23124499da',
-            '2CAD785E-49DE-4B44-AFFF-9A55033F65F3', -- Entity: MJ: AI Skill Actions
+            'a96bc379-f67f-475c-a272-5f847ce1f821',
+            '5E3EA927-BEFA-417E-8FD9-6C114C1C0A2A', -- Entity: MJ: AI Skill Actions
             100003,
             'ActionID',
             'Action ID',
@@ -2370,7 +2294,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '3e685b67-2d04-4624-9009-27ba84be0366' OR (EntityID = '2CAD785E-49DE-4B44-AFFF-9A55033F65F3' AND Name = '__mj_CreatedAt')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '96d3843f-079f-4bee-8ecc-8012a07f10d6' OR (EntityID = '5E3EA927-BEFA-417E-8FD9-6C114C1C0A2A' AND Name = '__mj_CreatedAt')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2403,8 +2327,8 @@ GO
          )
          VALUES
          (
-            '3e685b67-2d04-4624-9009-27ba84be0366',
-            '2CAD785E-49DE-4B44-AFFF-9A55033F65F3', -- Entity: MJ: AI Skill Actions
+            '96d3843f-079f-4bee-8ecc-8012a07f10d6',
+            '5E3EA927-BEFA-417E-8FD9-6C114C1C0A2A', -- Entity: MJ: AI Skill Actions
             100004,
             '__mj_CreatedAt',
             'Created At',
@@ -2435,7 +2359,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'a63f6b2c-9847-4ace-8f00-0704d0ec8864' OR (EntityID = '2CAD785E-49DE-4B44-AFFF-9A55033F65F3' AND Name = '__mj_UpdatedAt')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'd5737f0b-e63f-464a-8bd0-81b9f7fdb446' OR (EntityID = '5E3EA927-BEFA-417E-8FD9-6C114C1C0A2A' AND Name = '__mj_UpdatedAt')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2468,8 +2392,8 @@ GO
          )
          VALUES
          (
-            'a63f6b2c-9847-4ace-8f00-0704d0ec8864',
-            '2CAD785E-49DE-4B44-AFFF-9A55033F65F3', -- Entity: MJ: AI Skill Actions
+            'd5737f0b-e63f-464a-8bd0-81b9f7fdb446',
+            '5E3EA927-BEFA-417E-8FD9-6C114C1C0A2A', -- Entity: MJ: AI Skill Actions
             100005,
             '__mj_UpdatedAt',
             'Updated At',
@@ -2498,80 +2422,1185 @@ GO
          )
       END;
 
-/* SQL text to insert entity field value with ID 2e02ccd3-e577-4ef6-9537-6e99e11ef253 */
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'cfb281f4-03ac-41a2-b61a-32f39c6ad41b' OR (EntityID = '1F1EBDD5-84DA-4554-A029-87AFF327971D' AND Name = 'ID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'cfb281f4-03ac-41a2-b61a-32f39c6ad41b',
+            '1F1EBDD5-84DA-4554-A029-87AFF327971D', -- Entity: MJ: AI Agent Skills
+            100001,
+            'ID',
+            'ID',
+            NULL,
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            0,
+            'newsequentialid()',
+            0,
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            1,
+            1,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '73aa9933-4307-43e6-8080-f5304d5d34bb' OR (EntityID = '1F1EBDD5-84DA-4554-A029-87AFF327971D' AND Name = 'AgentID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '73aa9933-4307-43e6-8080-f5304d5d34bb',
+            '1F1EBDD5-84DA-4554-A029-87AFF327971D', -- Entity: MJ: AI Agent Skills
+            100002,
+            'AgentID',
+            'Agent ID',
+            'Agent the skill is assigned to. Used when the agent''s AcceptsSkills = Limited.',
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            'CDB135CC-6D3C-480B-90AE-25B7805F82C1',
+            'ID',
+            0,
+            0,
+            1,
+            0,
+            0,
+            1,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '81fa8f23-39ba-4246-b583-daab08cbf4e1' OR (EntityID = '1F1EBDD5-84DA-4554-A029-87AFF327971D' AND Name = 'SkillID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '81fa8f23-39ba-4246-b583-daab08cbf4e1',
+            '1F1EBDD5-84DA-4554-A029-87AFF327971D', -- Entity: MJ: AI Agent Skills
+            100003,
+            'SkillID',
+            'Skill ID',
+            'Skill assigned to the agent.',
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            '1D52DE84-DD3F-4E46-8D2B-574B70080BB4',
+            'ID',
+            0,
+            0,
+            1,
+            0,
+            0,
+            1,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'fdcf5c8c-e402-497c-9da8-5a47e6295937' OR (EntityID = '1F1EBDD5-84DA-4554-A029-87AFF327971D' AND Name = 'Status')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'fdcf5c8c-e402-497c-9da8-5a47e6295937',
+            '1F1EBDD5-84DA-4554-A029-87AFF327971D', -- Entity: MJ: AI Agent Skills
+            100004,
+            'Status',
+            'Status',
+            'Per-assignment status: Active, Pending, or Revoked. Lets an assignment be disabled without unlinking.',
+            'nvarchar',
+            40,
+            0,
+            0,
+            0,
+            'Active',
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'c8fcf2dd-1109-42f6-9c3b-04a998414c5f' OR (EntityID = '1F1EBDD5-84DA-4554-A029-87AFF327971D' AND Name = '__mj_CreatedAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'c8fcf2dd-1109-42f6-9c3b-04a998414c5f',
+            '1F1EBDD5-84DA-4554-A029-87AFF327971D', -- Entity: MJ: AI Agent Skills
+            100005,
+            '__mj_CreatedAt',
+            'Created At',
+            NULL,
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            0,
+            'getutcdate()',
+            0,
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'c4d2d43c-ee05-4f56-8636-68cff6c74050' OR (EntityID = '1F1EBDD5-84DA-4554-A029-87AFF327971D' AND Name = '__mj_UpdatedAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'c4d2d43c-ee05-4f56-8636-68cff6c74050',
+            '1F1EBDD5-84DA-4554-A029-87AFF327971D', -- Entity: MJ: AI Agent Skills
+            100006,
+            '__mj_UpdatedAt',
+            'Updated At',
+            NULL,
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            0,
+            'getutcdate()',
+            0,
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'bcf6f504-a122-4e01-910d-da799502d208' OR (EntityID = '7EEDD9FB-3882-4E98-804E-BE1E95FAC54A' AND Name = 'ID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'bcf6f504-a122-4e01-910d-da799502d208',
+            '7EEDD9FB-3882-4E98-804E-BE1E95FAC54A', -- Entity: MJ: AI Skill Permissions
+            100001,
+            'ID',
+            'ID',
+            NULL,
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            0,
+            'newsequentialid()',
+            0,
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            1,
+            1,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'f1584029-6fa2-417f-8592-29288a8a2d3c' OR (EntityID = '7EEDD9FB-3882-4E98-804E-BE1E95FAC54A' AND Name = 'SkillID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'f1584029-6fa2-417f-8592-29288a8a2d3c',
+            '7EEDD9FB-3882-4E98-804E-BE1E95FAC54A', -- Entity: MJ: AI Skill Permissions
+            100002,
+            'SkillID',
+            'Skill ID',
+            'Skill this permission grant applies to.',
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            '1D52DE84-DD3F-4E46-8D2B-574B70080BB4',
+            'ID',
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '758c7804-58ea-4092-b420-9e24fcc072eb' OR (EntityID = '7EEDD9FB-3882-4E98-804E-BE1E95FAC54A' AND Name = 'RoleID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '758c7804-58ea-4092-b420-9e24fcc072eb',
+            '7EEDD9FB-3882-4E98-804E-BE1E95FAC54A', -- Entity: MJ: AI Skill Permissions
+            100003,
+            'RoleID',
+            'Role ID',
+            'Role this grant is for. Mutually exclusive with UserID — exactly one of the two is set per row.',
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            'DA238F34-2837-EF11-86D4-6045BDEE16E6',
+            'ID',
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'e741feb8-69ea-49bc-b6b9-a89ca678a324' OR (EntityID = '7EEDD9FB-3882-4E98-804E-BE1E95FAC54A' AND Name = 'UserID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'e741feb8-69ea-49bc-b6b9-a89ca678a324',
+            '7EEDD9FB-3882-4E98-804E-BE1E95FAC54A', -- Entity: MJ: AI Skill Permissions
+            100004,
+            'UserID',
+            'User ID',
+            'User this grant is for. Mutually exclusive with RoleID — exactly one of the two is set per row.',
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            'E1238F34-2837-EF11-86D4-6045BDEE16E6',
+            'ID',
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '360c60b6-7f6e-4659-a588-f7c293119143' OR (EntityID = '7EEDD9FB-3882-4E98-804E-BE1E95FAC54A' AND Name = 'CanView')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '360c60b6-7f6e-4659-a588-f7c293119143',
+            '7EEDD9FB-3882-4E98-804E-BE1E95FAC54A', -- Entity: MJ: AI Skill Permissions
+            100005,
+            'CanView',
+            'Can View',
+            'Grants viewing the skill in catalogs/pickers. Maps to the normalized Read action.',
+            'bit',
+            1,
+            1,
+            0,
+            0,
+            '(0)',
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '6e0ac00f-a853-4ce1-932c-1b1867eae004' OR (EntityID = '7EEDD9FB-3882-4E98-804E-BE1E95FAC54A' AND Name = 'CanRun')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '6e0ac00f-a853-4ce1-932c-1b1867eae004',
+            '7EEDD9FB-3882-4E98-804E-BE1E95FAC54A', -- Entity: MJ: AI Skill Permissions
+            100006,
+            'CanRun',
+            'Can Run',
+            'Grants requesting/activating the skill at agent runtime. Maps to the normalized Execute action.',
+            'bit',
+            1,
+            1,
+            0,
+            0,
+            '(0)',
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'c7205e95-20ed-4b5c-a809-74cbec0e82f3' OR (EntityID = '7EEDD9FB-3882-4E98-804E-BE1E95FAC54A' AND Name = 'CanEdit')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'c7205e95-20ed-4b5c-a809-74cbec0e82f3',
+            '7EEDD9FB-3882-4E98-804E-BE1E95FAC54A', -- Entity: MJ: AI Skill Permissions
+            100007,
+            'CanEdit',
+            'Can Edit',
+            'Grants editing the skill definition and its bundled actions/sub-agents. Maps to the normalized Update action.',
+            'bit',
+            1,
+            1,
+            0,
+            0,
+            '(0)',
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '05ff7c4a-fc59-41df-a656-bf2a5cc4b112' OR (EntityID = '7EEDD9FB-3882-4E98-804E-BE1E95FAC54A' AND Name = 'CanDelete')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '05ff7c4a-fc59-41df-a656-bf2a5cc4b112',
+            '7EEDD9FB-3882-4E98-804E-BE1E95FAC54A', -- Entity: MJ: AI Skill Permissions
+            100008,
+            'CanDelete',
+            'Can Delete',
+            'Grants deleting the skill. Maps to the normalized Delete action.',
+            'bit',
+            1,
+            1,
+            0,
+            0,
+            '(0)',
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '5a64b3cb-3e78-4cad-99ae-4d8f0a606151' OR (EntityID = '7EEDD9FB-3882-4E98-804E-BE1E95FAC54A' AND Name = 'Comments')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '5a64b3cb-3e78-4cad-99ae-4d8f0a606151',
+            '7EEDD9FB-3882-4E98-804E-BE1E95FAC54A', -- Entity: MJ: AI Skill Permissions
+            100009,
+            'Comments',
+            'Comments',
+            'Optional free-text note explaining why the grant exists.',
+            'nvarchar',
+            -1,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'f24f0607-585a-46dd-a1ce-e1204e98b5ae' OR (EntityID = '7EEDD9FB-3882-4E98-804E-BE1E95FAC54A' AND Name = '__mj_CreatedAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'f24f0607-585a-46dd-a1ce-e1204e98b5ae',
+            '7EEDD9FB-3882-4E98-804E-BE1E95FAC54A', -- Entity: MJ: AI Skill Permissions
+            100010,
+            '__mj_CreatedAt',
+            'Created At',
+            NULL,
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            0,
+            'getutcdate()',
+            0,
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '137f6a40-b765-46eb-b13e-e136e8f35766' OR (EntityID = '7EEDD9FB-3882-4E98-804E-BE1E95FAC54A' AND Name = '__mj_UpdatedAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '137f6a40-b765-46eb-b13e-e136e8f35766',
+            '7EEDD9FB-3882-4E98-804E-BE1E95FAC54A', -- Entity: MJ: AI Skill Permissions
+            100011,
+            '__mj_UpdatedAt',
+            'Updated At',
+            NULL,
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            0,
+            'getutcdate()',
+            0,
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert entity field value with ID 8182b804-9d3b-424b-b7e1-98e74bd5d37d */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('2e02ccd3-e577-4ef6-9537-6e99e11ef253', '12EA822E-B901-4526-A801-5178952A1BF3', 1, 'Active', 'Active', GETUTCDATE(), GETUTCDATE());
+                                       ('8182b804-9d3b-424b-b7e1-98e74bd5d37d', '58BCAF71-A955-473D-99E4-FA0997CFBE56', 1, 'Active', 'Active', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID e10af91f-9143-4b1b-8896-4cc8299e3140 */
+/* SQL text to insert entity field value with ID 0479be4e-4225-4301-b05a-71416ab3d22b */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('e10af91f-9143-4b1b-8896-4cc8299e3140', '12EA822E-B901-4526-A801-5178952A1BF3', 2, 'Deprecated', 'Deprecated', GETUTCDATE(), GETUTCDATE());
+                                       ('0479be4e-4225-4301-b05a-71416ab3d22b', '58BCAF71-A955-473D-99E4-FA0997CFBE56', 2, 'Deprecated', 'Deprecated', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 9eeddc20-b27e-416d-8ac8-39836d4d03c0 */
+/* SQL text to insert entity field value with ID 366b5c02-e6be-41dd-82b0-456e3764715e */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('9eeddc20-b27e-416d-8ac8-39836d4d03c0', '12EA822E-B901-4526-A801-5178952A1BF3', 3, 'Pending', 'Pending', GETUTCDATE(), GETUTCDATE());
+                                       ('366b5c02-e6be-41dd-82b0-456e3764715e', '58BCAF71-A955-473D-99E4-FA0997CFBE56', 3, 'Pending', 'Pending', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to update ValueListType for entity field ID 12EA822E-B901-4526-A801-5178952A1BF3 */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='12EA822E-B901-4526-A801-5178952A1BF3';
+/* SQL text to update ValueListType for entity field ID 58BCAF71-A955-473D-99E4-FA0997CFBE56 */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='58BCAF71-A955-473D-99E4-FA0997CFBE56';
 
-/* SQL text to insert entity field value with ID 67ffccf6-8686-41dc-8d25-af0c06f21bf4 */
+/* SQL text to insert entity field value with ID e6f3d0a3-72ea-464e-b9fe-9943fc06a3f8 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('67ffccf6-8686-41dc-8d25-af0c06f21bf4', 'DEE4FBFE-D1DF-4394-AAF2-994588803DB3', 1, 'Active', 'Active', GETUTCDATE(), GETUTCDATE());
+                                       ('e6f3d0a3-72ea-464e-b9fe-9943fc06a3f8', 'FDCF5C8C-E402-497C-9DA8-5A47E6295937', 1, 'Active', 'Active', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 8f883187-e6b0-481b-9315-702cb32e9e52 */
+/* SQL text to insert entity field value with ID 7001b5fe-7a31-4364-b4d4-0b97478fff2b */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('8f883187-e6b0-481b-9315-702cb32e9e52', 'DEE4FBFE-D1DF-4394-AAF2-994588803DB3', 2, 'Pending', 'Pending', GETUTCDATE(), GETUTCDATE());
+                                       ('7001b5fe-7a31-4364-b4d4-0b97478fff2b', 'FDCF5C8C-E402-497C-9DA8-5A47E6295937', 2, 'Pending', 'Pending', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID e0e521c3-aedb-406c-93ae-cbf7577aa893 */
+/* SQL text to insert entity field value with ID 4eef763f-87ac-4735-8a57-773ca619c8b4 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('e0e521c3-aedb-406c-93ae-cbf7577aa893', 'DEE4FBFE-D1DF-4394-AAF2-994588803DB3', 3, 'Revoked', 'Revoked', GETUTCDATE(), GETUTCDATE());
+                                       ('4eef763f-87ac-4735-8a57-773ca619c8b4', 'FDCF5C8C-E402-497C-9DA8-5A47E6295937', 3, 'Revoked', 'Revoked', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to update ValueListType for entity field ID DEE4FBFE-D1DF-4394-AAF2-994588803DB3 */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='DEE4FBFE-D1DF-4394-AAF2-994588803DB3';
+/* SQL text to update ValueListType for entity field ID FDCF5C8C-E402-497C-9DA8-5A47E6295937 */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='FDCF5C8C-E402-497C-9DA8-5A47E6295937';
 
-/* SQL text to insert entity field value with ID 7c8beaa2-6556-4003-8f8a-9fe176052e42 */
+/* SQL text to insert entity field value with ID dcdfea86-30ca-45b9-a14d-71ef8dfd4c86 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('7c8beaa2-6556-4003-8f8a-9fe176052e42', '98FD8B10-D9B4-46E3-BB2F-96481446DAD8', 1, 'All', 'All', GETUTCDATE(), GETUTCDATE());
+                                       ('dcdfea86-30ca-45b9-a14d-71ef8dfd4c86', '5147944D-E146-47A9-B728-E46BBACDEAB5', 1, 'All', 'All', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 4c536c11-648c-43cc-a01d-c1e980b50477 */
+/* SQL text to insert entity field value with ID 96ab48af-a429-49a7-92ac-45bb4064d87e */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('4c536c11-648c-43cc-a01d-c1e980b50477', '98FD8B10-D9B4-46E3-BB2F-96481446DAD8', 2, 'Limited', 'Limited', GETUTCDATE(), GETUTCDATE());
+                                       ('96ab48af-a429-49a7-92ac-45bb4064d87e', '5147944D-E146-47A9-B728-E46BBACDEAB5', 2, 'Limited', 'Limited', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 2f3e58db-6284-4635-898d-e1699b147f0f */
+/* SQL text to insert entity field value with ID f9379a40-6ea6-4340-b48c-87fa70c7bb54 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('2f3e58db-6284-4635-898d-e1699b147f0f', '98FD8B10-D9B4-46E3-BB2F-96481446DAD8', 3, 'None', 'None', GETUTCDATE(), GETUTCDATE());
+                                       ('f9379a40-6ea6-4340-b48c-87fa70c7bb54', '5147944D-E146-47A9-B728-E46BBACDEAB5', 3, 'None', 'None', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to update ValueListType for entity field ID 98FD8B10-D9B4-46E3-BB2F-96481446DAD8 */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='98FD8B10-D9B4-46E3-BB2F-96481446DAD8';
+/* SQL text to update ValueListType for entity field ID 5147944D-E146-47A9-B728-E46BBACDEAB5 */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='5147944D-E146-47A9-B728-E46BBACDEAB5';
 
-/* SQL text to insert entity field value with ID b61f6e51-a6da-4bb3-85ee-20e112f59307 */
+/* SQL text to insert entity field value with ID 6b6811bd-344f-4805-a13a-94076410c986 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('b61f6e51-a6da-4bb3-85ee-20e112f59307', 'B04A327B-55BF-4914-9DCF-3552A5DD0293', 5, 'Plan', 'Plan', GETUTCDATE(), GETUTCDATE());
+                                       ('6b6811bd-344f-4805-a13a-94076410c986', 'B04A327B-55BF-4914-9DCF-3552A5DD0293', 5, 'Plan', 'Plan', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 7e221b0f-afff-4648-9c87-78f4a5eb912a */
+/* SQL text to insert entity field value with ID 903515ef-293d-4186-8fa1-95ac7a83f5ab */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('7e221b0f-afff-4648-9c87-78f4a5eb912a', 'B04A327B-55BF-4914-9DCF-3552A5DD0293', 7, 'Skill', 'Skill', GETUTCDATE(), GETUTCDATE());
+                                       ('903515ef-293d-4186-8fa1-95ac7a83f5ab', 'B04A327B-55BF-4914-9DCF-3552A5DD0293', 7, 'Skill', 'Skill', GETUTCDATE(), GETUTCDATE());
 
 /* SQL text to update entity field value sequence */
 UPDATE [${flyway:defaultSchema}].[EntityFieldValue] SET Sequence=6 WHERE ID='B4FDC768-5F15-4720-B9EA-FB39634AFEF9';
@@ -2589,72 +3618,101 @@ UPDATE [${flyway:defaultSchema}].[EntityFieldValue] SET Sequence=10 WHERE ID='61
 UPDATE [${flyway:defaultSchema}].[EntityFieldValue] SET Sequence=11 WHERE ID='5E90D638-0329-4FF7-BA05-B38037474BF5';
 
 
-/* Create Entity Relationship: MJ: AI Skills -> MJ: AI Skill Sub Agents (One To Many via SkillID) */
+/* Create Entity Relationship: MJ: AI Agents -> MJ: AI Agent Skills (One To Many via AgentID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '3684810e-d89f-49fc-8db4-b3bddda2f214'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '1d5a8480-384d-461b-ad27-334d676f9113'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('3684810e-d89f-49fc-8db4-b3bddda2f214', 'F3ECEDA6-0B91-4A0A-86D1-15F8C29CA336', '9829E043-0AE7-44E5-9566-92081E9630AF', 'SkillID', 'One To Many', 1, 1, 1, GETUTCDATE(), GETUTCDATE())
-   END;
-
-
-/* Create Entity Relationship: MJ: AI Skills -> MJ: AI Skill Actions (One To Many via SkillID) */
-   IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'd0378ce8-86c9-403b-8308-d94aeaa745ad'
-   )
-   BEGIN
-      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('d0378ce8-86c9-403b-8308-d94aeaa745ad', 'F3ECEDA6-0B91-4A0A-86D1-15F8C29CA336', '2CAD785E-49DE-4B44-AFFF-9A55033F65F3', 'SkillID', 'One To Many', 1, 1, 2, GETUTCDATE(), GETUTCDATE())
-   END;
-                    
-/* Create Entity Relationship: MJ: AI Skills -> MJ: AI Agent Skills (One To Many via SkillID) */
-   IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '58af1522-2c4a-40b8-88f8-0950cf4639b8'
-   )
-   BEGIN
-      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('58af1522-2c4a-40b8-88f8-0950cf4639b8', 'F3ECEDA6-0B91-4A0A-86D1-15F8C29CA336', '63982A61-BB89-4F62-A279-172ECB10DA38', 'SkillID', 'One To Many', 1, 1, 3, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('1d5a8480-384d-461b-ad27-334d676f9113', 'CDB135CC-6D3C-480B-90AE-25B7805F82C1', '1F1EBDD5-84DA-4554-A029-87AFF327971D', 'AgentID', 'One To Many', 1, 1, 35, GETUTCDATE(), GETUTCDATE())
    END;
 
 
 /* Create Entity Relationship: MJ: AI Agents -> MJ: AI Skill Sub Agents (One To Many via SubAgentID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'f505672b-49cf-4796-b33e-2afca11571f4'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'bc151c47-e823-4b5f-9261-3118dde42df0'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('f505672b-49cf-4796-b33e-2afca11571f4', 'CDB135CC-6D3C-480B-90AE-25B7805F82C1', '9829E043-0AE7-44E5-9566-92081E9630AF', 'SubAgentID', 'One To Many', 1, 1, 35, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('bc151c47-e823-4b5f-9261-3118dde42df0', 'CDB135CC-6D3C-480B-90AE-25B7805F82C1', 'AA4ADD02-7763-44CE-B07D-0CF74708749C', 'SubAgentID', 'One To Many', 1, 1, 36, GETUTCDATE(), GETUTCDATE())
    END;
 
 
-/* Create Entity Relationship: MJ: AI Agents -> MJ: AI Agent Skills (One To Many via AgentID) */
+/* Create Entity Relationship: MJ: AI Skills -> MJ: AI Skill Sub Agents (One To Many via SkillID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '073246fb-35fc-46bf-ae53-8a8db996a929'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'b3bb324e-0dff-4e77-8dbc-50ec6098d07d'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('073246fb-35fc-46bf-ae53-8a8db996a929', 'CDB135CC-6D3C-480B-90AE-25B7805F82C1', '63982A61-BB89-4F62-A279-172ECB10DA38', 'AgentID', 'One To Many', 1, 1, 36, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('b3bb324e-0dff-4e77-8dbc-50ec6098d07d', '1D52DE84-DD3F-4E46-8D2B-574B70080BB4', 'AA4ADD02-7763-44CE-B07D-0CF74708749C', 'SkillID', 'One To Many', 1, 1, 1, GETUTCDATE(), GETUTCDATE())
+   END;
+                    
+/* Create Entity Relationship: MJ: AI Skills -> MJ: AI Agent Skills (One To Many via SkillID) */
+   IF NOT EXISTS (
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'f0cfd509-8c61-4b90-8b32-917c9e394bc9'
+   )
+   BEGIN
+      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
+                    VALUES ('f0cfd509-8c61-4b90-8b32-917c9e394bc9', '1D52DE84-DD3F-4E46-8D2B-574B70080BB4', '1F1EBDD5-84DA-4554-A029-87AFF327971D', 'SkillID', 'One To Many', 1, 1, 2, GETUTCDATE(), GETUTCDATE())
+   END;
+
+
+/* Create Entity Relationship: MJ: AI Skills -> MJ: AI Skill Actions (One To Many via SkillID) */
+   IF NOT EXISTS (
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'c214d7b7-6526-48d7-a93f-5adebfacb121'
+   )
+   BEGIN
+      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
+                    VALUES ('c214d7b7-6526-48d7-a93f-5adebfacb121', '1D52DE84-DD3F-4E46-8D2B-574B70080BB4', '5E3EA927-BEFA-417E-8FD9-6C114C1C0A2A', 'SkillID', 'One To Many', 1, 1, 3, GETUTCDATE(), GETUTCDATE())
+   END;
+                    
+/* Create Entity Relationship: MJ: AI Skills -> MJ: AI Skill Permissions (One To Many via SkillID) */
+   IF NOT EXISTS (
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'd87b66e2-13b0-4444-af5b-1684e5f71c70'
+   )
+   BEGIN
+      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
+                    VALUES ('d87b66e2-13b0-4444-af5b-1684e5f71c70', '1D52DE84-DD3F-4E46-8D2B-574B70080BB4', '7EEDD9FB-3882-4E98-804E-BE1E95FAC54A', 'SkillID', 'One To Many', 1, 1, 4, GETUTCDATE(), GETUTCDATE())
+   END;
+
+
+/* Create Entity Relationship: MJ: Roles -> MJ: AI Skill Permissions (One To Many via RoleID) */
+   IF NOT EXISTS (
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'f2139e41-3ffb-4a97-a769-156cf5ef9726'
+   )
+   BEGIN
+      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
+                    VALUES ('f2139e41-3ffb-4a97-a769-156cf5ef9726', 'DA238F34-2837-EF11-86D4-6045BDEE16E6', '7EEDD9FB-3882-4E98-804E-BE1E95FAC54A', 'RoleID', 'One To Many', 1, 1, 15, GETUTCDATE(), GETUTCDATE())
+   END;
+
+
+/* Create Entity Relationship: MJ: Users -> MJ: AI Skill Permissions (One To Many via UserID) */
+   IF NOT EXISTS (
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'a1a64d0d-9b8c-4d26-a051-eb9e0bc91732'
+   )
+   BEGIN
+      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
+                    VALUES ('a1a64d0d-9b8c-4d26-a051-eb9e0bc91732', 'E1238F34-2837-EF11-86D4-6045BDEE16E6', '7EEDD9FB-3882-4E98-804E-BE1E95FAC54A', 'UserID', 'One To Many', 1, 1, 106, GETUTCDATE(), GETUTCDATE())
    END;
 
 
 /* Create Entity Relationship: MJ: Users -> MJ: AI Skills (One To Many via CreatedByUserID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'bd7e4612-b5cd-4dc1-9725-98313a308195'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '9471d132-baac-4a71-bf22-cc1e0d79a07c'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('bd7e4612-b5cd-4dc1-9725-98313a308195', 'E1238F34-2837-EF11-86D4-6045BDEE16E6', 'F3ECEDA6-0B91-4A0A-86D1-15F8C29CA336', 'CreatedByUserID', 'One To Many', 1, 1, 106, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('9471d132-baac-4a71-bf22-cc1e0d79a07c', 'E1238F34-2837-EF11-86D4-6045BDEE16E6', '1D52DE84-DD3F-4E46-8D2B-574B70080BB4', 'CreatedByUserID', 'One To Many', 1, 1, 107, GETUTCDATE(), GETUTCDATE())
    END;
 
 
 /* Create Entity Relationship: MJ: Actions -> MJ: AI Skill Actions (One To Many via ActionID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '4355f0f6-fc79-4cc5-ac0f-485ae9ce4a2d'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '91cdffd9-19ce-465a-b1a1-2e1b7c71b5c6'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('4355f0f6-fc79-4cc5-ac0f-485ae9ce4a2d', '38248F34-2837-EF11-86D4-6045BDEE16E6', '2CAD785E-49DE-4B44-AFFF-9A55033F65F3', 'ActionID', 'One To Many', 1, 1, 14, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('91cdffd9-19ce-465a-b1a1-2e1b7c71b5c6', '38248F34-2837-EF11-86D4-6045BDEE16E6', '5E3EA927-BEFA-417E-8FD9-6C114C1C0A2A', 'ActionID', 'One To Many', 1, 1, 14, GETUTCDATE(), GETUTCDATE())
    END;
 
 /* Index for Foreign Keys for AIAgentSkill */
@@ -2684,11 +3742,11 @@ IF NOT EXISTS (
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_AIAgentSkill_SkillID ON [${flyway:defaultSchema}].[AIAgentSkill] ([SkillID]);
 
-/* SQL text to update entity field related entity name field map for entity field ID B34877EC-FAFD-46EA-BD9B-F6213BAB500E */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='B34877EC-FAFD-46EA-BD9B-F6213BAB500E', @RelatedEntityNameFieldMap='Agent';
+/* SQL text to update entity field related entity name field map for entity field ID 73AA9933-4307-43E6-8080-F5304D5D34BB */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='73AA9933-4307-43E6-8080-F5304D5D34BB', @RelatedEntityNameFieldMap='Agent';
 
-/* SQL text to update entity field related entity name field map for entity field ID 423836EA-F904-4196-9957-2054E368477C */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='423836EA-F904-4196-9957-2054E368477C', @RelatedEntityNameFieldMap='Skill';
+/* SQL text to update entity field related entity name field map for entity field ID 81FA8F23-39BA-4246-B583-DAAB08CBF4E1 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='81FA8F23-39BA-4246-B583-DAAB08CBF4E1', @RelatedEntityNameFieldMap='Skill';
 
 /* Base View SQL for MJ: AI Agent Skills */
 -----------------------------------------------------------------
@@ -2964,8 +4022,47 @@ IF NOT EXISTS (
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_AISkillAction_ActionID ON [${flyway:defaultSchema}].[AISkillAction] ([ActionID]);
 
-/* SQL text to update entity field related entity name field map for entity field ID D3B82B60-E0FA-42F1-A6D8-47123B8F7A12 */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='D3B82B60-E0FA-42F1-A6D8-47123B8F7A12', @RelatedEntityNameFieldMap='Skill';
+/* SQL text to update entity field related entity name field map for entity field ID 39650EAE-013A-4E44-A315-0695C32DF61D */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='39650EAE-013A-4E44-A315-0695C32DF61D', @RelatedEntityNameFieldMap='Skill';
+
+/* Index for Foreign Keys for AISkillPermission */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: AI Skill Permissions
+-- Item: Index for Foreign Keys
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+-- Index for foreign key SkillID in table AISkillPermission
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_AISkillPermission_SkillID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[AISkillPermission]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_AISkillPermission_SkillID ON [${flyway:defaultSchema}].[AISkillPermission] ([SkillID]);
+
+-- Index for foreign key RoleID in table AISkillPermission
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_AISkillPermission_RoleID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[AISkillPermission]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_AISkillPermission_RoleID ON [${flyway:defaultSchema}].[AISkillPermission] ([RoleID]);
+
+-- Index for foreign key UserID in table AISkillPermission
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_AISkillPermission_UserID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[AISkillPermission]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_AISkillPermission_UserID ON [${flyway:defaultSchema}].[AISkillPermission] ([UserID]);
+
+/* SQL text to update entity field related entity name field map for entity field ID F1584029-6FA2-417F-8592-29288A8A2D3C */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='F1584029-6FA2-417F-8592-29288A8A2D3C', @RelatedEntityNameFieldMap='Skill';
 
 /* Index for Foreign Keys for AISkillSubAgent */
 -----------------------------------------------------------------
@@ -2994,302 +4091,20 @@ IF NOT EXISTS (
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_AISkillSubAgent_SubAgentID ON [${flyway:defaultSchema}].[AISkillSubAgent] ([SubAgentID]);
 
-/* SQL text to update entity field related entity name field map for entity field ID 5115EDED-FE0A-4FFC-A9F9-2DAB4BA0C3E8 */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='5115EDED-FE0A-4FFC-A9F9-2DAB4BA0C3E8', @RelatedEntityNameFieldMap='Skill';
+/* SQL text to update entity field related entity name field map for entity field ID 00059B09-D83B-44E4-8604-DC0102128FA1 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='00059B09-D83B-44E4-8604-DC0102128FA1', @RelatedEntityNameFieldMap='Skill';
 
-/* Index for Foreign Keys for AISkill */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: AI Skills
--- Item: Index for Foreign Keys
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
--- Index for foreign key CreatedByUserID in table AISkill
-IF NOT EXISTS (
-    SELECT 1
-    FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_AISkill_CreatedByUserID' 
-    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[AISkill]')
-)
-CREATE INDEX IDX_AUTO_MJ_FKEY_AISkill_CreatedByUserID ON [${flyway:defaultSchema}].[AISkill] ([CreatedByUserID]);
+/* SQL text to update entity field related entity name field map for entity field ID 7319E9CE-62D0-4DD4-99BD-E48FC866277F */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='7319E9CE-62D0-4DD4-99BD-E48FC866277F', @RelatedEntityNameFieldMap='SubAgent';
 
-/* SQL text to update entity field related entity name field map for entity field ID DF469925-5F2D-4FC6-9DEB-F7818B265081 */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='DF469925-5F2D-4FC6-9DEB-F7818B265081', @RelatedEntityNameFieldMap='CreatedByUser';
+/* SQL text to update entity field related entity name field map for entity field ID A96BC379-F67F-475C-A272-5F847CE1F821 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='A96BC379-F67F-475C-A272-5F847CE1F821', @RelatedEntityNameFieldMap='Action';
 
-/* Base View SQL for MJ: AI Skills */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: AI Skills
--- Item: vwAISkills
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
+/* SQL text to update entity field related entity name field map for entity field ID 758C7804-58EA-4092-B420-9E24FCC072EB */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='758C7804-58EA-4092-B420-9E24FCC072EB', @RelatedEntityNameFieldMap='Role';
 
-------------------------------------------------------------
------ BASE VIEW FOR ENTITY:      MJ: AI Skills
------               SCHEMA:      ${flyway:defaultSchema}
------               BASE TABLE:  AISkill
------               PRIMARY KEY: ID
-------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[vwAISkills]', 'V') IS NOT NULL
-    DROP VIEW [${flyway:defaultSchema}].[vwAISkills];
-GO
-
-CREATE VIEW [${flyway:defaultSchema}].[vwAISkills]
-AS
-SELECT
-    a.*,
-    MJUser_CreatedByUserID.[Name] AS [CreatedByUser]
-FROM
-    [${flyway:defaultSchema}].[AISkill] AS a
-INNER JOIN
-    [${flyway:defaultSchema}].[User] AS MJUser_CreatedByUserID
-  ON
-    [a].[CreatedByUserID] = MJUser_CreatedByUserID.[ID]
-GO
-GRANT SELECT ON [${flyway:defaultSchema}].[vwAISkills] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
-
-/* Base View Permissions SQL for MJ: AI Skills */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: AI Skills
--- Item: Permissions for vwAISkills
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-GRANT SELECT ON [${flyway:defaultSchema}].[vwAISkills] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
-
-/* spCreate SQL for MJ: AI Skills */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: AI Skills
--- Item: spCreateAISkill
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-------------------------------------------------------------
------ CREATE PROCEDURE FOR AISkill
-------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[spCreateAISkill]', 'P') IS NOT NULL
-    DROP PROCEDURE [${flyway:defaultSchema}].[spCreateAISkill];
-GO
-
-CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateAISkill]
-    @ID uniqueidentifier = NULL,
-    @Name nvarchar(255),
-    @Description_Clear bit = 0,
-    @Description nvarchar(MAX) = NULL,
-    @Instructions nvarchar(MAX),
-    @Status nvarchar(20) = NULL,
-    @Category_Clear bit = 0,
-    @Category nvarchar(100) = NULL,
-    @CreatedByUserID uniqueidentifier
-AS
-BEGIN
-    SET NOCOUNT ON;
-    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-
-    IF @ID IS NOT NULL
-    BEGIN
-        -- User provided a value, use it
-        INSERT INTO [${flyway:defaultSchema}].[AISkill]
-            (
-                [ID],
-                [Name],
-                [Description],
-                [Instructions],
-                [Status],
-                [Category],
-                [CreatedByUserID]
-            )
-        OUTPUT INSERTED.[ID] INTO @InsertedRow
-        VALUES
-            (
-                @ID,
-                @Name,
-                CASE WHEN @Description_Clear = 1 THEN NULL ELSE ISNULL(@Description, NULL) END,
-                @Instructions,
-                ISNULL(@Status, 'Active'),
-                CASE WHEN @Category_Clear = 1 THEN NULL ELSE ISNULL(@Category, NULL) END,
-                @CreatedByUserID
-            )
-    END
-    ELSE
-    BEGIN
-        -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
-        INSERT INTO [${flyway:defaultSchema}].[AISkill]
-            (
-                [Name],
-                [Description],
-                [Instructions],
-                [Status],
-                [Category],
-                [CreatedByUserID]
-            )
-        OUTPUT INSERTED.[ID] INTO @InsertedRow
-        VALUES
-            (
-                @Name,
-                CASE WHEN @Description_Clear = 1 THEN NULL ELSE ISNULL(@Description, NULL) END,
-                @Instructions,
-                ISNULL(@Status, 'Active'),
-                CASE WHEN @Category_Clear = 1 THEN NULL ELSE ISNULL(@Category, NULL) END,
-                @CreatedByUserID
-            )
-    END
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [${flyway:defaultSchema}].[vwAISkills] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
-END
-GO
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateAISkill] TO [cdp_Developer], [cdp_Integration];
-
-/* spCreate Permissions for MJ: AI Skills */
-
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateAISkill] TO [cdp_Developer], [cdp_Integration];
-
-/* spUpdate SQL for MJ: AI Skills */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: AI Skills
--- Item: spUpdateAISkill
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-------------------------------------------------------------
------ UPDATE PROCEDURE FOR AISkill
-------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[spUpdateAISkill]', 'P') IS NOT NULL
-    DROP PROCEDURE [${flyway:defaultSchema}].[spUpdateAISkill];
-GO
-
-CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateAISkill]
-    @ID uniqueidentifier,
-    @Name nvarchar(255) = NULL,
-    @Description_Clear bit = 0,
-    @Description nvarchar(MAX) = NULL,
-    @Instructions nvarchar(MAX) = NULL,
-    @Status nvarchar(20) = NULL,
-    @Category_Clear bit = 0,
-    @Category nvarchar(100) = NULL,
-    @CreatedByUserID uniqueidentifier = NULL
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE
-        [${flyway:defaultSchema}].[AISkill]
-    SET
-        [Name] = ISNULL(@Name, [Name]),
-        [Description] = CASE WHEN @Description_Clear = 1 THEN NULL ELSE ISNULL(@Description, [Description]) END,
-        [Instructions] = ISNULL(@Instructions, [Instructions]),
-        [Status] = ISNULL(@Status, [Status]),
-        [Category] = CASE WHEN @Category_Clear = 1 THEN NULL ELSE ISNULL(@Category, [Category]) END,
-        [CreatedByUserID] = ISNULL(@CreatedByUserID, [CreatedByUserID])
-    WHERE
-        [ID] = @ID
-
-    -- Check if the update was successful
-    IF @@ROWCOUNT = 0
-        -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
-        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwAISkills] WHERE 1=0
-    ELSE
-        -- Return the updated record so the caller can see the updated values and any calculated fields
-        SELECT
-                                        *
-                                    FROM
-                                        [${flyway:defaultSchema}].[vwAISkills]
-                                    WHERE
-                                        [ID] = @ID
-                                    
-END
-GO
-
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateAISkill] TO [cdp_Developer], [cdp_Integration]
-GO
-
-------------------------------------------------------------
------ TRIGGER FOR __mj_UpdatedAt field for the AISkill table
-------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[trgUpdateAISkill]', 'TR') IS NOT NULL
-    DROP TRIGGER [${flyway:defaultSchema}].[trgUpdateAISkill];
-GO
-CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateAISkill
-ON [${flyway:defaultSchema}].[AISkill]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE
-        [${flyway:defaultSchema}].[AISkill]
-    SET
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM
-        [${flyway:defaultSchema}].[AISkill] AS _organicTable
-    INNER JOIN
-        INSERTED AS I ON
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-
-/* spUpdate Permissions for MJ: AI Skills */
-
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateAISkill] TO [cdp_Developer], [cdp_Integration];
-
-/* spDelete SQL for MJ: AI Skills */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: AI Skills
--- Item: spDeleteAISkill
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-------------------------------------------------------------
------ DELETE PROCEDURE FOR AISkill
-------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[spDeleteAISkill]', 'P') IS NOT NULL
-    DROP PROCEDURE [${flyway:defaultSchema}].[spDeleteAISkill];
-GO
-
-CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteAISkill]
-    @ID uniqueidentifier
-AS
-BEGIN
-    SET NOCOUNT ON;
-
-    DELETE FROM
-        [${flyway:defaultSchema}].[AISkill]
-    WHERE
-        [ID] = @ID
-
-
-    -- Check if the delete was successful
-    IF @@ROWCOUNT = 0
-        SELECT NULL AS [ID] -- Return NULL for all primary key fields to indicate no record was deleted
-    ELSE
-        SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
-END
-GO
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAISkill] TO [cdp_Developer], [cdp_Integration];
-
-/* spDelete Permissions for MJ: AI Skills */
-
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAISkill] TO [cdp_Developer], [cdp_Integration];
-
-/* SQL text to update entity field related entity name field map for entity field ID 12978C41-2304-4C3D-A8D0-BC23124499DA */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='12978C41-2304-4C3D-A8D0-BC23124499DA', @RelatedEntityNameFieldMap='Action';
-
-/* SQL text to update entity field related entity name field map for entity field ID 95E3080B-9C4D-4D0F-BC6C-D4C2A9CF9CF8 */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='95E3080B-9C4D-4D0F-BC6C-D4C2A9CF9CF8', @RelatedEntityNameFieldMap='SubAgent';
+/* SQL text to update entity field related entity name field map for entity field ID E741FEB8-69EA-49BC-B6B9-A89CA678A324 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='E741FEB8-69EA-49BC-B6B9-A89CA678A324', @RelatedEntityNameFieldMap='User';
 
 /* Base View SQL for MJ: AI Skill Actions */
 -----------------------------------------------------------------
@@ -3770,6 +4585,605 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAISkillSubAgent] TO [cdp_Dev
 /* spDelete Permissions for MJ: AI Skill Sub Agents */
 
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAISkillSubAgent] TO [cdp_Developer], [cdp_Integration];
+
+/* Base View SQL for MJ: AI Skill Permissions */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: AI Skill Permissions
+-- Item: vwAISkillPermissions
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- BASE VIEW FOR ENTITY:      MJ: AI Skill Permissions
+-----               SCHEMA:      ${flyway:defaultSchema}
+-----               BASE TABLE:  AISkillPermission
+-----               PRIMARY KEY: ID
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[vwAISkillPermissions]', 'V') IS NOT NULL
+    DROP VIEW [${flyway:defaultSchema}].[vwAISkillPermissions];
+GO
+
+CREATE VIEW [${flyway:defaultSchema}].[vwAISkillPermissions]
+AS
+SELECT
+    a.*,
+    MJAISkill_SkillID.[Name] AS [Skill],
+    MJRole_RoleID.[Name] AS [Role],
+    MJUser_UserID.[Name] AS [User]
+FROM
+    [${flyway:defaultSchema}].[AISkillPermission] AS a
+INNER JOIN
+    [${flyway:defaultSchema}].[AISkill] AS MJAISkill_SkillID
+  ON
+    [a].[SkillID] = MJAISkill_SkillID.[ID]
+LEFT OUTER JOIN
+    [${flyway:defaultSchema}].[Role] AS MJRole_RoleID
+  ON
+    [a].[RoleID] = MJRole_RoleID.[ID]
+LEFT OUTER JOIN
+    [${flyway:defaultSchema}].[User] AS MJUser_UserID
+  ON
+    [a].[UserID] = MJUser_UserID.[ID]
+GO
+GRANT SELECT ON [${flyway:defaultSchema}].[vwAISkillPermissions] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
+
+/* Base View Permissions SQL for MJ: AI Skill Permissions */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: AI Skill Permissions
+-- Item: Permissions for vwAISkillPermissions
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+GRANT SELECT ON [${flyway:defaultSchema}].[vwAISkillPermissions] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
+
+/* spCreate SQL for MJ: AI Skill Permissions */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: AI Skill Permissions
+-- Item: spCreateAISkillPermission
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- CREATE PROCEDURE FOR AISkillPermission
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spCreateAISkillPermission]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spCreateAISkillPermission];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateAISkillPermission]
+    @ID uniqueidentifier = NULL,
+    @SkillID uniqueidentifier,
+    @RoleID_Clear bit = 0,
+    @RoleID uniqueidentifier = NULL,
+    @UserID_Clear bit = 0,
+    @UserID uniqueidentifier = NULL,
+    @CanView bit = NULL,
+    @CanRun bit = NULL,
+    @CanEdit bit = NULL,
+    @CanDelete bit = NULL,
+    @Comments_Clear bit = 0,
+    @Comments nvarchar(MAX) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+
+    IF @ID IS NOT NULL
+    BEGIN
+        -- User provided a value, use it
+        INSERT INTO [${flyway:defaultSchema}].[AISkillPermission]
+            (
+                [ID],
+                [SkillID],
+                [RoleID],
+                [UserID],
+                [CanView],
+                [CanRun],
+                [CanEdit],
+                [CanDelete],
+                [Comments]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @ID,
+                @SkillID,
+                CASE WHEN @RoleID_Clear = 1 THEN NULL ELSE ISNULL(@RoleID, NULL) END,
+                CASE WHEN @UserID_Clear = 1 THEN NULL ELSE ISNULL(@UserID, NULL) END,
+                ISNULL(@CanView, 0),
+                ISNULL(@CanRun, 0),
+                ISNULL(@CanEdit, 0),
+                ISNULL(@CanDelete, 0),
+                CASE WHEN @Comments_Clear = 1 THEN NULL ELSE ISNULL(@Comments, NULL) END
+            )
+    END
+    ELSE
+    BEGIN
+        -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
+        INSERT INTO [${flyway:defaultSchema}].[AISkillPermission]
+            (
+                [SkillID],
+                [RoleID],
+                [UserID],
+                [CanView],
+                [CanRun],
+                [CanEdit],
+                [CanDelete],
+                [Comments]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @SkillID,
+                CASE WHEN @RoleID_Clear = 1 THEN NULL ELSE ISNULL(@RoleID, NULL) END,
+                CASE WHEN @UserID_Clear = 1 THEN NULL ELSE ISNULL(@UserID, NULL) END,
+                ISNULL(@CanView, 0),
+                ISNULL(@CanRun, 0),
+                ISNULL(@CanEdit, 0),
+                ISNULL(@CanDelete, 0),
+                CASE WHEN @Comments_Clear = 1 THEN NULL ELSE ISNULL(@Comments, NULL) END
+            )
+    END
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [${flyway:defaultSchema}].[vwAISkillPermissions] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateAISkillPermission] TO [cdp_Developer], [cdp_Integration];
+
+/* spCreate Permissions for MJ: AI Skill Permissions */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateAISkillPermission] TO [cdp_Developer], [cdp_Integration];
+
+/* spUpdate SQL for MJ: AI Skill Permissions */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: AI Skill Permissions
+-- Item: spUpdateAISkillPermission
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- UPDATE PROCEDURE FOR AISkillPermission
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spUpdateAISkillPermission]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spUpdateAISkillPermission];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateAISkillPermission]
+    @ID uniqueidentifier,
+    @SkillID uniqueidentifier = NULL,
+    @RoleID_Clear bit = 0,
+    @RoleID uniqueidentifier = NULL,
+    @UserID_Clear bit = 0,
+    @UserID uniqueidentifier = NULL,
+    @CanView bit = NULL,
+    @CanRun bit = NULL,
+    @CanEdit bit = NULL,
+    @CanDelete bit = NULL,
+    @Comments_Clear bit = 0,
+    @Comments nvarchar(MAX) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[AISkillPermission]
+    SET
+        [SkillID] = ISNULL(@SkillID, [SkillID]),
+        [RoleID] = CASE WHEN @RoleID_Clear = 1 THEN NULL ELSE ISNULL(@RoleID, [RoleID]) END,
+        [UserID] = CASE WHEN @UserID_Clear = 1 THEN NULL ELSE ISNULL(@UserID, [UserID]) END,
+        [CanView] = ISNULL(@CanView, [CanView]),
+        [CanRun] = ISNULL(@CanRun, [CanRun]),
+        [CanEdit] = ISNULL(@CanEdit, [CanEdit]),
+        [CanDelete] = ISNULL(@CanDelete, [CanDelete]),
+        [Comments] = CASE WHEN @Comments_Clear = 1 THEN NULL ELSE ISNULL(@Comments, [Comments]) END
+    WHERE
+        [ID] = @ID
+
+    -- Check if the update was successful
+    IF @@ROWCOUNT = 0
+        -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
+        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwAISkillPermissions] WHERE 1=0
+    ELSE
+        -- Return the updated record so the caller can see the updated values and any calculated fields
+        SELECT
+                                        *
+                                    FROM
+                                        [${flyway:defaultSchema}].[vwAISkillPermissions]
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateAISkillPermission] TO [cdp_Developer], [cdp_Integration]
+GO
+
+------------------------------------------------------------
+----- TRIGGER FOR __mj_UpdatedAt field for the AISkillPermission table
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[trgUpdateAISkillPermission]', 'TR') IS NOT NULL
+    DROP TRIGGER [${flyway:defaultSchema}].[trgUpdateAISkillPermission];
+GO
+CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateAISkillPermission
+ON [${flyway:defaultSchema}].[AISkillPermission]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[AISkillPermission]
+    SET
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM
+        [${flyway:defaultSchema}].[AISkillPermission] AS _organicTable
+    INNER JOIN
+        INSERTED AS I ON
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+
+/* spUpdate Permissions for MJ: AI Skill Permissions */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateAISkillPermission] TO [cdp_Developer], [cdp_Integration];
+
+/* spDelete SQL for MJ: AI Skill Permissions */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: AI Skill Permissions
+-- Item: spDeleteAISkillPermission
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- DELETE PROCEDURE FOR AISkillPermission
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spDeleteAISkillPermission]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spDeleteAISkillPermission];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteAISkillPermission]
+    @ID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM
+        [${flyway:defaultSchema}].[AISkillPermission]
+    WHERE
+        [ID] = @ID
+
+
+    -- Check if the delete was successful
+    IF @@ROWCOUNT = 0
+        SELECT NULL AS [ID] -- Return NULL for all primary key fields to indicate no record was deleted
+    ELSE
+        SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAISkillPermission] TO [cdp_Developer], [cdp_Integration];
+
+/* spDelete Permissions for MJ: AI Skill Permissions */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAISkillPermission] TO [cdp_Developer], [cdp_Integration];
+
+/* Index for Foreign Keys for AISkill */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: AI Skills
+-- Item: Index for Foreign Keys
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+-- Index for foreign key CreatedByUserID in table AISkill
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_AISkill_CreatedByUserID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[AISkill]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_AISkill_CreatedByUserID ON [${flyway:defaultSchema}].[AISkill] ([CreatedByUserID]);
+
+/* SQL text to update entity field related entity name field map for entity field ID A807D7C3-7083-42E5-BAF7-62EECA9C8813 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='A807D7C3-7083-42E5-BAF7-62EECA9C8813', @RelatedEntityNameFieldMap='CreatedByUser';
+
+/* Base View SQL for MJ: AI Skills */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: AI Skills
+-- Item: vwAISkills
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- BASE VIEW FOR ENTITY:      MJ: AI Skills
+-----               SCHEMA:      ${flyway:defaultSchema}
+-----               BASE TABLE:  AISkill
+-----               PRIMARY KEY: ID
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[vwAISkills]', 'V') IS NOT NULL
+    DROP VIEW [${flyway:defaultSchema}].[vwAISkills];
+GO
+
+CREATE VIEW [${flyway:defaultSchema}].[vwAISkills]
+AS
+SELECT
+    a.*,
+    MJUser_CreatedByUserID.[Name] AS [CreatedByUser]
+FROM
+    [${flyway:defaultSchema}].[AISkill] AS a
+INNER JOIN
+    [${flyway:defaultSchema}].[User] AS MJUser_CreatedByUserID
+  ON
+    [a].[CreatedByUserID] = MJUser_CreatedByUserID.[ID]
+GO
+GRANT SELECT ON [${flyway:defaultSchema}].[vwAISkills] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
+
+/* Base View Permissions SQL for MJ: AI Skills */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: AI Skills
+-- Item: Permissions for vwAISkills
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+GRANT SELECT ON [${flyway:defaultSchema}].[vwAISkills] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
+
+/* spCreate SQL for MJ: AI Skills */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: AI Skills
+-- Item: spCreateAISkill
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- CREATE PROCEDURE FOR AISkill
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spCreateAISkill]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spCreateAISkill];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateAISkill]
+    @ID uniqueidentifier = NULL,
+    @Name nvarchar(255),
+    @Description_Clear bit = 0,
+    @Description nvarchar(MAX) = NULL,
+    @Instructions nvarchar(MAX),
+    @Status nvarchar(20) = NULL,
+    @Category_Clear bit = 0,
+    @Category nvarchar(100) = NULL,
+    @IconClass_Clear bit = 0,
+    @IconClass nvarchar(100) = NULL,
+    @Color_Clear bit = 0,
+    @Color nvarchar(50) = NULL,
+    @CreatedByUserID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+
+    IF @ID IS NOT NULL
+    BEGIN
+        -- User provided a value, use it
+        INSERT INTO [${flyway:defaultSchema}].[AISkill]
+            (
+                [ID],
+                [Name],
+                [Description],
+                [Instructions],
+                [Status],
+                [Category],
+                [IconClass],
+                [Color],
+                [CreatedByUserID]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @ID,
+                @Name,
+                CASE WHEN @Description_Clear = 1 THEN NULL ELSE ISNULL(@Description, NULL) END,
+                @Instructions,
+                ISNULL(@Status, 'Active'),
+                CASE WHEN @Category_Clear = 1 THEN NULL ELSE ISNULL(@Category, NULL) END,
+                CASE WHEN @IconClass_Clear = 1 THEN NULL ELSE ISNULL(@IconClass, NULL) END,
+                CASE WHEN @Color_Clear = 1 THEN NULL ELSE ISNULL(@Color, NULL) END,
+                @CreatedByUserID
+            )
+    END
+    ELSE
+    BEGIN
+        -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
+        INSERT INTO [${flyway:defaultSchema}].[AISkill]
+            (
+                [Name],
+                [Description],
+                [Instructions],
+                [Status],
+                [Category],
+                [IconClass],
+                [Color],
+                [CreatedByUserID]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @Name,
+                CASE WHEN @Description_Clear = 1 THEN NULL ELSE ISNULL(@Description, NULL) END,
+                @Instructions,
+                ISNULL(@Status, 'Active'),
+                CASE WHEN @Category_Clear = 1 THEN NULL ELSE ISNULL(@Category, NULL) END,
+                CASE WHEN @IconClass_Clear = 1 THEN NULL ELSE ISNULL(@IconClass, NULL) END,
+                CASE WHEN @Color_Clear = 1 THEN NULL ELSE ISNULL(@Color, NULL) END,
+                @CreatedByUserID
+            )
+    END
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [${flyway:defaultSchema}].[vwAISkills] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateAISkill] TO [cdp_Developer], [cdp_Integration];
+
+/* spCreate Permissions for MJ: AI Skills */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateAISkill] TO [cdp_Developer], [cdp_Integration];
+
+/* spUpdate SQL for MJ: AI Skills */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: AI Skills
+-- Item: spUpdateAISkill
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- UPDATE PROCEDURE FOR AISkill
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spUpdateAISkill]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spUpdateAISkill];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateAISkill]
+    @ID uniqueidentifier,
+    @Name nvarchar(255) = NULL,
+    @Description_Clear bit = 0,
+    @Description nvarchar(MAX) = NULL,
+    @Instructions nvarchar(MAX) = NULL,
+    @Status nvarchar(20) = NULL,
+    @Category_Clear bit = 0,
+    @Category nvarchar(100) = NULL,
+    @IconClass_Clear bit = 0,
+    @IconClass nvarchar(100) = NULL,
+    @Color_Clear bit = 0,
+    @Color nvarchar(50) = NULL,
+    @CreatedByUserID uniqueidentifier = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[AISkill]
+    SET
+        [Name] = ISNULL(@Name, [Name]),
+        [Description] = CASE WHEN @Description_Clear = 1 THEN NULL ELSE ISNULL(@Description, [Description]) END,
+        [Instructions] = ISNULL(@Instructions, [Instructions]),
+        [Status] = ISNULL(@Status, [Status]),
+        [Category] = CASE WHEN @Category_Clear = 1 THEN NULL ELSE ISNULL(@Category, [Category]) END,
+        [IconClass] = CASE WHEN @IconClass_Clear = 1 THEN NULL ELSE ISNULL(@IconClass, [IconClass]) END,
+        [Color] = CASE WHEN @Color_Clear = 1 THEN NULL ELSE ISNULL(@Color, [Color]) END,
+        [CreatedByUserID] = ISNULL(@CreatedByUserID, [CreatedByUserID])
+    WHERE
+        [ID] = @ID
+
+    -- Check if the update was successful
+    IF @@ROWCOUNT = 0
+        -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
+        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwAISkills] WHERE 1=0
+    ELSE
+        -- Return the updated record so the caller can see the updated values and any calculated fields
+        SELECT
+                                        *
+                                    FROM
+                                        [${flyway:defaultSchema}].[vwAISkills]
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateAISkill] TO [cdp_Developer], [cdp_Integration]
+GO
+
+------------------------------------------------------------
+----- TRIGGER FOR __mj_UpdatedAt field for the AISkill table
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[trgUpdateAISkill]', 'TR') IS NOT NULL
+    DROP TRIGGER [${flyway:defaultSchema}].[trgUpdateAISkill];
+GO
+CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateAISkill
+ON [${flyway:defaultSchema}].[AISkill]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[AISkill]
+    SET
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM
+        [${flyway:defaultSchema}].[AISkill] AS _organicTable
+    INNER JOIN
+        INSERTED AS I ON
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+
+/* spUpdate Permissions for MJ: AI Skills */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateAISkill] TO [cdp_Developer], [cdp_Integration];
+
+/* spDelete SQL for MJ: AI Skills */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: AI Skills
+-- Item: spDeleteAISkill
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- DELETE PROCEDURE FOR AISkill
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spDeleteAISkill]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spDeleteAISkill];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteAISkill]
+    @ID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM
+        [${flyway:defaultSchema}].[AISkill]
+    WHERE
+        [ID] = @ID
+
+
+    -- Check if the delete was successful
+    IF @@ROWCOUNT = 0
+        SELECT NULL AS [ID] -- Return NULL for all primary key fields to indicate no record was deleted
+    ELSE
+        SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAISkill] TO [cdp_Developer], [cdp_Integration];
+
+/* spDelete Permissions for MJ: AI Skills */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAISkill] TO [cdp_Developer], [cdp_Integration];
 
 /* spDelete SQL for MJ: Actions */
 -----------------------------------------------------------------
@@ -7314,6 +8728,26 @@ BEGIN
     CLOSE cascade_update_MJRecordProcesses_PromptID_cursor
     DEALLOCATE cascade_update_MJRecordProcesses_PromptID_cursor
     
+    -- Cascade delete from ScopedPromptPart using cursor to call spDeleteScopedPromptPart
+    DECLARE @MJScopedPromptParts_PromptIDID uniqueidentifier
+    DECLARE cascade_delete_MJScopedPromptParts_PromptID_cursor CURSOR FOR 
+        SELECT [ID]
+        FROM [${flyway:defaultSchema}].[ScopedPromptPart]
+        WHERE [PromptID] = @ID
+    
+    OPEN cascade_delete_MJScopedPromptParts_PromptID_cursor
+    FETCH NEXT FROM cascade_delete_MJScopedPromptParts_PromptID_cursor INTO @MJScopedPromptParts_PromptIDID
+    
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        EXEC [${flyway:defaultSchema}].[spDeleteScopedPromptPart] @ID = @MJScopedPromptParts_PromptIDID
+        
+        FETCH NEXT FROM cascade_delete_MJScopedPromptParts_PromptID_cursor INTO @MJScopedPromptParts_PromptIDID
+    END
+    
+    CLOSE cascade_delete_MJScopedPromptParts_PromptID_cursor
+    DEALLOCATE cascade_delete_MJScopedPromptParts_PromptID_cursor
+    
 
     DELETE FROM
         [${flyway:defaultSchema}].[AIPrompt]
@@ -7336,7 +8770,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIPrompt] TO [cdp_Developer]
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '0e5f12fc-d8ac-4489-8477-fcc34d47a19c' OR (EntityID = 'F3ECEDA6-0B91-4A0A-86D1-15F8C29CA336' AND Name = 'CreatedByUser')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'a631bb20-d464-46d5-aed7-afe0f8b0f5ea' OR (EntityID = 'AA4ADD02-7763-44CE-B07D-0CF74708749C' AND Name = 'Skill')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -7369,203 +8803,8 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIPrompt] TO [cdp_Developer]
          )
          VALUES
          (
-            '0e5f12fc-d8ac-4489-8477-fcc34d47a19c',
-            'F3ECEDA6-0B91-4A0A-86D1-15F8C29CA336', -- Entity: MJ: AI Skills
-            100019,
-            'CreatedByUser',
-            'Created By User',
-            NULL,
-            'nvarchar',
-            200,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            0,
-            1,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '94358427-88fd-4523-ad37-c54b90cebd3d' OR (EntityID = '63982A61-BB89-4F62-A279-172ECB10DA38' AND Name = 'Agent')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '94358427-88fd-4523-ad37-c54b90cebd3d',
-            '63982A61-BB89-4F62-A279-172ECB10DA38', -- Entity: MJ: AI Agent Skills
-            100013,
-            'Agent',
-            'Agent',
-            NULL,
-            'nvarchar',
-            510,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            0,
-            1,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '5a174af5-cd12-47d5-8a98-0a8a1bebf8fb' OR (EntityID = '63982A61-BB89-4F62-A279-172ECB10DA38' AND Name = 'Skill')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '5a174af5-cd12-47d5-8a98-0a8a1bebf8fb',
-            '63982A61-BB89-4F62-A279-172ECB10DA38', -- Entity: MJ: AI Agent Skills
-            100014,
-            'Skill',
-            'Skill',
-            NULL,
-            'nvarchar',
-            510,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            0,
-            1,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '7ba04cab-6748-4569-8634-a529a2bda3a6' OR (EntityID = '9829E043-0AE7-44E5-9566-92081E9630AF' AND Name = 'Skill')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '7ba04cab-6748-4569-8634-a529a2bda3a6',
-            '9829E043-0AE7-44E5-9566-92081E9630AF', -- Entity: MJ: AI Skill Sub Agents
+            'a631bb20-d464-46d5-aed7-afe0f8b0f5ea',
+            'AA4ADD02-7763-44CE-B07D-0CF74708749C', -- Entity: MJ: AI Skill Sub Agents
             100011,
             'Skill',
             'Skill',
@@ -7596,7 +8835,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIPrompt] TO [cdp_Developer]
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '0cbdf0eb-e7fa-40ad-b39d-b61cb8e3cce7' OR (EntityID = '9829E043-0AE7-44E5-9566-92081E9630AF' AND Name = 'SubAgent')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b3254762-6b08-431d-bb4c-2973859fb1ed' OR (EntityID = 'AA4ADD02-7763-44CE-B07D-0CF74708749C' AND Name = 'SubAgent')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -7629,8 +8868,8 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIPrompt] TO [cdp_Developer]
          )
          VALUES
          (
-            '0cbdf0eb-e7fa-40ad-b39d-b61cb8e3cce7',
-            '9829E043-0AE7-44E5-9566-92081E9630AF', -- Entity: MJ: AI Skill Sub Agents
+            'b3254762-6b08-431d-bb4c-2973859fb1ed',
+            'AA4ADD02-7763-44CE-B07D-0CF74708749C', -- Entity: MJ: AI Skill Sub Agents
             100012,
             'SubAgent',
             'Sub Agent',
@@ -7661,7 +8900,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIPrompt] TO [cdp_Developer]
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '360b4500-e97b-401a-b7fc-2380407f7d63' OR (EntityID = '2CAD785E-49DE-4B44-AFFF-9A55033F65F3' AND Name = 'Skill')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '9252d454-9cc5-4719-9604-a558224c4a4c' OR (EntityID = '1D52DE84-DD3F-4E46-8D2B-574B70080BB4' AND Name = 'CreatedByUser')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -7694,8 +8933,73 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIPrompt] TO [cdp_Developer]
          )
          VALUES
          (
-            '360b4500-e97b-401a-b7fc-2380407f7d63',
-            '2CAD785E-49DE-4B44-AFFF-9A55033F65F3', -- Entity: MJ: AI Skill Actions
+            '9252d454-9cc5-4719-9604-a558224c4a4c',
+            '1D52DE84-DD3F-4E46-8D2B-574B70080BB4', -- Entity: MJ: AI Skills
+            100023,
+            'CreatedByUser',
+            'Created By User',
+            NULL,
+            'nvarchar',
+            200,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '24e87322-7829-4951-9bc3-bbe9c72ce9e1' OR (EntityID = '5E3EA927-BEFA-417E-8FD9-6C114C1C0A2A' AND Name = 'Skill')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '24e87322-7829-4951-9bc3-bbe9c72ce9e1',
+            '5E3EA927-BEFA-417E-8FD9-6C114C1C0A2A', -- Entity: MJ: AI Skill Actions
             100011,
             'Skill',
             'Skill',
@@ -7726,7 +9030,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIPrompt] TO [cdp_Developer]
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'f984916b-f332-432d-8dc5-a131d2eec965' OR (EntityID = '2CAD785E-49DE-4B44-AFFF-9A55033F65F3' AND Name = 'Action')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '716ccfef-3b4d-4e12-8e75-6db96997a051' OR (EntityID = '5E3EA927-BEFA-417E-8FD9-6C114C1C0A2A' AND Name = 'Action')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -7759,8 +9063,8 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIPrompt] TO [cdp_Developer]
          )
          VALUES
          (
-            'f984916b-f332-432d-8dc5-a131d2eec965',
-            '2CAD785E-49DE-4B44-AFFF-9A55033F65F3', -- Entity: MJ: AI Skill Actions
+            '716ccfef-3b4d-4e12-8e75-6db96997a051',
+            '5E3EA927-BEFA-417E-8FD9-6C114C1C0A2A', -- Entity: MJ: AI Skill Actions
             100012,
             'Action',
             'Action',
@@ -7789,41 +9093,549 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIPrompt] TO [cdp_Developer]
          )
       END;
 
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '33ab33c2-ac0f-430a-b189-4fa6cc2f7459' OR (EntityID = '1F1EBDD5-84DA-4554-A029-87AFF327971D' AND Name = 'Agent')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '33ab33c2-ac0f-430a-b189-4fa6cc2f7459',
+            '1F1EBDD5-84DA-4554-A029-87AFF327971D', -- Entity: MJ: AI Agent Skills
+            100013,
+            'Agent',
+            'Agent',
+            NULL,
+            'nvarchar',
+            510,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '28aee521-e7a0-42bb-8b5e-d0390523aff3' OR (EntityID = '1F1EBDD5-84DA-4554-A029-87AFF327971D' AND Name = 'Skill')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '28aee521-e7a0-42bb-8b5e-d0390523aff3',
+            '1F1EBDD5-84DA-4554-A029-87AFF327971D', -- Entity: MJ: AI Agent Skills
+            100014,
+            'Skill',
+            'Skill',
+            NULL,
+            'nvarchar',
+            510,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '1150580c-84a4-425e-8d9d-5d10cb9ed8c8' OR (EntityID = '7EEDD9FB-3882-4E98-804E-BE1E95FAC54A' AND Name = 'Skill')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '1150580c-84a4-425e-8d9d-5d10cb9ed8c8',
+            '7EEDD9FB-3882-4E98-804E-BE1E95FAC54A', -- Entity: MJ: AI Skill Permissions
+            100023,
+            'Skill',
+            'Skill',
+            NULL,
+            'nvarchar',
+            510,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'd7ec9643-30aa-429d-a9b5-d8310a6e1d1e' OR (EntityID = '7EEDD9FB-3882-4E98-804E-BE1E95FAC54A' AND Name = 'Role')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'd7ec9643-30aa-429d-a9b5-d8310a6e1d1e',
+            '7EEDD9FB-3882-4E98-804E-BE1E95FAC54A', -- Entity: MJ: AI Skill Permissions
+            100024,
+            'Role',
+            'Role',
+            NULL,
+            'nvarchar',
+            100,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'ed9603db-5736-4d0c-93f6-e0386171822c' OR (EntityID = '7EEDD9FB-3882-4E98-804E-BE1E95FAC54A' AND Name = 'User')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'ed9603db-5736-4d0c-93f6-e0386171822c',
+            '7EEDD9FB-3882-4E98-804E-BE1E95FAC54A', -- Entity: MJ: AI Skill Permissions
+            100025,
+            'User',
+            'User',
+            NULL,
+            'nvarchar',
+            200,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
 /* Set field properties for entity */
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = '9823A987-8D99-48EF-A4BD-EA8105D2ED45'
+               WHERE ID = 'FDCF5C8C-E402-497C-9DA8-5A47E6295937'
                AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = '7BA04CAB-6748-4569-8634-A529A2BDA3A6'
+               WHERE ID = '33AB33C2-AC0F-430A-B189-4FA6CC2F7459'
                AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = '0CBDF0EB-E7FA-40AD-B39D-B61CB8E3CCE7'
+               WHERE ID = '28AEE521-E7A0-42BB-8B5E-D0390523AFF3'
                AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET IncludeInUserSearchAPI = 1
-               WHERE ID = '7BA04CAB-6748-4569-8634-A529A2BDA3A6'
+               WHERE ID = 'FDCF5C8C-E402-497C-9DA8-5A47E6295937'
                AND AutoUpdateIncludeInUserSearchAPI = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET IncludeInUserSearchAPI = 1
-               WHERE ID = '0CBDF0EB-E7FA-40AD-B39D-B61CB8E3CCE7'
+               WHERE ID = '33AB33C2-AC0F-430A-B189-4FA6CC2F7459'
+               AND AutoUpdateIncludeInUserSearchAPI = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET IncludeInUserSearchAPI = 1
+               WHERE ID = '28AEE521-E7A0-42BB-8B5E-D0390523AFF3'
                AND AutoUpdateIncludeInUserSearchAPI = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET UserSearchPredicateAPI = 'BeginsWith'
-               WHERE ID = '7BA04CAB-6748-4569-8634-A529A2BDA3A6'
+               WHERE ID = '33AB33C2-AC0F-430A-B189-4FA6CC2F7459'
                AND AutoUpdateUserSearchPredicate = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET UserSearchPredicateAPI = 'BeginsWith'
-               WHERE ID = '0CBDF0EB-E7FA-40AD-B39D-B61CB8E3CCE7'
+               WHERE ID = '28AEE521-E7A0-42BB-8B5E-D0390523AFF3'
+               AND AutoUpdateUserSearchPredicate = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET UserSearchPredicateAPI = 'Exact'
+               WHERE ID = 'FDCF5C8C-E402-497C-9DA8-5A47E6295937'
+               AND AutoUpdateUserSearchPredicate = 1;
+
+/* Set field properties for entity */
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = '24E87322-7829-4951-9BC3-BBE9C72CE9E1'
+               AND AutoUpdateDefaultInView = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = '716CCFEF-3B4D-4E12-8E75-6DB96997A051'
+               AND AutoUpdateDefaultInView = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET IncludeInUserSearchAPI = 1
+               WHERE ID = '24E87322-7829-4951-9BC3-BBE9C72CE9E1'
+               AND AutoUpdateIncludeInUserSearchAPI = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET IncludeInUserSearchAPI = 1
+               WHERE ID = '716CCFEF-3B4D-4E12-8E75-6DB96997A051'
+               AND AutoUpdateIncludeInUserSearchAPI = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET UserSearchPredicateAPI = 'BeginsWith'
+               WHERE ID = '24E87322-7829-4951-9BC3-BBE9C72CE9E1'
+               AND AutoUpdateUserSearchPredicate = 1;
+
+/* Set field properties for entity */
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = '6C692028-511D-4FE4-A475-590724775EB4'
+               AND AutoUpdateDefaultInView = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = 'A631BB20-D464-46D5-AED7-AFE0F8B0F5EA'
+               AND AutoUpdateDefaultInView = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = 'B3254762-6B08-431D-BB4C-2973859FB1ED'
+               AND AutoUpdateDefaultInView = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET IncludeInUserSearchAPI = 1
+               WHERE ID = 'A631BB20-D464-46D5-AED7-AFE0F8B0F5EA'
+               AND AutoUpdateIncludeInUserSearchAPI = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET IncludeInUserSearchAPI = 1
+               WHERE ID = 'B3254762-6B08-431D-BB4C-2973859FB1ED'
+               AND AutoUpdateIncludeInUserSearchAPI = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET UserSearchPredicateAPI = 'BeginsWith'
+               WHERE ID = 'A631BB20-D464-46D5-AED7-AFE0F8B0F5EA'
+               AND AutoUpdateUserSearchPredicate = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET UserSearchPredicateAPI = 'BeginsWith'
+               WHERE ID = 'B3254762-6B08-431D-BB4C-2973859FB1ED'
+               AND AutoUpdateUserSearchPredicate = 1;
+
+/* Set field properties for entity */
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = '360C60B6-7F6E-4659-A588-F7C293119143'
+               AND AutoUpdateDefaultInView = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = '6E0AC00F-A853-4CE1-932C-1B1867EAE004'
+               AND AutoUpdateDefaultInView = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = 'C7205E95-20ED-4B5C-A809-74CBEC0E82F3'
+               AND AutoUpdateDefaultInView = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = '05FF7C4A-FC59-41DF-A656-BF2A5CC4B112'
+               AND AutoUpdateDefaultInView = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = '1150580C-84A4-425E-8D9D-5D10CB9ED8C8'
+               AND AutoUpdateDefaultInView = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = 'D7EC9643-30AA-429D-A9B5-D8310A6E1D1E'
+               AND AutoUpdateDefaultInView = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = 'ED9603DB-5736-4D0C-93F6-E0386171822C'
+               AND AutoUpdateDefaultInView = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET IncludeInUserSearchAPI = 1
+               WHERE ID = '1150580C-84A4-425E-8D9D-5D10CB9ED8C8'
+               AND AutoUpdateIncludeInUserSearchAPI = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET IncludeInUserSearchAPI = 1
+               WHERE ID = 'D7EC9643-30AA-429D-A9B5-D8310A6E1D1E'
+               AND AutoUpdateIncludeInUserSearchAPI = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET IncludeInUserSearchAPI = 1
+               WHERE ID = 'ED9603DB-5736-4D0C-93F6-E0386171822C'
+               AND AutoUpdateIncludeInUserSearchAPI = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET UserSearchPredicateAPI = 'BeginsWith'
+               WHERE ID = '1150580C-84A4-425E-8D9D-5D10CB9ED8C8'
+               AND AutoUpdateUserSearchPredicate = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET UserSearchPredicateAPI = 'BeginsWith'
+               WHERE ID = 'ED9603DB-5736-4D0C-93F6-E0386171822C'
+               AND AutoUpdateUserSearchPredicate = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET UserSearchPredicateAPI = 'BeginsWith'
+               WHERE ID = 'D7EC9643-30AA-429D-A9B5-D8310A6E1D1E'
+               AND AutoUpdateUserSearchPredicate = 1;
+
+/* Set field properties for entity */
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = '58BCAF71-A955-473D-99E4-FA0997CFBE56'
+               AND AutoUpdateDefaultInView = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = '03BF582C-CBE4-4DE3-A5D9-F9B788E0D665'
+               AND AutoUpdateDefaultInView = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = '9252D454-9CC5-4719-9604-A558224C4A4C'
+               AND AutoUpdateDefaultInView = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET IncludeInUserSearchAPI = 1
+               WHERE ID = '03BF582C-CBE4-4DE3-A5D9-F9B788E0D665'
+               AND AutoUpdateIncludeInUserSearchAPI = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET IncludeInUserSearchAPI = 1
+               WHERE ID = '9252D454-9CC5-4719-9604-A558224C4A4C'
+               AND AutoUpdateIncludeInUserSearchAPI = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET UserSearchPredicateAPI = 'BeginsWith'
+               WHERE ID = 'BF89FCCE-6D4D-4DD0-AC89-F7785BE11F27'
+               AND AutoUpdateUserSearchPredicate = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET UserSearchPredicateAPI = 'BeginsWith'
+               WHERE ID = '03BF582C-CBE4-4DE3-A5D9-F9B788E0D665'
+               AND AutoUpdateUserSearchPredicate = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET UserSearchPredicateAPI = 'BeginsWith'
+               WHERE ID = '9252D454-9CC5-4719-9604-A558224C4A4C'
                AND AutoUpdateUserSearchPredicate = 1;
 
 /* Set field properties for entity */
@@ -7831,112 +9643,6 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIPrompt] TO [cdp_Developer]
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET UserSearchPredicateAPI = 'BeginsWith'
                WHERE ID = '1B312173-DA2A-492C-A8F7-EB92CC0F8BDA'
-               AND AutoUpdateUserSearchPredicate = 1;
-
-/* Set field properties for entity */
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET DefaultInView = 1
-               WHERE ID = '12EA822E-B901-4526-A801-5178952A1BF3'
-               AND AutoUpdateDefaultInView = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET DefaultInView = 1
-               WHERE ID = 'B4014EB6-D14E-42EC-A811-79C2F09C7CE0'
-               AND AutoUpdateDefaultInView = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET DefaultInView = 1
-               WHERE ID = '0E5F12FC-D8AC-4489-8477-FCC34D47A19C'
-               AND AutoUpdateDefaultInView = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = 'B4014EB6-D14E-42EC-A811-79C2F09C7CE0'
-               AND AutoUpdateIncludeInUserSearchAPI = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET UserSearchPredicateAPI = 'BeginsWith'
-               WHERE ID = '7CDD99CC-C2E9-4B29-83BE-3D2153ECB979'
-               AND AutoUpdateUserSearchPredicate = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET UserSearchPredicateAPI = 'BeginsWith'
-               WHERE ID = 'B4014EB6-D14E-42EC-A811-79C2F09C7CE0'
-               AND AutoUpdateUserSearchPredicate = 1;
-
-/* Set field properties for entity */
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET DefaultInView = 1
-               WHERE ID = 'A63F6B2C-9847-4ACE-8F00-0704D0EC8864'
-               AND AutoUpdateDefaultInView = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET DefaultInView = 1
-               WHERE ID = '360B4500-E97B-401A-B7FC-2380407F7D63'
-               AND AutoUpdateDefaultInView = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET DefaultInView = 1
-               WHERE ID = 'F984916B-F332-432D-8DC5-A131D2EEC965'
-               AND AutoUpdateDefaultInView = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '360B4500-E97B-401A-B7FC-2380407F7D63'
-               AND AutoUpdateIncludeInUserSearchAPI = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = 'F984916B-F332-432D-8DC5-A131D2EEC965'
-               AND AutoUpdateIncludeInUserSearchAPI = 1;
-
-/* Set field properties for entity */
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET DefaultInView = 1
-               WHERE ID = 'DEE4FBFE-D1DF-4394-AAF2-994588803DB3'
-               AND AutoUpdateDefaultInView = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET DefaultInView = 1
-               WHERE ID = '94358427-88FD-4523-AD37-C54B90CEBD3D'
-               AND AutoUpdateDefaultInView = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET DefaultInView = 1
-               WHERE ID = '5A174AF5-CD12-47D5-8A98-0A8A1BEBF8FB'
-               AND AutoUpdateDefaultInView = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = 'DEE4FBFE-D1DF-4394-AAF2-994588803DB3'
-               AND AutoUpdateIncludeInUserSearchAPI = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '94358427-88FD-4523-AD37-C54B90CEBD3D'
-               AND AutoUpdateIncludeInUserSearchAPI = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '5A174AF5-CD12-47D5-8A98-0A8A1BEBF8FB'
-               AND AutoUpdateIncludeInUserSearchAPI = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET UserSearchPredicateAPI = 'BeginsWith'
-               WHERE ID = '94358427-88FD-4523-AD37-C54B90CEBD3D'
-               AND AutoUpdateUserSearchPredicate = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET UserSearchPredicateAPI = 'BeginsWith'
-               WHERE ID = '5A174AF5-CD12-47D5-8A98-0A8A1BEBF8FB'
-               AND AutoUpdateUserSearchPredicate = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET UserSearchPredicateAPI = 'Exact'
-               WHERE ID = 'DEE4FBFE-D1DF-4394-AAF2-994588803DB3'
                AND AutoUpdateUserSearchPredicate = 1;
 
 /* Set categories for 8 fields */
@@ -7949,7 +9655,7 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '0520DC26-434D-4D79-A4D5-8A393ADC1BDF' AND AutoUpdateCategory = 1;
+   ID = 'CFB281F4-03AC-41A2-B61A-32F39C6AD41B' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: AI Agent Skills.AgentID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -7960,7 +9666,7 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'B34877EC-FAFD-46EA-BD9B-F6213BAB500E' AND AutoUpdateCategory = 1;
+   ID = '73AA9933-4307-43E6-8080-F5304D5D34BB' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: AI Agent Skills.SkillID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -7971,7 +9677,17 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '423836EA-F904-4196-9957-2054E368477C' AND AutoUpdateCategory = 1;
+   ID = '81FA8F23-39BA-4246-B583-DAAB08CBF4E1' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agent Skills.Status 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Assignment Details',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'FDCF5C8C-E402-497C-9DA8-5A47E6295937' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: AI Agent Skills.Agent 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -7982,7 +9698,7 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '94358427-88FD-4523-AD37-C54B90CEBD3D' AND AutoUpdateCategory = 1;
+   ID = '33AB33C2-AC0F-430A-B189-4FA6CC2F7459' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: AI Agent Skills.Skill 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -7993,17 +9709,7 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '5A174AF5-CD12-47D5-8A98-0A8A1BEBF8FB' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agent Skills.Status 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Assignment Details',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'DEE4FBFE-D1DF-4394-AAF2-994588803DB3' AND AutoUpdateCategory = 1;
+   ID = '28AEE521-E7A0-42BB-8B5E-D0390523AFF3' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: AI Agent Skills.__mj_CreatedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -8013,7 +9719,7 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '04E9DD13-6924-4994-A4A1-C84908F54DE9' AND AutoUpdateCategory = 1;
+   ID = 'C8FCF2DD-1109-42F6-9C3B-04A998414C5F' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: AI Agent Skills.__mj_UpdatedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -8023,29 +9729,173 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '513ABFC5-8AF6-4ED4-893D-5D3B465E059D' AND AutoUpdateCategory = 1;
+   ID = 'C4D2D43C-EE05-4F56-8636-68CFF6C74050' AND AutoUpdateCategory = 1;
 
-/* Set entity icon to fa fa-user-graduate */
+/* Set entity icon to fa fa-brain */
 
                UPDATE [${flyway:defaultSchema}].[Entity]
-               SET [Icon] = 'fa fa-user-graduate', [__mj_UpdatedAt] = GETUTCDATE()
-               WHERE [ID] = '63982A61-BB89-4F62-A279-172ECB10DA38';
+               SET [Icon] = 'fa fa-brain', [__mj_UpdatedAt] = GETUTCDATE()
+               WHERE [ID] = '1F1EBDD5-84DA-4554-A029-87AFF327971D';
 
 /* Insert FieldCategoryInfo setting for entity */
 
                INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('8e41b4a3-1013-4fd3-bc1e-69e67f6c0e1e', '63982A61-BB89-4F62-A279-172ECB10DA38', 'FieldCategoryInfo', '{"Assignment Details":{"icon":"fa fa-tasks","description":"Details regarding the association between agents and their specific skill sets"},"System Metadata":{"icon":"fa fa-cog","description":"System-managed audit and tracking fields"}}', GETUTCDATE(), GETUTCDATE());
+               VALUES ('bc8ff518-0ccf-48ba-be40-dd79e2c21043', '1F1EBDD5-84DA-4554-A029-87AFF327971D', 'FieldCategoryInfo', '{"Assignment Details":{"icon":"fa fa-tasks","description":"Configuration and status of skills assigned to specific AI agents"},"System Metadata":{"icon":"fa fa-cog","description":"System-managed audit and tracking fields"}}', GETUTCDATE(), GETUTCDATE());
 
 /* Insert FieldCategoryIcons setting (legacy) */
 
                INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('841b2077-51a5-4a35-8f0b-8aecc1117a03', '63982A61-BB89-4F62-A279-172ECB10DA38', 'FieldCategoryIcons', '{"Assignment Details":"fa fa-tasks","System Metadata":"fa fa-cog"}', GETUTCDATE(), GETUTCDATE());
+               VALUES ('bf4bd092-ce73-4363-99da-1aa695317379', '1F1EBDD5-84DA-4554-A029-87AFF327971D', 'FieldCategoryIcons', '{"Assignment Details":"fa fa-tasks","System Metadata":"fa fa-cog"}', GETUTCDATE(), GETUTCDATE());
 
 /* Set DefaultForNewUser=false for NEW entity (category: junction, confidence: high) */
 
          UPDATE [${flyway:defaultSchema}].[ApplicationEntity]
          SET [DefaultForNewUser] = 0, [__mj_UpdatedAt] = GETUTCDATE()
-         WHERE [EntityID] = '63982A61-BB89-4F62-A279-172ECB10DA38';
+         WHERE [EntityID] = '1F1EBDD5-84DA-4554-A029-87AFF327971D';
+
+/* Set categories for 12 fields */
+
+-- UPDATE Entity Field Category Info MJ: AI Skills.ID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'System Metadata',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'B0738691-8E33-41FC-9E5B-EFAF4A13AB01' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Skills.Name 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Skill Definition',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'BF89FCCE-6D4D-4DD0-AC89-F7785BE11F27' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Skills.Description 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Skill Definition',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '27EDDFE6-8E94-4F90-ABB3-BFD7029C3640' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Skills.Instructions 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Skill Definition',
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'Code',
+   CodeType = 'Other'
+WHERE 
+   ID = '4EA0DE7B-5BF0-4F2A-A8C4-CC8AE1FE47A7' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Skills.Status 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Configuration',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '58BCAF71-A955-473D-99E4-FA0997CFBE56' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Skills.Category 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Configuration',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '03BF582C-CBE4-4DE3-A5D9-F9B788E0D665' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Skills.IconClass 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'UI Customization',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '4F38D266-56D2-49DE-9912-3C67A28413CC' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Skills.Color 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'UI Customization',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '9CC2C1AD-8A1D-4DAB-BEA5-83845F7FEEC9' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Skills.CreatedByUserID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Ownership and Audit',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'A807D7C3-7083-42E5-BAF7-62EECA9C8813' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Skills.CreatedByUser 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Ownership and Audit',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '9252D454-9CC5-4719-9604-A558224C4A4C' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Skills.__mj_CreatedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'System Metadata',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'B0021E00-68FF-4499-B029-D16440781316' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Skills.__mj_UpdatedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'System Metadata',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '86FF4D27-32D6-4E3D-9857-DA7DA9855289' AND AutoUpdateCategory = 1;
+
+/* Set entity icon to fa fa-wand-magic-sparkles */
+
+               UPDATE [${flyway:defaultSchema}].[Entity]
+               SET [Icon] = 'fa fa-wand-magic-sparkles', [__mj_UpdatedAt] = GETUTCDATE()
+               WHERE [ID] = '1D52DE84-DD3F-4E46-8D2B-574B70080BB4';
+
+/* Insert FieldCategoryInfo setting for entity */
+
+               INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
+               VALUES ('1bfb828d-b86f-4abe-b2ac-97c029722d35', '1D52DE84-DD3F-4E46-8D2B-574B70080BB4', 'FieldCategoryInfo', '{"Skill Definition":{"icon":"fa fa-book","description":"Core identity and behavioral instructions for the AI skill"},"Configuration":{"icon":"fa fa-cog","description":"Operational settings and classification for the skill"},"UI Customization":{"icon":"fa fa-palette","description":"Visual styling elements for the skill in the catalog"},"Ownership and Audit":{"icon":"fa fa-user-shield","description":"Information regarding skill ownership and authorship"},"System Metadata":{"icon":"fa fa-database","description":"System-managed audit and tracking fields"}}', GETUTCDATE(), GETUTCDATE());
+
+/* Insert FieldCategoryIcons setting (legacy) */
+
+               INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
+               VALUES ('6d3ca558-12e1-4dc6-9f1e-14165d0417d7', '1D52DE84-DD3F-4E46-8D2B-574B70080BB4', 'FieldCategoryIcons', '{"Skill Definition":"fa fa-book","Configuration":"fa fa-cog","UI Customization":"fa fa-palette","Ownership and Audit":"fa fa-user-shield","System Metadata":"fa fa-database"}', GETUTCDATE(), GETUTCDATE());
+
+/* Set DefaultForNewUser=true for NEW entity (category: primary, confidence: high) */
+
+         UPDATE [${flyway:defaultSchema}].[ApplicationEntity]
+         SET [DefaultForNewUser] = 1, [__mj_UpdatedAt] = GETUTCDATE()
+         WHERE [EntityID] = '1D52DE84-DD3F-4E46-8D2B-574B70080BB4';
 
 /* Set categories for 7 fields */
 
@@ -8057,49 +9907,49 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'B4156455-9CCC-4DA5-8329-3D842EB9FB76' AND AutoUpdateCategory = 1;
+   ID = '6F06BF51-578F-4879-AD6A-9EC786939BE7' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: AI Skill Sub Agents.SkillID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Sub-Agent Mapping',
+   Category = 'Agent Association',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '5115EDED-FE0A-4FFC-A9F9-2DAB4BA0C3E8' AND AutoUpdateCategory = 1;
+   ID = '00059B09-D83B-44E4-8604-DC0102128FA1' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: AI Skill Sub Agents.SubAgentID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Sub-Agent Mapping',
+   Category = 'Agent Association',
    GeneratedFormSection = 'Category',
    DisplayName = 'Sub-Agent ID',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '95E3080B-9C4D-4D0F-BC6C-D4C2A9CF9CF8' AND AutoUpdateCategory = 1;
+   ID = '7319E9CE-62D0-4DD4-99BD-E48FC866277F' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: AI Skill Sub Agents.Skill 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Sub-Agent Mapping',
+   Category = 'Agent Association',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '7BA04CAB-6748-4569-8634-A529A2BDA3A6' AND AutoUpdateCategory = 1;
+   ID = 'A631BB20-D464-46D5-AED7-AFE0F8B0F5EA' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: AI Skill Sub Agents.SubAgent 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Sub-Agent Mapping',
+   Category = 'Agent Association',
    GeneratedFormSection = 'Category',
    DisplayName = 'Sub-Agent',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '0CBDF0EB-E7FA-40AD-B39D-B61CB8E3CCE7' AND AutoUpdateCategory = 1;
+   ID = 'B3254762-6B08-431D-BB4C-2973859FB1ED' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: AI Skill Sub Agents.__mj_CreatedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -8109,7 +9959,7 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '9823A987-8D99-48EF-A4BD-EA8105D2ED45' AND AutoUpdateCategory = 1;
+   ID = 'EED49C3C-6EF3-4258-B38B-625B2DFB694F' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: AI Skill Sub Agents.__mj_UpdatedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -8119,29 +9969,287 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '3EA7F6AD-FDC9-42D0-B34F-0CEACE22B7C1' AND AutoUpdateCategory = 1;
+   ID = '6C692028-511D-4FE4-A475-590724775EB4' AND AutoUpdateCategory = 1;
 
-/* Set entity icon to fa fa-robot */
+/* Set entity icon to fa fa-network-wired */
 
                UPDATE [${flyway:defaultSchema}].[Entity]
-               SET [Icon] = 'fa fa-robot', [__mj_UpdatedAt] = GETUTCDATE()
-               WHERE [ID] = '9829E043-0AE7-44E5-9566-92081E9630AF';
+               SET [Icon] = 'fa fa-network-wired', [__mj_UpdatedAt] = GETUTCDATE()
+               WHERE [ID] = 'AA4ADD02-7763-44CE-B07D-0CF74708749C';
 
 /* Insert FieldCategoryInfo setting for entity */
 
                INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('0cc642e0-23f3-4e2d-af87-31de574b53f0', '9829E043-0AE7-44E5-9566-92081E9630AF', 'FieldCategoryInfo', '{"Sub-Agent Mapping":{"icon":"fa fa-link","description":"Associations linking AI skills to their corresponding sub-agents"},"System Metadata":{"icon":"fa fa-cog","description":"System-managed audit and tracking fields"}}', GETUTCDATE(), GETUTCDATE());
+               VALUES ('25e4112c-a1d6-41aa-9b4e-7352b9d828e5', 'AA4ADD02-7763-44CE-B07D-0CF74708749C', 'FieldCategoryInfo', '{"Agent Association":{"icon":"fa fa-link","description":"Associations linking primary AI Skills with their designated Sub-Agents"},"System Metadata":{"icon":"fa fa-cog","description":"System-managed audit and tracking fields"}}', GETUTCDATE(), GETUTCDATE());
 
 /* Insert FieldCategoryIcons setting (legacy) */
 
                INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('3d01f23c-6920-4666-9cc9-0c0209c278be', '9829E043-0AE7-44E5-9566-92081E9630AF', 'FieldCategoryIcons', '{"Sub-Agent Mapping":"fa fa-link","System Metadata":"fa fa-cog"}', GETUTCDATE(), GETUTCDATE());
+               VALUES ('fe44b15b-cc79-4285-9759-4db8d95602f1', 'AA4ADD02-7763-44CE-B07D-0CF74708749C', 'FieldCategoryIcons', '{"Agent Association":"fa fa-link","System Metadata":"fa fa-cog"}', GETUTCDATE(), GETUTCDATE());
 
 /* Set DefaultForNewUser=false for NEW entity (category: junction, confidence: high) */
 
          UPDATE [${flyway:defaultSchema}].[ApplicationEntity]
          SET [DefaultForNewUser] = 0, [__mj_UpdatedAt] = GETUTCDATE()
-         WHERE [EntityID] = '9829E043-0AE7-44E5-9566-92081E9630AF';
+         WHERE [EntityID] = 'AA4ADD02-7763-44CE-B07D-0CF74708749C';
+
+/* Set categories for 7 fields */
+
+-- UPDATE Entity Field Category Info MJ: AI Skill Actions.ID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'System Metadata',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '81AB537E-0D9F-4090-9B15-3B372100E402' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Skill Actions.SkillID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Skill & Action Mapping',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '39650EAE-013A-4E44-A315-0695C32DF61D' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Skill Actions.ActionID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Skill & Action Mapping',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'A96BC379-F67F-475C-A272-5F847CE1F821' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Skill Actions.Skill 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Skill & Action Mapping',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '24E87322-7829-4951-9BC3-BBE9C72CE9E1' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Skill Actions.Action 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Skill & Action Mapping',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '716CCFEF-3B4D-4E12-8E75-6DB96997A051' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Skill Actions.__mj_CreatedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'System Metadata',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '96D3843F-079F-4BEE-8ECC-8012A07F10D6' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Skill Actions.__mj_UpdatedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'System Metadata',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'D5737F0B-E63F-464A-8BD0-81B9F7FDB446' AND AutoUpdateCategory = 1;
+
+/* Set entity icon to fa fa-bolt */
+
+               UPDATE [${flyway:defaultSchema}].[Entity]
+               SET [Icon] = 'fa fa-bolt', [__mj_UpdatedAt] = GETUTCDATE()
+               WHERE [ID] = '5E3EA927-BEFA-417E-8FD9-6C114C1C0A2A';
+
+/* Insert FieldCategoryInfo setting for entity */
+
+               INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
+               VALUES ('6bed06d3-7b8c-43e1-84e6-4dfec8328fca', '5E3EA927-BEFA-417E-8FD9-6C114C1C0A2A', 'FieldCategoryInfo', '{"Skill & Action Mapping":{"icon":"fa fa-link","description":"Associations between AI skills and the actions they are permitted to invoke."},"System Metadata":{"icon":"fa fa-cog","description":"System-managed audit and tracking fields"}}', GETUTCDATE(), GETUTCDATE());
+
+/* Insert FieldCategoryIcons setting (legacy) */
+
+               INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
+               VALUES ('087db2f4-f6a4-4d7e-8e84-26a917e19755', '5E3EA927-BEFA-417E-8FD9-6C114C1C0A2A', 'FieldCategoryIcons', '{"Skill & Action Mapping":"fa fa-link","System Metadata":"fa fa-cog"}', GETUTCDATE(), GETUTCDATE());
+
+/* Set DefaultForNewUser=false for NEW entity (category: junction, confidence: high) */
+
+         UPDATE [${flyway:defaultSchema}].[ApplicationEntity]
+         SET [DefaultForNewUser] = 0, [__mj_UpdatedAt] = GETUTCDATE()
+         WHERE [EntityID] = '5E3EA927-BEFA-417E-8FD9-6C114C1C0A2A';
+
+/* Set categories for 14 fields */
+
+-- UPDATE Entity Field Category Info MJ: AI Skill Permissions.ID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'System Metadata',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'BCF6F504-A122-4E01-910D-DA799502D208' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Skill Permissions.SkillID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Permission Assignment',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'F1584029-6FA2-417F-8592-29288A8A2D3C' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Skill Permissions.Skill 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Permission Assignment',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '1150580C-84A4-425E-8D9D-5D10CB9ED8C8' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Skill Permissions.RoleID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Permission Assignment',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '758C7804-58EA-4092-B420-9E24FCC072EB' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Skill Permissions.Role 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Permission Assignment',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'D7EC9643-30AA-429D-A9B5-D8310A6E1D1E' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Skill Permissions.UserID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Permission Assignment',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'E741FEB8-69EA-49BC-B6B9-A89CA678A324' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Skill Permissions.User 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Permission Assignment',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'ED9603DB-5736-4D0C-93F6-E0386171822C' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Skill Permissions.CanView 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Access Rights',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '360C60B6-7F6E-4659-A588-F7C293119143' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Skill Permissions.CanRun 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Access Rights',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '6E0AC00F-A853-4CE1-932C-1B1867EAE004' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Skill Permissions.CanEdit 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Access Rights',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'C7205E95-20ED-4B5C-A809-74CBEC0E82F3' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Skill Permissions.CanDelete 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Access Rights',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '05FF7C4A-FC59-41DF-A656-BF2A5CC4B112' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Skill Permissions.Comments 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Access Rights',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '5A64B3CB-3E78-4CAD-99AE-4D8F0A606151' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Skill Permissions.__mj_CreatedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'System Metadata',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'F24F0607-585A-46DD-A1CE-E1204E98B5AE' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Skill Permissions.__mj_UpdatedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'System Metadata',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '137F6A40-B765-46EB-B13E-E136E8F35766' AND AutoUpdateCategory = 1;
+
+/* Set entity icon to fa fa-user-shield */
+
+               UPDATE [${flyway:defaultSchema}].[Entity]
+               SET [Icon] = 'fa fa-user-shield', [__mj_UpdatedAt] = GETUTCDATE()
+               WHERE [ID] = '7EEDD9FB-3882-4E98-804E-BE1E95FAC54A';
+
+/* Insert FieldCategoryInfo setting for entity */
+
+               INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
+               VALUES ('56a6798b-534d-4dc2-a7ff-7343fa38d3cd', '7EEDD9FB-3882-4E98-804E-BE1E95FAC54A', 'FieldCategoryInfo', '{"Permission Assignment":{"icon":"fa fa-user-tag","description":"Details regarding the target skill and the user or role receiving the permission grant"},"Access Rights":{"icon":"fa fa-shield-alt","description":"Specific action-level permissions (View, Run, Edit, Delete) and associated justification notes"},"System Metadata":{"icon":"fa fa-cog","description":"System-managed audit and tracking fields"}}', GETUTCDATE(), GETUTCDATE());
+
+/* Insert FieldCategoryIcons setting (legacy) */
+
+               INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
+               VALUES ('83e98632-300a-4b65-b9a5-14ab5475ec98', '7EEDD9FB-3882-4E98-804E-BE1E95FAC54A', 'FieldCategoryIcons', '{"Permission Assignment":"fa fa-user-tag","Access Rights":"fa fa-shield-alt","System Metadata":"fa fa-cog"}', GETUTCDATE(), GETUTCDATE());
+
+/* Set DefaultForNewUser=false for NEW entity (category: system, confidence: high) */
+
+         UPDATE [${flyway:defaultSchema}].[ApplicationEntity]
+         SET [DefaultForNewUser] = 0, [__mj_UpdatedAt] = GETUTCDATE()
+         WHERE [EntityID] = '7EEDD9FB-3882-4E98-804E-BE1E95FAC54A';
 
 /* Set categories for 87 fields */
 
@@ -8180,161 +10288,6 @@ SET
    CodeType = NULL
 WHERE 
    ID = '77845738-5781-458B-AD3C-5DAE745373C2' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agents.TypeID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '91CA077D-3F59-48E1-A593-AF8686276115' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agents.Status 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'BC44595E-6FCA-42A9-AAF8-4A730088BE46' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agents.DriverClass 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'BB9AD9CB-40C0-41F1-B54B-750C844FD41B' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agents.IconClass 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'E3E05E29-CDAF-4BFE-9FC8-4450EEBE05E5' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agents.ModelSelectionMode 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'FEEBD49D-5572-45D7-9F1E-08AE762F41D9' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agents.DefaultArtifactTypeID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'F58EA638-CE95-4D2A-9095-9909149B83C7' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agents.OwnerUserID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '261B4D18-464B-4AD9-9FFD-EA8B70C576D8' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agents.ArtifactCreationMode 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '4371BED0-7C4A-4D24-9E07-17E15D617607' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agents.FunctionalRequirements 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'F613597C-C38F-4D71-B64A-8BBCFD87D8CC' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agents.TechnicalDesign 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'CAEA2872-B089-4192-8FA8-1737FF357FFD' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agents.IsRestricted 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'E5B17B79-282F-4F19-9656-246DE119D588' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agents.AgentTypePromptParams 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'FD515BF1-7E8A-4CB0-A8CE-D5C0C8C132D7' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agents.CategoryID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '7DCA7B3C-9A81-4D32-AF2E-5EA32B22D988' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agents.Type 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'C4F745BD-57E7-4F87-9B65-8BBDD2B50529' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agents.DefaultArtifactType 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Default Artifact Type',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '6C1C76DF-BBFF-4903-9BB9-3325B5ABB4B1' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agents.OwnerUser 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'B098B41F-7953-473E-8257-DB6BFFEF48A0' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agents.Category 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '6517DB09-A12E-4F1B-95B6-0B0A92918A1D' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: AI Agents.__mj_CreatedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -8390,33 +10343,6 @@ SET
 WHERE 
    ID = '8261D630-2560-4C03-BE14-C8A9682ABBB4' AND AutoUpdateCategory = 1;
 
--- UPDATE Entity Field Category Info MJ: AI Agents.InvocationMode 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '3AFE3A93-073F-4EF0-A03F-BF1C1BE3C39C' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agents.Parent 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '52E74C81-D246-4B52-B7A7-91757C299671' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agents.RootParentID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '644AA4B2-1044-430C-BCBA-245644294E02' AND AutoUpdateCategory = 1;
-
 -- UPDATE Entity Field Category Info MJ: AI Agents.EnableContextCompression 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
@@ -8430,7 +10356,7 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Compression Threshold',
+   DisplayName = 'Context Compression Message Threshold',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -8440,6 +10366,7 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
+   DisplayName = 'Context Compression Prompt',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -8449,28 +10376,64 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Retention Count',
+   DisplayName = 'Context Compression Message Retention Count',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
    ID = '73A50D68-976F-49A7-9737-12D1D26C6011' AND AutoUpdateCategory = 1;
 
--- UPDATE Entity Field Category Info MJ: AI Agents.ContextCompressionPrompt 
+-- UPDATE Entity Field Category Info MJ: AI Agents.TypeID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Type',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '91CA077D-3F59-48E1-A593-AF8686276115' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.Status 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'AD36EF69-1494-409C-A97E-FE73669DD28A' AND AutoUpdateCategory = 1;
+   ID = 'BC44595E-6FCA-42A9-AAF8-4A730088BE46' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.DriverClass 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'BB9AD9CB-40C0-41F1-B54B-750C844FD41B' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.IconClass 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'E3E05E29-CDAF-4BFE-9FC8-4450EEBE05E5' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.ModelSelectionMode 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'FEEBD49D-5572-45D7-9F1E-08AE762F41D9' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: AI Agents.PayloadDownstreamPaths 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Downstream Paths',
-   ExtendedType = NULL,
-   CodeType = NULL
+   ExtendedType = 'Code',
+   CodeType = 'Other'
 WHERE 
    ID = '85B6AA86-796D-4970-9E35-5A483498B517' AND AutoUpdateCategory = 1;
 
@@ -8478,9 +10441,8 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Upstream Paths',
-   ExtendedType = NULL,
-   CodeType = NULL
+   ExtendedType = 'Code',
+   CodeType = 'Other'
 WHERE 
    ID = 'DA784B76-66CD-434B-90BD-DEC808917E68' AND AutoUpdateCategory = 1;
 
@@ -8488,9 +10450,8 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Self-Read Paths',
-   ExtendedType = NULL,
-   CodeType = NULL
+   ExtendedType = 'Code',
+   CodeType = 'Other'
 WHERE 
    ID = 'EBF3B958-F07C-420B-82BE-2CB1E396A0F5' AND AutoUpdateCategory = 1;
 
@@ -8498,9 +10459,8 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Self-Write Paths',
-   ExtendedType = NULL,
-   CodeType = NULL
+   ExtendedType = 'Code',
+   CodeType = 'Other'
 WHERE 
    ID = '61E51FC3-8EFA-40D9-9525-F3FAD0A95DCA' AND AutoUpdateCategory = 1;
 
@@ -8517,9 +10477,9 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Final Validation',
-   ExtendedType = NULL,
-   CodeType = NULL
+   DisplayName = 'Final Payload Validation Schema',
+   ExtendedType = 'Code',
+   CodeType = 'Other'
 WHERE 
    ID = '1C7959AE-F48B-4858-8383-28C3F4706314' AND AutoUpdateCategory = 1;
 
@@ -8527,7 +10487,6 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Final Validation Mode',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -8537,19 +10496,72 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Max Retries',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
    ID = 'AF62DAAB-74D4-4539-9B47-58DD4A023E4B' AND AutoUpdateCategory = 1;
 
+-- UPDATE Entity Field Category Info MJ: AI Agents.MaxCostPerRun 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '23850C5A-311A-4271-AE53-BD36921C5AA5' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.MaxTokensPerRun 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'C5F8BB50-DC10-4DFC-AC45-8613C152EE94' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.MaxIterationsPerRun 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '3FA6B9F3-60BC-4631-8EB4-7ED0D04844C4' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.MaxTimePerRun 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'E64A4FF8-BAD5-491C-9D8D-E5E70378ED67' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.MinExecutionsPerRun 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'BCCCA2DC-8A15-4701-98E2-337FB60B463A' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.MaxExecutionsPerRun 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'F0CCA759-DEA4-4F61-B233-C632EE9317E1' AND AutoUpdateCategory = 1;
+
 -- UPDATE Entity Field Category Info MJ: AI Agents.StartingPayloadValidation 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Starting Validation',
-   ExtendedType = NULL,
-   CodeType = NULL
+   DisplayName = 'Starting Payload Validation Schema',
+   ExtendedType = 'Code',
+   CodeType = 'Other'
 WHERE 
    ID = 'B7A2371C-A22C-48EA-827E-824F8A40DA3D' AND AutoUpdateCategory = 1;
 
@@ -8557,11 +10569,83 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Starting Validation Mode',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
    ID = '0947203D-A5CA-4ED2-895B-17A8007323FC' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.DefaultPromptEffortLevel 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'DCBAEEFD-C5A2-449D-A4B9-EAB1290C2F89' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.ChatHandlingOption 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'BC671EC0-ED51-4F0B-A46C-50BE0CE53E51' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.DefaultArtifactTypeID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'F58EA638-CE95-4D2A-9095-9909149B83C7' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.OwnerUserID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Owner User',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '261B4D18-464B-4AD9-9FFD-EA8B70C576D8' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.InvocationMode 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '3AFE3A93-073F-4EF0-A03F-BF1C1BE3C39C' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.ArtifactCreationMode 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '4371BED0-7C4A-4D24-9E07-17E15D617607' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.FunctionalRequirements 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'F613597C-C38F-4D71-B64A-8BBCFD87D8CC' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.TechnicalDesign 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'CAEA2872-B089-4192-8FA8-1737FF357FFD' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: AI Agents.InjectNotes 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -8576,7 +10660,6 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Max Notes',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -8586,7 +10669,6 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Note Strategy',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -8605,7 +10687,6 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Max Examples',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -8615,91 +10696,19 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Example Strategy',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
    ID = '291FEE7A-1245-4C82-A470-07EEB8847F1E' AND AutoUpdateCategory = 1;
 
--- UPDATE Entity Field Category Info MJ: AI Agents.MaxCostPerRun 
+-- UPDATE Entity Field Category Info MJ: AI Agents.IsRestricted 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Max Cost',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '23850C5A-311A-4271-AE53-BD36921C5AA5' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agents.MaxTokensPerRun 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Max Tokens',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'C5F8BB50-DC10-4DFC-AC45-8613C152EE94' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agents.MaxIterationsPerRun 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Max Iterations',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '3FA6B9F3-60BC-4631-8EB4-7ED0D04844C4' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agents.MaxTimePerRun 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Max Time',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'E64A4FF8-BAD5-491C-9D8D-E5E70378ED67' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agents.MinExecutionsPerRun 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Min Executions',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'BCCCA2DC-8A15-4701-98E2-337FB60B463A' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agents.MaxExecutionsPerRun 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Max Executions',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'F0CCA759-DEA4-4F61-B233-C632EE9317E1' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agents.DefaultPromptEffortLevel 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Prompt Effort Level',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'DCBAEEFD-C5A2-449D-A4B9-EAB1290C2F89' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agents.ChatHandlingOption 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Chat Handling',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'BC671EC0-ED51-4F0B-A46C-50BE0CE53E51' AND AutoUpdateCategory = 1;
+   ID = 'E5B17B79-282F-4F19-9656-246DE119D588' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: AI Agents.MessageMode 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -8719,115 +10728,10 @@ SET
 WHERE 
    ID = 'F8924303-D53A-43B0-B70F-5B74FA6248D9' AND AutoUpdateCategory = 1;
 
--- UPDATE Entity Field Category Info MJ: AI Agents.AllowEphemeralClientTools 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Allow Ephemeral Tools',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '98BE9EE9-A855-488E-9D97-441AEBA2B34D' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agents.AcceptUnregisteredFiles 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '1380146E-BF7D-4624-803A-45B1E65F0B52' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agents.DefaultCoAgentID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '724ADC60-12A5-4C77-8C7D-AC8F110EE069' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agents.TypeConfiguration 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '6F17DFC0-75FA-4F2A-9CF7-DF90B51C1239' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agents.RecordingDefault 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '04C616DB-ABF1-4879-A79B-3229FD8A37B3' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agents.DefaultMediaCollectionID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'FB1433BA-3037-44C5-8CCB-F8E9E4DBB001' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agents.SupportsPlanMode 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Runtime Limits & Execution Settings',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '550EF6E6-3F13-4D78-BE50-2766B33E5AD1' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agents.AcceptsSkills 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Runtime Limits & Execution Settings',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '98FD8B10-D9B4-46E3-BB2F-96481446DAD8' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agents.DefaultCoAgent 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Default Co-Agent',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'AAC9DA92-2BBE-4599-B742-4AE9E01DA10B' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agents.DefaultMediaCollection 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Default Media Collection',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '6782D948-AE63-4A05-AFFF-066B97C2D865' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agents.RootDefaultCoAgentID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '1861E78B-4306-44CA-8E62-70991A1F58CA' AND AutoUpdateCategory = 1;
-
 -- UPDATE Entity Field Category Info MJ: AI Agents.AttachmentStorageProviderID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Storage Provider',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -8837,7 +10741,6 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Root Path',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -8847,66 +10750,26 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Inline Threshold',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
    ID = 'EC3D6539-FAF4-49B7-9A9B-6327249C9D06' AND AutoUpdateCategory = 1;
 
--- UPDATE Entity Field Category Info MJ: AI Agents.DefaultStorageAccountID 
+-- UPDATE Entity Field Category Info MJ: AI Agents.AgentTypePromptParams 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
+   ExtendedType = 'Code',
+   CodeType = 'Other'
 WHERE 
-   ID = '76AF4818-C79E-4DB5-8039-6B51C1C3A832' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agents.RecordingStorageProviderID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '5F516126-FCD8-4AF9-8600-E324886CC875' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agents.AttachmentStorageProvider 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Storage Provider',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'B6261245-1F52-43BA-9C92-A3E494D8C5BE' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agents.DefaultStorageAccount 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Default Storage Account',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'D900C3B8-F414-4468-AAA1-3CEB52C80ACD' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agents.RecordingStorageProvider 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Recording Storage Provider',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '3D53D5CF-CCED-4C20-A342-5FFDF9C34FE8' AND AutoUpdateCategory = 1;
+   ID = 'FD515BF1-7E8A-4CB0-A8CE-D5C0C8C132D7' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: AI Agents.ScopeConfig 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
+   ExtendedType = 'Code',
+   CodeType = 'Other'
 WHERE 
    ID = 'F644A0DD-0C7D-44E5-A2D5-0DAE4F0455AD' AND AutoUpdateCategory = 1;
 
@@ -8941,10 +10804,37 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
+   ExtendedType = 'Code',
+   CodeType = 'Other'
+WHERE 
+   ID = '269087F5-DEBE-4B14-8FA3-5938ADCF7325' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.CategoryID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '269087F5-DEBE-4B14-8FA3-5938ADCF7325' AND AutoUpdateCategory = 1;
+   ID = '7DCA7B3C-9A81-4D32-AF2E-5EA32B22D988' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.AllowEphemeralClientTools 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '98BE9EE9-A855-488E-9D97-441AEBA2B34D' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.DefaultStorageAccountID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '76AF4818-C79E-4DB5-8039-6B51C1C3A832' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: AI Agents.SearchScopeAccess 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -8955,6 +10845,33 @@ SET
 WHERE 
    ID = '948E9C24-C50E-47BF-8A93-D4ABAA0BBBBB' AND AutoUpdateCategory = 1;
 
+-- UPDATE Entity Field Category Info MJ: AI Agents.AcceptUnregisteredFiles 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '1380146E-BF7D-4624-803A-45B1E65F0B52' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.DefaultCoAgentID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '724ADC60-12A5-4C77-8C7D-AC8F110EE069' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.TypeConfiguration 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'Code',
+   CodeType = 'Other'
+WHERE 
+   ID = '6F17DFC0-75FA-4F2A-9CF7-DF90B51C1239' AND AutoUpdateCategory = 1;
+
 -- UPDATE Entity Field Category Info MJ: AI Agents.AllowMemoryWrite 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
@@ -8964,226 +10881,172 @@ SET
 WHERE 
    ID = 'F224B93A-955B-4810-A042-20CD259D4CED' AND AutoUpdateCategory = 1;
 
-/* Set categories for 7 fields */
-
--- UPDATE Entity Field Category Info MJ: AI Skill Actions.ID 
+-- UPDATE Entity Field Category Info MJ: AI Agents.RecordingDefault 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'System Metadata',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '9F6F97BA-7DB3-48D7-8FA5-ED336DF09D12' AND AutoUpdateCategory = 1;
+   ID = '04C616DB-ABF1-4879-A79B-3229FD8A37B3' AND AutoUpdateCategory = 1;
 
--- UPDATE Entity Field Category Info MJ: AI Skill Actions.SkillID 
+-- UPDATE Entity Field Category Info MJ: AI Agents.RecordingStorageProviderID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Mapping Details',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'D3B82B60-E0FA-42F1-A6D8-47123B8F7A12' AND AutoUpdateCategory = 1;
+   ID = '5F516126-FCD8-4AF9-8600-E324886CC875' AND AutoUpdateCategory = 1;
 
--- UPDATE Entity Field Category Info MJ: AI Skill Actions.ActionID 
+-- UPDATE Entity Field Category Info MJ: AI Agents.DefaultMediaCollectionID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Mapping Details',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '12978C41-2304-4C3D-A8D0-BC23124499DA' AND AutoUpdateCategory = 1;
+   ID = 'FB1433BA-3037-44C5-8CCB-F8E9E4DBB001' AND AutoUpdateCategory = 1;
 
--- UPDATE Entity Field Category Info MJ: AI Skill Actions.Skill 
+-- UPDATE Entity Field Category Info MJ: AI Agents.SupportsPlanMode 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Mapping Details',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Skill Name',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '360B4500-E97B-401A-B7FC-2380407F7D63' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Skill Actions.Action 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Mapping Details',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Action Name',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'F984916B-F332-432D-8DC5-A131D2EEC965' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Skill Actions.__mj_CreatedAt 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'System Metadata',
+   Category = 'Runtime Limits & Execution Settings',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '3E685B67-2D04-4624-9009-27BA84BE0366' AND AutoUpdateCategory = 1;
+   ID = 'E8AD66E4-D6EB-4A92-8E9D-BAE06162B98D' AND AutoUpdateCategory = 1;
 
--- UPDATE Entity Field Category Info MJ: AI Skill Actions.__mj_UpdatedAt 
+-- UPDATE Entity Field Category Info MJ: AI Agents.AcceptsSkills 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'System Metadata',
+   Category = 'Runtime Limits & Execution Settings',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'A63F6B2C-9847-4ACE-8F00-0704D0EC8864' AND AutoUpdateCategory = 1;
+   ID = '5147944D-E146-47A9-B728-E46BBACDEAB5' AND AutoUpdateCategory = 1;
 
-/* Set entity icon to fa fa-bolt */
-
-               UPDATE [${flyway:defaultSchema}].[Entity]
-               SET [Icon] = 'fa fa-bolt', [__mj_UpdatedAt] = GETUTCDATE()
-               WHERE [ID] = '2CAD785E-49DE-4B44-AFFF-9A55033F65F3';
-
-/* Insert FieldCategoryInfo setting for entity */
-
-               INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('a194025c-9dfb-42f5-b553-d7957411eccd', '2CAD785E-49DE-4B44-AFFF-9A55033F65F3', 'FieldCategoryInfo', '{"Mapping Details":{"icon":"fa fa-link","description":"Information linking AI Skills to their corresponding Actions"},"System Metadata":{"icon":"fa fa-cog","description":"System-managed audit and tracking fields"}}', GETUTCDATE(), GETUTCDATE());
-
-/* Insert FieldCategoryIcons setting (legacy) */
-
-               INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('68e2b651-5a15-46af-a18a-a8229583c489', '2CAD785E-49DE-4B44-AFFF-9A55033F65F3', 'FieldCategoryIcons', '{"Mapping Details":"fa fa-link","System Metadata":"fa fa-cog"}', GETUTCDATE(), GETUTCDATE());
-
-/* Set DefaultForNewUser=false for NEW entity (category: junction, confidence: high) */
-
-         UPDATE [${flyway:defaultSchema}].[ApplicationEntity]
-         SET [DefaultForNewUser] = 0, [__mj_UpdatedAt] = GETUTCDATE()
-         WHERE [EntityID] = '2CAD785E-49DE-4B44-AFFF-9A55033F65F3';
-
-/* Set categories for 10 fields */
-
--- UPDATE Entity Field Category Info MJ: AI Skills.ID 
+-- UPDATE Entity Field Category Info MJ: AI Agents.Parent 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'System Metadata',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Skill ID',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'D4C35A84-3E2B-446C-9E89-31E6D544DE89' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Skills.Name 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Skill Profile',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '7CDD99CC-C2E9-4B29-83BE-3D2153ECB979' AND AutoUpdateCategory = 1;
+   ID = '52E74C81-D246-4B52-B7A7-91757C299671' AND AutoUpdateCategory = 1;
 
--- UPDATE Entity Field Category Info MJ: AI Skills.Description 
+-- UPDATE Entity Field Category Info MJ: AI Agents.ContextCompressionPrompt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Skill Profile',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Context Compression Prompt Name',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'AD36EF69-1494-409C-A97E-FE73669DD28A' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.Type 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Type Name',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'C4F745BD-57E7-4F87-9B65-8BBDD2B50529' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.DefaultArtifactType 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'E1CF8053-36AC-43FB-8EC3-1C84D6103963' AND AutoUpdateCategory = 1;
+   ID = '6C1C76DF-BBFF-4903-9BB9-3325B5ABB4B1' AND AutoUpdateCategory = 1;
 
--- UPDATE Entity Field Category Info MJ: AI Skills.Category 
+-- UPDATE Entity Field Category Info MJ: AI Agents.OwnerUser 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Skill Profile',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Owner User Name',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'B098B41F-7953-473E-8257-DB6BFFEF48A0' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: AI Agents.AttachmentStorageProvider 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'B4014EB6-D14E-42EC-A811-79C2F09C7CE0' AND AutoUpdateCategory = 1;
+   ID = 'B6261245-1F52-43BA-9C92-A3E494D8C5BE' AND AutoUpdateCategory = 1;
 
--- UPDATE Entity Field Category Info MJ: AI Skills.Status 
+-- UPDATE Entity Field Category Info MJ: AI Agents.Category 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Skill Profile',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '12EA822E-B901-4526-A801-5178952A1BF3' AND AutoUpdateCategory = 1;
+   ID = '6517DB09-A12E-4F1B-95B6-0B0A92918A1D' AND AutoUpdateCategory = 1;
 
--- UPDATE Entity Field Category Info MJ: AI Skills.Instructions 
+-- UPDATE Entity Field Category Info MJ: AI Agents.DefaultStorageAccount 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Agent Configuration',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '8686790A-5FFA-429D-9BA8-81FBC3F22A80' AND AutoUpdateCategory = 1;
+   ID = 'D900C3B8-F414-4468-AAA1-3CEB52C80ACD' AND AutoUpdateCategory = 1;
 
--- UPDATE Entity Field Category Info MJ: AI Skills.CreatedByUserID 
+-- UPDATE Entity Field Category Info MJ: AI Agents.DefaultCoAgent 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'System Metadata',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Creator ID',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'DF469925-5F2D-4FC6-9DEB-F7818B265081' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Skills.CreatedByUser 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'System Metadata',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Created By',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '0E5F12FC-D8AC-4489-8477-FCC34D47A19C' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Skills.__mj_CreatedAt 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'System Metadata',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '8E631DF3-23B3-45F6-98C2-B12DFE9CB81F' AND AutoUpdateCategory = 1;
+   ID = 'AAC9DA92-2BBE-4599-B742-4AE9E01DA10B' AND AutoUpdateCategory = 1;
 
--- UPDATE Entity Field Category Info MJ: AI Skills.__mj_UpdatedAt 
+-- UPDATE Entity Field Category Info MJ: AI Agents.RecordingStorageProvider 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'System Metadata',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'B840CFC0-8E73-47E6-8C08-1D61F88919AD' AND AutoUpdateCategory = 1;
+   ID = '3D53D5CF-CCED-4C20-A342-5FFDF9C34FE8' AND AutoUpdateCategory = 1;
 
-/* Set entity icon to fa fa-robot */
+-- UPDATE Entity Field Category Info MJ: AI Agents.DefaultMediaCollection 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '6782D948-AE63-4A05-AFFF-066B97C2D865' AND AutoUpdateCategory = 1;
 
-               UPDATE [${flyway:defaultSchema}].[Entity]
-               SET [Icon] = 'fa fa-robot', [__mj_UpdatedAt] = GETUTCDATE()
-               WHERE [ID] = 'F3ECEDA6-0B91-4A0A-86D1-15F8C29CA336';
+-- UPDATE Entity Field Category Info MJ: AI Agents.RootParentID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Root Parent ID',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '644AA4B2-1044-430C-BCBA-245644294E02' AND AutoUpdateCategory = 1;
 
-/* Insert FieldCategoryInfo setting for entity */
-
-               INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('0ccc6eb4-fa47-4e8b-862d-db45ad5c5397', 'F3ECEDA6-0B91-4A0A-86D1-15F8C29CA336', 'FieldCategoryInfo', '{"Skill Profile":{"icon":"fa fa-brain","description":"Basic identity, description, categorization, and status of the AI skill"},"Agent Configuration":{"icon":"fa fa-sliders-h","description":"System prompts and instructions that guide the AI agent''s execution behavior"},"System Metadata":{"icon":"fa fa-cog","description":"System-managed audit, ownership, and tracking fields"}}', GETUTCDATE(), GETUTCDATE());
-
-/* Insert FieldCategoryIcons setting (legacy) */
-
-               INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('22bc037b-74ba-4dd8-ac30-bc9715471215', 'F3ECEDA6-0B91-4A0A-86D1-15F8C29CA336', 'FieldCategoryIcons', '{"Skill Profile":"fa fa-brain","Agent Configuration":"fa fa-sliders-h","System Metadata":"fa fa-cog"}', GETUTCDATE(), GETUTCDATE());
-
-/* Set DefaultForNewUser=true for NEW entity (category: primary, confidence: high) */
-
-         UPDATE [${flyway:defaultSchema}].[ApplicationEntity]
-         SET [DefaultForNewUser] = 1, [__mj_UpdatedAt] = GETUTCDATE()
-         WHERE [EntityID] = 'F3ECEDA6-0B91-4A0A-86D1-15F8C29CA336';
+-- UPDATE Entity Field Category Info MJ: AI Agents.RootDefaultCoAgentID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Root Default Co-Agent ID',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '1861E78B-4306-44CA-8E62-70991A1F58CA' AND AutoUpdateCategory = 1;
 

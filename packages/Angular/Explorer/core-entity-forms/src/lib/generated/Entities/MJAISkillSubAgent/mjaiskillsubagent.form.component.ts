@@ -15,7 +15,7 @@ export class MJAISkillSubAgentFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'subAgentMapping', sectionName: 'Sub-Agent Mapping', isExpanded: true },
+            { sectionKey: 'agentAssociation', sectionName: 'Agent Association', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

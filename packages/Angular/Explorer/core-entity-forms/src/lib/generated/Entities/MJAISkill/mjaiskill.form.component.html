@@ -10,11 +10,11 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Skill Profile Section -->
+    <!-- Skill Definition Section -->
     <mj-collapsible-panel
-        SectionKey="skillProfile"
-        SectionName="Skill Profile"
-        Icon="fa fa-brain"
+        SectionKey="skillDefinition"
+        SectionName="Skill Definition"
+        Icon="fa fa-book"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -36,6 +36,24 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
+            FieldName="Instructions"
+            Type="code"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Configuration Section -->
+    <mj-collapsible-panel
+        SectionKey="configuration"
+        SectionName="Configuration"
+        Icon="fa fa-cog"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
             FieldName="Status"
             Type="select"
             [EditMode]="EditMode"
@@ -52,20 +70,47 @@
 
     </mj-collapsible-panel>
 
-    <!-- Agent Configuration Section -->
+    <!-- UI Customization Section -->
     <mj-collapsible-panel
-        SectionKey="agentConfiguration"
-        SectionName="Agent Configuration"
-        Icon="fa fa-sliders-h"
+        SectionKey="uICustomization"
+        SectionName="UI Customization"
+        Icon="fa fa-palette"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="IconClass"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Color"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Ownership and Audit Section -->
+    <mj-collapsible-panel
+        SectionKey="ownershipAndAudit"
+        SectionName="Ownership and Audit"
+        Icon="fa fa-user-shield"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="false"
-            FieldName="Instructions"
-            Type="textarea"
+            FieldName="CreatedByUserID"
+            Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
+            LinkType="Record"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -74,18 +119,9 @@
     <mj-collapsible-panel
         SectionKey="systemMetadata"
         SectionName="System Metadata"
-        Icon="fa fa-cog"
+        Icon="fa fa-database"
         [Form]="this"
         [FormContext]="formContext">
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="CreatedByUserID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-            LinkType="Record"
-        ></mj-form-field>
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -115,7 +151,7 @@
     <mj-collapsible-panel
         SectionKey="mJAISkillSubAgents"
         SectionName="AI Skill Sub Agents"
-        Icon="fa fa-robot"
+        Icon="fa fa-network-wired"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
@@ -130,6 +166,31 @@
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAISkillSubAgents', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- AI Agent Skills Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAIAgentSkills"
+        SectionName="AI Agent Skills"
+        Icon="fa fa-brain"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentSkills')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Skills','SkillID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Skills')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentSkills')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentSkills', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -161,25 +222,25 @@
         }
     </mj-collapsible-panel>
 
-    <!-- AI Agent Skills Section -->
+    <!-- AI Skill Permissions Section -->
     <mj-collapsible-panel
-        SectionKey="mJAIAgentSkills"
-        SectionName="AI Agent Skills"
-        Icon="fa fa-user-graduate"
+        SectionKey="mJAISkillPermissions"
+        SectionName="AI Skill Permissions"
+        Icon="fa fa-user-shield"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJAIAgentSkills')"
+        [BadgeCount]="GetSectionRowCount('mJAISkillPermissions')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Skills','SkillID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Agent Skills')"
-                [AllowLoad]="IsSectionExpanded('mJAIAgentSkills')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Skill Permissions','SkillID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Skill Permissions')"
+                [AllowLoad]="IsSectionExpanded('mJAISkillPermissions')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJAIAgentSkills', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJAISkillPermissions', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

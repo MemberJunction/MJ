@@ -15,7 +15,7 @@ export class MJAISkillActionFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'mappingDetails', sectionName: 'Mapping Details', isExpanded: true },
+            { sectionKey: 'skillActionMapping', sectionName: 'Skill & Action Mapping', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }
