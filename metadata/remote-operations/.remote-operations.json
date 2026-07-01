@@ -375,5 +375,59 @@
       "lastModified": "2026-06-30T23:51:20.797Z",
       "checksum": "a7ef74f971f0454a747c60c45b55f4a85df04401951c0474aad48fd0358eab13"
     }
+  },
+  {
+    "fields": {
+      "Name": "Export Skill Markdown",
+      "OperationKey": "Skill.ExportMarkdown",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Skills",
+      "Description": "Exports an MJ: AI Skills record to the portable SKILL.md format (frontmatter + Instructions body). Bundled Action/sub-agent IDs are resolved to their current Names for cross-instance portability. Implemented by SkillExportMarkdownServerOperation in @memberjunction/ai-agents.",
+      "InputTypeName": "SkillExportMarkdownInput",
+      "InputTypeDefinition": "@file:types/skill-export-markdown.input.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "SkillExportMarkdownOutput",
+      "OutputTypeDefinition": "@file:types/skill-export-markdown.output.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiredScope": "skill:export",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "135B3EB8-E80E-402A-BC9A-07AF8A24FABC"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T13:37:27.117Z",
+      "checksum": "dff23661d99942169d7d1d9c8bf17d9748f67e1fef560963632e76bec22ddeaf"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Import Skill Markdown",
+      "OperationKey": "Skill.ImportMarkdown",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Skills",
+      "Description": "Imports a SKILL.md document, resolving Action/sub-agent names against this instance's catalog (unresolvable names become non-fatal warnings), and creates or updates the MJ: AI Skills record plus its Action/sub-agent bundling junction rows. Implemented by SkillImportMarkdownServerOperation in @memberjunction/ai-agents.",
+      "InputTypeName": "SkillImportMarkdownInput",
+      "InputTypeDefinition": "@file:types/skill-import-markdown.input.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "SkillImportMarkdownOutput",
+      "OutputTypeDefinition": "@file:types/skill-import-markdown.output.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiredScope": "skill:import",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "F4C0E677-1F7E-4835-B374-41EE6918DF3D"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T13:37:27.146Z",
+      "checksum": "e451cc54231ec2336044cc24fd5a762b3e1b0e370f91fc8ce07ca7107f121885"
+    }
   }
 ]

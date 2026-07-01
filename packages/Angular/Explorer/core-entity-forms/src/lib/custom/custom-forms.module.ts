@@ -93,6 +93,11 @@ import { AgentRealtimePanel, LoadAgentRealtimePanel } from "../panels/ai-agents/
 // self-hides unless that entity has an active MJ: ML Model Scoring Binding.
 // Imported here so the @RegisterClassEx decorator runs at module load.
 import { ModelPredictionPanel } from "../panels/model-predictions/model-prediction.panel";
+// AI Skills sharing/portability panel (Pattern 1 — BaseFormPanel slot): Share
+// dialog + SKILL.md export/import actions, mounted on the generated MJ: AI
+// Skills form. Imported so the @RegisterClassEx decorator runs at module load.
+import { AISkillSharingPanel } from "../panels/ai-skill-sharing/ai-skill-sharing-panel.component";
+import { ResourcePermissionsModule } from "@memberjunction/ng-resource-permissions";
 
 @NgModule({
     declarations: [
@@ -143,6 +148,7 @@ import { ModelPredictionPanel } from "../panels/model-predictions/model-predicti
         WebsiteCrawlerSettingsPanel,
         // Entity-agnostic ('*') Model Predictions panel — mounts on every form, self-hides when N/A.
         ModelPredictionPanel,
+        AISkillSharingPanel,
         MJSearchScopeFormComponentExtended,
         MJSearchScopeProviderFormComponentExtended,
         MJAIAgentSessionFormComponentExtended,
@@ -196,7 +202,8 @@ import { ModelPredictionPanel } from "../panels/model-predictions/model-predicti
         MjSlidePanelComponent,
         MjFormDialogComponent,
         SearchModule,
-        RecordProcessEditorComponent
+        RecordProcessEditorComponent,
+        ResourcePermissionsModule
     ],
     exports: [
         MJEntityFormComponentExtended,
@@ -226,6 +233,7 @@ import { ModelPredictionPanel } from "../panels/model-predictions/model-predicti
         TagPipelineConfigurationPanel,
         WebsiteCrawlerSettingsPanel,
         ModelPredictionPanel,
+        AISkillSharingPanel,
         MJSearchScopeFormComponentExtended,
         MJSearchScopeProviderFormComponentExtended,
         MJAIAgentSessionFormComponentExtended,

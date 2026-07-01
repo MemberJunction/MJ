@@ -36,6 +36,15 @@ export interface ImportSkillResult {
     warnings: string[];
 }
 
+/**
+ * Result of {@link SkillImportExportService.ExportSkill}.
+ */
+export interface ExportSkillResult {
+    markdown: string;
+    /** The skill's Name — returned alongside the markdown so callers don't need a second load. */
+    skillName: string;
+}
+
 export class SkillImportExportService {
     /**
      * Exports a skill to a portable SKILL.md string: Action/sub-agent IDs are resolved to their
@@ -45,7 +54,7 @@ export class SkillImportExportService {
         skillId: string,
         contextUser: UserInfo,
         provider?: IMetadataProvider
-    ): Promise<string> {
+    ): Promise<ExportSkillResult> {
         const md = provider ?? Metadata.Provider;
         const skill = await md.GetEntityObject<MJAISkillEntity>('MJ: AI Skills', contextUser);
         const loaded = await skill.Load(skillId);
@@ -75,7 +84,7 @@ export class SkillImportExportService {
             .map(row => AIEngine.Instance.Agents.find(a => a.ID === (row as MJAISkillSubAgentEntity).SubAgentID)?.Name)
             .filter((name): name is string => !!name);
 
-        return SkillMarkdownConverter.Serialize({
+        const markdown = SkillMarkdownConverter.Serialize({
             name: skill.Name,
             description: skill.Description ?? undefined,
             category: skill.Category ?? undefined,
@@ -83,6 +92,8 @@ export class SkillImportExportService {
             subAgentNames,
             instructions: skill.Instructions
         });
+
+        return { markdown, skillName: skill.Name };
     }
 
     /**

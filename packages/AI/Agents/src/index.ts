@@ -22,6 +22,7 @@ export * from './ArtifactToolManager';
 export * from './MemoryWriteManager';
 export * from './SkillMarkdownConverter';
 export * from './SkillImportExportService';
+export * from './operations/SkillMarkdownOperations';
 export * from './pipeline';
 export * from './file-input-resolver';
 export * from './artifact-tools/DataSnapshotToolLibrary';
