@@ -267,7 +267,8 @@ export class ConversationAgentService {
     sourceArtifactId?: string,
     sourceArtifactVersionId?: string,
     agentConfigurationPresetId?: string,
-    appContext?: Record<string, unknown> | null
+    appContext?: Record<string, unknown> | null,
+    planMode?: boolean
   ): Promise<ExecuteAgentResult | null> {
     try {
       // Ensure AIEngineBase is configured
@@ -311,6 +312,7 @@ export class ConversationAgentService {
         },
         ...(payload ? { Payload: payload as Record<string, unknown> } : {}),
         ...(aiConfigurationId ? { ConfigurationId: aiConfigurationId } : {}),
+        ...(planMode ? { PlanMode: true } : {}),
         CreateArtifacts: true,
         CreateNotification: true,
         SourceArtifactId: sourceArtifactId,

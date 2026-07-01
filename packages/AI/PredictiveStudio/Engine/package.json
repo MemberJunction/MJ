@@ -22,6 +22,7 @@
     "@memberjunction/actions": "5.43.0",
     "@memberjunction/actions-base": "5.43.0",
     "@memberjunction/ai": "5.43.0",
+    "@memberjunction/ai-agents": "5.43.0",
     "@memberjunction/ai-core-plus": "5.43.0",
     "@memberjunction/core": "5.43.0",
     "@memberjunction/core-entities": "5.43.0",

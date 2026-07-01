@@ -196,6 +196,37 @@ export interface EngineDataMapEntry {
     data: unknown[];
     loadedSuccessfully: boolean;
     errorMessage?: string;
+    /**
+     * True when this config was skipped because the current user lacks read
+     * permission on its entity. The data array will be empty `[]`.
+     */
+    permissionDenied?: boolean;
+}
+
+/**
+ * Thrown when engine data is accessed but was never loaded because the
+ * current user lacks read permissions on the underlying entities.
+ *
+ * Consumers that want graceful degradation should check
+ * `engine.IsPermissionConstrained` BEFORE accessing properties.
+ * This exception is the safety net for code paths that forget to check.
+ */
+export class PermissionConstrainedError extends Error {
+    /** The engine class name (e.g., 'AIEngineBase', 'QueryEngine') */
+    public readonly EngineName: string;
+    /** The entity names that were denied */
+    public readonly DeniedEntities: string[];
+
+    constructor(engineName: string, deniedEntities: string[]) {
+        super(
+            `${engineName} data is not available — user lacks read permission ` +
+            `on: ${deniedEntities.join(', ')}. Check engine.IsPermissionConstrained ` +
+            `before accessing properties to handle this gracefully.`
+        );
+        this.name = 'PermissionConstrainedError';
+        this.EngineName = engineName;
+        this.DeniedEntities = deniedEntities;
+    }
 }
 
 export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartupSink {
@@ -211,6 +242,8 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     private _dataChange$ = new Subject<EngineDataChangeEvent>();
     private _cacheChangeUnsubscribers: (() => void)[] = [];
     private _propertySubjects: Map<string, BehaviorSubject<BaseEntity[]>> = new Map();
+    private _isPermissionConstrained: boolean = false;
+    private _deniedEntityNames: string[] = [];
 
     /**
      * Returns an Observable for a specific engine array property. Subscribers receive the
@@ -295,6 +328,62 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             affectedEntity
         };
         this._dataChange$.next(event);
+    }
+
+    /**
+     * True when the engine loaded successfully but all entity configs were
+     * skipped because the current user lacks read permissions. Accessor
+     * properties will throw {@link PermissionConstrainedError} if accessed
+     * in this state. Check this flag first to degrade gracefully.
+     */
+    public get IsPermissionConstrained(): boolean {
+        return this._isPermissionConstrained;
+    }
+
+    /**
+     * Retrieves engine-loaded data for a config property by name. This is the
+     * canonical accessor for engine getter properties — it checks the data map
+     * for permission denial and throws {@link PermissionConstrainedError} with
+     * the specific denied entity name(s) if the config was skipped.
+     *
+     * Subclasses should use this in every getter that exposes engine-loaded data:
+     * ```typescript
+     * public get Models(): MJAIModelEntityExtended[] {
+     *     return this.GetConfigData<MJAIModelEntityExtended>('_models');
+     * }
+     * ```
+     *
+     * @param propertyName - The config property name (e.g., '_models', '_agents'),
+     *   matching the PropertyName used in the engine's Config() params array.
+     * @returns The data array for the property, or an empty array if not yet loaded.
+     * @throws {PermissionConstrainedError} if the property was skipped due to permission denial.
+     */
+    protected GetConfigData<E>(propertyName: string): E[] {
+        const entry = this._dataMap.get(propertyName);
+        if (entry?.permissionDenied) {
+            throw new PermissionConstrainedError(
+                this.constructor.name,
+                entry.entityName ? [entry.entityName] : this._deniedEntityNames
+            );
+        }
+        return ((this as Record<string, unknown>)[propertyName] as E[]) ?? [];
+    }
+
+    /**
+     * Check if a specific property was skipped due to permission denial.
+     * Forward-compatible with a future partial-loading approach.
+     */
+    public IsPropertyPermissionConstrained(propertyName: string): boolean {
+        const entry = this._dataMap.get(propertyName);
+        return entry?.permissionDenied === true;
+    }
+
+    /**
+     * List of entity names that were skipped due to permission denial.
+     * Empty if not permission-constrained. Useful for logging/diagnostics.
+     */
+    public get PermissionConstrainedEntities(): string[] {
+        return [...this._deniedEntityNames];
     }
 
     /**
@@ -427,6 +516,11 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         }
 
         if (!this._loaded || forceRefresh) {
+            // Reset permission-constrained state on fresh load or force refresh
+            // so permission changes mid-session take effect via Config(true).
+            this._isPermissionConstrained = false;
+            this._deniedEntityNames = [];
+
             // Start telemetry tracking for engine load
             const entityNames = configs
                 .filter(c => c.Type !== 'dataset' && c.EntityName)
@@ -619,6 +713,13 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      */
     protected async HandleIndividualBaseEntityEvent(event: BaseEntityEvent): Promise<boolean> {
         try {
+            // If the engine is permission-constrained, don't attempt to reload
+            // configs in response to entity events — the user can't read them
+            // anyway. Use Config(true) to re-check if permissions change.
+            if (this._isPermissionConstrained) {
+                return true;
+            }
+
             if (event.type === 'remote-invalidate') {
                 return await this.HandleRemoteInvalidateEvent(event);
             }
@@ -1305,11 +1406,77 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         const entityConfigs = this._metadataConfigs.filter(c => c.Type === 'entity');
         const datasetConfigs = this._metadataConfigs.filter(c => c.Type === 'dataset');
 
+        // All-or-nothing permission check: if the user lacks read access on ANY
+        // entity config, skip ALL entity configs for this engine. Returns the
+        // original array unchanged when permissions pass, or an empty array when
+        // any entity is denied (marking the engine as permission-constrained).
+        const entityConfigsToLoad = this.CheckPermissionsOrSkipAll(entityConfigs, contextUser);
+
         await Promise.all([...datasetConfigs.map(c => this.LoadSingleDatasetConfig(c, contextUser, bypassCache)),
-                           this.LoadMultipleEntityConfigs(entityConfigs, contextUser, bypassCache)]);
+                           this.LoadMultipleEntityConfigs(entityConfigsToLoad, contextUser, bypassCache)]);
 
         // Register cross-server cache change callbacks for entity configs
         this.RegisterCacheChangeCallbacks(entityConfigs);
+    }
+
+    /**
+     * All-or-nothing permission gate: checks `CanRead` on every entity config. If ANY
+     * entity is denied, ALL configs are skipped — the engine is marked permission-constrained
+     * and its data arrays are set to empty `[]`. This prevents noisy permission-denied errors
+     * and endless retry loops for users with limited permissions (e.g., org-scoped SaaS roles).
+     *
+     * On the server side with a system user (who has all permissions), this method returns
+     * the original configs unchanged — no behavior change for privileged users.
+     *
+     * @returns The original configs array (all permissions pass) or an empty array (any denied)
+     */
+    protected CheckPermissionsOrSkipAll(configs: BaseEnginePropertyConfig[], contextUser: UserInfo): BaseEnginePropertyConfig[] {
+        if (configs.length === 0) return configs;
+
+        // Determine the user to check permissions for — on the client side contextUser
+        // may be undefined, so fall back to the current logged-in user from Metadata.
+        const user = contextUser || this.ProviderToUse?.CurrentUser;
+        if (!user) return configs; // Can't check without a user — proceed with normal loading
+
+        const md = this.ProviderToUse;
+        const deniedEntities: string[] = [];
+
+        for (const config of configs) {
+            if (!config.EntityName) continue;
+            const entityInfo = md.EntityByName(config.EntityName);
+            if (!entityInfo) continue; // Entity not in metadata — let RunView handle it
+            const perms = entityInfo.GetUserPermisions(user);
+            if (!perms || !perms.CanRead) {
+                deniedEntities.push(config.EntityName);
+            }
+        }
+
+        if (deniedEntities.length > 0) {
+            LogStatus(`${this.constructor.name}: Skipping ${configs.length} entity config(s) — user ${user.Email} lacks read permission on: ${deniedEntities.join(', ')}`);
+
+            // Mark all entity configs as successfully loaded with empty data.
+            // This is not a failure — it's expected behavior for limited-permission users.
+            // Marking as successful allows the engine to set _loaded = true and avoid
+            // endless retry loops from EnsureLoaded().
+            for (const config of configs) {
+                if (config.AddToObject !== false) {
+                    (this as Record<string, unknown>)[config.PropertyName] = [];
+                }
+                this._dataMap.set(config.PropertyName, {
+                    entityName: config.EntityName,
+                    data: [],
+                    loadedSuccessfully: true,
+                    permissionDenied: true,
+                });
+            }
+
+            this._isPermissionConstrained = true;
+            this._deniedEntityNames = deniedEntities;
+
+            return []; // Return empty — don't attempt any RunView calls
+        }
+
+        return configs;
     }
 
     /**
