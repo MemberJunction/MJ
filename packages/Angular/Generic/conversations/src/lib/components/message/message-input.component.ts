@@ -247,7 +247,6 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   @Output() initialMessageAutoSendFailed = new EventEmitter<{conversationId: string}>(); // Emitted when a latched pending first message fails before messageSent
   @Output() emptyStateSubmit = new EventEmitter<{text: string; attachments: PendingAttachment[]}>(); // Emitted when in emptyStateMode
   @Output() uploadStateChanged = new EventEmitter<{isUploading: boolean; message: string}>(); // Emits when attachment upload state changes
-  @Output() artifactPickerRequested = new EventEmitter<void>(); // Emits when user clicks "Attach Artifact"
 
   @ViewChild('inputBox') inputBox!: MessageInputBoxComponent;
 
@@ -775,13 +774,6 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    */
   onAttachmentError(error: string): void {
     this.toastService.error(error);
-  }
-
-  /**
-   * Handle artifact picker request — bubble up to parent
-   */
-  onArtifactPickerRequested(): void {
-    this.artifactPickerRequested.emit();
   }
 
   /**

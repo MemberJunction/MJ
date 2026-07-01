@@ -44,17 +44,6 @@
           >
           <i class="fa-solid fa-paperclip"></i>
         </button>
-        <!--
-          "Attach artifact from library" (fa-cube) button was here but is NOT wired
-          (emits `artifactPickerRequested` with no consumer — see commit 0a4612abf1).
-          Hidden 2026-07-01 because a disabled, no-op button confused users. The
-          method + output are retained for whoever wires the picker. To restore, add
-          back a button that calls `openArtifactPicker()`. Original plan: wrap the
-          `<mj-tree-dropdown>` from dashboard-viewer's artifact-config-panel and, on
-          selection, attach the artifact version as a Direction='Input'
-          MJConversationDetailArtifact junction (agents already read input artifacts
-          via AgentRunner.gatherConversationArtifacts()).
-        -->
         }
         @if (enableRealtime) {
         <button
