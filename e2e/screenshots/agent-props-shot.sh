@@ -5,12 +5,12 @@
 # Angular debug API (the foblex canvas node-selection is hard to drive headless).
 # Prereq: playwright-cli on an agent's Flow Configuration (canvas) with >=1 step.
 #
-# Usage: scripts/agent-props-shot.sh <out-basename>
-# Writes: plans/collapsible-section-screenshots/agent-properties/<out>-light.png and -dark.png
+# Usage: e2e/screenshots/agent-props-shot.sh <out-basename>
+# Writes: plans/complete/collapsible-section-screenshots/agent-properties/<out>-light.png and -dark.png
 
 set -eu
 OUT="${1:?usage: agent-props-shot.sh <out>}"
-DIR="plans/collapsible-section-screenshots/agent-properties"
+DIR="plans/complete/collapsible-section-screenshots/agent-properties"
 mkdir -p "$DIR"
 
 FORCE="var all=[...document.querySelectorAll('*')]; var fe=null,steps=null; for(var i=0;i<all.length;i++){try{var c=ng.getComponent(all[i]); if(c&&c.steps&&c.steps.length&&('selectedStep' in c)){fe=c;steps=c.steps;break;}}catch(e){}} if(fe){fe.selectedStep=steps[0]; fe.selectedConnection=null; fe.selectedPathEntity=null; fe.showPropertiesPanel=true; ng.applyChanges(fe);}"

@@ -14,7 +14,7 @@
    Run (from repo root; password lives in packages/MJAPI/.env):
      DBP=$(grep -E "^DB_PASSWORD=" packages/MJAPI/.env | sed -E "s/^DB_PASSWORD=//;s/^'//;s/'$//")
      sqlcmd -S localhost,1433 -U sa -P "$DBP" -d AssociationDBv541 -C \
-       -i plans/collapsible-section-screenshots/seed-local-data.sql
+       -i plans/complete/collapsible-section-screenshots/seed-local-data.sql
 
    Covers:
      - MJ: Queries              -> query-viewer / query-info-panel   (target #10)
