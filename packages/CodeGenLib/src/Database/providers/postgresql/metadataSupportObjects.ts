@@ -439,6 +439,26 @@ BEGIN
     WHERE TRIM(v) ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
   v_is_scoped := EXISTS (SELECT 1 FROM _del_scope);
 
+  -- External-data-source entities must be excluded from the field prune (they are remote; they have no
+  -- physical table/view, so the orphan join would match every external EntityField and delete it). But
+  -- EDS is not yet ported to PostgreSQL, so vwEntities has no "ExternalDataSourceID" column here, and a
+  -- static reference to it would abort this SP on every PG CodeGen run (the function creates fine but
+  -- throws "column does not exist" on execution). So we populate the exclusion set only when the column
+  -- exists (a safe no-op today; it auto-activates once the PG EDS migration adds Entity."ExternalDataSourceID").
+  -- The un-taken IF branch is not planned by PL/pgSQL, so the missing-column reference never errors.
+  -- NOTE (parity): the ENTITY-level prune (vwEntitiesWithMissingBaseTables + the ExternalDataSourceID
+  -- guard in manage-metadata) is likewise inert on PG until that same migration also recreates
+  -- vwEntitiesWithMissingBaseTables as SELECT e.* (mirroring SQL Server migration 1726).
+  DROP TABLE IF EXISTS _del_ext_entities;
+  CREATE TEMP TABLE _del_ext_entities (entity_id UUID);
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = '__mj' AND table_name = 'vwEntities' AND column_name = 'ExternalDataSourceID'
+  ) THEN
+    INSERT INTO _del_ext_entities
+      SELECT e."ID" FROM __mj."vwEntities" e WHERE e."ExternalDataSourceID" IS NOT NULL;
+  END IF;
+
   -- metadata-side fields for in-scope, non-virtual entities
   DROP TABLE IF EXISTS _del_ef;
   CREATE TEMP TABLE _del_ef AS
@@ -448,11 +468,7 @@ BEGIN
   LEFT JOIN unnest(string_to_array(COALESCE(p_ExcludedSchemaNames, ''), ',')) AS ex(v)
     ON e."SchemaName"::text = TRIM(ex.v)
   WHERE e."VirtualEntity" = FALSE
-    -- Exclude external-data-source entities (remote; no physical table/view). NOTE: this is the FIELD-level
-    -- prune. The ENTITY-level prune (vwEntitiesWithMissingBaseTables + the ExternalDataSourceID guard in
-    -- manage-metadata) stays inert on PG until the PG EDS migration adds Entity."ExternalDataSourceID" AND
-    -- recreates vwEntitiesWithMissingBaseTables as SELECT e.* (mirroring SQL Server migration 1726).
-    AND e."ExternalDataSourceID" IS NULL
+    AND ef."EntityID" NOT IN (SELECT entity_id FROM _del_ext_entities) -- exclude external-data-source entities (see note above)
     AND ex.v IS NULL
     AND (NOT v_is_scoped OR ef."EntityID" IN (SELECT s.entity_id FROM _del_scope s));
 

@@ -114,10 +114,20 @@ describe('EDS — external-entity prune guard (PR #2449)', () => {
     // This locks the guard in. The SQL Server analogue lives in migration 1726, which is
     // immutable once applied; the fragile, regenerated-from-code copy is PostgreSQL's — so
     // that's the one a unit test must pin.
+    //
+    // The guard MUST be column-existence-aware: EDS is not yet ported to PG, so vwEntities has
+    // no "ExternalDataSourceID" column, and a STATIC reference to it aborts the SP on every PG
+    // CodeGen run ("column does not exist" at execution). So we pin both halves: the guard is
+    // present AND it is wrapped in an information_schema existence check so it's a safe no-op
+    // until the column exists.
     it('PostgreSQLCodeGenProvider excludes external entities from spDeleteUnneededEntityFields', () => {
         const sql = new PostgreSQLCodeGenProvider().getMetadataSupportObjectsSQL('__mj');
         expect(sql).toBeTruthy();
         expect(sql!).toContain('spDeleteUnneededEntityFields');
-        expect(sql!).toMatch(/e\."ExternalDataSourceID"\s+IS NULL/);
+        // The external-entity guard is present (populates the exclusion set from the EDS column)...
+        expect(sql!).toMatch(/e\."ExternalDataSourceID"\s+IS NOT NULL/);
+        expect(sql!).toContain('_del_ext_entities');
+        // ...and it is gated on the column actually existing, so it never references a missing column.
+        expect(sql!).toMatch(/information_schema\.columns[\s\S]*'ExternalDataSourceID'/);
     });
 });
