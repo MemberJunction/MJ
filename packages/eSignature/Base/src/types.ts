@@ -65,6 +65,78 @@ export interface SignatureProviderConfig {
     [key: string]: unknown;
 }
 
+/**
+ * The kind of field to place for a signer. This is the portable subset every MJ-supported provider
+ * (DocuSign, Dropbox Sign, PandaDoc) can render; each driver maps it onto its own vocabulary.
+ * Richer per-provider types (checkbox groups, dropdowns, attachments, …) are intentionally omitted
+ * until a real use case needs them — add here and to each driver's map together.
+ */
+export type SignatureFieldType = 'signature' | 'initials' | 'dateSigned' | 'text' | 'checkbox';
+
+/** Unit an anchor offset is expressed in. Maps to DocuSign `anchorUnits`; ignored by providers that
+ *  don't support offset units (they treat the offset as their native unit). */
+export type SignatureAnchorUnits = 'pixels' | 'mms' | 'cms' | 'inches';
+
+/**
+ * Where to place a single field for a signer on the document — the answer to "put the Sign Here box
+ * HERE, not at a hardcoded corner."
+ *
+ * Two placement strategies, checked in this order:
+ *   1. **Anchor string** (`anchor`) — place the field wherever a marker string (e.g. `"Signature:"`
+ *      or a hidden tag like `"\\s1\\"`) appears in the document text. This is the portable, layout-
+ *      resilient primitive supported by every provider (DocuSign anchor tabbing, Dropbox Sign /
+ *      PandaDoc text tags). **Preferred** whenever the caller controls the document's content.
+ *   2. **Normalized coordinates** (`page` + `xPercent` + `yPercent`) — an absolute fallback for when
+ *      the document has no usable marker. Coordinates are **percentages of the page** (0–100), NOT
+ *      raw pixels, so they're page-size independent; each driver converts to its native unit/origin.
+ *
+ * If a field supplies **neither** an anchor nor coordinates, the driver places **no tab** for it and
+ * lets the provider apply its own default. A recipient with an empty/absent `fields` array therefore
+ * produces no forced placement at all (the provider decides) — which is the correct behavior when
+ * the caller hasn't said where signing should happen.
+ */
+export interface SignatureFieldPlacement {
+    /** What to place. Defaults to `'signature'` when omitted. */
+    type?: SignatureFieldType;
+    /** Whether the signer must complete this field. Defaults to `true`. */
+    required?: boolean;
+
+    // ---- Strategy 1: anchor string (preferred) ----
+    /** Marker text in the document to anchor this field to (e.g. `"Signature:"`). */
+    anchor?: string;
+    /** Horizontal offset from the anchor, in {@link anchorUnits}. */
+    anchorXOffset?: number;
+    /** Vertical offset from the anchor, in {@link anchorUnits}. */
+    anchorYOffset?: number;
+    /** Unit for the anchor offsets. Defaults to `'pixels'`. */
+    anchorUnits?: SignatureAnchorUnits;
+    /** When true, don't error if the anchor string isn't found — just skip this field. Defaults to true. */
+    anchorIgnoreIfNotPresent?: boolean;
+
+    // ---- Strategy 2: normalized absolute coordinates (fallback) ----
+    /** 1-based page number to place the field on. Drivers adjust for 0-based APIs. */
+    page?: number;
+    /** X position as a percentage (0–100) of the page width. */
+    xPercent?: number;
+    /** Y position as a percentage (0–100) of the page height, measured from the top. */
+    yPercent?: number;
+    /**
+     * The target page's true width/height **in PDF points** (1/72"), when known. A drag-and-drop
+     * placer that renders the actual document knows each page's real size, so it should pass these —
+     * they let each provider convert the {@link xPercent}/{@link yPercent} against the ACTUAL page
+     * rather than assuming US-Letter. Omit them only when the page size is genuinely unknown, in
+     * which case drivers fall back to a US-Letter assumption (correct for Letter docs, off for A4 /
+     * legal / landscape). Percentages stay page-size-independent; these just make the back-conversion
+     * exact for non-Letter pages.
+     */
+    pageWidthPt?: number;
+    pageHeightPt?: number;
+
+    /** Which document (1-based index into the envelope's documents) this field targets. Defaults to
+     *  all documents when omitted (a signature is typically wanted on every document). */
+    documentIndex?: number;
+}
+
 /** A signer to be added to an envelope. */
 export interface SignatureRecipientInput {
     email: string;
@@ -73,6 +145,13 @@ export interface SignatureRecipientInput {
     routingOrder?: number;
     /** Template role name, when using {@link BaseSignatureProvider.ApplyTemplate}. */
     role?: string;
+    /**
+     * Fields to place for this signer (signature, date, initials, …) and WHERE to place them. When
+     * omitted or empty, the driver emits no explicit placement and the provider applies its own
+     * default — see {@link SignatureFieldPlacement}. Prefer anchor-string placement; fall back to
+     * normalized coordinates only when the document has no usable marker.
+     */
+    fields?: SignatureFieldPlacement[];
 }
 
 /** A document to include in an envelope. */
