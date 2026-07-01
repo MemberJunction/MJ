@@ -139,7 +139,7 @@
                 <ng-template mjAccordionTitle>
                     <i class="fa-solid fa-history"></i> Execution History
                     @if (loadingStates.executionHistory) {
-                        <span style="margin-left: 8px;"><i class="fa-solid fa-spinner fa-spin" style="font-size: 12px;"></i></span>
+                        <span><i class="fa-solid fa-spinner fa-spin"></i></span>
                     } @else if (executionHistoryCount > 0) {
                         <span> ({{ executionHistoryCount }}@if (executionHistoryCount < totalExecutionHistoryCount) { of {{ totalExecutionHistoryCount }}})</span>
                     }
@@ -474,7 +474,7 @@
                 <ng-template mjAccordionTitle>
                     <i class="fa-solid fa-bolt"></i> Actions
                     @if (loadingStates.actions) {
-                        <span style="margin-left: 8px;"><i class="fa-solid fa-spinner fa-spin" style="font-size: 12px;"></i></span>
+                        <span><i class="fa-solid fa-spinner fa-spin"></i></span>
                     } @else if (actionCount > 0) {
                         <span> ({{ actionCount }})</span>
                     }
@@ -560,7 +560,7 @@
                 <ng-template mjAccordionTitle>
                     <i class="fa-solid fa-sitemap"></i> Sub-Agents
                     @if (loadingStates.subAgents) {
-                        <span style="margin-left: 8px;"><i class="fa-solid fa-spinner fa-spin" style="font-size: 12px;"></i></span>
+                        <span><i class="fa-solid fa-spinner fa-spin"></i></span>
                     } @else if (totalSubAgentCount > 0) {
                         <span> ({{ totalSubAgentCount }})</span>
                     }
@@ -734,7 +734,7 @@
                 <ng-template mjAccordionTitle>
                     <i class="fa-solid fa-comments"></i> Prompts
                     @if (loadingStates.prompts) {
-                        <span style="margin-left: 8px;"><i class="fa-solid fa-spinner fa-spin" style="font-size: 12px;"></i></span>
+                        <span><i class="fa-solid fa-spinner fa-spin"></i></span>
                     } @else if (promptCount > 0) {
                         <span> ({{ promptCount }})</span>
                     }
@@ -840,7 +840,7 @@
                 <ng-template mjAccordionTitle>
                     <i class="fa-solid fa-brain"></i> Learning Cycles
                     @if (loadingStates.learningCycles) {
-                        <span style="margin-left: 8px;"><i class="fa-solid fa-spinner fa-spin" style="font-size: 12px;"></i></span>
+                        <span><i class="fa-solid fa-spinner fa-spin"></i></span>
                     } @else if (learningCycleCount > 0) {
                         <span> ({{ learningCycleCount }})</span>
                     }
@@ -901,7 +901,7 @@
                 <ng-template mjAccordionTitle>
                     <i class="fa-solid fa-sticky-note"></i> Notes
                     @if (loadingStates.notes) {
-                        <span style="margin-left: 8px;"><i class="fa-solid fa-spinner fa-spin" style="font-size: 12px;"></i></span>
+                        <span><i class="fa-solid fa-spinner fa-spin"></i></span>
                     } @else if (noteCount > 0) {
                         <span> ({{ noteCount }})</span>
                     }

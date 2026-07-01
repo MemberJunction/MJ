@@ -11,7 +11,7 @@ import { PaginationComponent } from '@memberjunction/ng-pagination';
 import { ExportServiceModule } from '@memberjunction/ng-export-service';
 import { MarkdownModule } from '@memberjunction/ng-markdown';
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
-import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
+import { MJEmptyStateComponent, MJAccordionModule } from '@memberjunction/ng-ui-components';
 
 // Query Viewer Components
 import { QueryDataGridComponent } from './query-data-grid/query-data-grid.component';
@@ -37,7 +37,8 @@ import { QueryInfoPanelComponent } from './query-info-panel/query-info-panel.com
         ExportServiceModule,
         MarkdownModule,
         CodeEditorModule,
-        MJEmptyStateComponent
+        MJEmptyStateComponent,
+        MJAccordionModule
     ],
     exports: [
         QueryDataGridComponent,

@@ -107,38 +107,7 @@
     overflow-y: auto;
     padding: 12px 20px;
 }
-.cr-group {
-    background: var(--mj-bg-surface);
-    border: 1px solid var(--mj-border-subtle);
-    border-radius: 10px;
-    margin-bottom: 8px;
-    overflow: hidden;
-    transition: box-shadow 0.15s;
-}
-.cr-group--expanded {
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-}
-.cr-group-head {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 14px;
-    width: 100%;
-    background: transparent;
-    border: none;
-    cursor: pointer;
-    text-align: left;
-    font-family: inherit;
-    transition: background 0.12s;
-}
-.cr-group-head:hover { background: var(--mj-bg-surface-hover); }
-.cr-group-chev {
-    color: var(--mj-text-muted);
-    font-size: 11px;
-    transition: transform 0.2s;
-    width: 12px;
-}
-.cr-group-chev--down { transform: rotate(90deg); }
+/* .cr-group chrome (border / header / chevron) is now owned by <mj-accordion-panel>. */
 .cr-group-name {
     font-size: 13.5px;
     font-weight: 600;
@@ -148,29 +117,8 @@
     letter-spacing: -0.2px;
 }
 .cr-group-meta { display: inline-flex; gap: 6px; }
-
-.cr-pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    font-size: 10.5px;
-    font-weight: 600;
-    padding: 2px 8px;
-    border-radius: 100px;
-    line-height: 1.4;
-}
-.cr-pill--neutral {
-    background: var(--mj-bg-surface-sunken);
-    color: var(--mj-text-secondary);
-}
-.cr-pill--info {
-    background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
-    color: var(--mj-brand-primary);
-}
-.cr-pill--warn {
-    background: color-mix(in srgb, var(--mj-status-warning) 16%, transparent);
-    color: color-mix(in srgb, var(--mj-status-warning) 70%, var(--mj-text-primary));
-}
+/* Count/keys/overrides pills migrated to <mj-accordion-badge> (--right / --info /
+   --warning). The bespoke .cr-pill* rules were removed. */
 
 /* Table */
 .cr-table {

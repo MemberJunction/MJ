@@ -1,7 +1,7 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { MJAlertComponent } from '@memberjunction/ng-ui-components';
+import { MJAccordionModule, MJAlertComponent } from '@memberjunction/ng-ui-components';
 
 import { ActionTestHarnessComponent } from './action-test-harness/action-test-harness.component';
 import { ActionTestHarnessDialogComponent } from './action-test-harness-dialog/action-test-harness-dialog.component';
@@ -18,6 +18,7 @@ import { ActionResultCodeDialogComponent } from './action-result-code-dialog/act
     imports: [
         CommonModule,
         FormsModule,
+        MJAccordionModule,
         MJAlertComponent
     ],
     exports: [

@@ -63,6 +63,16 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   @Input() appContext: Record<string, unknown> | null = null; // Application context for AI agent awareness
 
   /**
+   * Plan Mode pill state — sticky per-composer toggle, OFF by default (no behavior change unless
+   * the user turns it on). When on, the user's next message(s) request Plan Mode: the routed root
+   * agent must present a plan for approval before executing Actions/Sub-Agents. The toggle is
+   * always shown and the server enforces the `AIAgent.SupportsPlanMode` capability — a plan-mode
+   * request to an agent that doesn't support it simply no-ops the gate (see resolvePlanModeGate),
+   * so we don't need to resolve "the current agent" client-side just to hide the pill.
+   */
+  public PlanModeEnabled = false;
+
+  /**
    * Optional default agent ID for the conversation. When set, the FIRST
    * message routes directly to this agent — skipping Sage's default
    * delegation — provided the user did not @mention a different agent
@@ -843,6 +853,11 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     } finally {
       this.isSending = false;
     }
+  }
+
+  /** Toggle the sticky Plan Mode pill. Applies to subsequent user-initiated sends. */
+  public TogglePlanMode(): void {
+    this.PlanModeEnabled = !this.PlanModeEnabled;
   }
 
   async onSend(): Promise<void> {
@@ -1991,6 +2006,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         artifactInfo?.versionId,
         undefined, // configurationPresetId not used in this path
         this.appContext, // Embedder-supplied app/form context
+        this.PlanModeEnabled, // per-request Plan Mode toggle
       );
 
       // Task will be removed automatically in markMessageComplete() when status changes to Complete/Error
@@ -2093,6 +2109,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         artifactInfo?.versionId,
         configurationPresetId, // Pass configuration from previous @mention for continuity
         this.appContext, // Embedder-supplied app/form context
+        this.PlanModeEnabled, // per-request Plan Mode toggle
       );
 
       // Task will be removed automatically in markMessageComplete() when status changes to Complete/Error

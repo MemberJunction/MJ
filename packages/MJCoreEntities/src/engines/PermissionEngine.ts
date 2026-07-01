@@ -249,7 +249,7 @@ export class PermissionEngine extends BaseEngine<PermissionEngine> {
 
     /** All active, loaded domain catalog records. */
     public get Domains(): MJPermissionDomainEntity[] {
-        return this._domains.filter((d) => d.IsActive);
+        return this.GetConfigData<MJPermissionDomainEntity>('_domains').filter((d) => d.IsActive);
     }
 
     /** Look up the provider for a specific domain by name; returns undefined when not loaded. */
