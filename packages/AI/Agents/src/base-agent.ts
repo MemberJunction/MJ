@@ -7202,7 +7202,13 @@ The context is now within limits. Please retry your request with the recovered c
 
         // Fire-and-forget the 'started' INSERT — the agent flow never blocks on a step save. The queue
         // tracks the INSERT so every later UPDATE (queueStepSave) chains AFTER it commits.
-        this._stepSaveQueue.Insert(stepEntity);
+        // When the step has a parent, chain the INSERT AFTER the parent's INSERT to satisfy the
+        // self-referencing FK_AIAgentRunStep_ParentID constraint — without this, a child INSERT that
+        // races the parent INSERT hits an FK violation (especially under large-payload parent INSERTs).
+        const parentStepEntity = params.parentId && this._agentRun?.Steps
+            ? this._agentRun.Steps.find(s => UUIDsEqual(s.ID, params.parentId))
+            : undefined;
+        this._stepSaveQueue.Insert(stepEntity, parentStepEntity);
 
         // Add the step to the agent run's Steps array
         if (this._agentRun) {

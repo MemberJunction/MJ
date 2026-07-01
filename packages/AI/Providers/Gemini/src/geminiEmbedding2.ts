@@ -33,6 +33,14 @@ import { GeminiLLM } from '.';
 
 const DEFAULT_MODEL = 'gemini-embedding-2';
 
+/**
+ * Maximum number of in-flight `embedContent` requests issued by {@link GeminiEmbedding2.EmbedTexts}.
+ * `gemini-embedding-2` has no synchronous batch endpoint, so EmbedTexts fans out one request per
+ * text; this bounds concurrency to stay under Gemini's embedding rate limits on large batches
+ * while keeping throughput reasonable.
+ */
+const EMBED_TEXTS_MAX_CONCURRENCY = 4;
+
 @RegisterClass(BaseEmbeddings, 'GeminiEmbedding2')
 export class GeminiEmbedding2 extends BaseEmbeddings {
     private _gemini: GoogleGenAI;
@@ -90,20 +98,85 @@ export class GeminiEmbedding2 extends BaseEmbeddings {
         }
     }
 
+    /**
+     * Embeds an array of texts, returning exactly ONE vector per input text, in input order.
+     *
+     * IMPORTANT: `gemini-embedding-2` is multimodal — passing the whole `texts` array as a single
+     * `contents` value makes Gemini FUSE the texts into ONE blended vector (`response.embeddings`
+     * has length 1). That silently corrupts any caller that pairs vectors to records by index
+     * (e.g. `EntityVectorSyncer`). To guarantee a 1:1 mapping we issue a separate `embedContent`
+     * call per text with bounded concurrency, then hard-assert the count before returning.
+     *
+     * Error contract is preserved from the original: on an API/embedding failure this returns an
+     * empty `vectors` array (matching the prior behavior and the other MJ embedding providers), so
+     * batch pipelines degrade gracefully instead of aborting. A SUCCESSFUL run is then hard-asserted
+     * to be 1:1 with the inputs and throws on mismatch — so the batch-collapse bug can never again
+     * silently return a short/blended array that downstream code mis-pairs by index.
+     */
     public async EmbedTexts(params: EmbedTextsParams): Promise<EmbedTextsResult> {
         const model = params.model || DEFAULT_MODEL;
+        const texts = params.texts ?? [];
+
+        let vectors: number[][];
         try {
-            const response = await this._gemini.models.embedContent({ model, contents: params.texts });
-            return {
-                object: 'list',
-                model,
-                ModelUsage: new ModelUsage(0, 0),
-                vectors: (response.embeddings ?? []).map((e) => e.values ?? []),
-            };
+            vectors = await this.embedTextsConcurrently(texts, model, EMBED_TEXTS_MAX_CONCURRENCY);
         } catch (error) {
+            // Preserve the original contract: empty result on failure (no throw), so existing
+            // callers that don't wrap EmbedTexts keep degrading gracefully rather than aborting.
             console.error('Gemini embedding error:', ErrorAnalyzer.analyzeError(error, 'Gemini'));
             return { object: 'list', model, ModelUsage: new ModelUsage(0, 0), vectors: [] };
         }
+
+        // Hard guard OUTSIDE the catch: a successful run with the wrong count IS the collapse bug —
+        // fail loud here so it can never silently corrupt downstream vector storage again.
+        if (vectors.length !== texts.length) {
+            throw new Error(
+                `GeminiEmbedding2.EmbedTexts produced ${vectors.length} vector(s) for ${texts.length} ` +
+                    `input text(s); expected a 1:1 match. Refusing to return a misaligned embedding batch.`,
+            );
+        }
+
+        return {
+            object: 'list',
+            model,
+            ModelUsage: new ModelUsage(0, 0),
+            vectors,
+        };
+    }
+
+    /**
+     * Embeds each text with its own `embedContent` call while capping the number of concurrent
+     * in-flight requests at `maxConcurrency`. Results are returned in the same order as `texts`.
+     */
+    private async embedTextsConcurrently(texts: string[], model: string, maxConcurrency: number): Promise<number[][]> {
+        const vectors: number[][] = new Array<number[]>(texts.length);
+        let nextIndex = 0;
+
+        const worker = async (): Promise<void> => {
+            // `nextIndex++` runs to completion between awaits (JS is single-threaded), so each
+            // index is claimed by exactly one worker — no two workers embed the same text.
+            for (let index = nextIndex++; index < texts.length; index = nextIndex++) {
+                vectors[index] = await this.embedSingleText(texts[index], model);
+            }
+        };
+
+        const workerCount = Math.min(maxConcurrency, texts.length);
+        await Promise.all(Array.from({ length: workerCount }, () => worker()));
+        return vectors;
+    }
+
+    /**
+     * Embeds a single text and returns its vector. Throws on API error or an empty/missing
+     * embedding; {@link EmbedTexts} catches that to apply the batch-level empty-result contract,
+     * so a batch never ends up with a silently-corrupt (empty or blended) vector for one text.
+     */
+    private async embedSingleText(text: string, model: string): Promise<number[]> {
+        const response = await this._gemini.models.embedContent({ model, contents: text });
+        const vector = response.embeddings?.[0]?.values;
+        if (!vector || vector.length === 0) {
+            throw new Error('Gemini returned no embedding for one of the batch texts.');
+        }
+        return vector;
     }
 
     /**

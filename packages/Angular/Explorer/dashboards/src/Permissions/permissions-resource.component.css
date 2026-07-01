@@ -94,36 +94,7 @@
   gap: 8px;
 }
 
-.domain-group {
-  border: 1px solid var(--mj-border-default);
-  border-radius: 8px;
-  overflow: hidden;
-  background: var(--mj-bg-surface);
-}
-
-.domain-header {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px;
-  background: var(--mj-bg-surface-card);
-  border: none;
-  cursor: pointer;
-  text-align: left;
-  color: var(--mj-text-primary);
-  font: inherit;
-}
-
-.domain-header:hover {
-  background: var(--mj-bg-surface-hover);
-}
-
-.domain-header-left {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
+/* Group wrapper + header/chevron chrome now owned by <mj-accordion-panel>. */
 
 .domain-icon {
   color: var(--mj-brand-primary);
@@ -131,32 +102,15 @@
 }
 
 .domain-name {
+  flex: 1;
   font-weight: 600;
   font-size: 15px;
 }
 
-.domain-count {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 24px;
-  height: 20px;
-  padding: 0 8px;
-  background: var(--mj-brand-primary);
-  color: var(--mj-text-inverse);
-  border-radius: 10px;
-  font-size: 12px;
-  font-weight: 600;
-}
+/* Domain count pill migrated to <mj-accordion-badge mj-accordion-badge--right>;
+   bespoke .domain-count rule removed. */
 
-.toggle-icon {
-  transition: transform 0.15s ease;
-  color: var(--mj-text-muted);
-}
-
-.toggle-icon.rotated {
-  transform: rotate(180deg);
-}
+/* .toggle-icon chevron now owned by <mj-accordion-panel>. */
 
 .domain-body {
   padding: 0;
