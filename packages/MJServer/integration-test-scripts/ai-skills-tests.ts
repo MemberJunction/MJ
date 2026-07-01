@@ -26,6 +26,7 @@
 import { TestRunner, Assert, AssertEqual } from './lib/harness';
 import { bootstrapAI } from './lib/ai-bootstrap';
 import { RunView, UserInfo } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import {
     MJAISkillEntity,
     MJAISkillActionEntity,
@@ -129,24 +130,24 @@ async function main(): Promise<void> {
 
         suite.Test('AcceptsSkills=All includes an Active skill and excludes a Deprecated one', async () => {
             const skills = AIEngine.Instance.GetSkillsForAgent(agentAs(grantTargetAgent.ID, 'All'));
-            Assert(skills.some(s => s.ID === skillActive.ID), 'All must include the Active test skill');
-            Assert(!skills.some(s => s.ID === skillDeprecated.ID), 'All must exclude the Deprecated test skill');
+            Assert(skills.some(s => UUIDsEqual(s.ID, skillActive.ID)), 'All must include the Active test skill');
+            Assert(!skills.some(s => UUIDsEqual(s.ID, skillDeprecated.ID)), 'All must exclude the Deprecated test skill');
         });
 
         suite.Test('AcceptsSkills=Limited returns only granted Active skills', async () => {
             const granted = AIEngine.Instance.GetSkillsForAgent(agentAs(grantTargetAgent.ID, 'Limited'));
-            Assert(granted.some(s => s.ID === skillActive.ID), 'granted agent must see the granted skill');
+            Assert(granted.some(s => UUIDsEqual(s.ID, skillActive.ID)), 'granted agent must see the granted skill');
 
             // A different agent with no grant sees none of our test skills under Limited.
             const ungranted = AIEngine.Instance.GetSkillsForAgent(agentAs(bundledSubAgent.ID, 'Limited'));
-            Assert(!ungranted.some(s => s.ID === skillActive.ID), 'an agent without a grant must NOT see the skill under Limited');
+            Assert(!ungranted.some(s => UUIDsEqual(s.ID, skillActive.ID)), 'an agent without a grant must NOT see the skill under Limited');
         });
 
         suite.Test('GetSkillActionIDs / GetSkillSubAgentIDs return the bundled IDs', async () => {
             const actionIds = AIEngine.Instance.GetSkillActionIDs(skillActive.ID);
             const subIds = AIEngine.Instance.GetSkillSubAgentIDs(skillActive.ID);
-            Assert(actionIds.includes(anyAction!.ID), 'bundled action ID must be returned');
-            Assert(subIds.includes(bundledSubAgent.ID), 'bundled sub-agent ID must be returned');
+            Assert(actionIds.some(id => UUIDsEqual(id, anyAction!.ID)), 'bundled action ID must be returned');
+            Assert(subIds.some(id => UUIDsEqual(id, bundledSubAgent.ID)), 'bundled sub-agent ID must be returned');
         });
 
         // ── Permissions: grantee-exclusivity validator + GetSkillsForAgent user filter ───────────────
@@ -199,20 +200,20 @@ async function main(): Promise<void> {
 
         suite.Test('GetSkillsForAgent(agent) WITHOUT a user applies no permission filter', async () => {
             const skills = AIEngine.Instance.GetSkillsForAgent(agentAs(grantTargetAgent.ID, 'All'));
-            Assert(skills.some(s => s.ID === skillActive.ID), 'unfiltered call includes the restricted skill');
-            Assert(skills.some(s => s.ID === skillOpen.ID), 'unfiltered call includes the open skill');
+            Assert(skills.some(s => UUIDsEqual(s.ID, skillActive.ID)), 'unfiltered call includes the restricted skill');
+            Assert(skills.some(s => UUIDsEqual(s.ID, skillOpen.ID)), 'unfiltered call includes the open skill');
         });
 
         suite.Test('GetSkillsForAgent(agent, owner) returns owner-authored skills even when permission rows exist', async () => {
             const skills = AIEngine.Instance.GetSkillsForAgent(agentAs(grantTargetAgent.ID, 'All'), user);
-            Assert(skills.some(s => s.ID === skillActive.ID), 'owner sees their own skill despite a restrictive row');
-            Assert(skills.some(s => s.ID === skillOpen.ID), 'owner sees the open skill');
+            Assert(skills.some(s => UUIDsEqual(s.ID, skillActive.ID)), 'owner sees their own skill despite a restrictive row');
+            Assert(skills.some(s => UUIDsEqual(s.ID, skillOpen.ID)), 'owner sees the open skill');
         });
 
         suite.Test('GetSkillsForAgent(agent, nonOwner) excludes a skill with rows the user is not in, but keeps open-by-default skills', async () => {
             const skills = AIEngine.Instance.GetSkillsForAgent(agentAs(grantTargetAgent.ID, 'All'), nonOwner);
-            Assert(!skills.some(s => s.ID === skillActive.ID), 'non-owner is denied a skill whose rows do not grant them (closed once rows exist)');
-            Assert(skills.some(s => s.ID === skillOpen.ID), 'a skill with NO permission rows stays open to everyone (open-by-default)');
+            Assert(!skills.some(s => UUIDsEqual(s.ID, skillActive.ID)), 'non-owner is denied a skill whose rows do not grant them (closed once rows exist)');
+            Assert(skills.some(s => UUIDsEqual(s.ID, skillOpen.ID)), 'a skill with NO permission rows stays open to everyone (open-by-default)');
         });
 
         // ── SKILL.md round-trip via the service ─────────────────────────────────────────────────────

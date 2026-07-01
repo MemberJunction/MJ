@@ -53,7 +53,7 @@ export class AISkillSharingPanel extends BaseFormPanel<MJAISkillEntity> {
      * consistent with the rest of the not-yet-multi-provider-migrated panel system today.
      */
     public get CanShareSkills(): boolean {
-        const md = Metadata.Provider;
+        const md = Metadata.Provider; // global-provider-ok: BaseFormPanel slots have no Provider input; panel system is single-provider today
         if (!md?.CurrentUser) {
             return false;
         }
@@ -85,7 +85,7 @@ export class AISkillSharingPanel extends BaseFormPanel<MJAISkillEntity> {
         try {
             const result = await new AISkillExportMarkdownOperation().Execute(
                 { skillID: this.Record.ID },
-                { provider: Metadata.Provider }
+                { provider: Metadata.Provider } // global-provider-ok: BaseFormPanel slots have no Provider input; panel system is single-provider today
             );
             if (!result.Success || !result.Output) {
                 MJNotificationService.Instance.CreateSimpleNotification(
@@ -125,7 +125,7 @@ export class AISkillSharingPanel extends BaseFormPanel<MJAISkillEntity> {
             const markdownText = await file.text();
             const result = await new AISkillImportMarkdownOperation().Execute(
                 { markdownText, updateSkillID: this.Record.ID },
-                { provider: Metadata.Provider }
+                { provider: Metadata.Provider } // global-provider-ok: BaseFormPanel slots have no Provider input; panel system is single-provider today
             );
             if (!result.Success || !result.Output) {
                 MJNotificationService.Instance.CreateSimpleNotification(
