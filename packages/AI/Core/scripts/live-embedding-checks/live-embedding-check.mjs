@@ -17,7 +17,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, resolve } from 'node:path';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const distOf = (pkgDir) => resolve(HERE, '../../packages/AI/Providers', pkgDir, 'dist/index.js');
+const distOf = (pkgDir) => resolve(HERE, '../../../Providers', pkgDir, 'dist/index.js');
 
 /** Per-provider config. `keyEnv` lists accepted env-var names (first one set wins); empty = no key. */
 const PROVIDERS = {

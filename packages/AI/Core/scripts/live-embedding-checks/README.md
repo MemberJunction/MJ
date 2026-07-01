@@ -19,7 +19,7 @@ text**, i.e. no batch collapse (the GAP-8 bug this work fixes and generalizes ag
 3. From the repo root:
 
    ```bash
-   node --env-file=.env scripts/live-embedding-checks/live-embedding-check.mjs <provider>
+   node --env-file=.env packages/AI/Core/scripts/live-embedding-checks/live-embedding-check.mjs <provider>
    ```
 
    `<provider>` is one of `gemini`, `openai`, `cohere`, `local`.
