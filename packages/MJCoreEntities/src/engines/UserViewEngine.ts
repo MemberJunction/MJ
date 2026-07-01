@@ -76,7 +76,7 @@ export class UserViewEngine extends BaseEngine<UserViewEngine> {
      * Get all views in the cache (unfiltered)
      */
     public get AllViews(): MJUserViewEntityExtended[] {
-        return this._views || [];
+        return this.GetConfigData<MJUserViewEntityExtended>('_views');
     }
 
     /**

@@ -363,15 +363,14 @@ export interface ExecutionMonitoringState {
               <div class="dashboard-section analysis-panels">
                 
                 <!-- Cost Analysis Panel -->
-                <div class="analysis-panel">
-                  <div class="panel-header" (click)="togglePanel('cost')">
+                <mj-accordion-panel Size="sm" [FlushBody]="true" [Expanded]="panelStates.cost" (ExpandedChange)="onPanelExpandedChange('cost', $event)">
+                  <ng-template mjAccordionTitle>
                     <span class="panel-title">
                       <i class="fa-solid fa-dollar-sign"></i>
                       Cost Analysis
                     </span>
-                    <i class="fa-solid panel-toggle-icon" [class.fa-chevron-down]="!panelStates.cost" [class.fa-chevron-up]="panelStates.cost"></i>
-                  </div>
-                  @if (panelStates.cost) {
+                  </ng-template>
+                  <ng-template mjAccordionBody>
                     <div class="panel-content">
                       @if (costData$ | async; as costData) {
                         <div class="cost-bars">
@@ -395,19 +394,18 @@ export interface ExecutionMonitoringState {
                         </div>
                       }
                     </div>
-                  }
-                </div>
+                  </ng-template>
+                </mj-accordion-panel>
 
                 <!-- Token Efficiency Panel -->
-                <div class="analysis-panel">
-                  <div class="panel-header" (click)="togglePanel('efficiency')">
+                <mj-accordion-panel Size="sm" [FlushBody]="true" [Expanded]="panelStates.efficiency" (ExpandedChange)="onPanelExpandedChange('efficiency', $event)">
+                  <ng-template mjAccordionTitle>
                     <span class="panel-title">
                       <i class="fa-solid fa-chart-pie"></i>
                       Token Efficiency
                     </span>
-                    <i class="fa-solid panel-toggle-icon" [class.fa-chevron-down]="!panelStates.efficiency" [class.fa-chevron-up]="panelStates.efficiency"></i>
-                  </div>
-                  @if (panelStates.efficiency) {
+                  </ng-template>
+                  <ng-template mjAccordionBody>
                     <div class="panel-content">
                       @if (tokenEfficiency$ | async; as efficiencyData) {
                         <div class="efficiency-items">
@@ -443,27 +441,26 @@ export interface ExecutionMonitoringState {
                         </div>
                       }
                     </div>
-                  }
-                </div>
+                  </ng-template>
+                </mj-accordion-panel>
 
                 <!-- Live Executions Panel -->
-                <div class="analysis-panel">
-                  <div class="panel-header" (click)="togglePanel('executions')">
+                <mj-accordion-panel Size="sm" [FlushBody]="true" [Expanded]="panelStates.executions" (ExpandedChange)="onPanelExpandedChange('executions', $event)">
+                  <ng-template mjAccordionTitle>
                     <span class="panel-title">
                       <i class="fa-solid fa-bolt"></i>
                       Live Executions
                     </span>
-                    <i class="fa-solid panel-toggle-icon" [class.fa-chevron-down]="!panelStates.executions" [class.fa-chevron-up]="panelStates.executions"></i>
-                  </div>
-                  @if (panelStates.executions) {
+                  </ng-template>
+                  <ng-template mjAccordionBody>
                     <div class="panel-content live-executions-panel">
                       <app-live-execution-widget
                         [executions]="(liveExecutions$ | async) ?? []"
                         (executionClick)="onExecutionClick($event)"
                       ></app-live-execution-widget>
                     </div>
-                  }
-                </div>
+                  </ng-template>
+                </mj-accordion-panel>
               </div>
             </as-split-area>
           </as-split>
@@ -1556,39 +1553,7 @@ export interface ExecutionMonitoringState {
       background: var(--mj-bg-surface-card);
     }
 
-    .analysis-panel {
-      margin-bottom: 12px;
-      border-radius: 10px;
-      box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-brand-primary) 8%, transparent);
-      background: var(--mj-bg-surface);
-      overflow: hidden;
-      border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 8%, transparent);
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    }
-
-    .analysis-panel:hover {
-      box-shadow: 0 4px 12px color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
-    }
-
-    .analysis-panel:last-child {
-      margin-bottom: 0;
-    }
-
-    .panel-header {
-      padding: 14px 18px;
-      background: var(--mj-bg-surface-card);
-      border-bottom: 1px solid color-mix(in srgb, var(--mj-brand-primary) 8%, transparent);
-      cursor: pointer;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    }
-
-    .panel-header:hover {
-      background: var(--mj-bg-surface-sunken);
-    }
-
+    /* Analysis panel chrome (wrapper/header/toggle-icon) now owned by <mj-accordion-panel>. */
     .panel-title {
       display: flex;
       align-items: center;
@@ -1603,27 +1568,8 @@ export interface ExecutionMonitoringState {
       width: 18px;
     }
 
-    .panel-toggle-icon {
-      color: var(--mj-brand-primary);
-      font-size: 12px;
-      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    }
-
     .panel-content {
       padding: 18px;
-      border-top: 1px solid color-mix(in srgb, var(--mj-brand-primary) 5%, transparent);
-      animation: slideDown 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    }
-
-    @keyframes slideDown {
-      from {
-        opacity: 0;
-        max-height: 0;
-      }
-      to {
-        opacity: 1;
-        max-height: 500px;
-      }
     }
 
     .live-executions-panel {
@@ -1653,10 +1599,6 @@ export interface ExecutionMonitoringState {
       
       .analysis-panels {
         padding: 8px;
-      }
-      
-      .analysis-panel {
-        margin-bottom: 8px;
       }
     }
 
@@ -1730,11 +1672,7 @@ export interface ExecutionMonitoringState {
       .panel-content {
         padding: 12px;
       }
-      
-      .panel-header {
-        padding: 10px 12px;
-      }
-      
+
       .panel-title {
         font-size: 13px;
       }
@@ -2446,8 +2384,8 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
   }
 
   // Panel management methods
-  togglePanel(panelName: 'cost' | 'efficiency' | 'executions'): void {
-    this.panelStates[panelName] = !this.panelStates[panelName];
+  onPanelExpandedChange(panelName: 'cost' | 'efficiency' | 'executions', expanded: boolean): void {
+    this.panelStates[panelName] = expanded;
     this.emitStateChange();
   }
 

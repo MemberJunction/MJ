@@ -571,10 +571,6 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
     // This would navigate to action gallery view
   }
 
-  public toggleExecutionExpanded(execution: ExecutionWithExpanded): void {
-    execution.isExpanded = !execution.isExpanded;
-  }
-
   public formatJsonParams(params: string | null): string {
     if (!params) return '{}';
     try {

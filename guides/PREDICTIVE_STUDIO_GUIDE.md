@@ -678,6 +678,16 @@ The viewer is **`MLExperimentResultsViewerComponent`** (`@RegisterClass(BaseArti
 
 > **Stale-prose caveat:** the artifact-type **Description** field still says the Angular viewer "is a follow-up; falls back to the parent JSON viewer." That prose is out of date — the viewer is fully built, registered, and module-declared, and the `DriverClass` correctly points at it. Treat the description text as lagging reality.
 
+### 12.4 The deterministic Pipeline Builder (publish-gated-on-trust)
+
+The Model Development Agent is elevated to the **Database-Designer / Agent-Manager domain-builder pattern**: the conversation reasons in plain language, but the structure it commits to metadata is **deterministic + type-safe, never LLM-emitted**. Three pieces (in `packages/AI/PredictiveStudio/Engine/src/agent/`):
+
+- **`PredictiveStudioModelDevAgent`** (the parent's `DriverClass`) — overrides `determineNextStep`: once the plan is approved (an `Approved` flag or a "build it" intent), the LLM never decides whether/how to build — the orchestrator **forces** routing to the builder sub-agent (`shouldForceBuild`, with a no-loop guard). Every other decision stays LLM-driven via `super`.
+- **`PredictiveStudioPipelineBuilderAgent`** (the **Pipeline Builder** code sub-agent, `executeAgentInternal`, no LLM) — wraps:
+- **`PredictiveStudioPipelineBuilder`** (`pipeline-builder.ts`) — the pure builder: `modelingPlanToPipelineConfig(ModelingPlanSpec)` deterministically maps the plan → the exact `MJ: ML Training Pipelines` field shapes (SourceBindings, the FeatureStep DAG with one-hot for categoricals, AsOfStrategy, LeakageGuard from the plan's exclude-notes, ValidationStrategy); it creates the pipeline, trains via `trainModelViaEngine`, then **publishes the model ONLY if `deriveTrustVerdict` clears the bar** (`@memberjunction/predictive-studio-core`) and training wasn't leakage-flagged — otherwise it stays Draft with a plain held-reason. So a coin-flip model is **never auto-published into the business catalog**.
+
+Proven by: unit tests (mapper, gate logic, projection helpers), an in-process integration test (`ps-inproc-agent-builder.ts` — builds + trains + asserts the publish gate), and an **agent-loop test through the real `AgentRunner`** (`ps-inproc-agent-run.ts` — the sub-agent runs end-to-end and the gate fires). "+ New prediction" on the business surface opens this agent as a docked `mj-conversation-chat-area` co-pilot.
+
 ---
 
 ## 13. The security model
@@ -953,6 +963,21 @@ Each Phase 2 capability ships with an MJServer integration script that exercises
 ## 16. The Business-User Experience
 
 Phases 1–2 built the platform and gave the *model* reach. **This** is the layer that makes the whole thing usable, visible, and trustworthy for a **non-technical business user** — the conversational north-star made real, end to end, with **every surface generic** (binding-driven, entity-agnostic; "members/renewal" is throwaway test data, never a build target). Full plan + commit lineage: [`plans/predictive-studio-business-experience.md`](../plans/predictive-studio-business-experience.md).
+
+### 16.1 The Predictions surface (the front door)
+
+The default Predictive Studio nav item is **Predictions** (`PSPredictionsResourceComponent`, in `ng-dashboards`) — the business front door, modeled on the locked [`plans/predictive-studio-business-ux/option-b-refined.html`](../plans/predictive-studio-business-ux/option-b-refined.html):
+
+- **Catalog** — every **published** model reframed as a plain-language prediction card with a **trust badge** (`deriveTrustVerdict`). A Poor / unmeasured prediction shows "Not ready — Needs an analyst" with Open disabled: the trust gate at the catalog level.
+- **Workspace** (open a card) — a trust verdict banner that **gates the action bar**; a ranked **at-risk list** (parsed from the latest run's `MJ: Process Run Details`, highest-risk first, high/medium/low bars) with plain-language **"what's driving this"** drivers (`topGlobalDrivers` over the model's global feature importance — honest: global, not per-record SHAP); and four trust-gated actions — Review the call list · Save scores / Send to a list (open the docked Model Dev Agent co-pilot seeded with the request — the conversational action path) · Share/export (CSV).
+- **"+ New prediction"** opens the deterministic-builder agent (§12.4) as a docked `mj-conversation-chat-area` co-pilot. **Embedding the chat correctly requires the conversation lifecycle wiring** — bind `[isNewConversation]` (start `true`), `[conversation]`/`[conversationId]`, and handle `(conversationCreated)` to capture the new conversation + flip out of new-mode (mirror `(pendingMessageConsumed)` to clear the seed). Without it, the suppressed empty-state input has no conversation to write into and the first send silently no-ops. Both the Predictions co-pilot and the Studio co-pilot use this pattern; copy it for any new embedded PS chat.
+
+**Nav structure — three doors.** The Predictive Studio app exposes exactly **three** top-level nav items (`metadata/applications/.predictive-studio-application.json`), consolidated from an earlier eight-flat-item layout so business users see one door and analysts opt into depth:
+- **Predictions** (`PredictiveStudioPredictionsResource`) — the business front door above.
+- **Studio** (`PredictiveStudioStudioResource`) — the build/run workbench: an internal left-nav grouped Overview · Build (Pipelines, Algorithm Catalog) · Run (Experiments, Compare Runs), plus the shared docked Model Dev Agent co-pilot.
+- **Models** (`PredictiveStudioModelsResource`) — the trained-model lifecycle: an internal left-nav over Model Registry · Models in Production.
+
+The two workbench doors are single `BaseResourceComponent`s that host the **same** standalone section panels (`ps-home`, `ps-pipelines`, …) the old per-section resources hosted — only the wrapping changed. The active section round-trips through a `section` query param (deep links + back/forward), and the Overview panel's cross-door links route via `routeHomeNavigate` (pure, unit-tested in `predictive-studio.nav.ts`). The trust translator (`@memberjunction/predictive-studio-core`) is the single shared rule behind the catalog badges/gate **and** the agent's publish gate. The pure VMs (`business-predictions.view-models.ts`, `at-risk.view-models.ts`, `predictive-studio.nav.ts`) + the trust translator are unit-tested. Full design-driven lineage (brief → 3 divergent mockups → locked direction → plan): [`plans/predictive-studio-business-ux/`](../plans/predictive-studio-business-ux/).
 
 The one-sentence goal: *a membership director, in chat, asks "which members are likely to lapse?" — and minutes later every member record shows a renewal-risk score that refreshes monthly, driven and explained conversationally, with the deployed model visible in a control-tower view.*
 
