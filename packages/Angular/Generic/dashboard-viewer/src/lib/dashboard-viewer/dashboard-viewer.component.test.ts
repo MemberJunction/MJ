@@ -208,6 +208,68 @@ describe('DashboardViewerComponent layout lifecycle', () => {
     expect(updateSizeMock).toHaveBeenCalledTimes(1);
   });
 
+  it('rejects readiness when a zero-sized container never receives layout dimensions', async () => {
+    const component = new DashboardViewerComponent(
+      { detectChanges: vi.fn() } as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+    const states: Array<{ state: string; error?: Error }> = [];
+    const errors: Array<{ message: string; error?: Error }> = [];
+    component.layoutContainer = { nativeElement: createContainer({ width: 0, height: 0 }) } as any;
+    component.layoutLifecycle.subscribe(event => states.push({ state: event.state, error: event.error }));
+    component.error.subscribe(event => errors.push(event));
+
+    component.dashboard = createDashboard('dash-1') as any;
+    const ready = component.waitForLayoutReady();
+    await flushMicrotasks();
+
+    await vi.advanceTimersByTimeAsync(10_000);
+    await flushMicrotasks();
+
+    await expect(ready).rejects.toThrow('stayed at zero size');
+    expect(states.map(event => event.state)).toEqual(['pending-dashboard', 'pending-parts', 'waiting-for-size', 'error']);
+    expect(states.at(-1)?.error?.message).toContain('stayed at zero size');
+    expect(errors[0]?.message).toBe('Failed to initialize dashboard layout');
+    expect(errors[0]?.error?.message).toContain('stayed at zero size');
+    expect(initializeMock).not.toHaveBeenCalled();
+    expect(MockResizeObserver.instances[0].disconnect).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not initialize a deferred layout after the component is destroyed', async () => {
+    const component = new DashboardViewerComponent(
+      { detectChanges: vi.fn() } as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+    const rect = { width: 0, height: 0 };
+    let resolved = false;
+    component.layoutContainer = { nativeElement: createContainer(rect) } as any;
+
+    component.dashboard = createDashboard('dash-1') as any;
+    component.waitForLayoutReady().then(() => {
+      resolved = true;
+    });
+    await flushMicrotasks();
+
+    component.ngOnDestroy();
+    await flushMicrotasks();
+
+    rect.width = 800;
+    rect.height = 600;
+    MockResizeObserver.instances[0].trigger();
+    await flushMicrotasks();
+    await vi.advanceTimersByTimeAsync(10_000);
+    await flushMicrotasks();
+
+    expect(resolved).toBe(true);
+    expect(initializeMock).not.toHaveBeenCalled();
+    expect(updateSizeMock).not.toHaveBeenCalled();
+    expect(MockResizeObserver.instances[0].disconnect).toHaveBeenCalledTimes(1);
+  });
+
   it('does not let a stale deferred layout cycle resolve the active dashboard readiness', async () => {
     const component = new DashboardViewerComponent(
       { detectChanges: vi.fn() } as any,
@@ -272,7 +334,7 @@ describe('DashboardViewerComponent layout lifecycle', () => {
     await resolveReadyTimer();
 
     await expect(ready).rejects.toThrow('update failed');
-    expect(states.map(event => event.state)).toEqual(['pending-dashboard', 'pending-parts', 'initializing', 'error', 'error']);
+    expect(states.map(event => event.state)).toEqual(['pending-dashboard', 'pending-parts', 'initializing', 'error']);
     expect(states.at(-1)?.error).toBe(failure);
     expect(errors).toEqual([{ message: 'Failed to initialize dashboard layout', error: failure }]);
   });

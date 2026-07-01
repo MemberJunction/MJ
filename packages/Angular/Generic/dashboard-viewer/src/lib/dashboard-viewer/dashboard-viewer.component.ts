@@ -54,6 +54,8 @@ export interface DashboardLayoutLifecycleEvent {
     error?: Error;
 }
 
+const LAYOUT_CONTAINER_SIZE_TIMEOUT_MS = 10_000;
+
 /**
  * Main dashboard viewer component.
  * Renders a configurable dashboard with draggable/resizable panels using Golden Layout.
@@ -237,6 +239,8 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
     private _layoutInitGeneration = 0;
     private _layoutReadyTimer: ReturnType<typeof setTimeout> | null = null;
     private _resolveDeferredLayoutInit: (() => void) | null = null;
+    private _rejectDeferredLayoutInit: ((error: Error) => void) | null = null;
+    private _deferredLayoutInitTimer: ReturnType<typeof setTimeout> | null = null;
 
     // ========================================
     // Constructor
@@ -260,7 +264,9 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
     ngOnDestroy(): void {
         this._destroy$.next();
         this._destroy$.complete();
-        this.resolveLayoutReady(this._layoutInitGeneration);
+        const generation = this._layoutInitGeneration;
+        this.resolveLayoutReady(generation);
+        this._layoutInitGeneration++;
         this.clearLayoutReadyTimer();
         this.cancelDeferredLayoutInit();
         this.destroyLayout();
@@ -696,18 +702,11 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
             return;
         }
 
-        try {
-            this._glService?.updateSize();
-            this.cdr.detectChanges();
-            this.emitLayoutLifecycle('ready');
-            this.layoutReady.emit();
-            this.resolveLayoutReady(generation);
-        } catch (err) {
-            const error = err instanceof Error ? err : new Error(String(err));
-            this.emitLayoutLifecycle('error', undefined, error);
-            this.rejectLayoutReady(error, generation);
-            throw error;
-        }
+        this._glService?.updateSize();
+        this.cdr.detectChanges();
+        this.emitLayoutLifecycle('ready');
+        this.layoutReady.emit();
+        this.resolveLayoutReady(generation);
     }
 
     /** ResizeObserver used to wait for a zero-size container to gain a size before init. */
@@ -722,8 +721,9 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
     private waitForLayoutContainerSize(el: HTMLElement, generation: number): Promise<void> {
         this.cancelDeferredLayoutInit();
 
-        return new Promise<void>(resolve => {
+        return new Promise<void>((resolve, reject) => {
             this._resolveDeferredLayoutInit = resolve;
+            this._rejectDeferredLayoutInit = reject;
             const ro = new ResizeObserver(() => {
                 if (generation !== this._layoutInitGeneration) {
                     this.cancelDeferredLayoutInit();
@@ -739,16 +739,24 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
             const r = el.getBoundingClientRect();
             if (r.width > 0 && r.height > 0) {
                 this._resolveDeferredLayoutInit = null;
+                this._rejectDeferredLayoutInit = null;
                 resolve();
                 return;
             }
 
+            this._deferredLayoutInitTimer = setTimeout(() => {
+                const error = new Error(
+                    `Dashboard layout container stayed at zero size for ${LAYOUT_CONTAINER_SIZE_TIMEOUT_MS}ms`
+                );
+                this.failDeferredLayoutInit(error);
+            }, LAYOUT_CONTAINER_SIZE_TIMEOUT_MS);
             ro.observe(el);
             this._layoutSizeObserver = ro;
         });
     }
 
     private cancelDeferredLayoutInit(): void {
+        this.clearDeferredLayoutInitTimer();
         if (this._layoutSizeObserver) {
             this._layoutSizeObserver.disconnect();
             this._layoutSizeObserver = null;
@@ -756,6 +764,27 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
         if (this._resolveDeferredLayoutInit) {
             this._resolveDeferredLayoutInit();
             this._resolveDeferredLayoutInit = null;
+        }
+        this._rejectDeferredLayoutInit = null;
+    }
+
+    private failDeferredLayoutInit(error: Error): void {
+        this.clearDeferredLayoutInitTimer();
+        if (this._layoutSizeObserver) {
+            this._layoutSizeObserver.disconnect();
+            this._layoutSizeObserver = null;
+        }
+        if (this._rejectDeferredLayoutInit) {
+            this._rejectDeferredLayoutInit(error);
+            this._rejectDeferredLayoutInit = null;
+        }
+        this._resolveDeferredLayoutInit = null;
+    }
+
+    private clearDeferredLayoutInitTimer(): void {
+        if (this._deferredLayoutInitTimer) {
+            clearTimeout(this._deferredLayoutInitTimer);
+            this._deferredLayoutInitTimer = null;
         }
     }
 
