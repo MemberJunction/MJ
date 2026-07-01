@@ -1066,4 +1066,4 @@ export * from './geminiImage';
 export * from './geminiRealtime';
 
 // Export multimodal embeddings
-export * from './geminiEmbedding2';
+export * from './geminiEmbedding';
