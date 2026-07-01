@@ -1,11 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { ComponentFixture } from '@angular/core/testing';
-import { renderComponentFixture } from '@memberjunction/ng-test-utils';
-
-// Local query helpers (this branch's ng-test-utils exposes only renderComponentFixture).
-const query = <T>(f: ComponentFixture<T>, sel: string): HTMLElement | null => f.nativeElement.querySelector(sel);
-const queryAll = <T>(f: ComponentFixture<T>, sel: string): HTMLElement[] => Array.from(f.nativeElement.querySelectorAll(sel));
-const text = <T>(f: ComponentFixture<T>, sel: string): string => query(f, sel)?.textContent ?? '';
+import { renderComponentFixture, query, queryAll, text, typeInto } from '@memberjunction/ng-test-utils';
 import { LiveKitChatPanelComponent } from './livekit-chat-panel.component';
 import type { LiveKitChatMessage } from '../models';
 
@@ -52,9 +46,7 @@ describe('LiveKitChatPanelComponent (DOM)', () => {
     expect((query(f, 'button[type="submit"]') as HTMLButtonElement).disabled).toBe(true);
     // template-driven [(ngModel)] registers its control on a microtask — flush it before typing
     await Promise.resolve();
-    const input = query(f, '.lk-chat__input') as HTMLInputElement;
-    input.value = 'hello';
-    input.dispatchEvent(new Event('input')); // drives ngModel → draft
+    typeInto(f, '.lk-chat__input', 'hello'); // drives ngModel → draft
     await Promise.resolve();
     f.detectChanges();
     expect((query(f, 'button[type="submit"]') as HTMLButtonElement).disabled).toBe(false);
