@@ -122,14 +122,30 @@ GET /auth/providers  →
 
 - **0 providers** → fall back to `environment.AUTH_TYPE` (offline/legacy path).
 - **1 provider** → behave as today: instantiate that `MJAuthBase` via `ClassFactory` + its `angularProviderFactory`, no picker.
-- **2+ providers** → render the **login picker** (mockup in this folder). Selecting one instantiates the chosen provider and calls `login()`.
+- **2+ providers** → render the **login picker** (see the concept prototypes in `login-redesigns/` — visual reference only, see §6.3). Selecting one instantiates the chosen provider and calls `login()`.
 
 Magic-link stays a conditional provider (its existing "session token present?" check), now expressed as one catalog entry rather than special-cased in `forRoot`.
 
-### 6.2 Where the UI lives
+### 6.2 Where the UI lives — reusable picker vs. per-app surface
 
-- **Pre-auth picker:** the existing login surface in `@memberjunction/ng-explorer-app` (`explorer-app.component.html`, the `.login-wrapper` / `.login-btn` block). The single "Log in" button becomes a provider list when 2+ are available. Reuses the existing animated-wave banner and design tokens.
+The picker must be reusable by **any** MJ-based application, not baked into Explorer. So it splits into two layers:
+
+- **Reusable picker component — `<mj-login-picker>` in `@memberjunction/ng-auth-services`** (the shared auth package every app already imports for `AuthServicesModule` / `MJAuthBase`). It is **presentational and app-agnostic**: `@Input()` the public provider catalog (from `/auth/providers`), `@Output() providerSelected`. It renders each provider as `<button mjButton variant="secondary">` (single-provider → one `variant="primary"` CTA), with the default pill, brand chips, and purely token-driven styling — **no app branding, no Router, no Explorer coupling.** The 0/1/2+ resolution + `ClassFactory` provider instantiation lives beside it in `AuthServicesModule` (already the shared bootstrap). *(A dumb sub-component could live in `@memberjunction/ng-ui-components`, but the picker consumes the auth-catalog shape, so `ng-auth-services` is the cohesive home — keeps `ng-ui-components` free of auth types.)*
+- **Per-app login surface (chrome).** Each app supplies its own surrounding login layout and **embeds `<mj-login-picker>`**. For Explorer that's the existing `.login-wrapper` surface in `@memberjunction/ng-explorer-app` (wave banner + wordmark). Another app drops `<mj-login-picker>` into its own login page and gets the identical, accessible picker for free. **The concept prototypes (A / B / C) are *surface* options — all three embed the same reusable picker; only the chrome differs.**
+- **Server side is already reusable:** the `/auth/providers` endpoint and `AuthProviderEngine` (`@memberjunction/server`) are app-agnostic — any app pointed at the API gets the same catalog.
 - **Admin configuration:** the **Admin app** (`packages/Angular/Explorer/explorer-settings` + the Admin shell). Because `MJ: Authentication Providers` is a normal entity, CRUD comes free via generated forms; we add an **"Authentication Providers" settings page** under Admin (left-nav shell sub-page using `<mj-page-header-interior>`) listing providers with Active/Default/Visible toggles, ordering, and a link to edit each row. This is where an admin enables/orders the picker. (Per-Application provider scoping is a possible future extension; out of scope v1.)
+
+### 6.3 🚨 The prototypes are a VISUAL reference — do NOT port their classes
+
+`login-redesigns/` (concepts **A / B / C** + shared `base.css`; see `login-redesigns/README.md` for the design rationale + decision trail) and `login-mockup.html` are **standalone, dependency-free HTML prototypes for design sign-off only.** They exist so a `.html` can render with zero build. When implementing the reusable `<mj-login-picker>` (§6.2) and embedding it in an app's login surface, **do not copy their scaffolding** — build the picker + chosen chrome natively with scoped, semantically-named styles. Specifically:
+
+- **Do NOT reuse the prototype's bespoke class names** — `.pageA` / `.cardA`, `.pageB` / `.storyB` / `.glassCard` / `.markWM`, `.splitC` / `.asideC` / `.formC`, plus `.provider-list` / `.provider-btn` / `.default-pill`. They are ad-hoc mock scaffolding, not part of any MJ system. **The reusable row markup (icon chip + label + default pill + `mjButton`) belongs to `<mj-login-picker>`; the per-app surface owns only its own layout classes.**
+- **Provider rows / single CTA → the real `mjButton` directive.** The prototype's `.mj-btn` / `.mj-btn--secondary` / `.mj-btn--primary` classes are a **hand-rolled mirror** of `MJButtonDirective` (`@memberjunction/ng-ui-components`). Implement each provider row as `<button mjButton variant="secondary">` and the single-provider CTA as `variant="primary"`. The a11y (focus ring, 44px target, `ariaLabel`) comes from the directive — **never copy the mirrored `.mj-btn*` CSS.**
+- **Live tokens, not the pasted block.** The prototypes paste a `:root` token subset from `_tokens.scss` so the standalone file has values to resolve. The real component inherits the **live** `--mj-*` tokens automatically — **delete the pasted token block entirely.** The only literals that carry over are the documented exceptions: external brand-chip colors (Microsoft/Google/Okta/WorkOS), white text/overlays on the always-dark brand panels, and the `color-mix`-derived brand navies.
+- **Logo + waves via the existing mechanism.** Use the login surface's existing `--mj-logo-wordmark` / `.mj-logo-wordmark-login` and animated-wave banner — not the prototype's `<img src="assets/…svg">` copies.
+- **Carry over the mobile fixes** (proven in the prototypes): size the surface with **`100dvh`** (not `100vh`), let provider labels wrap (`white-space: normal; min-width: 0`), and collapse any brand-story copy to just the logo at the mobile breakpoint so the picker stays above the fold.
+
+Pick **one** direction (A / B / C) for sign-off. The provider-row markup + `mjButton` usage is identical across all three — only the surrounding layout differs — so the layout choice is the only thing that changes at implementation time.
 
 ## 7. Where everything goes (package map)
 
@@ -141,9 +157,10 @@ Magic-link stays a conditional provider (its existing "session token present?" c
 | `initializeProviders.ts` layered resolver | `@memberjunction/server` |
 | Drop hard-wired imports | `@memberjunction/auth-providers` (`AuthProviderFactory.ts`) |
 | Public `/auth/providers` endpoint | `@memberjunction/server` (resolver/route, auth-exempt) |
-| Login picker | `@memberjunction/ng-explorer-app` |
+| **Reusable** `<mj-login-picker>` (app-agnostic, `mjButton` rows, token-styled) | `@memberjunction/ng-auth-services` |
+| Per-app login **surface** that embeds the picker | `@memberjunction/ng-explorer-app` (Explorer chrome); any other app supplies its own |
 | Admin settings page | `@memberjunction/ng-explorer-settings` (+ Admin nav) |
-| HTML mockup | `plans/pluggable-auth-providers/login-mockup.html` (this PR) |
+| Login concept prototypes (visual reference only) | `plans/pluggable-auth-providers/login-redesigns/` (A/B/C + `base.css`) and `login-mockup.html` (this PR) |
 
 ## 8. CodeGen handoff (why this is one PR but two pushes)
 
