@@ -139,7 +139,7 @@ export class ApplicationSettingEngine extends BaseEngine<ApplicationSettingEngin
    * Get all application settings in the cache (global + app-scoped, unfiltered).
    */
   public get ApplicationSettings(): MJApplicationSettingEntity[] {
-    return this._ApplicationSettings || [];
+    return this.GetConfigData<MJApplicationSettingEntity>('_ApplicationSettings');
   }
 
   /**

@@ -852,18 +852,23 @@ export class MyEngine extends BaseEngine<MyEngine> {
         return super.getInstance<MyEngine>();
     }
 
-    public MyData: SomeEntity[] = [];
+    private _myData: SomeEntity[] = [];
 
-    protected get Config(): BaseEnginePropertyConfig[] {
-        return [
+    public get MyData(): SomeEntity[] {
+        return this.GetConfigData<SomeEntity>('_myData');
+    }
+
+    public async Config(forceRefresh?: boolean, contextUser?: UserInfo): Promise<void> {
+        const params: Partial<BaseEnginePropertyConfig>[] = [
             {
-                PropertyName: 'MyData',
+                PropertyName: '_myData',
                 EntityName: 'Some Entity',
                 Filter: 'IsActive = 1',
                 OrderBy: 'Name ASC',
                 AutoRefresh: true      // Auto-refresh on entity save/delete events
             }
         ];
+        return await this.Load(params, undefined, forceRefresh, contextUser);
     }
 }
 
@@ -878,6 +883,31 @@ Key features:
 - Automatic refresh when entities are saved or deleted (debounced)
 - Local caching support via `CacheLocal` and `CacheLocalTTL` options
 - Supports both entity and dataset loading
+
+#### Permission-Constrained Loading
+
+When a user lacks read permissions on entities an engine loads, the engine enters a **permission-constrained** state instead of failing with errors or retrying endlessly. This is an all-or-nothing check — if any entity config is denied, all configs for that engine are skipped.
+
+The `GetConfigData<E>(propertyName)` method is the canonical way for engine getters to expose loaded data. It checks the data map for permission denial and throws a `PermissionConstrainedError` if the config was skipped, preventing consumers from silently operating on empty arrays.
+
+```typescript
+// Consumer that wants graceful degradation (optional feature)
+if (!AIEngineBase.Instance.IsPermissionConstrained) {
+    const models = AIEngineBase.Instance.Models;
+    // ... render AI features
+} else {
+    // ... hide AI features, show notice
+}
+
+// Consumer that requires the data (hard error if missing)
+const queries = QueryEngine.Instance.Queries; // throws PermissionConstrainedError if denied
+```
+
+| State | `Loaded` | `IsPermissionConstrained` | Behavior |
+|---|---|---|---|
+| Not loaded | `false` | `false` | `EnsureLoaded()` retries normally |
+| Loaded normally | `true` | `false` | Normal operation |
+| Permission-constrained | `true` | `true` | `GetConfigData()` throws `PermissionConstrainedError`, no retry, no entity event handling |
 
 ---
 

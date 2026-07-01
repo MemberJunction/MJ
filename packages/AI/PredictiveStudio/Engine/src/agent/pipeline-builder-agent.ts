@@ -14,7 +14,7 @@
  */
 
 import { RegisterClass } from '@memberjunction/global';
-import { Metadata, LogError } from '@memberjunction/core';
+import { LogError } from '@memberjunction/core';
 import { BaseAgent } from '@memberjunction/ai-agents';
 import type { ExecuteAgentParams, AgentConfiguration, BaseAgentNextStep } from '@memberjunction/ai-core-plus';
 import type { ModelingPlanSpec, TrustGrade } from '@memberjunction/predictive-studio-core';
@@ -78,7 +78,7 @@ export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
     if (!user) {
       return this.codeStep<P>('Failed', payload as unknown as P, 'No context user — cannot build the pipeline.');
     }
-    const provider = Metadata.Provider;
+    const provider = this.ProviderToUse;
     if (!provider) {
       return this.codeStep<P>('Failed', payload as unknown as P, 'No metadata provider available — cannot build the pipeline.');
     }
