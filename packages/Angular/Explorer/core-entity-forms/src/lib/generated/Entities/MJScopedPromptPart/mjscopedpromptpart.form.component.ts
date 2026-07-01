@@ -15,11 +15,7 @@ export class MJScopedPromptPartFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'promptPartDefinition', sectionName: 'Prompt Part Definition', isExpanded: true },
-            { sectionKey: 'content', sectionName: 'Content', isExpanded: true },
-            { sectionKey: 'scopeSettings', sectionName: 'Scope Settings', isExpanded: true },
-            { sectionKey: 'resolutionRules', sectionName: 'Resolution Rules', isExpanded: true },
-            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true }
         ]);
     }
 }
