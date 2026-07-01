@@ -1,0 +1,580 @@
+{
+  "openapi" : "3.0.1",
+  "info" : {
+    "title" : "Auth Oauth",
+    "description" : "Basepom for all HubSpot Projects",
+    "version" : "2026-03",
+    "x-hubspot-product-tier-requirements" : {
+      "marketing" : "FREE",
+      "sales" : "FREE",
+      "service" : "FREE",
+      "cms" : "FREE",
+      "commerce" : "FREE",
+      "crmHub" : "FREE",
+      "dataHub" : "FREE"
+    }
+  },
+  "servers" : [ {
+    "url" : "https://api.hubapi.com"
+  } ],
+  "tags" : [ {
+    "name" : "Advanced"
+  } ],
+  "paths" : {
+    "/oauth/2026-03/token" : {
+      "post" : {
+        "tags" : [ "Advanced" ],
+        "summary" : "OAuth token endpoint",
+        "description" : "Authenticates a client and returns access and refresh tokens.",
+        "operationId" : "post-/oauth/2026-03/token_/oauth/v3/token",
+        "parameters" : [ ],
+        "requestBody" : {
+          "content" : {
+            "application/x-www-form-urlencoded" : {
+              "schema" : {
+                "type" : "object",
+                "properties" : {
+                  "client_id" : {
+                    "type" : "string"
+                  },
+                  "client_secret" : {
+                    "type" : "string"
+                  },
+                  "code" : {
+                    "type" : "string"
+                  },
+                  "code_verifier" : {
+                    "type" : "string"
+                  },
+                  "grant_type" : {
+                    "type" : "string",
+                    "enum" : [ "authorization_code", "client_credentials", "refresh_token" ]
+                  },
+                  "redirect_uri" : {
+                    "type" : "string"
+                  },
+                  "refresh_token" : {
+                    "type" : "string"
+                  },
+                  "scope" : {
+                    "type" : "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "description" : "successful operation",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TokenResponseIF"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "$ref" : "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/oauth/2026-03/token/introspect" : {
+      "post" : {
+        "tags" : [ "Advanced" ],
+        "summary" : "Token introspection endpoint",
+        "description" : "Returns validity and metadata for access and refresh tokens.",
+        "operationId" : "post-/oauth/2026-03/token/introspect_/oauth/v3/token/introspect",
+        "parameters" : [ ],
+        "requestBody" : {
+          "content" : {
+            "application/x-www-form-urlencoded" : {
+              "schema" : {
+                "type" : "object",
+                "properties" : {
+                  "client_id" : {
+                    "type" : "string"
+                  },
+                  "client_secret" : {
+                    "type" : "string"
+                  },
+                  "token" : {
+                    "type" : "string"
+                  },
+                  "token_type_hint" : {
+                    "type" : "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "description" : "successful operation",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TokenInfoResponseBaseIF"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "$ref" : "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/oauth/2026-03/token/revoke" : {
+      "post" : {
+        "tags" : [ "Advanced" ],
+        "summary" : "Token Revocation endpoint",
+        "description" : "Deletes/Revokes provided Refresh Token",
+        "operationId" : "post-/oauth/2026-03/token/revoke_/oauth/v3/token/revoke",
+        "parameters" : [ ],
+        "requestBody" : {
+          "content" : {
+            "application/x-www-form-urlencoded" : {
+              "schema" : {
+                "type" : "object",
+                "properties" : {
+                  "client_id" : {
+                    "type" : "string"
+                  },
+                  "client_secret" : {
+                    "type" : "string"
+                  },
+                  "token" : {
+                    "type" : "string"
+                  },
+                  "token_type_hint" : {
+                    "type" : "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses" : {
+          "default" : {
+            "description" : "",
+            "$ref" : "#/components/responses/Error"
+          }
+        }
+      }
+    }
+  },
+  "components" : {
+    "schemas" : {
+      "AccessTokenResponse" : {
+        "required" : [ "access_token", "expires_in", "refresh_token", "token_type", "token_use" ],
+        "type" : "object",
+        "properties" : {
+          "access_token" : {
+            "type" : "string"
+          },
+          "expires_in" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "hub_id" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "id_token" : {
+            "type" : "string"
+          },
+          "refresh_token" : {
+            "type" : "string"
+          },
+          "scopes" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "token_type" : {
+            "type" : "string"
+          },
+          "token_use" : {
+            "type" : "string",
+            "default" : "access_token",
+            "enum" : [ "access_token" ]
+          },
+          "user_id" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        },
+        "x-hubspot-sub-type-impl" : true
+      },
+      "ClientCredentialsTokenResponse" : {
+        "required" : [ "access_token", "expires_in", "token_type", "token_use" ],
+        "type" : "object",
+        "properties" : {
+          "access_token" : {
+            "type" : "string"
+          },
+          "expires_in" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "hub_id" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "id_token" : {
+            "type" : "string"
+          },
+          "scopes" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "token_type" : {
+            "type" : "string"
+          },
+          "token_use" : {
+            "type" : "string",
+            "default" : "client_credentials",
+            "enum" : [ "client_credentials" ]
+          },
+          "user_id" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        },
+        "x-hubspot-sub-type-impl" : true
+      },
+      "Error" : {
+        "required" : [ "category", "correlationId", "message" ],
+        "type" : "object",
+        "properties" : {
+          "category" : {
+            "type" : "string",
+            "description" : "The error category"
+          },
+          "context" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "array",
+              "items" : {
+                "type" : "string"
+              }
+            },
+            "description" : "Context about the error condition",
+            "example" : "{invalidPropertyName=[propertyValue], missingScopes=[scope1, scope2]}"
+          },
+          "correlationId" : {
+            "type" : "string",
+            "description" : "A unique identifier for the request. Include this value with any error reports or support tickets",
+            "format" : "uuid",
+            "example" : "aeb5f871-7f07-4993-9211-075dc63e7cbf"
+          },
+          "errors" : {
+            "type" : "array",
+            "description" : "further information about the error",
+            "items" : {
+              "$ref" : "#/components/schemas/ErrorDetail"
+            }
+          },
+          "links" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "description" : "A map of link names to associated URIs containing documentation about the error or recommended remediation steps"
+          },
+          "message" : {
+            "type" : "string",
+            "description" : "A human readable message describing the error along with remediation steps where appropriate",
+            "example" : "An error occurred"
+          },
+          "subCategory" : {
+            "type" : "string",
+            "description" : "A specific category that contains more specific detail about the error"
+          }
+        },
+        "example" : {
+          "message" : "Invalid input (details will vary based on the error)",
+          "correlationId" : "aeb5f871-7f07-4993-9211-075dc63e7cbf",
+          "category" : "VALIDATION_ERROR",
+          "links" : {
+            "knowledge-base" : "https://www.hubspot.com/products/service/knowledge-base"
+          }
+        }
+      },
+      "ErrorDetail" : {
+        "required" : [ "message" ],
+        "type" : "object",
+        "properties" : {
+          "code" : {
+            "type" : "string",
+            "description" : "The status code associated with the error detail"
+          },
+          "context" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "array",
+              "items" : {
+                "type" : "string"
+              }
+            },
+            "description" : "Context about the error condition",
+            "example" : "{missingScopes=[scope1, scope2]}"
+          },
+          "in" : {
+            "type" : "string",
+            "description" : "The name of the field or parameter in which the error was found."
+          },
+          "message" : {
+            "type" : "string",
+            "description" : "A human readable message describing the error along with remediation steps where appropriate"
+          },
+          "subCategory" : {
+            "type" : "string",
+            "description" : "A specific category that contains more specific detail about the error"
+          }
+        }
+      },
+      "PublicAccessTokenInfoResponse" : {
+        "required" : [ "active", "app_id", "client_id", "expires_in", "hub_id", "is_private_distribution", "scopes", "signed_access_token", "token", "token_type", "token_use", "user_id" ],
+        "type" : "object",
+        "properties" : {
+          "active" : {
+            "type" : "boolean"
+          },
+          "app_id" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "client_id" : {
+            "type" : "string"
+          },
+          "expires_in" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "hub_domain" : {
+            "type" : "string"
+          },
+          "hub_id" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "is_private_distribution" : {
+            "type" : "boolean"
+          },
+          "scopes" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "signed_access_token" : {
+            "$ref" : "#/components/schemas/SignedAccessToken"
+          },
+          "token" : {
+            "type" : "string"
+          },
+          "token_type" : {
+            "type" : "string"
+          },
+          "token_use" : {
+            "type" : "string",
+            "default" : "access_token",
+            "enum" : [ "access_token" ]
+          },
+          "user" : {
+            "type" : "string"
+          },
+          "user_id" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        },
+        "x-hubspot-sub-type-impl" : true
+      },
+      "PublicRefreshTokenInfoResponse" : {
+        "required" : [ "active", "app_id", "client_id", "hub_id", "scopes", "token", "token_type", "token_use", "user_id" ],
+        "type" : "object",
+        "properties" : {
+          "active" : {
+            "type" : "boolean"
+          },
+          "app_id" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "client_id" : {
+            "type" : "string"
+          },
+          "hub_domain" : {
+            "type" : "string"
+          },
+          "hub_id" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "scopes" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "token" : {
+            "type" : "string"
+          },
+          "token_type" : {
+            "type" : "string"
+          },
+          "token_use" : {
+            "type" : "string",
+            "default" : "refresh_token",
+            "enum" : [ "refresh_token" ]
+          },
+          "user" : {
+            "type" : "string"
+          },
+          "user_id" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        },
+        "x-hubspot-sub-type-impl" : true
+      },
+      "SignedAccessToken" : {
+        "required" : [ "appId", "appInstallId", "audience", "expiresAt", "hubId", "hublet", "installingUserId", "isPrivateDistribution", "isServiceAccount", "isUserLevel", "newSignature", "scopeToScopeGroupPks", "scopes", "signature", "trialScopeToScopeGroupPks", "trialScopes", "userId" ],
+        "type" : "object",
+        "properties" : {
+          "appId" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "appInstallId" : {
+            "type" : "string"
+          },
+          "audience" : {
+            "type" : "string"
+          },
+          "expiresAt" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "hubId" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "hublet" : {
+            "type" : "string"
+          },
+          "installingUserId" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "isPrivateDistribution" : {
+            "type" : "boolean"
+          },
+          "isServiceAccount" : {
+            "type" : "boolean"
+          },
+          "isUserLevel" : {
+            "type" : "boolean"
+          },
+          "newSignature" : {
+            "type" : "string"
+          },
+          "scopeToScopeGroupPks" : {
+            "type" : "string"
+          },
+          "scopes" : {
+            "type" : "string"
+          },
+          "signature" : {
+            "type" : "string"
+          },
+          "trialScopeToScopeGroupPks" : {
+            "type" : "string"
+          },
+          "trialScopes" : {
+            "type" : "string"
+          },
+          "userId" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
+      "TokenInfoResponseBaseIF" : {
+        "properties" : { },
+        "oneOf" : [ {
+          "$ref" : "#/components/schemas/PublicAccessTokenInfoResponse"
+        }, {
+          "$ref" : "#/components/schemas/PublicRefreshTokenInfoResponse"
+        } ]
+      },
+      "TokenResponseIF" : {
+        "properties" : { },
+        "oneOf" : [ {
+          "$ref" : "#/components/schemas/AccessTokenResponse"
+        }, {
+          "$ref" : "#/components/schemas/ClientCredentialsTokenResponse"
+        } ]
+      }
+    },
+    "responses" : {
+      "Error" : {
+        "description" : "An error occurred.",
+        "content" : {
+          "*/*" : {
+            "schema" : {
+              "$ref" : "#/components/schemas/Error"
+            }
+          }
+        }
+      }
+    },
+    "securitySchemes" : {
+      "developer_hapikey" : {
+        "type" : "apiKey",
+        "name" : "hapikey",
+        "in" : "query"
+      },
+      "oauth2" : {
+        "type" : "oauth2",
+        "flows" : {
+          "authorizationCode" : {
+            "authorizationUrl" : "https://app.hubspot.com/oauth/authorize",
+            "tokenUrl" : "https://api.hubapi.com/oauth/v1/token",
+            "scopes" : { }
+          }
+        }
+      },
+      "private_apps" : {
+        "type" : "apiKey",
+        "name" : "private-app",
+        "in" : "header"
+      },
+      "private_apps_legacy" : {
+        "type" : "apiKey",
+        "name" : "private-app-legacy",
+        "in" : "header"
+      }
+    }
+  },
+  "x-hubspot-product-tier-requirements" : {
+    "marketing" : "FREE",
+    "sales" : "FREE",
+    "service" : "FREE",
+    "cms" : "FREE",
+    "commerce" : "FREE",
+    "crmHub" : "FREE",
+    "dataHub" : "FREE"
+  }
+}

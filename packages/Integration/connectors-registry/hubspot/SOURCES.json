@@ -1,0 +1,466 @@
+{
+  "Vendor": "HubSpot",
+  "AuditedAt": "2026-06-30",
+  "AuditedBy": "SourceAuditor (claude-sonnet-4-6)",
+  "Sources": [
+    {
+      "URL": "https://api.hubspot.com/public/api/spec/v1/specs",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "CoversTaxonomies": [
+        "CRM Standard Objects",
+        "CRM Associations",
+        "Pipelines & Stages",
+        "CRM Lists",
+        "CRM Properties",
+        "Association Schemas",
+        "Owners & Teams",
+        "Custom Object Schemas",
+        "HubDB",
+        "Marketing",
+        "Automation",
+        "Custom Events",
+        "Files & Folders",
+        "Timeline",
+        "Conversations",
+        "Forecasts",
+        "Calling",
+        "Communication Preferences",
+        "CMS Content",
+        "Bulk Ops",
+        "Account Info"
+      ],
+      "AccessNotes": "102 per-API OpenAPI specs linked via this catalog. Each entry has 'versions' with 'openApi' URL pointing to the actual spec. The old endpoint api-catalog-public/v1/apis is sunsetted (November 2024); this new endpoint is the replacement. 102 APIs total across CRM (59), CMS (13), Marketing (7), Account (2), Conversations (3), Automation (3), Events (3), Settings (3), Files (1), Business Units (1), Data Studio (1), Auth (1), Meta (1), Webhooks (1), Webhooks Journal (1), Scheduler (1), Communication Preferences (1).",
+      "LocalRawPath": "sources/api-catalog-new.json",
+      "SpecCount": 102,
+      "SpecVersion": "2026-03 (LATEST), v3/v4 (STABLE)"
+    },
+    {
+      "URL": "https://api.hubspot.com/public/api/spec/v2/specs/release/75232/version/2026-03",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "CoversTaxonomies": [
+        "CRM Standard Objects"
+      ],
+      "AccessNotes": "Contacts OpenAPI spec (2026-03 latest). Downloaded 94.5 KB. Representative of all standard CRM object specs - each uses identical path patterns /crm/objects/2026-03/{objectType}. 49 total per-API spec files downloaded.",
+      "LocalRawPath": "sources/specs/contacts.json",
+      "Notes": "All 49 per-object specs downloaded to sources/specs/ directory. Each spec is ~89-200KB. Standard CRM objects use identical BatchInput/BatchResponse/SimplePublicObject framework types."
+    },
+    {
+      "URL": "https://api.hubspot.com/public/api/spec/v2/specs/release/75258/version/2026-03",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "CoversTaxonomies": [
+        "CRM Associations"
+      ],
+      "AccessNotes": "Associations v4 OpenAPI spec (2026-03). 118 KB. Documents /crm/associations/{fromObjectType}/{toObjectType}/batch/* paths. Association type pairs are runtime-defined via labels endpoint.",
+      "LocalRawPath": "sources/specs/associations.json"
+    },
+    {
+      "URL": "https://api.hubspot.com/public/api/spec/v2/specs/release/75238/version/2026-03",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "CoversTaxonomies": [
+        "Association Schemas"
+      ],
+      "AccessNotes": "Association Schema definitions spec. Documents /crm/associations/definitions/* paths for managing association type definitions and configurations.",
+      "LocalRawPath": "sources/specs/associations_schema.json"
+    },
+    {
+      "URL": "https://api.hubspot.com/public/api/spec/v2/specs/release/75321/version/2026-03",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "CoversTaxonomies": [
+        "Pipelines & Stages"
+      ],
+      "AccessNotes": "Pipelines OpenAPI spec. Documents /crm/pipelines/{objectType} paths. Pipelines and stages are pipeline-enabled object types: deals, tickets, leads, appointment, and any custom object with a pipeline.",
+      "LocalRawPath": "sources/specs/pipelines.json"
+    },
+    {
+      "URL": "https://api.hubspot.com/public/api/spec/v2/specs/release/75349/version/2026-03",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "CoversTaxonomies": [
+        "CRM Lists"
+      ],
+      "AccessNotes": "Lists OpenAPI spec. 203 KB - largest of the downloaded specs. Documents /crm/lists/ paths for list CRUD, folder management, membership management, and list search.",
+      "LocalRawPath": "sources/specs/lists.json"
+    },
+    {
+      "URL": "https://api.hubspot.com/public/api/spec/v2/specs/release/75280/version/2026-03",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "CoversTaxonomies": [
+        "CRM Properties"
+      ],
+      "AccessNotes": "Properties OpenAPI spec. Documents /crm/properties/{objectType} paths. Properties are per-object-type and include both properties and property groups.",
+      "LocalRawPath": "sources/specs/properties.json"
+    },
+    {
+      "URL": "https://api.hubspot.com/public/api/spec/v2/specs/release/75370/version/2026-03",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "CoversTaxonomies": [
+        "Custom Object Schemas"
+      ],
+      "AccessNotes": "Schemas OpenAPI spec (custom object schema management). Documents /crm-object-schemas/ paths for reading and managing custom CRM object schema definitions.",
+      "LocalRawPath": "sources/specs/schemas.json"
+    },
+    {
+      "URL": "https://api.hubspot.com/public/api/spec/v2/specs/release/75317/version/2026-03",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "CoversTaxonomies": [
+        "HubDB"
+      ],
+      "AccessNotes": "HubDB OpenAPI spec. Documents /cms/hubdb/ paths for table management, row CRUD, draft/live publishing. HubDB rows are runtime-dynamic (schema per table).",
+      "LocalRawPath": "sources/specs/hubdb.json"
+    },
+    {
+      "URL": "https://api.hubspot.com/public/api/spec/v2/specs/release/75335/version/2026-03",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "CoversTaxonomies": [
+        "Marketing"
+      ],
+      "AccessNotes": "Marketing Events OpenAPI spec. Documents marketing event record management and attendee tracking.",
+      "LocalRawPath": "sources/specs/marketing_events_real.json"
+    },
+    {
+      "URL": "https://api.hubspot.com/public/api/spec/v2/specs/release/75322/version/2026-03",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "CoversTaxonomies": [
+        "Marketing"
+      ],
+      "AccessNotes": "Marketing Emails OpenAPI spec. Documents PublicEmail, PublicEmailVersion, statistics.",
+      "LocalRawPath": "sources/specs/marketing_emails.json"
+    },
+    {
+      "URL": "https://api.hubspot.com/public/api/spec/v2/specs/release/75325/version/2026-03",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "CoversTaxonomies": [
+        "Marketing"
+      ],
+      "AccessNotes": "Campaigns OpenAPI spec. Documents PublicCampaign, PublicCampaignAsset records.",
+      "LocalRawPath": "sources/specs/campaigns.json"
+    },
+    {
+      "URL": "https://api.hubspot.com/public/api/spec/v2/specs/release/75344/version/2026-03",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "CoversTaxonomies": [
+        "Automation"
+      ],
+      "AccessNotes": "Sequences OpenAPI spec. Documents sequence enrollments and sequence definitions.",
+      "LocalRawPath": "sources/specs/sequences.json"
+    },
+    {
+      "URL": "https://api.hubspot.com/public/api/spec/v2/specs/release/75366/version/2026-03",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "CoversTaxonomies": [
+        "Custom Events"
+      ],
+      "AccessNotes": "Manage Event Definitions spec. Documents behavioral/custom event type definitions (ExternalBehavioralEventTypeDefinition).",
+      "LocalRawPath": "sources/specs/event_definitions.json"
+    },
+    {
+      "URL": "https://api.hubspot.com/public/api/spec/v2/specs/release/75340/version/2026-03",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "CoversTaxonomies": [
+        "Files & Folders"
+      ],
+      "AccessNotes": "Files OpenAPI spec. Documents File and Folder records for HubSpot's file manager.",
+      "LocalRawPath": "sources/specs/files.json"
+    },
+    {
+      "URL": "https://api.hubspot.com/public/api/spec/v2/specs/release/75345/version/2026-03",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "CoversTaxonomies": [
+        "Timeline"
+      ],
+      "AccessNotes": "Timeline OpenAPI spec. Documents timeline event types and events for custom integration events.",
+      "LocalRawPath": "sources/specs/timeline.json"
+    },
+    {
+      "URL": "https://api.hubspot.com/public/api/spec/v2/specs/release/22196/version/3",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "CoversTaxonomies": [
+        "Conversations"
+      ],
+      "AccessNotes": "Conversations v3 OpenAPI spec. Documents conversation threads, messages, inboxes.",
+      "LocalRawPath": "sources/specs/conversations_v3.json"
+    },
+    {
+      "URL": "https://api.hubspot.com/public/api/spec/v2/specs/release/75311/version/2026-03",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "CoversTaxonomies": [
+        "Forecasts"
+      ],
+      "AccessNotes": "Forecasts OpenAPI spec (beta). Documents forecast records.",
+      "LocalRawPath": "sources/specs/forecasts.json"
+    },
+    {
+      "URL": "https://api.hubspot.com/public/api/spec/v2/specs/release/75341/version/2026-03",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "CoversTaxonomies": [
+        "Calling"
+      ],
+      "AccessNotes": "Transcriptions (Calling Extensions) OpenAPI spec. Documents call transcript records.",
+      "LocalRawPath": "sources/specs/transcriptions.json"
+    },
+    {
+      "URL": "https://api.hubspot.com/public/api/spec/v2/specs/release/75272/version/2026-03",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "CoversTaxonomies": [
+        "Account Info"
+      ],
+      "AccessNotes": "Audit Logs OpenAPI spec. Documents PublicApiUserActionEvent, PublicLoginAudit, HydratedCriticalAction. INFORMATIONAL - not a syncable entity set.",
+      "LocalRawPath": "sources/specs/audit_logs.json"
+    },
+    {
+      "URL": "https://api.hubspot.com/public/api/spec/v2/specs/release/75364/version/2026-03",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "CoversTaxonomies": [
+        "CMS Content"
+      ],
+      "AccessNotes": "CMS Authors (BlogAuthor) OpenAPI spec. Documents /cms/blogs/authors paths.",
+      "LocalRawPath": "sources/specs/cms_authors.json"
+    },
+    {
+      "URL": "https://api.hubspot.com/public/api/spec/v2/specs/release/75356/version/2026-03",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "CoversTaxonomies": [
+        "CMS Content"
+      ],
+      "AccessNotes": "CMS Posts (BlogPost) OpenAPI spec. Documents /cms/blogs/posts paths with versioning support.",
+      "LocalRawPath": "sources/specs/cms_posts.json"
+    },
+    {
+      "URL": "https://api.hubspot.com/public/api/spec/v2/specs/release/75337/version/2026-03",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "CoversTaxonomies": [
+        "CMS Content"
+      ],
+      "AccessNotes": "CMS Pages spec. Documents landing pages, site pages (Page, PageVersion) via /cms/pages/ paths.",
+      "LocalRawPath": "sources/specs/cms_pages.json"
+    },
+    {
+      "URL": "https://api.hubspot.com/public/api/spec/v2/specs/release/75326/version/2026-03",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "CoversTaxonomies": [
+        "CMS Content"
+      ],
+      "AccessNotes": "URL Redirects and Mappings spec. Documents UrlMapping records.",
+      "LocalRawPath": "sources/specs/cms_url_redirects.json"
+    },
+    {
+      "URL": "https://api.hubspot.com/public/api/spec/v2/specs/release/75374/version/2026-03",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "CoversTaxonomies": [
+        "CMS Content"
+      ],
+      "AccessNotes": "CMS Domains spec. Documents Domain records (connected website domains).",
+      "LocalRawPath": "sources/specs/cms_domains.json"
+    },
+    {
+      "URL": "https://github.com/HubSpot/HubSpot-public-api-spec-collection",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "CoversTaxonomies": [
+        "CRM Standard Objects",
+        "CRM Associations",
+        "Pipelines & Stages",
+        "CRM Lists",
+        "CRM Properties",
+        "HubDB",
+        "Marketing",
+        "CMS Content"
+      ],
+      "AccessNotes": "HubSpot's official GitHub repo for Postman/OpenAPI spec collection. Contains PublicApiSpecs/ directory with 17 group subdirectories (CRM: 61 sub-APIs, CMS, Marketing, etc.). README states internal use for Postman sync. NOTE: Contains Bucket_Test111 in CRM subfolder - this is an internal test scaffold (name pattern, no real schema content) and should NOT be treated as a CRM object. Verified via GitHub API: CRM has 61 subdirs including the test bucket."
+    },
+    {
+      "URL": "https://www.postman.com/hubspot/hubspot-public-api-workspace/overview",
+      "AccessStatus": "Reachable",
+      "SourceTier": 2,
+      "SourceCategory": "PostmanCollection",
+      "CoversTaxonomies": [
+        "CRM Standard Objects",
+        "CRM Associations",
+        "Pipelines & Stages",
+        "CRM Lists",
+        "HubDB",
+        "Marketing",
+        "Automation"
+      ],
+      "AccessNotes": "HubSpot's official public Postman workspace. Contains per-API collections mirroring the OpenAPI specs. Preferred machine-readable source is the OpenAPI specs (downloaded); this is a supplementary source. Collections are synchronized from the GitHub spec repo."
+    },
+    {
+      "URL": "https://developers.hubspot.com/docs/api-reference/latest/overview",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "CoversTaxonomies": [
+        "CRM Standard Objects",
+        "CRM Associations",
+        "CRM Properties",
+        "Pipelines & Stages",
+        "Custom Object Schemas",
+        "HubDB",
+        "Marketing",
+        "Automation",
+        "Custom Events",
+        "Files & Folders",
+        "CMS Content",
+        "Conversations",
+        "Communication Preferences"
+      ],
+      "AccessNotes": "HubSpot developer docs reference portal. 2026-03 date-versioned API docs. Redirects to login for some deep endpoints but reference index is public. Prose docs for all API surfaces. Note: many deep doc URLs redirect through app.hubspot.com/myaccounts (auth wall) - use the OpenAPI specs for machine-readable truth."
+    },
+    {
+      "URL": "https://developers.hubspot.com/docs/reference/api/crm/associations/association-details",
+      "AccessStatus": "WebFetchBlocked",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "CoversTaxonomies": [
+        "CRM Associations"
+      ],
+      "AccessNotes": "Association type IDs reference page. Redirects through HubSpot auth wall (app.hubspot.com/myaccounts). Content recovered via WebSearch: documents 27+ contact association types, 15+ company types, 12+ deal types, 8+ ticket types. See enumerated association pairs in TaxonomyLeaves. Retry 1: 307 redirect to auth. Retry 2: Curl with -L gives 200 but returns JavaScript SPA (content rendered client-side). Data sourced from web search results instead."
+    },
+    {
+      "URL": "https://developers.hubspot.com/docs/apps/developer-platform/add-features/scim",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "CoversTaxonomies": [
+        "Identity Provisioning (SCIM)"
+      ],
+      "AccessNotes": "SCIM 2.0 tenant docs. No OpenAPI spec exists for SCIM (standards-based RFC7643/7644 surface, not part of api-catalog). Verified reachable via curl: GET https://api.hubspot.com/scim/v2/Users -> 401; GET https://api.hubspot.com/scim/v2/ServiceProviderConfig -> 401 (path real, auth-gated, not 404)."
+    },
+    {
+      "URL": "https://api.hubapi.com/automation/v3/workflows",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "CoversTaxonomies": [
+        "Automation"
+      ],
+      "AccessNotes": "Legacy Workflows v3 list endpoint. Doc page at developers.hubspot.com/docs/api-reference/legacy/create-manage-workflows-v3/... redirects through app.hubspot.com auth wall (SPA), but the endpoint itself verified live via curl: GET /automation/v3/workflows -> 401 (real, auth-gated). Current successor is Automation v4 flows (sources/specs/automation__automation_v4.json)."
+    },
+    {
+      "URL": "https://developers.hubspot.com/docs/api-reference/automation-actions-v4-v4/custom-code-actions",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "CoversTaxonomies": [
+        "Automation"
+      ],
+      "AccessNotes": "Custom Code Actions documentation. Managed via the Automation Actions v4 definitions API (sources/specs/automation__actions_v4.json) — custom code is a function-body sub-resource of an action definition."
+    },
+    {
+      "URL": "https://developers.hubspot.com/docs/api-reference/legacy/forms-v1/submissions/get-form-integrations-v1-submissions-forms-form_guid",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "CoversTaxonomies": [
+        "Marketing"
+      ],
+      "AccessNotes": "Legacy Form Submissions API doc (form_submissions is a distinct resource from Forms v3 definitions — sources/specs/marketing__forms.json only covers form definitions, not submission records). Verified reachable via curl: GET /form-integrations/v1/submissions/forms/{guid} -> 401 (real, auth-gated)."
+    },
+    {
+      "URL": "https://developers.hubspot.com/docs/apps/developer-platform/add-features/app-events/create-and-manage-event-types",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "CoversTaxonomies": [
+        "Timeline"
+      ],
+      "AccessNotes": "Confirms Timeline/App Event Type DEFINITIONS (the type-definition resource, distinct from the TimelineEventIFrame sub-object in crm__timeline.json) are managed via a project *-hsmeta.json config file deployed with `hs project upload` — NOT a runtime REST CRUD API in the current developer platform. The legacy REST surface (/integrations/v1/{appId}/timeline/event-types) is verified reachable (curl 401) but is deprecated and auth-gated for any read. Per task instruction: timeline_event_types is classified runtime-discovery-only with this documented reason, not silently dropped and not conflated with TimelineEventIFrame."
+    },
+    {
+      "URL": "https://api.hubapi.com/ads/v1/campaigns and https://api.hubapi.com/ads/v1/accounts",
+      "AccessStatus": "404",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "CoversTaxonomies": [],
+      "AccessNotes": "vendor-confirmed-absent evidence for the ad_campaigns / ad_accounts Gap entries. Both legacy /ads/v1/* paths return a true 404 (standard Jetty error page, not the JSON auth-gate 401/403 pattern every other probed endpoint returns) — confirming the legacy Ads API is decommissioned with no successor REST endpoint. HubSpots native Campaigns object (marketing__campaigns_public_api.json) is a DIFFERENT resource (marketing campaign container) and does not cover ad-network ad accounts/campaigns."
+    }
+  ],
+  "ScaffoldingExclusions": [
+    {
+      "Name": "Bucket_Test111",
+      "Location": "GitHub: HubSpot/HubSpot-public-api-spec-collection/tree/main/PublicApiSpecs/CRM/Bucket_Test111",
+      "Indicator": "Name pattern (internal test bucket naming convention), no real CRM schema content, absent from the public API catalog",
+      "Classification": "Internal test scaffold - NOT a CRM object type"
+    }
+  ],
+  "IndependentSignals": {
+    "APIcatalogCount": 102,
+    "CRMGroupAPIs": 59,
+    "CMSGroupAPIs": 13,
+    "OtherGroupAPIs": 30,
+    "EnumeratedSchemaTypes": 701,
+    "SpecFilesDownloaded": 64,
+    "EnumeratedObjectCountRedo": 161,
+    "EnumeratedAssociationCountRedo": 63,
+    "RedoPassDate": "2026-07-01",
+    "RedoNewTaxonomies": [
+      "Account & Settings",
+      "Identity Provisioning (SCIM)",
+      "Data Ingestion"
+    ]
+  },
+  "Gaps": [
+    {
+      "Area": "ad_accounts",
+      "Reason": "vendor-confirmed-absent: legacy /ads/v1/accounts is decommissioned (true 404, not 401/403 auth-gate) as of 2026-07-01. No successor Ads Accounts REST endpoint exists in the current 102-API OpenAPI catalog or in current developers.hubspot.com docs. HubSpot integrates with external ad networks (Google/Meta/LinkedIn Ads) rather than exposing ad-network account data as a native HubSpot-syncable object."
+    },
+    {
+      "Area": "ad_campaigns",
+      "Reason": "vendor-confirmed-absent: legacy /ads/v1/campaigns is decommissioned (true 404, not 401/403 auth-gate) as of 2026-07-01. No successor Ads Campaigns REST endpoint exists. Do not conflate with the native marketing Campaigns object (marketing__campaigns_public_api.json), which is a marketing-campaign container, not an ad-network ad campaign."
+    },
+    {
+      "Area": "timeline_event_types",
+      "Reason": "runtime-discovery-only, not credential-free-provable as a static catalog entry: crm__timeline.json (the current Timeline OpenAPI spec) exposes only /events, /events/batch, and /types/projects, plus the TimelineEventIFrame sub-object — it has NO top-level Timeline Event Type list/create/get-by-id resource. HubSpots current Developer Platform manages event-type DEFINITIONS via a project *-hsmeta.json config file deployed at build/deploy time (hs project upload), not a runtime REST API. A legacy REST surface (/integrations/v1/{appId}/timeline/event-types) is verified reachable (curl 401) but is deprecated in current docs and requires auth to enumerate/read any definitions — so it cannot be seeded as credential-free Declared metadata. Recommend: connector treats timeline_event_types as a runtime-Discovered object only (via the legacy authenticated endpoint at connection time), never a build-time static catalog entry."
+    }
+  ]
+}

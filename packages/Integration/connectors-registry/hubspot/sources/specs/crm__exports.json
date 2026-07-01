@@ -1,0 +1,650 @@
+{
+  "openapi" : "3.0.1",
+  "info" : {
+    "title" : "CRM Exports",
+    "description" : "Basepom for all HubSpot Projects",
+    "version" : "2026-03",
+    "x-hubspot-product-tier-requirements" : {
+      "marketing" : "FREE",
+      "sales" : "FREE",
+      "service" : "FREE",
+      "cms" : "FREE",
+      "commerce" : "FREE",
+      "crmHub" : "FREE",
+      "dataHub" : "FREE"
+    }
+  },
+  "servers" : [ {
+    "url" : "https://api.hubapi.com"
+  } ],
+  "tags" : [ {
+    "name" : "Advanced"
+  }, {
+    "name" : "Basic"
+  } ],
+  "paths" : {
+    "/crm/exports/2026-03/export/async" : {
+      "post" : {
+        "tags" : [ "Advanced" ],
+        "summary" : "Start an export",
+        "description" : "Begins exporting CRM data for the portal as specified in the request body",
+        "operationId" : "post-/crm/exports/2026-03/export/async_start",
+        "parameters" : [ ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PublicExportRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "202" : {
+            "description" : "accepted",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TaskLocator"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "$ref" : "#/components/responses/Error"
+          }
+        },
+        "security" : [ {
+          "oauth2" : [ "crm.export" ]
+        } ]
+      }
+    },
+    "/crm/exports/2026-03/export/async/tasks/{taskId}/status" : {
+      "get" : {
+        "tags" : [ "Advanced" ],
+        "summary" : "Get the status of the export including the URL to download the file",
+        "description" : "Returns the status of the export with taskId, including the URL of the resulting file if the export status is COMPLETE",
+        "operationId" : "get-/crm/exports/2026-03/export/async/tasks/{taskId}/status_getStatus",
+        "parameters" : [ {
+          "name" : "taskId",
+          "in" : "path",
+          "description" : "",
+          "required" : true,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "successful operation",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ActionResponseWithSingleResultURI"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "$ref" : "#/components/responses/Error"
+          }
+        },
+        "security" : [ {
+          "oauth2" : [ "crm.export" ]
+        } ]
+      }
+    },
+    "/crm/exports/2026-03/export/{exportId}" : {
+      "get" : {
+        "tags" : [ "Basic" ],
+        "summary" : "Retrieve details of a specific export by its unique ID.",
+        "description" : "Retrieve detailed information about a specific CRM export, including its current state and properties.",
+        "operationId" : "get-/crm/exports/2026-03/export/{exportId}_getById",
+        "parameters" : [ {
+          "name" : "exportId",
+          "in" : "path",
+          "description" : "",
+          "required" : true,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "successful operation",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PublicExportResponse"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "$ref" : "#/components/responses/Error"
+          }
+        },
+        "security" : [ {
+          "oauth2" : [ "crm.export" ]
+        } ]
+      }
+    }
+  },
+  "components" : {
+    "schemas" : {
+      "ActionResponseWithSingleResultURI" : {
+        "required" : [ "completedAt", "startedAt", "status" ],
+        "type" : "object",
+        "properties" : {
+          "completedAt" : {
+            "type" : "string",
+            "description" : "The timestamp when the export was completed, in ISO 8601 format.",
+            "format" : "date-time"
+          },
+          "errors" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/StandardError"
+            }
+          },
+          "links" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "description" : "A collection of related links associated with the export."
+          },
+          "numErrors" : {
+            "type" : "integer",
+            "description" : "The number of errors encountered during the export process.",
+            "format" : "int32"
+          },
+          "requestedAt" : {
+            "type" : "string",
+            "description" : "The timestamp when the export request was made, in ISO 8601 format.",
+            "format" : "date-time"
+          },
+          "result" : {
+            "type" : "string",
+            "description" : "The URL of the resulting file if the export status is COMPLETE."
+          },
+          "startedAt" : {
+            "type" : "string",
+            "description" : "The timestamp when the export process started, in ISO 8601 format.",
+            "format" : "date-time"
+          },
+          "status" : {
+            "type" : "string",
+            "description" : "The current status of the export, which can be PENDING, PROCESSING, COMPLETE or CANCELED.",
+            "enum" : [ "CANCELED", "COMPLETE", "PENDING", "PROCESSING" ]
+          }
+        }
+      },
+      "Error" : {
+        "required" : [ "category", "correlationId", "message" ],
+        "type" : "object",
+        "properties" : {
+          "category" : {
+            "type" : "string",
+            "description" : "The error category"
+          },
+          "context" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "array",
+              "items" : {
+                "type" : "string"
+              }
+            },
+            "description" : "Context about the error condition",
+            "example" : "{invalidPropertyName=[propertyValue], missingScopes=[scope1, scope2]}"
+          },
+          "correlationId" : {
+            "type" : "string",
+            "description" : "A unique identifier for the request. Include this value with any error reports or support tickets",
+            "format" : "uuid",
+            "example" : "aeb5f871-7f07-4993-9211-075dc63e7cbf"
+          },
+          "errors" : {
+            "type" : "array",
+            "description" : "further information about the error",
+            "items" : {
+              "$ref" : "#/components/schemas/ErrorDetail"
+            }
+          },
+          "links" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "description" : "A map of link names to associated URIs containing documentation about the error or recommended remediation steps"
+          },
+          "message" : {
+            "type" : "string",
+            "description" : "A human readable message describing the error along with remediation steps where appropriate",
+            "example" : "An error occurred"
+          },
+          "subCategory" : {
+            "type" : "string",
+            "description" : "A specific category that contains more specific detail about the error"
+          }
+        },
+        "example" : {
+          "message" : "Invalid input (details will vary based on the error)",
+          "correlationId" : "aeb5f871-7f07-4993-9211-075dc63e7cbf",
+          "category" : "VALIDATION_ERROR",
+          "links" : {
+            "knowledge-base" : "https://www.hubspot.com/products/service/knowledge-base"
+          }
+        }
+      },
+      "ErrorDetail" : {
+        "required" : [ "message" ],
+        "type" : "object",
+        "properties" : {
+          "code" : {
+            "type" : "string",
+            "description" : "The status code associated with the error detail"
+          },
+          "context" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "array",
+              "items" : {
+                "type" : "string"
+              }
+            },
+            "description" : "Context about the error condition",
+            "example" : "{missingScopes=[scope1, scope2]}"
+          },
+          "in" : {
+            "type" : "string",
+            "description" : "The name of the field or parameter in which the error was found."
+          },
+          "message" : {
+            "type" : "string",
+            "description" : "A human readable message describing the error along with remediation steps where appropriate"
+          },
+          "subCategory" : {
+            "type" : "string",
+            "description" : "A specific category that contains more specific detail about the error"
+          }
+        }
+      },
+      "Filter" : {
+        "required" : [ "operator", "propertyName" ],
+        "type" : "object",
+        "properties" : {
+          "highValue" : {
+            "type" : "string",
+            "description" : "The upper boundary value when using ranged-based filters."
+          },
+          "operator" : {
+            "type" : "string",
+            "description" : "The comparison operator used in the filter, such as \"EQ\" or \"GT\".",
+            "enum" : [ "BETWEEN", "CONTAINS_TOKEN", "EQ", "GT", "GTE", "HAS_PROPERTY", "IN", "LT", "LTE", "NEQ", "NOT_CONTAINS_TOKEN", "NOT_HAS_PROPERTY", "NOT_IN" ]
+          },
+          "propertyName" : {
+            "type" : "string",
+            "description" : "The name of the property to apply the filter to."
+          },
+          "value" : {
+            "type" : "string",
+            "description" : "The value to match against the property."
+          },
+          "values" : {
+            "type" : "array",
+            "description" : "The values to match against the property.",
+            "items" : {
+              "type" : "string"
+            }
+          }
+        },
+        "description" : "Defines a single condition for searching CRM objects, specifying the property to filter on, the operator to use (such as equals, greater than, or contains), and the value(s) to compare against. "
+      },
+      "FilterGroup" : {
+        "required" : [ "filters" ],
+        "type" : "object",
+        "properties" : {
+          "filters" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Filter"
+            }
+          }
+        }
+      },
+      "PublicCrmSearchRequest" : {
+        "required" : [ "filterGroups", "filters", "sorts" ],
+        "type" : "object",
+        "properties" : {
+          "filterGroups" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/FilterGroup"
+            }
+          },
+          "filters" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Filter"
+            }
+          },
+          "query" : {
+            "type" : "string",
+            "description" : "The search query string, to filter CRM records."
+          },
+          "sorts" : {
+            "type" : "array",
+            "description" : "Defines the order in which the CRM records should be returned.",
+            "items" : {
+              "type" : "string"
+            }
+          }
+        }
+      },
+      "PublicExportListRequest" : {
+        "required" : [ "associatedObjectType", "exportInternalValuesOptions", "exportName", "exportType", "format", "includeLabeledAssociations", "includePrimaryDisplayPropertyForAssociatedObjects", "language", "listId", "objectProperties", "objectType", "overrideAssociatedObjectsPerDefinitionPerRowLimit" ],
+        "type" : "object",
+        "properties" : {
+          "associatedObjectType" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "exportInternalValuesOptions" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string",
+              "enum" : [ "NAMES", "VALUES" ]
+            }
+          },
+          "exportName" : {
+            "type" : "string"
+          },
+          "exportType" : {
+            "type" : "string",
+            "default" : "LIST",
+            "enum" : [ "LIST" ]
+          },
+          "format" : {
+            "type" : "string",
+            "enum" : [ "CSV", "XLS", "XLSX" ]
+          },
+          "includeLabeledAssociations" : {
+            "type" : "boolean"
+          },
+          "includePrimaryDisplayPropertyForAssociatedObjects" : {
+            "type" : "boolean"
+          },
+          "language" : {
+            "type" : "string",
+            "enum" : [ "AF_ZA", "AR_EG", "BG", "BN", "CA_ES", "CS", "DA_DK", "DE", "EL_GR", "EN", "EN_GB", "ES", "ES_MX", "ET_EE", "FI", "FR", "FR_CA", "HE_IL", "HI_IN", "HR", "HU", "ID", "IT", "JA", "KO_KR", "LT_LT", "MS", "NL", "NO", "PL", "PT_BR", "PT_PT", "RO", "RU", "SK_SK", "SL", "SV", "TH", "TL", "TR", "UK", "VI_VN", "ZH_CN", "ZH_HK", "ZH_TW" ]
+          },
+          "listId" : {
+            "type" : "string"
+          },
+          "objectProperties" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "objectType" : {
+            "type" : "string"
+          },
+          "overrideAssociatedObjectsPerDefinitionPerRowLimit" : {
+            "type" : "boolean"
+          }
+        },
+        "x-hubspot-sub-type-impl" : true
+      },
+      "PublicExportRequest" : {
+        "properties" : { },
+        "oneOf" : [ {
+          "$ref" : "#/components/schemas/PublicExportViewRequest"
+        }, {
+          "$ref" : "#/components/schemas/PublicExportListRequest"
+        } ]
+      },
+      "PublicExportResponse" : {
+        "required" : [ "createdAt", "exportState", "exportType", "id", "objectProperties", "objectType", "updatedAt" ],
+        "type" : "object",
+        "properties" : {
+          "createdAt" : {
+            "type" : "string",
+            "description" : "The timestamp when the export was created, in ISO 8601 format.",
+            "format" : "date-time"
+          },
+          "exportName" : {
+            "type" : "string",
+            "description" : "The name assigned to the export."
+          },
+          "exportState" : {
+            "type" : "string",
+            "description" : "The current state of the export process.",
+            "enum" : [ "CANCELED", "CONFLICT", "DEFERRED", "DELETED", "DONE", "ENQUEUED", "FAILED", "PENDING_APPROVAL", "PROCESSING" ]
+          },
+          "exportType" : {
+            "type" : "string",
+            "description" : "The type of export, which can be either VIEW or LIST.",
+            "enum" : [ "LIST", "VIEW" ]
+          },
+          "id" : {
+            "type" : "string",
+            "description" : "The unique ID of the export."
+          },
+          "objectProperties" : {
+            "type" : "array",
+            "description" : "The list of properties exported for the associated object.",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "objectType" : {
+            "type" : "string",
+            "description" : "The associated CRM object being exported."
+          },
+          "recordCount" : {
+            "type" : "integer",
+            "description" : "The total number of records included in the export.",
+            "format" : "int32"
+          },
+          "updatedAt" : {
+            "type" : "string",
+            "description" : "The timestamp when the export was last updated, in ISO 8601 format.",
+            "format" : "date-time"
+          }
+        }
+      },
+      "PublicExportViewRequest" : {
+        "required" : [ "associatedObjectType", "exportInternalValuesOptions", "exportName", "exportType", "format", "includeLabeledAssociations", "includePrimaryDisplayPropertyForAssociatedObjects", "language", "objectProperties", "objectType", "overrideAssociatedObjectsPerDefinitionPerRowLimit" ],
+        "type" : "object",
+        "properties" : {
+          "associatedObjectType" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "exportInternalValuesOptions" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string",
+              "enum" : [ "NAMES", "VALUES" ]
+            }
+          },
+          "exportName" : {
+            "type" : "string"
+          },
+          "exportType" : {
+            "type" : "string",
+            "default" : "VIEW",
+            "enum" : [ "VIEW" ]
+          },
+          "format" : {
+            "type" : "string",
+            "enum" : [ "CSV", "XLS", "XLSX" ]
+          },
+          "includeLabeledAssociations" : {
+            "type" : "boolean"
+          },
+          "includePrimaryDisplayPropertyForAssociatedObjects" : {
+            "type" : "boolean"
+          },
+          "language" : {
+            "type" : "string",
+            "enum" : [ "AF_ZA", "AR_EG", "BG", "BN", "CA_ES", "CS", "DA_DK", "DE", "EL_GR", "EN", "EN_GB", "ES", "ES_MX", "ET_EE", "FI", "FR", "FR_CA", "HE_IL", "HI_IN", "HR", "HU", "ID", "IT", "JA", "KO_KR", "LT_LT", "MS", "NL", "NO", "PL", "PT_BR", "PT_PT", "RO", "RU", "SK_SK", "SL", "SV", "TH", "TL", "TR", "UK", "VI_VN", "ZH_CN", "ZH_HK", "ZH_TW" ]
+          },
+          "objectProperties" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "objectType" : {
+            "type" : "string"
+          },
+          "overrideAssociatedObjectsPerDefinitionPerRowLimit" : {
+            "type" : "boolean"
+          },
+          "publicCrmSearchRequest" : {
+            "$ref" : "#/components/schemas/PublicCrmSearchRequest"
+          }
+        },
+        "x-hubspot-sub-type-impl" : true
+      },
+      "StandardError" : {
+        "required" : [ "category", "context", "errors", "links", "message", "status" ],
+        "type" : "object",
+        "properties" : {
+          "category" : {
+            "type" : "string",
+            "description" : "The main category of the error."
+          },
+          "context" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "array",
+              "items" : {
+                "type" : "string"
+              }
+            },
+            "description" : "Context about the error condition"
+          },
+          "errors" : {
+            "type" : "array",
+            "description" : "The detailed error objects.",
+            "items" : {
+              "$ref" : "#/components/schemas/ErrorDetail"
+            }
+          },
+          "id" : {
+            "type" : "string",
+            "description" : "A unique ID for the error instance."
+          },
+          "links" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "description" : "URLs linking to documentation or resources associated with the error."
+          },
+          "message" : {
+            "type" : "string",
+            "description" : "A human readable message describing the error along with remediation steps where appropriate"
+          },
+          "status" : {
+            "type" : "string",
+            "description" : "The HTTP status code associated with the error."
+          },
+          "subCategory" : {
+            "type" : "object",
+            "properties" : { },
+            "description" : "A specific category that contains more specific detail about the error"
+          }
+        },
+        "description" : "Ye olde error"
+      },
+      "TaskLocator" : {
+        "required" : [ "id" ],
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "description" : "The unique ID of the export."
+          },
+          "links" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "description" : "An object containing relevant links related to the export process."
+          }
+        }
+      }
+    },
+    "responses" : {
+      "Error" : {
+        "description" : "An error occurred.",
+        "content" : {
+          "*/*" : {
+            "schema" : {
+              "$ref" : "#/components/schemas/Error"
+            }
+          }
+        }
+      }
+    },
+    "securitySchemes" : {
+      "developer_hapikey" : {
+        "type" : "apiKey",
+        "name" : "hapikey",
+        "in" : "query"
+      },
+      "oauth2" : {
+        "type" : "oauth2",
+        "flows" : {
+          "authorizationCode" : {
+            "authorizationUrl" : "https://app.hubspot.com/oauth/authorize",
+            "tokenUrl" : "https://api.hubapi.com/oauth/v1/token",
+            "scopes" : {
+              "crm.export" : ""
+            }
+          }
+        }
+      },
+      "private_apps" : {
+        "type" : "apiKey",
+        "name" : "private-app",
+        "in" : "header"
+      },
+      "private_apps_legacy" : {
+        "type" : "apiKey",
+        "name" : "private-app-legacy",
+        "in" : "header"
+      }
+    }
+  },
+  "x-hubspot-available-client-libraries" : [ "Node", "Python", "Ruby", "PHP" ],
+  "x-hubspot-product-tier-requirements" : {
+    "marketing" : "FREE",
+    "sales" : "FREE",
+    "service" : "FREE",
+    "cms" : "FREE",
+    "commerce" : "FREE",
+    "crmHub" : "FREE",
+    "dataHub" : "FREE"
+  }
+}

@@ -1,0 +1,506 @@
+{
+  "openapi" : "3.0.1",
+  "info" : {
+    "title" : "Domains",
+    "description" : "Content Domains Service",
+    "version" : "2026-03",
+    "x-hubspot-product-tier-requirements" : {
+      "marketing" : "FREE",
+      "sales" : "FREE",
+      "service" : "FREE",
+      "cms" : "FREE",
+      "commerce" : "FREE",
+      "crmHub" : "FREE",
+      "dataHub" : "FREE"
+    },
+    "x-hubspot-api-use-case" : "Retrieve all currently connected domains to see which sites are live in a given account.",
+    "x-hubspot-introduction" : "Use the domain management API to return information about the domains connected to a HubSpot account. You can return data for all currently connected domains, or for a single domain by ID."
+  },
+  "servers" : [ {
+    "url" : "https://api.hubapi.com"
+  } ],
+  "tags" : [ {
+    "name" : "Basic"
+  } ],
+  "paths" : {
+    "/cms/domains/2026-03" : {
+      "get" : {
+        "tags" : [ "Basic" ],
+        "operationId" : "get-/cms/domains/2026-03_/cms/domains/v3",
+        "parameters" : [ {
+          "name" : "after",
+          "in" : "query",
+          "required" : false,
+          "style" : "form",
+          "explode" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "archived",
+          "in" : "query",
+          "required" : false,
+          "style" : "form",
+          "explode" : true,
+          "schema" : {
+            "type" : "boolean"
+          }
+        }, {
+          "name" : "createdAfter",
+          "in" : "query",
+          "required" : false,
+          "style" : "form",
+          "explode" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "date-time"
+          }
+        }, {
+          "name" : "createdAt",
+          "in" : "query",
+          "required" : false,
+          "style" : "form",
+          "explode" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "date-time"
+          }
+        }, {
+          "name" : "createdBefore",
+          "in" : "query",
+          "required" : false,
+          "style" : "form",
+          "explode" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "date-time"
+          }
+        }, {
+          "name" : "limit",
+          "in" : "query",
+          "required" : false,
+          "style" : "form",
+          "explode" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }, {
+          "name" : "sort",
+          "in" : "query",
+          "required" : false,
+          "style" : "form",
+          "explode" : true,
+          "schema" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          }
+        }, {
+          "name" : "updatedAfter",
+          "in" : "query",
+          "required" : false,
+          "style" : "form",
+          "explode" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "date-time"
+          }
+        }, {
+          "name" : "updatedAt",
+          "in" : "query",
+          "required" : false,
+          "style" : "form",
+          "explode" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "date-time"
+          }
+        }, {
+          "name" : "updatedBefore",
+          "in" : "query",
+          "required" : false,
+          "style" : "form",
+          "explode" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "date-time"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "successful operation",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CollectionResponseWithTotalDomain"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "$ref" : "#/components/responses/Error"
+          }
+        },
+        "security" : [ {
+          "oauth2" : [ "cms.domains.write" ]
+        }, {
+          "oauth2" : [ "cms.knowledge_base.settings.read" ]
+        }, {
+          "oauth2" : [ "cms.knowledge_base.settings.write" ]
+        }, {
+          "oauth2" : [ "cms.domains.read" ]
+        }, {
+          "oauth2" : [ "content" ]
+        } ]
+      }
+    },
+    "/cms/domains/2026-03/{domainId}" : {
+      "get" : {
+        "tags" : [ "Basic" ],
+        "summary" : "Get a single domain",
+        "description" : "Returns a single domains with the id specified.",
+        "operationId" : "get-/cms/domains/2026-03/{domainId}_getById",
+        "parameters" : [ {
+          "name" : "domainId",
+          "in" : "path",
+          "description" : "The unique ID of the domain.",
+          "required" : true,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "successful operation",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Domain"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "$ref" : "#/components/responses/Error"
+          }
+        },
+        "security" : [ {
+          "oauth2" : [ "cms.domains.write" ]
+        }, {
+          "oauth2" : [ "cms.knowledge_base.settings.read" ]
+        }, {
+          "oauth2" : [ "cms.knowledge_base.settings.write" ]
+        }, {
+          "oauth2" : [ "cms.domains.read" ]
+        }, {
+          "oauth2" : [ "content" ]
+        } ]
+      }
+    }
+  },
+  "components" : {
+    "schemas" : {
+      "CollectionResponseWithTotalDomain" : {
+        "required" : [ "results", "total" ],
+        "type" : "object",
+        "properties" : {
+          "paging" : {
+            "$ref" : "#/components/schemas/Paging"
+          },
+          "results" : {
+            "type" : "array",
+            "description" : "The results of the query.",
+            "items" : {
+              "$ref" : "#/components/schemas/Domain"
+            }
+          },
+          "total" : {
+            "type" : "integer",
+            "description" : "The number of available results.",
+            "format" : "int32"
+          }
+        }
+      },
+      "Domain" : {
+        "required" : [ "correctCname", "created", "domain", "id", "isResolving", "isSslEnabled", "isSslOnly", "isUsedForBlogPost", "isUsedForEmail", "isUsedForKnowledge", "isUsedForLandingPage", "isUsedForSitePage", "manuallyMarkedAsResolving", "primaryBlogPost", "primaryEmail", "primaryKnowledge", "primaryLandingPage", "primarySitePage", "secondaryToDomain", "updated" ],
+        "type" : "object",
+        "properties" : {
+          "correctCname" : {
+            "type" : "string",
+            "description" : "The expected CNAME record for the domain."
+          },
+          "created" : {
+            "type" : "string",
+            "description" : "The date and time when the domain was created.",
+            "format" : "date-time"
+          },
+          "domain" : {
+            "type" : "string",
+            "description" : "The actual domain or sub-domain. e.g. www.hubspot.com"
+          },
+          "id" : {
+            "type" : "string",
+            "description" : "The unique ID of this domain."
+          },
+          "isResolving" : {
+            "type" : "boolean",
+            "description" : "Whether the DNS for this domain is optimally configured for use with HubSpot."
+          },
+          "isSslEnabled" : {
+            "type" : "boolean",
+            "description" : "Indicates whether SSL is enabled for the domain."
+          },
+          "isSslOnly" : {
+            "type" : "boolean",
+            "description" : "Indicates whether the domain is accessible only via SSL."
+          },
+          "isUsedForBlogPost" : {
+            "type" : "boolean",
+            "description" : "Whether the domain is used for CMS blog posts."
+          },
+          "isUsedForEmail" : {
+            "type" : "boolean",
+            "description" : "Whether the domain is used for CMS email web pages."
+          },
+          "isUsedForKnowledge" : {
+            "type" : "boolean",
+            "description" : "Whether the domain is used for CMS knowledge pages."
+          },
+          "isUsedForLandingPage" : {
+            "type" : "boolean",
+            "description" : "Whether the domain is used for CMS landing pages."
+          },
+          "isUsedForSitePage" : {
+            "type" : "boolean",
+            "description" : "Whether the domain is used for CMS site pages."
+          },
+          "manuallyMarkedAsResolving" : {
+            "type" : "boolean",
+            "description" : "Indicates whether the domain has been manually marked as resolving."
+          },
+          "primaryBlogPost" : {
+            "type" : "boolean",
+            "description" : "Indicates whether the domain is the primary domain for blog posts."
+          },
+          "primaryEmail" : {
+            "type" : "boolean",
+            "description" : "Indicates whether the domain is the primary domain for email pages."
+          },
+          "primaryKnowledge" : {
+            "type" : "boolean",
+            "description" : "Indicates whether the domain is the primary domain for knowledge pages."
+          },
+          "primaryLandingPage" : {
+            "type" : "boolean",
+            "description" : "Indicates whether the domain is the primary domain for landing pages."
+          },
+          "primarySitePage" : {
+            "type" : "boolean",
+            "description" : "Indicates whether the domain is the primary domain for site pages."
+          },
+          "secondaryToDomain" : {
+            "type" : "string",
+            "description" : "Specifies the domain to which this domain is secondary."
+          },
+          "updated" : {
+            "type" : "string",
+            "description" : "The date and time when the domain was last updated.",
+            "format" : "date-time"
+          }
+        }
+      },
+      "Error" : {
+        "required" : [ "category", "correlationId", "message" ],
+        "type" : "object",
+        "properties" : {
+          "category" : {
+            "type" : "string",
+            "description" : "The error category"
+          },
+          "context" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "array",
+              "items" : {
+                "type" : "string"
+              }
+            },
+            "description" : "Context about the error condition",
+            "example" : "{invalidPropertyName=[propertyValue], missingScopes=[scope1, scope2]}"
+          },
+          "correlationId" : {
+            "type" : "string",
+            "description" : "A unique identifier for the request. Include this value with any error reports or support tickets",
+            "format" : "uuid",
+            "example" : "aeb5f871-7f07-4993-9211-075dc63e7cbf"
+          },
+          "errors" : {
+            "type" : "array",
+            "description" : "further information about the error",
+            "items" : {
+              "$ref" : "#/components/schemas/ErrorDetail"
+            }
+          },
+          "links" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "description" : "A map of link names to associated URIs containing documentation about the error or recommended remediation steps"
+          },
+          "message" : {
+            "type" : "string",
+            "description" : "A human readable message describing the error along with remediation steps where appropriate",
+            "example" : "An error occurred"
+          },
+          "subCategory" : {
+            "type" : "string",
+            "description" : "A specific category that contains more specific detail about the error"
+          }
+        },
+        "example" : {
+          "message" : "Invalid input (details will vary based on the error)",
+          "correlationId" : "aeb5f871-7f07-4993-9211-075dc63e7cbf",
+          "category" : "VALIDATION_ERROR",
+          "links" : {
+            "knowledge-base" : "https://www.hubspot.com/products/service/knowledge-base"
+          }
+        }
+      },
+      "ErrorDetail" : {
+        "required" : [ "message" ],
+        "type" : "object",
+        "properties" : {
+          "code" : {
+            "type" : "string",
+            "description" : "The status code associated with the error detail"
+          },
+          "context" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "array",
+              "items" : {
+                "type" : "string"
+              }
+            },
+            "description" : "Context about the error condition",
+            "example" : "{missingScopes=[scope1, scope2]}"
+          },
+          "in" : {
+            "type" : "string",
+            "description" : "The name of the field or parameter in which the error was found."
+          },
+          "message" : {
+            "type" : "string",
+            "description" : "A human readable message describing the error along with remediation steps where appropriate"
+          },
+          "subCategory" : {
+            "type" : "string",
+            "description" : "A specific category that contains more specific detail about the error"
+          }
+        }
+      },
+      "NextPage" : {
+        "required" : [ "after" ],
+        "type" : "object",
+        "properties" : {
+          "after" : {
+            "type" : "string",
+            "description" : "The cursor value indicating where to begin fetching the next page of results in a paginated collection"
+          },
+          "link" : {
+            "type" : "string",
+            "description" : "An optional URL for directly accessing the next page of results."
+          }
+        },
+        "description" : "Specifies the paging information needed to retrieve the next set of results in a paginated API response"
+      },
+      "Paging" : {
+        "type" : "object",
+        "properties" : {
+          "next" : {
+            "$ref" : "#/components/schemas/NextPage"
+          },
+          "prev" : {
+            "$ref" : "#/components/schemas/PreviousPage"
+          }
+        }
+      },
+      "PreviousPage" : {
+        "required" : [ "before" ],
+        "type" : "object",
+        "properties" : {
+          "before" : {
+            "type" : "string",
+            "description" : "A paging cursor token for retrieving previous pages."
+          },
+          "link" : {
+            "type" : "string",
+            "description" : "A URL that can be used to retrieve the previous pages' results."
+          }
+        },
+        "description" : "specifies the paging information needed to retrieve the previous set of results in a paginated API response"
+      }
+    },
+    "responses" : {
+      "Error" : {
+        "description" : "An error occurred.",
+        "content" : {
+          "*/*" : {
+            "schema" : {
+              "$ref" : "#/components/schemas/Error"
+            }
+          }
+        }
+      }
+    },
+    "securitySchemes" : {
+      "developer_hapikey" : {
+        "type" : "apiKey",
+        "name" : "hapikey",
+        "in" : "query"
+      },
+      "oauth2" : {
+        "type" : "oauth2",
+        "flows" : {
+          "authorizationCode" : {
+            "authorizationUrl" : "https://app.hubspot.com/oauth/authorize",
+            "tokenUrl" : "https://api.hubapi.com/oauth/v1/token",
+            "scopes" : {
+              "cms.domains.write" : "",
+              "cms.knowledge_base.settings.read" : "",
+              "cms.knowledge_base.settings.write" : "",
+              "content" : ""
+            }
+          }
+        }
+      },
+      "private_apps" : {
+        "type" : "apiKey",
+        "name" : "private-app",
+        "in" : "header"
+      },
+      "private_apps_legacy" : {
+        "type" : "apiKey",
+        "name" : "private-app-legacy",
+        "in" : "header"
+      }
+    }
+  },
+  "x-hubspot-available-client-libraries" : [ "Node", "Python", "Ruby", "PHP" ],
+  "x-hubspot-product-tier-requirements" : {
+    "marketing" : "FREE",
+    "sales" : "FREE",
+    "service" : "FREE",
+    "cms" : "FREE",
+    "commerce" : "FREE",
+    "crmHub" : "FREE",
+    "dataHub" : "FREE"
+  }
+}

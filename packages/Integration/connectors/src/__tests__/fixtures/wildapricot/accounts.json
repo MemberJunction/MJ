@@ -1,0 +1,10 @@
+[
+  {
+    "Id": 123456,
+    "PrimaryDomainName": "example.wildapricot.org",
+    "Name": "<scrubbed-org-name-1>",
+    "Url": "https://api.wildapricot.org/v2.3/accounts/123456",
+    "IsFreeAccount": false,
+    "Resources": []
+  }
+]

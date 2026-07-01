@@ -1,0 +1,5291 @@
+{
+  "Entries": [
+    {
+      "ScriptPath": "scratchpad/fetch-hubspot-integration-facts.mjs",
+      "ScriptRunAt": "2026-06-30T20:09:51.379Z",
+      "StructuredOutput": {
+        "probeResults": [
+          {
+            "endpoint": "GET /crm/v3/objects/contacts",
+            "status": 401,
+            "errorBody": "{\"status\":\"error\",\"message\":\"Authentication credentials not found. This API supports OAuth 2.0 authentication...\",\"category\":\"INVALID_AUTHENTICATION\"}"
+          },
+          {
+            "endpoint": "POST /crm/v3/objects/contacts/search",
+            "status": 405,
+            "note": "GET not allowed; POST is the required verb — confirms auth-gated search endpoint"
+          },
+          {
+            "oauthSpec": "https://api.hubspot.com/public/api/spec/v2/specs/release/75328/version/2026-03",
+            "status": 200,
+            "securitySchemes": [
+              "developer_hapikey",
+              "oauth2",
+              "private_apps",
+              "private_apps_legacy"
+            ]
+          }
+        ],
+        "searchEndpointPaginationConfirmed": {
+          "param": "after",
+          "responseField": "paging.next.after",
+          "maxLimit": 200,
+          "schemaName": "PublicObjectSearchRequest"
+        }
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.AuthFlow"
+    },
+    {
+      "ScriptPath": "scratchpad/fetch-hubspot-integration-facts.mjs",
+      "ScriptRunAt": "2026-06-30T20:09:51.379Z",
+      "StructuredOutput": {
+        "searchAPISchemaVerified": true,
+        "PublicObjectSearchRequest": {
+          "after": "string (cursor)",
+          "limit": "integer (max 200)",
+          "filterGroups": "array",
+          "properties": "array",
+          "sorts": "array",
+          "query": "string"
+        },
+        "listEndpointCursorParam": "after",
+        "listEndpointResponseField": "paging.next.after",
+        "nextPageSchema": {
+          "after": "required string",
+          "link": "optional URL"
+        }
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.PaginationDefaults"
+    },
+    {
+      "ScriptPath": "scratchpad/fetch-hubspot-rate-webhooks.mjs",
+      "ScriptRunAt": "2026-06-30T20:09:51.379Z",
+      "StructuredOutput": {
+        "webhooksSpecStatus": 200,
+        "webhooksSpecUrl": "https://api.hubspot.com/public/api/spec/v2/specs/release/75333/version/2026-03",
+        "webhooksSpecPaths": [
+          "/webhooks/2026-03/{appId}/settings",
+          "/webhooks/2026-03/{appId}/subscriptions",
+          "/webhooks/2026-03/{appId}/subscriptions/batch/update",
+          "/webhooks/2026-03/{appId}/subscriptions/{subscriptionId}"
+        ],
+        "webhooksEventTypes": [
+          "company.associationChange",
+          "company.creation",
+          "company.deletion",
+          "contact.creation",
+          "contact.deletion",
+          "deal.creation"
+        ],
+        "oauthSpecStatus": 200,
+        "oauthSpecSecuritySchemes": [
+          "developer_hapikey",
+          "oauth2",
+          "private_apps",
+          "private_apps_legacy"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.WebhooksAvailable"
+    },
+    {
+      "ScriptPath": "scratchpad/fetch-hubspot-rate-webhooks.mjs",
+      "ScriptRunAt": "2026-06-30T20:09:51.379Z",
+      "StructuredOutput": {
+        "errorSchemaVerified": true,
+        "errorSchemaRequired": [
+          "category",
+          "correlationId",
+          "message"
+        ],
+        "errorSchemaProperties": [
+          "category",
+          "context",
+          "correlationId",
+          "errors",
+          "links",
+          "message",
+          "subCategory"
+        ],
+        "errorDetailRequired": [
+          "message"
+        ],
+        "errorDetailProperties": [
+          "code",
+          "context",
+          "in",
+          "message",
+          "subCategory"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.ErrorResponseShape"
+    },
+    {
+      "ScriptPath": "scratchpad/fetch-hubspot-rate-webhooks.mjs",
+      "ScriptRunAt": "2026-06-30T20:09:51.379Z",
+      "StructuredOutput": {
+        "schemasSpecStatus": 200,
+        "objectSchemaFullyQualifiedNameDescription": "An assigned unique ID for the object, including portal ID and object name.",
+        "objectSchemaRequired": [
+          "fullyQualifiedName",
+          "id",
+          "labels",
+          "name",
+          "objectTypeId"
+        ],
+        "customObjectDiscoveryPath": "/crm-object-schemas/2026-03/schemas"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.CustomObjectMarkerPattern"
+    },
+    {
+      "ScriptPath": "scratchpad/fetch-hubspot-rate-webhooks.mjs",
+      "ScriptRunAt": "2026-06-30T20:09:51.379Z",
+      "StructuredOutput": {
+        "propertiesSpecStatus": 200,
+        "hubspotDefinedField": {
+          "type": "boolean",
+          "description": "This will be true for default object properties built into HubSpot."
+        },
+        "propertiesEndpoint": "/crm/properties/2026-03/{objectType}"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.CustomFieldMarkerPattern"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/contacts",
+        "idParam": "contactId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.contacts"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/companies",
+        "idParam": "companyId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.companies"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/deals",
+        "idParam": null,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.deals"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/tickets",
+        "idParam": "ticketId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.tickets"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/products",
+        "idParam": "productId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.products"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/line_items",
+        "idParam": "lineItemId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.line_items"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/quotes",
+        "idParam": "quoteId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.quotes"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/calls",
+        "idParam": "callId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.calls"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/emails",
+        "idParam": "emailId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.emails"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/meetings",
+        "idParam": "meetingId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.meetings"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/notes",
+        "idParam": "noteId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.notes"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/tasks",
+        "idParam": "taskId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.tasks"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/postal_mail",
+        "idParam": "postalMailId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.postal_mail"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/communications",
+        "idParam": "communicationId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.communications"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/orders",
+        "idParam": "orderId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.orders"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/carts",
+        "idParam": "cartId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.carts"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/invoices",
+        "idParam": "invoiceId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.invoices"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/commerce_payments",
+        "idParam": "commercePaymentId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.commerce_payments"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/subscriptions",
+        "idParam": null,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.subscriptions"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/discounts",
+        "idParam": "discountId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.discounts"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/fees",
+        "idParam": "feeId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.fees"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/taxes",
+        "idParam": "taxId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.taxes"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/leads",
+        "idParam": "leadsId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.leads"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/appointments",
+        "idParam": null,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.appointments"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/services",
+        "idParam": null,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.services"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/courses",
+        "idParam": null,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.courses"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/listings",
+        "idParam": null,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.listings"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/contracts",
+        "idParam": "contractId",
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.contracts"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/goal_targets",
+        "idParam": "goalTargetId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.goal_targets"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/feedback_submissions",
+        "idParam": "feedbackSubmissionId",
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.feedback_submissions"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/projects",
+        "idParam": "projectId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.projects"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/users",
+        "idParam": "userId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.users"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/deal_splits",
+        "idParam": null,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.deal_splits"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "companies",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_companies"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "deals",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_deals"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "tickets",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_tickets"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "calls",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_calls"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "emails",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_emails"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "meetings",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_meetings"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "notes",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_notes"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "tasks",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_tasks"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "communications",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_communications"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "postal_mail",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_postal_mail"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "quotes",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_quotes"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "carts",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_carts"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "orders",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_orders"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "invoices",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_invoices"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "commerce_payments",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_commerce_payments"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "subscriptions",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_subscriptions"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "appointments",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_appointments"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "courses",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_courses"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "listings",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_listings"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "services",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_services"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "leads",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_leads"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "projects",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_projects"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "feedback_submissions",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_feedback_submissions"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "contacts",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_contacts"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "companies",
+        "to": "contacts",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_companies_contacts"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "companies",
+        "to": "deals",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_companies_deals"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "companies",
+        "to": "tickets",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_companies_tickets"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "companies",
+        "to": "calls",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_companies_calls"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "companies",
+        "to": "emails",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_companies_emails"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "companies",
+        "to": "meetings",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_companies_meetings"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "companies",
+        "to": "notes",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_companies_notes"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "companies",
+        "to": "tasks",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_companies_tasks"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "companies",
+        "to": "communications",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_companies_communications"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "companies",
+        "to": "quotes",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_companies_quotes"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "companies",
+        "to": "orders",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_companies_orders"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "companies",
+        "to": "invoices",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_companies_invoices"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "companies",
+        "to": "subscriptions",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_companies_subscriptions"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "companies",
+        "to": "appointments",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_companies_appointments"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "companies",
+        "to": "courses",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_companies_courses"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "companies",
+        "to": "companies",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_companies_companies"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "deals",
+        "to": "contacts",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_deals_contacts"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "deals",
+        "to": "companies",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_deals_companies"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "deals",
+        "to": "tickets",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_deals_tickets"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "deals",
+        "to": "calls",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_deals_calls"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "deals",
+        "to": "emails",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_deals_emails"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "deals",
+        "to": "meetings",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_deals_meetings"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "deals",
+        "to": "notes",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_deals_notes"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "deals",
+        "to": "tasks",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_deals_tasks"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "deals",
+        "to": "quotes",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_deals_quotes"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "deals",
+        "to": "line_items",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_deals_line_items"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "deals",
+        "to": "orders",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_deals_orders"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "deals",
+        "to": "leads",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_deals_leads"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "tickets",
+        "to": "contacts",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_tickets_contacts"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "tickets",
+        "to": "companies",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_tickets_companies"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "tickets",
+        "to": "deals",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_tickets_deals"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "tickets",
+        "to": "calls",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_tickets_calls"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "tickets",
+        "to": "emails",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_tickets_emails"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "tickets",
+        "to": "meetings",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_tickets_meetings"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "tickets",
+        "to": "notes",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_tickets_notes"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "tickets",
+        "to": "tasks",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_tickets_tasks"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "schema": "Pipeline",
+        "fields": 8,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.pipelines_deals"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "schema": "PipelineStage",
+        "fields": 9,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.pipeline_stages_deals"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "schema": "Pipeline",
+        "fields": 8,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.pipelines_tickets"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "schema": "PipelineStage",
+        "fields": 9,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.pipeline_stages_tickets"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "schema": "Pipeline",
+        "fields": 8,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.pipelines_leads"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "schema": "PipelineStage",
+        "fields": 9,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.pipeline_stages_leads"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "schema": "PublicObjectList",
+        "fields": 16,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.lists"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "schema": "PublicListFolder",
+        "fields": 9,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.list_folders"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "schema": "RecordListMembership",
+        "fields": 5,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": null
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.list_memberships"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "schema": "PublicOwner",
+        "fields": 11,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.owners"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "schema": "PublicTeam",
+        "fields": 3,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": null
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.teams"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "schema": "ObjectSchema",
+        "fields": 18,
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.custom_object_schemas"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "schema": "HubDbTableV3",
+        "fields": 20,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.hubdb_tables"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "schema": "HubDbTableRowV3",
+        "fields": 8,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.hubdb_rows"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "schema": "MarketingEventPublicReadResponseV2",
+        "fields": 21,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.marketing_events"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "schema": "MarketingEventSubscriber",
+        "fields": 3,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": null
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.marketing_event_attendances"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "schema": "PublicEmail",
+        "fields": 49,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.marketing_emails"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "schema": "PublicEmailVersion",
+        "fields": 4,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.marketing_email_versions"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "schema": "PublicCampaignWithAssets",
+        "fields": 6,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.campaigns"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "schema": "PublicCampaignAsset",
+        "fields": 3,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": null
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.campaign_assets"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "schema": "PublicSequenceResponse",
+        "fields": 9,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.sequences"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "schema": "PublicSequenceStepResponse",
+        "fields": 8,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.sequence_steps"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "schema": "PublicSequenceEnrollmentResponse",
+        "fields": 8,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.sequence_enrollments"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "schema": "ExternalBehavioralEventTypeDefinition",
+        "fields": 20,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.custom_event_definitions"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "schema": "ExternalUnifiedEvent",
+        "fields": 6,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": null
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.custom_event_completions"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "schema": "File",
+        "fields": 21,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.files"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "schema": "Folder",
+        "fields": 8,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.file_folders"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "schema": "TimelineEventIFrame",
+        "fields": 5,
+        "supportsCreate": true,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": null
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.timeline_event_types"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "schema": "AppEventOccurrence",
+        "fields": 11,
+        "supportsCreate": true,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": null
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.timeline_events"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "schema": "PublicThread",
+        "fields": 15,
+        "supportsCreate": false,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "watermark": null
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.conversation_threads"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "schema": "PublicConversationsMessage",
+        "fields": 20,
+        "supportsCreate": true,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.conversation_messages"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "schema": "SimplePublicObjectWithAssociations",
+        "fields": 11,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.forecasts"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "schema": "ForecastTypeDealSplitProperties",
+        "fields": 7,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": null
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.forecast_categories"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "schema": "TranscriptUtterance",
+        "fields": 6,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": null
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.call_transcriptions"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "schema": "SubscriptionDefinition",
+        "fields": 12,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.subscription_types"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "schema": "PublicStatus",
+        "fields": 11,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": null
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.subscription_statuses"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "schema": "BlogPost",
+        "fields": 61,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.blog_posts"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "schema": "BlogPostVersion",
+        "fields": 4,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.blog_post_versions"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "schema": "BlogAuthor",
+        "fields": 17,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.blog_authors"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "schema": "Tag",
+        "fields": 8,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.blog_tags"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "schema": "Page",
+        "fields": 57,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.site_pages"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "schema": "Page",
+        "fields": 57,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.landing_pages"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "schema": "UrlMapping",
+        "fields": 13,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.url_redirects"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:19:59.678Z",
+      "StructuredOutput": {
+        "schema": "Domain",
+        "fields": 20,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.domains"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/contacts",
+        "idParam": "contactId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.contacts"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/companies",
+        "idParam": "companyId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.companies"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/deals",
+        "idParam": null,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.deals"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/tickets",
+        "idParam": "ticketId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.tickets"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/products",
+        "idParam": "productId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.products"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/line_items",
+        "idParam": "lineItemId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.line_items"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/quotes",
+        "idParam": "quoteId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.quotes"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/calls",
+        "idParam": "callId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.calls"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/emails",
+        "idParam": "emailId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.emails"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/meetings",
+        "idParam": "meetingId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.meetings"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/notes",
+        "idParam": "noteId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.notes"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/tasks",
+        "idParam": "taskId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.tasks"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/postal_mail",
+        "idParam": "postalMailId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.postal_mail"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/communications",
+        "idParam": "communicationId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.communications"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/orders",
+        "idParam": "orderId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.orders"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/carts",
+        "idParam": "cartId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.carts"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/invoices",
+        "idParam": "invoiceId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.invoices"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/commerce_payments",
+        "idParam": "commercePaymentId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.commerce_payments"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/subscriptions",
+        "idParam": null,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.subscriptions"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/discounts",
+        "idParam": "discountId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.discounts"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/fees",
+        "idParam": "feeId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.fees"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/taxes",
+        "idParam": "taxId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.taxes"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/leads",
+        "idParam": "leadsId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.leads"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/appointments",
+        "idParam": null,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.appointments"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/services",
+        "idParam": null,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.services"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/courses",
+        "idParam": null,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.courses"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/listings",
+        "idParam": null,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.listings"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/contracts",
+        "idParam": "contractId",
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.contracts"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/goal_targets",
+        "idParam": "goalTargetId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.goal_targets"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/feedback_submissions",
+        "idParam": "feedbackSubmissionId",
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.feedback_submissions"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/projects",
+        "idParam": "projectId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.projects"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/users",
+        "idParam": "userId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.users"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/deal_splits",
+        "idParam": null,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.deal_splits"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "companies",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_companies"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "deals",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_deals"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "tickets",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_tickets"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "calls",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_calls"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "emails",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_emails"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "meetings",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_meetings"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "notes",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_notes"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "tasks",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_tasks"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "communications",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_communications"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "postal_mail",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_postal_mail"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "quotes",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_quotes"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "carts",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_carts"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "orders",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_orders"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "invoices",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_invoices"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "commerce_payments",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_commerce_payments"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "subscriptions",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_subscriptions"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "appointments",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_appointments"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "courses",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_courses"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "listings",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_listings"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "services",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_services"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "leads",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_leads"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "projects",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_projects"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "feedback_submissions",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_feedback_submissions"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "contacts",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_contacts"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "companies",
+        "to": "contacts",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_companies_contacts"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "companies",
+        "to": "deals",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_companies_deals"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "companies",
+        "to": "tickets",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_companies_tickets"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "companies",
+        "to": "calls",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_companies_calls"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "companies",
+        "to": "emails",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_companies_emails"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "companies",
+        "to": "meetings",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_companies_meetings"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "companies",
+        "to": "notes",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_companies_notes"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "companies",
+        "to": "tasks",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_companies_tasks"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "companies",
+        "to": "communications",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_companies_communications"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "companies",
+        "to": "quotes",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_companies_quotes"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "companies",
+        "to": "orders",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_companies_orders"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "companies",
+        "to": "invoices",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_companies_invoices"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "companies",
+        "to": "subscriptions",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_companies_subscriptions"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "companies",
+        "to": "appointments",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_companies_appointments"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "companies",
+        "to": "courses",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_companies_courses"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "companies",
+        "to": "companies",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_companies_companies"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "deals",
+        "to": "contacts",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_deals_contacts"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "deals",
+        "to": "companies",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_deals_companies"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "deals",
+        "to": "tickets",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_deals_tickets"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "deals",
+        "to": "calls",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_deals_calls"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "deals",
+        "to": "emails",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_deals_emails"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "deals",
+        "to": "meetings",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_deals_meetings"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "deals",
+        "to": "notes",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_deals_notes"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "deals",
+        "to": "tasks",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_deals_tasks"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "deals",
+        "to": "quotes",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_deals_quotes"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "deals",
+        "to": "line_items",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_deals_line_items"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "deals",
+        "to": "orders",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_deals_orders"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "deals",
+        "to": "leads",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_deals_leads"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "tickets",
+        "to": "contacts",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_tickets_contacts"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "tickets",
+        "to": "companies",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_tickets_companies"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "tickets",
+        "to": "deals",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_tickets_deals"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "tickets",
+        "to": "calls",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_tickets_calls"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "tickets",
+        "to": "emails",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_tickets_emails"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "tickets",
+        "to": "meetings",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_tickets_meetings"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "tickets",
+        "to": "notes",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_tickets_notes"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "tickets",
+        "to": "tasks",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_tickets_tasks"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "schema": "Pipeline",
+        "fields": 8,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.pipelines_deals"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "schema": "PipelineStage",
+        "fields": 9,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.pipeline_stages_deals"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "schema": "Pipeline",
+        "fields": 8,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.pipelines_tickets"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "schema": "PipelineStage",
+        "fields": 9,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.pipeline_stages_tickets"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "schema": "Pipeline",
+        "fields": 8,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.pipelines_leads"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "schema": "PipelineStage",
+        "fields": 9,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.pipeline_stages_leads"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "schema": "PublicObjectList",
+        "fields": 16,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.lists"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "schema": "PublicListFolder",
+        "fields": 9,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.list_folders"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "schema": "RecordListMembership",
+        "fields": 5,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": null
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.list_memberships"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "schema": "PublicOwner",
+        "fields": 11,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.owners"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "schema": "PublicTeam",
+        "fields": 3,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": null
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.teams"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "schema": "ObjectSchema",
+        "fields": 18,
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.custom_object_schemas"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "schema": "HubDbTableV3",
+        "fields": 20,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.hubdb_tables"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "schema": "HubDbTableRowV3",
+        "fields": 8,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.hubdb_rows"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "schema": "MarketingEventPublicReadResponseV2",
+        "fields": 21,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.marketing_events"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "schema": "MarketingEventSubscriber",
+        "fields": 3,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": null
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.marketing_event_attendances"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "schema": "PublicEmail",
+        "fields": 49,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.marketing_emails"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "schema": "PublicEmailVersion",
+        "fields": 4,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.marketing_email_versions"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "schema": "PublicCampaignWithAssets",
+        "fields": 6,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.campaigns"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "schema": "PublicCampaignAsset",
+        "fields": 3,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": null
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.campaign_assets"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "schema": "PublicSequenceResponse",
+        "fields": 9,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.sequences"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "schema": "PublicSequenceStepResponse",
+        "fields": 8,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.sequence_steps"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "schema": "PublicSequenceEnrollmentResponse",
+        "fields": 8,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.sequence_enrollments"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "schema": "ExternalBehavioralEventTypeDefinition",
+        "fields": 20,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.custom_event_definitions"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "schema": "ExternalUnifiedEvent",
+        "fields": 6,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": null
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.custom_event_completions"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "schema": "File",
+        "fields": 21,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.files"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "schema": "Folder",
+        "fields": 8,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.file_folders"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "schema": "TimelineEventIFrame",
+        "fields": 5,
+        "supportsCreate": true,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": null
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.timeline_event_types"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "schema": "AppEventOccurrence",
+        "fields": 11,
+        "supportsCreate": true,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": null
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.timeline_events"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "schema": "PublicThread",
+        "fields": 15,
+        "supportsCreate": false,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "watermark": null
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.conversation_threads"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "schema": "PublicConversationsMessage",
+        "fields": 20,
+        "supportsCreate": true,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.conversation_messages"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "schema": "SimplePublicObjectWithAssociations",
+        "fields": 11,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.forecasts"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "schema": "ForecastTypeDealSplitProperties",
+        "fields": 7,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": null
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.forecast_categories"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "schema": "TranscriptUtterance",
+        "fields": 6,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": null
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.call_transcriptions"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "schema": "SubscriptionDefinition",
+        "fields": 12,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.subscription_types"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "schema": "PublicStatus",
+        "fields": 11,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": null
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.subscription_statuses"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "schema": "BlogPost",
+        "fields": 61,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.blog_posts"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "schema": "BlogPostVersion",
+        "fields": 4,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.blog_post_versions"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "schema": "BlogAuthor",
+        "fields": 17,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.blog_authors"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "schema": "Tag",
+        "fields": 8,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.blog_tags"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "schema": "Page",
+        "fields": 57,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.site_pages"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "schema": "Page",
+        "fields": 57,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.landing_pages"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "schema": "UrlMapping",
+        "fields": 13,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.url_redirects"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:20:28.301Z",
+      "StructuredOutput": {
+        "schema": "Domain",
+        "fields": 20,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "watermark": "updatedAt"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.domains"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/contacts",
+        "idParam": "contactId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.contacts"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/companies",
+        "idParam": "companyId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.companies"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/deals",
+        "idParam": null,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.deals"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/tickets",
+        "idParam": "ticketId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.tickets"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/products",
+        "idParam": "productId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.products"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/line_items",
+        "idParam": "lineItemId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.line_items"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/quotes",
+        "idParam": "quoteId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.quotes"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/calls",
+        "idParam": "callId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.calls"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/emails",
+        "idParam": "emailId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.emails"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/meetings",
+        "idParam": "meetingId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.meetings"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/notes",
+        "idParam": "noteId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.notes"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/tasks",
+        "idParam": "taskId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.tasks"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/postal_mail",
+        "idParam": "postalMailId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.postal_mail"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/communications",
+        "idParam": "communicationId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.communications"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/orders",
+        "idParam": "orderId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.orders"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/carts",
+        "idParam": "cartId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.carts"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/invoices",
+        "idParam": "invoiceId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.invoices"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/commerce_payments",
+        "idParam": "commercePaymentId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.commerce_payments"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/subscriptions",
+        "idParam": null,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.subscriptions"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/discounts",
+        "idParam": "discountId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.discounts"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/fees",
+        "idParam": "feeId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.fees"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/taxes",
+        "idParam": "taxId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.taxes"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/leads",
+        "idParam": "leadsId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.leads"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/appointments",
+        "idParam": null,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.appointments"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/services",
+        "idParam": null,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.services"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/courses",
+        "idParam": null,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.courses"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/listings",
+        "idParam": null,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.listings"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/contracts",
+        "idParam": "contractId",
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.contracts"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/goal_targets",
+        "idParam": "goalTargetId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.goal_targets"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/feedback_submissions",
+        "idParam": "feedbackSubmissionId",
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.feedback_submissions"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/projects",
+        "idParam": "projectId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.projects"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/users",
+        "idParam": "userId",
+        "supportsCreate": true,
+        "supportsUpdate": true,
+        "supportsDelete": true,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.users"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "APIPath": "/crm/objects/2026-03/deal_splits",
+        "idParam": null,
+        "supportsCreate": false,
+        "supportsUpdate": false,
+        "supportsDelete": false,
+        "pagination": "Cursor:after",
+        "watermark": "hs_lastmodifieddate"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.deal_splits"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "companies",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_companies"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "deals",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_deals"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "tickets",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_tickets"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "calls",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_calls"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "emails",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_emails"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "meetings",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_meetings"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "notes",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_notes"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "tasks",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_tasks"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "communications",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_communications"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "postal_mail",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_postal_mail"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "quotes",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_quotes"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "carts",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_carts"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "orders",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_orders"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "invoices",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_invoices"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "commerce_payments",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_commerce_payments"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "subscriptions",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_subscriptions"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "appointments",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_appointments"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "courses",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_courses"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "listings",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_listings"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "services",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_services"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "leads",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_leads"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "projects",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_projects"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "feedback_submissions",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_feedback_submissions"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "contacts",
+        "to": "contacts",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_contacts_contacts"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "companies",
+        "to": "contacts",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_companies_contacts"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "companies",
+        "to": "deals",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_companies_deals"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "companies",
+        "to": "tickets",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_companies_tickets"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "companies",
+        "to": "calls",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_companies_calls"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "companies",
+        "to": "emails",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_companies_emails"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "companies",
+        "to": "meetings",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_companies_meetings"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "companies",
+        "to": "notes",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_companies_notes"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "companies",
+        "to": "tasks",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_companies_tasks"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "companies",
+        "to": "communications",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_companies_communications"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "companies",
+        "to": "quotes",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_companies_quotes"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "companies",
+        "to": "orders",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_companies_orders"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "companies",
+        "to": "invoices",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_companies_invoices"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "companies",
+        "to": "subscriptions",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_companies_subscriptions"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "companies",
+        "to": "appointments",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_companies_appointments"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "companies",
+        "to": "courses",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_companies_courses"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "companies",
+        "to": "companies",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_companies_companies"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T20:22:57.227Z",
+      "StructuredOutput": {
+        "kind": "association-pair",
+        "from": "deals",
+        "to": "contacts",
+        "compositePK": [
+          "fromObjectId",
+          "toObjectId"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.associations_deals_contacts"
+    }
+  ]
+}

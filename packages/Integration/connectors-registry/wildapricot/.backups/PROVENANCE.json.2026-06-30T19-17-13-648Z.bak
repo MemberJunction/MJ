@@ -1,0 +1,74 @@
+{
+  "Entries": [
+    {
+      "URL": "https://api.swaggerhub.com/apis/WildApricot/wild-apricot_public_api/9.14.0-oas3",
+      "AccessedAt": "2026-06-30T19:17:13.642Z",
+      "UsedFor": "APIBaseURL and APIVersioningStrategy: servers[0].url = \"https://api.wildapricot.org/v2.3\" establishes the base URL and confirms version-in-path strategy.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.APIBaseURL",
+      "Excerpt": "\"servers\": [{\"url\": \"https://api.wildapricot.org/v2.3\"}]"
+    },
+    {
+      "URL": "https://api.swaggerhub.com/apis/WildApricot/wild-apricot_public_api/9.14.0-oas3",
+      "AccessedAt": "2026-06-30T19:17:13.642Z",
+      "UsedFor": "APIVersioningStrategy = url-path: version is embedded as /v2.3/ path segment.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.APIVersioningStrategy",
+      "Excerpt": "\"servers\": [{\"url\": \"https://api.wildapricot.org/v2.3\"}] — version in URL path segment."
+    },
+    {
+      "URL": "https://api.swaggerhub.com/apis/WildApricot/wild-apricot_public_api/9.14.0-oas3",
+      "AccessedAt": "2026-06-30T19:17:13.642Z",
+      "UsedFor": "BatchRequestWaitTime = 60 seconds: 429 response description states \"Wait for a minute and try again\" — implies 60-second window. BatchMaxRequestCount left null because exact request count per window is not stated.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ImpliedFromExample",
+      "TargetField": "integration.BatchRequestWaitTime",
+      "Excerpt": "\"tooManyRequests\": {\"description\": \"Too many requests from same account. Wait for a minute and try again.\"}"
+    },
+    {
+      "URL": "https://api.swaggerhub.com/apis/WildApricot/wild-apricot_public_api/9.14.0-oas3",
+      "AccessedAt": "2026-06-30T19:17:13.642Z",
+      "UsedFor": "Configuration.AuthFlow = oauth2-cc (client_credentials) and Configuration.tokenUrl. The OAuth2_clientCredentials security scheme has flows.clientCredentials.tokenUrl = \"https://oauth.wildapricot.org/auth/token\".",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.AuthFlow",
+      "Excerpt": "\"OAuth2_clientCredentials\": {\"type\": \"oauth2\", \"flows\": {\"clientCredentials\": {\"tokenUrl\": \"https://oauth.wildapricot.org/auth/token\", \"scopes\": {\"auto\": \"autodetect allowed scopes based on current user permissions\"}}}}"
+    },
+    {
+      "URL": "https://api.swaggerhub.com/apis/WildApricot/wild-apricot_public_api/9.14.0-oas3",
+      "AccessedAt": "2026-06-30T19:17:13.642Z",
+      "UsedFor": "Configuration.tokenUrl = https://oauth.wildapricot.org/auth/token. Confirmed by all three security scheme flows using the same token URL.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.tokenUrl",
+      "Excerpt": "\"tokenUrl\": \"https://oauth.wildapricot.org/auth/token\""
+    },
+    {
+      "URL": "https://gethelp.wildapricot.com/en/articles/484-api-authentication",
+      "AccessedAt": "2026-06-30T19:17:13.642Z",
+      "UsedFor": "Confirms auth mechanism: API key used as Basic auth username (empty password) on POST to tokenUrl. Describes client_credentials grant_type and scope=auto.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.authNote",
+      "Excerpt": "clientId=APIKEY&clientSecret=<your_api_key> — API key used as clientId+clientSecret on Basic-auth token request."
+    },
+    {
+      "URL": "https://api.swaggerhub.com/apis/WildApricot/wild-apricot_public_api/9.14.0-oas3",
+      "AccessedAt": "2026-06-30T19:17:13.642Z",
+      "UsedFor": "Configuration.AuthHeaderPattern = Authorization: Bearer <token>. The OpenAPI security scheme type is oauth2; the bearer token pattern is the standard OAuth2 bearer pattern confirmed by the spec.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.AuthHeaderPattern",
+      "Excerpt": "Security scheme type: \"oauth2\" with clientCredentials flow; standard Bearer token authorization."
+    }
+  ]
+}

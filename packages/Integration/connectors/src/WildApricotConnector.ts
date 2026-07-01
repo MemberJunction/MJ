@@ -1,1350 +1,665 @@
 import { RegisterClass } from '@memberjunction/global';
 import { Metadata, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
-import type { MJCompanyIntegrationEntity, MJCredentialEntity } from '@memberjunction/core-entities';
+import type {
+    MJCompanyIntegrationEntity,
+    MJCredentialEntity,
+    MJIntegrationObjectEntity,
+} from '@memberjunction/core-entities';
 import {
     BaseIntegrationConnector,
     BaseRESTIntegrationConnector,
+    OAuth2TokenManager,
     type RESTAuthContext,
     type RESTResponse,
     type PaginationState,
     type PaginationType,
     type ConnectionTestResult,
-    type ExternalObjectSchema,
-    type ExternalFieldSchema,
+    type ExternalRecord,
     type FetchContext,
     type FetchBatchResult,
-    type ExternalRecord,
-    type CreateRecordContext,
-    type UpdateRecordContext,
-    type DeleteRecordContext,
-    type CRUDResult,
-    type DefaultFieldMapping,
-    type DefaultIntegrationConfig,
-    type IntegrationObjectInfo,
-    type ActionGeneratorConfig,
+    type RateLimitPolicy,
 } from '@memberjunction/integration-engine';
-
-// ─── Types ────────────────────────────────────────────────────────────
+import { z } from 'zod';
 
 /**
- * Connection configuration for the Wild Apricot connector.
+ * Wild Apricot membership-management connector (Admin API v2.3).
  *
- * Wild Apricot uses OAuth 2.0 client_credentials grant: the admin API Key is
- * passed as the Basic auth username (with empty password) on the token
- * endpoint. A bearer access token comes back and is used on every subsequent
- * request.
- */
-export interface WildApricotConnectionConfig {
-    /** Wild Apricot admin API Key (used as Basic auth username on the OAuth token endpoint). */
-    ApiKey: string;
-    /**
-     * Optional Wild Apricot account (tenant) ID. When omitted, the connector
-     * auto-discovers it via GET /v2/accounts on first authentication and
-     * selects the first account the API Key has access to.
-     */
-    AccountId?: string;
-    /**
-     * Wild Apricot REST API version segment, e.g. "v2.3". Defaults to "v2.3".
-     * Changing this lets the integration opt into a newer/older published version.
-     */
-    ApiVersion?: string;
-
-    // ── Optional performance overrides ──────────────────────────────
-    /** Maximum retries for rate-limited or failed requests. Default: 4 */
-    MaxRetries?: number;
-    /** HTTP request timeout in milliseconds. Default: 30000 */
-    RequestTimeoutMs?: number;
-    /**
-     * Minimum interval between requests (ms). Default: 1100.
-     * Wild Apricot's rate limit baseline is ~60 req/min — 1.1s floor keeps
-     * headroom. Adaptive backoff widens this on 429.
-     */
-    MinRequestIntervalMs?: number;
-    /** Polling interval for async contact queries (ms). Default: 2000 */
-    AsyncPollIntervalMs?: number;
-    /** Maximum wait for async contact queries (ms). Default: 120000 (2 min) */
-    AsyncPollTimeoutMs?: number;
-}
-
-/** Authenticated context carried through each request cycle. */
-interface WildApricotAuthContext extends RESTAuthContext {
-    Token: string;
-    ExpiresAt: Date;
-    AccountId: string;
-    BaseUrl: string;
-    Config: WildApricotConnectionConfig;
-}
-
-/** Token response from https://oauth.wildapricot.org/auth/token. */
-interface WildApricotTokenResponse {
-    access_token: string;
-    token_type: string;
-    expires_in: number;
-    refresh_token?: string;
-    Permissions?: Array<{ AccountId?: number }>;
-}
-
-/** Shape of an entry returned by GET /v2/accounts. */
-interface WildApricotAccountSummary {
-    Id: number;
-    Name?: string;
-    Url?: string;
-    PrimaryDomainName?: string;
-}
-
-/** Response envelope for async /contacts queries — contains a pollable ResultId. */
-interface WildApricotAsyncResponse {
-    State?: string;
-    ResultId?: string;
-    ResultUrl?: string;
-}
-
-/** Polled result envelope for async /contacts queries. */
-interface WildApricotContactResults {
-    Contacts?: Record<string, unknown>[];
-    ContactsCount?: number;
-    State?: string;
-}
-
-// ─── Constants ────────────────────────────────────────────────────────
-
-const WA_OAUTH_TOKEN_URL = 'https://oauth.wildapricot.org/auth/token';
-const WA_API_HOST = 'https://api.wildapricot.org';
-const DEFAULT_API_VERSION = 'v2.3';
-
-/** Refresh access token 60s before hard expiry to avoid race conditions. */
-const TOKEN_REFRESH_BUFFER_MS = 60 * 1000;
-
-const DEFAULT_MAX_RETRIES = 4;
-const DEFAULT_REQUEST_TIMEOUT_MS = 30000;
-/** 60 req/min documented baseline → ~1.1s floor. */
-const DEFAULT_MIN_REQUEST_INTERVAL_MS = 1100;
-const DEFAULT_ASYNC_POLL_INTERVAL_MS = 2000;
-const DEFAULT_ASYNC_POLL_TIMEOUT_MS = 120000;
-const DEFAULT_PAGE_SIZE = 100;
-
-/**
- * Maps the ApiType string used in /contactfields responses to a MemberJunction
- * field DataType. Wild Apricot's custom field type taxonomy is a closed set
- * documented in the Admin API.
- */
-const WA_CUSTOM_FIELD_TYPE_MAP: Record<string, string> = {
-    'String': 'nvarchar',
-    'Text': 'nvarchar',
-    'MultilineText': 'nvarchar',
-    'Number': 'decimal',
-    'Decimal': 'decimal',
-    'Integer': 'int',
-    'Boolean': 'bit',
-    'Date': 'datetime',
-    'DateTime': 'datetime',
-    'Email': 'nvarchar',
-    'Phone': 'nvarchar',
-    'Picture': 'nvarchar',
-    'Document': 'nvarchar',
-    'Choice': 'nvarchar',
-    'MultipleChoice': 'nvarchar',
-    'RadioButtons': 'nvarchar',
-    'DropDown': 'nvarchar',
-    'ExtraChargeCalculation': 'decimal',
-    'Rules': 'nvarchar',
-    'Section': 'nvarchar',
-};
-
-// ─── Static Action Metadata ───────────────────────────────────────────
-
-/**
- * Static catalog of Wild Apricot admin API objects used for action generation.
- * Mirrors the runtime metadata in `metadata/integrations/.wild-apricot.json`
- * but is maintained here so action generation does not require a live
- * connection. The custom-fields discovery layer is dynamic and layered on top
- * of the Contacts object at runtime.
- */
-const WILD_APRICOT_OBJECTS: IntegrationObjectInfo[] = [
-    {
-        Name: 'Contacts', DisplayName: 'Contacts', SupportsWrite: true,
-        Description: 'Contacts including members, prospects, and staff. Rich custom field support via FieldValues.',
-        Fields: [
-            { Name: 'Id', DisplayName: 'ID', Type: 'integer', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Unique contact identifier' },
-            { Name: 'FirstName', DisplayName: 'First Name', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Shortcut to FirstName system field' },
-            { Name: 'LastName', DisplayName: 'Last Name', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Shortcut to LastName system field' },
-            { Name: 'Email', DisplayName: 'Email', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Primary email — natural key' },
-            { Name: 'Organization', DisplayName: 'Organization', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Organization name' },
-            { Name: 'DisplayName', DisplayName: 'Display Name', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Computed display name' },
-            { Name: 'MembershipLevel', DisplayName: 'Membership Level', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Linked membership level reference' },
-            { Name: 'MembershipEnabled', DisplayName: 'Membership Enabled', Type: 'boolean', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Whether contact is a member' },
-            { Name: 'Status', DisplayName: 'Status', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Membership status' },
-            { Name: 'ProfileLastUpdated', DisplayName: 'Profile Last Updated', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Watermark field for incremental sync' },
-        ],
-    },
-    {
-        Name: 'MembershipLevels', DisplayName: 'Membership Levels', SupportsWrite: false,
-        Description: 'Membership level catalog — tiers, fees, renewal cadence.',
-        Fields: [
-            { Name: 'Id', DisplayName: 'ID', Type: 'integer', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Unique membership level ID' },
-            { Name: 'Name', DisplayName: 'Name', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Level name' },
-            { Name: 'Description', DisplayName: 'Description', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Level description' },
-            { Name: 'Type', DisplayName: 'Type', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Individual or Bundle' },
-            { Name: 'MembershipFee', DisplayName: 'Membership Fee', Type: 'decimal', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Base fee' },
-            { Name: 'PublicCanApply', DisplayName: 'Public Can Apply', Type: 'boolean', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Self-apply flag' },
-            { Name: 'BundleMembersLimit', DisplayName: 'Bundle Members Limit', Type: 'integer', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Seats for bundle tiers' },
-        ],
-    },
-    {
-        Name: 'MemberGroups', DisplayName: 'Member Groups', SupportsWrite: false,
-        Description: 'Ad-hoc member groups with contact membership lists.',
-        Fields: [
-            { Name: 'Id', DisplayName: 'ID', Type: 'integer', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Group ID' },
-            { Name: 'ContactsCount', DisplayName: 'Contacts Count', Type: 'integer', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Count of members' },
-            { Name: 'ContactIds', DisplayName: 'Contact IDs', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Member contact IDs (array)' },
-        ],
-    },
-    {
-        Name: 'Events', DisplayName: 'Events', SupportsWrite: true,
-        Description: 'Event catalog with dates, locations, registration settings, and tags.',
-        Fields: [
-            { Name: 'Id', DisplayName: 'ID', Type: 'integer', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Event ID' },
-            { Name: 'Name', DisplayName: 'Name', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Event title' },
-            { Name: 'EventType', DisplayName: 'Event Type', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Simple (RSVP) or Regular' },
-            { Name: 'StartDate', DisplayName: 'Start Date', Type: 'datetime', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Scheduled start' },
-            { Name: 'EndDate', DisplayName: 'End Date', Type: 'datetime', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Scheduled end' },
-            { Name: 'Location', DisplayName: 'Location', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Location text' },
-            { Name: 'RegistrationEnabled', DisplayName: 'Registration Enabled', Type: 'boolean', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Whether registration is open' },
-            { Name: 'RegistrationsLimit', DisplayName: 'Registrations Limit', Type: 'integer', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Max registrations' },
-        ],
-    },
-    {
-        Name: 'EventRegistrations', DisplayName: 'Event Registrations', SupportsWrite: true,
-        Description: 'Per-event registrations tying a Contact to an Event + RegistrationType.',
-        Fields: [
-            { Name: 'Id', DisplayName: 'ID', Type: 'integer', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Registration ID' },
-            { Name: 'Event', DisplayName: 'Event', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Linked event reference' },
-            { Name: 'Contact', DisplayName: 'Contact', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Linked contact reference' },
-            { Name: 'RegistrationTypeId', DisplayName: 'Registration Type ID', Type: 'integer', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Registration type FK' },
-            { Name: 'IsCheckedIn', DisplayName: 'Is Checked In', Type: 'boolean', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Check-in flag' },
-            { Name: 'RegistrationDate', DisplayName: 'Registration Date', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'When created' },
-            { Name: 'Memo', DisplayName: 'Memo', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Internal notes' },
-        ],
-    },
-    {
-        Name: 'EventRegistrationTypes', DisplayName: 'Event Registration Types', SupportsWrite: true,
-        Description: 'Event-specific registration type definitions with pricing and availability.',
-        Fields: [
-            { Name: 'Id', DisplayName: 'ID', Type: 'integer', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Registration type ID' },
-            { Name: 'EventId', DisplayName: 'Event ID', Type: 'integer', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Parent event' },
-            { Name: 'Name', DisplayName: 'Name', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Display name' },
-            { Name: 'IsEnabled', DisplayName: 'Is Enabled', Type: 'boolean', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Enabled flag' },
-            { Name: 'BasePrice', DisplayName: 'Base Price', Type: 'decimal', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Base price' },
-            { Name: 'GuestPrice', DisplayName: 'Guest Price', Type: 'decimal', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Per-guest price' },
-            { Name: 'AvailableFrom', DisplayName: 'Available From', Type: 'datetime', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Start of availability window' },
-            { Name: 'AvailableThrough', DisplayName: 'Available Through', Type: 'datetime', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'End of availability window' },
-        ],
-    },
-    {
-        Name: 'Invoices', DisplayName: 'Invoices', SupportsWrite: true,
-        Description: 'Invoices with line items, totals, and paid amounts.',
-        Fields: [
-            { Name: 'Id', DisplayName: 'ID', Type: 'integer', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Invoice ID' },
-            { Name: 'DocumentNumber', DisplayName: 'Document Number', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'User-visible invoice number' },
-            { Name: 'IsPaid', DisplayName: 'Is Paid', Type: 'boolean', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Fully paid flag' },
-            { Name: 'PaidAmount', DisplayName: 'Paid Amount', Type: 'decimal', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Amount paid so far' },
-            { Name: 'OrderType', DisplayName: 'Order Type', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Source order type' },
-            { Name: 'Memo', DisplayName: 'Memo', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Internal memo' },
-            { Name: 'PublicMemo', DisplayName: 'Public Memo', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Public memo' },
-            { Name: 'VoidedDate', DisplayName: 'Voided Date', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Void timestamp' },
-        ],
-    },
-    {
-        Name: 'Payments', DisplayName: 'Payments', SupportsWrite: true,
-        Description: 'Payments linked to invoices and contacts.',
-        Fields: [
-            { Name: 'Id', DisplayName: 'ID', Type: 'integer', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Payment ID' },
-            { Name: 'Value', DisplayName: 'Value', Type: 'decimal', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Payment amount' },
-            { Name: 'DocumentDate', DisplayName: 'Document Date', Type: 'datetime', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Payment date' },
-            { Name: 'Contact', DisplayName: 'Contact', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Linked contact' },
-            { Name: 'Tender', DisplayName: 'Tender', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Linked tender' },
-            { Name: 'Comment', DisplayName: 'Comment', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Internal note' },
-            { Name: 'PublicComment', DisplayName: 'Public Comment', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Public note' },
-            { Name: 'PaymentType', DisplayName: 'Payment Type', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Payment type' },
-        ],
-    },
-    {
-        Name: 'Refunds', DisplayName: 'Refunds', SupportsWrite: true,
-        Description: 'Refunds issued against payments.',
-        Fields: [
-            { Name: 'Id', DisplayName: 'ID', Type: 'integer', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Refund ID' },
-            { Name: 'Tender', DisplayName: 'Tender', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Tender reference' },
-            { Name: 'Comment', DisplayName: 'Comment', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Internal comment' },
-            { Name: 'PublicComment', DisplayName: 'Public Comment', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Public-facing comment' },
-            { Name: 'SettledValue', DisplayName: 'Settled Value', Type: 'decimal', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Previously settled amount' },
-        ],
-    },
-    {
-        Name: 'Donations', DisplayName: 'Donations', SupportsWrite: true,
-        Description: 'Donation transactions with donor, fund, and amount details.',
-        Fields: [
-            { Name: 'Id', DisplayName: 'ID', Type: 'integer', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Donation ID' },
-            { Name: 'Value', DisplayName: 'Value', Type: 'decimal', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Donation amount' },
-            { Name: 'DonationDate', DisplayName: 'Donation Date', Type: 'datetime', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Donation date' },
-            { Name: 'FirstName', DisplayName: 'First Name', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Donor first name' },
-            { Name: 'LastName', DisplayName: 'Last Name', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Donor last name' },
-            { Name: 'Email', DisplayName: 'Email', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Donor email' },
-            { Name: 'Organization', DisplayName: 'Organization', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Donor organization' },
-            { Name: 'Type', DisplayName: 'Type', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Donation type' },
-            { Name: 'Comment', DisplayName: 'Comment', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Internal note' },
-            { Name: 'PublicComment', DisplayName: 'Public Comment', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Public-facing note' },
-        ],
-    },
-    {
-        Name: 'Tenders', DisplayName: 'Tenders', SupportsWrite: true,
-        Description: 'Tender (payment method) definitions — cash, check, credit card, etc.',
-        Fields: [
-            { Name: 'Id', DisplayName: 'ID', Type: 'integer', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Tender ID' },
-            { Name: 'DisplayPosition', DisplayName: 'Display Position', Type: 'integer', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Display sort order' },
-            { Name: 'IsCustom', DisplayName: 'Is Custom', Type: 'boolean', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Admin-created flag' },
-        ],
-    },
-    {
-        Name: 'ContactFields', DisplayName: 'Contact Fields', SupportsWrite: true,
-        Description: 'Definitions of standard and custom fields available on Contacts. Drives dynamic custom-field discovery.',
-        Fields: [
-            { Name: 'Id', DisplayName: 'ID', Type: 'integer', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Field definition ID' },
-            { Name: 'SystemCode', DisplayName: 'System Code', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Stable system code' },
-            { Name: 'FieldName', DisplayName: 'Field Name', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Human-readable field name' },
-            { Name: 'FieldType', DisplayName: 'Field Type', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Data type (Text, Number, Choice, etc.)' },
-            { Name: 'MemberOnly', DisplayName: 'Member Only', Type: 'boolean', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Whether field is member-only' },
-        ],
-    },
-    {
-        Name: 'DonationFields', DisplayName: 'Donation Fields', SupportsWrite: true,
-        Description: 'Custom field definitions for donations.',
-        Fields: [
-            { Name: 'Id', DisplayName: 'ID', Type: 'integer', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Field ID' },
-            { Name: 'FieldType', DisplayName: 'Field Type', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Data type' },
-        ],
-    },
-    {
-        Name: 'Bundles', DisplayName: 'Bundles', SupportsWrite: false,
-        Description: 'Bundle memberships grouping multiple sub-members under a primary contact.',
-        Fields: [
-            { Name: 'Id', DisplayName: 'ID', Type: 'integer', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Bundle ID' },
-            { Name: 'Email', DisplayName: 'Administrator Email', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Bundle admin email' },
-            { Name: 'ParticipantsCount', DisplayName: 'Participants Count', Type: 'integer', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Number of members' },
-            { Name: 'SpacesLeft', DisplayName: 'Spaces Left', Type: 'integer', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Remaining capacity' },
-        ],
-    },
-    {
-        Name: 'SentEmails', DisplayName: 'Sent Emails', SupportsWrite: false,
-        Description: 'History of emails sent through Wild Apricot with delivery metrics.',
-        Fields: [
-            { Name: 'Id', DisplayName: 'ID', Type: 'integer', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Email ID' },
-            { Name: 'SentDate', DisplayName: 'Sent Date', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Send start timestamp' },
-            { Name: 'Subject', DisplayName: 'Subject', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Email subject' },
-            { Name: 'RecipientCount', DisplayName: 'Recipient Count', Type: 'integer', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Total recipients' },
-            { Name: 'SuccessfullySentCount', DisplayName: 'Successfully Sent', Type: 'integer', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Successfully delivered count' },
-            { Name: 'ReadCount', DisplayName: 'Read Count', Type: 'integer', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Opened count' },
-            { Name: 'FailedCount', DisplayName: 'Failed Count', Type: 'integer', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Failed delivery count' },
-        ],
-    },
-    {
-        Name: 'EmailDrafts', DisplayName: 'Email Drafts', SupportsWrite: false,
-        Description: 'Draft emails staged for sending, including scheduled-send metadata.',
-        Fields: [
-            { Name: 'Id', DisplayName: 'ID', Type: 'integer', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Draft ID' },
-            { Name: 'CreatedDate', DisplayName: 'Created Date', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Created at' },
-            { Name: 'LastChangedDate', DisplayName: 'Last Changed', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Last edit timestamp' },
-            { Name: 'Subject', DisplayName: 'Subject', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Draft subject' },
-            { Name: 'IsScheduled', DisplayName: 'Is Scheduled', Type: 'boolean', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Scheduled-send flag' },
-            { Name: 'ScheduledDate', DisplayName: 'Scheduled Date', Type: 'datetime', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'When draft will send' },
-        ],
-    },
-    {
-        Name: 'AuditLogItems', DisplayName: 'Audit Log Items', SupportsWrite: false,
-        Description: 'Audit log entries capturing admin + member actions across the tenant.',
-        Fields: [
-            { Name: 'Id', DisplayName: 'ID', Type: 'integer', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Audit log ID' },
-            { Name: 'Timestamp', DisplayName: 'Timestamp', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Event timestamp' },
-            { Name: 'FirstName', DisplayName: 'First Name', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Actor first name' },
-            { Name: 'LastName', DisplayName: 'Last Name', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Actor last name' },
-            { Name: 'Email', DisplayName: 'Email', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Actor email' },
-            { Name: 'Message', DisplayName: 'Message', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Log message' },
-            { Name: 'Severity', DisplayName: 'Severity', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Severity level' },
-            { Name: 'OrderType', DisplayName: 'Order Type', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Origin of audit event' },
-        ],
-    },
-    {
-        Name: 'SavedSearches', DisplayName: 'Saved Searches', SupportsWrite: false,
-        Description: 'Saved contact searches with computed contact ID lists.',
-        Fields: [
-            { Name: 'Id', DisplayName: 'ID', Type: 'integer', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Saved search ID' },
-            { Name: 'ContactIds', DisplayName: 'Contact IDs', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Matching contact IDs' },
-        ],
-    },
-    {
-        Name: 'StoreProducts', DisplayName: 'Store Products', SupportsWrite: false,
-        Description: 'Storefront product catalog with pricing, stock, and option/variant metadata.',
-        Fields: [
-            { Name: 'id', DisplayName: 'ID', Type: 'integer', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Product ID' },
-            { Name: 'title', DisplayName: 'Title', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Product title' },
-            { Name: 'description', DisplayName: 'Description', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Description' },
-            { Name: 'price', DisplayName: 'Price', Type: 'decimal', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Price object (value + currency)' },
-            { Name: 'status', DisplayName: 'Status', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Product status' },
-            { Name: 'type', DisplayName: 'Type', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Product type' },
-            { Name: 'stock', DisplayName: 'Stock', Type: 'integer', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Inventory count' },
-            { Name: 'trackInventory', DisplayName: 'Track Inventory', Type: 'boolean', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Whether inventory is tracked' },
-            { Name: 'outOfStock', DisplayName: 'Out Of Stock', Type: 'boolean', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Out-of-stock flag' },
-        ],
-    },
-];
-
-/**
- * Maps the API object name to its list path relative to `/accounts/{accountId}`.
- * Keyed lowercase for case-insensitive lookup.
- */
-const WA_API_PATHS: Record<string, string> = {
-    contacts: 'contacts',
-    contactfields: 'contactfields',
-    membershiplevels: 'membershiplevels',
-    membergroups: 'membergroups',
-    events: 'events',
-    eventregistrations: 'eventregistrations',
-    eventregistrationtypes: 'EventRegistrationTypes',
-    invoices: 'invoices',
-    payments: 'payments',
-    refunds: 'refunds',
-    donations: 'donations',
-    donationfields: 'donationfields',
-    tenders: 'tenders',
-    bundles: 'bundles',
-    sentemails: 'SentEmails',
-    emaildrafts: 'EmailDrafts',
-    auditlogitems: 'auditLogItems',
-    savedsearches: 'savedsearches',
-    storeproducts: 'store/products',
-};
-
-/**
- * Maps the API object name to the response envelope key that contains the
- * record array. Null means the response body IS the array (root array).
- */
-const WA_RESPONSE_DATA_KEYS: Record<string, string | null> = {
-    contacts: 'Contacts',
-    contactfields: null,
-    membershiplevels: null,
-    membergroups: null,
-    events: 'Events',
-    eventregistrations: null,
-    eventregistrationtypes: null,
-    invoices: 'Invoices',
-    payments: 'Payments',
-    refunds: 'Refunds',
-    donations: 'Donations',
-    donationfields: null,
-    tenders: 'Tenders',
-    bundles: null,
-    sentemails: null,
-    emaildrafts: null,
-    auditlogitems: 'Items',
-    savedsearches: null,
-    storeproducts: null,
-};
-
-/**
- * Maps the API object name to an incremental-sync configuration.
- * Wild Apricot's filter syntax uses display names with spaces in quotes,
- * e.g. `$filter='Profile last updated' ge '<iso>'` on Contacts.
- */
-const WA_WATERMARK_CONFIG: Record<string, { filterField: string; responseField: string }> = {
-    contacts: { filterField: 'Profile last updated', responseField: 'ProfileLastUpdated' },
-    events:   { filterField: 'LastUpdated',          responseField: 'LastUpdated' },
-    invoices: { filterField: 'LastUpdated',          responseField: 'LastUpdated' },
-    payments: { filterField: 'LastUpdated',          responseField: 'LastUpdated' },
-};
-
-// ─── Connector Implementation ─────────────────────────────────────────
-
-/**
- * Connector for Wild Apricot (part of Personify / Momentive Software).
+ * ── AUTH ──────────────────────────────────────────────────────────────────
+ * OAuth 2.0 `client_credentials`. The admin API Key is sent as the HTTP-Basic
+ * USERNAME (empty password) on `POST https://oauth.wildapricot.org/auth/token`
+ * with `grant_type=client_credentials&scope=auto`. Both the Basic token-endpoint
+ * header AND the resulting `Authorization: Bearer <access_token>` header are built
+ * via the shared auth-helpers ({@link OAuth2TokenManager} with `UseBasicAuth:true`)
+ * — no inline base64/crypto lives in this connector. The access token is cached +
+ * auto-refreshed by the manager; the `client_credentials` grant returns no refresh
+ * token, so expiry re-mints via the same API key (per Configuration.TokenRefreshStrategy).
  *
- * Authenticates via OAuth 2.0 client_credentials (API Key as Basic auth
- * username). Auto-discovers the Account ID from GET /v2/accounts when not
- * supplied. Handles the cursor-by-offset pagination model (`$top`/`$skip`),
- * the async contact query pattern (`$async=true` + poll), custom-field
- * discovery via `/contactfields`, server-side date filtering with the
- * `$filter` OData syntax, and rate-limit-aware retries.
+ * ── TENANT ANCHOR (accountId) ───────────────────────────────────────────────
+ * Every data path is `/accounts/{accountId}/…`. The accountId is a per-tenant anchor,
+ * NOT a synced parent record: {@link TestConnection} / {@link Authenticate} resolve it
+ * by issuing `GET /v2.3/accounts` (no id in path) and taking the first account's Id when
+ * the credential omits AccountId (Configuration.accountIdDiscovery). It is cached on the
+ * auth context and substituted into `{accountId}` in {@link MakeHTTPRequest}. It is
+ * per-tenant config — NEVER hardcoded.
+ *
+ * ── DISCOVERY (mechanism only — NO baked catalog) ───────────────────────────
+ * Wild Apricot's object/field universe is credential-free-documented (public OpenAPI
+ * 9.14.0), so it is seeded as Declared metadata in the integration file. This connector
+ * therefore carries NO `WILD_APRICOT_OBJECTS` catalog constant (the deprecated
+ * connector's anti-pattern): {@link DiscoverObjects}/{@link DiscoverFields} inherit the
+ * base cache-driven implementation that reads the Declared metadata. That is the
+ * sanctioned "case-1 → Declared metadata" mechanism.
+ *
+ * ── CRUD ────────────────────────────────────────────────────────────────────
+ * Generic per-operation CRUD from {@link BaseRESTIntegrationConnector} (reads
+ * Create/Update/Delete APIPath/Method/BodyShape/IDLocation off each IO row) is used
+ * as-is; create fails LOUDLY on an empty response ID via `BuildCreatedResult`. No CRUD
+ * verb is re-implemented here.
+ *
+ * ── PAGINATION ──────────────────────────────────────────────────────────────
+ * Offset pagination via Wild Apricot's `$top`/`$skip` params (NOT the base's
+ * `limit`/`offset`), clamped to a 100-item max page per spec — {@link BuildPaginatedURL}
+ * + {@link ExtractPaginationInfo} are overridden for the vendor param names.
+ *
+ * ── THE ONE IDIOSYNCRATIC OVERRIDE: async Contacts list ─────────────────────
+ * `GET /accounts/{accountId}/contacts` defaults to ASYNC: it returns a `ResultId`
+ * that must be polled (`?resultId=<ResultId>`) until `State=Complete`, then the same
+ * URL returns the `Contacts` array. {@link FetchChanges} overrides ONLY the `Contact`
+ * object to run that request→poll→collect flow (bounded poll timeout); every other
+ * object delegates to the base flat/nested paginated fetch. See {@link FetchContacts}.
  */
 @RegisterClass(BaseIntegrationConnector, 'WildApricotConnector')
 export class WildApricotConnector extends BaseRESTIntegrationConnector {
 
-    /** Cached auth context (token + discovered account). Invalidated on token expiry or 401. */
-    private authState: WildApricotAuthContext | null = null;
+    /** Cached OAuth2 token manager (one per connector instance; the manager caches + refreshes the token). */
+    private tokenManager = new OAuth2TokenManager();
+    /** Cached tenant anchor accountId, resolved once per instance (per-tenant, never hardcoded). */
+    private cachedAccountId: string | null = null;
 
-    /** Timestamp of the last outbound request, used for throttling. */
-    private lastRequestTime = 0;
+    /** Verbatim three-way invariant name: IntegrationName getter === MJ: Integrations.Name. */
+    public override get IntegrationName(): string {
+        return 'Wild Apricot';
+    }
 
-    /** Currently-active watermark for FetchChanges, used to inject $filter params. */
-    private currentWatermark: string | null = null;
-
-    // ── Capability getters ────────────────────────────────────────────
+    // ─── Capability surface ──────────────────────────────────────────────────
+    // Wild Apricot supports create/update/delete on many objects; the ACTUAL per-verb
+    // support is metadata-driven (each IO's Create/Update/Delete columns), and the base's
+    // generic CRUD throws for any verb whose columns are null. These getters declare the
+    // connector is capable so the engine offers the write surface.
 
     public override get SupportsCreate(): boolean { return true; }
     public override get SupportsUpdate(): boolean { return true; }
     public override get SupportsDelete(): boolean { return true; }
 
-    public override get IntegrationName(): string { return 'Wild Apricot'; }
-
-    // ── Action generation ─────────────────────────────────────────────
-
-    public override GetIntegrationObjects(): IntegrationObjectInfo[] {
-        return WILD_APRICOT_OBJECTS;
+    /**
+     * Documented rate-limit policy (Configuration.RateLimitDetail). The general ceiling is
+     * 400 requests/min (≈6.67/s) for "other request types"; the two Contacts-specific
+     * ceilings (list=40/min, by-id=120/min) are lower, so the engine's AIMD bucket starts
+     * from the CONSERVATIVE general rate and backs off further on a 429 (honored via
+     * ExtractRetryAfterMs). Burst kept modest to respect the per-minute windows.
+     */
+    public override get RateLimitPolicy(): RateLimitPolicy | null {
+        return { TokensPerSec: 6, Burst: 6, ThrottleBackoffFactor: 0.5 };
     }
 
-    public override GetActionGeneratorConfig(): ActionGeneratorConfig | null {
-        const objects = this.GetIntegrationObjects();
-        if (objects.length === 0) return null;
-        return {
-            IntegrationName: 'Wild Apricot',
-            CategoryName: 'Wild Apricot',
-            IconClass: 'fa-solid fa-apple-whole',
-            Objects: objects,
-            IncludeSearch: false,
-            IncludeList: false,
-            CategoryDescription: 'Wild Apricot (Personify) AMS integration actions',
-            ParentCategoryName: 'Membership',
-        };
-    }
-
-    public override GetDefaultConfiguration(): DefaultIntegrationConfig | null {
-        return {
-            DefaultSchemaName: 'Wild Apricot',
-            DefaultObjects: [
-                {
-                    SourceObjectName: 'Contacts',
-                    TargetTableName: 'WildApricot_Contact',
-                    TargetEntityName: 'WildApricot Contacts',
-                    SyncEnabled: true,
-                    FieldMappings: this.GetDefaultFieldMappings('Contacts', 'Contacts'),
-                },
-                {
-                    SourceObjectName: 'Events',
-                    TargetTableName: 'WildApricot_Event',
-                    TargetEntityName: 'WildApricot Events',
-                    SyncEnabled: true,
-                    FieldMappings: this.GetDefaultFieldMappings('Events', 'Events'),
-                },
-                {
-                    SourceObjectName: 'EventRegistrations',
-                    TargetTableName: 'WildApricot_EventRegistration',
-                    TargetEntityName: 'WildApricot Event Registrations',
-                    SyncEnabled: true,
-                    FieldMappings: [],
-                },
-            ],
-        };
-    }
-
-    public override GetDefaultFieldMappings(objectName: string, _entityName: string): DefaultFieldMapping[] {
-        switch (objectName) {
-            case 'Contacts':
-                return [
-                    { SourceFieldName: 'Id', DestinationFieldName: 'ExternalID', IsKeyField: true },
-                    { SourceFieldName: 'FirstName', DestinationFieldName: 'FirstName' },
-                    { SourceFieldName: 'LastName', DestinationFieldName: 'LastName' },
-                    { SourceFieldName: 'Email', DestinationFieldName: 'Email' },
-                    { SourceFieldName: 'Organization', DestinationFieldName: 'CompanyName' },
-                ];
-            case 'Events':
-                return [
-                    { SourceFieldName: 'Id', DestinationFieldName: 'ExternalID', IsKeyField: true },
-                    { SourceFieldName: 'Name', DestinationFieldName: 'Name' },
-                    { SourceFieldName: 'StartDate', DestinationFieldName: 'StartDate' },
-                    { SourceFieldName: 'EndDate', DestinationFieldName: 'EndDate' },
-                    { SourceFieldName: 'Location', DestinationFieldName: 'Location' },
-                ];
-            default:
-                return [];
+    /** Parses Wild Apricot's 429 Retry-After (seconds) into ms so the AIMD bucket waits the full window. */
+    public override ExtractRetryAfterMs(error: unknown): number | undefined {
+        // Wild Apricot returns HTTP 429 "wait for a minute"; when a Retry-After header is present we honor it.
+        const headers = this.ExtractErrorHeaders(error);
+        const retryAfter = headers?.['retry-after'];
+        if (retryAfter) {
+            const secs = Number(retryAfter);
+            if (Number.isFinite(secs) && secs >= 0) return Math.round(secs * 1000);
         }
+        // No header → the documented guidance is "wait for a minute" on a 429.
+        if (this.IsRateLimitError(error)) return 60_000;
+        return undefined;
     }
 
-    // ─── TestConnection ──────────────────────────────────────────────
+    // ─── Auth + transport (BaseRESTIntegrationConnector abstracts) ────────────
 
     /**
-     * Verifies connectivity by authenticating (which also discovers the
-     * Account ID if needed) and calling `/` on the accounts endpoint to
-     * fetch account name/URL for feedback.
+     * Mints/refreshes the bearer token via the shared OAuth2 manager, then resolves the
+     * tenant accountId (from the credential config, else auto-discovered via GET /accounts).
+     * Returns the bearer token + accountId on the auth context.
      */
-    public async TestConnection(
-        companyIntegration: MJCompanyIntegrationEntity,
-        contextUser: UserInfo
-    ): Promise<ConnectionTestResult> {
-        try {
-            const auth = await this.Authenticate(companyIntegration, contextUser) as WildApricotAuthContext;
-            const url = `${auth.BaseUrl}`;
-            const headers = this.BuildHeaders(auth);
-            const resp = await this.MakeHTTPRequest(auth, url, 'GET', headers);
-            if (resp.Status < 200 || resp.Status >= 300) {
-                return { Success: false, Message: `Wild Apricot TestConnection failed: HTTP ${resp.Status}` };
-            }
-            const body = resp.Body as WildApricotAccountSummary | null;
-            const name = body?.Name ?? 'Unknown account';
-            return {
-                Success: true,
-                Message: `Successfully connected to Wild Apricot account: ${name}`,
-                ServerVersion: `Wild Apricot Admin API ${auth.Config.ApiVersion ?? DEFAULT_API_VERSION}`,
-            };
-        } catch (err: unknown) {
-            const message = err instanceof Error ? err.message : String(err);
-            return { Success: false, Message: `Connection failed: ${message}` };
-        }
-    }
-
-    // ─── Discovery ────────────────────────────────────────────────────
-
-    public override async DiscoverObjects(
-        _companyIntegration: MJCompanyIntegrationEntity,
-        _contextUser: UserInfo
-    ): Promise<ExternalObjectSchema[]> {
-        return WILD_APRICOT_OBJECTS.map(obj => ({
-            Name: obj.Name,
-            Label: obj.DisplayName,
-            Description: obj.Description,
-            SupportsIncrementalSync: this.supportsIncrementalSync(obj.Name),
-            SupportsWrite: obj.SupportsWrite,
-        }));
-    }
-
-    /**
-     * Returns the static fields for the object, merging in any dynamically
-     * discovered custom fields for Contacts via GET /contactfields. Custom
-     * fields are flagged in their description for downstream consumers.
-     */
-    public override async DiscoverFields(
-        companyIntegration: MJCompanyIntegrationEntity,
-        objectName: string,
-        contextUser: UserInfo
-    ): Promise<ExternalFieldSchema[]> {
-        const base = this.staticFieldsFor(objectName);
-        if (objectName.toLowerCase() !== 'contacts') return base;
-
-        try {
-            const customFields = await this.discoverContactCustomFields(companyIntegration, contextUser);
-            return this.mergeStaticAndCustomFields(base, customFields);
-        } catch (err: unknown) {
-            const message = err instanceof Error ? err.message : String(err);
-            console.warn(`[WildApricot] Custom field discovery for Contacts failed — returning static catalog only: ${message}`);
-            return base;
-        }
-    }
-
-    private staticFieldsFor(objectName: string): ExternalFieldSchema[] {
-        const obj = WILD_APRICOT_OBJECTS.find(o => o.Name.toLowerCase() === objectName.toLowerCase());
-        if (!obj) return [];
-        return obj.Fields.map(f => {
-            const fkTarget = this.resolveForeignKeyTarget(f.Name);
-            return {
-                Name: f.Name,
-                Label: f.DisplayName,
-                Description: f.Description,
-                DataType: f.Type,
-                IsRequired: f.IsRequired,
-                IsUniqueKey: f.IsPrimaryKey,
-                IsReadOnly: f.IsReadOnly,
-                IsForeignKey: fkTarget != null,
-                ForeignKeyTarget: fkTarget,
-            };
-        });
-    }
-
-    /**
-     * Resolves a field name to a sibling object's external name when the field
-     * is an implicit foreign key — i.e. it is named `<Sibling>Id` / `<Sibling>_id`
-     * / `<Sibling>Ref` AND `<Sibling>` matches another object declared in this
-     * connector (singular/plural aware). Provable-only: returns null unless the
-     * named sibling is itself a declared WILD_APRICOT_OBJECTS object, so no FK is
-     * invented for references whose target this connector does not model.
-     *
-     * With the current static catalog this resolves exactly one field —
-     * EventRegistrationTypes.EventId → Events. (RegistrationTypeId does NOT
-     * resolve: no "RegistrationType(s)" object is declared.)
-     */
-    private resolveForeignKeyTarget(fieldName: string): string | null {
-        const m = /^(.+?)(Id|_id|Ref)$/.exec(fieldName);
-        if (!m) return null;
-        const sibling = m[1].toLowerCase();
-        const singular = sibling.endsWith('s') ? sibling.slice(0, -1) : sibling;
-        const plural = `${singular}s`;
-        const target = WILD_APRICOT_OBJECTS.find(o => {
-            const name = o.Name.toLowerCase();
-            return name === sibling || name === singular || name === plural;
-        });
-        return target ? target.Name : null;
-    }
-
-    /**
-     * Fetches Wild Apricot's contact field definitions and returns one
-     * ExternalFieldSchema per contact field, marked `IsCustom` in the
-     * description so consumers can recognise them.
-     */
-    private async discoverContactCustomFields(
-        companyIntegration: MJCompanyIntegrationEntity,
-        contextUser: UserInfo
-    ): Promise<ExternalFieldSchema[]> {
-        const auth = await this.Authenticate(companyIntegration, contextUser) as WildApricotAuthContext;
-        const url = `${auth.BaseUrl}/contactfields`;
-        const headers = this.BuildHeaders(auth);
-        const resp = await this.MakeHTTPRequest(auth, url, 'GET', headers);
-        if (resp.Status < 200 || resp.Status >= 300) return [];
-        const arr = Array.isArray(resp.Body) ? resp.Body as Record<string, unknown>[] : [];
-        return arr
-            .filter(f => typeof f['SystemCode'] === 'string')
-            .map(f => this.toContactFieldSchema(f));
-    }
-
-    private toContactFieldSchema(raw: Record<string, unknown>): ExternalFieldSchema {
-        const systemCode = String(raw['SystemCode'] ?? '');
-        const fieldName = typeof raw['FieldName'] === 'string' ? raw['FieldName'] : systemCode;
-        const apiType = typeof raw['Type'] === 'string' ? raw['Type'] : 'String';
-        const dataType = WA_CUSTOM_FIELD_TYPE_MAP[apiType] ?? 'nvarchar';
-        const isSystem = raw['IsSystem'] === true;
-        return {
-            Name: systemCode,
-            Label: fieldName,
-            Description: isSystem
-                ? `Wild Apricot standard contact field (${apiType}).`
-                : `Wild Apricot CUSTOM contact field (${apiType}). IsCustom=true. Stored inside Contact.FieldValues[] keyed by SystemCode.`,
-            DataType: dataType,
-            IsRequired: raw['IsRequired'] === true,
-            IsUniqueKey: false,
-            IsReadOnly: raw['IsSystem'] === true && raw['IsBuiltIn'] === true,
-        };
-    }
-
-    /**
-     * Merges static fields with discovered contact fields. Static fields win
-     * on name collision (their metadata is more precise). Non-colliding
-     * discovered fields are appended.
-     */
-    private mergeStaticAndCustomFields(
-        staticFields: ExternalFieldSchema[],
-        discovered: ExternalFieldSchema[]
-    ): ExternalFieldSchema[] {
-        const existing = new Set(staticFields.map(f => f.Name.toLowerCase()));
-        const extra = discovered.filter(f => !existing.has(f.Name.toLowerCase()));
-        return [...staticFields, ...extra];
-    }
-
-    // ─── FetchChanges (OData $top/$skip pagination) ──────────────────
-
-    /**
-     * Fetches records for the given object using Wild Apricot's OData-style
-     * pagination. For Contacts, uses the `$async=true` pattern to dispatch
-     * long-running queries and polls the ResultUrl until ready.
-     */
-    public override async FetchChanges(ctx: FetchContext): Promise<FetchBatchResult> {
-        const auth = await this.Authenticate(ctx.CompanyIntegration, ctx.ContextUser) as WildApricotAuthContext;
-        const objLower = ctx.ObjectName.toLowerCase();
-        const path = WA_API_PATHS[objLower];
-        if (!path) {
-            console.warn(`[WildApricot] No API path mapped for object "${ctx.ObjectName}"`);
-            return { Records: [], HasMore: false };
-        }
-
-        this.currentWatermark = ctx.WatermarkValue;
-        try {
-            if (objLower === 'contacts') {
-                return await this.fetchContactsAsync(auth, ctx);
-            }
-            return await this.fetchFlat(auth, ctx, path);
-        } finally {
-            this.currentWatermark = null;
-        }
-    }
-
-    /**
-     * Executes the standard OData flat fetch: GET {path}?$top={batchSize}&$skip={offset}
-     * with optional $filter for incremental sync.
-     */
-    private async fetchFlat(
-        auth: WildApricotAuthContext,
-        ctx: FetchContext,
-        path: string
-    ): Promise<FetchBatchResult> {
-        const objLower = ctx.ObjectName.toLowerCase();
-        const dataKey = WA_RESPONSE_DATA_KEYS[objLower] ?? null;
-        const pageSize = ctx.BatchSize > 0 ? ctx.BatchSize : DEFAULT_PAGE_SIZE;
-        const offset = ctx.CurrentOffset ?? 0;
-
-        const url = this.buildListUrl(auth.BaseUrl, path, objLower, pageSize, offset, ctx.WatermarkValue);
-        const headers = this.BuildHeaders(auth);
-        const resp = await this.MakeHTTPRequest(auth, url, 'GET', headers);
-        if (resp.Status < 200 || resp.Status >= 300) {
-            throw new Error(`Wild Apricot GET ${path} returned HTTP ${resp.Status}`);
-        }
-        const records = this.extractRecords(resp.Body, dataKey);
-        const externalRecords = records.map(r => this.toExternalRecord(r, ctx.ObjectName));
-        const { hasMore, newWatermark } = this.computePageState(records, pageSize, objLower);
-
-        return {
-            Records: externalRecords,
-            HasMore: hasMore,
-            NextOffset: hasMore ? offset + records.length : undefined,
-            NewWatermarkValue: !hasMore && newWatermark ? newWatermark : undefined,
-        };
-    }
-
-    /**
-     * Builds the URL for a flat list request, adding OData pagination and —
-     * when a watermark is present for a supported object — a server-side
-     * `$filter` with the Wild Apricot display-name-in-quotes syntax.
-     */
-    private buildListUrl(
-        baseUrl: string,
-        path: string,
-        objLower: string,
-        top: number,
-        skip: number,
-        watermark: string | null
-    ): string {
-        const params: string[] = [`$top=${top}`, `$skip=${skip}`];
-        const wm = WA_WATERMARK_CONFIG[objLower];
-        if (wm && watermark) {
-            const filter = `'${wm.filterField}' ge '${watermark}'`;
-            params.push(`$filter=${encodeURIComponent(filter)}`);
-        }
-        return `${baseUrl}/${path}?${params.join('&')}`;
-    }
-
-    /**
-     * Extracts the record array from a Wild Apricot response. When `dataKey`
-     * is null the response body itself is expected to be the array.
-     */
-    private extractRecords(body: unknown, dataKey: string | null): Record<string, unknown>[] {
-        if (Array.isArray(body)) return body as Record<string, unknown>[];
-        if (!dataKey) return [];
-        const obj = body as Record<string, unknown> | null;
-        if (!obj) return [];
-        const arr = obj[dataKey];
-        return Array.isArray(arr) ? arr as Record<string, unknown>[] : [];
-    }
-
-    /**
-     * Computes HasMore and the rolling watermark for a page. Watermark is
-     * the max of the configured response field across returned records.
-     */
-    private computePageState(
-        records: Record<string, unknown>[],
-        pageSize: number,
-        objLower: string
-    ): { hasMore: boolean; newWatermark: string | null } {
-        const hasMore = records.length >= pageSize;
-        const wm = WA_WATERMARK_CONFIG[objLower];
-        if (!wm) return { hasMore, newWatermark: null };
-
-        let latest: Date | null = null;
-        for (const rec of records) {
-            const raw = rec[wm.responseField];
-            if (typeof raw !== 'string') continue;
-            const parsed = new Date(raw);
-            if (isNaN(parsed.getTime())) continue;
-            if (!latest || parsed > latest) latest = parsed;
-        }
-        return { hasMore, newWatermark: latest ? latest.toISOString() : null };
-    }
-
-    /**
-     * Fetches contacts using Wild Apricot's async query pattern:
-     *   GET /contacts?$async=true&$filter=...  → returns ResultUrl
-     *   poll ResultUrl until State=Complete
-     */
-    private async fetchContactsAsync(
-        auth: WildApricotAuthContext,
-        ctx: FetchContext
-    ): Promise<FetchBatchResult> {
-        const pageSize = ctx.BatchSize > 0 ? ctx.BatchSize : DEFAULT_PAGE_SIZE;
-        const offset = ctx.CurrentOffset ?? 0;
-        const params: string[] = ['$async=true', `$top=${pageSize}`, `$skip=${offset}`];
-        const wm = WA_WATERMARK_CONFIG['contacts'];
-        if (ctx.WatermarkValue && wm) {
-            const filter = `'${wm.filterField}' ge '${ctx.WatermarkValue}'`;
-            params.push(`$filter=${encodeURIComponent(filter)}`);
-        }
-        const url = `${auth.BaseUrl}/contacts?${params.join('&')}`;
-        const headers = this.BuildHeaders(auth);
-
-        const initial = await this.MakeHTTPRequest(auth, url, 'GET', headers);
-        if (initial.Status < 200 || initial.Status >= 300) {
-            throw new Error(`Wild Apricot async contacts initial call returned HTTP ${initial.Status}`);
-        }
-
-        const contacts = await this.resolveAsyncContactResult(auth, initial);
-        const externalRecords = contacts.map(r => this.toExternalRecord(r, ctx.ObjectName));
-        const { hasMore, newWatermark } = this.computePageState(contacts, pageSize, 'contacts');
-
-        return {
-            Records: externalRecords,
-            HasMore: hasMore,
-            NextOffset: hasMore ? offset + contacts.length : undefined,
-            NewWatermarkValue: !hasMore && newWatermark ? newWatermark : undefined,
-        };
-    }
-
-    /**
-     * If the initial async contacts response already contains the Contacts
-     * array (small queries return synchronously), returns it. Otherwise polls
-     * the ResultUrl at the configured interval until Complete or timeout.
-     */
-    private async resolveAsyncContactResult(
-        auth: WildApricotAuthContext,
-        initial: RESTResponse
-    ): Promise<Record<string, unknown>[]> {
-        const body = (initial.Body ?? {}) as WildApricotAsyncResponse & WildApricotContactResults;
-        if (Array.isArray(body.Contacts)) {
-            return body.Contacts;
-        }
-        const resultUrl = body.ResultUrl;
-        if (typeof resultUrl !== 'string' || resultUrl.length === 0) {
-            console.warn('[WildApricot] Async contacts response has no ResultUrl and no inline Contacts — returning empty');
-            return [];
-        }
-        return this.pollAsyncContactsResultUrl(auth, resultUrl);
-    }
-
-    /** Polls the Wild Apricot async ResultUrl until it returns a Contacts array. */
-    private async pollAsyncContactsResultUrl(
-        auth: WildApricotAuthContext,
-        resultUrl: string
-    ): Promise<Record<string, unknown>[]> {
-        const interval = auth.Config.AsyncPollIntervalMs ?? DEFAULT_ASYNC_POLL_INTERVAL_MS;
-        const timeout = auth.Config.AsyncPollTimeoutMs ?? DEFAULT_ASYNC_POLL_TIMEOUT_MS;
-        const deadline = Date.now() + timeout;
-        const headers = this.BuildHeaders(auth);
-
-        while (Date.now() < deadline) {
-            await this.sleep(interval);
-            const resp = await this.MakeHTTPRequest(auth, resultUrl, 'GET', headers);
-            if (resp.Status === 202) continue; // still processing
-            if (resp.Status < 200 || resp.Status >= 300) {
-                throw new Error(`Wild Apricot async ResultUrl poll returned HTTP ${resp.Status}`);
-            }
-            const body = (resp.Body ?? {}) as WildApricotContactResults;
-            if (Array.isArray(body.Contacts)) return body.Contacts;
-        }
-        throw new Error(`Wild Apricot async contacts query timed out after ${timeout}ms`);
-    }
-
-    private toExternalRecord(raw: Record<string, unknown>, objectType: string): ExternalRecord {
-        const idRaw = raw['Id'] ?? raw['id'] ?? raw['ID'];
-        const externalID = idRaw != null ? String(idRaw) : '';
-        return { ExternalID: externalID, ObjectType: objectType, Fields: raw };
-    }
-
-    private supportsIncrementalSync(objectName: string): boolean {
-        return WA_WATERMARK_CONFIG[objectName.toLowerCase()] != null;
-    }
-
-    // ─── CRUD ─────────────────────────────────────────────────────────
-
-    public override async CreateRecord(ctx: CreateRecordContext): Promise<CRUDResult> {
-        const companyIntegration = ctx.CompanyIntegration as MJCompanyIntegrationEntity;
-        const contextUser = ctx.ContextUser as UserInfo;
-        return this.executeMutation(companyIntegration, contextUser, ctx.ObjectName, 'POST', null, ctx.Attributes, 'CreateRecord');
-    }
-
-    public override async UpdateRecord(ctx: UpdateRecordContext): Promise<CRUDResult> {
-        const companyIntegration = ctx.CompanyIntegration as MJCompanyIntegrationEntity;
-        const contextUser = ctx.ContextUser as UserInfo;
-        return this.executeMutation(companyIntegration, contextUser, ctx.ObjectName, 'PUT', ctx.ExternalID, ctx.Attributes, 'UpdateRecord');
-    }
-
-    public override async DeleteRecord(ctx: DeleteRecordContext): Promise<CRUDResult> {
-        const companyIntegration = ctx.CompanyIntegration as MJCompanyIntegrationEntity;
-        const contextUser = ctx.ContextUser as UserInfo;
-        return this.executeMutation(companyIntegration, contextUser, ctx.ObjectName, 'DELETE', ctx.ExternalID, undefined, 'DeleteRecord');
-    }
-
-    /**
-     * Shared CRUD implementation: routes POST/PUT/DELETE to the object's list
-     * path with an optional trailing `/{id}`. Returns a uniform CRUDResult.
-     */
-    private async executeMutation(
-        companyIntegration: MJCompanyIntegrationEntity,
-        contextUser: UserInfo,
-        objectName: string,
-        method: 'POST' | 'PUT' | 'DELETE',
-        externalID: string | null,
-        attributes: Record<string, unknown> | undefined,
-        operation: string
-    ): Promise<CRUDResult> {
-        try {
-            const auth = await this.Authenticate(companyIntegration, contextUser) as WildApricotAuthContext;
-            const objLower = objectName.toLowerCase();
-            const path = WA_API_PATHS[objLower];
-            if (!path) {
-                return { Success: false, ErrorMessage: `WildApricot ${operation} not supported for "${objectName}"`, StatusCode: 400 };
-            }
-            const url = externalID != null
-                ? `${auth.BaseUrl}/${path}/${encodeURIComponent(externalID)}`
-                : `${auth.BaseUrl}/${path}`;
-            const headers = this.BuildHeaders(auth);
-            const resp = await this.MakeHTTPRequest(auth, url, method, headers, attributes);
-            if (resp.Status < 200 || resp.Status >= 300) {
-                return this.buildCRUDError(resp, operation, objectName);
-            }
-            const body = (resp.Body ?? {}) as Record<string, unknown>;
-            const newIdRaw = body['Id'] ?? body['id'] ?? externalID;
-            const newId = newIdRaw != null ? String(newIdRaw) : undefined;
-            // CREATE-ONLY: a 2xx create with no usable record ID is a silent record-loss bug
-            // (duplicate creates next sync). Fail loudly via the base helper. Update/Delete keep
-            // their existing semantics — they legitimately may not echo an ID.
-            if (method === 'POST') {
-                return this.BuildCreatedResult(newId, resp.Status, objectName);
-            }
-            return {
-                Success: true,
-                ExternalID: newId,
-                StatusCode: resp.Status,
-            };
-        } catch (err: unknown) {
-            const message = err instanceof Error ? err.message : String(err);
-            return { Success: false, ErrorMessage: `WildApricot ${operation} failed: ${message}`, StatusCode: 500 };
-        }
-    }
-
-    private buildCRUDError(resp: RESTResponse, op: string, objectName: string): CRUDResult {
-        const body = resp.Body as Record<string, unknown> | undefined;
-        const rawMessage = typeof body?.['Message'] === 'string'
-            ? (body['Message'] as string)
-            : typeof body?.['message'] === 'string'
-                ? (body['message'] as string)
-                : undefined;
-        return {
-            Success: false,
-            ErrorMessage: rawMessage ?? `WildApricot ${op} on ${objectName} failed (HTTP ${resp.Status})`,
-            StatusCode: resp.Status,
-        };
-    }
-
-    // ─── Abstract REST hooks (BaseRESTIntegrationConnector) ───────────
-
     protected async Authenticate(
         companyIntegration: MJCompanyIntegrationEntity,
         contextUser: UserInfo
-    ): Promise<RESTAuthContext> {
-        if (this.authState && this.isTokenValid(this.authState)) {
-            return this.authState;
-        }
-        const config = await this.parseConfig(companyIntegration, contextUser);
-        const token = await this.obtainAccessToken(config);
-        const accountId = config.AccountId ?? await this.resolveAccountId(token.access_token);
-        const apiVersion = config.ApiVersion ?? DEFAULT_API_VERSION;
-        const state: WildApricotAuthContext = {
-            Token: token.access_token,
-            ExpiresAt: new Date(Date.now() + (token.expires_in * 1000)),
+    ): Promise<WildApricotAuthContext> {
+        const creds = await this.LoadCredentials(companyIntegration, contextUser);
+        const token = await this.tokenManager.GetAccessToken(
+            {
+                TokenURL: creds.TokenUrl,
+                ClientId: creds.ApiKey,     // API key is the Basic-auth USERNAME …
+                ClientSecret: '',           // … with an EMPTY password.
+                Scopes: 'auto',
+                UseBasicAuth: true,         // → Authorization: Basic base64(apiKey:) — built by the helper, no inline crypto.
+            },
+            'client_credentials'
+        );
+        const accountId = await this.ResolveAccountId(creds, token.AccessToken);
+        return {
+            Token: token.AccessToken,
             AccountId: accountId,
-            BaseUrl: `${WA_API_HOST}/${apiVersion}/accounts/${accountId}`,
-            Config: config,
+            BaseHost: creds.BaseHost,
+            ApiVersion: creds.ApiVersion,
         };
-        this.authState = state;
-        return state;
     }
 
-    protected BuildHeaders(auth: RESTAuthContext): Record<string, string> {
-        const waAuth = auth as WildApricotAuthContext;
+    /** Bearer header for API calls, built from the manager-minted token. No inline crypto. */
+    protected BuildHeaders(auth: WildApricotAuthContext): Record<string, string> {
         return {
-            'Authorization': `Bearer ${waAuth.Token}`,
+            'Authorization': `Bearer ${auth.Token}`,
             'Accept': 'application/json',
         };
     }
 
-    /**
-     * Not used by FetchChanges (which implements its own pagination), but
-     * retained for compatibility with any callers that route through the
-     * base pipeline.
-     */
-    protected NormalizeResponse(rawBody: unknown, responseDataKey: string | null): Record<string, unknown>[] {
-        return this.extractRecords(rawBody, responseDataKey);
-    }
-
-    protected ExtractPaginationInfo(
-        _rawBody: unknown,
-        _paginationType: PaginationType,
-        _currentPage: number,
-        currentOffset: number,
-        pageSize: number
-    ): PaginationState {
-        // Wild Apricot uses skip-based pagination; we advance the base engine's offset by pageSize.
-        return { HasMore: false, NextOffset: currentOffset + pageSize };
-    }
-
-    protected GetBaseURL(
-        _companyIntegration: MJCompanyIntegrationEntity,
-        auth: RESTAuthContext
-    ): string {
-        return (auth as WildApricotAuthContext).BaseUrl;
-    }
-
-    // ─── Token lifecycle ──────────────────────────────────────────────
-
-    private isTokenValid(state: WildApricotAuthContext): boolean {
-        return state.ExpiresAt.getTime() - Date.now() > TOKEN_REFRESH_BUFFER_MS;
+    /** Base URL: host + versioned path segment (e.g. https://api.wildapricot.org/v2.3). */
+    protected GetBaseURL(_companyIntegration: MJCompanyIntegrationEntity, auth: WildApricotAuthContext): string {
+        const host = auth.BaseHost ?? WILDAPRICOT_API_HOST;
+        const version = auth.ApiVersion ?? DEFAULT_API_VERSION;
+        return `${host.replace(/\/+$/, '')}/${version}`;
     }
 
     /**
-     * Exchanges the admin API Key for a bearer token via OAuth 2.0
-     * client_credentials grant. Per the Wild Apricot docs, `scope=auto` is
-     * required — without it the token has near-empty permissions.
+     * Executes an HTTP request via fetch. Substitutes the resolved `{accountId}` tenant anchor
+     * into the URL (the base leaves it as a template var; here it becomes the concrete tenant id)
+     * and parses JSON responses. The concrete connector owns the transport seam so tests override it.
      */
-    private async obtainAccessToken(config: WildApricotConnectionConfig): Promise<WildApricotTokenResponse> {
-        const basic = Buffer.from(`APIKEY:${config.ApiKey}`).toString('base64');
-        const resp = await fetch(WA_OAUTH_TOKEN_URL, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Basic ${basic}`,
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'Accept': 'application/json',
-            },
-            body: 'grant_type=client_credentials&scope=auto',
-        });
-        if (!resp.ok) {
-            const text = await resp.text();
-            throw new Error(`Wild Apricot OAuth token request failed (HTTP ${resp.status}): ${text.slice(0, 500)}`);
-        }
-        const payload = await resp.json() as WildApricotTokenResponse;
-        if (!payload.access_token || typeof payload.access_token !== 'string') {
-            throw new Error('Wild Apricot OAuth token response missing access_token');
-        }
-        return payload;
-    }
-
-    /**
-     * Auto-discovers the account ID by calling GET /v2/accounts with the
-     * freshly obtained token. Selects the first account the API Key has
-     * access to. Most Wild Apricot keys are scoped to a single tenant.
-     */
-    private async resolveAccountId(accessToken: string): Promise<string> {
-        const url = `${WA_API_HOST}/v2/accounts`;
-        const resp = await fetch(url, {
-            method: 'GET',
-            headers: {
-                'Authorization': `Bearer ${accessToken}`,
-                'Accept': 'application/json',
-            },
-        });
-        if (!resp.ok) {
-            const text = await resp.text();
-            throw new Error(`Wild Apricot /v2/accounts failed (HTTP ${resp.status}): ${text.slice(0, 500)}`);
-        }
-        const body = await resp.json() as WildApricotAccountSummary[] | WildApricotAccountSummary;
-        const accounts = Array.isArray(body) ? body : [body];
-        const first = accounts.find(a => typeof a?.Id === 'number');
-        if (!first) {
-            throw new Error('Wild Apricot /v2/accounts returned no accounts for this API Key');
-        }
-        return String(first.Id);
-    }
-
-    // ─── HTTP transport with retry + throttling ───────────────────────
-
     protected async MakeHTTPRequest(
-        auth: RESTAuthContext,
+        auth: WildApricotAuthContext,
         url: string,
         method: string,
         headers: Record<string, string>,
         body?: unknown
     ): Promise<RESTResponse> {
-        const waAuth = auth as WildApricotAuthContext;
-        const cfg = waAuth.Config;
-        const maxRetries = cfg.MaxRetries ?? DEFAULT_MAX_RETRIES;
-        const timeoutMs = cfg.RequestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
-        const minInterval = cfg.MinRequestIntervalMs ?? DEFAULT_MIN_REQUEST_INTERVAL_MS;
-        let currentHeaders = headers;
-
-        for (let attempt = 0; attempt <= maxRetries; attempt++) {
-            await this.throttle(minInterval);
-            try {
-                const resp = await this.doFetch(url, method, currentHeaders, body, timeoutMs);
-                this.lastRequestTime = Date.now();
-
-                if (resp.Status === 401 && attempt < maxRetries) {
-                    // Token expired or revoked — drop cache and refresh against the same
-                    // credentials we already hold, then retry with the new bearer header.
-                    this.authState = null;
-                    const refreshedToken = await this.obtainAccessToken(cfg);
-                    const accountId = cfg.AccountId ?? await this.resolveAccountId(refreshedToken.access_token);
-                    const apiVersion = cfg.ApiVersion ?? DEFAULT_API_VERSION;
-                    const refreshedState: WildApricotAuthContext = {
-                        Token: refreshedToken.access_token,
-                        ExpiresAt: new Date(Date.now() + (refreshedToken.expires_in * 1000)),
-                        AccountId: accountId,
-                        BaseUrl: `${WA_API_HOST}/${apiVersion}/accounts/${accountId}`,
-                        Config: cfg,
-                    };
-                    this.authState = refreshedState;
-                    currentHeaders = this.BuildHeaders(refreshedState);
-                    continue;
-                }
-                if (resp.Status === 429 || resp.Status === 503) {
-                    if (attempt === maxRetries) return resp;
-                    await this.sleep(this.backoffFromResponse(resp, attempt));
-                    continue;
-                }
-                return resp;
-            } catch (err: unknown) {
-                if (attempt === maxRetries) throw err;
-                if (!this.isRetryableError(err)) throw err;
-                await this.sleep(this.backoffMs(attempt));
-            }
+        const resolvedUrl = this.SubstituteAccountId(url, auth.AccountId);
+        const init: RequestInit = { method, headers };
+        if (body !== undefined && method !== 'GET' && method !== 'HEAD') {
+            init.body = typeof body === 'string' ? body : JSON.stringify(body);
+            (init.headers as Record<string, string>)['Content-Type'] = 'application/json';
         }
-        throw new Error(`Wild Apricot request to ${url} exhausted ${maxRetries + 1} attempts`);
-    }
-
-    /** Single fetch() with AbortController-backed timeout. */
-    private async doFetch(
-        url: string,
-        method: string,
-        headers: Record<string, string>,
-        body: unknown,
-        timeoutMs: number
-    ): Promise<RESTResponse> {
-        const controller = new AbortController();
-        const handle = setTimeout(() => controller.abort(), timeoutMs);
-        const finalHeaders: Record<string, string> = { ...headers };
-        if (body !== undefined && !finalHeaders['Content-Type']) {
-            finalHeaders['Content-Type'] = 'application/json';
+        const response = await fetch(resolvedUrl, init);
+        const responseHeaders: Record<string, string> = {};
+        response.headers.forEach((value, key) => { responseHeaders[key.toLowerCase()] = value; });
+        const text = await response.text();
+        let parsed: unknown = text;
+        const contentType = responseHeaders['content-type'] ?? '';
+        if (contentType.includes('json') || (text.length > 0 && (text[0] === '{' || text[0] === '['))) {
+            try { parsed = JSON.parse(text); } catch { parsed = text; }
         }
-        try {
-            const resp = await fetch(url, {
-                method,
-                headers: finalHeaders,
-                body: body !== undefined ? JSON.stringify(body) : undefined,
-                signal: controller.signal,
-            });
-            const respHeaders: Record<string, string> = {};
-            resp.headers.forEach((value, key) => { respHeaders[key.toLowerCase()] = value; });
-            const text = await resp.text();
-            const parsed = text.length > 0 ? this.safeParseJSON(text) : null;
-            return { Status: resp.status, Body: parsed, Headers: respHeaders };
-        } finally {
-            clearTimeout(handle);
-        }
-    }
-
-    private safeParseJSON(text: string): unknown {
-        try { return JSON.parse(text) as unknown; } catch { return text; }
-    }
-
-    private isRetryableError(err: unknown): boolean {
-        const msg = err instanceof Error ? err.message : String(err);
-        return /abort|timeout|ECONNRESET|ENOTFOUND|ETIMEDOUT|network/i.test(msg);
-    }
-
-    private backoffMs(attempt: number): number {
-        const base = Math.min(1000 * Math.pow(2, attempt), 20000);
-        const jitter = Math.floor(Math.random() * 500);
-        return base + jitter;
+        return { Status: response.status, Body: parsed, Headers: responseHeaders };
     }
 
     /**
-     * Derives a back-off duration from a 429/503 response, honoring a
-     * Retry-After header when present (both delta-seconds and HTTP-date
-     * forms are supported).
+     * Extracts the record array from a Wild Apricot response. ResponseDataKey is null in the
+     * Declared metadata because the wrapper key varies by endpoint (e.g. `Contacts`, `Events`,
+     * `Invoices`) and some endpoints return a bare array. So: honor an explicit key when set,
+     * else return a root-level array, else unwrap the first array-valued property of an object,
+     * else wrap a single object. This handles both wrapped-collection and bare-array shapes.
      */
-    private backoffFromResponse(resp: RESTResponse, attempt: number): number {
-        const retryAfter = resp.Headers['retry-after'];
-        if (typeof retryAfter === 'string' && retryAfter.length > 0) {
-            const asSeconds = Number(retryAfter);
-            if (!isNaN(asSeconds) && asSeconds >= 0) {
-                return Math.min(asSeconds * 1000, 30000);
-            }
-            const asDate = Date.parse(retryAfter);
-            if (!isNaN(asDate)) {
-                const delta = asDate - Date.now();
-                if (delta > 0) return Math.min(delta, 30000);
-            }
+    protected NormalizeResponse(rawBody: unknown, responseDataKey: string | null): Record<string, unknown>[] {
+        if (responseDataKey && isRecord(rawBody)) {
+            const inner = rawBody[responseDataKey];
+            if (Array.isArray(inner)) return inner.filter(isRecord);
         }
-        return this.backoffMs(attempt);
-    }
-
-    private async throttle(minIntervalMs: number): Promise<void> {
-        const elapsed = Date.now() - this.lastRequestTime;
-        if (elapsed < minIntervalMs) {
-            await this.sleep(minIntervalMs - elapsed);
+        if (Array.isArray(rawBody)) return rawBody.filter(isRecord);
+        if (isRecord(rawBody)) {
+            const arr = this.FindArrayInObject(rawBody);
+            if (arr.length > 0) return arr.filter(isRecord);
+            return [rawBody];
         }
+        return [];
     }
 
-    private sleep(ms: number): Promise<void> {
-        return new Promise(resolve => setTimeout(resolve, ms));
+    /**
+     * Wild Apricot uses OData-style `$top`/`$skip` Offset pagination (NOT the base's `limit`/`offset`).
+     * `$top` is clamped to 100 per spec ("more than 100 → maximum 100 items returned"). Overridden
+     * here so the vendor param names + the 100 clamp are honored.
+     */
+    protected override BuildPaginatedURL(
+        basePath: string,
+        obj: MJIntegrationObjectEntity,
+        _page: number,
+        offset: number,
+        _cursor?: string,
+        effectivePageSize?: number
+    ): string {
+        const pageSize = Math.min(effectivePageSize ?? obj.DefaultPageSize ?? WILDAPRICOT_MAX_PAGE_SIZE, WILDAPRICOT_MAX_PAGE_SIZE);
+        const separator = basePath.includes('?') ? '&' : '?';
+        return `${basePath}${separator}$skip=${offset}&$top=${pageSize}`;
     }
 
-    // ─── Config parsing ───────────────────────────────────────────────
+    /**
+     * Offset pagination termination: Wild Apricot list endpoints return fewer than `$top` items on
+     * the final page (and none past the end). More pages remain only when a FULL page came back.
+     */
+    protected ExtractPaginationInfo(
+        rawBody: unknown,
+        _paginationType: PaginationType,
+        _currentPage: number,
+        currentOffset: number,
+        pageSize: number
+    ): PaginationState {
+        const records = this.NormalizeResponse(rawBody, null);
+        const count = records.length;
+        const hasMore = pageSize > 0 && count >= pageSize;
+        return {
+            HasMore: hasMore,
+            NextOffset: currentOffset + count,
+        };
+    }
 
-    private async parseConfig(
+    // ─── TestConnection (auto-discovers the accountId) ────────────────────────
+
+    /**
+     * Tests connectivity by minting a token and listing accounts (GET /accounts). When the credential
+     * omits AccountId, the first account's Id is adopted as the tenant anchor (Configuration.accountIdDiscovery).
+     */
+    public override async TestConnection(
         companyIntegration: MJCompanyIntegrationEntity,
         contextUser: UserInfo
-    ): Promise<WildApricotConnectionConfig> {
-        const credentialID = companyIntegration.CredentialID;
-        if (credentialID) {
-            const fromCred = await this.loadFromCredential(credentialID, contextUser);
-            if (fromCred) return fromCred;
+    ): Promise<ConnectionTestResult> {
+        try {
+            const auth = await this.Authenticate(companyIntegration, contextUser);
+            const url = `${this.GetBaseURL(companyIntegration, auth)}/accounts`;
+            const response = await this.MakeHTTPRequest(auth, url, 'GET', this.BuildHeaders(auth));
+            if (response.Status === 401 || response.Status === 403) {
+                return { Success: false, Message: `Wild Apricot authentication failed (HTTP ${response.Status}) — check the API key.` };
+            }
+            if (response.Status < 200 || response.Status >= 300) {
+                return { Success: false, Message: `Wild Apricot /accounts returned HTTP ${response.Status}.` };
+            }
+            const accounts = this.NormalizeResponse(response.Body, null);
+            return {
+                Success: true,
+                Message: `Connected to Wild Apricot account ${auth.AccountId}; ${accounts.length} account(s) accessible to this API key.`,
+            };
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : String(err);
+            return { Success: false, Message: `Wild Apricot connection error: ${message}` };
         }
-        const raw = companyIntegration.Configuration;
-        if (!raw) {
-            throw new Error('WildApricotConnector: No credential or Configuration JSON found on CompanyIntegration');
-        }
-        const parsed = JSON.parse(raw) as Partial<WildApricotConnectionConfig>;
-        return this.validateConfig(parsed);
     }
 
-    private async loadFromCredential(
+    // ─── THE idiosyncratic override: async Contacts list ──────────────────────
+
+    /**
+     * Fetches records. Only the `Contact` object is idiosyncratic — its list endpoint is ASYNC:
+     * the request returns a `ResultId` which must be polled until `State=Complete`. All other
+     * objects use the generic base flat/nested paginated fetch unchanged.
+     */
+    public override async FetchChanges(ctx: FetchContext): Promise<FetchBatchResult> {
+        if (ctx.ObjectName === CONTACT_OBJECT_NAME) {
+            return this.FetchContacts(ctx);
+        }
+        return super.FetchChanges(ctx);
+    }
+
+    /**
+     * Contacts async list flow (the single documented idiosyncrasy):
+     *   1. GET /accounts/{accountId}/contacts?$async=true&$skip&$top  → 200/202 with a ResultId.
+     *   2. Poll GET /accounts/{accountId}/contacts?resultId=<ResultId> until State='Complete'
+     *      (or the poll budget below is exhausted), then read the Contacts array.
+     * Incremental narrowing: when a watermark is present it is applied as a `$filter` on the
+     * documented cursor field (ProfileLastUpdated). Bounded by POLL_MAX_ATTEMPTS × POLL_INTERVAL_MS
+     * so a stuck async job can never hang the sync. Watermark persists on full-page success only.
+     */
+    private async FetchContacts(ctx: FetchContext): Promise<FetchBatchResult> {
+        const auth = await this.Authenticate(ctx.CompanyIntegration, ctx.ContextUser);
+        const obj = this.GetCachedObject(ctx.CompanyIntegration.IntegrationID, ctx.ObjectName);
+        const fields = this.GetCachedFields(obj.ID);
+        const pkFieldNames = fields.filter(f => f.IsPrimaryKey).map(f => f.Name);
+        const effectivePk = pkFieldNames.length > 0 ? pkFieldNames : ['Id'];
+
+        const offset = ctx.CurrentOffset ?? 0;
+        const pageSize = Math.min(ctx.BatchSize && ctx.BatchSize > 0 ? ctx.BatchSize : WILDAPRICOT_MAX_PAGE_SIZE, WILDAPRICOT_MAX_PAGE_SIZE);
+        const base = `${this.GetBaseURL(ctx.CompanyIntegration, auth)}${obj.APIPath}`;
+
+        // Build the OData query string with LITERAL $-prefixed param names (not URLSearchParams, which
+        // percent-encodes `$` → `%24`), keeping it consistent with BuildPaginatedURL's $skip/$top.
+        const queryParts = [`$async=true`, `$skip=${offset}`, `$top=${pageSize}`];
+        if (ctx.WatermarkValue && obj.IncrementalWatermarkField) {
+            // Documented incremental strategy: $filter on ProfileLastUpdated (ISO8601 comparison).
+            queryParts.push(`$filter=${encodeURIComponent(`${obj.IncrementalWatermarkField} ge ${ctx.WatermarkValue}`)}`);
+        }
+        const requestUrl = `${base}?${queryParts.join('&')}`;
+
+        // Step 1: kick off the async query.
+        const start = await this.MakeHTTPRequest(auth, requestUrl, 'GET', this.BuildHeaders(auth));
+        this.AssertContactsOK(start, 'start async contacts query');
+        const records = await this.ResolveAsyncContacts(auth, base, start.Body);
+
+        // Step 2: emit with FULL-RECORD pass-through (Fields = raw source record).
+        const out: ExternalRecord[] = records.map(raw => ({
+            ExternalID: this.BuildContactIdentity(raw, effectivePk),
+            ObjectType: ctx.ObjectName,
+            Fields: raw,
+        }));
+
+        const hasMore = records.length >= pageSize;
+        const result: FetchBatchResult = {
+            Records: out,
+            HasMore: hasMore,
+            NextOffset: offset + records.length,
+        };
+        // Persist the max watermark seen on this (full-page-success) batch.
+        if (obj.IncrementalWatermarkField) {
+            const maxWatermark = this.MaxWatermark(records, obj.IncrementalWatermarkField, ctx.WatermarkValue);
+            if (maxWatermark) result.NewWatermarkValue = maxWatermark;
+        }
+        return result;
+    }
+
+    /**
+     * Resolves the async Contacts response: if a ResultId is present, polls the same endpoint with
+     * `?resultId=<id>` until State='Complete' (bounded), then returns the Contacts array. If the
+     * initial response already carried the Contacts array synchronously, returns it directly.
+     */
+    private async ResolveAsyncContacts(
+        auth: WildApricotAuthContext,
+        baseUrl: string,
+        firstBody: unknown
+    ): Promise<Record<string, unknown>[]> {
+        const parsed = AsyncContactsSchema.safeParse(firstBody);
+        const resultId = parsed.success ? parsed.data.ResultId : undefined;
+
+        // Synchronous shape: the body already carries the Contacts array (no polling needed).
+        if (!resultId) {
+            return this.NormalizeResponse(firstBody, 'Contacts');
+        }
+
+        const pollUrl = `${baseUrl}?resultId=${encodeURIComponent(resultId)}`;
+        for (let attempt = 0; attempt < POLL_MAX_ATTEMPTS; attempt++) {
+            const poll = await this.MakeHTTPRequest(auth, pollUrl, 'GET', this.BuildHeaders(auth));
+            this.AssertContactsOK(poll, 'poll async contacts result');
+            const state = this.ReadState(poll.Body);
+            if (state === 'Complete') {
+                return this.NormalizeResponse(poll.Body, 'Contacts');
+            }
+            if (state === 'Failed') {
+                throw new Error(`Wild Apricot async contacts query failed (ResultId ${resultId}).`);
+            }
+            await delay(POLL_INTERVAL_MS);
+        }
+        throw new Error(
+            `Wild Apricot async contacts query did not complete within ${(POLL_MAX_ATTEMPTS * POLL_INTERVAL_MS) / 1000}s ` +
+            `(ResultId ${resultId}) — poll timeout.`
+        );
+    }
+
+    // ─── Helpers ──────────────────────────────────────────────────────────────
+
+    /** Substitutes the resolved `{accountId}` tenant anchor into a URL (case-insensitive on the var name). */
+    private SubstituteAccountId(url: string, accountId: string): string {
+        return url.replace(/\{accountId\}/gi, encodeURIComponent(accountId));
+    }
+
+    /**
+     * Resolves the tenant accountId: prefers the credential-configured value, else issues
+     * GET /accounts and adopts the first account's Id. Cached per instance. NEVER hardcoded.
+     */
+    private async ResolveAccountId(creds: WildApricotCredentials, token: string): Promise<string> {
+        if (creds.AccountId) return creds.AccountId;
+        if (this.cachedAccountId) return this.cachedAccountId;
+
+        const host = creds.BaseHost ?? WILDAPRICOT_API_HOST;
+        const version = creds.ApiVersion ?? DEFAULT_API_VERSION;
+        const url = `${host.replace(/\/+$/, '')}/${version}/accounts`;
+        // Auth is not yet fully assembled (that's what we're resolving), so build a minimal context.
+        const bootstrapAuth: WildApricotAuthContext = { Token: token, AccountId: '', BaseHost: creds.BaseHost, ApiVersion: creds.ApiVersion };
+        const response = await this.MakeHTTPRequest(bootstrapAuth, url, 'GET', this.BuildHeaders(bootstrapAuth));
+        if (response.Status < 200 || response.Status >= 300) {
+            throw new Error(`Wild Apricot account auto-discovery failed: GET /accounts returned HTTP ${response.Status}.`);
+        }
+        const accounts = this.NormalizeResponse(response.Body, null);
+        const first = accounts[0];
+        const id = first ? first['Id'] ?? first['id'] : undefined;
+        if (id == null) {
+            throw new Error('Wild Apricot account auto-discovery returned no accounts for this API key.');
+        }
+        this.cachedAccountId = String(id);
+        return this.cachedAccountId;
+    }
+
+    /** Finds the first array-valued property of an object (a wrapped collection under a vendor key). */
+    private FindArrayInObject(obj: Record<string, unknown>): unknown[] {
+        for (const v of Object.values(obj)) {
+            if (Array.isArray(v)) return v;
+        }
+        return [];
+    }
+
+    /** Reads the async-result State ('Complete'/'Processing'/'Failed'/…) from a poll body, tolerant of shape. */
+    private ReadState(body: unknown): string | undefined {
+        if (!isRecord(body)) return undefined;
+        const state = body['State'] ?? body['state'];
+        return typeof state === 'string' ? state : undefined;
+    }
+
+    /** Builds a Contact record identity from its declared PK (falls back to a common id key, then a content hash). */
+    private BuildContactIdentity(raw: Record<string, unknown>, pkFieldNames: string[]): string {
+        const parts = pkFieldNames.map(name => raw[name]).filter(v => v != null && String(v).length > 0);
+        if (parts.length === pkFieldNames.length && parts.length > 0) {
+            return parts.map(v => String(v)).join('|');
+        }
+        for (const k of ['Id', 'id', 'ID']) {
+            const v = raw[k];
+            if (v != null && String(v).length > 0) return String(v);
+        }
+        return stableHash(raw);
+    }
+
+    /** Max watermark value across a record batch (ISO8601 string comparison), never below the current one. */
+    private MaxWatermark(records: Record<string, unknown>[], field: string, current: string | null): string | undefined {
+        let max = current ?? '';
+        for (const r of records) {
+            const v = r[field];
+            if (typeof v === 'string' && v > max) max = v;
+        }
+        return max.length > 0 && max !== (current ?? '') ? max : undefined;
+    }
+
+    /** Throws a descriptive error on a non-2xx contacts response (202 Accepted is treated as OK for the async kick-off). */
+    private AssertContactsOK(response: RESTResponse, action: string): void {
+        if (response.Status === 202) return;
+        if (response.Status < 200 || response.Status >= 300) {
+            throw new Error(`Wild Apricot failed to ${action}: HTTP ${response.Status}`);
+        }
+    }
+
+    /** Reads headers off an error-like object (for Retry-After parsing). */
+    private ExtractErrorHeaders(error: unknown): Record<string, string> | undefined {
+        if (isRecord(error)) {
+            const headers = error['Headers'] ?? error['headers'];
+            if (isRecord(headers)) {
+                const out: Record<string, string> = {};
+                for (const [k, v] of Object.entries(headers)) {
+                    if (typeof v === 'string') out[k.toLowerCase()] = v;
+                }
+                return out;
+            }
+        }
+        return undefined;
+    }
+
+    /** Whether an error indicates a 429 rate-limit. */
+    private IsRateLimitError(error: unknown): boolean {
+        if (isRecord(error)) {
+            const status = error['Status'] ?? error['status'] ?? error['StatusCode'];
+            if (status === 429) return true;
+        }
+        const msg = error instanceof Error ? error.message : String(error ?? '');
+        return /\b429\b/.test(msg);
+    }
+
+    /**
+     * Resolves the API key + tenant config from the linked Credential entity, falling back to the
+     * CompanyIntegration.Configuration / APIKey. The credential bytes never leave this scope.
+     */
+    private async LoadCredentials(
+        companyIntegration: MJCompanyIntegrationEntity,
+        contextUser: UserInfo
+    ): Promise<WildApricotCredentials> {
+        let apiKey: string | undefined;
+        let accountId: string | undefined;
+        let tokenUrl: string | undefined;
+        let baseHost: string | undefined;
+        let apiVersion: string | undefined;
+
+        if (companyIntegration.CredentialID) {
+            const fromCred = await this.LoadFromCredentialEntity(companyIntegration.CredentialID, contextUser);
+            if (fromCred) {
+                apiKey = fromCred.ApiKey || apiKey;
+                accountId = fromCred.AccountId || accountId;
+                tokenUrl = fromCred.TokenUrl || tokenUrl;
+                baseHost = fromCred.BaseHost || baseHost;
+                apiVersion = fromCred.ApiVersion || apiVersion;
+            }
+        }
+
+        // Non-secret tenant config lives on Configuration JSON (AccountId, tokenUrl, host, version).
+        const configJson = companyIntegration.Configuration;
+        if (configJson) {
+            const fromConfig = this.ParseConfigJson(configJson);
+            if (fromConfig) {
+                apiKey = apiKey ?? fromConfig.ApiKey;
+                accountId = accountId ?? fromConfig.AccountId;
+                tokenUrl = tokenUrl ?? fromConfig.TokenUrl;
+                baseHost = baseHost ?? fromConfig.BaseHost;
+                apiVersion = apiVersion ?? fromConfig.ApiVersion;
+            }
+        }
+
+        // Legacy fallback: the API key may live on CompanyIntegration.APIKey.
+        apiKey = apiKey ?? companyIntegration.APIKey ?? undefined;
+
+        if (!apiKey) {
+            throw new Error('No Wild Apricot API key found — set the admin API Key on the credential, Configuration JSON, or CompanyIntegration.APIKey.');
+        }
+        return {
+            ApiKey: apiKey,
+            AccountId: accountId,
+            TokenUrl: tokenUrl ?? WILDAPRICOT_TOKEN_URL,
+            BaseHost: baseHost,
+            ApiVersion: apiVersion,
+        };
+    }
+
+    /** Loads credential fields from a Credential entity's Values JSON. */
+    private async LoadFromCredentialEntity(
         credentialID: string,
         contextUser: UserInfo,
         provider?: IMetadataProvider
-    ): Promise<WildApricotConnectionConfig | null> {
+    ): Promise<WildApricotCredentials | null> {
         const md = provider ?? new Metadata();
         const credential = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', contextUser);
         const loaded = await credential.Load(credentialID);
         if (!loaded || !credential.Values) return null;
+        return this.ParseConfigJson(credential.Values);
+    }
+
+    /** Parses a JSON string into credential/config fields (tolerant of casing/aliases). */
+    private ParseConfigJson(json: string): WildApricotCredentials | null {
         try {
-            const raw = JSON.parse(credential.Values) as Record<string, unknown>;
-            // Accept both PascalCase (WildApricot-specific) and the standard
-            // 'API Key' schema field name 'apiKey' (lowercase). AccountId is
-            // optional — auto-discovered via GET /v2/accounts when omitted.
-            const get = (...keys: string[]): string | undefined => {
-                for (const k of keys) {
-                    const hit = Object.entries(raw).find(([key]) => key.toLowerCase() === k.toLowerCase());
-                    if (hit && typeof hit[1] === 'string') return hit[1] as string;
-                }
-                return undefined;
+            const result = WildApricotConfigSchema.safeParse(JSON.parse(json));
+            if (!result.success) return null;
+            const p = result.data;
+            const apiKey = p.ApiKey ?? p.apiKey ?? p.APIKey ?? p.Key ?? p.Token ?? p.token;
+            const accountId = p.AccountId ?? p.accountId ?? p.AccountID;
+            const tokenUrl = p.tokenUrl ?? p.TokenUrl ?? p.tokenURL;
+            const baseHost = p.apiBaseUrl ?? p.BaseURL ?? p.baseHost;
+            const apiVersion = p.ApiVersion ?? p.apiVersion;
+            return {
+                ApiKey: apiKey ?? '',
+                AccountId: accountId != null ? String(accountId) : undefined,
+                TokenUrl: tokenUrl ?? WILDAPRICOT_TOKEN_URL,
+                BaseHost: baseHost,
+                ApiVersion: apiVersion,
             };
-            const apiKey = get('ApiKey', 'apiKey', 'api_key');
-            const accountId = get('AccountId', 'accountId', 'account_id');
-            if (!apiKey) return null;
-            const parsed: Partial<WildApricotConnectionConfig> = {
-                ApiKey: apiKey,
-                AccountId: accountId,
-            };
-            return this.validateConfig(parsed);
         } catch {
             return null;
         }
     }
-
-    private validateConfig(raw: Partial<WildApricotConnectionConfig>): WildApricotConnectionConfig {
-        if (!raw.ApiKey || typeof raw.ApiKey !== 'string') {
-            throw new Error('WildApricotConnector: ApiKey is required');
-        }
-        return {
-            ApiKey: raw.ApiKey,
-            AccountId: raw.AccountId,
-            ApiVersion: raw.ApiVersion ?? DEFAULT_API_VERSION,
-            MaxRetries: raw.MaxRetries ?? DEFAULT_MAX_RETRIES,
-            RequestTimeoutMs: raw.RequestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS,
-            MinRequestIntervalMs: raw.MinRequestIntervalMs ?? DEFAULT_MIN_REQUEST_INTERVAL_MS,
-            AsyncPollIntervalMs: raw.AsyncPollIntervalMs ?? DEFAULT_ASYNC_POLL_INTERVAL_MS,
-            AsyncPollTimeoutMs: raw.AsyncPollTimeoutMs ?? DEFAULT_ASYNC_POLL_TIMEOUT_MS,
-        };
-    }
 }
 
-/** Tree-shaking prevention function — import and call from module entry point. */
-export function LoadWildApricotConnector(): void { /* no-op */ }
+// ─── Module-level constants + helpers (mechanism, NOT a catalog) ──────────────
+
+/** Wild Apricot API host root; the version segment (/v2.3) + tenant paths are appended at runtime. */
+const WILDAPRICOT_API_HOST = 'https://api.wildapricot.org';
+/** OAuth2 token endpoint (client_credentials). */
+const WILDAPRICOT_TOKEN_URL = 'https://oauth.wildapricot.org/auth/token';
+/** Default API version path segment. */
+const DEFAULT_API_VERSION = 'v2.3';
+/** Max page size — `$top` above 100 is silently clamped to 100 per spec. */
+const WILDAPRICOT_MAX_PAGE_SIZE = 100;
+/** The single object whose list endpoint is async (request → ResultId → poll). */
+const CONTACT_OBJECT_NAME = 'Contact';
+/** Async-contacts poll bounds: attempts × interval caps total wait so a stuck job cannot hang the sync. */
+const POLL_MAX_ATTEMPTS = 60;
+const POLL_INTERVAL_MS = 1000;
+
+/** Auth context: resolved bearer token + tenant accountId + non-secret host/version overrides. */
+interface WildApricotAuthContext extends RESTAuthContext {
+    Token: string;
+    AccountId: string;
+    BaseHost?: string;
+    ApiVersion?: string;
+}
+
+/** Resolved Wild Apricot credentials/config. */
+interface WildApricotCredentials {
+    ApiKey: string;
+    AccountId?: string;
+    TokenUrl: string;
+    BaseHost?: string;
+    ApiVersion?: string;
+}
+
+/** Zod schema for the credential/Configuration JSON shape (tolerant of casing aliases). */
+const WildApricotConfigSchema = z.object({
+    ApiKey: z.string().optional(),
+    apiKey: z.string().optional(),
+    APIKey: z.string().optional(),
+    Key: z.string().optional(),
+    Token: z.string().optional(),
+    token: z.string().optional(),
+    AccountId: z.union([z.string(), z.number()]).optional(),
+    accountId: z.union([z.string(), z.number()]).optional(),
+    AccountID: z.union([z.string(), z.number()]).optional(),
+    tokenUrl: z.string().optional(),
+    TokenUrl: z.string().optional(),
+    tokenURL: z.string().optional(),
+    apiBaseUrl: z.string().optional(),
+    BaseURL: z.string().optional(),
+    baseHost: z.string().optional(),
+    ApiVersion: z.string().optional(),
+    apiVersion: z.string().optional(),
+}).passthrough();
+
+/** Zod schema for the async-contacts kick-off response (carries a ResultId to poll). */
+const AsyncContactsSchema = z.object({
+    ResultId: z.string().optional(),
+    State: z.string().optional(),
+}).passthrough();
+
+/** Narrows an unknown value to a plain record. */
+function isRecord(v: unknown): v is Record<string, unknown> {
+    return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+
+/** Small deterministic hash for record-identity fallback (FNV-1a, hex). */
+function stableHash(record: Record<string, unknown>): string {
+    const json = JSON.stringify(record, Object.keys(record).sort());
+    let h = 0x811c9dc5;
+    for (let i = 0; i < json.length; i++) {
+        h ^= json.charCodeAt(i);
+        h = Math.imul(h, 0x01000193);
+    }
+    return (h >>> 0).toString(16);
+}
+
+/** Awaits `ms` milliseconds (poll interval). */
+function delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}

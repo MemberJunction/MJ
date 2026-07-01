@@ -1,0 +1,124 @@
+{
+  "Entries": [
+    {
+      "URL": "https://api.swaggerhub.com/apis/WildApricot/wild-apricot_public_api/9.14.0-oas3",
+      "AccessedAt": "2026-06-30T21:06:01.666Z",
+      "UsedFor": "Account collection endpoint",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Account.APIPath",
+      "Excerpt": "Path /accounts (verbs GET) returns Account."
+    },
+    {
+      "URL": "https://api.swaggerhub.com/apis/WildApricot/wild-apricot_public_api/9.14.0-oas3",
+      "AccessedAt": "2026-06-30T21:06:01.666Z",
+      "UsedFor": "Account primary key",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.Account.Id.IsPrimaryKey",
+      "Excerpt": "Addressing path /accounts/{accountId} requires {accountId} to fetch one Account; the universal PK field is Id (integer) per Configuration.universalPK."
+    },
+    {
+      "URL": "https://api.swaggerhub.com/apis/WildApricot/wild-apricot_public_api/9.14.0-oas3",
+      "AccessedAt": "2026-06-30T21:06:01.666Z",
+      "UsedFor": "AttachmentData collection endpoint",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.AttachmentData.APIPath",
+      "Excerpt": "Path /accounts/{accountId}/attachments/GetInfos (verbs GET) returns AttachmentData."
+    },
+    {
+      "URL": "https://api.swaggerhub.com/apis/WildApricot/wild-apricot_public_api/9.14.0-oas3",
+      "AccessedAt": "2026-06-30T21:06:01.666Z",
+      "UsedFor": "AuditLogItem collection endpoint",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.AuditLogItem.APIPath",
+      "Excerpt": "Path /accounts/{accountId}/auditLogItems (verbs GET) returns AuditLogItem."
+    },
+    {
+      "URL": "https://api.swaggerhub.com/apis/WildApricot/wild-apricot_public_api/9.14.0-oas3",
+      "AccessedAt": "2026-06-30T21:06:01.666Z",
+      "UsedFor": "AuditLogItem primary key",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.AuditLogItem.Id.IsPrimaryKey",
+      "Excerpt": "Addressing path /accounts/{accountId}/auditLogItems/{itemId} requires {itemId} to fetch one AuditLogItem; the universal PK field is Id (integer) per Configuration.universalPK."
+    },
+    {
+      "URL": "https://api.swaggerhub.com/apis/WildApricot/wild-apricot_public_api/9.14.0-oas3",
+      "AccessedAt": "2026-06-30T21:06:01.666Z",
+      "UsedFor": "BillingPerson parent FK to Order",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ImpliedFromExample",
+      "TargetField": "iof.BillingPerson.OrderId.RelatedIntegrationObjectID",
+      "Excerpt": "Nested record BillingPerson accessed via Order.billingPerson; synthetic FK to parent Order."
+    },
+    {
+      "URL": "https://api.swaggerhub.com/apis/WildApricot/wild-apricot_public_api/9.14.0-oas3",
+      "AccessedAt": "2026-06-30T21:06:01.666Z",
+      "UsedFor": "Bundle collection endpoint",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Bundle.APIPath",
+      "Excerpt": "Path /accounts/{accountId}/bundles (verbs GET) returns Bundle."
+    },
+    {
+      "URL": "https://api.swaggerhub.com/apis/WildApricot/wild-apricot_public_api/9.14.0-oas3",
+      "AccessedAt": "2026-06-30T21:06:01.666Z",
+      "UsedFor": "Bundle primary key",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.Bundle.Id.IsPrimaryKey",
+      "Excerpt": "Addressing path /accounts/{accountId}/bundles/{bundleId} requires {bundleId} to fetch one Bundle; the universal PK field is Id (integer) per Configuration.universalPK."
+    },
+    {
+      "URL": "https://api.swaggerhub.com/apis/WildApricot/wild-apricot_public_api/9.14.0-oas3",
+      "AccessedAt": "2026-06-30T21:06:01.666Z",
+      "UsedFor": "CeuRecord collection endpoint",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.CeuRecord.APIPath",
+      "Excerpt": "Path /accounts/{accountId}/ceuRecords (verbs GET,PUT,DELETE,POST) returns CeuRecord."
+    },
+    {
+      "URL": "https://api.swaggerhub.com/apis/WildApricot/wild-apricot_public_api/9.14.0-oas3",
+      "AccessedAt": "2026-06-30T21:06:01.666Z",
+      "UsedFor": "CeuRecord create",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.CeuRecord.CreateAPIPath",
+      "Excerpt": "POST /accounts/{accountId}/ceuRecords creates a CeuRecord."
+    },
+    {
+      "URL": "https://api.swaggerhub.com/apis/WildApricot/wild-apricot_public_api/9.14.0-oas3",
+      "AccessedAt": "2026-06-30T21:06:01.666Z",
+      "UsedFor": "CeuRecord update",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.CeuRecord.UpdateAPIPath",
+      "Excerpt": "PUT /accounts/{accountId}/ceuRecords/{id} updates a CeuRecord."
+    },
+    {
+      "URL": "https://api.swaggerhub.com/apis/WildApricot/wild-apricot_public_api/9.14.0-oas3",
+      "AccessedAt": "2026-06-30T21:06:01.666Z",
+      "UsedFor": "CeuRecord delete",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.CeuRecord.DeleteAPIPath",
+      "Excerpt": "DELETE /accounts/{accountId}/ceuRecords/{id} deletes a CeuRecord."
+    }
+  ]
+}

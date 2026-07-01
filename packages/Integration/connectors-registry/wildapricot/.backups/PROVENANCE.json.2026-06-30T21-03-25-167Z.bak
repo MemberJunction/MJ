@@ -1,0 +1,24 @@
+{
+  "Entries": [
+    {
+      "URL": "https://api.swaggerhub.com/apis/WildApricot/wild-apricot_public_api/9.14.0-oas3",
+      "AccessedAt": "2026-06-30T21:03:25.159Z",
+      "UsedFor": "Account collection endpoint",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Account.APIPath",
+      "Excerpt": "Path /accounts (verbs GET) returns Account."
+    },
+    {
+      "URL": "https://api.swaggerhub.com/apis/WildApricot/wild-apricot_public_api/9.14.0-oas3",
+      "AccessedAt": "2026-06-30T21:03:25.159Z",
+      "UsedFor": "Account primary key",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.Account.Id.IsPrimaryKey",
+      "Excerpt": "Addressing path /accounts/{accountId} requires {accountId} to fetch one Account; the universal PK field is Id (integer) per Configuration.universalPK."
+    }
+  ]
+}

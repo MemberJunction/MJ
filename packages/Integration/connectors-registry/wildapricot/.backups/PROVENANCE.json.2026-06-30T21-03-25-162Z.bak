@@ -1,0 +1,14 @@
+{
+  "Entries": [
+    {
+      "URL": "https://api.swaggerhub.com/apis/WildApricot/wild-apricot_public_api/9.14.0-oas3",
+      "AccessedAt": "2026-06-30T21:03:25.159Z",
+      "UsedFor": "Account collection endpoint",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.Account.APIPath",
+      "Excerpt": "Path /accounts (verbs GET) returns Account."
+    }
+  ]
+}

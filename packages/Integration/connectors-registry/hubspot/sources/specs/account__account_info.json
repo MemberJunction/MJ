@@ -1,0 +1,321 @@
+{
+  "openapi" : "3.0.1",
+  "info" : {
+    "title" : "Account Account Info",
+    "description" : "Basepom for all HubSpot Projects",
+    "version" : "2026-03",
+    "x-hubspot-product-tier-requirements" : {
+      "marketing" : "FREE",
+      "sales" : "FREE",
+      "service" : "FREE",
+      "cms" : "FREE",
+      "commerce" : "FREE",
+      "crmHub" : "FREE",
+      "dataHub" : "FREE"
+    }
+  },
+  "servers" : [ {
+    "url" : "https://api.hubapi.com"
+  } ],
+  "tags" : [ {
+    "name" : "Basic"
+  } ],
+  "paths" : {
+    "/account-info/2026-03/api-usage/daily/private-apps" : {
+      "get" : {
+        "tags" : [ "Basic" ],
+        "summary" : "Retrieve private app daily API usage",
+        "description" : "Retrieve the daily API usage for private apps in the account, along with information about usage limits.",
+        "operationId" : "get-/account-info/2026-03/api-usage/daily/private-apps_/account-info/2025-09/api-usage/daily/private-apps",
+        "parameters" : [ ],
+        "responses" : {
+          "200" : {
+            "description" : "successful operation",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CollectionResponseApiUsageNoPaging"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "$ref" : "#/components/responses/Error"
+          }
+        },
+        "security" : [ {
+          "oauth2" : [ "oauth" ]
+        } ]
+      }
+    },
+    "/account-info/2026-03/details" : {
+      "get" : {
+        "tags" : [ "Basic" ],
+        "summary" : "Retrieve account details",
+        "description" : "Retrieve account details such as the account type, time zone, currencies, and data hosting location. ",
+        "operationId" : "get-/account-info/2026-03/details_/account-info/2025-09/details",
+        "parameters" : [ ],
+        "responses" : {
+          "200" : {
+            "description" : "successful operation",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PortalInformationResponse"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "$ref" : "#/components/responses/Error"
+          }
+        },
+        "security" : [ {
+          "oauth2" : [ "oauth" ]
+        } ]
+      }
+    }
+  },
+  "components" : {
+    "schemas" : {
+      "ApiUsage" : {
+        "required" : [ "collectedAt", "currentUsage", "fetchStatus", "name", "usageLimit" ],
+        "type" : "object",
+        "properties" : {
+          "collectedAt" : {
+            "type" : "string",
+            "description" : "Indicates when the cache was last updated.",
+            "format" : "date-time"
+          },
+          "currentUsage" : {
+            "type" : "integer",
+            "description" : "How many API calls an account has made for the current day.",
+            "format" : "int32"
+          },
+          "fetchStatus" : {
+            "type" : "string",
+            "description" : "Status of fetching the information, including if the data came from the cache.",
+            "enum" : [ "CACHED", "FAILURE", "NOTFOUND", "SUCCESS", "TIMEOUT" ]
+          },
+          "name" : {
+            "type" : "string",
+            "description" : "Name of the limit type."
+          },
+          "resetsAt" : {
+            "type" : "string",
+            "description" : "Time that the limit will reset.",
+            "format" : "date-time"
+          },
+          "usageLimit" : {
+            "type" : "integer",
+            "description" : "Limits by which a single integration can consume the HubSpot public APIs.",
+            "format" : "int32"
+          }
+        }
+      },
+      "CollectionResponseApiUsageNoPaging" : {
+        "required" : [ "results" ],
+        "type" : "object",
+        "properties" : {
+          "results" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ApiUsage"
+            }
+          }
+        }
+      },
+      "Error" : {
+        "required" : [ "category", "correlationId", "message" ],
+        "type" : "object",
+        "properties" : {
+          "category" : {
+            "type" : "string",
+            "description" : "The error category"
+          },
+          "context" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "array",
+              "items" : {
+                "type" : "string"
+              }
+            },
+            "description" : "Context about the error condition",
+            "example" : "{invalidPropertyName=[propertyValue], missingScopes=[scope1, scope2]}"
+          },
+          "correlationId" : {
+            "type" : "string",
+            "description" : "A unique identifier for the request. Include this value with any error reports or support tickets",
+            "format" : "uuid",
+            "example" : "aeb5f871-7f07-4993-9211-075dc63e7cbf"
+          },
+          "errors" : {
+            "type" : "array",
+            "description" : "further information about the error",
+            "items" : {
+              "$ref" : "#/components/schemas/ErrorDetail"
+            }
+          },
+          "links" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "description" : "A map of link names to associated URIs containing documentation about the error or recommended remediation steps"
+          },
+          "message" : {
+            "type" : "string",
+            "description" : "A human readable message describing the error along with remediation steps where appropriate",
+            "example" : "An error occurred"
+          },
+          "subCategory" : {
+            "type" : "string",
+            "description" : "A specific category that contains more specific detail about the error"
+          }
+        },
+        "example" : {
+          "message" : "Invalid input (details will vary based on the error)",
+          "correlationId" : "aeb5f871-7f07-4993-9211-075dc63e7cbf",
+          "category" : "VALIDATION_ERROR",
+          "links" : {
+            "knowledge-base" : "https://www.hubspot.com/products/service/knowledge-base"
+          }
+        }
+      },
+      "ErrorDetail" : {
+        "required" : [ "message" ],
+        "type" : "object",
+        "properties" : {
+          "code" : {
+            "type" : "string",
+            "description" : "The status code associated with the error detail"
+          },
+          "context" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "array",
+              "items" : {
+                "type" : "string"
+              }
+            },
+            "description" : "Context about the error condition",
+            "example" : "{missingScopes=[scope1, scope2]}"
+          },
+          "in" : {
+            "type" : "string",
+            "description" : "The name of the field or parameter in which the error was found."
+          },
+          "message" : {
+            "type" : "string",
+            "description" : "A human readable message describing the error along with remediation steps where appropriate"
+          },
+          "subCategory" : {
+            "type" : "string",
+            "description" : "A specific category that contains more specific detail about the error"
+          }
+        }
+      },
+      "PortalInformationResponse" : {
+        "required" : [ "accountType", "additionalCurrencies", "companyCurrency", "dataHostingLocation", "portalId", "timeZone", "uiDomain", "utcOffset", "utcOffsetMilliseconds" ],
+        "type" : "object",
+        "properties" : {
+          "accountType" : {
+            "type" : "string",
+            "description" : "The type of account, such as APP_DEVELOPER, DEVELOPER_TEST, SANDBOX, or STANDARD.",
+            "enum" : [ "APP_DEVELOPER", "DEVELOPER_TEST", "SANDBOX", "STANDARD" ]
+          },
+          "additionalCurrencies" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "companyCurrency" : {
+            "type" : "string",
+            "description" : "The primary currency used by the company."
+          },
+          "dataHostingLocation" : {
+            "type" : "string",
+            "description" : "The location where the account's data is hosted."
+          },
+          "portalId" : {
+            "type" : "integer",
+            "description" : "The unique identifier for the HubSpot account.",
+            "format" : "int32"
+          },
+          "timeZone" : {
+            "type" : "string",
+            "description" : "The time zone in which the account operates."
+          },
+          "uiDomain" : {
+            "type" : "string",
+            "description" : "The domain used for accessing the HubSpot user interface."
+          },
+          "utcOffset" : {
+            "type" : "string",
+            "description" : "The time zone offset from UTC in hours and minutes."
+          },
+          "utcOffsetMilliseconds" : {
+            "type" : "integer",
+            "description" : "The time zone offset from UTC in milliseconds.",
+            "format" : "int64"
+          }
+        }
+      }
+    },
+    "responses" : {
+      "Error" : {
+        "description" : "An error occurred.",
+        "content" : {
+          "*/*" : {
+            "schema" : {
+              "$ref" : "#/components/schemas/Error"
+            }
+          }
+        }
+      }
+    },
+    "securitySchemes" : {
+      "developer_hapikey" : {
+        "type" : "apiKey",
+        "name" : "hapikey",
+        "in" : "query"
+      },
+      "oauth2" : {
+        "type" : "oauth2",
+        "flows" : {
+          "authorizationCode" : {
+            "authorizationUrl" : "https://app.hubspot.com/oauth/authorize",
+            "tokenUrl" : "https://api.hubapi.com/oauth/v1/token",
+            "scopes" : {
+              "account-info.security.read" : "",
+              "oauth" : ""
+            }
+          }
+        }
+      },
+      "private_apps" : {
+        "type" : "apiKey",
+        "name" : "private-app",
+        "in" : "header"
+      },
+      "private_apps_legacy" : {
+        "type" : "apiKey",
+        "name" : "private-app-legacy",
+        "in" : "header"
+      }
+    }
+  },
+  "x-hubspot-product-tier-requirements" : {
+    "marketing" : "FREE",
+    "sales" : "FREE",
+    "service" : "FREE",
+    "cms" : "FREE",
+    "commerce" : "FREE",
+    "crmHub" : "FREE",
+    "dataHub" : "FREE"
+  }
+}

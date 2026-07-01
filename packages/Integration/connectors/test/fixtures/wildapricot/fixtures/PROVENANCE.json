@@ -1,0 +1,35 @@
+{
+  "Description": "Credential-free mock fixtures for the Wild Apricot connector. All record bodies are SYNTHESIZED to match the shapes in the Wild Apricot Admin API OpenAPI spec (schemas + list-endpoint envelopes) and the connector's actual request paths (from the persisted Integration metadata). No live vendor data was captured; every value is a scrubbed placeholder. ExternalIDs (Id / number / SystemCode) are synthetic-but-stable, kept intact for FK/delta identity per the fixture PII rules.",
+  "Entries": [
+    {
+      "URL": "https://api.wildapricot.org/ui/swagger/adminAccess",
+      "AccessedAt": "2026-07-01T00:00:00.000Z",
+      "UsedFor": "Authoritative Admin API v2.3 OpenAPI 3.1 spec (84 paths, 183 schemas). Source of the response envelopes (ContactsResponse/ContactsListResponse -> Contacts array + ResultId/State for the async poll; EventsListResponse -> Events; InvoiceListResponse -> Invoices; PaymentListResponse -> Payments) and per-object field shapes used to synthesize realistic route bodies. Saved (YAML->JSON) to sources/wildapricot.swagger.json, which also satisfies T7 OpenAPI validation.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "fixtures.Routes",
+      "Excerpt": "openapi: 3.1.0 — Wild Apricot API (adminAccess). Paths under /accounts/{accountId}/... include /contacts (async ResultId+poll), /events, /invoices, /payments, /bundles, /membergroups, /membershiplevels, /store/products, /store/orders, /tenders, /refunds, /donations, /ceuRecords, /features/{featureId}, /auditLogItems, /savedsearches, /EmailDrafts, etc."
+    },
+    {
+      "URL": "https://api.wildapricot.org/ui/swagger/publicAccess",
+      "AccessedAt": "2026-07-01T00:00:00.000Z",
+      "UsedFor": "Cross-check of the public (non-administrative) API surface (contacts, events, invoices, payments) for envelope/field confirmation. Confirms the async Contacts ResultId+poll pattern and OData $skip/$top pagination that the connector mocks.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "fixtures.Routes",
+      "Excerpt": "servers: https://api.wildapricot.org/publicview/v1 — Wild Apricot API for non-administrative access; contacts list returns ContactsAsyncResponse with ResultId to poll."
+    },
+    {
+      "URL": "https://github.com/WildApricot/ApiSamples",
+      "AccessedAt": "2026-07-01T00:00:00.000Z",
+      "UsedFor": "Vendor-published API sample repository (C#/JS/Python/PHP). Consulted for realistic request/response usage patterns of the Admin API (auth via API key -> client_credentials token, /accounts discovery, paged list reads). No response JSON fixtures were copied from it; the sample repo is client code, so record shapes were derived from the OpenAPI schemas instead.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialSDK",
+      "EvidenceStrength": "ImpliedFromExample",
+      "TargetField": "fixtures.Routes",
+      "Excerpt": "Sample code to work with Wild Apricot public API; recommends the auto-generated client from the SwaggerHub specification."
+    }
+  ]
+}

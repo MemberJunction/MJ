@@ -1,0 +1,3137 @@
+openapi: 3.0.0
+info:
+  title: Wild Apricot API for non-administrative access
+  description: Wild Apricot API for non-administrative access
+  version: 9.08.0
+security:
+  - OAuth2_autorizationCode: []
+  - OAuth2_password: []
+paths:
+  /:
+    get:
+      summary: Base URL for this API.
+      description: |
+        Base URL for this API. It provides a list of resources,
+        which can be directly accessed by URL without providing any additional
+        information like account ID etc.
+      responses:
+        '200':
+          description: Array of resources
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Resource'
+            application/xml:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Resource'
+        '401':
+          $ref: '#/components/responses/unauthorized'
+  /accounts:
+    get:
+      summary: List of available accounts
+      description: >
+        List of accounts available with current oAuth token. Typically, there
+        would be only one record in an array.
+      tags:
+        - Accounts
+      responses:
+        '200':
+          description: Array of accounts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Account'
+            application/xml:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Account'
+        '401':
+          $ref: '#/components/responses/unauthorized'
+        '429':
+          $ref: '#/components/responses/tooManyRequests'
+  /accounts/{accountId}:
+    get:
+      summary: Details for specific account
+      description: |
+        Details for specific account
+      parameters:
+        - $ref: '#/components/parameters/accountId'
+      tags:
+        - Accounts
+      responses:
+        '200':
+          description: Array of accounts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+            application/xml:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '401':
+          $ref: '#/components/responses/unauthorized'
+        '429':
+          $ref: '#/components/responses/tooManyRequests'
+  /accounts/{accountId}/contacts:
+    get:
+      summary: Contacts list
+      description: >
+
+        Retrieves or updates contact information. Results can be filtered using
+        filter criteria consisting of fields, operators, and values.
+
+        Large lists can be retrieved with in sets or pages using $top and $skip
+        parameters.
+      parameters:
+        - name: accountId
+          in: path
+          description: Current account identifier
+          required: true
+          schema:
+            type: number
+            format: integer
+        - name: simpleQuery
+          in: query
+          description: A search string used to filter contacts list.
+          required: false
+          schema:
+            type: string
+        - name: $filter
+          in: query
+          description: >
+            An expression to filter contacts. Possible field names to filter
+            contacts are
+
+            **Id** - A list of contact IDs. Supports operation **in**. E.g.
+            `$filter=Id in [1,3,5,7,9]`
+          required: false
+          schema:
+            type: string
+        - name: $select
+          in: query
+          description: >
+            Fields to be returned for each contact. If not specified, no custom
+            fields will be returned.
+
+            The field names correspond to the fields returned by the
+            [ContactFields API
+            call](#/Contacts/get_accounts__accountId__contactfields), not the
+            field names that appear in Wild Apricot. Multiple field names are
+            separated by commas, and field names with spaces or special
+            characters are enclosed in single quotation marks.
+
+            Example `$select='First name','Last name','My favorite book'`
+          required: false
+          schema:
+            type: string
+        - name: $skip
+          in: query
+          description: >
+            This parameter specifies the number of records to be skipped. For
+            example, if the result set contains 200 records and $skip=50, then
+            the call will return records 51 to 150.
+
+
+            Usually used together with **$top** parameter.
+          required: false
+          schema:
+            type: integer
+        - name: $top
+          in: query
+          description: >
+            Specifies the maximum number of records to be returned. For example,
+            if the result set contains 100 records and $top=50, then the call
+            will return records from 1 to 50.
+            If omitted or set more than 100 then maximum 100 items returned
+
+            Usually this parameter used together with $skip parameter.
+          required: false
+          schema:
+            type: integer
+        - name: $count
+          in: query
+          description: >
+            Append this parameter to a search request to retrieve the number of
+            contacts returned by the search.
+          required: false
+          schema:
+            type: boolean
+        - name: ids
+          in: query
+          description: |
+            Retrieve specific contacts.
+
+            E.g. `ids=1,2,3`
+          required: false
+          schema:
+            type: string
+        - name: idsOnly
+          in: query
+          description: >
+            If specified, the call returns a list of contact IDs for the
+            filtered contacts. In this case, the response will contain only the
+            ContactIdentifiers field.
+          required: false
+          schema:
+            type: boolean
+      tags:
+        - Contacts
+      responses:
+        '200':
+          description: >
+            A wrapper object, which contains a list of contacts, or the number
+            of contacts, or a list of contact IDs.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContactsResponse'
+            application/xml:
+              schema:
+                $ref: '#/components/schemas/ContactsResponse'
+        '400':
+          $ref: '#/components/responses/badRequest'
+        '401':
+          $ref: '#/components/responses/unauthorized'
+        '428':
+          $ref: '#/components/responses/termsOfUseRequired'
+        '429':
+          $ref: '#/components/responses/tooManyRequests'
+  /accounts/{accountId}/contacts/me:
+    get:
+      summary: Retrieve information about the current user
+      description: >
+        Retrieve information about the current user. FieldValues would not be
+        returned in a result.
+      parameters:
+        - $ref: '#/components/parameters/accountId'
+        - name: includeDetails
+          in: query
+          description: >
+            Append this parameter to a search request to retrieve additional
+            information for current user, including FieldValues.
+          required: false
+          schema:
+            type: boolean
+      tags:
+        - Contacts
+      responses:
+        '200':
+          description: |
+            The current user information has been updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContactMe'
+            application/xml:
+              schema:
+                $ref: '#/components/schemas/ContactMe'
+        '401':
+          $ref: '#/components/responses/unauthorized'
+        '428':
+          $ref: '#/components/responses/termsOfUseRequired'
+        '429':
+          $ref: '#/components/responses/tooManyRequests'
+    put:
+      summary: Update the current user information
+      description: >
+        Update the current user information. Pass the fieldValues those need to be changed.
+      parameters:
+        - $ref: '#/components/parameters/accountId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Contact'
+        required: true
+      tags:
+        - Contacts
+      responses:
+        '200':
+          description: |
+            Brief information about the current user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Contact'
+            application/xml:
+              schema:
+                $ref: '#/components/schemas/Contact'
+        '401':
+          $ref: '#/components/responses/unauthorized'
+        '428':
+          $ref: '#/components/responses/termsOfUseRequired'
+        '429':
+          $ref: '#/components/responses/tooManyRequests'
+  /accounts/{accountId}/contacts/{contactId}:
+    get:
+      summary: Retrieve information about specific member or contact
+      parameters:
+        - $ref: '#/components/parameters/accountId'
+        - name: contactId
+          in: path
+          required: true
+          schema:
+            type: number
+            format: integer
+      tags:
+        - Contacts
+      responses:
+        '200':
+          description: >-
+            Detailed information about requested contact. Field values will be
+            provided with respect to current user permissions and privacy
+            settings.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Contact'
+            application/xml:
+              schema:
+                $ref: '#/components/schemas/Contact'
+        '400':
+          $ref: '#/components/responses/badRequest'
+        '401':
+          $ref: '#/components/responses/unauthorized'
+        '404':
+          $ref: '#/components/responses/notFound'
+        '428':
+          $ref: '#/components/responses/termsOfUseRequired'
+        '429':
+          $ref: '#/components/responses/tooManyRequests'
+  /accounts/{accountId}/contactfields:
+    get:
+      summary: >
+        Detailed list of the common and membership fields.  If a field is not
+        set to be visible to everyone, then the field  will not be included in
+        the results.
+      parameters:
+        - $ref: '#/components/parameters/accountId'
+        - name: showSectionDividers
+          in: query
+          description: >
+            Specifies whether section dividers should be included in the
+            response.
+
+            Default value is false.
+          required: false
+          schema:
+            type: boolean
+      tags:
+        - Contacts
+      responses:
+        '200':
+          description: Array of common and membership field descriptions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContactField'
+            application/xml:
+              schema:
+                $ref: '#/components/schemas/ContactField'
+        '400':
+          $ref: '#/components/responses/badRequest'
+        '401':
+          $ref: '#/components/responses/unauthorized'
+        '428':
+          $ref: '#/components/responses/termsOfUseRequired'
+        '429':
+          $ref: '#/components/responses/tooManyRequests'
+  /accounts/{accountId}/attachments/{attachmentId}:
+    get:
+      operationId: GetAttachmentContent
+      summary: Download attachment
+      description: Attachment, available for specific account.
+      parameters:
+        - $ref: '#/components/parameters/accountId'
+        - name: attachmentId
+          in: path
+          description: Attachment identifier
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/ThumbnailSize'
+        - name: fieldSystemCode
+          in: query
+          description: SystemCode of attachement field which the attachment belongs to.
+          required: false
+          schema:
+            type: string
+        - name: contactId
+          in: query
+          description: ID of contact which the attachment belongs to.
+          required: false
+          schema:
+            type: string
+        - name: eventRegistrationId
+          in: query
+          description: ID of event registration which the attachment belongs to.
+          required: false
+          schema:
+            type: string
+        - name: asBase64
+          in: query
+          description: Base64 encoded image will be returned.
+          required: false
+          schema:
+            type: boolean
+            default: false
+      tags:
+        - Attachments
+      responses:
+        '200':
+          description: >-
+            Response is common HttpResponseMessage with content set to
+            attachment binary data.
+          content:
+            application/json:
+              schema:
+                type: string
+                format: binary
+            application/xml:
+              schema:
+                type: string
+                format: binary
+        '400':
+          $ref: '#/components/responses/badRequest'
+        '401':
+          $ref: '#/components/responses/unauthorized'
+        '404':
+          $ref: '#/components/responses/notFound'
+        '429':
+          $ref: '#/components/responses/tooManyRequests'
+  /accounts/{accountId}/attachments/GetInfos:
+    get:
+      operationId: GetAttachmentInfos
+      summary: Get attachments infos belongs to a field value
+      description: Attachment infos, available for specific account.
+      parameters:
+        - $ref: '#/components/parameters/accountId'
+        - name: fieldSystemCode
+          in: query
+          description: SystemCode of attachement field which the attachment belongs to.
+          required: true
+          schema:
+            type: string
+        - name: contactId
+          in: query
+          description: ID of contact which the attachment belongs to.
+          required: false
+          schema:
+            type: string
+        - name: eventRegistrationId
+          in: query
+          description: ID of event registration which the attachment belongs to.
+          required: false
+          schema:
+            type: string
+      tags:
+        - Attachments
+      responses:
+        '200':
+          description: An array of attachment descriptions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FileInfo'
+            application/xml:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FileInfo'
+        '400':
+          $ref: '#/components/responses/badRequest'
+        '401':
+          $ref: '#/components/responses/unauthorized'
+        '404':
+          $ref: '#/components/responses/notFound'
+        '429':
+          $ref: '#/components/responses/tooManyRequests'
+  /accounts/{accountId}/attachments/Upload:
+    post:
+      operationId: UploadAttachments
+      summary: Upload attachments
+      description: >
+        Upload attachments data and get their identifiers to use for contact
+        values.  Attachment not used for any Contact field value will be deleted
+        in 30 minutes.
+      parameters:
+        - $ref: '#/components/parameters/accountId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttachmentDataList'
+        required: true
+      tags:
+        - Attachments
+      responses:
+        '200':
+          description: An array of attachment descriptions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FileInfo'
+            application/xml:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FileInfo'
+        '400':
+          $ref: '#/components/responses/badRequest'
+        '401':
+          $ref: '#/components/responses/unauthorized'
+        '429':
+          $ref: '#/components/responses/tooManyRequests'
+  /accounts/{accountId}/membershiplevels:
+    get:
+      summary: List of membership levels visible to the current user.
+      description: |
+        ---
+      parameters:
+        - $ref: '#/components/parameters/accountId'
+      tags:
+        - Contacts
+      responses:
+        '200':
+          description: Array of level descriptions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MembershipLevel'
+            application/xml:
+              schema:
+                $ref: '#/components/schemas/MembershipLevel'
+        '401':
+          $ref: '#/components/responses/unauthorized'
+        '428':
+          $ref: '#/components/responses/termsOfUseRequired'
+        '429':
+          $ref: '#/components/responses/tooManyRequests'
+  /accounts/{accountId}/events:
+    get:
+      summary: Retrieve list of events visible to the current user.
+      description: Retrieve list of events visible to the current user.
+      parameters:
+        - $ref: '#/components/parameters/accountId'
+        - name: $filter
+          in: query
+          description: >
+            An expression to filter events. Possible field names to filter
+            events are
+
+
+            **Id** - A list of event IDs. Supports operation **in**. E.g.
+            `$filter=Id in [1,3,5,7,9]`
+
+
+            **RegistrationEnabled** - Indicates whether registration has been
+            enabled for the event. Supports operations **eq** and **ne**. E.g.
+            `RegistrationEnabled eq true`
+
+
+            **IsUpcoming** - Indicates whether the event has yet to take place.
+            Supports operations **eq** and **ne**. E.g. `IsUpcoming eq false`
+
+
+            **StartDate** - The start date of the event (using the yyyy-mm-dd
+            date format). Supports operations **eq**, **ne**, **gt**, **ge**,
+            **lt**, **le**. E.g. `StartDate gt 2016-01-02`
+
+
+            **EndDate** - The end date of the event (using  the  yyyy-mm-dd date
+            format). Supports operations **eq**, **ne**, **gt**, **ge**, **lt**,
+            **le**. E.g. `EndDate le 2016-01-02`
+
+
+            **TextIndex** - Returns events that contain the specified string
+            within the event title, description, location, start date, or event
+            tag. Supports operation **substringof**. E.g.
+            `$filter=substringof(TextIndex,'some text to look for')`
+          required: false
+          schema:
+            type: string
+        - name: $skip
+          in: query
+          description: >
+            This parameter specifies the number of records to be skipped. For
+            example, if the result set contains 100 records and $skip=50, then
+            the call will return records 51 to 150.
+
+
+            Usually used together with **$top** parameter.
+          required: false
+          schema:
+            type: integer
+        - name: $top
+          in: query
+          description: >
+            Specifies the maximum number of records to be returned. For example,
+            if the result set contains 100 records and $top=50, then the call
+            will return records from 1 to 50.
+            If omitted or set more than 100 then maximum 100 items returned.
+
+            Usually this parameter used together with $skip parameter.
+          required: false
+          schema:
+            type: integer
+        - name: $count
+          in: query
+          description: >
+            Append this parameter to a search request to retrieve the number of items.
+          required: false
+          schema:
+            type: boolean
+        - name: idsOnly
+          in: query
+          description: >
+            If specified, the call returns a list of event IDs for the filtered
+            events. In this case, the response will contain only the
+            EventsIdentifiers field.
+          required: false
+          schema:
+            type: boolean
+      tags:
+        - Events
+      responses:
+        '200':
+          description: Returns list of filtered events
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventsResponse'
+            application/xml:
+              schema:
+                $ref: '#/components/schemas/EventsResponse'
+        '400':
+          $ref: '#/components/responses/badRequest'
+        '401':
+          $ref: '#/components/responses/unauthorized'
+        '428':
+          $ref: '#/components/responses/termsOfUseRequired'
+        '429':
+          $ref: '#/components/responses/tooManyRequests'
+  /accounts/{accountId}/events/{eventId}:
+    get:
+      summary: Retrieve details for specific event
+      description: Retrieve details for specific event
+      parameters:
+        - $ref: '#/components/parameters/accountId'
+        - name: eventId
+          in: path
+          description: Unique event identifier
+          required: true
+          schema:
+            type: integer
+      tags:
+        - Events
+      responses:
+        '200':
+          description: Returns list of filtered events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Event'
+            application/xml:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Event'
+        '401':
+          $ref: '#/components/responses/unauthorized'
+        '404':
+          $ref: '#/components/responses/notFound'
+        '428':
+          $ref: '#/components/responses/termsOfUseRequired'
+        '429':
+          $ref: '#/components/responses/tooManyRequests'
+  /accounts/{accountId}/eventregistrations:
+    get:
+      summary: Retrieve list of event registrations for current contact.
+      parameters:
+        - $ref: '#/components/parameters/accountId'
+        - $ref: '#/components/parameters/pagingSkip'
+        - $ref: '#/components/parameters/pagingTop'
+        - $ref: '#/components/parameters/pagingCount'
+        - name: idsOnly
+          in: query
+          description: |
+            Should be set to true in order to get only a list of event registration identifiers as a result of search request.
+          schema:
+            type: boolean
+
+        - name: eventId
+          description: ID of event to retrieve registrations for
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: isUpcoming
+          description: if set then returns registrations either of upcoming or past events only 
+          in: query
+          required: false
+          schema:
+            type: boolean
+        - name: parentRegistrationId
+          description: ID of event registration to retrieve dependant registrations for
+          in: query
+          required: false
+          schema:
+            type: integer
+      tags:
+        - Event registrations
+      responses:
+        '200':
+          description: Returns list of event registrations for current contact.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EventRegistration'
+            application/xml:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EventRegistration'
+        '400':
+          $ref: '#/components/responses/badRequest'
+        '401':
+          $ref: '#/components/responses/unauthorized'
+        '428':
+          $ref: '#/components/responses/termsOfUseRequired'
+        '429':
+          $ref: '#/components/responses/tooManyRequests'
+    post:
+      summary: Create new event registration
+      tags:
+        - Event registrations
+      parameters:
+        - $ref: '#/components/parameters/accountId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventRegistrationParams'
+        required: true
+      responses:
+        '200':
+          description: ID of new event registration
+          content:
+            application/json:
+              schema:
+                type: integer
+            application/xml:
+              schema:
+                type: integer
+        '400':
+          $ref: '#/components/responses/badRequest'
+        '401':
+          $ref: '#/components/responses/unauthorized'
+        '428':
+          $ref: '#/components/responses/termsOfUseRequired'
+        '429':
+          $ref: '#/components/responses/tooManyRequests'
+  /accounts/{accountId}/eventregistrations/{Id}:
+    get:
+      summary: Retrieve details for specific event registration.
+      parameters:
+        - $ref: '#/components/parameters/accountId'
+        - name: Id
+          required: true
+          in: path
+          schema:
+            type: number
+            format: integer
+      tags:
+        - Event registrations
+      responses:
+        '200':
+          description: Retrieve details for specific event registration.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventRegistration'
+            application/xml:
+              schema:
+                $ref: '#/components/schemas/EventRegistration'
+        '401':
+          $ref: '#/components/responses/unauthorized'
+        '404':
+          $ref: '#/components/responses/notFound'
+        '428':
+          $ref: '#/components/responses/termsOfUseRequired'
+        '429':
+          $ref: '#/components/responses/tooManyRequests'
+    delete:
+      summary: Delete own event registration or wait list item.
+      parameters:
+        - $ref: '#/components/parameters/accountId'
+        - name: Id
+          required: true
+          in: path
+          schema:
+            type: number
+            format: integer
+      tags:
+        - Event registrations
+      responses:
+        '200':
+          description: Retrieve details for specific event registration.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventRegistration'
+            application/xml:
+              schema:
+                $ref: '#/components/schemas/EventRegistration'
+        '401':
+          $ref: '#/components/responses/unauthorized'
+        '404':
+          $ref: '#/components/responses/notFound'
+        '428':
+          $ref: '#/components/responses/termsOfUseRequired'
+        '429':
+          $ref: '#/components/responses/tooManyRequests'
+  /accounts/{accountId}/EventAttendees:
+    get:
+      summary: Retrieve list of public event registration infos (if enabled).
+      parameters:
+        - $ref: '#/components/parameters/accountId'
+        - name: eventId
+          description: ID of event to retrieve registrations for
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: simpleQuery
+          in: query
+          description: A search string used to filter contacts list.
+          required: false
+          schema:
+            type: string
+        - name: $skip
+          in: query
+          description: >
+            This parameter specifies the number of records to be skipped. For
+            example, if the result set contains 200 records and $skip=50, then
+            the call will return records 51 to 200.
+
+
+            Usually used together with **$top** parameter.
+          required: false
+          schema:
+            type: integer
+        - name: $top
+          in: query
+          description: >
+            Specifies the maximum number of records to be returned. For example,
+            if the result set contains 100 records and $top=50, then the call
+            will return records from 1 to 50.
+            If omitted or set more than 100 then maximum 100 items returned.
+
+            Usually this parameter used together with $skip parameter.
+          required: false
+          schema:
+            type: integer
+        - name: $count
+          in: query
+          description: >
+            Append this parameter to a search request to retrieve the number of
+            items returned by the search.
+          required: false
+          schema:
+            type: boolean
+        - name: ids
+          in: query
+          description: |
+            Retrieve specific event registrations (if allowed).
+
+            E.g. `ids=1,2,3`
+          required: false
+          schema:
+            type: string
+        - name: idsOnly
+          in: query
+          description: >
+            If specified, the call returns a list of event registration IDs. In
+            this case, the response will contain only the Identifiers field.
+          required: false
+          schema:
+            type: boolean
+      tags:
+        - Event registrations
+      responses:
+        '200':
+          description: Returns list of public event registration infos.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventAttendeesResponse'
+            application/xml:
+              schema:
+                $ref: '#/components/schemas/EventAttendeesResponse'
+        '400':
+          $ref: '#/components/responses/badRequest'
+        '401':
+          $ref: '#/components/responses/unauthorized'
+        '428':
+          $ref: '#/components/responses/termsOfUseRequired'
+        '429':
+          $ref: '#/components/responses/tooManyRequests'
+  /rpc/{accountId}/CalculateEventRegistrationCosts:
+    post:
+      summary: Generate possible invoice for event registration
+      description: '---'
+      parameters:
+        - $ref: '#/components/parameters/accountId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventRegistrationParams'
+        description: The same parameters as for creating new Event Registration
+        required: true
+      tags:
+        - Event registrations
+      responses:
+        '200':
+          description: Indicates whether message was accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invoice'
+            application/xml:
+              schema:
+                $ref: '#/components/schemas/Invoice'
+        '400':
+          $ref: '#/components/responses/badRequest'
+        '401':
+          $ref: '#/components/responses/unauthorized'
+        '428':
+          $ref: '#/components/responses/termsOfUseRequired'
+        '429':
+          $ref: '#/components/responses/tooManyRequests'
+  /rpc/{accountId}/IsEventRegistrationCancellationAllowed:
+    get:
+      summary: Indicates whether the registration can be canceled by the registrant
+      description: '---'
+      parameters:
+        - $ref: '#/components/parameters/accountId'
+        - name: registrationId
+          in: query
+          description: Event registration identifier
+          required: true
+          schema:
+            type: integer
+      tags:
+        - Event registrations
+      responses:
+        '200':
+          description: '---'
+          content:
+            application/json:
+              schema:
+                type: boolean
+            application/xml:
+              schema:
+                type: boolean
+        '400':
+          $ref: '#/components/responses/badRequest'
+        '401':
+          $ref: '#/components/responses/unauthorized'
+        '428':
+          $ref: '#/components/responses/termsOfUseRequired'
+        '429':
+          $ref: '#/components/responses/tooManyRequests'
+  /rpc/{accountId}/CancelEventRegistration:
+    post:
+      summary: Cancels event registration
+      description: '---'
+      parameters:
+        - $ref: '#/components/parameters/accountId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: integer
+      tags:
+        - Event registrations
+      responses:
+        '200':
+          description: Indicates that the registration was successfully canceled
+          content:
+            application/json:
+              schema:
+                type: boolean
+            application/xml:
+              schema:
+                type: boolean
+        '400':
+          $ref: '#/components/responses/badRequest'
+        '404':
+          $ref: '#/components/responses/notFound'
+        '401':
+          $ref: '#/components/responses/unauthorized'
+        '428':
+          $ref: '#/components/responses/termsOfUseRequired'
+        '429':
+          $ref: '#/components/responses/tooManyRequests'
+  /rpc/{accountId}/verifyEventRegistrationCode:
+    post:
+      summary: Indicates whether the registration code is valid
+      description: '---'
+      parameters:
+        - $ref: '#/components/parameters/accountId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyRegistrationCodeParams'
+        required: true
+      tags:
+        - Events
+      responses:
+        '200':
+          description: >-
+            Indicates whether the registration code is valid for this event and
+            registration type
+          content:
+            application/json:
+              schema:
+                type: boolean
+            application/xml:
+              schema:
+                type: boolean
+        '401':
+          $ref: '#/components/responses/unauthorized'
+        '428':
+          $ref: '#/components/responses/termsOfUseRequired'
+        '429':
+          $ref: '#/components/responses/tooManyRequests'
+  /accounts/{accountId}/invoices:
+    get:
+      summary: Retrieve list of invoices for the current contact.
+      description: Retrieve list of invoices associated with the current contact.
+      parameters:
+        - $ref: '#/components/parameters/accountId'
+        - name: openBalanceOnly
+          in: query
+          description: Return only invoices with an open balance
+          required: false
+          schema:
+            type: boolean
+        - name: eventRegistrationId
+          in: query
+          description: Return only those invoices related to specific event registration ID
+          required: false
+          schema:
+            type: integer
+        - name: $skip
+          in: query
+          description: >
+            This parameter specifies the number of records to be skipped. For
+            example, if the result set contains 200 records and $skip=50, then
+            the call will return records 51 to 200.
+
+
+            Usually used together with **$top** parameter.
+          required: false
+          schema:
+            type: integer
+        - name: $top
+          in: query
+          description: >
+            Specifies the maximum number of records to be returned. For example,
+            if the result set contains 100 records and $top=50, then the call
+            will return records from 1 to 50.
+            If omitted or set more than 100 then maximum 100 items returned.
+
+            Usually this parameter used together with $skip parameter.
+          required: false
+          schema:
+            type: integer
+        - name: $count
+          in: query
+          description: >
+            Append this parameter to a search request to retrieve the number of
+            items returned by the search.
+          required: false
+          schema:
+            type: boolean
+        - name: ids
+          in: query
+          description: |
+            Retrieve specific records (if allowed).
+
+            E.g. `ids=1,2,3`
+          required: false
+          schema:
+            type: string
+        - name: idsOnly
+          in: query
+          description: >
+            If specified, the call returns a list of record IDs. In
+            this case, the response will contain only the Identifiers field.
+          required: false
+          schema:
+            type: boolean
+      tags:
+        - Invoices
+      responses:
+        '200':
+          description: Returns list of filtered invoices
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Invoice'
+            application/xml:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Invoice'
+        '400':
+          $ref: '#/components/responses/badRequest'
+        '401':
+          $ref: '#/components/responses/unauthorized'
+        '428':
+          $ref: '#/components/responses/termsOfUseRequired'
+        '429':
+          $ref: '#/components/responses/tooManyRequests'
+  /accounts/{accountId}/payments:
+    get:
+      summary: Retrieve list of payments for the current contact.
+      description: Retrieve list of payments made by the current contact.
+      parameters:
+        - $ref: '#/components/parameters/accountId'
+        - name: $skip
+          in: query
+          description: >
+            This parameter specifies the number of records to be skipped. For
+            example, if the result set contains 100 records and $skip=50, then
+            the call will return records 51 to 100.
+            Usually used together with **$top** parameter.
+          required: false
+          schema:
+            type: integer
+        - name: $top
+          in: query
+          description: >
+            Specifies the maximum number of records to be returned. For example,
+            if the result set contains 100 records and $top=50, then the call
+            will return records from 1 to 50.
+
+
+            Usually this parameter used together with $skip parameter.
+          required: false
+          schema:
+            type: integer
+        - name: $count
+          in: query
+          description: >
+            Append this parameter to a search request to retrieve the number of
+            payments returned by the search.
+          required: false
+          schema:
+            type: boolean
+        - name: idsOnly
+          in: query
+          description: >
+            If specified, the call returns a list of payment IDs for the
+            filtered payments. In this case, the response will contain only the
+            PaymentIdentifiers field.
+          required: false
+          schema:
+            type: boolean
+      tags:
+        - Payments
+      responses:
+        '200':
+          description: Returns list of payments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Payment'
+            application/xml:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Payment'
+        '401':
+          $ref: '#/components/responses/unauthorized'
+        '428':
+          $ref: '#/components/responses/termsOfUseRequired'
+        '429':
+          $ref: '#/components/responses/tooManyRequests'
+  /rpc/{accountId}/acceptTermsOfUse:
+    post:
+      summary: Accepts terms of use.
+      description: >
+        Accepts terms of use for the currently loged in user. Does nothing if
+        terms have been accepted already.
+      parameters:
+        - $ref: '#/components/parameters/accountId'
+      tags:
+        - Contacts
+      responses:
+        '200':
+          description: OK
+        '401':
+          $ref: '#/components/responses/unauthorized'
+  /rpc/{accountId}/getAllowedPaymentMethodTypes:
+    post:
+      summary: Retrieve allowed online payment methods
+      description: Retrieve allowed online payment methods
+      parameters:
+        - $ref: '#/components/parameters/accountId'
+      tags:
+        - Payments
+      responses:
+        '200':
+          description: List of available payment methods and method descriptions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PaymentMethodTypeDescription'
+            application/xml:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PaymentMethodTypeDescription'
+        '400':
+          $ref: '#/components/responses/badRequest'
+        '401':
+          $ref: '#/components/responses/unauthorized'
+        '428':
+          $ref: '#/components/responses/termsOfUseRequired'
+        '429':
+          $ref: '#/components/responses/tooManyRequests'
+  /rpc/{accountId}/startPayment:
+    post:
+      summary: Start payment procedure
+      description: Start payment procedure for specific invoice(s)
+      parameters:
+        - $ref: '#/components/parameters/accountId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StartPaymentParams'
+      tags:
+        - Payments
+      responses:
+        '200':
+          description: >-
+            Redirect URL to payment processor page, where user can enter credit
+            card info and proceed with payment
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentTrackingInfo'
+            application/xml:
+              schema:
+                $ref: '#/components/schemas/PaymentTrackingInfo'
+        '400':
+          $ref: '#/components/responses/badRequest'
+        '401':
+          $ref: '#/components/responses/unauthorized'
+        '428':
+          $ref: '#/components/responses/termsOfUseRequired'
+        '429':
+          $ref: '#/components/responses/tooManyRequests'
+  /rpc/{accountId}/checkPaymentStatus:
+    post:
+      summary: Check status of credit card payment
+      description: Check the status of the credit card payment
+      parameters:
+        - $ref: '#/components/parameters/accountId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: string
+        description: >-
+          Tracking ID of payment transaction, returned from
+          rpc/{accountId}/startPayment
+        required: true
+      tags:
+        - Payments
+      responses:
+        '200':
+          description: Returns current payment status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentStatus'
+            application/xml:
+              schema:
+                $ref: '#/components/schemas/PaymentStatus'
+        '400':
+          $ref: '#/components/responses/badRequest'
+        '401':
+          $ref: '#/components/responses/unauthorized'
+        '428':
+          $ref: '#/components/responses/termsOfUseRequired'
+        '429':
+          $ref: '#/components/responses/tooManyRequests'
+  /rpc/{accountId}/applyForMembership:
+    post:
+      summary: Initiates a membership application
+      description: '---'
+      parameters:
+        - $ref: '#/components/parameters/accountId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MembershipApplication'
+        description: Parameters of membership application
+        required: true
+      tags:
+        - Membership
+      responses:
+        '200':
+          description: >-
+            Result of membership application - new level, new status, invoice to
+            pay if any
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MembershipApplicationResult'
+            application/xml:
+              schema:
+                $ref: '#/components/schemas/MembershipApplicationResult'
+        '400':
+          $ref: '#/components/responses/badRequest'
+        '401':
+          $ref: '#/components/responses/unauthorized'
+        '428':
+          $ref: '#/components/responses/termsOfUseRequired'
+        '429':
+          $ref: '#/components/responses/tooManyRequests'
+  /rpc/{accountId}/CalculateRenewalCosts:
+    post:
+      summary: Generate possible invoice for membership renewal
+      description: '---'
+      parameters:
+        - $ref: '#/components/parameters/accountId'
+      requestBody:
+        $ref: '#/components/requestBodies/RenewParameters'
+      tags:
+        - Membership
+      responses:
+        '200':
+          description: >-
+            Result of membership renewal - invoice to pay if any, next renewal
+            date
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CalculateRenewalResult'
+            application/xml:
+              schema:
+                $ref: '#/components/schemas/CalculateRenewalResult'
+        '400':
+          $ref: '#/components/responses/badRequest'
+        '401':
+          $ref: '#/components/responses/unauthorized'
+        '428':
+          $ref: '#/components/responses/termsOfUseRequired'
+        '429':
+          $ref: '#/components/responses/tooManyRequests'
+  /rpc/{accountId}/ApplyForRenewal:
+    post:
+      summary: Initiates a membership renewal
+      description: '---'
+      parameters:
+        - $ref: '#/components/parameters/accountId'
+      requestBody:
+        $ref: '#/components/requestBodies/RenewParameters'
+      tags:
+        - Membership
+      responses:
+        '200':
+          description: Result of membership renewal - invoice to pay if any
+        '400':
+          $ref: '#/components/responses/badRequest'
+        '401':
+          $ref: '#/components/responses/unauthorized'
+        '428':
+          $ref: '#/components/responses/termsOfUseRequired'
+        '429':
+          $ref: '#/components/responses/tooManyRequests'
+  /rpc/{accountId}/CancelRenewal:
+    post:
+      summary: Cancels a membership renewal
+      description: '---'
+      parameters:
+        - $ref: '#/components/parameters/accountId'
+      tags:
+        - Membership
+      responses:
+        '200':
+          description: Result of membership renewal - invoice to pay if any
+        '400':
+          $ref: '#/components/responses/badRequest'
+        '401':
+          $ref: '#/components/responses/unauthorized'
+        '428':
+          $ref: '#/components/responses/termsOfUseRequired'
+        '429':
+          $ref: '#/components/responses/tooManyRequests'
+  /rpc/{accountId}/sendMessage:
+    post:
+      summary: Send message to specific contact
+      description: '---'
+      parameters:
+        - $ref: '#/components/parameters/accountId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendMessageRequest'
+        description: Contact ID of recipient and message text
+        required: true
+      tags:
+        - Messaging
+      responses:
+        '200':
+          description: Indicates whether message was accepted
+        '400':
+          $ref: '#/components/responses/badRequest'
+        '401':
+          $ref: '#/components/responses/unauthorized'
+        '428':
+          $ref: '#/components/responses/termsOfUseRequired'
+        '429':
+          $ref: '#/components/responses/tooManyRequests'
+  /accounts/{accountId}/mobileAppSettings:
+    get:
+      summary: Retrieve mobile app settings.
+      parameters:
+        - $ref: '#/components/parameters/accountId'
+      tags:
+        - Settings
+      responses:
+        '200':
+          description: Retrieves mobile app settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Settings'
+            application/xml:
+              schema:
+                $ref: '#/components/schemas/Settings'
+        '400':
+          $ref: '#/components/responses/badRequest'
+        '401':
+          $ref: '#/components/responses/unauthorized'
+        '428':
+          $ref: '#/components/responses/termsOfUseRequired'
+        '429':
+          $ref: '#/components/responses/tooManyRequests'
+servers:
+  - url: https://api.wildapricot.org/publicview/v1
+components:
+  parameters:
+    ThumbnailSize:
+      name: size
+      in: query
+      schema:
+        type: string
+        enum:
+          - Original
+          - Small
+          - Medium
+          - Medium1
+          - Large
+    pagingCount:
+      name: $count
+      in: query
+      description: >-
+        Specifies that the result should contain only a total number of records matching criteria. Requests with specified $count parameter are always processed as synchronous.
+      schema:
+        type: boolean
+    pagingSkip:
+      name: $skip
+      in: query
+      required: false
+      schema:
+        type: integer
+      description: >-
+    
+        'Specifies the number of records to skip (not include in a result set). For example if you expect about 300 records in result set and want to get them in small portions, you could make do so with 3 calls:'
+        - ...&$top=100 - will return records from 0 to 99
+        - ...?$skip=100&top=100' - will return records from 100 to 199
+        - ...?$skip=200' - will return records from 199 to the end
+    pagingTop:
+      name: $top
+      in: query
+      description: this parameter specifies the maximum number of entries to be returned. If omitted or set more than 100 then maximum 100 items returned.
+      required: false
+      schema:
+        type: integer
+    accountId:
+      name: accountId
+      in: path
+      description: Your account identifier
+      required: true
+      schema:
+        type: number
+        format: integer
+  responses:
+    badRequest:
+      description: On invalid parameters. See error details in response body.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+        application/xml:
+          schema:
+            $ref: '#/components/schemas/Error'
+    unauthorized:
+      description: >-
+        oAuth token was not provided, invalid or does not provide access to
+        requested URL.
+    tooManyRequests:
+      description: On too many requests from same account. Wait for a minute and try again.
+    notFound:
+      description: Requested item not found.
+    termsOfUseRequired:
+      description: >-
+        Current user should accept terms of use before using API. It can be done
+        in web interface, or by making a POST request to
+        /rpc/{accountId}/acceptTermsOfUse
+  requestBodies:
+    RenewParameters:
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/RenewParameters'
+      description: Parameters of membership renewal
+      required: true
+  securitySchemes:
+    OAuth2_autorizationCode:
+      type: oauth2
+      description: >
+
+        Use this flow to get token by authorization through your organization
+        web site login form.
+
+         - Replace YOUR_ORGANIZATION to valid domain name.
+         - Allow SSO for your authorized application.
+         - Add your web application redirect url to list of trusted domains for that application.
+
+         See also `http://gethelp.wildapricot.com/en/articles/200`
+      flows:
+        authorizationCode:
+          authorizationUrl: https://YOUR_ORGANIZATION.wildapricot.org/sys/login
+          tokenUrl: https://oauth.wildapricot.org/auth/token
+          scopes:
+            auto: autodetect allowed scopes based on current user permissions
+    OAuth2_password:
+      type: oauth2
+      description: >
+        Use this authentication flow to get oauth token by providing user
+        credentials.
+
+        clientId and clientSecret should be taken from Authorized applications
+        page in admin backend.
+
+
+        For example if your if your emails is admin@yourdomain.com and password
+        is 123456.
+
+        you should pass
+
+        `username=admin@yourdomain.com&password=12345&&scope=auto`
+      flows:
+        password:
+          tokenUrl: https://oauth.wildapricot.org/auth/token
+          scopes:
+            auto: autodetect allowed scopes based on current user permissions
+  schemas:
+    AttachmentDataList:
+      description: list of uploading files
+      type: array
+      items:
+        $ref: '#/components/schemas/AttachmentData'
+    AttachmentData:
+      type: object
+      properties:
+        Name:
+          type: string
+          description: attachment name
+        MimeType:
+          type: string
+          description: http ContentType (MIME type)
+        Data:
+          type: object
+          description: uploading file data
+    FileInfo:
+      type: object
+      properties:
+        Id:
+          type: integer
+          description: Unique attachment identifier
+        Name:
+          type: string
+          description: attachment name
+        ContentType:
+          type: string
+          description: http ContentType (MIME type)
+        Size:
+          type: integer
+          description: File size
+        CreatedDate:
+          type: string
+          format: datetime
+          description: Date and time when the file has been uploaded.
+    Settings:
+      type: object
+      description: n/a
+      properties:
+        AccountId:
+          type: integer
+          description: Your account identifier.
+        AppForMembersAvailable:
+          type: boolean
+          description: >-
+            Indicates whether an app for members available or not. It's not
+            available for free accounts.
+        EnableAppForMembers:
+          type: boolean
+          description: Indicates whether an app for members enabled in settings or not
+        EnableEventsList:
+          type: boolean
+          description: Indicates whether an event list is available
+        EnableMemberDirectory:
+          type: boolean
+          description: Indicates whether a member directory is available
+        Tags:
+          type: array
+          items:
+            type: string
+            description: tag name
+    VerifyRegistrationCodeParams:
+      type: object
+      description: Set of parameters for event registration code verification
+      properties:
+        eventId:
+          type: integer
+          description: Registration event ID
+        registrationTypeId:
+          type: integer
+          description: Event registration type ID
+        code:
+          type: string
+          description: Code to verify
+    SendMessageRequest:
+      type: object
+      description: Set of parameters for sending private message to contact/member
+      properties:
+        contactId:
+          type: integer
+          description: Contact ID of recipient
+        subject:
+          type: string
+          description: Message subject
+        text:
+          type: string
+          description: Message content in plain text
+        replyToName:
+          type: string
+          description: Name used when replying to the message.
+        replyToEMail:
+          type: string
+          description: Email address used when replying to the message.
+    MembershipApplication:
+      type: object
+      description: Set of parameters to apply for membership
+      properties:
+        membershipLevelId:
+          type: integer
+          description: ID of membership level to apply for
+        fieldValues:
+          description: Field values for membership application form
+          type: array
+          items:
+            $ref: '#/components/schemas/CustomFieldValue'
+        couponCode:
+          type: string
+          description: coupon code
+    RenewParameters:
+      type: object
+      description: Set of parameters to apply for renewal
+      properties:
+        CouponCode:
+          type: string
+          description: coupon code
+        fieldValues:
+          description: Field values for membership renewal form
+          type: array
+          items:
+            $ref: '#/components/schemas/CustomFieldValue'
+    Account:
+      type: object
+      description: Information about Wild Apricot account
+      properties:
+        Id:
+          type: integer
+          description: Unique account identifier.
+        Name:
+          type: string
+          description: The organization name.
+        Url:
+          type: string
+          description: Address of API call providing account details.
+        PrimaryDomainName:
+          type: string
+          description: The primary domain name for the account.
+        Resources:
+          type: array
+          items:
+            $ref: '#/components/schemas/Resource'
+          description: Collection of account-related resources.
+        Currency:
+          $ref: '#/components/schemas/Currency'
+        Localization:
+          $ref: '#/components/schemas/Localization'
+        TimeZone:
+          $ref: '#/components/schemas/TimeZoneDescription'
+    Currency:
+      type: object
+      title: Account currency info
+      properties:
+        Code:
+          type: string
+          description: Currency code according to ISO 4217
+        Name:
+          type: string
+          description: Human-readable currency name
+        Symbol:
+          type: string
+          description: Currency symbol e.g $ or €
+    Localization:
+      type: object
+      properties:
+        DateFormat:
+          type: string
+          description: Format for displaying dates
+        TimeFormat:
+          type: string
+          description: Format for displaying time
+    ContactsResponse:
+      type: object
+      description: >-
+        Contains a collection of contacts or number of contacts or list of
+        contact identifiers, depending on passed query parameters.
+      properties:
+        Contacts:
+          type: array
+          items:
+            $ref: '#/components/schemas/Contact'
+          description: List of contacts found.
+        ContactIdentifiers:
+          type: array
+          items:
+            type: integer
+          description: List of contact IDs found.
+        Count:
+          type: integer
+          description: >-
+            Number of contacts found. Value appears only if $count was passed in
+            parameters.
+    Contact:
+      type: object
+      description: >-
+        Contact / member data. Optional fields can be omitted if value is null
+        or if the fields are restricted from viewing.
+      required:
+        - Id
+        - FieldValues
+      properties:
+        Id:
+          type: integer
+          description: Unique contact ID.
+        Url:
+          $ref: '#/components/schemas/ResourceUrl'
+        FirstName:
+          type: string
+        LastName:
+          type: string
+        Organization:
+          type: string
+        Email:
+          type: string
+        Phone:
+          type: string
+        MembershipLevel:
+          $ref: '#/components/schemas/MembershipLevelStub'
+        FieldValues:
+          type: array
+          description: Collection of
+          items:
+            $ref: '#/components/schemas/CustomFieldValue'
+        SendMessageAllowed:
+          type: boolean
+    ContactMe:
+      type: object
+      description: Brief information about the current user.
+      properties:
+        Id:
+          type: integer
+          description: Contact ID of the current contact.
+        Url:
+          $ref: '#/components/schemas/ResourceUrl'
+        FirstName:
+          type: string
+        LastName:
+          type: string
+        Organization:
+          type: string
+        Email:
+          type: string
+        Phone:
+          type: string
+        TermsOfUseAccepted:
+          type: boolean
+        HasAvailableUserCard:
+          type: boolean
+        MembershipStateDescription:
+          type: string
+          description: Describes details of current membership status
+        IsRecurringPaymentsActive:
+          type: boolean
+    MembershipLevelStub:
+      type: object
+      description: Brief summary of membership level
+      properties:
+        Id:
+          type: integer
+          description: Unique level identifier
+        Name:
+          type: string
+          description: Membership level name
+        Url:
+          $ref: '#/components/schemas/ResourceUrl'
+    MembershipLevelPaymentMethod:
+      type: string
+      enum:
+        - OnlineAndOffline
+        - OfflineOnly
+        - OnlineOnly
+      description: >-
+        Payment method for applications, renewals and upgrades for this
+        membershipLevel.
+    ResourceUrl:
+      type: string
+      description: URL to access this object
+    CustomFieldValue:
+      type: object
+      required:
+        - FieldName
+        - SystemCode
+        - Value
+      properties:
+        FieldName:
+          type: string
+          description: >-
+            Field name. Can be changed by administrator, so it is not
+            recommended to identify fields by their names.
+        FieldType:
+          $ref: '#/components/schemas/CustomFieldType'
+        FieldOrder:
+          type: integer
+          description: Field order as described in forms.
+        SystemCode:
+          type: string
+          description: >-
+            Unique identifier of field, so it can be used as a key to find
+            custom field value record in a list.
+        Value:
+          type: object
+          description: >-
+            Field value. Can be of type string, number, object or array. See
+            related ContactField.
+    ContactField:
+      type: object
+      required:
+        - FieldName
+        - SystemCode
+        - Type
+        - Access
+        - Description
+        - MemberOnly
+      properties:
+        FieldName:
+          type: string
+          description: Field name to display on UI. It can be edited by administrator.
+        SystemCode:
+          type: string
+          description: >
+            System-defined code associated with the field. It does not change
+            even if
+
+            FieldName is modified
+        Type:
+          $ref: '#/components/schemas/CustomFieldType'
+        DisplayType:
+          type: string
+          description: |
+            Optional hint, which tells how to display and edit field. It appears
+            for String and Choice fields.
+        IsSystem:
+          type: boolean
+          description: Field is system-defined.
+        Access:
+          $ref: '#/components/schemas/CustomFieldAccessLevel'
+        AdminOnly:
+          type: boolean
+          description: Indicates that the field is accessible only by administrator.
+        Description:
+          type: string
+          description: User-defined description of the field.
+        ExistsInLevels:
+          type: array
+          description: >-
+            Collection of membership levels (Id+Url pairs) where the field
+            exists.
+          items:
+            $ref: '#/components/schemas/LinkedItem'
+        AllowedValues:
+          type: array
+          description: >-
+            List of allowed values for this field. Appears for Choice /
+            MultipleChoice fields.
+          items:
+            $ref: '#/components/schemas/CustomFieldAllowedValue'
+        Order:
+          type: integer
+          description: Sorting order to display the field in UI
+        MemberOnly:
+          type: boolean
+          description: The field exists only for members.
+        IsBuiltIn:
+          type: boolean
+          description: >
+            The field is built-in system field, its definition can't be edited
+            or
+
+            deleted.
+        SupportSearch:
+          type: boolean
+          description: >
+            If true, then this field can be used in $filter expression in
+            contact
+
+            search.
+        IsIncludedInRenewal:
+          type: boolean
+          description: |
+            If true, then this field is shown in renewal form.
+        AllowToChangeInRenewal:
+          type: boolean
+          description: |
+            If true, then this field is allowed to be changed in renewal form.
+        RulesAndTermsInfo:
+          $ref: '#/components/schemas/CustomFieldRulesAndTermsInfo'
+        ExtraCharge:
+          $ref: '#/components/schemas/CustomFieldExtraChargeInfo'
+    CustomFieldAllowedValue:
+      type: object
+      title: Option
+      required:
+        - Id
+        - Label
+      properties:
+        Id:
+          type: integer
+          description: Unique option identifier.
+        Label:
+          type: string
+          description: Human-readable text label.
+        ExtraCost:
+          type: number
+          format: decimal
+          description: >-
+            Price of item, when applying for membership or registering for
+            event.
+    CustomFieldRulesAndTermsInfo:
+      type: object
+      description: |
+        Additional info for fields with rules / terms conditions. Not present
+        for other field types.
+      title: RulesAndTermsInfo
+      properties:
+        Text:
+          type: string
+          description: Terms of use text.
+        Link:
+          type: string
+          description: Url of rules and terms document.
+    CustomFieldType:
+      type: string
+      enum:
+        - String
+        - DateTime
+        - Boolean
+        - Choice
+        - MultipleChoice
+        - Picture
+        - Number
+        - CalculatedExtraCharge
+        - SectionDivider
+      description: Field data type.
+    ExtraChargeMultiplierType:
+      type: string
+      description: |
+        Description of multiplier field.
+          ItemPrice multiplier specifies a price for each requested item.
+          Percentage multiplier specifies the percentage of the field value to use as extra charge.
+      enum:
+        - ItemPrice
+        - Percentage
+    CustomFieldExtraChargeInfo:
+      type: object
+      title: ExtraChargeOptions
+      description: This property applies to CalculatedExtraCharge fields only.
+      required:
+        - MultiplierType
+        - Multiplier
+      properties:
+        MultiplierType:
+          $ref: '#/components/schemas/ExtraChargeMultiplierType'
+        Multiplier:
+          type: number
+          format: decimal
+          description: value of multiplier for extra charge calculation
+        MinAmount:
+          type: integer
+          description: |
+            Minimum amount of items to request (minimal field value). Applies to
+            ItemPrice multiplier type only.
+        MaxAmount:
+          type: integer
+          description: >
+            Maximum amount of items to request (maximum field value). Applies to
+            ItemPrice multiplier type only.
+        MinCharge:
+          type: number
+          format: decimal
+          description: |
+            Minimum extra charge. Applies to
+            Percentage multiplier type only.
+        MaxCharge:
+          type: number
+          format: decimal
+          description: |
+            Maximum extra charge. Applies to
+            Percentage multiplier type only.
+    Invoice:
+      type: object
+      required:
+        - Id
+        - Url
+        - Value
+        - DocumentNumber
+        - DocumentDate
+        - PaidAmount
+        - FullyPaid
+        - OrderType
+      properties:
+        Id:
+          type: integer
+          title: Unique invoice identifier.
+        Url:
+          $ref: '#/components/schemas/ResourceUrl'
+        Value:
+          type: number
+          format: decimal
+          description: >-
+            Full value (amount) of this invoice, using account's primary
+            currency.
+        DocumentNumber:
+          type: string
+          description: Autoincremented for each subsequent invoice.
+        DocumentDate:
+          type: string
+          format: date
+          description: Date and time when invoice was created
+        PaidAmount:
+          type: number
+          format: decimal
+          description: Sum of invoice already paid.
+        FullyPaid:
+          type: boolean
+          description: Indicates whether invoice is fully paid
+        OrderType:
+          $ref: '#/components/schemas/InvoiceOrderType'
+        OrderDetails:
+          type: array
+          description: Collection of invoice subitems.
+          items:
+            $ref: '#/components/schemas/OrderDetail'
+    InvoiceOrderType:
+      type: string
+      description: A reason for creating the invoice.
+      enum:
+        - MembershipApplication
+        - MembershipRenewal
+        - MembershipLevelChange
+        - EventRegistration
+        - Donation
+        - OnlineStore
+    OrderDetail:
+      type: object
+      description: An invoice item
+      properties:
+        Price:
+          type: number
+          format: decimal
+          description: >-
+            Sum to pay for this a single item. Can be negative in case of
+            discount.
+        Quantity:
+          type: number
+          format: integer
+          description: Quantity of item
+        Notes:
+          type: string
+          description: Explanation for the item.
+        OrderDetailType:
+          $ref: '#/components/schemas/OrderDetailType'
+        Taxes:
+          $ref: '#/components/schemas/SalesTaxInfo'
+    OrderDetailType:
+      type: string
+      description: Type of invoice detail item.
+      enum:
+        - Unspecified
+        - EventRegistration
+        - GuestsNumber
+        - GuestCard
+        - ExtraCost
+        - MemberLevel
+        - Prorate
+        - Discount
+        - Donation
+        - OnlineStoreProduct
+        - OnlineStoreShipping
+    SalesTaxInfo:
+      type: object
+      description: An invoice item tax details
+      properties:
+        Amount:
+          type: number
+          description: total gross amount including all taxes
+        CalculatedTax1:
+          type: number
+          description: tax 1 amount
+        CalculatedTax2:
+          type: number
+          description: tax 2 amount
+        NetAmount:
+          type: number
+          description: net amount from invoice items
+        RoundedAmount:
+          type: number
+          description: rounded total amount including all taxes
+        Tax1:
+          allOf:
+            - $ref: '#/components/schemas/SalesTax'
+            - description: applied Tax 1 description
+        Tax2:
+          allOf:
+            - $ref: '#/components/schemas/SalesTax'
+            - description: applied Tax 2 description
+    SalesTax:
+      description: Taxes applied to the invoice according to account Tax Rules settings.
+      type: object
+      properties:
+        Name:
+          type: string
+          description: Internal account tax name.
+        PublicId:
+          type: string
+          description: Public tax ID (displayed on invoices).
+        Rate:
+          type: number
+          description: Tax rate value.
+    Payment:
+      type: object
+      required:
+        - Id
+        - Url
+        - Value
+        - DocumentNumber
+        - DocumentDate
+        - AllocatedValue
+        - PaymentType
+      properties:
+        Id:
+          type: integer
+          title: Unique payment identifier.
+        Url:
+          $ref: '#/components/schemas/ResourceUrl'
+        Value:
+          type: number
+          format: decimal
+          description: >-
+            Full value (amount) of this payment, using account's primary
+            currency.
+        DocumentNumber:
+          type: string
+          description: Autoincremented for each subsequent payment.
+        DocumentDate:
+          type: string
+          format: date
+          description: Date and time payment was received.
+        AllocatedValue:
+          type: number
+          format: decimal
+          description: Sum of payment already allocated to existing invoices.
+        RefundedAmount:
+          type: number
+          format: decimal
+          description: Amount of a refund assigned to the payment.
+        PaymentType:
+          $ref: '#/components/schemas/PaymentType'
+        Comment:
+          type: string
+        PaymentMethodID:
+          type: string
+    PaymentType:
+      type: string
+      description: The reason for the payment.
+      enum:
+        - Unknown
+        - InvoicePayment
+        - DonationPayment
+    StartPaymentParams:
+      type: object
+      required:
+        - InvoiceIds
+        - RedirectUrl
+        - PaymentMethodType
+      properties:
+        InvoiceIds:
+          type: array
+          items:
+            type: number
+          description: Collection of identifiers of invoices to be paid
+        PaymentMethodType:
+          type: string
+          description: >-
+            An ID of payment method - one of methods from
+            getAllowedPaymentMethodTypes call
+        RedirectUrl:
+          type: string
+          description: An URL to redirect to after successfully entering payment info
+    PaymentStatus:
+      type: string
+      enum:
+        - OK
+        - Failed
+        - InProgress
+        - Cancelled
+      description: Current status of payment started with startPayment api call
+    EventsResponse:
+      type: object
+      description: >-
+        Contains a collection of events or number of events or list of event
+        identifiers, depending on passed query parameters.
+      properties:
+        Events:
+          type: array
+          items:
+            $ref: '#/components/schemas/Event'
+          description: List of events found.
+        EventIdentifiers:
+          type: array
+          items:
+            type: integer
+          description: List of identifiers of events found.
+        Count:
+          type: integer
+          description: >-
+            Number of events found. Value is returned only if $count was passed
+            in parameters.
+    Event:
+      type: object
+      required:
+        - Id
+        - Url
+        - Name
+        - Location
+        - StartDate
+        - RegistrationEnabled
+      properties:
+        Id:
+          type: integer
+          description: Unique event identifier
+        Url:
+          $ref: '#/components/schemas/ResourceUrl'
+        Name:
+          type: string
+          description: Event title
+        Location:
+          type: string
+          description: The location or address where event will take place.
+        StartDate:
+          type: string
+          format: date
+          description: Date and optionally time when event starts.
+        StartTimeSpecified:
+          type: boolean
+          description: >-
+            Indicates whether start time was explicitly specified in StartDate.
+            Value of false means StartDate contains date only.
+        EndDate:
+          type: string
+          format: date
+          description: Date and optionally time when event completes.
+        EndTimeSpecified:
+          type: boolean
+          description: >-
+            Indicates whether end time was explicitly specified in EndDate.
+            Value of false means EndDate contains date only.
+        RegistrationEnabled:
+          type: boolean
+          description: Indicates whether event is enabled for registration.
+        RegistrationsLimit:
+          type: integer
+          description: The registration limit for this event.
+        Details:
+          $ref: '#/components/schemas/EventDetails'
+        Sessions:
+          type: array
+          description: Collection of event sessions for multisession events.
+          items:
+            $ref: '#/components/schemas/EventSession'
+    TimeZoneDescription:
+      type: object
+      description: >-
+        The timezone where an event will take place. If missing, then default
+        timezone for this account is  used.
+      required:
+        - Name
+        - UtcOffset
+      properties:
+        ZoneId:
+          type: string
+        Name:
+          type: string
+        UtcOffset:
+          type: number
+          format: decimal
+    EventWaitlistSettings:
+      type: object
+      description: provides event waitlist settings and could be nullable
+      required:
+        - Type
+        - InformationToCollect
+      properties:
+        Type:
+          $ref: '#/components/schemas/EventWaitlistType'
+        InformationToCollect:
+          $ref: '#/components/schemas/EventWaitlistInformationToCollect'
+    EventWaitlistType:
+      type: string
+      enum:
+        - None
+        - Manual
+        - Auto
+      description: >-
+        it describes waitlist registration behaviour (Undefined value is
+        unexpected)
+    EventWaitlistInformationToCollect:
+      type: string
+      enum:
+        - Undefined
+        - NameAndEmail
+        - ContactInformation
+        - RegistrationInformation
+      description: >-
+        it describes reqired information for register in waitlist (Undefined
+        value is unexpected)
+    EventDetails:
+      type: object
+      description: Additional details related to event.
+      required:
+        - DescriptionHtml
+        - RegistrationTypes
+        - RegistrationStatistics
+        - EventRegistrationFields
+        - PaymentMethod
+        - IsWaitlistEnabled
+        - IsAutoCancelRegistrationEnabled
+        - MultipleRegistrationAllowed
+      properties:
+        DescriptionHtml:
+          type: string
+          description: HTML description of event.
+        TimeZone:
+          $ref: '#/components/schemas/TimeZoneDescription'
+        RegistrationTypes:
+          type: array
+          description: >-
+            A list of available registration types (tickets). The list contains
+            only types visible to current user.
+          items:
+            $ref: '#/components/schemas/EventRegistrationType'
+        RegistrationStatistics:
+          $ref: '#/components/schemas/EventRegistrationStatistics'
+        EventRegistrationFields:
+          type: array
+          description: Collection of fields for registration form.
+          items:
+            $ref: '#/components/schemas/EventRegistrationField'
+        Organizer:
+          allOf:
+            - $ref: '#/components/schemas/LinkedItem'
+            - description: Link to a contact designated as the event organizer.
+        PaymentMethod:
+          $ref: '#/components/schemas/EventPaymentMethod'
+        RegistrationsPublicVisibility:
+          $ref: '#/components/schemas/EventRegistrationsPublicVisibility'
+        IsWaitlistEnabled:
+          type: boolean
+          description: Shows if waitlist enabled for event
+        WaitlistSettings:
+          $ref: '#/components/schemas/EventWaitlistSettings'
+        IsAutoCancelRegistrationEnabled:
+          type: boolean
+          description: >-
+            Shows if registration will be automatically canceled if not paid in
+            specific timeout
+        RegistrationAutoCancelTimeout:
+          type: number
+          description: Number of minutes to pay for created event registration.
+        MultipleRegistrationAllowed:
+          type: boolean
+          description: >-
+            Indicates whether a single contact can register multiple times for
+            the event.
+    EventRegistrationStatistics:
+      type: object
+      description: All registrations on event distinguished by kind.
+      required:
+        - RegistrationsPaidCount
+        - RegistrationsUnpaidCount
+        - RegistrationsCanceledCount
+        - RegistrationsFreeCount
+        - RegistrationsPartiallyPaidCount
+        - RegistrationsWithNoInvoiceCount
+        - RegistrationsOnWaitlistCount
+      properties:
+        RegistrationsPaidCount:
+          type: integer
+          description: The current number of paid registrants for this event.
+        RegistrationsUnpaidCount:
+          type: integer
+          description: The current number of unpaid registrants for this event.
+        RegistrationsCanceledCount:
+          type: integer
+          description: The current number of canceled registrants for this event.
+        RegistrationsFreeCount:
+          type: integer
+          description: The current number of free registrants for this event.
+        RegistrationsPartiallyPaidCount:
+          type: integer
+          description: The current number of partially paid registrants for this event.
+        RegistrationsWithNoInvoiceCount:
+          type: integer
+          description: The current number of registrants without invoice for this event.
+        RegistrationsOnWaitlistCount:
+          type: integer
+          description: The current number of waitlisters for this event.
+    EventRegistrationsPublicVisibility:
+      type: string
+      description: Indicates who can see event registrants.
+      enum:
+        - Nobody
+        - Members
+        - Anybody
+    EventPaymentMethod:
+      type: string
+      enum:
+        - OnlineAndOffline
+        - OfflineOnly
+        - OnlineOnly
+      description: Payment method for registrations for this event.
+    EventSession:
+      type: object
+      required:
+        - Id
+        - StartDate
+      properties:
+        Id:
+          type: integer
+          description: Unique event session identifier.
+        Title:
+          type: string
+          description: Session title
+        StartDate:
+          type: string
+          format: date
+          description: Date and optionally time when event session starts.
+        StartTimeSpecified:
+          type: boolean
+          description: >-
+            Indicates whether start time was explicitly specified in StartDate.
+            A value of false means StartDate contains date only.
+        EndDate:
+          type: string
+          format: date
+          description: Date and optionally time when event session ends.
+        EndTimeSpecified:
+          type: boolean
+          description: >-
+            Indicates whether end time was explicitly specified in EndDate. A
+            value of false means EndDate contains date only.
+    GuestRegistrationPolicy:
+      type: string
+      enum:
+        - Disabled
+        - NumberOfGuests
+        - CollectContactDetails
+        - CollectFullInformation
+    EventRegistrationType:
+      type: object
+      description: Settings for event registration type (ticket).
+      required:
+        - Id
+        - Url
+        - Name
+        - EventId
+        - BasePrice
+        - Enabled
+        - CodeRequired
+        - GuestRegistrationPolicy
+        - IsWaitlistEnabled
+        - MultipleRegistrationAllowed
+        - CancellationBehavior
+      properties:
+        Id:
+          type: integer
+          description: Unique event registration type identifier.
+        Url:
+          $ref: '#/components/schemas/ResourceUrl'
+        Name:
+          type: string
+          description: Event registration type title.
+        EventId:
+          type: integer
+          description: Related event identifier
+        Description:
+          type: string
+          description: Registration type (ticket) description
+        BasePrice:
+          type: number
+          format: decimal
+        GuestPrice:
+          type: number
+          format: decimal
+        AvailableForRegistration:
+          type: boolean
+          description: Indicates whether this registration type is enabled user
+        CodeRequired:
+          type: boolean
+          description: Indicates whether registration code is required to register.
+        GuestRegistrationPolicy:
+          $ref: '#/components/schemas/GuestRegistrationPolicy'
+        MaximumRegistrantsCount:
+          type: integer
+          description: Maximum number of attendees for this registration type.
+        IsWaitlistEnabled:
+          type: boolean
+          description: Shows is waitlist enabled for registration type
+        MultipleRegistrationAllowed:
+          type: boolean
+          description: >-
+            Indicates whether a single contact can register multiple times for
+            this event.
+        CurrentRegistrantsCount:
+          type: integer
+          description: The current number of registrants for this registration type.
+        Availability:
+          $ref: '#/components/schemas/RegistrationTypeAccessLevel'
+        AvailableFrom:
+          type: string
+          format: date
+          description: The first day on which this registration type is available.
+        AvailableThrough:
+          type: string
+          format: date
+          description: The last day on which this registration type is available.
+        CancellationBehavior:
+          $ref: '#/components/schemas/EventCancellationBehavior'
+        CancellationDaysBeforeEvent:
+          type: integer
+          description: >-
+            Number of days when cancellation available before event started and
+            CancellationBehavior is AllowUpToPeriodBeforeEvent.
+        IsGuestRegistrationRequired:
+          type: string
+          description: Indicates if guest registration is require.
+    EventStub:
+      type: object
+      description: Related event
+      required:
+        - Id
+        - Url
+        - Location
+        - Name
+        - StartDate
+      properties:
+        Id:
+          type: integer
+          description: Unique event identifier
+        Url:
+          $ref: '#/components/schemas/ResourceUrl'
+        Name:
+          type: string
+          description: Event title
+        Location:
+          type: string
+          description: Location / address where event will take place
+        StartDate:
+          type: string
+          format: date
+          description: Event start date
+        EndDate:
+          type: string
+          format: date
+          description: Event end date
+    EventAttendeesResponse:
+      type: object
+      description: >-
+        Contains a collection of attendees or number of attendees or list of of
+        attendee identifiers, depending on passed query parameters.
+      properties:
+        RegistrationPublicInfos:
+          type: array
+          items:
+            $ref: '#/components/schemas/EventRegistrationPublicInfo'
+          description: List of public event registration infos found.
+        Identifiers:
+          type: array
+          items:
+            type: integer
+          description: List of event registration IDs found.
+        Count:
+          type: integer
+          description: >-
+            Number of registrations found. Value appears only if $count was
+            passed in parameters.
+    EventRegistrationPublicInfo:
+      type: object
+      required:
+        - Id
+        - Url
+        - FirstName
+        - LastName
+        - Organization
+        - ContactId
+        - NumberOfGuests
+        - RegistrationDate
+      properties:
+        Id:
+          type: integer
+          description: Unique identifier of event registration
+        Url:
+          $ref: '#/components/schemas/ResourceUrl'
+        FirstName:
+          type: string
+          description: Registration first name.
+        LastName:
+          type: string
+          description: Registration last name.
+        Organization:
+          type: string
+          description: Registration organization name.
+        ContactId:
+          type: integer
+          description: >-
+            Id of contact with public-enabled membership (absent if registration
+            contact is not a member or profile not enabled to public).
+        NumberOfGuests:
+          type: integer
+          description: Number of additionally registered guests.
+        RegistrationDate:
+          type: string
+          format: datetime
+          description: Date and time when registration was created. (Account local time)
+    EventRegistration:
+      type: object
+      description: A record of registration for an event.
+      required:
+        - Id
+        - Url
+        - Event
+        - RegistrationType
+        - ShowToPublic
+        - IsGuestRegistration
+      properties:
+        Id:
+          type: integer
+          description: Unique event registration identifier
+        Url:
+          $ref: '#/components/schemas/ResourceUrl'
+        Event:
+          $ref: '#/components/schemas/Event'
+        RegistrationType:
+          $ref: '#/components/schemas/LinkedItemWithName'
+        Invoice:
+          $ref: '#/components/schemas/LinkedItem'
+        RegistrationFee:
+          type: number
+          format: decimal
+          description: Total registration fee, including all taxes and discounts.
+        PaidAmount:
+          type: number
+          format: decimal
+          description: The value that was already paid.
+        ShowToPublic:
+          type: boolean
+          description: >-
+            Indicates whether to include this registrant in the public list of
+            registrants.
+        RegistrationFields:
+          type: array
+          items:
+            $ref: '#/components/schemas/CustomFieldValue'
+        HasChildRegistrations:
+          type: boolean
+          description: >-
+            Indicates whether there are event registrations with parent
+            registration id equal to id of current registration. In order to get
+            child registrations make a call to
+            /accounts/XXX/eventregistrations?parentRegistrationId=YYY
+        NumberOfGuests:
+          type: integer
+          description: >-
+            Number of guests in this registration. This number does not include
+            child registrations.
+        IsGuestRegistration:
+          type: boolean
+        Status:
+          $ref: '#/components/schemas/EventRegistrationStatus'
+        ParentRegistration:
+          $ref: '#/components/schemas/LinkedItem'
+    EventRegistrationStatus:
+      type: string
+      description: |
+        Describes event registration status
+      enum:
+        - Undefined
+        - Paid
+        - Unpaid
+        - PartiallyPaid
+        - Canceled
+        - Free
+        - NoInvoice
+        - OnWaitlist
+    EventRegistrationField:
+      type: object
+      required:
+        - FieldName
+        - SystemCode
+        - Type
+        - IsSystem
+        - Access
+        - Description
+        - Kind
+      properties:
+        FieldName:
+          type: string
+          description: Field name to display on UI. It can be edited by administrator.
+        SystemCode:
+          type: string
+          description: >
+            System-defined code associated with field. It does not change even
+            if
+
+            FieldName is edited
+        Type:
+          $ref: '#/components/schemas/CustomFieldType'
+        DisplayType:
+          type: string
+          description: |
+            Optional hint, which tells how to display and edit field. It appears
+            for String and Choice fields.
+        IsSystem:
+          type: boolean
+          description: Field is system-defined.
+        Access:
+          $ref: '#/components/schemas/CustomFieldAccessLevel'
+        Description:
+          type: string
+          description: User-defined description of the field.
+        AllowedValues:
+          type: array
+          description: >-
+            List of allowed values for this field. Appears for Choice /
+            MultipleChoice fields.
+          items:
+            $ref: '#/components/schemas/CustomFieldAllowedValue'
+        Order:
+          type: integer
+          description: Sorting order to display the field in UI
+        RulesAndTermsInfo:
+          $ref: '#/components/schemas/CustomFieldRulesAndTermsInfo'
+        ExtraCharge:
+          $ref: '#/components/schemas/CustomFieldExtraChargeInfo'
+        Kind:
+          $ref: '#/components/schemas/EventRegistrationFieldKind'
+    CustomFieldAccessLevel:
+      type: string
+      description: |
+        Default access level for the field. Describes who can access this
+        field.
+      enum:
+        - Public
+        - Member
+        - Nobody
+    AccessLevel:
+      type: string
+      enum:
+        - Anybody
+        - Members
+        - Nobody
+    EventCancellationBehavior:
+      type: string
+      enum:
+        - None
+        - DoNotAllow
+        - AllowUpToPeriodBeforeEvent
+        - Allow
+      description: Event cancellation behavior types.
+    RegistrationTypeAccessLevel:
+      type: string
+      enum:
+        - Everyone
+        - MembersOnly
+      description: >-
+        Whether this registration type is available for Everyone or just
+        MembersOnly.
+    EventRegistrationFieldKind:
+      type: string
+      enum:
+        - Common
+        - Custom
+      description: >-
+        Common - field is a part of contact fieldset. Custom - field is specific
+        to event.
+    MembershipLevelType:
+      type: string
+      enum:
+        - Individual
+        - Bundle
+    MembershipRenewalPeriod:
+      type: object
+      required:
+        - Kind
+      properties:
+        Kind:
+          $ref: '#/components/schemas/RenewalPeriodKind'
+        StartFromJoinDate:
+          type: boolean
+          description: >-
+            If true, renewal dates are calculated starting from join date.
+            Otherwise,  renewal dates are specified in Dates field.
+        YearPeriod:
+          type: integer
+          description: For EveryNYears renewal, specifies number of years between renewals.
+        Dates:
+          type: array
+          description: >-
+            Renewal dates during a year. For monthly renewals, it contains 12
+            records.
+          items:
+            $ref: '#/components/schemas/DayOfYear'
+        RenewalLimits:
+          $ref: '#/components/schemas/RenewalLimits'
+    RenewalLimits:
+      type: object
+      properties:
+        OnePeriodAhead:
+          type: boolean
+          description: Limit renewal to 1 period ahead
+        ExpirationPeriod:
+          $ref: '#/components/schemas/RenewalExpirationPeriod'
+    RenewalExpirationPeriod:
+      type: object
+      properties:
+        Active:
+          type: boolean
+          description: Limit renewal to within certain period
+        Length:
+          type: integer
+          description: number of Days or Weeks (PeriodType)
+        PeriodType:
+          $ref: '#/components/schemas/RenewalExpirationPeriodType'
+    RenewalExpirationPeriodType:
+      type: string
+      description: Expiration period type
+      enum:
+        - Days
+        - Months
+    RenewalPeriodKind:
+      type: string
+      description: How often membership should be renewed
+      enum:
+        - Never
+        - Monthly
+        - Quarterly
+        - TwiceAYear
+        - EveryNYears
+    DayOfYear:
+      type: object
+      properties:
+        Month:
+          type: integer
+          description: Month of renewal. 1 - Jan ... 12 - Dec
+        Day:
+          type: integer
+          description: Day of the month
+    MembershipLevel:
+      type: object
+      required:
+        - Id
+        - Url
+        - Name
+        - Type
+        - MembershipFee
+        - RenewalPeriod
+        - AutomaticRecurringPayments
+      properties:
+        Id:
+          type: integer
+          description: Unique membership level identifier
+        Url:
+          $ref: '#/components/schemas/ResourceUrl'
+        Name:
+          type: string
+          description: Membership level title
+        Description:
+          type: string
+          description: Level description
+        Type:
+          $ref: '#/components/schemas/MembershipLevelType'
+        MembershipFee:
+          type: number
+          format: decimal
+          description: >-
+            The membership fee for one renewal period. See RenewalPeriod
+            setttings for details.
+        BundleMembersLimit:
+          type: integer
+          description: Maximum number of bundle members. Empty for individuals.
+        RenewalPeriod:
+          $ref: '#/components/schemas/MembershipRenewalPeriod'
+        AutomaticRecurringPayments:
+          type: boolean
+          description: >-
+            For levels with renewal period != Never. If true then membership
+            will be automatically renewed and user charged each next membership
+            period.
+        MemberCanChangeToLevels:
+          type: array
+          description: >-
+            Collection of membership levels that members on this level can
+            change to.
+          items:
+            $ref: '#/components/schemas/ResourceUrl'
+        PaymentMethod:
+          $ref: '#/components/schemas/MembershipLevelPaymentMethod'
+        DiscountCouponExists:
+          type: boolean
+          description: is there any applicable discount coupon
+    MembershipApplicationResult:
+      type: object
+      required:
+        - NewLevel
+      properties:
+        NextRenewalDate:
+          type: string
+          format: date
+          description: Expected next renewal date
+        Invoice:
+          $ref: '#/components/schemas/LinkedItem'
+    CalculateRenewalResult:
+      type: object
+      required:
+        - NewLevel
+      properties:
+        NewLevel:
+          $ref: '#/components/schemas/LinkedItem'
+        Invoice:
+          $ref: '#/components/schemas/LinkedItem'
+    PaymentMethodTypeDescription:
+      type: object
+      required:
+        - PaymentMethodType
+        - Description
+      properties:
+        PaymentMethodType:
+          type: string
+          description: Payment method type ID
+        Description:
+          type: string
+          description: Payment method description
+    PaymentTrackingInfo:
+      type: object
+      required:
+        - TrackingIdentifier
+        - PaymentPageUrl
+      properties:
+        TrackingIdentifier:
+          type: string
+          description: Identifier of credit card payment to track payment progress
+        PaymentPageUrl:
+          type: string
+          description: >-
+            URL of page to enter payment information, like credit card data or
+            PayPal password
+    LinkedItem:
+      type: object
+      required:
+        - Id
+        - Url
+      properties:
+        Id:
+          type: integer
+          description: unique item identifier
+        Url:
+          $ref: '#/components/schemas/ResourceUrl'
+    LinkedItemWithName:
+      type: object
+      required:
+        - Id
+        - Url
+        - Name
+      properties:
+        Id:
+          type: integer
+          description: unique item identifier
+        Url:
+          $ref: '#/components/schemas/ResourceUrl'
+        Name:
+          type: string
+          description: Item title
+    Resource:
+      type: object
+      required:
+        - Url
+        - Name
+      properties:
+        Url:
+          type: string
+          description: Address of resource
+        Name:
+          type: string
+          description: Name of resource
+        Description:
+          type: string
+          description: Optional text description of the resource.
+        AllowedOperations:
+          type: string
+          description: >
+            Collection of allowed operations for this resource. Possible values
+            are:
+
+            GET - Resource can be requested
+
+            POST - Resource can be created
+
+            PUT - Resource can be updated
+
+            DELETE - Resource can be deleted
+    EventRegistrationParams:
+      type: object
+      description: A record of registration for an event.
+      properties:
+        Id:
+          type: integer
+          description: >-
+            Unique event registration identifier. Required while updating
+            existing registration. Should not be included when creating new
+            registration.
+        EventId:
+          type: integer
+          description: >-
+            Related event identifier. Required when creating new registration.
+            Will be ignored while updating existing registration.
+        RegistrationTypeId:
+          type: integer
+          description: >-
+            Selected registration type identifier. Required when creating new
+            registration.
+        RegistrationFields:
+          type: array
+          items:
+            $ref: '#/components/schemas/CustomFieldValue'
+        ParentRegistrationId:
+          type: integer
+          description: >-
+            For guest registrations: parent registration identifier. Will be
+            ignored when updating existing registration.
+        ShowToPublic:
+          type: boolean
+          description: >-
+            Indicates whether the registrant is included in the public list of
+            event registrants.
+        ForWaitList:
+          type: boolean
+          description: Indicates whether the registration is for new Wait List entry
+        NumberOfGuests:
+          type: integer
+          description: >-
+            The number of guests for this registration, if guest registrations
+            are set up to collect only the total number of guests.
+        RegistrationCode:
+          type: string
+          description: The registration code for this event.
+        PaymentMethodType:
+          type: string
+          description: >-
+            An ID of payment method - one of methods from
+            getAllowedPaymentMethodTypes call. If not set then invoice will be
+            sent to registrant's email.
+    Error:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          description: Error code, like Validation / Search / ...
+        message:
+          type: string
+          description: An explanation of why this error occured
+        details:
+          type: object
+          description: >-
+            More information about the error. Data structure is specific for
+            each error kind.

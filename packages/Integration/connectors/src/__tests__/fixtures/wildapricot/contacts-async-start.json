@@ -1,0 +1,5 @@
+{
+  "ResultId": "abc123-result-id",
+  "State": "Processing",
+  "ResultUrl": "https://api.wildapricot.org/v2.3/accounts/123456/contacts?resultId=abc123-result-id"
+}

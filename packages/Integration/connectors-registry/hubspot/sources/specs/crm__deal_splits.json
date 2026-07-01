@@ -1,0 +1,588 @@
+{
+  "openapi" : "3.0.1",
+  "info" : {
+    "title" : "CRM Deal Splits",
+    "description" : "Basepom for all HubSpot Projects",
+    "version" : "2026-03",
+    "x-hubspot-product-tier-requirements" : {
+      "marketing" : "FREE",
+      "sales" : "ENTERPRISE",
+      "service" : "FREE",
+      "cms" : "FREE",
+      "commerce" : "FREE",
+      "crmHub" : "FREE",
+      "dataHub" : "FREE"
+    },
+    "x-hubspot-api-use-case" : "When two sales reps work together to close a deal, add a split to the deal to reflect that the credit and commission are being shared.",
+    "x-hubspot-introduction" : "Use the deal splits API to split existing deals between owners when credit and/or commission are shared between them. "
+  },
+  "servers" : [ {
+    "url" : "https://api.hubapi.com"
+  } ],
+  "tags" : [ {
+    "name" : "Batch"
+  } ],
+  "paths" : {
+    "/deal-splits/2026-03/batch/read" : {
+      "post" : {
+        "tags" : [ "Batch" ],
+        "summary" : "Read a batch of deal split objects by their associated deal object internal ID",
+        "description" : "Read a batch of deal split objects by their associated deal object internal ID",
+        "operationId" : "post-/deal-splits/2026-03/batch/read_/crm/objects/v3/deals/splits/batch/read",
+        "parameters" : [ ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/BatchInputPublicObjectId"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "successful operation",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BatchResponseDealToDealSplits"
+                }
+              }
+            }
+          },
+          "207" : {
+            "description" : "multiple statuses",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BatchResponseDealToDealSplitsWithErrors"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "$ref" : "#/components/responses/Error"
+          }
+        },
+        "security" : [ {
+          "oauth2" : [ "crm.dealsplits.read_write" ]
+        } ]
+      }
+    },
+    "/deal-splits/2026-03/batch/upsert" : {
+      "post" : {
+        "tags" : [ "Batch" ],
+        "summary" : "Create or replace deal splits for deals with the provided IDs. Deal split percentages for each deal must sum up to 1.0 (100%) and may have up to 8 decimal places",
+        "description" : "Create or replace deal splits for deals with the provided IDs. Deal split percentages for each deal must sum up to 1.0 (100%) and may have up to 8 decimal places",
+        "operationId" : "post-/deal-splits/2026-03/batch/upsert_/crm/objects/v3/deals/splits/batch/upsert",
+        "parameters" : [ ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PublicDealSplitsBatchCreateRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "successful operation",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BatchResponseDealToDealSplits"
+                }
+              }
+            }
+          },
+          "207" : {
+            "description" : "multiple statuses",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BatchResponseDealToDealSplitsWithErrors"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "$ref" : "#/components/responses/Error"
+          }
+        },
+        "security" : [ {
+          "oauth2" : [ "crm.dealsplits.read_write" ]
+        } ]
+      }
+    }
+  },
+  "components" : {
+    "schemas" : {
+      "BatchInputPublicObjectId" : {
+        "required" : [ "inputs" ],
+        "type" : "object",
+        "properties" : {
+          "inputs" : {
+            "type" : "array",
+            "description" : "An array of deal split inputs",
+            "items" : {
+              "$ref" : "#/components/schemas/PublicObjectId"
+            }
+          }
+        }
+      },
+      "BatchResponseDealToDealSplits" : {
+        "required" : [ "completedAt", "results", "startedAt", "status" ],
+        "type" : "object",
+        "properties" : {
+          "completedAt" : {
+            "type" : "string",
+            "description" : "The timestamp indicating when the batch operation was completed, in date-time format.",
+            "format" : "date-time"
+          },
+          "links" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "description" : "A map of link names to associated URIs for additional resources or documentation."
+          },
+          "requestedAt" : {
+            "type" : "string",
+            "description" : "The timestamp indicating when the batch operation was requested, in date-time format.",
+            "format" : "date-time"
+          },
+          "results" : {
+            "type" : "array",
+            "description" : "An array of deal-to-deal split objects representing the results of the batch operation.",
+            "items" : {
+              "$ref" : "#/components/schemas/DealToDealSplits"
+            }
+          },
+          "startedAt" : {
+            "type" : "string",
+            "description" : "The timestamp indicating when the batch operation started, in date-time format.",
+            "format" : "date-time"
+          },
+          "status" : {
+            "type" : "string",
+            "description" : "The current status of the batch operation, with possible values: CANCELED, COMPLETE, PENDING, PROCESSING.",
+            "enum" : [ "CANCELED", "COMPLETE", "PENDING", "PROCESSING" ]
+          }
+        }
+      },
+      "BatchResponseDealToDealSplitsWithErrors" : {
+        "required" : [ "completedAt", "results", "startedAt", "status" ],
+        "type" : "object",
+        "properties" : {
+          "completedAt" : {
+            "type" : "string",
+            "description" : "The timestamp indicating when the batch operation was completed, in date-time format.",
+            "format" : "date-time"
+          },
+          "errors" : {
+            "type" : "array",
+            "description" : "An array of error objects detailing the errors that occurred during the batch operation.",
+            "items" : {
+              "$ref" : "#/components/schemas/StandardError"
+            }
+          },
+          "links" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "description" : "A map of link names to associated URIs for additional resources or documentation."
+          },
+          "numErrors" : {
+            "type" : "integer",
+            "description" : "The total number of errors encountered during the batch operation.",
+            "format" : "int32"
+          },
+          "requestedAt" : {
+            "type" : "string",
+            "description" : "The timestamp indicating when the batch operation was requested, in date-time format.",
+            "format" : "date-time"
+          },
+          "results" : {
+            "type" : "array",
+            "description" : "An array of deal-to-deal split objects representing the results of the batch operation.",
+            "items" : {
+              "$ref" : "#/components/schemas/DealToDealSplits"
+            }
+          },
+          "startedAt" : {
+            "type" : "string",
+            "description" : "The timestamp indicating when the batch operation started, in date-time format.",
+            "format" : "date-time"
+          },
+          "status" : {
+            "type" : "string",
+            "description" : "The current status of the batch operation, with possible values: CANCELED, COMPLETE, PENDING, PROCESSING.",
+            "enum" : [ "CANCELED", "COMPLETE", "PENDING", "PROCESSING" ]
+          }
+        }
+      },
+      "DealToDealSplits" : {
+        "required" : [ "id", "splits" ],
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "description" : "The unique identifier for the deal associated with the deal splits."
+          },
+          "splits" : {
+            "type" : "array",
+            "description" : "An array of deal split objects, each representing a portion of the deal assigned to an owner.",
+            "items" : {
+              "$ref" : "#/components/schemas/SimplePublicObject"
+            }
+          }
+        }
+      },
+      "Error" : {
+        "required" : [ "category", "correlationId", "message" ],
+        "type" : "object",
+        "properties" : {
+          "category" : {
+            "type" : "string",
+            "description" : "The error category"
+          },
+          "context" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "array",
+              "items" : {
+                "type" : "string"
+              }
+            },
+            "description" : "Context about the error condition",
+            "example" : "{invalidPropertyName=[propertyValue], missingScopes=[scope1, scope2]}"
+          },
+          "correlationId" : {
+            "type" : "string",
+            "description" : "A unique identifier for the request. Include this value with any error reports or support tickets",
+            "format" : "uuid",
+            "example" : "aeb5f871-7f07-4993-9211-075dc63e7cbf"
+          },
+          "errors" : {
+            "type" : "array",
+            "description" : "further information about the error",
+            "items" : {
+              "$ref" : "#/components/schemas/ErrorDetail"
+            }
+          },
+          "links" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "description" : "A map of link names to associated URIs containing documentation about the error or recommended remediation steps"
+          },
+          "message" : {
+            "type" : "string",
+            "description" : "A human readable message describing the error along with remediation steps where appropriate",
+            "example" : "An error occurred"
+          },
+          "subCategory" : {
+            "type" : "string",
+            "description" : "A specific category that contains more specific detail about the error"
+          }
+        },
+        "example" : {
+          "message" : "Invalid input (details will vary based on the error)",
+          "correlationId" : "aeb5f871-7f07-4993-9211-075dc63e7cbf",
+          "category" : "VALIDATION_ERROR",
+          "links" : {
+            "knowledge-base" : "https://www.hubspot.com/products/service/knowledge-base"
+          }
+        }
+      },
+      "ErrorDetail" : {
+        "required" : [ "message" ],
+        "type" : "object",
+        "properties" : {
+          "code" : {
+            "type" : "string",
+            "description" : "The status code associated with the error detail"
+          },
+          "context" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "array",
+              "items" : {
+                "type" : "string"
+              }
+            },
+            "description" : "Context about the error condition",
+            "example" : "{missingScopes=[scope1, scope2]}"
+          },
+          "in" : {
+            "type" : "string",
+            "description" : "The name of the field or parameter in which the error was found."
+          },
+          "message" : {
+            "type" : "string",
+            "description" : "A human readable message describing the error along with remediation steps where appropriate"
+          },
+          "subCategory" : {
+            "type" : "string",
+            "description" : "A specific category that contains more specific detail about the error"
+          }
+        }
+      },
+      "PublicDealSplitInput" : {
+        "required" : [ "ownerId", "percentage" ],
+        "type" : "object",
+        "properties" : {
+          "ownerId" : {
+            "type" : "integer",
+            "description" : "The unique identifier of the owner receiving the deal split.",
+            "format" : "int32"
+          },
+          "percentage" : {
+            "type" : "number",
+            "description" : "The portion of the deal assigned to the owner, expressed as a percentage. The total percentage for all splits in a deal must sum up to 1.0 (100%) and can have up to 8 decimal places."
+          }
+        }
+      },
+      "PublicDealSplitsBatchCreateRequest" : {
+        "required" : [ "inputs" ],
+        "type" : "object",
+        "properties" : {
+          "inputs" : {
+            "type" : "array",
+            "description" : "An array of deal split inputs",
+            "items" : {
+              "$ref" : "#/components/schemas/PublicDealSplitsCreateRequest"
+            }
+          }
+        }
+      },
+      "PublicDealSplitsCreateRequest" : {
+        "required" : [ "id", "splits" ],
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "description" : "The unique identifier for the deal.",
+            "format" : "int64"
+          },
+          "splits" : {
+            "type" : "array",
+            "description" : "An array of deal split inputs, each containing an owner ID and a percentage of the deal split.",
+            "items" : {
+              "$ref" : "#/components/schemas/PublicDealSplitInput"
+            }
+          }
+        }
+      },
+      "PublicObjectId" : {
+        "required" : [ "id" ],
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "description" : "The unique identifier for the public object."
+          }
+        },
+        "description" : "Contains the Id of a Public Object"
+      },
+      "SimplePublicObject" : {
+        "required" : [ "archived", "createdAt", "id", "properties", "updatedAt" ],
+        "type" : "object",
+        "properties" : {
+          "archived" : {
+            "type" : "boolean",
+            "description" : "Whether the object is archived."
+          },
+          "archivedAt" : {
+            "type" : "string",
+            "description" : "The timestamp when the object was archived, in ISO 8601 format.",
+            "format" : "date-time"
+          },
+          "createdAt" : {
+            "type" : "string",
+            "description" : "The timestamp when the object was created, in ISO 8601 format.",
+            "format" : "date-time"
+          },
+          "id" : {
+            "type" : "string",
+            "description" : "The unique ID of the object."
+          },
+          "objectWriteTraceId" : {
+            "type" : "string",
+            "description" : "An identifier used for tracing the write request for the object."
+          },
+          "properties" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "description" : "Key-value pairs representing the properties of the object."
+          },
+          "propertiesWithHistory" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "array",
+              "items" : {
+                "$ref" : "#/components/schemas/ValueWithTimestamp"
+              }
+            },
+            "description" : "Key-value pairs representing the properties of the object along with their history."
+          },
+          "updatedAt" : {
+            "type" : "string",
+            "description" : "The timestamp when the object was last updated, in ISO 8601 format.",
+            "format" : "date-time"
+          },
+          "url" : {
+            "type" : "string",
+            "description" : "The URL associated with the object."
+          }
+        },
+        "description" : "A simple public object."
+      },
+      "StandardError" : {
+        "required" : [ "category", "context", "errors", "links", "message", "status" ],
+        "type" : "object",
+        "properties" : {
+          "category" : {
+            "type" : "string",
+            "description" : "The error category"
+          },
+          "context" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "array",
+              "items" : {
+                "type" : "string"
+              }
+            },
+            "description" : "Context about the error condition"
+          },
+          "errors" : {
+            "type" : "array",
+            "description" : "The detailed error objects.",
+            "items" : {
+              "$ref" : "#/components/schemas/ErrorDetail"
+            }
+          },
+          "id" : {
+            "type" : "string",
+            "description" : "The id of the error"
+          },
+          "links" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "description" : "A map of link names to associated URIs containing documentation about the error or recommended remediation steps"
+          },
+          "message" : {
+            "type" : "string",
+            "description" : "The error message"
+          },
+          "status" : {
+            "type" : "string",
+            "description" : "A human readable message describing the error along with remediation steps where appropriate"
+          },
+          "subCategory" : {
+            "type" : "object",
+            "properties" : { },
+            "description" : "A specific category that contains more specific detail about the error"
+          }
+        },
+        "description" : "Ye olde error"
+      },
+      "ValueWithTimestamp" : {
+        "required" : [ "sourceType", "timestamp", "value" ],
+        "type" : "object",
+        "properties" : {
+          "sourceId" : {
+            "type" : "string",
+            "description" : "The unique ID of the property."
+          },
+          "sourceLabel" : {
+            "type" : "string",
+            "description" : "A human-readable label."
+          },
+          "sourceType" : {
+            "type" : "string",
+            "description" : "The property type."
+          },
+          "timestamp" : {
+            "type" : "string",
+            "description" : "The timestamp when the property was updated, in ISO 8601 format.",
+            "format" : "date-time"
+          },
+          "updatedByUserId" : {
+            "type" : "integer",
+            "description" : "The ID of the user who last updated the property.",
+            "format" : "int32"
+          },
+          "value" : {
+            "type" : "string",
+            "description" : "The property value."
+          }
+        },
+        "description" : "Property model that includes timestamp."
+      }
+    },
+    "responses" : {
+      "Error" : {
+        "description" : "An error occurred.",
+        "content" : {
+          "*/*" : {
+            "schema" : {
+              "$ref" : "#/components/schemas/Error"
+            }
+          }
+        }
+      }
+    },
+    "securitySchemes" : {
+      "developer_hapikey" : {
+        "type" : "apiKey",
+        "name" : "hapikey",
+        "in" : "query"
+      },
+      "oauth2" : {
+        "type" : "oauth2",
+        "flows" : {
+          "authorizationCode" : {
+            "authorizationUrl" : "https://app.hubspot.com/oauth/authorize",
+            "tokenUrl" : "https://api.hubapi.com/oauth/v1/token",
+            "scopes" : {
+              "crm.dealsplits.read_write" : ""
+            }
+          }
+        }
+      },
+      "private_apps" : {
+        "type" : "apiKey",
+        "name" : "private-app",
+        "in" : "header"
+      },
+      "private_apps_legacy" : {
+        "type" : "apiKey",
+        "name" : "private-app-legacy",
+        "in" : "header"
+      }
+    }
+  },
+  "x-hubspot-available-client-libraries" : [ "PHP" ],
+  "x-hubspot-product-tier-requirements" : {
+    "marketing" : "FREE",
+    "sales" : "ENTERPRISE",
+    "service" : "FREE",
+    "cms" : "FREE",
+    "commerce" : "FREE",
+    "crmHub" : "FREE",
+    "dataHub" : "FREE"
+  }
+}

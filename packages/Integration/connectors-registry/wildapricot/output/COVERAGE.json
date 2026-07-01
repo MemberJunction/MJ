@@ -1,0 +1,374 @@
+[
+  {
+    "object": "Account",
+    "listable": true,
+    "apiPath": "/accounts",
+    "reason": "documented list endpoint"
+  },
+  {
+    "object": "AttachmentData",
+    "listable": true,
+    "apiPath": "/accounts/{accountId}/attachments/GetInfos",
+    "reason": "documented list endpoint"
+  },
+  {
+    "object": "AuditLogItem",
+    "listable": true,
+    "apiPath": "/accounts/{accountId}/auditLogItems",
+    "reason": "documented list endpoint"
+  },
+  {
+    "object": "BillingPerson",
+    "listable": false,
+    "apiPath": null,
+    "reason": "nested-in:Order.billingPerson (no independent list endpoint)"
+  },
+  {
+    "object": "Bundle",
+    "listable": true,
+    "apiPath": "/accounts/{accountId}/bundles",
+    "reason": "documented list endpoint"
+  },
+  {
+    "object": "CeuRecord",
+    "listable": true,
+    "apiPath": "/accounts/{accountId}/ceuRecords",
+    "reason": "documented list endpoint"
+  },
+  {
+    "object": "ClickedLink",
+    "listable": false,
+    "apiPath": null,
+    "reason": "nested-in:SentEmailRecipient.ClickedLinks[] (no independent list endpoint)"
+  },
+  {
+    "object": "Contact",
+    "listable": true,
+    "apiPath": "/accounts/{accountId}/contacts",
+    "reason": "documented list endpoint"
+  },
+  {
+    "object": "ContactFieldDescription",
+    "listable": true,
+    "apiPath": "/accounts/{accountId}/contactfields",
+    "reason": "documented list endpoint"
+  },
+  {
+    "object": "ContactFieldValue",
+    "listable": false,
+    "apiPath": null,
+    "reason": "nested-in:Contact.FieldValues[] (no independent list endpoint)"
+  },
+  {
+    "object": "ContactLimitInfo",
+    "listable": false,
+    "apiPath": null,
+    "reason": "nested-in:Account.ContactLimitInfo (no independent list endpoint)"
+  },
+  {
+    "object": "DigitalProduct",
+    "listable": false,
+    "apiPath": null,
+    "reason": "nested-in:Product.digitalProduct (no independent list endpoint)"
+  },
+  {
+    "object": "Donation",
+    "listable": true,
+    "apiPath": "/accounts/{accountId}/donations",
+    "reason": "documented list endpoint"
+  },
+  {
+    "object": "EcourseProduct",
+    "listable": false,
+    "apiPath": null,
+    "reason": "nested-in:Product.ecourseProduct (no independent list endpoint)"
+  },
+  {
+    "object": "EmailDraft",
+    "listable": true,
+    "apiPath": "/accounts/{accountId}/EmailDrafts",
+    "reason": "documented list endpoint"
+  },
+  {
+    "object": "EmailLog",
+    "listable": true,
+    "apiPath": "/accounts/{accountId}/SentEmails",
+    "reason": "documented list endpoint"
+  },
+  {
+    "object": "EntityFieldDescription",
+    "listable": true,
+    "apiPath": "/accounts/{accountId}/donationfields",
+    "reason": "documented list endpoint"
+  },
+  {
+    "object": "Event",
+    "listable": true,
+    "apiPath": "/accounts/{accountId}/events",
+    "reason": "documented list endpoint"
+  },
+  {
+    "object": "EventAccessControl",
+    "listable": false,
+    "apiPath": null,
+    "reason": "nested-in:EventDetails.AccessControl (no independent list endpoint)"
+  },
+  {
+    "object": "EventAttendeesDisplaySettings",
+    "listable": false,
+    "apiPath": null,
+    "reason": "nested-in:EventDetails.AttendeesDisplaySettings (no independent list endpoint)"
+  },
+  {
+    "object": "EventDetails",
+    "listable": false,
+    "apiPath": null,
+    "reason": "nested-in:Event.Details (no independent list endpoint)"
+  },
+  {
+    "object": "EventGuestRegistrationSettings",
+    "listable": false,
+    "apiPath": null,
+    "reason": "nested-in:EventDetails.GuestRegistrationSettings (no independent list endpoint)"
+  },
+  {
+    "object": "EventInviteeStatistics",
+    "listable": false,
+    "apiPath": null,
+    "reason": "nested-in:Event.InviteeStat (no independent list endpoint)"
+  },
+  {
+    "object": "EventRegistration",
+    "listable": true,
+    "apiPath": "/accounts/{accountId}/eventregistrations",
+    "reason": "documented list endpoint"
+  },
+  {
+    "object": "EventRegistrationFieldDescription",
+    "listable": false,
+    "apiPath": null,
+    "reason": "nested-in:EventDetails.EventRegistrationFields[] (no independent list endpoint)"
+  },
+  {
+    "object": "EventRegistrationType",
+    "listable": true,
+    "apiPath": "/accounts/{accountId}/EventRegistrationTypes",
+    "reason": "documented list endpoint"
+  },
+  {
+    "object": "EventSesssion",
+    "listable": false,
+    "apiPath": null,
+    "reason": "nested-in:Event.Sessions[] (no independent list endpoint)"
+  },
+  {
+    "object": "EventWaitlistSettings",
+    "listable": false,
+    "apiPath": null,
+    "reason": "nested-in:EventDetails.WaitlistSettings (no independent list endpoint)"
+  },
+  {
+    "object": "ExtraCharge",
+    "listable": false,
+    "apiPath": null,
+    "reason": "nested-in:EntityFieldDescriptionWithExtraCharge.ExtraCharge (no independent list endpoint)"
+  },
+  {
+    "object": "Feature",
+    "listable": false,
+    "apiPath": null,
+    "reason": "no-list-endpoint: only /accounts/{accountId}/features/{featureId} (get-by-id); not nested in Account object either; removed as IO"
+  },
+  {
+    "object": "FieldValue",
+    "listable": false,
+    "apiPath": null,
+    "reason": "nested-in:EventRegistration.RegistrationFields[] (no independent list endpoint)"
+  },
+  {
+    "object": "GuestRegistrationsSummary",
+    "listable": false,
+    "apiPath": null,
+    "reason": "nested-in:EventRegistration.GuestRegistrationsSummary (no independent list endpoint)"
+  },
+  {
+    "object": "Invoice",
+    "listable": true,
+    "apiPath": "/accounts/{accountId}/invoices",
+    "reason": "documented list endpoint"
+  },
+  {
+    "object": "MembershipGroup",
+    "listable": true,
+    "apiPath": "/accounts/{accountId}/membergroups",
+    "reason": "documented list endpoint"
+  },
+  {
+    "object": "MembershipLevel",
+    "listable": true,
+    "apiPath": "/accounts/{accountId}/membershiplevels",
+    "reason": "documented list endpoint"
+  },
+  {
+    "object": "MembershipRenewalPeriod",
+    "listable": false,
+    "apiPath": null,
+    "reason": "nested-in:MembershipLevel.RenewalPeriod (no independent list endpoint)"
+  },
+  {
+    "object": "Order",
+    "listable": true,
+    "apiPath": "/accounts/{accountId}/store/orders",
+    "reason": "documented list endpoint"
+  },
+  {
+    "object": "OrderDeliveryOption",
+    "listable": false,
+    "apiPath": null,
+    "reason": "nested-in:Order.deliveryOption (no independent list endpoint)"
+  },
+  {
+    "object": "OrderDetailRecord",
+    "listable": false,
+    "apiPath": null,
+    "reason": "nested-in:Invoice.OrderDetails[] (no independent list endpoint)"
+  },
+  {
+    "object": "OrderDigitalProduct",
+    "listable": false,
+    "apiPath": null,
+    "reason": "nested-in:OrderProduct.digitalProduct (no independent list endpoint)"
+  },
+  {
+    "object": "OrderEcourseProduct",
+    "listable": false,
+    "apiPath": null,
+    "reason": "nested-in:OrderProduct.orderEcourseProduct (no independent list endpoint)"
+  },
+  {
+    "object": "OrderExternalNote",
+    "listable": false,
+    "apiPath": null,
+    "reason": "nested-in:Order.externalNote (no independent list endpoint)"
+  },
+  {
+    "object": "OrderInternalNote",
+    "listable": false,
+    "apiPath": null,
+    "reason": "nested-in:Order.internalNote (no independent list endpoint)"
+  },
+  {
+    "object": "OrderProduct",
+    "listable": false,
+    "apiPath": null,
+    "reason": "nested-in:Order.products[] (no independent list endpoint)"
+  },
+  {
+    "object": "Payment",
+    "listable": true,
+    "apiPath": "/accounts/{accountId}/payments",
+    "reason": "documented list endpoint"
+  },
+  {
+    "object": "PaymentAllocation",
+    "listable": true,
+    "apiPath": "/accounts/{accountId}/paymentAllocations",
+    "reason": "documented list endpoint"
+  },
+  {
+    "object": "Price",
+    "listable": false,
+    "apiPath": null,
+    "reason": "nested-in:Product.price (no independent list endpoint)"
+  },
+  {
+    "object": "Product",
+    "listable": true,
+    "apiPath": "/accounts/{accountId}/store/products",
+    "reason": "documented list endpoint"
+  },
+  {
+    "object": "ProductFile",
+    "listable": false,
+    "apiPath": null,
+    "reason": "nested-in:DigitalProduct.productFile (no independent list endpoint)"
+  },
+  {
+    "object": "ProductLink",
+    "listable": false,
+    "apiPath": null,
+    "reason": "nested-in:DigitalProduct.productLink (no independent list endpoint)"
+  },
+  {
+    "object": "ProductOption",
+    "listable": false,
+    "apiPath": null,
+    "reason": "nested-in:Product.productOptions[] (no independent list endpoint)"
+  },
+  {
+    "object": "ProductVariant",
+    "listable": false,
+    "apiPath": null,
+    "reason": "nested-in:Product.productVariants[] (no independent list endpoint)"
+  },
+  {
+    "object": "ProductVariantOptionValue",
+    "listable": false,
+    "apiPath": null,
+    "reason": "nested-in:ProductVariant.productVariantOptionValues[] (no independent list endpoint)"
+  },
+  {
+    "object": "Refund",
+    "listable": true,
+    "apiPath": "/accounts/{accountId}/refunds",
+    "reason": "documented list endpoint"
+  },
+  {
+    "object": "RenewalPolicy",
+    "listable": false,
+    "apiPath": null,
+    "reason": "nested-in:ContactFieldDescription.RenewalPolicy (no independent list endpoint)"
+  },
+  {
+    "object": "RulesAndTermsInfo",
+    "listable": false,
+    "apiPath": null,
+    "reason": "nested-in:EntityFieldDescription.RulesAndTermsInfo (no independent list endpoint)"
+  },
+  {
+    "object": "SalesTax",
+    "listable": false,
+    "apiPath": null,
+    "reason": "no-list-endpoint: schema not reachable via any documented list route"
+  },
+  {
+    "object": "SalesTaxInfo",
+    "listable": false,
+    "apiPath": null,
+    "reason": "nested-in:OrderDetailRecord.Taxes (no independent list endpoint)"
+  },
+  {
+    "object": "SavedSearch",
+    "listable": true,
+    "apiPath": "/accounts/{accountId}/savedsearches",
+    "reason": "documented list endpoint"
+  },
+  {
+    "object": "SentEmailRecipient",
+    "listable": true,
+    "apiPath": "/accounts/{accountId}/SentEmailRecipients",
+    "reason": "documented list endpoint"
+  },
+  {
+    "object": "ShippingAddress",
+    "listable": false,
+    "apiPath": null,
+    "reason": "nested-in:Order.shippingAddress (no independent list endpoint)"
+  },
+  {
+    "object": "Tender",
+    "listable": true,
+    "apiPath": "/accounts/{accountId}/tenders",
+    "reason": "documented list endpoint"
+  }
+]

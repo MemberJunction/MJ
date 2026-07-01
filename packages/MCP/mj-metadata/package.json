@@ -1,0 +1,35 @@
+{
+  "name": "@memberjunction/mcp-mj-metadata",
+  "type": "module",
+  "version": "5.38.0",
+  "description": "MemberJunction: Model Context Protocol (MCP) server exposing atomic read/write tools for connector integration metadata",
+  "main": "./dist/server.js",
+  "types": "./dist/server.d.ts",
+  "bin": {
+    "mj-metadata-mcp": "./dist/server.js"
+  },
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "files": [
+    "dist"
+  ],
+  "author": "MemberJunction.com",
+  "license": "ISC",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.26.0",
+    "zod": "~3.24.4"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.11",
+    "tsc-alias": "^1.8.10",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

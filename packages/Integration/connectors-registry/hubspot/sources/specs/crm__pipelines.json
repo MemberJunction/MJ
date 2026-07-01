@@ -1,0 +1,2928 @@
+{
+  "openapi" : "3.0.1",
+  "info" : {
+    "title" : "Pipelines",
+    "description" : "Basepom for all HubSpot Projects",
+    "version" : "2026-03",
+    "x-hubspot-product-tier-requirements" : {
+      "marketing" : "FREE",
+      "sales" : "FREE",
+      "service" : "FREE",
+      "cms" : "FREE",
+      "commerce" : "FREE",
+      "crmHub" : "FREE",
+      "dataHub" : "FREE"
+    },
+    "x-hubspot-api-use-case" : "To streamline customer support processes, use this API to retrieve your existing ticket pipelines and add new stages based on your business needs. Support reps can then assign tickets to those pipeline stages to track progress on customer issues.",
+    "x-hubspot-introduction" : "Use the pipelines API to create and manage deal and ticket pipelines. Pipelines enable you to track the status or progress of deals and tickets, such as closing deals and opening support tickets."
+  },
+  "servers" : [ {
+    "url" : "https://api.hubapi.com"
+  } ],
+  "tags" : [ {
+    "name" : "Basic"
+  } ],
+  "paths" : {
+    "/crm/pipelines/2026-03/{objectType}" : {
+      "get" : {
+        "tags" : [ "Basic" ],
+        "summary" : "Retrieve all pipelines",
+        "description" : "Return all pipelines for the object type specified by `{objectType}`.",
+        "operationId" : "get-/crm/pipelines/2026-03/{objectType}_getAll",
+        "parameters" : [ {
+          "name" : "objectType",
+          "in" : "path",
+          "description" : "",
+          "required" : true,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "successful operation",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CollectionResponsePipelineNoPaging"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "$ref" : "#/components/responses/Error"
+          }
+        },
+        "security" : [ {
+          "oauth2" : [ "crm.objects.owners.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.deals.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.subscriptions.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.services.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.listings.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.custom.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.custom.sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.tasks.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.custom.highly_sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.schemas.quotes.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.companies.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.companies.sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "media_bridge.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.deals.highly_sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.companies.highly_sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.contacts.sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.calls.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.meetings.read" ]
+        }, {
+          "oauth2" : [ "crm.schemas.services.read" ]
+        }, {
+          "oauth2" : [ "crm.schemas.line_items.read" ]
+        }, {
+          "oauth2" : [ "crm.schemas.subscriptions.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.projects.highly_sensitive.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.companies.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.feedback_submissions.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.products.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.services.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.subscriptions.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.calls.read" ]
+        }, {
+          "oauth2" : [ "crm.schemas.meetings.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.contacts.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.invoices.read" ]
+        }, {
+          "oauth2" : [ "crm.schemas.orders.read" ]
+        }, {
+          "oauth2" : [ "crm.schemas.emails.read" ]
+        }, {
+          "oauth2" : [ "crm.schemas.deals.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.deals.write" ]
+        }, {
+          "oauth2" : [ "e-commerce" ]
+        }, {
+          "oauth2" : [ "crm.schemas.notes.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.projects.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.companies.sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.custom.highly_sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.goals.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.line_items.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.contacts.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.goals.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.line_items.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.deals.sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.projects.sensitive.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.quotes.write" ]
+        }, {
+          "oauth2" : [ "tickets.highly_sensitive.v2" ]
+        }, {
+          "oauth2" : [ "crm.schemas.contacts.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.leads.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.leads.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.tasks.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.emails.read" ]
+        }, {
+          "oauth2" : [ "crm.schemas.invoices.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.quotes.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.notes.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.courses.read" ]
+        }, {
+          "oauth2" : [ "timeline" ]
+        }, {
+          "oauth2" : [ "crm.pipelines.orders.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.marketing_events.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.contacts.sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "crm.schemas.projects.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.orders.read" ]
+        }, {
+          "oauth2" : [ "automation" ]
+        }, {
+          "oauth2" : [ "crm.objects.companies.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.carts.read" ]
+        }, {
+          "oauth2" : [ "cpq.quotes.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.listings.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.contacts.highly_sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.appointments.sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.contacts.highly_sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.commercepayments.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.invoices.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.custom.sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.users.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.appointments.write" ]
+        }, {
+          "oauth2" : [ "tickets" ]
+        }, {
+          "oauth2" : [ "crm.objects.deals.sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "cpq.quotes.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.appointments.sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.projects.highly_sensitive.read" ]
+        }, {
+          "oauth2" : [ "crm.schemas.appointments.read" ]
+        }, {
+          "oauth2" : [ "tickets.sensitive.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.custom.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.appointments.read" ]
+        }, {
+          "oauth2" : [ "crm.schemas.courses.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.deals.highly_sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.companies.highly_sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.projects.sensitive.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.projects.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.marketing_events.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.custom.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.carts.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.courses.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.commercepayments.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.listings.read" ]
+        } ]
+      },
+      "post" : {
+        "tags" : [ "Basic" ],
+        "summary" : "Create a pipeline",
+        "description" : "Create a new pipeline with the provided property values. The entire pipeline object, including its unique ID, will be returned in the response.",
+        "operationId" : "post-/crm/pipelines/2026-03/{objectType}_create",
+        "parameters" : [ {
+          "name" : "objectType",
+          "in" : "path",
+          "description" : "",
+          "required" : true,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PipelineInput"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "201" : {
+            "description" : "successful operation",
+            "headers" : {
+              "Location" : {
+                "description" : "URL of the newly created resource",
+                "style" : "simple",
+                "explode" : false,
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Pipeline"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "$ref" : "#/components/responses/Error"
+          }
+        },
+        "security" : [ {
+          "oauth2" : [ "crm.schemas.quotes.write" ]
+        }, {
+          "oauth2" : [ "tickets" ]
+        }, {
+          "oauth2" : [ "crm.schemas.subscriptions.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.custom.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.listings.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.invoices.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.orders.write" ]
+        }, {
+          "oauth2" : [ "crm.pipelines.orders.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.commercepayments.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.users.write" ]
+        }, {
+          "oauth2" : [ "tickets.highly_sensitive.v2" ]
+        }, {
+          "oauth2" : [ "crm.schemas.services.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.orders.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.courses.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.projects.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.deals.write" ]
+        }, {
+          "oauth2" : [ "tickets.sensitive.v2" ]
+        }, {
+          "oauth2" : [ "e-commerce" ]
+        }, {
+          "oauth2" : [ "crm.objects.carts.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.appointments.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.contacts.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.carts.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.companies.write" ]
+        } ]
+      }
+    },
+    "/crm/pipelines/2026-03/{objectType}/{pipelineId}" : {
+      "get" : {
+        "tags" : [ "Basic" ],
+        "summary" : "Return a pipeline by ID",
+        "description" : "Return a single pipeline object identified by its unique `{pipelineId}`.",
+        "operationId" : "get-/crm/pipelines/2026-03/{objectType}/{pipelineId}_getById",
+        "parameters" : [ {
+          "name" : "objectType",
+          "in" : "path",
+          "description" : "",
+          "required" : true,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "pipelineId",
+          "in" : "path",
+          "description" : "",
+          "required" : true,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "successful operation",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Pipeline"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "$ref" : "#/components/responses/Error"
+          }
+        },
+        "security" : [ {
+          "oauth2" : [ "crm.objects.owners.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.deals.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.subscriptions.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.services.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.listings.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.custom.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.custom.sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.tasks.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.custom.highly_sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.schemas.quotes.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.companies.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.companies.sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "media_bridge.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.deals.highly_sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.companies.highly_sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.contacts.sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.calls.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.meetings.read" ]
+        }, {
+          "oauth2" : [ "crm.schemas.services.read" ]
+        }, {
+          "oauth2" : [ "crm.schemas.line_items.read" ]
+        }, {
+          "oauth2" : [ "crm.schemas.subscriptions.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.projects.highly_sensitive.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.companies.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.feedback_submissions.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.products.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.services.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.subscriptions.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.calls.read" ]
+        }, {
+          "oauth2" : [ "crm.schemas.meetings.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.contacts.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.invoices.read" ]
+        }, {
+          "oauth2" : [ "crm.schemas.orders.read" ]
+        }, {
+          "oauth2" : [ "crm.schemas.emails.read" ]
+        }, {
+          "oauth2" : [ "crm.schemas.deals.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.deals.write" ]
+        }, {
+          "oauth2" : [ "e-commerce" ]
+        }, {
+          "oauth2" : [ "crm.schemas.notes.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.projects.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.companies.sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.custom.highly_sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.goals.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.line_items.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.contacts.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.goals.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.line_items.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.deals.sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.projects.sensitive.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.quotes.write" ]
+        }, {
+          "oauth2" : [ "tickets.highly_sensitive.v2" ]
+        }, {
+          "oauth2" : [ "crm.schemas.contacts.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.leads.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.leads.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.tasks.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.emails.read" ]
+        }, {
+          "oauth2" : [ "crm.schemas.invoices.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.quotes.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.notes.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.courses.read" ]
+        }, {
+          "oauth2" : [ "timeline" ]
+        }, {
+          "oauth2" : [ "crm.pipelines.orders.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.marketing_events.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.contacts.sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "crm.schemas.projects.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.orders.read" ]
+        }, {
+          "oauth2" : [ "automation" ]
+        }, {
+          "oauth2" : [ "crm.objects.companies.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.carts.read" ]
+        }, {
+          "oauth2" : [ "cpq.quotes.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.listings.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.contacts.highly_sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.appointments.sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.contacts.highly_sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.commercepayments.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.invoices.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.custom.sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.users.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.appointments.write" ]
+        }, {
+          "oauth2" : [ "tickets" ]
+        }, {
+          "oauth2" : [ "crm.objects.deals.sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "cpq.quotes.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.appointments.sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.projects.highly_sensitive.read" ]
+        }, {
+          "oauth2" : [ "crm.schemas.appointments.read" ]
+        }, {
+          "oauth2" : [ "tickets.sensitive.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.custom.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.appointments.read" ]
+        }, {
+          "oauth2" : [ "crm.schemas.courses.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.deals.highly_sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.companies.highly_sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.projects.sensitive.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.projects.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.marketing_events.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.custom.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.carts.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.courses.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.commercepayments.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.listings.read" ]
+        } ]
+      },
+      "put" : {
+        "tags" : [ "Basic" ],
+        "summary" : "Replace a pipeline",
+        "description" : "Replace all properties of an existing pipeline with the provided values.",
+        "operationId" : "put-/crm/pipelines/2026-03/{objectType}/{pipelineId}_replace",
+        "parameters" : [ {
+          "name" : "objectType",
+          "in" : "path",
+          "description" : "",
+          "required" : true,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "pipelineId",
+          "in" : "path",
+          "description" : "",
+          "required" : true,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "validateDealStageUsagesBeforeDelete",
+          "in" : "query",
+          "description" : "",
+          "required" : false,
+          "style" : "form",
+          "explode" : true,
+          "schema" : {
+            "type" : "boolean",
+            "default" : false
+          }
+        }, {
+          "name" : "validateReferencesBeforeDelete",
+          "in" : "query",
+          "description" : "",
+          "required" : false,
+          "style" : "form",
+          "explode" : true,
+          "schema" : {
+            "type" : "boolean",
+            "default" : false
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PipelineReplaceInput"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "successful operation",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Pipeline"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "$ref" : "#/components/responses/Error"
+          }
+        },
+        "security" : [ {
+          "oauth2" : [ "crm.schemas.quotes.write" ]
+        }, {
+          "oauth2" : [ "tickets" ]
+        }, {
+          "oauth2" : [ "crm.schemas.subscriptions.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.custom.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.listings.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.invoices.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.orders.write" ]
+        }, {
+          "oauth2" : [ "crm.pipelines.orders.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.commercepayments.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.users.write" ]
+        }, {
+          "oauth2" : [ "tickets.highly_sensitive.v2" ]
+        }, {
+          "oauth2" : [ "crm.schemas.services.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.orders.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.courses.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.projects.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.deals.write" ]
+        }, {
+          "oauth2" : [ "tickets.sensitive.v2" ]
+        }, {
+          "oauth2" : [ "e-commerce" ]
+        }, {
+          "oauth2" : [ "crm.objects.carts.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.appointments.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.contacts.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.carts.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.companies.write" ]
+        } ]
+      },
+      "delete" : {
+        "tags" : [ "Basic" ],
+        "summary" : "Delete a pipeline",
+        "description" : "Delete a pipeline identified by its unique pipelineId",
+        "operationId" : "delete-/crm/pipelines/2026-03/{objectType}/{pipelineId}_archive",
+        "parameters" : [ {
+          "name" : "objectType",
+          "in" : "path",
+          "description" : "",
+          "required" : true,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "pipelineId",
+          "in" : "path",
+          "description" : "",
+          "required" : true,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "validateDealStageUsagesBeforeDelete",
+          "in" : "query",
+          "description" : "",
+          "required" : false,
+          "style" : "form",
+          "explode" : true,
+          "schema" : {
+            "type" : "boolean",
+            "default" : false
+          }
+        }, {
+          "name" : "validateReferencesBeforeDelete",
+          "in" : "query",
+          "description" : "",
+          "required" : false,
+          "style" : "form",
+          "explode" : true,
+          "schema" : {
+            "type" : "boolean",
+            "default" : false
+          }
+        } ],
+        "responses" : {
+          "204" : {
+            "description" : "No content",
+            "content" : { }
+          },
+          "default" : {
+            "description" : "",
+            "$ref" : "#/components/responses/Error"
+          }
+        },
+        "security" : [ {
+          "oauth2" : [ "crm.schemas.quotes.write" ]
+        }, {
+          "oauth2" : [ "tickets" ]
+        }, {
+          "oauth2" : [ "crm.schemas.subscriptions.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.custom.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.listings.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.invoices.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.orders.write" ]
+        }, {
+          "oauth2" : [ "crm.pipelines.orders.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.commercepayments.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.users.write" ]
+        }, {
+          "oauth2" : [ "tickets.highly_sensitive.v2" ]
+        }, {
+          "oauth2" : [ "crm.schemas.services.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.orders.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.courses.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.projects.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.deals.write" ]
+        }, {
+          "oauth2" : [ "tickets.sensitive.v2" ]
+        }, {
+          "oauth2" : [ "e-commerce" ]
+        }, {
+          "oauth2" : [ "crm.objects.carts.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.appointments.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.contacts.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.carts.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.companies.write" ]
+        } ]
+      },
+      "patch" : {
+        "tags" : [ "Basic" ],
+        "summary" : "Perform a partial update of the pipeline identified by pipelineId.",
+        "description" : "Perform a partial update of the pipeline identified by `{pipelineId}`. The updated pipeline will be returned in the response.",
+        "operationId" : "patch-/crm/pipelines/2026-03/{objectType}/{pipelineId}_update",
+        "parameters" : [ {
+          "name" : "objectType",
+          "in" : "path",
+          "description" : "",
+          "required" : true,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "pipelineId",
+          "in" : "path",
+          "description" : "",
+          "required" : true,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "validateDealStageUsagesBeforeDelete",
+          "in" : "query",
+          "description" : "",
+          "required" : false,
+          "style" : "form",
+          "explode" : true,
+          "schema" : {
+            "type" : "boolean",
+            "default" : false
+          }
+        }, {
+          "name" : "validateReferencesBeforeDelete",
+          "in" : "query",
+          "description" : "",
+          "required" : false,
+          "style" : "form",
+          "explode" : true,
+          "schema" : {
+            "type" : "boolean",
+            "default" : false
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PipelinePatchInput"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "successful operation",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Pipeline"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "$ref" : "#/components/responses/Error"
+          }
+        },
+        "security" : [ {
+          "oauth2" : [ "crm.schemas.quotes.write" ]
+        }, {
+          "oauth2" : [ "tickets" ]
+        }, {
+          "oauth2" : [ "crm.schemas.subscriptions.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.custom.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.listings.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.invoices.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.orders.write" ]
+        }, {
+          "oauth2" : [ "crm.pipelines.orders.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.commercepayments.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.users.write" ]
+        }, {
+          "oauth2" : [ "tickets.highly_sensitive.v2" ]
+        }, {
+          "oauth2" : [ "crm.schemas.services.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.orders.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.courses.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.projects.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.deals.write" ]
+        }, {
+          "oauth2" : [ "tickets.sensitive.v2" ]
+        }, {
+          "oauth2" : [ "e-commerce" ]
+        }, {
+          "oauth2" : [ "crm.objects.carts.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.appointments.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.contacts.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.carts.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.companies.write" ]
+        } ]
+      }
+    },
+    "/crm/pipelines/2026-03/{objectType}/{pipelineId}/audit" : {
+      "get" : {
+        "tags" : [ "Basic" ],
+        "summary" : "Return an audit of all changes to the pipeline",
+        "description" : "Return a reverse chronological list of all mutations that have occurred on the pipeline identified by `{pipelineId}`.",
+        "operationId" : "get-/crm/pipelines/2026-03/{objectType}/{pipelineId}/audit_getAudit",
+        "parameters" : [ {
+          "name" : "objectType",
+          "in" : "path",
+          "description" : "",
+          "required" : true,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "pipelineId",
+          "in" : "path",
+          "description" : "",
+          "required" : true,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "successful operation",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CollectionResponsePublicAuditInfoNoPaging"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "$ref" : "#/components/responses/Error"
+          }
+        },
+        "security" : [ {
+          "oauth2" : [ "crm.objects.owners.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.deals.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.subscriptions.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.services.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.listings.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.custom.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.custom.sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.tasks.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.custom.highly_sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.schemas.quotes.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.companies.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.companies.sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "media_bridge.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.deals.highly_sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.companies.highly_sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.contacts.sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.calls.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.meetings.read" ]
+        }, {
+          "oauth2" : [ "crm.schemas.services.read" ]
+        }, {
+          "oauth2" : [ "crm.schemas.line_items.read" ]
+        }, {
+          "oauth2" : [ "crm.schemas.subscriptions.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.projects.highly_sensitive.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.companies.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.feedback_submissions.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.products.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.services.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.subscriptions.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.calls.read" ]
+        }, {
+          "oauth2" : [ "crm.schemas.meetings.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.contacts.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.invoices.read" ]
+        }, {
+          "oauth2" : [ "crm.schemas.orders.read" ]
+        }, {
+          "oauth2" : [ "crm.schemas.emails.read" ]
+        }, {
+          "oauth2" : [ "crm.schemas.deals.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.deals.write" ]
+        }, {
+          "oauth2" : [ "e-commerce" ]
+        }, {
+          "oauth2" : [ "crm.schemas.notes.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.projects.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.companies.sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.custom.highly_sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.goals.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.line_items.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.contacts.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.goals.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.line_items.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.deals.sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.projects.sensitive.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.quotes.write" ]
+        }, {
+          "oauth2" : [ "tickets.highly_sensitive.v2" ]
+        }, {
+          "oauth2" : [ "crm.schemas.contacts.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.leads.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.leads.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.tasks.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.emails.read" ]
+        }, {
+          "oauth2" : [ "crm.schemas.invoices.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.quotes.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.notes.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.courses.read" ]
+        }, {
+          "oauth2" : [ "timeline" ]
+        }, {
+          "oauth2" : [ "crm.pipelines.orders.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.marketing_events.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.contacts.sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "crm.schemas.projects.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.orders.read" ]
+        }, {
+          "oauth2" : [ "automation" ]
+        }, {
+          "oauth2" : [ "crm.objects.companies.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.carts.read" ]
+        }, {
+          "oauth2" : [ "cpq.quotes.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.listings.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.contacts.highly_sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.appointments.sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.contacts.highly_sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.commercepayments.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.invoices.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.custom.sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.users.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.appointments.write" ]
+        }, {
+          "oauth2" : [ "tickets" ]
+        }, {
+          "oauth2" : [ "crm.objects.deals.sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "cpq.quotes.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.appointments.sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.projects.highly_sensitive.read" ]
+        }, {
+          "oauth2" : [ "crm.schemas.appointments.read" ]
+        }, {
+          "oauth2" : [ "tickets.sensitive.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.custom.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.appointments.read" ]
+        }, {
+          "oauth2" : [ "crm.schemas.courses.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.deals.highly_sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.companies.highly_sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.projects.sensitive.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.projects.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.marketing_events.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.custom.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.carts.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.courses.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.commercepayments.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.listings.read" ]
+        } ]
+      }
+    },
+    "/crm/pipelines/2026-03/{objectType}/{pipelineId}/stages" : {
+      "get" : {
+        "tags" : [ "Basic" ],
+        "summary" : "Return all stages of a pipeline",
+        "description" : "Return all the stages associated with the pipeline identified by `{pipelineId}`.",
+        "operationId" : "get-/crm/pipelines/2026-03/{objectType}/{pipelineId}/stages_getAll",
+        "parameters" : [ {
+          "name" : "objectType",
+          "in" : "path",
+          "description" : "",
+          "required" : true,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "pipelineId",
+          "in" : "path",
+          "description" : "",
+          "required" : true,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "successful operation",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CollectionResponsePipelineStageNoPaging"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "$ref" : "#/components/responses/Error"
+          }
+        },
+        "security" : [ {
+          "oauth2" : [ "crm.objects.owners.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.deals.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.subscriptions.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.services.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.listings.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.custom.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.custom.sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.tasks.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.custom.highly_sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.schemas.quotes.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.companies.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.companies.sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "media_bridge.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.deals.highly_sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.companies.highly_sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.contacts.sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.calls.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.meetings.read" ]
+        }, {
+          "oauth2" : [ "crm.schemas.services.read" ]
+        }, {
+          "oauth2" : [ "crm.schemas.line_items.read" ]
+        }, {
+          "oauth2" : [ "crm.schemas.subscriptions.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.projects.highly_sensitive.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.companies.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.feedback_submissions.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.products.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.services.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.subscriptions.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.calls.read" ]
+        }, {
+          "oauth2" : [ "crm.schemas.meetings.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.contacts.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.invoices.read" ]
+        }, {
+          "oauth2" : [ "crm.schemas.orders.read" ]
+        }, {
+          "oauth2" : [ "crm.schemas.emails.read" ]
+        }, {
+          "oauth2" : [ "crm.schemas.deals.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.deals.write" ]
+        }, {
+          "oauth2" : [ "e-commerce" ]
+        }, {
+          "oauth2" : [ "crm.schemas.notes.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.projects.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.companies.sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.custom.highly_sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.goals.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.line_items.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.contacts.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.goals.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.line_items.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.deals.sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.projects.sensitive.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.quotes.write" ]
+        }, {
+          "oauth2" : [ "tickets.highly_sensitive.v2" ]
+        }, {
+          "oauth2" : [ "crm.schemas.contacts.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.leads.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.leads.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.tasks.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.emails.read" ]
+        }, {
+          "oauth2" : [ "crm.schemas.invoices.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.quotes.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.notes.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.courses.read" ]
+        }, {
+          "oauth2" : [ "timeline" ]
+        }, {
+          "oauth2" : [ "crm.pipelines.orders.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.marketing_events.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.contacts.sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "crm.schemas.projects.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.orders.read" ]
+        }, {
+          "oauth2" : [ "automation" ]
+        }, {
+          "oauth2" : [ "crm.objects.companies.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.carts.read" ]
+        }, {
+          "oauth2" : [ "cpq.quotes.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.listings.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.contacts.highly_sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.appointments.sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.contacts.highly_sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.commercepayments.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.invoices.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.custom.sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.users.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.appointments.write" ]
+        }, {
+          "oauth2" : [ "tickets" ]
+        }, {
+          "oauth2" : [ "crm.objects.deals.sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "cpq.quotes.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.appointments.sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.projects.highly_sensitive.read" ]
+        }, {
+          "oauth2" : [ "crm.schemas.appointments.read" ]
+        }, {
+          "oauth2" : [ "tickets.sensitive.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.custom.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.appointments.read" ]
+        }, {
+          "oauth2" : [ "crm.schemas.courses.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.deals.highly_sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.companies.highly_sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.projects.sensitive.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.projects.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.marketing_events.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.custom.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.carts.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.courses.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.commercepayments.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.listings.read" ]
+        } ]
+      },
+      "post" : {
+        "tags" : [ "Basic" ],
+        "summary" : "Create a pipeline stage",
+        "description" : "Create a new stage within the specified pipeline.",
+        "operationId" : "post-/crm/pipelines/2026-03/{objectType}/{pipelineId}/stages_create",
+        "parameters" : [ {
+          "name" : "objectType",
+          "in" : "path",
+          "description" : "",
+          "required" : true,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "pipelineId",
+          "in" : "path",
+          "description" : "",
+          "required" : true,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PipelineStageInput"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "201" : {
+            "description" : "successful operation",
+            "headers" : {
+              "Location" : {
+                "description" : "URL of the newly created resource",
+                "style" : "simple",
+                "explode" : false,
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PipelineStage"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "$ref" : "#/components/responses/Error"
+          }
+        },
+        "security" : [ {
+          "oauth2" : [ "crm.schemas.quotes.write" ]
+        }, {
+          "oauth2" : [ "tickets" ]
+        }, {
+          "oauth2" : [ "crm.schemas.subscriptions.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.custom.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.listings.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.invoices.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.orders.write" ]
+        }, {
+          "oauth2" : [ "crm.pipelines.orders.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.commercepayments.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.users.write" ]
+        }, {
+          "oauth2" : [ "tickets.highly_sensitive.v2" ]
+        }, {
+          "oauth2" : [ "crm.schemas.services.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.orders.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.courses.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.projects.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.deals.write" ]
+        }, {
+          "oauth2" : [ "tickets.sensitive.v2" ]
+        }, {
+          "oauth2" : [ "e-commerce" ]
+        }, {
+          "oauth2" : [ "crm.objects.carts.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.appointments.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.contacts.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.carts.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.companies.write" ]
+        } ]
+      }
+    },
+    "/crm/pipelines/2026-03/{objectType}/{pipelineId}/stages/{stageId}" : {
+      "get" : {
+        "tags" : [ "Basic" ],
+        "summary" : "Return a pipeline stage by ID",
+        "description" : "Retrieve a specific stage from a pipeline using its ID.",
+        "operationId" : "get-/crm/pipelines/2026-03/{objectType}/{pipelineId}/stages/{stageId}_getById",
+        "parameters" : [ {
+          "name" : "objectType",
+          "in" : "path",
+          "description" : "",
+          "required" : true,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "pipelineId",
+          "in" : "path",
+          "description" : "",
+          "required" : true,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "stageId",
+          "in" : "path",
+          "description" : "",
+          "required" : true,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "successful operation",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PipelineStage"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "$ref" : "#/components/responses/Error"
+          }
+        },
+        "security" : [ {
+          "oauth2" : [ "crm.objects.owners.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.deals.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.subscriptions.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.services.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.listings.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.custom.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.custom.sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.tasks.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.custom.highly_sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.schemas.quotes.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.companies.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.companies.sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "media_bridge.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.deals.highly_sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.companies.highly_sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.contacts.sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.calls.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.meetings.read" ]
+        }, {
+          "oauth2" : [ "crm.schemas.services.read" ]
+        }, {
+          "oauth2" : [ "crm.schemas.line_items.read" ]
+        }, {
+          "oauth2" : [ "crm.schemas.subscriptions.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.projects.highly_sensitive.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.companies.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.feedback_submissions.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.products.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.services.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.subscriptions.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.calls.read" ]
+        }, {
+          "oauth2" : [ "crm.schemas.meetings.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.contacts.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.invoices.read" ]
+        }, {
+          "oauth2" : [ "crm.schemas.orders.read" ]
+        }, {
+          "oauth2" : [ "crm.schemas.emails.read" ]
+        }, {
+          "oauth2" : [ "crm.schemas.deals.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.deals.write" ]
+        }, {
+          "oauth2" : [ "e-commerce" ]
+        }, {
+          "oauth2" : [ "crm.schemas.notes.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.projects.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.companies.sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.custom.highly_sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.goals.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.line_items.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.contacts.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.goals.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.line_items.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.deals.sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.projects.sensitive.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.quotes.write" ]
+        }, {
+          "oauth2" : [ "tickets.highly_sensitive.v2" ]
+        }, {
+          "oauth2" : [ "crm.schemas.contacts.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.leads.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.leads.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.tasks.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.emails.read" ]
+        }, {
+          "oauth2" : [ "crm.schemas.invoices.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.quotes.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.notes.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.courses.read" ]
+        }, {
+          "oauth2" : [ "timeline" ]
+        }, {
+          "oauth2" : [ "crm.pipelines.orders.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.marketing_events.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.contacts.sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "crm.schemas.projects.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.orders.read" ]
+        }, {
+          "oauth2" : [ "automation" ]
+        }, {
+          "oauth2" : [ "crm.objects.companies.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.carts.read" ]
+        }, {
+          "oauth2" : [ "cpq.quotes.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.listings.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.contacts.highly_sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.appointments.sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.contacts.highly_sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.commercepayments.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.invoices.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.custom.sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.users.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.appointments.write" ]
+        }, {
+          "oauth2" : [ "tickets" ]
+        }, {
+          "oauth2" : [ "crm.objects.deals.sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "cpq.quotes.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.appointments.sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.projects.highly_sensitive.read" ]
+        }, {
+          "oauth2" : [ "crm.schemas.appointments.read" ]
+        }, {
+          "oauth2" : [ "tickets.sensitive.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.custom.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.appointments.read" ]
+        }, {
+          "oauth2" : [ "crm.schemas.courses.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.deals.highly_sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.companies.highly_sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.projects.sensitive.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.projects.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.marketing_events.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.custom.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.carts.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.courses.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.commercepayments.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.listings.read" ]
+        } ]
+      },
+      "put" : {
+        "tags" : [ "Basic" ],
+        "summary" : "Replace a pipeline stage",
+        "description" : "Replace all the properties of an existing pipeline stage with the values provided. The updated stage will be returned in the response.",
+        "operationId" : "put-/crm/pipelines/2026-03/{objectType}/{pipelineId}/stages/{stageId}_replace",
+        "parameters" : [ {
+          "name" : "objectType",
+          "in" : "path",
+          "description" : "",
+          "required" : true,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "pipelineId",
+          "in" : "path",
+          "description" : "",
+          "required" : true,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "stageId",
+          "in" : "path",
+          "description" : "",
+          "required" : true,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PipelineStageReplaceInput"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "successful operation",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PipelineStage"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "$ref" : "#/components/responses/Error"
+          }
+        },
+        "security" : [ {
+          "oauth2" : [ "crm.schemas.quotes.write" ]
+        }, {
+          "oauth2" : [ "tickets" ]
+        }, {
+          "oauth2" : [ "crm.schemas.subscriptions.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.custom.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.listings.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.invoices.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.orders.write" ]
+        }, {
+          "oauth2" : [ "crm.pipelines.orders.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.commercepayments.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.users.write" ]
+        }, {
+          "oauth2" : [ "tickets.highly_sensitive.v2" ]
+        }, {
+          "oauth2" : [ "crm.schemas.services.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.orders.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.courses.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.projects.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.deals.write" ]
+        }, {
+          "oauth2" : [ "tickets.sensitive.v2" ]
+        }, {
+          "oauth2" : [ "e-commerce" ]
+        }, {
+          "oauth2" : [ "crm.objects.carts.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.appointments.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.contacts.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.carts.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.companies.write" ]
+        } ]
+      },
+      "delete" : {
+        "tags" : [ "Basic" ],
+        "summary" : "Delete a pipeline stage",
+        "description" : "Delete a specific stage from a pipeline.",
+        "operationId" : "delete-/crm/pipelines/2026-03/{objectType}/{pipelineId}/stages/{stageId}_archive",
+        "parameters" : [ {
+          "name" : "objectType",
+          "in" : "path",
+          "description" : "",
+          "required" : true,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "pipelineId",
+          "in" : "path",
+          "description" : "",
+          "required" : true,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "stageId",
+          "in" : "path",
+          "description" : "",
+          "required" : true,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "validateReferencesBeforeDelete",
+          "in" : "query",
+          "description" : "",
+          "required" : false,
+          "style" : "form",
+          "explode" : true,
+          "schema" : {
+            "type" : "boolean",
+            "default" : false
+          }
+        } ],
+        "responses" : {
+          "204" : {
+            "description" : "No content",
+            "content" : { }
+          },
+          "default" : {
+            "description" : "",
+            "$ref" : "#/components/responses/Error"
+          }
+        },
+        "security" : [ {
+          "oauth2" : [ "crm.schemas.quotes.write" ]
+        }, {
+          "oauth2" : [ "tickets" ]
+        }, {
+          "oauth2" : [ "crm.schemas.subscriptions.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.custom.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.listings.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.invoices.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.orders.write" ]
+        }, {
+          "oauth2" : [ "crm.pipelines.orders.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.commercepayments.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.users.write" ]
+        }, {
+          "oauth2" : [ "tickets.highly_sensitive.v2" ]
+        }, {
+          "oauth2" : [ "crm.schemas.services.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.orders.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.courses.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.projects.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.deals.write" ]
+        }, {
+          "oauth2" : [ "tickets.sensitive.v2" ]
+        }, {
+          "oauth2" : [ "e-commerce" ]
+        }, {
+          "oauth2" : [ "crm.objects.carts.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.appointments.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.contacts.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.carts.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.companies.write" ]
+        } ]
+      },
+      "patch" : {
+        "tags" : [ "Basic" ],
+        "summary" : "Update specific properties of an existing pipeline stage.",
+        "description" : "Perform a partial update on a specific stage of a pipeline.",
+        "operationId" : "patch-/crm/pipelines/2026-03/{objectType}/{pipelineId}/stages/{stageId}_update",
+        "parameters" : [ {
+          "name" : "objectType",
+          "in" : "path",
+          "description" : "",
+          "required" : true,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "pipelineId",
+          "in" : "path",
+          "description" : "",
+          "required" : true,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "stageId",
+          "in" : "path",
+          "description" : "",
+          "required" : true,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PipelineStagePatchInput"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "successful operation",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PipelineStage"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "$ref" : "#/components/responses/Error"
+          }
+        },
+        "security" : [ {
+          "oauth2" : [ "crm.schemas.quotes.write" ]
+        }, {
+          "oauth2" : [ "tickets" ]
+        }, {
+          "oauth2" : [ "crm.schemas.subscriptions.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.custom.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.listings.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.invoices.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.orders.write" ]
+        }, {
+          "oauth2" : [ "crm.pipelines.orders.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.commercepayments.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.users.write" ]
+        }, {
+          "oauth2" : [ "tickets.highly_sensitive.v2" ]
+        }, {
+          "oauth2" : [ "crm.schemas.services.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.orders.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.courses.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.projects.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.deals.write" ]
+        }, {
+          "oauth2" : [ "tickets.sensitive.v2" ]
+        }, {
+          "oauth2" : [ "e-commerce" ]
+        }, {
+          "oauth2" : [ "crm.objects.carts.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.appointments.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.contacts.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.carts.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.companies.write" ]
+        } ]
+      }
+    },
+    "/crm/pipelines/2026-03/{objectType}/{pipelineId}/stages/{stageId}/audit" : {
+      "get" : {
+        "tags" : [ "Basic" ],
+        "summary" : "Retrieve a reverse chronological list of all changes made to a specific pipeline stage.",
+        "description" : "Return a reverse chronological list of all mutations that have occurred on the pipeline stage identified by `{stageId}`.",
+        "operationId" : "get-/crm/pipelines/2026-03/{objectType}/{pipelineId}/stages/{stageId}/audit_getAudit",
+        "parameters" : [ {
+          "name" : "objectType",
+          "in" : "path",
+          "description" : "",
+          "required" : true,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "pipelineId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "pattern" : ".+",
+            "type" : "string"
+          }
+        }, {
+          "name" : "stageId",
+          "in" : "path",
+          "description" : "",
+          "required" : true,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "successful operation",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CollectionResponsePublicAuditInfoNoPaging"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "$ref" : "#/components/responses/Error"
+          }
+        },
+        "security" : [ {
+          "oauth2" : [ "crm.objects.owners.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.deals.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.subscriptions.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.services.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.listings.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.custom.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.custom.sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.tasks.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.custom.highly_sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.schemas.quotes.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.companies.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.companies.sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "media_bridge.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.deals.highly_sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.companies.highly_sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.contacts.sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.calls.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.meetings.read" ]
+        }, {
+          "oauth2" : [ "crm.schemas.services.read" ]
+        }, {
+          "oauth2" : [ "crm.schemas.line_items.read" ]
+        }, {
+          "oauth2" : [ "crm.schemas.subscriptions.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.projects.highly_sensitive.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.companies.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.feedback_submissions.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.products.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.services.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.subscriptions.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.calls.read" ]
+        }, {
+          "oauth2" : [ "crm.schemas.meetings.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.contacts.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.invoices.read" ]
+        }, {
+          "oauth2" : [ "crm.schemas.orders.read" ]
+        }, {
+          "oauth2" : [ "crm.schemas.emails.read" ]
+        }, {
+          "oauth2" : [ "crm.schemas.deals.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.deals.write" ]
+        }, {
+          "oauth2" : [ "e-commerce" ]
+        }, {
+          "oauth2" : [ "crm.schemas.notes.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.projects.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.companies.sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.custom.highly_sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.goals.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.line_items.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.contacts.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.goals.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.line_items.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.deals.sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.projects.sensitive.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.quotes.write" ]
+        }, {
+          "oauth2" : [ "tickets.highly_sensitive.v2" ]
+        }, {
+          "oauth2" : [ "crm.schemas.contacts.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.leads.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.leads.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.tasks.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.emails.read" ]
+        }, {
+          "oauth2" : [ "crm.schemas.invoices.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.quotes.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.notes.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.courses.read" ]
+        }, {
+          "oauth2" : [ "timeline" ]
+        }, {
+          "oauth2" : [ "crm.pipelines.orders.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.marketing_events.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.contacts.sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "crm.schemas.projects.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.orders.read" ]
+        }, {
+          "oauth2" : [ "automation" ]
+        }, {
+          "oauth2" : [ "crm.objects.companies.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.carts.read" ]
+        }, {
+          "oauth2" : [ "cpq.quotes.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.listings.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.contacts.highly_sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.appointments.sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.contacts.highly_sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.commercepayments.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.invoices.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.custom.sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.users.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.appointments.write" ]
+        }, {
+          "oauth2" : [ "tickets" ]
+        }, {
+          "oauth2" : [ "crm.objects.deals.sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "cpq.quotes.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.appointments.sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.projects.highly_sensitive.read" ]
+        }, {
+          "oauth2" : [ "crm.schemas.appointments.read" ]
+        }, {
+          "oauth2" : [ "tickets.sensitive.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.custom.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.appointments.read" ]
+        }, {
+          "oauth2" : [ "crm.schemas.courses.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.deals.highly_sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.companies.highly_sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.projects.sensitive.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.projects.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.marketing_events.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.custom.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.carts.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.courses.write" ]
+        }, {
+          "oauth2" : [ "crm.schemas.commercepayments.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.listings.read" ]
+        } ]
+      }
+    }
+  },
+  "components" : {
+    "schemas" : {
+      "CollectionResponsePipelineNoPaging" : {
+        "required" : [ "results" ],
+        "type" : "object",
+        "properties" : {
+          "results" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Pipeline"
+            }
+          }
+        }
+      },
+      "CollectionResponsePipelineStageNoPaging" : {
+        "required" : [ "results" ],
+        "type" : "object",
+        "properties" : {
+          "results" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/PipelineStage"
+            }
+          }
+        }
+      },
+      "CollectionResponsePublicAuditInfoNoPaging" : {
+        "required" : [ "results" ],
+        "type" : "object",
+        "properties" : {
+          "results" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/PublicAuditInfo"
+            }
+          }
+        }
+      },
+      "Error" : {
+        "required" : [ "category", "correlationId", "message" ],
+        "type" : "object",
+        "properties" : {
+          "category" : {
+            "type" : "string",
+            "description" : "The error category"
+          },
+          "context" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "array",
+              "items" : {
+                "type" : "string"
+              }
+            },
+            "description" : "Context about the error condition",
+            "example" : "{invalidPropertyName=[propertyValue], missingScopes=[scope1, scope2]}"
+          },
+          "correlationId" : {
+            "type" : "string",
+            "description" : "A unique identifier for the request. Include this value with any error reports or support tickets",
+            "format" : "uuid",
+            "example" : "aeb5f871-7f07-4993-9211-075dc63e7cbf"
+          },
+          "errors" : {
+            "type" : "array",
+            "description" : "further information about the error",
+            "items" : {
+              "$ref" : "#/components/schemas/ErrorDetail"
+            }
+          },
+          "links" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "description" : "A map of link names to associated URIs containing documentation about the error or recommended remediation steps"
+          },
+          "message" : {
+            "type" : "string",
+            "description" : "A human readable message describing the error along with remediation steps where appropriate",
+            "example" : "An error occurred"
+          },
+          "subCategory" : {
+            "type" : "string",
+            "description" : "A specific category that contains more specific detail about the error"
+          }
+        },
+        "example" : {
+          "message" : "Invalid input (details will vary based on the error)",
+          "correlationId" : "aeb5f871-7f07-4993-9211-075dc63e7cbf",
+          "category" : "VALIDATION_ERROR",
+          "links" : {
+            "knowledge-base" : "https://www.hubspot.com/products/service/knowledge-base"
+          }
+        }
+      },
+      "ErrorDetail" : {
+        "required" : [ "message" ],
+        "type" : "object",
+        "properties" : {
+          "code" : {
+            "type" : "string",
+            "description" : "The status code associated with the error detail"
+          },
+          "context" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "array",
+              "items" : {
+                "type" : "string"
+              }
+            },
+            "description" : "Context about the error condition",
+            "example" : "{missingScopes=[scope1, scope2]}"
+          },
+          "in" : {
+            "type" : "string",
+            "description" : "The name of the field or parameter in which the error was found."
+          },
+          "message" : {
+            "type" : "string",
+            "description" : "A human readable message describing the error along with remediation steps where appropriate"
+          },
+          "subCategory" : {
+            "type" : "string",
+            "description" : "A specific category that contains more specific detail about the error"
+          }
+        }
+      },
+      "Pipeline" : {
+        "required" : [ "archived", "createdAt", "displayOrder", "id", "label", "stages", "updatedAt" ],
+        "type" : "object",
+        "properties" : {
+          "archived" : {
+            "type" : "boolean",
+            "description" : "Whether the pipeline is archived."
+          },
+          "archivedAt" : {
+            "type" : "string",
+            "description" : "The date the pipeline was archived. `archivedAt` will only be present if the pipeline is archived.",
+            "format" : "date-time"
+          },
+          "createdAt" : {
+            "type" : "string",
+            "description" : "The date the pipeline was created. The default pipelines will have createdAt = 0.",
+            "format" : "date-time"
+          },
+          "displayOrder" : {
+            "type" : "integer",
+            "description" : "The order for displaying this pipeline. If two pipelines have a matching `displayOrder`, they will be sorted alphabetically by label.",
+            "format" : "int32"
+          },
+          "id" : {
+            "type" : "string",
+            "description" : "A unique identifier generated by HubSpot that can be used to retrieve and update the pipeline."
+          },
+          "label" : {
+            "type" : "string",
+            "description" : "A unique label used to organize pipelines in HubSpot's UI"
+          },
+          "stages" : {
+            "type" : "array",
+            "description" : "The stages associated with the pipeline. They can be retrieved and updated via the pipeline stages endpoints.",
+            "items" : {
+              "$ref" : "#/components/schemas/PipelineStage"
+            }
+          },
+          "updatedAt" : {
+            "type" : "string",
+            "description" : "The date the pipeline was last updated.",
+            "format" : "date-time"
+          }
+        }
+      },
+      "PipelineInput" : {
+        "required" : [ "displayOrder", "label", "stages" ],
+        "type" : "object",
+        "properties" : {
+          "displayOrder" : {
+            "type" : "integer",
+            "description" : "The order for displaying this pipeline. If two pipelines have a matching `displayOrder`, they will be sorted alphabetically by label.",
+            "format" : "int32"
+          },
+          "label" : {
+            "type" : "string",
+            "description" : "A unique label used to organize pipelines in HubSpot's UI"
+          },
+          "pipelineId" : {
+            "type" : "string"
+          },
+          "stages" : {
+            "type" : "array",
+            "description" : "Pipeline stage inputs used to create the new or replacement pipeline.",
+            "items" : {
+              "$ref" : "#/components/schemas/PipelineStageInput"
+            }
+          }
+        }
+      },
+      "PipelinePatchInput" : {
+        "type" : "object",
+        "properties" : {
+          "archived" : {
+            "type" : "boolean",
+            "description" : "Whether the pipeline is archived. This property should only be provided when restoring an archived pipeline. If it's provided in any other call, the request will fail and a `400 Bad Request` will be returned."
+          },
+          "displayOrder" : {
+            "type" : "integer",
+            "description" : "The order for displaying this pipeline. If two pipelines have a matching `displayOrder`, they will be sorted alphabetically by label.",
+            "format" : "int32"
+          },
+          "label" : {
+            "type" : "string",
+            "description" : "A unique label used to organize pipelines in HubSpot's UI"
+          }
+        }
+      },
+      "PipelineReplaceInput" : {
+        "required" : [ "displayOrder", "label", "stages" ],
+        "type" : "object",
+        "properties" : {
+          "displayOrder" : {
+            "type" : "integer",
+            "description" : "The order for displaying this pipeline stage. If two pipeline stages have a matching `displayOrder`, they will be sorted alphabetically by label.",
+            "format" : "int32"
+          },
+          "label" : {
+            "type" : "string",
+            "description" : "A label used to organize pipeline stages in HubSpot's UI. Each pipeline stage's label must be unique within that pipeline."
+          },
+          "stages" : {
+            "type" : "array",
+            "description" : "The stages associated with the pipeline. They can be retrieved and updated via the pipeline stages endpoints.",
+            "items" : {
+              "$ref" : "#/components/schemas/PipelineStageInput"
+            }
+          }
+        }
+      },
+      "PipelineStage" : {
+        "required" : [ "archived", "createdAt", "displayOrder", "id", "label", "metadata", "updatedAt", "writePermissions" ],
+        "type" : "object",
+        "properties" : {
+          "archived" : {
+            "type" : "boolean",
+            "description" : "Whether the pipeline is archived."
+          },
+          "archivedAt" : {
+            "type" : "string",
+            "description" : "The date the pipeline was archived. `archivedAt` will only be present if the pipeline is archived.",
+            "format" : "date-time"
+          },
+          "createdAt" : {
+            "type" : "string",
+            "description" : "The date the pipeline stage was created. The stages on default pipelines will have createdAt = 0.",
+            "format" : "date-time"
+          },
+          "displayOrder" : {
+            "type" : "integer",
+            "description" : "The order for displaying this pipeline stage. If two pipeline stages have a matching `displayOrder`, they will be sorted alphabetically by label.",
+            "format" : "int32"
+          },
+          "id" : {
+            "type" : "string",
+            "description" : "A unique identifier generated by HubSpot that can be used to retrieve and update the pipeline stage."
+          },
+          "label" : {
+            "type" : "string",
+            "description" : "A label used to organize pipeline stages in HubSpot's UI. Each pipeline stage's label must be unique within that pipeline."
+          },
+          "metadata" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "description" : "A JSON object containing properties that are not present on all object pipelines.\n\nFor `deals` pipelines, the `probability` field is required (`{ \"probability\": 0.5 }`), and represents the likelihood a deal will close. Possible values are between 0.0 and 1.0 in increments of 0.1.\n\nFor `tickets` pipelines, the `ticketState` field is optional (`{ \"ticketState\": \"OPEN\" }`), and represents whether the ticket remains open or has been closed by a member of your Support team. Possible values are `OPEN` or `CLOSED`."
+          },
+          "updatedAt" : {
+            "type" : "string",
+            "description" : "The date the pipeline stage was last updated.",
+            "format" : "date-time"
+          },
+          "writePermissions" : {
+            "type" : "string",
+            "description" : "Defines the level of write access for the pipeline stage, with possible values being CRM_PERMISSIONS_ENFORCEMENT, READ_ONLY, or INTERNAL_ONLY.",
+            "enum" : [ "CRM_PERMISSIONS_ENFORCEMENT", "INTERNAL_ONLY", "READ_ONLY" ]
+          }
+        }
+      },
+      "PipelineStageInput" : {
+        "required" : [ "displayOrder", "label", "metadata" ],
+        "type" : "object",
+        "properties" : {
+          "displayOrder" : {
+            "type" : "integer",
+            "description" : "The order for displaying this pipeline stage. If two pipeline stages have a matching `displayOrder`, they will be sorted alphabetically by label.",
+            "format" : "int32"
+          },
+          "label" : {
+            "type" : "string",
+            "description" : "A label used to organize pipeline stages in HubSpot's UI. Each pipeline stage's label must be unique within that pipeline."
+          },
+          "metadata" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "description" : "A JSON object containing properties that are not present on all object pipelines.\n\nFor `deals` pipelines, the `probability` field is required (`{ \"probability\": 0.5 }`), and represents the likelihood a deal will close. Possible values are between 0.0 and 1.0 in increments of 0.1.\n\nFor `tickets` pipelines, the `ticketState` field is optional (`{ \"ticketState\": \"OPEN\" }`), and represents whether the ticket remains open or has been closed by a member of your Support team. Possible values are `OPEN` or `CLOSED`."
+          },
+          "stageId" : {
+            "type" : "string"
+          }
+        }
+      },
+      "PipelineStagePatchInput" : {
+        "required" : [ "metadata" ],
+        "type" : "object",
+        "properties" : {
+          "archived" : {
+            "type" : "boolean",
+            "description" : "Whether the pipeline is archived."
+          },
+          "displayOrder" : {
+            "type" : "integer",
+            "description" : "The order for displaying this pipeline stage. If two pipeline stages have a matching `displayOrder`, they will be sorted alphabetically by label.",
+            "format" : "int32"
+          },
+          "label" : {
+            "type" : "string",
+            "description" : "A label used to organize pipeline stages in HubSpot's UI. Each pipeline stage's label must be unique within that pipeline."
+          },
+          "metadata" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "description" : "A JSON object containing properties that are not present on all object pipelines.\n\nFor `deals` pipelines, the `probability` field is required (`{ \"probability\": 0.5 }`), and represents the likelihood a deal will close. Possible values are between 0.0 and 1.0 in increments of 0.1.\n\nFor `tickets` pipelines, the `ticketState` field is optional (`{ \"ticketState\": \"OPEN\" }`), and represents whether the ticket remains open or has been closed by a member of your Support team. Possible values are `OPEN` or `CLOSED`."
+          }
+        }
+      },
+      "PipelineStageReplaceInput" : {
+        "required" : [ "displayOrder", "label", "metadata" ],
+        "type" : "object",
+        "properties" : {
+          "displayOrder" : {
+            "type" : "integer",
+            "description" : "The order for displaying this pipeline stage. If two pipeline stages have a matching `displayOrder`, they will be sorted alphabetically by label.",
+            "format" : "int32"
+          },
+          "label" : {
+            "type" : "string",
+            "description" : "A label used to organize pipeline stages in HubSpot's UI. Each pipeline stage's label must be unique within that pipeline."
+          },
+          "metadata" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "description" : "A JSON object containing properties that are not present on all object pipelines.\n\nFor `deals` pipelines, the `probability` field is required (`{ \"probability\": 0.5 }`), and represents the likelihood a deal will close. Possible values are between 0.0 and 1.0 in increments of 0.1.\n\nFor `tickets` pipelines, the `ticketState` field is optional (`{ \"ticketState\": \"OPEN\" }`), and represents whether the ticket remains open or has been closed by a member of your Support team. Possible values are `OPEN` or `CLOSED`."
+          }
+        }
+      },
+      "PublicAuditInfo" : {
+        "required" : [ "action", "identifier", "portalId" ],
+        "type" : "object",
+        "properties" : {
+          "action" : {
+            "type" : "string",
+            "description" : "The action performed that triggered the audit event."
+          },
+          "fromUserId" : {
+            "type" : "integer",
+            "description" : "The ID of the user who initiated the audit event.",
+            "format" : "int32"
+          },
+          "identifier" : {
+            "type" : "string",
+            "description" : "A unique string identifier for the audit event."
+          },
+          "message" : {
+            "type" : "string",
+            "description" : "A descriptive message related to the audit event."
+          },
+          "portalId" : {
+            "type" : "integer",
+            "description" : "The unique identifier for the HubSpot portal where the audit event occurred.",
+            "format" : "int32"
+          },
+          "rawObject" : {
+            "type" : "object",
+            "properties" : { },
+            "description" : "An object containing the raw data associated with the audit event."
+          },
+          "timestamp" : {
+            "type" : "string",
+            "description" : "The date and time when the audit event took place.",
+            "format" : "date-time"
+          }
+        }
+      }
+    },
+    "responses" : {
+      "Error" : {
+        "description" : "An error occurred.",
+        "content" : {
+          "*/*" : {
+            "schema" : {
+              "$ref" : "#/components/schemas/Error"
+            }
+          }
+        }
+      }
+    },
+    "securitySchemes" : {
+      "developer_hapikey" : {
+        "type" : "apiKey",
+        "name" : "hapikey",
+        "in" : "query"
+      },
+      "oauth2" : {
+        "type" : "oauth2",
+        "flows" : {
+          "authorizationCode" : {
+            "authorizationUrl" : "https://app.hubspot.com/oauth/authorize",
+            "tokenUrl" : "https://api.hubapi.com/oauth/v1/token",
+            "scopes" : {
+              "automation" : "",
+              "cpq.quotes.read" : "",
+              "cpq.quotes.write" : "",
+              "crm.objects.appointments.read" : "",
+              "crm.objects.appointments.sensitive.read.v2" : "",
+              "crm.objects.appointments.sensitive.write.v2" : "",
+              "crm.objects.appointments.write" : "",
+              "crm.objects.calls.read" : "",
+              "crm.objects.carts.read" : "",
+              "crm.objects.carts.write" : "",
+              "crm.objects.commercepayments.write" : "",
+              "crm.objects.companies.highly_sensitive.read.v2" : "",
+              "crm.objects.companies.highly_sensitive.write.v2" : "",
+              "crm.objects.companies.read" : "",
+              "crm.objects.companies.sensitive.read.v2" : "",
+              "crm.objects.companies.sensitive.write.v2" : "",
+              "crm.objects.companies.write" : "",
+              "crm.objects.contacts.highly_sensitive.read.v2" : "",
+              "crm.objects.contacts.highly_sensitive.write.v2" : "",
+              "crm.objects.contacts.read" : "",
+              "crm.objects.contacts.sensitive.read.v2" : "",
+              "crm.objects.contacts.sensitive.write.v2" : "",
+              "crm.objects.contacts.write" : "",
+              "crm.objects.courses.read" : "",
+              "crm.objects.courses.write" : "",
+              "crm.objects.custom.highly_sensitive.read.v2" : "",
+              "crm.objects.custom.highly_sensitive.write.v2" : "",
+              "crm.objects.custom.read" : "",
+              "crm.objects.custom.sensitive.read.v2" : "",
+              "crm.objects.custom.sensitive.write.v2" : "",
+              "crm.objects.custom.write" : "",
+              "crm.objects.deals.highly_sensitive.read.v2" : "",
+              "crm.objects.deals.highly_sensitive.write.v2" : "",
+              "crm.objects.deals.read" : "",
+              "crm.objects.deals.sensitive.read.v2" : "",
+              "crm.objects.deals.sensitive.write.v2" : "",
+              "crm.objects.deals.write" : "",
+              "crm.objects.emails.read" : "",
+              "crm.objects.feedback_submissions.read" : "",
+              "crm.objects.goals.read" : "",
+              "crm.objects.goals.write" : "",
+              "crm.objects.invoices.read" : "",
+              "crm.objects.invoices.write" : "",
+              "crm.objects.leads.read" : "",
+              "crm.objects.leads.write" : "",
+              "crm.objects.line_items.read" : "",
+              "crm.objects.line_items.write" : "",
+              "crm.objects.listings.read" : "",
+              "crm.objects.listings.write" : "",
+              "crm.objects.marketing_events.read" : "",
+              "crm.objects.marketing_events.write" : "",
+              "crm.objects.meetings.read" : "",
+              "crm.objects.notes.read" : "",
+              "crm.objects.orders.read" : "",
+              "crm.objects.orders.write" : "",
+              "crm.objects.owners.read" : "",
+              "crm.objects.products.write" : "",
+              "crm.objects.projects.highly_sensitive.read" : "",
+              "crm.objects.projects.highly_sensitive.write" : "",
+              "crm.objects.projects.read" : "",
+              "crm.objects.projects.sensitive.read" : "",
+              "crm.objects.projects.sensitive.write" : "",
+              "crm.objects.projects.write" : "",
+              "crm.objects.quotes.read" : "",
+              "crm.objects.quotes.write" : "",
+              "crm.objects.services.read" : "",
+              "crm.objects.services.write" : "",
+              "crm.objects.subscriptions.read" : "",
+              "crm.objects.subscriptions.write" : "",
+              "crm.objects.tasks.read" : "",
+              "crm.objects.users.read" : "",
+              "crm.objects.users.write" : "",
+              "crm.pipelines.orders.read" : "",
+              "crm.pipelines.orders.write" : "",
+              "crm.schemas.appointments.read" : "",
+              "crm.schemas.appointments.write" : "",
+              "crm.schemas.calls.read" : "",
+              "crm.schemas.carts.read" : "",
+              "crm.schemas.carts.write" : "",
+              "crm.schemas.commercepayments.read" : "",
+              "crm.schemas.commercepayments.write" : "",
+              "crm.schemas.companies.read" : "",
+              "crm.schemas.companies.write" : "",
+              "crm.schemas.contacts.read" : "",
+              "crm.schemas.contacts.write" : "",
+              "crm.schemas.courses.read" : "",
+              "crm.schemas.courses.write" : "",
+              "crm.schemas.custom.read" : "",
+              "crm.schemas.custom.write" : "",
+              "crm.schemas.deals.read" : "",
+              "crm.schemas.deals.write" : "",
+              "crm.schemas.emails.read" : "",
+              "crm.schemas.invoices.read" : "",
+              "crm.schemas.invoices.write" : "",
+              "crm.schemas.line_items.read" : "",
+              "crm.schemas.listings.read" : "",
+              "crm.schemas.listings.write" : "",
+              "crm.schemas.meetings.read" : "",
+              "crm.schemas.notes.read" : "",
+              "crm.schemas.orders.read" : "",
+              "crm.schemas.orders.write" : "",
+              "crm.schemas.projects.read" : "",
+              "crm.schemas.projects.write" : "",
+              "crm.schemas.quotes.read" : "",
+              "crm.schemas.quotes.write" : "",
+              "crm.schemas.services.read" : "",
+              "crm.schemas.services.write" : "",
+              "crm.schemas.subscriptions.read" : "",
+              "crm.schemas.subscriptions.write" : "",
+              "crm.schemas.tasks.read" : "",
+              "e-commerce" : "",
+              "media_bridge.read" : "",
+              "tickets" : "",
+              "tickets.highly_sensitive.v2" : "",
+              "tickets.sensitive.v2" : "",
+              "timeline" : ""
+            }
+          }
+        }
+      },
+      "private_apps" : {
+        "type" : "apiKey",
+        "name" : "private-app",
+        "in" : "header"
+      },
+      "private_apps_legacy" : {
+        "type" : "apiKey",
+        "name" : "private-app-legacy",
+        "in" : "header"
+      }
+    }
+  },
+  "x-hubspot-available-client-libraries" : [ "Node", "Python", "Ruby", "PHP" ],
+  "x-hubspot-product-tier-requirements" : {
+    "marketing" : "FREE",
+    "sales" : "FREE",
+    "service" : "FREE",
+    "cms" : "FREE",
+    "commerce" : "FREE",
+    "crmHub" : "FREE",
+    "dataHub" : "FREE"
+  }
+}

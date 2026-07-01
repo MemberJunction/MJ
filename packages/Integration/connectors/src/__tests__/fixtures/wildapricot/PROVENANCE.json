@@ -1,0 +1,34 @@
+{
+  "Entries": [
+    {
+      "URL": "https://api.wildapricot.org/v2.3/accounts",
+      "AccessedAt": "2026-07-01T00:00:00.000Z",
+      "UsedFor": "accounts.json fixture — shape of the GET /accounts response used for tenant accountId auto-discovery (root-level array of account objects, PK field Id).",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ImpliedFromExample",
+      "TargetField": "io.Account",
+      "Excerpt": "GET /accounts returns the list of accounts accessible to the token; each account carries Id, Name, PrimaryDomainName, Url. All names/domains scrubbed."
+    },
+    {
+      "URL": "https://gethelp.wildapricot.com/en/articles/391-contacts-api-call",
+      "AccessedAt": "2026-07-01T00:00:00.000Z",
+      "UsedFor": "contacts-async-start.json / contacts-async-complete.json fixtures — the async Contacts list flow (kickoff returns ResultId + State; poll returns State=Complete + Contacts array).",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ImpliedFromExample",
+      "TargetField": "io.Contact",
+      "Excerpt": "The Contacts list defaults to async: the request returns a ResultId; poll ?resultId=<id> until State=Complete, then read the Contacts array. All contact names/emails PII-scrubbed to example+N@example.com / <scrubbed-name-N>."
+    },
+    {
+      "URL": "https://api.wildapricot.org/v2.3/accounts/{accountId}/events",
+      "AccessedAt": "2026-07-01T00:00:00.000Z",
+      "UsedFor": "events-page.json fixture — shape of a wrapped-collection ($top/$skip Offset) list response used to exercise NormalizeResponse envelope-unwrap + pagination.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ImpliedFromExample",
+      "TargetField": "io.Event",
+      "Excerpt": "GET /accounts/{accountId}/events returns an Events-wrapped array; each event carries Id, Name, StartDate, EndDate. Event names/locations scrubbed."
+    }
+  ]
+}

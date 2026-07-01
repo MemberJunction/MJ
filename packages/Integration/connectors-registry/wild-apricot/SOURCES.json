@@ -1,0 +1,166 @@
+[
+  {
+    "URL": "https://api.swaggerhub.com/apis/WildApricot/wild-apricot_public_api/9.14.0-oas3",
+    "LocalPath": "sources/openapi.admin.9.14.0.json",
+    "AccessStatus": "Reachable",
+    "SourceTier": 1,
+    "SourceCategory": "OpenAPISpec",
+    "Title": "Wild Apricot Admin API — OpenAPI 3.1.0 (v9.14.0, 2026-04-01)",
+    "CoversTaxonomies": [
+      "Accounts",
+      "Contacts",
+      "ContactFields",
+      "SavedSearches",
+      "Events",
+      "EventRegistrationTypes",
+      "EventRegistrations",
+      "Finances.Donations",
+      "Donation.CustomFields",
+      "Finances.Invoices",
+      "Finances.Payments",
+      "Finances.PaymentAllocations",
+      "Finances.Refunds",
+      "Finances.Tenders",
+      "Finances.AuditLog",
+      "Membership.Levels",
+      "Membership.Groups",
+      "Membership.Bundles",
+      "OnlineStore.Orders",
+      "OnlineStore.Products",
+      "Emailing.Drafts",
+      "Emailing.SentEmails",
+      "Emailing.SentEmailRecipients",
+      "Attachments",
+      "Pictures",
+      "CeuRecords",
+      "AdminRPCOperations"
+    ],
+    "Description": "Vendor-published machine-readable admin API contract. OpenAPI 3.1.0. 84 paths, 183 schemas. Latest version (2026-04-01). Canonical source for all CRUD endpoints, schema types, authentication, request/response shapes. Hosted on SwaggerHub at app.swaggerhub.com/apis/WildApricot/wild-apricot_public_api.",
+    "AccessNotes": "Downloaded via https://api.swaggerhub.com/apis/WildApricot/wild-apricot_public_api/9.14.0-oas3 (SwaggerHub API endpoint). The SwaggerHub HTML page itself redirects to auth, but the raw JSON spec is publicly downloadable via the /apis/ API endpoint without auth. Verified 2026-06-30."
+  },
+  {
+    "URL": "https://api.wildapricot.org/ui/swagger/publicAccess",
+    "LocalPath": "sources/openapi.public-access.9.08.0.yaml",
+    "AccessStatus": "Reachable",
+    "SourceTier": 1,
+    "SourceCategory": "OpenAPISpec",
+    "Title": "Wild Apricot Member/Public-Access API — OpenAPI 3.0.0 YAML (v9.08.0)",
+    "CoversTaxonomies": [
+      "Accounts",
+      "Contacts",
+      "ContactFields",
+      "Events",
+      "EventRegistrations",
+      "EventRegistrationTypes",
+      "Finances.Invoices",
+      "Finances.Payments",
+      "Membership.Levels",
+      "Attachments",
+      "MemberRPCOperations"
+    ],
+    "Description": "Non-administrative (member-facing) API contract. OpenAPI 3.0.0, YAML format. 32 paths, ~75 schemas. Covers member self-service flows: apply for membership, register for events, view own invoices/payments, check event attendees. Referenced from Swagger UI at api.wildapricot.org/content/swagger/?url=/ui/swagger/publicAccess. Hosted directly on api.wildapricot.org.",
+    "AccessNotes": "Downloaded directly from api.wildapricot.org/ui/swagger/publicAccess. Reachable without authentication. Verified 2026-06-30."
+  },
+  {
+    "URL": "https://gethelp.wildapricot.com/en/categories/62-wildapricot-admin-api",
+    "AccessStatus": "Reachable",
+    "SourceTier": 1,
+    "SourceCategory": "OfficialDocs",
+    "Title": "Wild Apricot Admin API Help Center (24 articles)",
+    "CoversTaxonomies": [
+      "Accounts",
+      "Contacts",
+      "ContactFields",
+      "SavedSearches",
+      "Events",
+      "EventRegistrationTypes",
+      "EventRegistrations",
+      "Finances.Invoices",
+      "Finances.Payments",
+      "Finances.PaymentAllocations",
+      "Finances.Refunds",
+      "Finances.Tenders",
+      "Finances.AuditLog",
+      "Membership.Levels",
+      "Membership.Groups",
+      "Membership.Bundles",
+      "OnlineStore.Orders",
+      "OnlineStore.Products",
+      "Emailing.Drafts",
+      "Emailing.SentEmails",
+      "Pictures",
+      "AdminRPCOperations"
+    ],
+    "Description": "WildApricot's official prose documentation for the admin API. 24 articles covering each resource family. Uses Elevio (JavaScript-rendered). Confirms endpoint shapes, filter parameters, pagination behavior, and edge cases not always captured in the OpenAPI spec. Articles as of 2026-06-30: Accounts (506), AuditLogItems (505), Bundles (504), Base API call (507), Contacts (502), ContactFields (503), EmailDrafts (1607), EventRegistrationTypes (500), EventRegistrations (501), Events (499), Invoices (498), MemberGroups (497), MembershipLevels (496), PaymentAllocations (495), Payments (494), Pictures (493), Refunds (492), Remote procedure calls (489), SavedSearches (491), SentEmails (1606), Store (1873), Tenders (490). Also includes API version difference notes (1599, 1683).",
+    "AccessNotes": "Pages are JavaScript-rendered (Elevio SPA). Raw HTML returns a shell. Embedded window.initialData JSON contains structured article data. HTTP 200 on all article URL tests. Verified 2026-06-30."
+  },
+  {
+    "URL": "https://gethelp.wildapricot.com/en/categories/145-wildapricot-member-api",
+    "AccessStatus": "Reachable",
+    "SourceTier": 2,
+    "SourceCategory": "OfficialDocs",
+    "Title": "Wild Apricot Member API Help Center (10 articles)",
+    "CoversTaxonomies": [
+      "Accounts",
+      "Contacts",
+      "ContactFields",
+      "Events",
+      "EventRegistrations",
+      "Finances.Invoices",
+      "Finances.Payments",
+      "Membership.Levels",
+      "MemberRPCOperations"
+    ],
+    "Description": "Prose documentation for the non-administrative (member-facing) API. 10 articles: Accounts (1609), ContactFields (1611), Contacts (1610), EventRegistrations (1613), Events (1612), Invoices (1614), MembershipLevels (1615), MobileAppSettings (1616), Payments (1617), Remote procedure calls (1618). Describes member self-service flows. Supplement to the public-access OpenAPI spec.",
+    "AccessNotes": "Same Elevio SPA rendering as the admin API docs. HTTP 200. Verified 2026-06-30."
+  },
+  {
+    "URL": "https://gethelp.wildapricot.com/en/articles/484-api-authentication",
+    "AccessStatus": "Reachable",
+    "SourceTier": 1,
+    "SourceCategory": "OfficialDocs",
+    "Title": "Wild Apricot API Authentication Guide",
+    "CoversTaxonomies": [
+      "OAuth2AuthFlow",
+      "MultiTenantAppFlow"
+    ],
+    "Description": "Official OAuth 2.0 authentication documentation. Covers: API key (password grant), OAuth 2.0 authorization_code flow for multi-tenant apps, token refresh, scopes. INFORMATIONAL — describes the auth mechanism, not syncable entities.",
+    "AccessNotes": "HTTP 200. Elevio SPA rendered. mainEntity JSON in page source contains full article text. Verified 2026-06-30."
+  },
+  {
+    "URL": "https://gethelp.wildapricot.com/en/categories/314-api-updates-in-2025",
+    "AccessStatus": "Reachable",
+    "SourceTier": 1,
+    "SourceCategory": "OfficialDocs",
+    "Title": "Wild Apricot API Updates 2025",
+    "CoversTaxonomies": [
+      "PaginationChanges2025"
+    ],
+    "Description": "1 article (2911): 'Updating your API integrations for pagination'. Documents the mandatory pagination changes effective November 1, 2025. Describes the new PagingSettings response structure with ResultId, PageSize, PageIndex, Count, and the $skip/$top/$count query parameters. INFORMATIONAL — pagination mechanics, not new entity types.",
+    "AccessNotes": "HTTP 200. Verified 2026-06-30."
+  },
+  {
+    "URL": "https://gethelp.wildapricot.com/en/articles/182-using-wildapricot-s-api",
+    "AccessStatus": "Reachable",
+    "SourceTier": 1,
+    "SourceCategory": "OfficialDocs",
+    "Title": "Using Wild Apricot's API — Overview",
+    "CoversTaxonomies": [
+      "APIOverview",
+      "BatchRequests",
+      "RateLimiting"
+    ],
+    "Description": "Overview article: API version history, versioned base URL (/v2.2/), batch requests (BATCH method), JSON/XML format selection, rate limits, admin vs member API distinction. INFORMATIONAL — orientation material, no entity definitions.",
+    "AccessNotes": "HTTP 200. Verified 2026-06-30."
+  },
+  {
+    "URL": "https://github.com/WildApricot/ApiSamples",
+    "AccessStatus": "Reachable",
+    "SourceTier": 2,
+    "SourceCategory": "OfficialSDK",
+    "Title": "Wild Apricot ApiSamples GitHub Repository",
+    "CoversTaxonomies": [],
+    "Description": "Official Wild Apricot GitHub repository with sample code for working with the API. README references SwaggerHub as the canonical spec location. No typed SDK or type definitions. Sample code only. Low-value source for type extraction — defers to SwaggerHub spec.",
+    "AccessNotes": "HTTP 200. Public repository. Last meaningful update 2018. Verified 2026-06-30."
+  }
+]

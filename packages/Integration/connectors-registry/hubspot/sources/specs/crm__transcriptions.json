@@ -1,0 +1,582 @@
+{
+  "openapi" : "3.0.1",
+  "info" : {
+    "title" : "Transcriptions",
+    "description" : "Basepom for all HubSpot Projects",
+    "version" : "2026-03",
+    "x-hubspot-product-tier-requirements" : {
+      "marketing" : "FREE",
+      "sales" : "FREE",
+      "service" : "FREE",
+      "cms" : "FREE",
+      "commerce" : "FREE",
+      "crmHub" : "FREE",
+      "dataHub" : "FREE"
+    }
+  },
+  "servers" : [ {
+    "url" : "https://api.hubapi.com"
+  } ],
+  "tags" : [ {
+    "name" : "Advanced"
+  }, {
+    "name" : "Basic"
+  } ],
+  "paths" : {
+    "/crm/extensions/calling/2026-03/inbound-call" : {
+      "post" : {
+        "tags" : [ "Advanced" ],
+        "operationId" : "post-/crm/extensions/calling/2026-03/inbound-call_/crm/v3/extensions/calling/inbound-call",
+        "parameters" : [ ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CompletedThirdPartyCallRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "successful operation",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CompletedThirdPartyCallResponse"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "$ref" : "#/components/responses/Error"
+          }
+        },
+        "security" : [ {
+          "oauth2" : [ "crm.objects.contacts.highly_sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.contacts.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.contacts.sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.schemas.contacts.write" ]
+        } ]
+      }
+    },
+    "/crm/extensions/calling/2026-03/transcripts" : {
+      "post" : {
+        "tags" : [ "Advanced" ],
+        "operationId" : "post-/crm/extensions/calling/2026-03/transcripts_/crm/extensions/calling/2026-03/transcripts",
+        "parameters" : [ ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/TranscriptCreateRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "successful operation",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TranscriptCreateResponse"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "$ref" : "#/components/responses/Error"
+          }
+        },
+        "security" : [ {
+          "oauth2" : [ "crm.extensions_calling_transcripts.write" ]
+        } ]
+      }
+    },
+    "/crm/extensions/calling/2026-03/transcripts/{transcriptId}" : {
+      "get" : {
+        "tags" : [ "Basic" ],
+        "operationId" : "get-/crm/extensions/calling/2026-03/transcripts/{transcriptId}_/crm/extensions/calling/2026-03/transcripts/{transcriptId}",
+        "parameters" : [ {
+          "name" : "transcriptId",
+          "in" : "path",
+          "description" : "",
+          "required" : true,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "successful operation",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TranscriptResponse"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "$ref" : "#/components/responses/Error"
+          }
+        },
+        "security" : [ {
+          "oauth2" : [ "crm.extensions_calling_transcripts.read" ]
+        } ]
+      },
+      "delete" : {
+        "tags" : [ "Basic" ],
+        "operationId" : "delete-/crm/extensions/calling/2026-03/transcripts/{transcriptId}_/crm/extensions/calling/2026-03/transcripts/{transcriptId}",
+        "parameters" : [ {
+          "name" : "transcriptId",
+          "in" : "path",
+          "description" : "",
+          "required" : true,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "204" : {
+            "description" : "No content",
+            "content" : { }
+          },
+          "default" : {
+            "description" : "",
+            "$ref" : "#/components/responses/Error"
+          }
+        },
+        "security" : [ {
+          "oauth2" : [ "crm.extensions_calling_transcripts.write" ]
+        } ]
+      }
+    }
+  },
+  "components" : {
+    "schemas" : {
+      "CompanyCallerId" : {
+        "title" : "COMPANY",
+        "required" : [ "callerIdType", "objectCoordinates" ],
+        "type" : "object",
+        "properties" : {
+          "callerIdType" : {
+            "type" : "string",
+            "default" : "COMPANY",
+            "enum" : [ "COMPANY" ]
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "objectCoordinates" : {
+            "$ref" : "#/components/schemas/ObjectCoordinates"
+          }
+        },
+        "x-hubspot-sub-type-impl" : true
+      },
+      "CompletedThirdPartyCallRequest" : {
+        "required" : [ "createEngagement", "engagementProperties", "externalCallId", "finalCallStatus", "fromNumber", "potentialRecipientUserIds", "toNumber" ],
+        "type" : "object",
+        "properties" : {
+          "callStartedTimestamp" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "createEngagement" : {
+            "type" : "boolean"
+          },
+          "durationSeconds" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "engagementProperties" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "string"
+            }
+          },
+          "externalCallId" : {
+            "type" : "string"
+          },
+          "finalCallStatus" : {
+            "type" : "string",
+            "enum" : [ "BUSY", "CALLING_CRM_USER", "CANCELED", "COMPLETED", "CONNECTING", "FAILED", "HOLD", "IN_PROGRESS", "MISSED", "NO_ANSWER", "QUEUED", "RINGING", "UNKNOWN" ]
+          },
+          "fromNumber" : {
+            "$ref" : "#/components/schemas/FormattedPhoneNumber"
+          },
+          "potentialRecipientUserIds" : {
+            "type" : "array",
+            "items" : {
+              "type" : "integer",
+              "format" : "int32"
+            }
+          },
+          "toNumber" : {
+            "$ref" : "#/components/schemas/FormattedPhoneNumber"
+          },
+          "userId" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
+      "CompletedThirdPartyCallResponse" : {
+        "required" : [ "callerIdMatches" ],
+        "type" : "object",
+        "properties" : {
+          "callerIdMatches" : {
+            "type" : "array",
+            "items" : {
+              "oneOf" : [ {
+                "$ref" : "#/components/schemas/ContactCallerId"
+              }, {
+                "$ref" : "#/components/schemas/CompanyCallerId"
+              } ]
+            }
+          }
+        }
+      },
+      "ContactCallerId" : {
+        "title" : "CONTACT",
+        "required" : [ "callerIdType", "objectCoordinates" ],
+        "type" : "object",
+        "properties" : {
+          "callerIdType" : {
+            "type" : "string",
+            "default" : "CONTACT",
+            "enum" : [ "CONTACT" ]
+          },
+          "email" : {
+            "type" : "string"
+          },
+          "firstName" : {
+            "type" : "string"
+          },
+          "lastName" : {
+            "type" : "string"
+          },
+          "objectCoordinates" : {
+            "$ref" : "#/components/schemas/ObjectCoordinates"
+          }
+        },
+        "x-hubspot-sub-type-impl" : true
+      },
+      "Error" : {
+        "required" : [ "category", "correlationId", "message" ],
+        "type" : "object",
+        "properties" : {
+          "category" : {
+            "type" : "string",
+            "description" : "The error category"
+          },
+          "context" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "array",
+              "items" : {
+                "type" : "string"
+              }
+            },
+            "description" : "Context about the error condition",
+            "example" : "{invalidPropertyName=[propertyValue], missingScopes=[scope1, scope2]}"
+          },
+          "correlationId" : {
+            "type" : "string",
+            "description" : "A unique identifier for the request. Include this value with any error reports or support tickets",
+            "format" : "uuid",
+            "example" : "aeb5f871-7f07-4993-9211-075dc63e7cbf"
+          },
+          "errors" : {
+            "type" : "array",
+            "description" : "further information about the error",
+            "items" : {
+              "$ref" : "#/components/schemas/ErrorDetail"
+            }
+          },
+          "links" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "description" : "A map of link names to associated URIs containing documentation about the error or recommended remediation steps"
+          },
+          "message" : {
+            "type" : "string",
+            "description" : "A human readable message describing the error along with remediation steps where appropriate",
+            "example" : "An error occurred"
+          },
+          "subCategory" : {
+            "type" : "string",
+            "description" : "A specific category that contains more specific detail about the error"
+          }
+        },
+        "example" : {
+          "message" : "Invalid input (details will vary based on the error)",
+          "correlationId" : "aeb5f871-7f07-4993-9211-075dc63e7cbf",
+          "category" : "VALIDATION_ERROR",
+          "links" : {
+            "knowledge-base" : "https://www.hubspot.com/products/service/knowledge-base"
+          }
+        }
+      },
+      "ErrorDetail" : {
+        "required" : [ "message" ],
+        "type" : "object",
+        "properties" : {
+          "code" : {
+            "type" : "string",
+            "description" : "The status code associated with the error detail"
+          },
+          "context" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "array",
+              "items" : {
+                "type" : "string"
+              }
+            },
+            "description" : "Context about the error condition",
+            "example" : "{missingScopes=[scope1, scope2]}"
+          },
+          "in" : {
+            "type" : "string",
+            "description" : "The name of the field or parameter in which the error was found."
+          },
+          "message" : {
+            "type" : "string",
+            "description" : "A human readable message describing the error along with remediation steps where appropriate"
+          },
+          "subCategory" : {
+            "type" : "string",
+            "description" : "A specific category that contains more specific detail about the error"
+          }
+        }
+      },
+      "FormattedPhoneNumber" : {
+        "required" : [ "e164Number", "phoneNumberType" ],
+        "type" : "object",
+        "properties" : {
+          "e164Number" : {
+            "type" : "string"
+          },
+          "extension" : {
+            "type" : "string"
+          },
+          "phoneNumberType" : {
+            "type" : "string",
+            "enum" : [ "FIXED_LINE", "FIXED_LINE_OR_MOBILE", "MOBILE", "PAGER", "PERSONAL_NUMBER", "PREMIUM_RATE", "SHARED_COST", "TOLL_FREE", "UAN", "UNKNOWN", "VOICEMAIL", "VOIP" ]
+          }
+        }
+      },
+      "ObjectCoordinates" : {
+        "required" : [ "objectId", "objectTypeId", "portalId" ],
+        "type" : "object",
+        "properties" : {
+          "objectId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "objectTypeId" : {
+            "type" : "string"
+          },
+          "portalId" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
+      "Speaker" : {
+        "required" : [ "id", "name" ],
+        "type" : "object",
+        "properties" : {
+          "email" : {
+            "type" : "string"
+          },
+          "id" : {
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          }
+        }
+      },
+      "TranscriptCreateRequest" : {
+        "required" : [ "engagementId", "transcriptCreateUtterances" ],
+        "type" : "object",
+        "properties" : {
+          "engagementId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "transcriptCreateUtterances" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/TranscriptCreateUtterance"
+            }
+          }
+        }
+      },
+      "TranscriptCreateResponse" : {
+        "required" : [ "id" ],
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string"
+          }
+        }
+      },
+      "TranscriptCreateUtterance" : {
+        "required" : [ "endTimeMillis", "speaker", "startTimeMillis", "text" ],
+        "type" : "object",
+        "properties" : {
+          "endTimeMillis" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "languageCode" : {
+            "type" : "string"
+          },
+          "speaker" : {
+            "$ref" : "#/components/schemas/Speaker"
+          },
+          "startTimeMillis" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "text" : {
+            "type" : "string"
+          }
+        }
+      },
+      "TranscriptResponse" : {
+        "required" : [ "createdAt", "engagementId", "id", "transcriptSource", "transcriptUtterances", "updatedAt" ],
+        "type" : "object",
+        "properties" : {
+          "createdAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "engagementId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "id" : {
+            "type" : "string"
+          },
+          "transcriptSource" : {
+            "type" : "string",
+            "enum" : [ "HUBSPOT_GENERATED", "INTEGRATOR_GENERATED" ]
+          },
+          "transcriptUtterances" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/TranscriptUtterance"
+            }
+          },
+          "updatedAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          }
+        }
+      },
+      "TranscriptUtterance" : {
+        "required" : [ "endTimeMillis", "id", "startTimeMillis", "text" ],
+        "type" : "object",
+        "properties" : {
+          "endTimeMillis" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "id" : {
+            "type" : "string"
+          },
+          "languageCode" : {
+            "type" : "string"
+          },
+          "speaker" : {
+            "$ref" : "#/components/schemas/Speaker"
+          },
+          "startTimeMillis" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "text" : {
+            "type" : "string"
+          }
+        }
+      }
+    },
+    "responses" : {
+      "Error" : {
+        "description" : "An error occurred.",
+        "content" : {
+          "*/*" : {
+            "schema" : {
+              "$ref" : "#/components/schemas/Error"
+            }
+          }
+        }
+      }
+    },
+    "securitySchemes" : {
+      "developer_hapikey" : {
+        "type" : "apiKey",
+        "name" : "hapikey",
+        "in" : "query"
+      },
+      "oauth2" : {
+        "type" : "oauth2",
+        "flows" : {
+          "authorizationCode" : {
+            "authorizationUrl" : "https://app.hubspot.com/oauth/authorize",
+            "tokenUrl" : "https://api.hubapi.com/oauth/v1/token",
+            "scopes" : {
+              "crm.extensions_calling_transcripts.read" : "",
+              "crm.extensions_calling_transcripts.write" : "",
+              "crm.objects.contacts.highly_sensitive.write.v2" : "",
+              "crm.objects.contacts.sensitive.read.v2" : "",
+              "crm.objects.contacts.sensitive.write.v2" : "",
+              "crm.objects.contacts.write" : "",
+              "crm.schemas.contacts.write" : "",
+              "developers-read" : "",
+              "developers-write" : ""
+            }
+          }
+        }
+      },
+      "private_apps" : {
+        "type" : "apiKey",
+        "name" : "private-app",
+        "in" : "header"
+      },
+      "private_apps_legacy" : {
+        "type" : "apiKey",
+        "name" : "private-app-legacy",
+        "in" : "header"
+      }
+    }
+  },
+  "x-hubspot-product-tier-requirements" : {
+    "marketing" : "FREE",
+    "sales" : "FREE",
+    "service" : "FREE",
+    "cms" : "FREE",
+    "commerce" : "FREE",
+    "crmHub" : "FREE",
+    "dataHub" : "FREE"
+  }
+}

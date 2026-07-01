@@ -1,0 +1,40 @@
+{
+  "Entries": [
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T21:06:01.666Z",
+      "StructuredOutput": {
+        "IOCreated": 62,
+        "IOFCreated": 527,
+        "Skipped": 88,
+        "EnumeratedUniverse": 150
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.*"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T21:06:34.748Z",
+      "StructuredOutput": {
+        "IOCreated": 62,
+        "IOFCreated": 527,
+        "Skipped": 88,
+        "EnumeratedUniverse": 150
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.*"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T21:24:05.288Z",
+      "StructuredOutput": {
+        "IOCreated": 62,
+        "IOFCreated": 527,
+        "Skipped": 88,
+        "EnumeratedUniverse": 150
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.*"
+    }
+  ]
+}

@@ -1,0 +1,649 @@
+{
+  "openapi" : "3.0.1",
+  "info" : {
+    "title" : "Transactional Single Send",
+    "description" : "Basepom for all HubSpot Projects",
+    "version" : "2026-03",
+    "x-hubspot-product-tier-requirements" : {
+      "marketing" : "PROFESSIONAL",
+      "sales" : "FREE",
+      "service" : "FREE",
+      "cms" : "FREE",
+      "commerce" : "FREE",
+      "crmHub" : "FREE",
+      "dataHub" : "FREE"
+    },
+    "x-hubspot-api-use-case" : "After a customer converts or purchases a product from your business, you want to send them a receipt of their transaction.",
+    "x-hubspot-introduction" : "Use the transactional email API to send emails from a dedicated IP address to your contacts for essential business transactions, including account updates or terms of service changes."
+  },
+  "servers" : [ {
+    "url" : "https://api.hubapi.com"
+  } ],
+  "tags" : [ {
+    "name" : "Send transactional email"
+  }, {
+    "name" : "SMTP Tokens"
+  } ],
+  "paths" : {
+    "/marketing/transactional/2026-03/single-email/send" : {
+      "post" : {
+        "tags" : [ "Send transactional email" ],
+        "summary" : "Send a single send transactional email asynchronously.",
+        "description" : "Asynchronously send a transactional email. Returns the status of the email send with a statusId that can be used to continuously query for the status using the Email Send Status API.",
+        "operationId" : "post-/marketing/transactional/2026-03/single-email/send_sendEmail",
+        "parameters" : [ ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PublicSingleSendRequestEgg"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "successful operation",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/EmailSendStatusView"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "$ref" : "#/components/responses/Error"
+          }
+        },
+        "security" : [ {
+          "oauth2" : [ "transactional-email" ]
+        } ],
+        "x-hubspot-rate-limit-exemptions" : [ "daily", "ten-secondly" ]
+      }
+    },
+    "/marketing/transactional/2026-03/smtp-tokens" : {
+      "get" : {
+        "tags" : [ "SMTP Tokens" ],
+        "summary" : "Query SMTP API tokens by campaign name or an emailCampaignId.",
+        "description" : "Query multiple SMTP API tokens by campaign name or a single token by emailCampaignId.",
+        "operationId" : "get-/marketing/transactional/2026-03/smtp-tokens_getTokensPage",
+        "parameters" : [ {
+          "name" : "after",
+          "in" : "query",
+          "description" : "The paging cursor token of the last successfully read resource will be returned as the `paging.next.after` JSON property of a paged response containing more results.",
+          "required" : false,
+          "style" : "form",
+          "explode" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "campaignName",
+          "in" : "query",
+          "description" : "A name for the campaign tied to the SMTP API token.",
+          "required" : false,
+          "style" : "form",
+          "explode" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "emailCampaignId",
+          "in" : "query",
+          "description" : "Identifier assigned to the campaign provided during the token creation.",
+          "required" : false,
+          "style" : "form",
+          "explode" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "limit",
+          "in" : "query",
+          "description" : "The maximum number of results to display per page.",
+          "required" : false,
+          "style" : "form",
+          "explode" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "successful operation",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CollectionResponseSmtpApiTokenViewForwardPaging"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "$ref" : "#/components/responses/Error"
+          }
+        },
+        "security" : [ {
+          "oauth2" : [ "content" ]
+        } ]
+      },
+      "post" : {
+        "tags" : [ "SMTP Tokens" ],
+        "summary" : "Create a SMTP API token.",
+        "description" : "Create a SMTP API token.",
+        "operationId" : "post-/marketing/transactional/2026-03/smtp-tokens_createToken",
+        "parameters" : [ ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SmtpApiTokenRequestEgg"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "201" : {
+            "description" : "successful operation",
+            "headers" : {
+              "Location" : {
+                "description" : "URL of the newly created resource",
+                "style" : "simple",
+                "explode" : false,
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SmtpApiTokenView"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "$ref" : "#/components/responses/Error"
+          }
+        },
+        "security" : [ {
+          "oauth2" : [ "content" ]
+        } ]
+      }
+    },
+    "/marketing/transactional/2026-03/smtp-tokens/{tokenId}" : {
+      "get" : {
+        "tags" : [ "SMTP Tokens" ],
+        "summary" : "Query a single token by ID.",
+        "description" : "Query a single token by ID.",
+        "operationId" : "get-/marketing/transactional/2026-03/smtp-tokens/{tokenId}_getTokenById",
+        "parameters" : [ {
+          "name" : "tokenId",
+          "in" : "path",
+          "description" : "Identifier generated when a token is created.",
+          "required" : true,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "successful operation",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SmtpApiTokenView"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "$ref" : "#/components/responses/Error"
+          }
+        },
+        "security" : [ {
+          "oauth2" : [ "content" ]
+        } ]
+      },
+      "delete" : {
+        "tags" : [ "SMTP Tokens" ],
+        "summary" : "Delete a single token by ID.",
+        "description" : "Delete a single token by ID.",
+        "operationId" : "delete-/marketing/transactional/2026-03/smtp-tokens/{tokenId}_archiveToken",
+        "parameters" : [ {
+          "name" : "tokenId",
+          "in" : "path",
+          "description" : "Identifier generated when a token is created.",
+          "required" : true,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "204" : {
+            "description" : "No content",
+            "content" : { }
+          },
+          "default" : {
+            "description" : "",
+            "$ref" : "#/components/responses/Error"
+          }
+        },
+        "security" : [ {
+          "oauth2" : [ "content" ]
+        } ]
+      }
+    },
+    "/marketing/transactional/2026-03/smtp-tokens/{tokenId}/password-reset" : {
+      "post" : {
+        "tags" : [ "SMTP Tokens" ],
+        "summary" : "Reset the password of an existing token.",
+        "description" : "Allows the creation of a replacement password for a given token. Once the password is successfully reset, the old password for the token will be invalid.",
+        "operationId" : "post-/marketing/transactional/2026-03/smtp-tokens/{tokenId}/password-reset_resetPassword",
+        "parameters" : [ {
+          "name" : "tokenId",
+          "in" : "path",
+          "description" : "Identifier generated when a token is created.",
+          "required" : true,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "successful operation",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SmtpApiTokenView"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "$ref" : "#/components/responses/Error"
+          }
+        },
+        "security" : [ {
+          "oauth2" : [ "content" ]
+        } ]
+      }
+    }
+  },
+  "components" : {
+    "schemas" : {
+      "CollectionResponseSmtpApiTokenViewForwardPaging" : {
+        "required" : [ "results" ],
+        "type" : "object",
+        "properties" : {
+          "paging" : {
+            "$ref" : "#/components/schemas/ForwardPaging"
+          },
+          "results" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/SmtpApiTokenView"
+            }
+          }
+        }
+      },
+      "EmailSendStatusView" : {
+        "required" : [ "status", "statusId" ],
+        "type" : "object",
+        "properties" : {
+          "completedAt" : {
+            "type" : "string",
+            "description" : "Time when the send was completed.",
+            "format" : "date-time"
+          },
+          "eventId" : {
+            "$ref" : "#/components/schemas/EventIdView"
+          },
+          "message" : {
+            "type" : "string",
+            "description" : "A human readable message describing the error along with remediation steps where appropriate"
+          },
+          "requestedAt" : {
+            "type" : "string",
+            "description" : "Time when the send was requested.",
+            "format" : "date-time"
+          },
+          "sendResult" : {
+            "type" : "string",
+            "description" : "Result of the send.",
+            "enum" : [ "ADDRESS_LIST_BOMBED", "ADDRESS_ONLY_ACCEPTED_ON_PROD", "ADDRESS_OPTED_OUT", "ATTACHMENT_DOWNLOAD_QUEUE_FULL", "BLOCKED_ADDRESS", "BLOCKED_DOMAIN", "BRAND_RECIPIENT_FATIGUE_SUPPRESSED", "CAMPAIGN_CANCELLED", "CANCELLED_ABUSE", "CONTACT_VIEW_PERMISSION", "CORRUPT_INPUT", "EMAIL_DISABLED", "EMAIL_UNCONFIRMED", "GDPR_DOI_ENABLED", "GRAYMAIL_SUPPRESSED", "HUBL_LIMIT_EXCEEDED", "IDEMPOTENT_FAIL", "IDEMPOTENT_IGNORE", "INVALID_APP_ID_ATTRIBUTION", "INVALID_FROM_ADDRESS", "INVALID_TO_ADDRESS", "LOW_CONTACT_QUALITY_SCORE", "MARKETING_ACTIVATION_DISALLOWED", "MISSING_CONTENT", "MISSING_REQUIRED_PARAMETER", "MISSING_TEMPLATE_PROPERTIES", "MTA_IGNORE", "NON_MARKETABLE_CONTACT", "PORTAL_AUTHENTICATION_FAILURE", "PORTAL_EXPIRED", "PORTAL_MISSING_MARKETING_SCOPE", "PORTAL_NOT_AUTHORIZED_FOR_APPLICATION", "PORTAL_OVER_LIMIT", "PORTAL_SUSPENDED", "PREVIOUS_SPAM", "PREVIOUSLY_BOUNCED", "PREVIOUSLY_UNSUBSCRIBED_BRAND", "PREVIOUSLY_UNSUBSCRIBED_BUSINESS_UNIT", "PREVIOUSLY_UNSUBSCRIBED_MESSAGE", "PREVIOUSLY_UNSUBSCRIBED_PORTAL", "QUARANTINED_ADDRESS", "QUEUED", "RECIPIENT_FATIGUE_SUPPRESSED", "SENT", "TEMPLATE_RENDER_EXCEPTION", "THROTTLED", "TOO_MANY_RECIPIENTS", "UBB_GOVERNANCE_MISSING", "UNCONFIGURED_SENDING_DOMAIN", "UNDELIVERABLE", "VALIDATION_FAILED" ]
+          },
+          "startedAt" : {
+            "type" : "string",
+            "description" : "Time when the send began processing.",
+            "format" : "date-time"
+          },
+          "status" : {
+            "type" : "string",
+            "description" : "Status of the send request.",
+            "enum" : [ "CANCELED", "COMPLETE", "PENDING", "PROCESSING" ]
+          },
+          "statusId" : {
+            "type" : "string",
+            "description" : "Identifier used to query the status of the send."
+          }
+        }
+      },
+      "Error" : {
+        "required" : [ "category", "correlationId", "message" ],
+        "type" : "object",
+        "properties" : {
+          "category" : {
+            "type" : "string",
+            "description" : "The error category"
+          },
+          "context" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "array",
+              "items" : {
+                "type" : "string"
+              }
+            },
+            "description" : "Context about the error condition",
+            "example" : "{invalidPropertyName=[propertyValue], missingScopes=[scope1, scope2]}"
+          },
+          "correlationId" : {
+            "type" : "string",
+            "description" : "A unique identifier for the request. Include this value with any error reports or support tickets",
+            "format" : "uuid",
+            "example" : "aeb5f871-7f07-4993-9211-075dc63e7cbf"
+          },
+          "errors" : {
+            "type" : "array",
+            "description" : "further information about the error",
+            "items" : {
+              "$ref" : "#/components/schemas/ErrorDetail"
+            }
+          },
+          "links" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "description" : "A map of link names to associated URIs containing documentation about the error or recommended remediation steps"
+          },
+          "message" : {
+            "type" : "string",
+            "description" : "A human readable message describing the error along with remediation steps where appropriate",
+            "example" : "An error occurred"
+          },
+          "subCategory" : {
+            "type" : "string",
+            "description" : "A specific category that contains more specific detail about the error"
+          }
+        },
+        "example" : {
+          "message" : "Invalid input (details will vary based on the error)",
+          "correlationId" : "aeb5f871-7f07-4993-9211-075dc63e7cbf",
+          "category" : "VALIDATION_ERROR",
+          "links" : {
+            "knowledge-base" : "https://www.hubspot.com/products/service/knowledge-base"
+          }
+        }
+      },
+      "ErrorDetail" : {
+        "required" : [ "message" ],
+        "type" : "object",
+        "properties" : {
+          "code" : {
+            "type" : "string",
+            "description" : "The status code associated with the error detail"
+          },
+          "context" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "array",
+              "items" : {
+                "type" : "string"
+              }
+            },
+            "description" : "Context about the error condition",
+            "example" : "{missingScopes=[scope1, scope2]}"
+          },
+          "in" : {
+            "type" : "string",
+            "description" : "The name of the field or parameter in which the error was found."
+          },
+          "message" : {
+            "type" : "string",
+            "description" : "A human readable message describing the error along with remediation steps where appropriate"
+          },
+          "subCategory" : {
+            "type" : "string",
+            "description" : "A specific category that contains more specific detail about the error"
+          }
+        }
+      },
+      "EventIdView" : {
+        "required" : [ "created", "id" ],
+        "type" : "object",
+        "properties" : {
+          "created" : {
+            "type" : "string",
+            "description" : "Time of event creation.",
+            "format" : "date-time"
+          },
+          "id" : {
+            "type" : "string",
+            "description" : "Identifier of event.",
+            "format" : "uuid"
+          }
+        }
+      },
+      "ForwardPaging" : {
+        "type" : "object",
+        "properties" : {
+          "next" : {
+            "$ref" : "#/components/schemas/NextPage"
+          }
+        }
+      },
+      "NextPage" : {
+        "required" : [ "after" ],
+        "type" : "object",
+        "properties" : {
+          "after" : {
+            "type" : "string",
+            "description" : "A paging cursor token for retrieving subsequent pages."
+          },
+          "link" : {
+            "type" : "string",
+            "description" : "A URL that can be used to retrieve the next page results."
+          }
+        },
+        "description" : "Specifies the paging information needed to retrieve the next set of results in a paginated API response"
+      },
+      "PublicSingleSendEmail" : {
+        "required" : [ "bcc", "cc", "replyTo" ],
+        "type" : "object",
+        "properties" : {
+          "bcc" : {
+            "type" : "array",
+            "description" : "List of email addresses to send as Bcc.",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "cc" : {
+            "type" : "array",
+            "description" : "List of email addresses to send as Cc.",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "from" : {
+            "type" : "string",
+            "description" : "The From header for the email."
+          },
+          "replyTo" : {
+            "type" : "array",
+            "description" : "List of Reply-To header values for the email.",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "sendId" : {
+            "type" : "string",
+            "description" : "ID for a particular send. No more than one email will be sent per sendId."
+          },
+          "to" : {
+            "type" : "string",
+            "description" : "The recipient of the email."
+          }
+        }
+      },
+      "PublicSingleSendRequestEgg" : {
+        "required" : [ "contactProperties", "customProperties", "emailId", "message" ],
+        "type" : "object",
+        "properties" : {
+          "contactProperties" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "description" : "The contactProperties field is a map of contact property values. Each contact property value contains a name and value property. Each property will get set on the contact record and will be visible in the template under {{ contact.NAME }}. Use these properties when you want to set a contact property while you’re sending the email. For example, when sending a reciept you may want to set a last_paid_date property, as the sending of the receipt will have information about the last payment."
+          },
+          "customProperties" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "object",
+              "properties" : { }
+            },
+            "description" : "The customProperties field is a map of property values. Each property value contains a name and value property. Each property will be visible in the template under {{ custom.NAME }}.\nNote: Custom properties do not currently support arrays. To provide a listing in an email, one workaround is to build an HTML list (either with tables or ul) and specify it as a custom property."
+          },
+          "emailId" : {
+            "type" : "integer",
+            "description" : "The content ID for the transactional email, which can be found in email tool UI.",
+            "format" : "int64"
+          },
+          "message" : {
+            "$ref" : "#/components/schemas/PublicSingleSendEmail"
+          }
+        }
+      },
+      "SmtpApiTokenRequestEgg" : {
+        "required" : [ "campaignName", "createContact" ],
+        "type" : "object",
+        "properties" : {
+          "campaignName" : {
+            "type" : "string",
+            "description" : "A name for the campaign tied to the SMTP API token."
+          },
+          "createContact" : {
+            "type" : "boolean",
+            "description" : "Indicates whether a contact should be created for email recipients."
+          }
+        }
+      },
+      "SmtpApiTokenView" : {
+        "required" : [ "campaignName", "createContact", "createdAt", "createdBy", "emailCampaignId", "id" ],
+        "type" : "object",
+        "properties" : {
+          "campaignName" : {
+            "type" : "string",
+            "description" : "A name for the campaign tied to the token."
+          },
+          "createContact" : {
+            "type" : "boolean",
+            "description" : "Indicates whether a contact should be created for email recipients."
+          },
+          "createdAt" : {
+            "type" : "string",
+            "description" : "Timestamp generated when a token is created.",
+            "format" : "date-time"
+          },
+          "createdBy" : {
+            "type" : "string",
+            "description" : "Email address of the user that sent the token creation request."
+          },
+          "emailCampaignId" : {
+            "type" : "string",
+            "description" : "Identifier assigned to the campaign provided in the token creation request."
+          },
+          "id" : {
+            "type" : "string",
+            "description" : "User name to log into the HubSpot SMTP server."
+          },
+          "password" : {
+            "type" : "string",
+            "description" : "Password used to log into the HubSpot SMTP server."
+          }
+        }
+      }
+    },
+    "responses" : {
+      "Error" : {
+        "description" : "An error occurred.",
+        "content" : {
+          "*/*" : {
+            "schema" : {
+              "$ref" : "#/components/schemas/Error"
+            }
+          }
+        }
+      }
+    },
+    "securitySchemes" : {
+      "developer_hapikey" : {
+        "type" : "apiKey",
+        "name" : "hapikey",
+        "in" : "query"
+      },
+      "oauth2" : {
+        "type" : "oauth2",
+        "flows" : {
+          "authorizationCode" : {
+            "authorizationUrl" : "https://app.hubspot.com/oauth/authorize",
+            "tokenUrl" : "https://api.hubapi.com/oauth/v1/token",
+            "scopes" : {
+              "content" : "",
+              "transactional-email" : ""
+            }
+          }
+        }
+      },
+      "private_apps" : {
+        "type" : "apiKey",
+        "name" : "private-app",
+        "in" : "header"
+      },
+      "private_apps_legacy" : {
+        "type" : "apiKey",
+        "name" : "private-app-legacy",
+        "in" : "header"
+      }
+    }
+  },
+  "x-hubspot-available-client-libraries" : [ "Node", "Python", "Ruby", "PHP" ],
+  "x-hubspot-product-tier-requirements" : {
+    "marketing" : "PROFESSIONAL",
+    "sales" : "FREE",
+    "service" : "FREE",
+    "cms" : "FREE",
+    "commerce" : "FREE",
+    "crmHub" : "FREE",
+    "dataHub" : "FREE"
+  }
+}

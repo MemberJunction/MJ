@@ -1,0 +1,40 @@
+{
+  "Entries": [
+    {
+      "ScriptPath": "scratchpad/fetch-hubspot-integration-facts.mjs",
+      "ScriptRunAt": "2026-06-30T20:09:51.379Z",
+      "StructuredOutput": {
+        "probeResults": [
+          {
+            "endpoint": "GET /crm/v3/objects/contacts",
+            "status": 401,
+            "errorBody": "{\"status\":\"error\",\"message\":\"Authentication credentials not found. This API supports OAuth 2.0 authentication...\",\"category\":\"INVALID_AUTHENTICATION\"}"
+          },
+          {
+            "endpoint": "POST /crm/v3/objects/contacts/search",
+            "status": 405,
+            "note": "GET not allowed; POST is the required verb — confirms auth-gated search endpoint"
+          },
+          {
+            "oauthSpec": "https://api.hubspot.com/public/api/spec/v2/specs/release/75328/version/2026-03",
+            "status": 200,
+            "securitySchemes": [
+              "developer_hapikey",
+              "oauth2",
+              "private_apps",
+              "private_apps_legacy"
+            ]
+          }
+        ],
+        "searchEndpointPaginationConfirmed": {
+          "param": "after",
+          "responseField": "paging.next.after",
+          "maxLimit": 200,
+          "schemaName": "PublicObjectSearchRequest"
+        }
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.AuthFlow"
+    }
+  ]
+}

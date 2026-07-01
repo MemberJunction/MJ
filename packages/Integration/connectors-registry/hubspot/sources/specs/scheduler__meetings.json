@@ -1,0 +1,1695 @@
+{
+  "openapi" : "3.0.1",
+  "info" : {
+    "title" : "Scheduler Meetings",
+    "description" : "Meetings Service For HubSpot Sales",
+    "version" : "2026-03",
+    "x-hubspot-product-tier-requirements" : {
+      "marketing" : "FREE",
+      "sales" : "FREE",
+      "service" : "FREE",
+      "cms" : "FREE",
+      "commerce" : "FREE",
+      "crmHub" : "FREE",
+      "dataHub" : "FREE"
+    }
+  },
+  "servers" : [ {
+    "url" : "https://api.hubapi.com"
+  } ],
+  "tags" : [ {
+    "name" : "Advanced"
+  }, {
+    "name" : "Basic"
+  } ],
+  "paths" : {
+    "/scheduler/2026-03/meetings/calendar" : {
+      "post" : {
+        "tags" : [ "Advanced" ],
+        "summary" : "Create a new calendar meeting event.",
+        "description" : "Create a new calendar event and meeting object by providing the necessary details such as associations, email reminders, meeting object properties, and timezone.",
+        "operationId" : "post-/scheduler/2026-03/meetings/calendar",
+        "parameters" : [ {
+          "name" : "organizerUserId",
+          "in" : "query",
+          "description" : "",
+          "required" : true,
+          "style" : "form",
+          "explode" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ExternalCalendarMeetingEventCreateRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "successful operation",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ExternalCalenderMeetingEventResponse"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "$ref" : "#/components/responses/Error"
+          }
+        },
+        "security" : [ {
+          "oauth2" : [ "crm.objects.contacts.highly_sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "tickets" ]
+        }, {
+          "oauth2" : [ "crm.objects.commercepayments.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.goals.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.line_items.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.contacts.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.products.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.projects.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.contacts.sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.projects.sensitive.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.services.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.deals.sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "tickets.highly_sensitive.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.listings.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.appointments.sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.companies.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.courses.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.appointments.write" ]
+        }, {
+          "oauth2" : [ "tickets.sensitive.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.deals.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.projects.highly_sensitive.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.companies.sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.deals.highly_sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.companies.highly_sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "meetings-write" ]
+        } ]
+      }
+    },
+    "/scheduler/2026-03/meetings/meeting-links" : {
+      "get" : {
+        "tags" : [ "Basic" ],
+        "summary" : "Get meeting scheduling pages",
+        "description" : "Get a paged list meeting scheduling pages",
+        "operationId" : "get-/scheduler/2026-03/meetings/meeting-links",
+        "parameters" : [ {
+          "name" : "after",
+          "in" : "query",
+          "description" : "The paging cursor token of the last successfully read resource will be returned as the `paging.next.after` JSON property of a paged response containing more results.",
+          "required" : false,
+          "style" : "form",
+          "explode" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "limit",
+          "in" : "query",
+          "description" : "The maximum number of results to display per page.",
+          "required" : false,
+          "style" : "form",
+          "explode" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }, {
+          "name" : "name",
+          "in" : "query",
+          "description" : "",
+          "required" : false,
+          "style" : "form",
+          "explode" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "organizerUserId",
+          "in" : "query",
+          "description" : "",
+          "required" : false,
+          "style" : "form",
+          "explode" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "type",
+          "in" : "query",
+          "description" : "",
+          "required" : false,
+          "style" : "form",
+          "explode" : true,
+          "schema" : {
+            "type" : "string",
+            "enum" : [ "GROUP_CALENDAR", "PERSONAL_LINK", "ROUND_ROBIN_CALENDAR" ]
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "successful operation",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CollectionResponseWithTotalExternalLinkMetadata"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "$ref" : "#/components/responses/Error"
+          }
+        },
+        "security" : [ {
+          "oauth2" : [ "scheduler.meetings.meeting-link.read" ]
+        } ]
+      }
+    },
+    "/scheduler/2026-03/meetings/meeting-links/book" : {
+      "post" : {
+        "tags" : [ "Advanced" ],
+        "summary" : "Book a meeting\n",
+        "description" : "Book a meeting for a specified meeting page.",
+        "operationId" : "post-/scheduler/2026-03/meetings/meeting-links/book",
+        "parameters" : [ ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ExternalMeetingBooking"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "successful operation",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ExternalMeetingBookingResponse"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "$ref" : "#/components/responses/Error"
+          }
+        },
+        "security" : [ {
+          "oauth2" : [ "crm.objects.contacts.highly_sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "tickets" ]
+        }, {
+          "oauth2" : [ "crm.objects.commercepayments.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.goals.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.line_items.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.contacts.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.products.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.projects.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.contacts.sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.projects.sensitive.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.services.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.deals.sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "tickets.highly_sensitive.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.listings.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.appointments.sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.companies.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.courses.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.appointments.write" ]
+        }, {
+          "oauth2" : [ "tickets.sensitive.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.deals.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.projects.highly_sensitive.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.companies.sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.deals.highly_sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.companies.highly_sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "meetings-write" ]
+        } ]
+      }
+    },
+    "/scheduler/2026-03/meetings/meeting-links/book/availability-page/{slug}" : {
+      "get" : {
+        "tags" : [ "Basic" ],
+        "summary" : "Get the availability for a meeting",
+        "description" : "Get the next availability times for a meeting page.",
+        "operationId" : "get-/scheduler/2026-03/meetings/meeting-links/book/availability-page/{slug}",
+        "parameters" : [ {
+          "name" : "slug",
+          "in" : "path",
+          "description" : "",
+          "required" : true,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "timezone",
+          "in" : "query",
+          "description" : "",
+          "required" : true,
+          "style" : "form",
+          "explode" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "monthOffset",
+          "in" : "query",
+          "description" : "",
+          "required" : false,
+          "style" : "form",
+          "explode" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "successful operation",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ExternalLinkAvailabilityAndBusyTimes"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "$ref" : "#/components/responses/Error"
+          }
+        },
+        "security" : [ {
+          "oauth2" : [ "scheduler.meetings.meeting-link.read" ]
+        } ]
+      }
+    },
+    "/scheduler/2026-03/meetings/meeting-links/book/{slug}" : {
+      "get" : {
+        "tags" : [ "Basic" ],
+        "summary" : "List booking information",
+        "description" : "Get details about the initial information necessary for a meeting scheduler.",
+        "operationId" : "get-/scheduler/2026-03/meetings/meeting-links/book/{slug}",
+        "parameters" : [ {
+          "name" : "slug",
+          "in" : "path",
+          "description" : "",
+          "required" : true,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "timezone",
+          "in" : "query",
+          "description" : "",
+          "required" : true,
+          "style" : "form",
+          "explode" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "successful operation",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ExternalBookingInfo"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "$ref" : "#/components/responses/Error"
+          }
+        },
+        "security" : [ {
+          "oauth2" : [ "scheduler.meetings.meeting-link.read" ]
+        } ]
+      }
+    }
+  },
+  "components" : {
+    "schemas" : {
+      "AssociationSpec" : {
+        "required" : [ "associationCategory", "associationTypeId" ],
+        "type" : "object",
+        "properties" : {
+          "associationCategory" : {
+            "type" : "string",
+            "description" : "The category of the association, such as \"HUBSPOT_DEFINED\".",
+            "enum" : [ "HUBSPOT_DEFINED", "INTEGRATOR_DEFINED", "USER_DEFINED", "WORK" ]
+          },
+          "associationTypeId" : {
+            "type" : "integer",
+            "description" : "The ID representing the specific type of association.",
+            "format" : "int32"
+          }
+        },
+        "description" : "Defines the type, direction, and details of the relationship between two CRM objects."
+      },
+      "CollectionResponseWithTotalExternalLinkMetadata" : {
+        "required" : [ "results", "total" ],
+        "type" : "object",
+        "properties" : {
+          "paging" : {
+            "$ref" : "#/components/schemas/Paging"
+          },
+          "results" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ExternalLinkMetadata"
+            }
+          },
+          "total" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
+      "Error" : {
+        "required" : [ "category", "correlationId", "message" ],
+        "type" : "object",
+        "properties" : {
+          "category" : {
+            "type" : "string",
+            "description" : "The error category"
+          },
+          "context" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "array",
+              "items" : {
+                "type" : "string"
+              }
+            },
+            "description" : "Context about the error condition",
+            "example" : "{invalidPropertyName=[propertyValue], missingScopes=[scope1, scope2]}"
+          },
+          "correlationId" : {
+            "type" : "string",
+            "description" : "A unique identifier for the request. Include this value with any error reports or support tickets",
+            "format" : "uuid",
+            "example" : "aeb5f871-7f07-4993-9211-075dc63e7cbf"
+          },
+          "errors" : {
+            "type" : "array",
+            "description" : "further information about the error",
+            "items" : {
+              "$ref" : "#/components/schemas/ErrorDetail"
+            }
+          },
+          "links" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "description" : "A map of link names to associated URIs containing documentation about the error or recommended remediation steps"
+          },
+          "message" : {
+            "type" : "string",
+            "description" : "A human readable message describing the error along with remediation steps where appropriate",
+            "example" : "An error occurred"
+          },
+          "subCategory" : {
+            "type" : "string",
+            "description" : "A specific category that contains more specific detail about the error"
+          }
+        },
+        "example" : {
+          "message" : "Invalid input (details will vary based on the error)",
+          "correlationId" : "aeb5f871-7f07-4993-9211-075dc63e7cbf",
+          "category" : "VALIDATION_ERROR",
+          "links" : {
+            "knowledge-base" : "https://www.hubspot.com/products/service/knowledge-base"
+          }
+        }
+      },
+      "ErrorDetail" : {
+        "required" : [ "message" ],
+        "type" : "object",
+        "properties" : {
+          "code" : {
+            "type" : "string",
+            "description" : "The status code associated with the error detail"
+          },
+          "context" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "array",
+              "items" : {
+                "type" : "string"
+              }
+            },
+            "description" : "Context about the error condition",
+            "example" : "{missingScopes=[scope1, scope2]}"
+          },
+          "in" : {
+            "type" : "string",
+            "description" : "The name of the field or parameter in which the error was found."
+          },
+          "message" : {
+            "type" : "string",
+            "description" : "A human readable message describing the error along with remediation steps where appropriate"
+          },
+          "subCategory" : {
+            "type" : "string",
+            "description" : "A specific category that contains more specific detail about the error"
+          }
+        }
+      },
+      "ExternalAssociationCreateRequest" : {
+        "required" : [ "to", "types" ],
+        "type" : "object",
+        "properties" : {
+          "to" : {
+            "$ref" : "#/components/schemas/PublicObjectId"
+          },
+          "types" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/AssociationSpec"
+            }
+          }
+        }
+      },
+      "ExternalBookingFormField" : {
+        "required" : [ "name", "value" ],
+        "type" : "object",
+        "properties" : {
+          "name" : {
+            "type" : "string",
+            "description" : "The name of the form field."
+          },
+          "value" : {
+            "type" : "string",
+            "description" : "The value associated with the form field."
+          }
+        }
+      },
+      "ExternalBookingInfo" : {
+        "required" : [ "allUsersBusyTimes", "customParams", "isOffline", "linkId", "linkType" ],
+        "type" : "object",
+        "properties" : {
+          "allUsersBusyTimes" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ExternalUserBusyTimes"
+            }
+          },
+          "brandingMetadata" : {
+            "$ref" : "#/components/schemas/ExternalBrandingMetadata"
+          },
+          "customParams" : {
+            "$ref" : "#/components/schemas/ExternalMeetingsLinkSettings"
+          },
+          "isOffline" : {
+            "type" : "boolean",
+            "description" : "Whether the meeting was booked offline, meaning no associated calendar event was created."
+          },
+          "linkAvailability" : {
+            "$ref" : "#/components/schemas/ExternalLinkAvailability"
+          },
+          "linkId" : {
+            "type" : "string",
+            "description" : "The unique identifier for the meeting link."
+          },
+          "linkType" : {
+            "type" : "string",
+            "description" : "The type of the meeting link. Accepted values are: GROUP_CALENDAR, PERSONAL_LINK, ROUND_ROBIN_CALENDAR.",
+            "enum" : [ "GROUP_CALENDAR", "PERSONAL_LINK", "ROUND_ROBIN_CALENDAR" ]
+          }
+        }
+      },
+      "ExternalBrandingMetadata" : {
+        "required" : [ "logoAltText", "showMarketingAd", "showSalesAd" ],
+        "type" : "object",
+        "properties" : {
+          "accent2Color" : {
+            "type" : "string",
+            "description" : "The secondary accent color used in branding."
+          },
+          "accentColor" : {
+            "type" : "string",
+            "description" : "The primary accent color used in branding."
+          },
+          "companyAddressLine1" : {
+            "type" : "string",
+            "description" : "The first line of the company's address."
+          },
+          "companyAddressLine2" : {
+            "type" : "string",
+            "description" : "The second line of the company's address."
+          },
+          "companyAvatar" : {
+            "type" : "string",
+            "description" : "The URL of the company's avatar image."
+          },
+          "companyCity" : {
+            "type" : "string",
+            "description" : "The city where the company is located."
+          },
+          "companyCountry" : {
+            "type" : "string",
+            "description" : "The country where the company is located."
+          },
+          "companyDomain" : {
+            "type" : "string",
+            "description" : "The domain of the company's website."
+          },
+          "companyName" : {
+            "type" : "string",
+            "description" : "The name of the company."
+          },
+          "companyState" : {
+            "type" : "string",
+            "description" : "The state where the company is located."
+          },
+          "companyZip" : {
+            "type" : "string",
+            "description" : "The ZIP code of the company's location."
+          },
+          "logoAltText" : {
+            "type" : "string",
+            "description" : "The alternative text for the current logo."
+          },
+          "logoHeight" : {
+            "type" : "integer",
+            "description" : "The height of the logo in pixels.",
+            "format" : "int32"
+          },
+          "logoUrl" : {
+            "type" : "string",
+            "description" : "The URL of a custom logo image."
+          },
+          "logoWidth" : {
+            "type" : "integer",
+            "description" : "The width of the logo in pixels.",
+            "format" : "int32"
+          },
+          "primaryColor" : {
+            "type" : "string",
+            "description" : "The primary color used in branding."
+          },
+          "secondaryColor" : {
+            "type" : "string",
+            "description" : "The secondary color used in branding."
+          },
+          "showMarketingAd" : {
+            "type" : "boolean",
+            "description" : "Whether Hubspot Marketing ads are shown."
+          },
+          "showSalesAd" : {
+            "type" : "boolean",
+            "description" : "Whether Hubspot Sales ads are shown."
+          }
+        }
+      },
+      "ExternalCalendarMeetingEventCreateProperties" : {
+        "required" : [ "hs_meeting_end_time", "hs_meeting_outcome", "hs_meeting_start_time", "hs_meeting_title", "hs_timestamp", "hubspot_owner_id" ],
+        "type" : "object",
+        "properties" : {
+          "hs_activity_type" : {
+            "type" : "string",
+            "description" : "The activity type of the meeting. Acceptable values are based on portal defined call and meeting types."
+          },
+          "hs_attachment_ids" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "hs_attendee_owner_ids" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "hs_internal_meeting_notes" : {
+            "type" : "string",
+            "description" : "Internal notes related to the meeting."
+          },
+          "hs_meeting_body" : {
+            "type" : "string",
+            "description" : "The description of the meeting and calendar event."
+          },
+          "hs_meeting_end_time" : {
+            "type" : "string",
+            "description" : "The time that the meeting should end in ISO 8601 format.",
+            "format" : "date-time"
+          },
+          "hs_meeting_location" : {
+            "type" : "string",
+            "description" : "The physical address, virtual location, or phone number where the meeting will take place."
+          },
+          "hs_meeting_location_type" : {
+            "type" : "string",
+            "description" : "The type of location for the meeting. Acceptable values are: ADDRESS, CUSTOM, PHONE.",
+            "enum" : [ "ADDRESS", "CUSTOM", "PHONE" ]
+          },
+          "hs_meeting_outcome" : {
+            "type" : "string",
+            "description" : "The outcome of the meeting. Acceptable default values are: SCHEDULED, COMPLETED, RESCHEDULED, NO_SHOW, CANCELED. This property can be changed to include additional custom values."
+          },
+          "hs_meeting_start_time" : {
+            "type" : "string",
+            "description" : "The time that the meeting should start in ISO 8601 format.",
+            "format" : "date-time"
+          },
+          "hs_meeting_title" : {
+            "type" : "string",
+            "description" : "The title of the meeting and calendar event."
+          },
+          "hs_timestamp" : {
+            "type" : "string",
+            "description" : "The time that the meeting should start in ISO 8601 format. This value should be the same as `hs_meeting_start_time`.",
+            "format" : "date-time"
+          },
+          "hubspot_owner_id" : {
+            "type" : "string",
+            "description" : "The ownerId of the HubSpot user who will host the meeting."
+          }
+        }
+      },
+      "ExternalCalendarMeetingEventCreateRequest" : {
+        "required" : [ "associations", "emailReminderSchedule", "properties", "timezone" ],
+        "type" : "object",
+        "properties" : {
+          "associations" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ExternalAssociationCreateRequest"
+            }
+          },
+          "emailReminderSchedule" : {
+            "$ref" : "#/components/schemas/ExternalEmailReminderSchedule"
+          },
+          "properties" : {
+            "$ref" : "#/components/schemas/ExternalCalendarMeetingEventCreateProperties"
+          },
+          "timezone" : {
+            "type" : "string",
+            "description" : "The timezone property that will be set on the meeting event."
+          }
+        }
+      },
+      "ExternalCalendarMeetingEventResponseProperties" : {
+        "required" : [ "hs_engagement_source", "hs_engagement_source_id", "hs_meeting_end_time", "hs_meeting_outcome", "hs_meeting_start_time", "hs_meeting_title", "hs_timestamp" ],
+        "type" : "object",
+        "properties" : {
+          "hs_activity_type" : {
+            "type" : "string",
+            "description" : "The activity type of the meeting. Acceptable values are based on portal defined call and meeting types."
+          },
+          "hs_attachment_ids" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "hs_attendee_owner_ids" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "hs_engagement_source" : {
+            "type" : "string",
+            "description" : "The source of the engagement, will always be `MEETINGS`.",
+            "enum" : [ "ACADEMY", "ACCEPTANCE_TEST", "ACTIVITY_AUTO_ASSOCIATE", "ACTIVITY_LOG_REVERT", "ADS", "AI_GROUP", "ANALYTICS", "API", "APPROVALS", "ASSISTS", "ASSOCIATIONS", "AUTO_ASSOCIATE_BY_DOMAIN", "AUTOMATION_JOURNEY", "AUTOMATION_PLATFORM", "AVATARS_SERVICE", "BATCH_UPDATE", "BCC_TO_CRM", "BEHAVIORAL_EVENTS", "BET_ASSIGNMENT", "BET_CRM_CONNECTOR", "BIDEN", "BILLING", "BOT", "BREEZE_AGENT", "CALCULATED", "CENTRAL_EXCHANGE_RATES", "CHATSPOT", "CLONE_OBJECTS", "COMMUNICATOR", "COMPANIES", "COMPANY_FAMILIES", "COMPANY_INSIGHTS", "CONNECTED_ACCOUNT", "CONTACTS", "CONTACTS_WEB", "CONTENT_MEMBERSHIP", "CONVERSATIONAL_ENRICHMENT", "CONVERSATIONS", "CRM_PROCESSES_PLATFORM", "CRM_UI", "CRM_UI_BULK_ACTION", "CUSTOMER_AGENT", "CUSTOMER_PORTAL", "DATA_ENRICHMENT", "DATA_QUALITY", "DATASET", "DEALS", "DEFAULT", "DELETE_OBJECTS", "DI_WRITE_TO_CRM", "EMAIL", "EMAIL_INBOX_IMPORT", "EMAIL_INTEGRATION", "ENGAGEMENTS", "EXTENSION", "FILE_MANAGER", "FLYWHEEL_PRODUCT_DATA_SYNC", "FORECASTING", "FORM", "FORWARD_TO_CRM", "GMAIL_INTEGRATION", "GOALS", "HEISENBERG", "HELP_DESK", "HELP_DESK_AI", "IMPORT", "INTEGRATION", "INTEGRATIONS_PLATFORM", "INTEGRATIONS_SYNC", "INTENT", "INTERNAL_PROCESSING", "LEADIN", "LEGAL_BASIS_REMEDIATION", "MARKET_SOURCING", "MARKETPLACE", "MARKETS", "MEETINGS", "MERGE_COMPANIES", "MERGE_CONTACTS", "MERGE_OBJECTS", "MERGE_REVERT_OBJECTS", "MICROAPPS", "MIGRATION", "MOBILE_ANDROID", "MOBILE_IOS", "PAYMENTS", "PIPELINE_SETTINGS", "PLAYBOOKS", "PORTAL_OBJECT_SYNC", "PORTAL_USER_ASSOCIATOR", "PRESENTATIONS", "PRIMARY_AUTOMATION", "PROPERTY_DEFAULT_VALUE", "PROPERTY_RESTORE", "PROPERTY_SETTINGS", "PROSPECTING_AGENT", "QUOTAS", "QUOTES", "RECYCLING_BIN", "RESTORE_OBJECTS", "REVENUE_PLATFORM", "SALES", "SALES_MESSAGES", "SALESFORCE", "SEQUENCES", "SETTINGS", "SIDEKICK", "SIGNALS", "SLACK_INTEGRATION", "SMART_DATA_CAPTURE", "SOCIAL", "SUCCESS", "TALLY", "TASK", "UNKNOWN", "WAL_INCREMENTAL", "WORK_UI", "WORKFLOW_CONTACT_DELETE_ACTION", "WORKFLOWS" ]
+          },
+          "hs_engagement_source_id" : {
+            "type" : "string",
+            "description" : "The ID associated with the process created the engagement. Should always be empty when creating meeting events through this API."
+          },
+          "hs_include_description_in_reminder" : {
+            "type" : "string",
+            "description" : "Whether to include the meeting description in the reminder."
+          },
+          "hs_internal_meeting_notes" : {
+            "type" : "string",
+            "description" : "Internal notes related to the meeting."
+          },
+          "hs_meeting_body" : {
+            "type" : "string",
+            "description" : "The description of the meeting and calendar event."
+          },
+          "hs_meeting_end_time" : {
+            "type" : "string",
+            "description" : "The end time of the meeting in ISO 8601 format.",
+            "format" : "date-time"
+          },
+          "hs_meeting_external_url" : {
+            "type" : "string",
+            "description" : "The calendar event URL for the meeting."
+          },
+          "hs_meeting_location" : {
+            "type" : "string",
+            "description" : "The physical address, virtual location, or phone number where the meeting will take place."
+          },
+          "hs_meeting_location_type" : {
+            "type" : "string",
+            "description" : "The type of location for the meeting. Acceptable values are: ADDRESS, CUSTOM, PHONE.",
+            "enum" : [ "ADDRESS", "CUSTOM", "PHONE" ]
+          },
+          "hs_meeting_outcome" : {
+            "type" : "string",
+            "description" : "The outcome of the meeting. Acceptable default values are: SCHEDULED, COMPLETED, RESCHEDULED, NO_SHOW, CANCELED. This property can be changed to include additional custom values."
+          },
+          "hs_meeting_start_time" : {
+            "type" : "string",
+            "description" : "The start time of the meeting in ISO 8601 format.",
+            "format" : "date-time"
+          },
+          "hs_meeting_title" : {
+            "type" : "string",
+            "description" : "The title of the meeting and calendar event."
+          },
+          "hs_timestamp" : {
+            "type" : "string",
+            "description" : "The time that the meeting should start in ISO 8601 format. This value should be the same as `hs_meeting_start_time`.",
+            "format" : "date-time"
+          },
+          "hs_unique_id" : {
+            "type" : "string",
+            "description" : "The unique ID of the created calendar event."
+          },
+          "hubspot_owner_id" : {
+            "type" : "string",
+            "description" : "The owner ID of the HubSpot user hosting the meeting."
+          }
+        }
+      },
+      "ExternalCalenderMeetingEventResponse" : {
+        "required" : [ "createdAt", "id", "lastUpdatedAt", "properties" ],
+        "type" : "object",
+        "properties" : {
+          "createdAt" : {
+            "type" : "string",
+            "description" : "The date and time when the meeting event was initially created, in ISO 8601 format.",
+            "format" : "date-time"
+          },
+          "id" : {
+            "type" : "string",
+            "description" : "The unique identifier for the meeting event."
+          },
+          "lastUpdatedAt" : {
+            "type" : "string",
+            "description" : "The date and time when the meeting event was last updated, in ISO 8601 format.",
+            "format" : "date-time"
+          },
+          "properties" : {
+            "$ref" : "#/components/schemas/ExternalCalendarMeetingEventResponseProperties"
+          }
+        }
+      },
+      "ExternalClosedRange" : {
+        "required" : [ "end", "start" ],
+        "type" : "object",
+        "properties" : {
+          "end" : {
+            "type" : "integer",
+            "description" : "The end value of the closed range, represented as an integer.",
+            "format" : "int64"
+          },
+          "start" : {
+            "type" : "integer",
+            "description" : "The start value of the closed range, represented as an integer.",
+            "format" : "int64"
+          }
+        }
+      },
+      "ExternalCommunicationConsentCheckbox" : {
+        "required" : [ "communicationTypeId", "label", "required" ],
+        "type" : "object",
+        "properties" : {
+          "communicationTypeId" : {
+            "type" : "string",
+            "description" : "The ID of the communication consent form being recorded."
+          },
+          "label" : {
+            "type" : "string",
+            "description" : "The text label describing the consent being given."
+          },
+          "required" : {
+            "type" : "boolean",
+            "description" : "Whether the consent checkbox is required."
+          }
+        }
+      },
+      "ExternalEmailReminderSchedule" : {
+        "required" : [ "reminders", "shouldIncludeInviteDescription" ],
+        "type" : "object",
+        "properties" : {
+          "reminders" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ExternalReminder"
+            }
+          },
+          "shouldIncludeInviteDescription" : {
+            "type" : "boolean",
+            "description" : "Whether the invite description should be included in the reminder."
+          }
+        }
+      },
+      "ExternalGuestSettings" : {
+        "required" : [ "canAddGuests", "maxGuestCount" ],
+        "type" : "object",
+        "properties" : {
+          "canAddGuests" : {
+            "type" : "boolean",
+            "description" : "Indicates whether guests can be added to the meeting."
+          },
+          "maxGuestCount" : {
+            "type" : "integer",
+            "description" : "The maximum number of guests that can be added to the meeting.",
+            "format" : "int32"
+          }
+        }
+      },
+      "ExternalLegalConsentOptions" : {
+        "required" : [ "communicationConsentCheckboxes", "communicationConsentText", "isLegitimateInterest", "legitimateInterestSubscriptionTypes", "privacyPolicyText", "processingConsentCheckboxLabel", "processingConsentFooterText", "processingConsentText", "processingConsentType" ],
+        "type" : "object",
+        "properties" : {
+          "communicationConsentCheckboxes" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ExternalCommunicationConsentCheckbox"
+            }
+          },
+          "communicationConsentText" : {
+            "type" : "string",
+            "description" : "The text that describes the consent for communication preferences."
+          },
+          "isLegitimateInterest" : {
+            "type" : "boolean",
+            "description" : "Whether the legal basis for processing is legitimate interest."
+          },
+          "legitimateInterestLegalBasis" : {
+            "type" : "string",
+            "description" : "The legal basis for processing under legitimate interest. Accepted values are: LEGITIMATE_INTEREST_PQL, LEGITIMATE_INTEREST_CLIENT, PERFORMANCE_OF_CONTRACT, CONSENT_WITH_NOTICE, NON_GDPR, PROCESS_AND_STORE, LEGITIMATE_INTEREST_OTHER.",
+            "enum" : [ "CONSENT_WITH_NOTICE", "LEGITIMATE_INTEREST_CLIENT", "LEGITIMATE_INTEREST_OTHER", "LEGITIMATE_INTEREST_PQL", "NON_GDPR", "PERFORMANCE_OF_CONTRACT", "PROCESS_AND_STORE" ]
+          },
+          "legitimateInterestSubscriptionTypes" : {
+            "type" : "array",
+            "items" : {
+              "type" : "integer",
+              "format" : "int64"
+            }
+          },
+          "privacyPolicyText" : {
+            "type" : "string",
+            "description" : "The text that describes the data processing privacy policy."
+          },
+          "processingConsentCheckboxLabel" : {
+            "type" : "string",
+            "description" : "The label for the checkbox used to obtain consent for data processing."
+          },
+          "processingConsentFooterText" : {
+            "type" : "string",
+            "description" : "The footer text accompanying the consent for data processing. This field is not used by the meeting platform and will always be empty."
+          },
+          "processingConsentText" : {
+            "type" : "string",
+            "description" : "The text that describes the consent for processing personal data."
+          },
+          "processingConsentType" : {
+            "type" : "string",
+            "description" : "The type of consent required for processing. Accepted values are: IMPLICIT, REQUIRED_CHECKBOX.",
+            "enum" : [ "IMPLICIT", "REQUIRED_CHECKBOX" ]
+          }
+        }
+      },
+      "ExternalLegalConsentResponse" : {
+        "required" : [ "communicationTypeId", "consented" ],
+        "type" : "object",
+        "properties" : {
+          "communicationTypeId" : {
+            "type" : "string",
+            "description" : "The ID of communication consent form being recorded."
+          },
+          "consented" : {
+            "type" : "boolean",
+            "description" : "Whether the user has given consent for the specified communication type."
+          }
+        }
+      },
+      "ExternalLinkAvailability" : {
+        "required" : [ "hasMore", "linkAvailabilityByDuration" ],
+        "type" : "object",
+        "properties" : {
+          "hasMore" : {
+            "type" : "boolean",
+            "description" : "Whether there are more available meeting times beyond the returned set."
+          },
+          "linkAvailabilityByDuration" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "$ref" : "#/components/schemas/ExternalLinkAvailabilityForDuration"
+            },
+            "description" : "Available booking slots for the meeting, grouped by the duration."
+          }
+        }
+      },
+      "ExternalLinkAvailabilityAndBusyTimes" : {
+        "required" : [ "allUsersBusyTimes" ],
+        "type" : "object",
+        "properties" : {
+          "allUsersBusyTimes" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ExternalUserBusyTimes"
+            }
+          },
+          "linkAvailability" : {
+            "$ref" : "#/components/schemas/ExternalLinkAvailability"
+          }
+        }
+      },
+      "ExternalLinkAvailabilityForDuration" : {
+        "required" : [ "availabilities", "meetingDurationMillis" ],
+        "type" : "object",
+        "properties" : {
+          "availabilities" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ExternalMeetingAvailability"
+            }
+          },
+          "meetingDurationMillis" : {
+            "type" : "integer",
+            "description" : "The duration of the meeting in milliseconds.",
+            "format" : "int64"
+          }
+        }
+      },
+      "ExternalLinkDisplayInfo" : {
+        "type" : "object",
+        "properties" : {
+          "avatar" : {
+            "type" : "string",
+            "description" : "The URL of the user's custom uploaded avatar image."
+          },
+          "companyAvatar" : {
+            "type" : "string",
+            "description" : "The URL of the company's avatar image."
+          },
+          "headline" : {
+            "type" : "string",
+            "description" : "Deprecated field with no impact of link display info."
+          },
+          "publicDisplayAvatarOption" : {
+            "type" : "string",
+            "description" : "Option for determining which avatar to display on scheduling page. Accepted values are: PROFILE_IMAGE, COMPANY_LOGO, CUSTOM_AVATAR,",
+            "enum" : [ "COMPANY_LOGO", "CUSTOM_AVATAR", "PROFILE_IMAGE" ]
+          }
+        }
+      },
+      "ExternalLinkFormField" : {
+        "required" : [ "fieldType", "isCustom", "isRequired", "label", "name", "options", "type" ],
+        "type" : "object",
+        "properties" : {
+          "fieldType" : {
+            "type" : "string",
+            "description" : "The specific field type of the form field. Corresponds to property types (e.g., `select`, `radio`, `date`, etc)"
+          },
+          "isCustom" : {
+            "type" : "boolean",
+            "description" : "Whether the form field is a custom field."
+          },
+          "isRequired" : {
+            "type" : "boolean",
+            "description" : "Whether the form field is mandatory."
+          },
+          "label" : {
+            "type" : "string",
+            "description" : "The text label for the form field."
+          },
+          "name" : {
+            "type" : "string",
+            "description" : "The name identifier for the form field."
+          },
+          "options" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ExternalOption"
+            }
+          },
+          "type" : {
+            "type" : "string",
+            "description" : "The data type of the form field accepts (e.g. `date`, `enumeration`,  etc)"
+          }
+        }
+      },
+      "ExternalLinkMetadata" : {
+        "required" : [ "createdAt", "defaultLink", "id", "link", "organizerUserId", "slug", "type", "userIdsOfLinkMembers" ],
+        "type" : "object",
+        "properties" : {
+          "createdAt" : {
+            "type" : "string",
+            "description" : "The Unix time in milliseconds when the meeting link was created.",
+            "format" : "date-time"
+          },
+          "defaultLink" : {
+            "type" : "boolean",
+            "description" : "Whether the meeting link is the user's default link."
+          },
+          "id" : {
+            "type" : "string",
+            "description" : "The unique identifier for the meeting link."
+          },
+          "link" : {
+            "type" : "string",
+            "description" : "The URL of the meeting link."
+          },
+          "name" : {
+            "type" : "string",
+            "description" : "The name of the meeting link."
+          },
+          "organizerUserId" : {
+            "type" : "string",
+            "description" : "The user ID of the meeting link's organizer."
+          },
+          "slug" : {
+            "type" : "string",
+            "description" : "The slug of the meeting link, located directly after the domain in the URL."
+          },
+          "type" : {
+            "type" : "string",
+            "description" : "The type of the external meeting link. Accepted values are: PERSONAL_LINK, GROUP_CALENDAR, ROUND_ROBIN_CALENDAR.",
+            "enum" : [ "GROUP_CALENDAR", "PERSONAL_LINK", "ROUND_ROBIN_CALENDAR" ]
+          },
+          "updatedAt" : {
+            "type" : "string",
+            "description" : "The Unix time in milliseconds when the meeting link was last updated.",
+            "format" : "date-time"
+          },
+          "userIdsOfLinkMembers" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          }
+        }
+      },
+      "ExternalMeetingAvailability" : {
+        "required" : [ "endMillisUtc", "startMillisUtc" ],
+        "type" : "object",
+        "properties" : {
+          "endMillisUtc" : {
+            "type" : "integer",
+            "description" : "The end time of the meeting availability, represented as Unix time in milliseconds.",
+            "format" : "int64"
+          },
+          "startMillisUtc" : {
+            "type" : "integer",
+            "description" : "The start time of the meeting availability, represented as Unix time in milliseconds.",
+            "format" : "int64"
+          }
+        }
+      },
+      "ExternalMeetingBooking" : {
+        "required" : [ "duration", "email", "firstName", "formFields", "lastName", "legalConsentResponses", "likelyAvailableUserIds", "slug", "startTime" ],
+        "type" : "object",
+        "properties" : {
+          "duration" : {
+            "type" : "integer",
+            "description" : "The duration of the meeting in milliseconds.",
+            "format" : "int64"
+          },
+          "email" : {
+            "type" : "string",
+            "description" : "The email address of the person booking the meeting."
+          },
+          "firstName" : {
+            "type" : "string",
+            "description" : "The first name of the person booking the meeting."
+          },
+          "formFields" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ExternalBookingFormField"
+            }
+          },
+          "lastName" : {
+            "type" : "string",
+            "description" : "The last name of the person booking the meeting."
+          },
+          "legalConsentResponses" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ExternalLegalConsentResponse"
+            }
+          },
+          "likelyAvailableUserIds" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "locale" : {
+            "type" : "string",
+            "description" : "The locale used for formatting dates and times in the meeting booking."
+          },
+          "slug" : {
+            "type" : "string",
+            "description" : "The unique path identifier for the meeting page."
+          },
+          "startTime" : {
+            "type" : "string",
+            "description" : "The date and time when the meeting is scheduled to start, in ISO 8601 format.",
+            "format" : "date-time"
+          },
+          "timezone" : {
+            "type" : "string",
+            "description" : "The timezone in which the meeting is scheduled."
+          }
+        }
+      },
+      "ExternalMeetingBookingResponse" : {
+        "required" : [ "bookingTimezone", "calendarEventId", "contactId", "duration", "end", "formFields", "guestEmails", "isOffline", "legalConsentResponses", "start", "subject" ],
+        "type" : "object",
+        "properties" : {
+          "bookingTimezone" : {
+            "type" : "string",
+            "description" : "The timezone the meeting was booked from."
+          },
+          "calendarEventId" : {
+            "type" : "string",
+            "description" : "The unique identifier for the meeting's calendar event."
+          },
+          "contactId" : {
+            "type" : "string",
+            "description" : "The ID of the contact associated to the meeting."
+          },
+          "duration" : {
+            "type" : "integer",
+            "description" : "The duration of the meeting in milliseconds.",
+            "format" : "int64"
+          },
+          "end" : {
+            "type" : "string",
+            "description" : "The date and time when the meeting is scheduled to end, in ISO 8601 format.",
+            "format" : "date-time"
+          },
+          "formFields" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ExternalValidatedFormField"
+            }
+          },
+          "guestEmails" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "isOffline" : {
+            "type" : "boolean",
+            "description" : "Whether the meeting was booked offline and no associated calendar event was created."
+          },
+          "legalConsentResponses" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ExternalLegalConsentResponse"
+            }
+          },
+          "locale" : {
+            "type" : "string",
+            "description" : "The locale the meeting was booked with, used to determine date formatting in calendar event description."
+          },
+          "location" : {
+            "type" : "string",
+            "description" : "The physical or virtual location where the meeting will take place."
+          },
+          "start" : {
+            "type" : "string",
+            "description" : "The date and time when the meeting is scheduled to start, in ISO 8601 format.",
+            "format" : "date-time"
+          },
+          "subject" : {
+            "type" : "string",
+            "description" : "The title of the meeting and calendar event."
+          },
+          "webConferenceMeetingId" : {
+            "type" : "string",
+            "description" : "The unique identifier for the web conference meeting."
+          },
+          "webConferenceUrl" : {
+            "type" : "string",
+            "description" : "The URL for accessing the meeting's web conference."
+          }
+        }
+      },
+      "ExternalMeetingsLinkSettings" : {
+        "required" : [ "availability", "durations", "formFields", "legalConsentEnabled", "meetingBufferTime", "ownerPrioritized", "startTimeIncrementMinutes", "weeksToAdvertise" ],
+        "type" : "object",
+        "properties" : {
+          "availability" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "$ref" : "#/components/schemas/ExternalClosedRange"
+            },
+            "description" : "An array containing the closed range availability for a meeting link. Closed range times are provided as minute offsets from midnight (e.g., 540 corresponds to 9am)."
+          },
+          "customAvailabilityEndDate" : {
+            "type" : "integer",
+            "description" : "The end date for a meeting link's custom availability window, represented as Unix time in milliseconds.",
+            "format" : "int64"
+          },
+          "customAvailabilityStartDate" : {
+            "type" : "integer",
+            "description" : "The start date for a meeting link's custom availability window, represented as Unix time in milliseconds.",
+            "format" : "int64"
+          },
+          "displayInfo" : {
+            "$ref" : "#/components/schemas/ExternalLinkDisplayInfo"
+          },
+          "durations" : {
+            "type" : "array",
+            "items" : {
+              "type" : "integer",
+              "format" : "int64"
+            }
+          },
+          "formFields" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ExternalLinkFormField"
+            }
+          },
+          "guestSettings" : {
+            "$ref" : "#/components/schemas/ExternalGuestSettings"
+          },
+          "language" : {
+            "type" : "string",
+            "description" : "The language setting used for the meeting link."
+          },
+          "legalConsentEnabled" : {
+            "type" : "boolean",
+            "description" : "Whether the legal consent checkbox is displayed during meeting booking."
+          },
+          "legalConsentOptions" : {
+            "$ref" : "#/components/schemas/ExternalLegalConsentOptions"
+          },
+          "locale" : {
+            "type" : "string",
+            "description" : "The locale setting used for formatting dates and times in the meeting link."
+          },
+          "location" : {
+            "type" : "string",
+            "description" : "The physical or virtual location where the meeting will take place."
+          },
+          "meetingBufferTime" : {
+            "type" : "integer",
+            "description" : "The minimum buffer time in milliseconds between consecutive meetings.",
+            "format" : "int64"
+          },
+          "ownerPrioritized" : {
+            "type" : "boolean",
+            "description" : "Indicates whether the meeting owner is prioritized during booking. Only applies to link types of ROUND_ROBIN."
+          },
+          "redirectUrl" : {
+            "type" : "string",
+            "description" : "The URL to redirect to after a meeting is booked."
+          },
+          "startTimeIncrementMinutes" : {
+            "type" : "string",
+            "description" : "The increment for available start times of meetings, spelt out as a word (e.g. 15 minute increment corresponds to `FIFTEEN`). `MEETING_DURATION` is also a valid value.",
+            "enum" : [ "FIFTEEN", "FIVE", "FORTY_FIVE", "MEETING_DURATION", "NINETY", "ONE_HUNDRED_TWENTY", "SIXTY", "TEN", "THIRTY", "TWENTY" ]
+          },
+          "weeksToAdvertise" : {
+            "type" : "integer",
+            "description" : "Legacy property that indicates the number of weeks in advance that availability is advertised. May be outdated or superseded by other properties.",
+            "format" : "int32"
+          },
+          "welcomeScreenInfo" : {
+            "$ref" : "#/components/schemas/ExternalMeetingsWelcomeScreenInfo"
+          }
+        }
+      },
+      "ExternalMeetingsUser" : {
+        "required" : [ "calendarProvider", "id", "isSalesStarter", "userId", "userProfile" ],
+        "type" : "object",
+        "properties" : {
+          "calendarProvider" : {
+            "type" : "string",
+            "description" : "The calendar provider associated with the user. Accepted values are: GOOGLE, OFFICE365, EXCHANGE, UNKNOWN.",
+            "enum" : [ "EXCHANGE", "GOOGLE", "OFFICE365", "UNKNOWN" ]
+          },
+          "id" : {
+            "type" : "string",
+            "description" : "The ID for the meetings user. This value is different than the userId."
+          },
+          "isSalesStarter" : {
+            "type" : "boolean",
+            "description" : "Whether the user has a sales starter seat."
+          },
+          "userId" : {
+            "type" : "string",
+            "description" : "The ID of the user."
+          },
+          "userProfile" : {
+            "$ref" : "#/components/schemas/ExternalUserProfile"
+          }
+        }
+      },
+      "ExternalMeetingsWelcomeScreenInfo" : {
+        "type" : "object",
+        "properties" : {
+          "description" : {
+            "type" : "string",
+            "description" : "A brief description displayed the welcome screen below the title."
+          },
+          "logoUrl" : {
+            "type" : "string",
+            "description" : "The URL of the logo image to be displayed on the welcome screen, only used if `useCompanyLogo` is false."
+          },
+          "showWelcomeScreen" : {
+            "type" : "boolean",
+            "description" : "Deprecated property. Value can be ignored but will always be false."
+          },
+          "title" : {
+            "type" : "string",
+            "description" : "The main heading displayed on the welcome screen."
+          },
+          "useCompanyLogo" : {
+            "type" : "boolean",
+            "description" : "Whether the company's logo should be displayed on the welcome screen."
+          }
+        }
+      },
+      "ExternalOption" : {
+        "required" : [ "description", "displayOrder", "doubleData", "hidden", "label", "readOnly", "value" ],
+        "type" : "object",
+        "properties" : {
+          "description" : {
+            "type" : "string",
+            "description" : "A brief description of the option."
+          },
+          "displayOrder" : {
+            "type" : "integer",
+            "description" : "The order in which the option should be displayed.",
+            "format" : "int32"
+          },
+          "doubleData" : {
+            "type" : "number",
+            "description" : "Deprecated property. Will always be 0."
+          },
+          "hidden" : {
+            "type" : "boolean",
+            "description" : "Whether the option should be hidden from the user."
+          },
+          "label" : {
+            "type" : "string",
+            "description" : "The text label for the option."
+          },
+          "readOnly" : {
+            "type" : "boolean",
+            "description" : "Whether the option is read-only."
+          },
+          "value" : {
+            "type" : "string",
+            "description" : "The value associated with the option."
+          }
+        }
+      },
+      "ExternalReminder" : {
+        "required" : [ "numberOfTimeUnits", "timeUnit" ],
+        "type" : "object",
+        "properties" : {
+          "numberOfTimeUnits" : {
+            "type" : "integer",
+            "description" : "The number of timeUnits prior to the meeting start when the reminder will be sent.",
+            "format" : "int32"
+          },
+          "timeUnit" : {
+            "type" : "string",
+            "description" : "Accepted values are: WEEKS, DAYS, HOURS, MINUTES.",
+            "enum" : [ "DAYS", "HOURS", "MINUTES", "WEEKS" ]
+          }
+        }
+      },
+      "ExternalTimeRange" : {
+        "required" : [ "end", "start" ],
+        "type" : "object",
+        "properties" : {
+          "end" : {
+            "type" : "integer",
+            "description" : "The end time of the time range, represented as Unix time in milliseconds.",
+            "format" : "int64"
+          },
+          "start" : {
+            "type" : "integer",
+            "description" : "The start time of the time range, represented as Unix time in milliseconds.",
+            "format" : "int64"
+          }
+        }
+      },
+      "ExternalUserBusyTimes" : {
+        "required" : [ "busyTimes", "isOffline", "meetingsUser" ],
+        "type" : "object",
+        "properties" : {
+          "busyTimes" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ExternalTimeRange"
+            }
+          },
+          "isOffline" : {
+            "type" : "boolean",
+            "description" : "Whether the user is offline."
+          },
+          "meetingsUser" : {
+            "$ref" : "#/components/schemas/ExternalMeetingsUser"
+          }
+        }
+      },
+      "ExternalUserProfile" : {
+        "required" : [ "email" ],
+        "type" : "object",
+        "properties" : {
+          "email" : {
+            "type" : "string",
+            "description" : "The email address of the user."
+          },
+          "firstName" : {
+            "type" : "string",
+            "description" : "The first name of the user."
+          },
+          "fullName" : {
+            "type" : "string",
+            "description" : "The full name of the user."
+          },
+          "lastName" : {
+            "type" : "string",
+            "description" : "The last name of the user."
+          }
+        }
+      },
+      "ExternalValidatedFormField" : {
+        "required" : [ "isCustom", "label", "name", "value" ],
+        "type" : "object",
+        "properties" : {
+          "fieldType" : {
+            "type" : "string",
+            "description" : "The specific input type of the form field. Corresponds to property types (e.g., `select`, `radio`, `date`, etc)."
+          },
+          "isCustom" : {
+            "type" : "boolean",
+            "description" : "Whether the form field is a custom field."
+          },
+          "label" : {
+            "type" : "string",
+            "description" : "The text label associated with the form field."
+          },
+          "name" : {
+            "type" : "string",
+            "description" : "The name identifier for the form field, includes underscores in place of spaces (e.g., the label `my form` is converted to `my_form`)."
+          },
+          "translatedLabel" : {
+            "type" : "string",
+            "description" : "The translated text label for the form field."
+          },
+          "value" : {
+            "type" : "string",
+            "description" : "The value associated with the form field."
+          },
+          "valueLabel" : {
+            "type" : "string",
+            "description" : "The text label associated to a form field selection or option."
+          }
+        }
+      },
+      "NextPage" : {
+        "required" : [ "after" ],
+        "type" : "object",
+        "properties" : {
+          "after" : {
+            "type" : "string",
+            "description" : "A paging cursor token for retrieving subsequent pages."
+          },
+          "link" : {
+            "type" : "string",
+            "description" : "A URL that can be used to retrieve the next page results."
+          }
+        },
+        "description" : "Specifies the paging information needed to retrieve the next set of results in a paginated API response"
+      },
+      "Paging" : {
+        "type" : "object",
+        "properties" : {
+          "next" : {
+            "$ref" : "#/components/schemas/NextPage"
+          },
+          "prev" : {
+            "$ref" : "#/components/schemas/PreviousPage"
+          }
+        }
+      },
+      "PreviousPage" : {
+        "required" : [ "before" ],
+        "type" : "object",
+        "properties" : {
+          "before" : {
+            "type" : "string",
+            "description" : "A paging cursor token for retrieving previous pages."
+          },
+          "link" : {
+            "type" : "string",
+            "description" : "A URL that can be used to retrieve the previous pages' results."
+          }
+        },
+        "description" : "specifies the paging information needed to retrieve the previous set of results in a paginated API response"
+      },
+      "PublicObjectId" : {
+        "required" : [ "id" ],
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "description" : "The unique identifier for an object."
+          }
+        },
+        "description" : "Contains the Id of a Public Object"
+      }
+    },
+    "responses" : {
+      "Error" : {
+        "description" : "An error occurred.",
+        "content" : {
+          "*/*" : {
+            "schema" : {
+              "$ref" : "#/components/schemas/Error"
+            }
+          }
+        }
+      }
+    },
+    "securitySchemes" : {
+      "developer_hapikey" : {
+        "type" : "apiKey",
+        "name" : "hapikey",
+        "in" : "query"
+      },
+      "oauth2" : {
+        "type" : "oauth2",
+        "flows" : {
+          "authorizationCode" : {
+            "authorizationUrl" : "https://app.hubspot.com/oauth/authorize",
+            "tokenUrl" : "https://api.hubapi.com/oauth/v1/token",
+            "scopes" : {
+              "crm.objects.contacts.sensitive.write.v2" : "",
+              "meetings-write" : "",
+              "scheduler.meetings.meeting-link.read" : ""
+            }
+          }
+        }
+      },
+      "private_apps" : {
+        "type" : "apiKey",
+        "name" : "private-app",
+        "in" : "header"
+      },
+      "private_apps_legacy" : {
+        "type" : "apiKey",
+        "name" : "private-app-legacy",
+        "in" : "header"
+      }
+    }
+  },
+  "x-hubspot-product-tier-requirements" : {
+    "marketing" : "FREE",
+    "sales" : "FREE",
+    "service" : "FREE",
+    "cms" : "FREE",
+    "commerce" : "FREE",
+    "crmHub" : "FREE",
+    "dataHub" : "FREE"
+  }
+}

@@ -1,0 +1,380 @@
+{
+  "openapi" : "3.0.1",
+  "info" : {
+    "title" : "CRM Forecast Types",
+    "description" : "Basepom for all HubSpot Projects",
+    "version" : "v3",
+    "x-hubspot-product-tier-requirements" : {
+      "marketing" : "FREE",
+      "sales" : "PROFESSIONAL",
+      "service" : "PROFESSIONAL",
+      "cms" : "FREE",
+      "commerce" : "FREE",
+      "crmHub" : "FREE",
+      "dataHub" : "FREE"
+    }
+  },
+  "servers" : [ {
+    "url" : "https://api.hubapi.com"
+  } ],
+  "tags" : [ {
+    "name" : "Basic"
+  } ],
+  "paths" : {
+    "/forecast-settings/v3/forecast-types" : {
+      "get" : {
+        "tags" : [ "Basic" ],
+        "summary" : "List",
+        "description" : "Retrieve all forecast types configured for your portal. Forecast types define which properties are used to calculate forecasts, helping you understand and manage your sales projections effectively.",
+        "operationId" : "get-/forecast-settings/v3/forecast-types_/forecast-settings/v3/forecast-types",
+        "parameters" : [ ],
+        "responses" : {
+          "200" : {
+            "description" : "successful operation",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ForecastTypeSettingPublicResponse"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Unauthorized - missing or invalid authentication",
+            "content" : { }
+          },
+          "403" : {
+            "description" : "Forbidden - insufficient permissions",
+            "content" : { }
+          },
+          "default" : {
+            "description" : "",
+            "$ref" : "#/components/responses/Error"
+          }
+        },
+        "security" : [ {
+          "oauth2" : [ "forecast-read" ]
+        }, {
+          "oauth2" : [ "forecasting-access" ]
+        } ]
+      }
+    },
+    "/forecast-settings/v3/forecast-types/{forecastTypeId}" : {
+      "get" : {
+        "tags" : [ "Basic" ],
+        "summary" : "Retrieve forecast type",
+        "description" : "Retrieve a specific forecast type by its ID. This endpoint allows you to access detailed information about a particular forecast type configured in your HubSpot portal. It is useful for understanding how forecasts are calculated based on specific properties.",
+        "operationId" : "get-/forecast-settings/v3/forecast-types/{forecastTypeId}_/forecast-settings/v3/forecast-types/{forecastTypeId}",
+        "parameters" : [ {
+          "name" : "forecastTypeId",
+          "in" : "path",
+          "description" : "The ID of the forecast type to retrieve.",
+          "required" : true,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "successful operation",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ForecastTypeSettingPublicResponse"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Unauthorized - missing or invalid authentication",
+            "content" : { }
+          },
+          "403" : {
+            "description" : "Forbidden - insufficient permissions",
+            "content" : { }
+          },
+          "404" : {
+            "description" : "Forecast type not found",
+            "content" : { }
+          },
+          "default" : {
+            "description" : "",
+            "$ref" : "#/components/responses/Error"
+          }
+        },
+        "security" : [ {
+          "oauth2" : [ "forecast-read" ]
+        }, {
+          "oauth2" : [ "forecasting-access" ]
+        } ]
+      }
+    }
+  },
+  "components" : {
+    "schemas" : {
+      "Error" : {
+        "required" : [ "category", "correlationId", "message" ],
+        "type" : "object",
+        "properties" : {
+          "category" : {
+            "type" : "string",
+            "description" : "The error category, represented as a string."
+          },
+          "context" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "array",
+              "items" : {
+                "type" : "string"
+              }
+            },
+            "description" : "An object providing context about the error condition, where each key is a string and each value is an array of strings.",
+            "example" : "{invalidPropertyName=[propertyValue], missingScopes=[scope1, scope2]}"
+          },
+          "correlationId" : {
+            "type" : "string",
+            "description" : "A unique identifier for the request, provided as a UUID string. Include this value with any error reports or support tickets.",
+            "format" : "uuid",
+            "example" : "aeb5f871-7f07-4993-9211-075dc63e7cbf"
+          },
+          "errors" : {
+            "type" : "array",
+            "description" : "An array providing further information about the error, with each item being an ErrorDetail object.",
+            "items" : {
+              "$ref" : "#/components/schemas/ErrorDetail"
+            }
+          },
+          "links" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "description" : "A map of link names to associated URIs containing documentation about the error or recommended remediation steps. Each key is a string and each value is a string URI."
+          },
+          "message" : {
+            "type" : "string",
+            "description" : "A human readable message describing the error along with remediation steps where appropriate. It is a string.",
+            "example" : "An error occurred"
+          },
+          "subCategory" : {
+            "type" : "string",
+            "description" : "A specific category that contains more specific detail about the error, represented as a string."
+          }
+        },
+        "example" : {
+          "message" : "Invalid input (details will vary based on the error)",
+          "correlationId" : "aeb5f871-7f07-4993-9211-075dc63e7cbf",
+          "category" : "VALIDATION_ERROR",
+          "links" : {
+            "knowledge-base" : "https://www.hubspot.com/products/service/knowledge-base"
+          }
+        }
+      },
+      "ErrorDetail" : {
+        "required" : [ "message" ],
+        "type" : "object",
+        "properties" : {
+          "code" : {
+            "type" : "string",
+            "description" : "The status code associated with the error detail."
+          },
+          "context" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "array",
+              "items" : {
+                "type" : "string"
+              }
+            },
+            "description" : "Context about the error condition, represented as an object with additional properties that are arrays of strings.",
+            "example" : "{missingScopes=[scope1, scope2]}"
+          },
+          "in" : {
+            "type" : "string",
+            "description" : "The name of the field or parameter in which the error was found."
+          },
+          "message" : {
+            "type" : "string",
+            "description" : "A human readable message describing the error along with remediation steps where appropriate. This is a required property."
+          },
+          "subCategory" : {
+            "type" : "string",
+            "description" : "A specific category that contains more specific detail about the error."
+          }
+        }
+      },
+      "ForecastTypeDealSplitProperties" : {
+        "required" : [ "dealCustomAmountProperty", "dealCustomAmountPropertyInHomeCurrency", "dealCustomDateProperty", "dealSplitCustomAmountProperty", "dealSplitCustomAmountPropertyInHomeCurrency", "dealSplitWeightedCustomAmountProperty", "dealSplitWeightedCustomAmountPropertyInHomeCurrency" ],
+        "type" : "object",
+        "properties" : {
+          "dealCustomAmountProperty" : {
+            "type" : "string",
+            "description" : "A string representing the custom amount property for a deal."
+          },
+          "dealCustomAmountPropertyInHomeCurrency" : {
+            "type" : "string",
+            "description" : "A string representing the custom amount property for a deal, converted to the home currency."
+          },
+          "dealCustomDateProperty" : {
+            "type" : "string",
+            "description" : "A string representing the custom date property for a deal."
+          },
+          "dealSplitCustomAmountProperty" : {
+            "type" : "string",
+            "description" : "A string representing the custom amount property for a deal split."
+          },
+          "dealSplitCustomAmountPropertyInHomeCurrency" : {
+            "type" : "string",
+            "description" : "A string representing the custom amount property for a deal split, converted to the home currency."
+          },
+          "dealSplitWeightedCustomAmountProperty" : {
+            "type" : "string",
+            "description" : "A string representing the weighted custom amount property for a deal split."
+          },
+          "dealSplitWeightedCustomAmountPropertyInHomeCurrency" : {
+            "type" : "string",
+            "description" : "A string representing the weighted custom amount property for a deal split, converted to the home currency."
+          }
+        }
+      },
+      "ForecastTypeSettingPublicResponse" : {
+        "required" : [ "amountOrDatePropertyRestrictedForUser", "amountProperty", "createdAt", "createdAtTimestamp", "createdBy", "dateProperty", "defaultType", "forecastName", "forecastTypeId", "id", "objectTypeId", "updatedAt", "updatedBy", "updatedTimestamp" ],
+        "type" : "object",
+        "properties" : {
+          "amountInHomeCurrencyProperty" : {
+            "type" : "string",
+            "description" : "The property representing the amount in the home currency, represented as a string."
+          },
+          "amountOrDatePropertyRestrictedForUser" : {
+            "type" : "boolean",
+            "description" : "A boolean indicating whether the amount or date property is restricted for the user."
+          },
+          "amountProperty" : {
+            "type" : "string",
+            "description" : "The property used to determine the amount for this forecast type, represented as a string."
+          },
+          "createdAt" : {
+            "type" : "string",
+            "description" : "The date and time when the forecast type was created, in ISO 8601 format.",
+            "format" : "date-time"
+          },
+          "createdAtTimestamp" : {
+            "type" : "integer",
+            "description" : "A Unix timestamp in milliseconds indicating when the forecast type was created.",
+            "format" : "int64"
+          },
+          "createdBy" : {
+            "type" : "integer",
+            "description" : "The ID of the user who created the forecast type, represented as an integer.",
+            "format" : "int32"
+          },
+          "dateProperty" : {
+            "type" : "string",
+            "description" : "The property used to determine the date for this forecast type, represented as a string."
+          },
+          "dealSplitProperties" : {
+            "$ref" : "#/components/schemas/ForecastTypeDealSplitProperties"
+          },
+          "defaultType" : {
+            "type" : "boolean",
+            "description" : "A boolean indicating whether this is the default forecast type."
+          },
+          "forecastName" : {
+            "type" : "string",
+            "description" : "The name of the forecast type, represented as a string."
+          },
+          "forecastTypeId" : {
+            "type" : "integer",
+            "description" : "A unique identifier for the forecast type, represented as an integer.",
+            "format" : "int64"
+          },
+          "id" : {
+            "type" : "string",
+            "description" : "A unique string identifier for the forecast type."
+          },
+          "objectTypeId" : {
+            "type" : "string",
+            "description" : "The identifier for the object type associated with this forecast, represented as a string."
+          },
+          "updatedAt" : {
+            "type" : "string",
+            "description" : "The date and time when the forecast type was last updated, in ISO 8601 format.",
+            "format" : "date-time"
+          },
+          "updatedBy" : {
+            "type" : "integer",
+            "description" : "The ID of the user who last updated the forecast type, represented as an integer.",
+            "format" : "int32"
+          },
+          "updatedTimestamp" : {
+            "type" : "integer",
+            "description" : "A Unix timestamp in milliseconds indicating when the forecast type was last updated.",
+            "format" : "int64"
+          },
+          "weightedAmountInHomeCurrencyProperty" : {
+            "type" : "string",
+            "description" : "The property representing the weighted amount in the home currency, represented as a string."
+          },
+          "weightedAmountProperty" : {
+            "type" : "string",
+            "description" : "The property representing the weighted amount, represented as a string."
+          }
+        }
+      }
+    },
+    "responses" : {
+      "Error" : {
+        "description" : "An error occurred.",
+        "content" : {
+          "*/*" : {
+            "schema" : {
+              "$ref" : "#/components/schemas/Error"
+            }
+          }
+        }
+      }
+    },
+    "securitySchemes" : {
+      "developer_hapikey" : {
+        "type" : "apiKey",
+        "name" : "hapikey",
+        "in" : "query"
+      },
+      "oauth2" : {
+        "type" : "oauth2",
+        "flows" : {
+          "authorizationCode" : {
+            "authorizationUrl" : "https://app.hubspot.com/oauth/authorize",
+            "tokenUrl" : "https://api.hubapi.com/oauth/v1/token",
+            "scopes" : {
+              "forecast-read" : "",
+              "forecasting-access" : ""
+            }
+          }
+        }
+      },
+      "private_apps" : {
+        "type" : "apiKey",
+        "name" : "private-app",
+        "in" : "header"
+      },
+      "private_apps_legacy" : {
+        "type" : "apiKey",
+        "name" : "private-app-legacy",
+        "in" : "header"
+      }
+    }
+  },
+  "x-hubspot-product-tier-requirements" : {
+    "marketing" : "FREE",
+    "sales" : "PROFESSIONAL",
+    "service" : "PROFESSIONAL",
+    "cms" : "FREE",
+    "commerce" : "FREE",
+    "crmHub" : "FREE",
+    "dataHub" : "FREE"
+  }
+}

@@ -1,0 +1,79 @@
+{
+  "Entries": [
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T21:06:01.666Z",
+      "StructuredOutput": {
+        "IOCreated": 62,
+        "IOFCreated": 527,
+        "Skipped": 88,
+        "EnumeratedUniverse": 150
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.*"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T21:06:34.748Z",
+      "StructuredOutput": {
+        "IOCreated": 62,
+        "IOFCreated": 527,
+        "Skipped": 88,
+        "EnumeratedUniverse": 150
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.*"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T21:24:05.288Z",
+      "StructuredOutput": {
+        "IOCreated": 62,
+        "IOFCreated": 527,
+        "Skipped": 88,
+        "EnumeratedUniverse": 150
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.*"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T21:27:53.422Z",
+      "StructuredOutput": {
+        "IOCreated": 62,
+        "IOFCreated": 527,
+        "Skipped": 90,
+        "EnumeratedUniverse": 150,
+        "FloorUniverse": 152,
+        "FloorBackfilled": 2
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.*"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T21:28:19.330Z",
+      "StructuredOutput": {
+        "IOCreated": 62,
+        "IOFCreated": 527,
+        "Skipped": 90,
+        "EnumeratedUniverse": 150,
+        "FloorUniverse": 152,
+        "FloorBackfilled": 2
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.*"
+    },
+    {
+      "ScriptPath": "scripts/amend-round2.ts",
+      "ScriptRunAt": "2026-07-01T15:26:24.154Z",
+      "StructuredOutput": {
+        "amendmentApplied": 18,
+        "objectsReprocessed": 11,
+        "source": "openapi.admin.9.14.0.json documented LinkedResource/LinkedResourceWithName/scalar-Int FK fields (GAP-3/GAP-4)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.*.RelatedIntegrationObjectID (Donation.Contact/Payment, Invoice.Contact/EventRegistration, Payment.Contact/Tender, Refund.Contact/Tender, PaymentAllocation.Invoice/Payment, EventRegistration.Event/Contact, AuditLogItem.Contact, CeuRecord.Contact, Bundle.MembershipLevel, Contact.MembershipLevel, Order.contactId/invoiceId)"
+    }
+  ]
+}

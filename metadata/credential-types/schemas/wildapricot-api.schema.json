@@ -1,0 +1,28 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "ApiKey": {
+      "type": "string",
+      "title": "API Key",
+      "description": "Wild Apricot admin API key. Used as Basic auth username on OAuth2 token endpoint.",
+      "isSecret": true,
+      "order": 0
+    },
+    "AccountId": {
+      "type": "string",
+      "title": "Account ID",
+      "description": "Optional Wild Apricot account (tenant) ID. Auto-discovered from first available account if omitted.",
+      "isSecret": false,
+      "order": 1
+    },
+    "ApiVersion": {
+      "type": "string",
+      "title": "API Version",
+      "description": "Wild Apricot REST API version segment (e.g., 'v2.3'). Defaults to 'v2.3' if omitted.",
+      "isSecret": false,
+      "order": 2
+    }
+  },
+  "required": ["ApiKey"]
+}

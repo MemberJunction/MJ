@@ -1,0 +1,149 @@
+{
+  "Entries": [
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T19:27:17.339Z",
+      "StructuredOutput": {
+        "IOCreated": 58,
+        "IOFCreated": 457,
+        "Skipped": 92,
+        "EnumeratedUniverse": 150
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.*"
+    },
+    {
+      "ScriptPath": "scripts/amend-round1.ts",
+      "ScriptRunAt": "2026-06-30T20:12:40.468Z",
+      "TargetField": "io.Contact.SupportsUpdate",
+      "SchemaValidationStatus": "Passed",
+      "Note": "/accounts/{accountId}/contacts/{contactId} PUT"
+    },
+    {
+      "ScriptPath": "scripts/amend-round1.ts",
+      "ScriptRunAt": "2026-06-30T20:12:40.468Z",
+      "TargetField": "io.Contact.SupportsDelete",
+      "SchemaValidationStatus": "Passed",
+      "Note": "/accounts/{accountId}/contacts/{contactId} DELETE"
+    },
+    {
+      "ScriptPath": "scripts/amend-round1.ts",
+      "ScriptRunAt": "2026-06-30T20:12:40.470Z",
+      "TargetField": "io.ContactFieldDescription.SupportsUpdate",
+      "SchemaValidationStatus": "Passed",
+      "Note": "/accounts/{accountId}/contactfields/{contactFieldId} PUT"
+    },
+    {
+      "ScriptPath": "scripts/amend-round1.ts",
+      "ScriptRunAt": "2026-06-30T20:12:40.470Z",
+      "TargetField": "io.ContactFieldDescription.SupportsDelete",
+      "SchemaValidationStatus": "Passed",
+      "Note": "/accounts/{accountId}/contactfields/{contactFieldId} DELETE"
+    },
+    {
+      "ScriptPath": "scripts/amend-round1.ts",
+      "ScriptRunAt": "2026-06-30T20:12:40.471Z",
+      "TargetField": "io.EntityFieldDescription.SupportsUpdate",
+      "SchemaValidationStatus": "Passed",
+      "Note": "/accounts/{accountId}/donationfields/{donationFieldId} PUT"
+    },
+    {
+      "ScriptPath": "scripts/amend-round1.ts",
+      "ScriptRunAt": "2026-06-30T20:12:40.471Z",
+      "TargetField": "io.EntityFieldDescription.SupportsDelete",
+      "SchemaValidationStatus": "Passed",
+      "Note": "/accounts/{accountId}/donationfields/{donationFieldId} DELETE"
+    },
+    {
+      "ScriptPath": "scripts/amend-round1.ts",
+      "ScriptRunAt": "2026-06-30T20:12:40.473Z",
+      "TargetField": "io.Payment.SupportsCreate",
+      "SchemaValidationStatus": "Passed",
+      "Note": "/accounts/{accountId}/payments POST (CreatePaymentModel flat body; Payment response carries Id)"
+    },
+    {
+      "ScriptPath": "scripts/amend-round1.ts",
+      "ScriptRunAt": "2026-06-30T20:12:40.474Z",
+      "TargetField": "iof.Product.id.IsPrimaryKey",
+      "SchemaValidationStatus": "Passed",
+      "Note": "/accounts/{accountId}/store/products/{id} — {id} is the addressing path param ⇒ PK"
+    },
+    {
+      "ScriptPath": "scripts/amend-round1.ts",
+      "ScriptRunAt": "2026-06-30T20:12:40.475Z",
+      "TargetField": "io.EventSession.Name",
+      "SchemaValidationStatus": "Passed",
+      "Note": "schema EventSession (source spec) — corrected triple-s typo EventSesssion"
+    },
+    {
+      "ScriptPath": "scripts/amend-round1.ts",
+      "ScriptRunAt": "2026-06-30T20:12:40.497Z",
+      "TargetField": "io.Account.APIPath",
+      "SchemaValidationStatus": "Passed",
+      "Note": "Account endpoint/schema in admin spec"
+    },
+    {
+      "ScriptPath": "scripts/amend-round1.ts",
+      "ScriptRunAt": "2026-06-30T20:12:40.497Z",
+      "TargetField": "io.Account.PaginationType",
+      "SchemaValidationStatus": "Passed",
+      "Note": "Account endpoint/schema in admin spec"
+    },
+    {
+      "ScriptPath": "scripts/amend-round1.ts",
+      "ScriptRunAt": "2026-06-30T20:12:40.497Z",
+      "TargetField": "io.Account.SupportsWrite",
+      "SchemaValidationStatus": "Passed",
+      "Note": "Account endpoint/schema in admin spec"
+    },
+    {
+      "ScriptPath": "scripts/amend-round1.ts",
+      "ScriptRunAt": "2026-06-30T20:12:40.497Z",
+      "TargetField": "io.Account.Status",
+      "SchemaValidationStatus": "Passed",
+      "Note": "Account endpoint/schema in admin spec"
+    },
+    {
+      "ScriptPath": "scripts/amend-round1.ts",
+      "ScriptRunAt": "2026-06-30T20:12:40.497Z",
+      "TargetField": "iof.Account.Id.IsPrimaryKey",
+      "SchemaValidationStatus": "Passed",
+      "Note": "Account.Id is required in schema + universal id convention (tenant root, addressed via /accounts/{accountId})"
+    },
+    {
+      "ScriptPath": "scripts/amend-round1.ts",
+      "ScriptRunAt": "2026-06-30T20:12:40.513Z",
+      "TargetField": "io.PaymentAllocation.APIPath",
+      "SchemaValidationStatus": "Passed",
+      "Note": "PaymentAllocation endpoint/schema in admin spec"
+    },
+    {
+      "ScriptPath": "scripts/amend-round1.ts",
+      "ScriptRunAt": "2026-06-30T20:12:40.513Z",
+      "TargetField": "io.PaymentAllocation.PaginationType",
+      "SchemaValidationStatus": "Passed",
+      "Note": "PaymentAllocation endpoint/schema in admin spec"
+    },
+    {
+      "ScriptPath": "scripts/amend-round1.ts",
+      "ScriptRunAt": "2026-06-30T20:12:40.513Z",
+      "TargetField": "io.PaymentAllocation.SupportsWrite",
+      "SchemaValidationStatus": "Passed",
+      "Note": "PaymentAllocation endpoint/schema in admin spec"
+    },
+    {
+      "ScriptPath": "scripts/amend-round1.ts",
+      "ScriptRunAt": "2026-06-30T20:12:40.513Z",
+      "TargetField": "io.PaymentAllocation.Status",
+      "SchemaValidationStatus": "Passed",
+      "Note": "PaymentAllocation endpoint/schema in admin spec"
+    },
+    {
+      "ScriptPath": "scripts/amend-round1.ts",
+      "ScriptRunAt": "2026-06-30T20:12:40.513Z",
+      "TargetField": "iof.PaymentAllocation.Id.IsPrimaryKey",
+      "SchemaValidationStatus": "Passed",
+      "Note": "PaymentAllocation.Id integer — universal id naming convention (soft PK)."
+    }
+  ]
+}

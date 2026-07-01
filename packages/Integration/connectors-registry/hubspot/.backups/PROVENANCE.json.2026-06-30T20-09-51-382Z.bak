@@ -1,0 +1,74 @@
+{
+  "Entries": [
+    {
+      "URL": "https://developers.hubspot.com/docs/api/usage-details",
+      "AccessedAt": "2026-06-30T20:09:51.379Z",
+      "UsedFor": "HubSpot per-app rate limit table: burst (per 10 seconds) and daily limits by subscription tier",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.BatchMaxRequestCount",
+      "Excerpt": "Privately distributed apps (Any Hub) Free and Starter: 100 / app per 10 seconds, 250,000 / account per day. Professional: 190 / app, 625,000 / account. Enterprise: 190 / app, 1,000,000 / account."
+    },
+    {
+      "URL": "https://developers.hubspot.com/docs/api/usage-details",
+      "AccessedAt": "2026-06-30T20:09:51.379Z",
+      "UsedFor": "HubSpot rate limit window duration (10 seconds)",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.BatchRequestWaitTime",
+      "Excerpt": "The burst limit, detailed in the Per 10 seconds column below, applies individually per app. X-HubSpot-RateLimit-Interval-Milliseconds: The window of time...For example, a value of 10000 would be a window of 10 seconds."
+    },
+    {
+      "URL": "https://api.hubspot.com/public/api/spec/v2/specs/release/75328/version/2026-03",
+      "AccessedAt": "2026-06-30T20:09:51.379Z",
+      "UsedFor": "HubSpot OAuth 2.0 authorization code flow endpoints and private_apps API key auth scheme",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.AuthFlow",
+      "Excerpt": "securitySchemes: private_apps: {type: apiKey, name: private-app, in: header}; oauth2: {type: oauth2, flows: {authorizationCode: {authorizationUrl: \"https://app.hubspot.com/oauth/authorize\", tokenUrl: \"https://api.hubapi.com/oauth/v1/token\"}}}"
+    },
+    {
+      "URL": "https://api.hubspot.com/public/api/spec/v2/specs/release/75328/version/2026-03",
+      "AccessedAt": "2026-06-30T20:09:51.379Z",
+      "UsedFor": "OAuth token response schema confirms access_token, expires_in, refresh_token fields for OAuth2 public app flow",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.TokenRefreshStrategy",
+      "Excerpt": "AccessTokenResponse required: [\"access_token\", \"expires_in\", \"refresh_token\", \"token_type\", \"token_use\"]"
+    },
+    {
+      "URL": "https://api.hubspot.com/public/api/spec/v2/specs/release/75232/version/2026-03",
+      "AccessedAt": "2026-06-30T20:09:51.379Z",
+      "UsedFor": "Cursor pagination: list endpoint uses \"after\" query param; response includes paging.next.after",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.PaginationDefaults",
+      "Excerpt": "GET /crm/objects/2026-03/contacts param \"after\": \"The paging cursor token of the last successfully read resource will be returned as the paging.next.after JSON property\". NextPage schema: required: [\"after\"], properties: {after: \"A paging cursor token for retrieving subsequent pages.\"}"
+    },
+    {
+      "URL": "https://api.hubspot.com/public/api/spec/v2/specs/release/75232/version/2026-03",
+      "AccessedAt": "2026-06-30T20:09:51.379Z",
+      "UsedFor": "Search API uses \"after\" cursor in POST body (PublicObjectSearchRequest); max limit 200 per page",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.PaginationDefaults",
+      "Excerpt": "PublicObjectSearchRequest properties: after: \"A paging cursor token for retrieving subsequent pages.\", limit: \"The maximum results to return, up to 200 objects.\""
+    },
+    {
+      "URL": "https://developers.hubspot.com/docs/api-reference/latest/crm/search-the-crm",
+      "AccessedAt": "2026-06-30T20:09:51.379Z",
+      "UsedFor": "CRM Search API: 10,000 total results cap per query, 5 req/sec rate limit, lastmodifieddate / hs_lastmodifieddate watermark field",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.IncrementalSyncCapability",
+      "Excerpt": "The search endpoints are rate limited to five requests per second per account. The search endpoints are limited to 10,000 total results for any given query. Attempting to page beyond 10,000 will result in a 400 error. For contacts, a search will return createdate, email, firstname, hs_object_id, lastmodifieddate, and lastname."
+    }
+  ]
+}

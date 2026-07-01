@@ -1,0 +1,22 @@
+{
+  "Events": [
+    {
+      "Id": 9001,
+      "Url": "https://api.wildapricot.org/v2.3/accounts/123456/events/9001",
+      "Name": "<scrubbed-event-1>",
+      "StartDate": "2026-07-18T09:00:00-04:00",
+      "EndDate": "2026-07-18T17:00:00-04:00",
+      "Location": "<scrubbed-location-1>",
+      "RegistrationEnabled": true
+    },
+    {
+      "Id": 9002,
+      "Url": "https://api.wildapricot.org/v2.3/accounts/123456/events/9002",
+      "Name": "<scrubbed-event-2>",
+      "StartDate": "2026-09-03T18:30:00-04:00",
+      "EndDate": "2026-09-03T21:00:00-04:00",
+      "Location": "<scrubbed-location-2>",
+      "RegistrationEnabled": false
+    }
+  ]
+}

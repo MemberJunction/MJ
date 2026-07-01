@@ -1,0 +1,14 @@
+{
+  "Entries": [
+    {
+      "URL": "https://developers.hubspot.com/docs/api/usage-details",
+      "AccessedAt": "2026-06-30T20:09:51.379Z",
+      "UsedFor": "HubSpot per-app rate limit table: burst (per 10 seconds) and daily limits by subscription tier",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.BatchMaxRequestCount",
+      "Excerpt": "Privately distributed apps (Any Hub) Free and Starter: 100 / app per 10 seconds, 250,000 / account per day. Professional: 190 / app, 625,000 / account. Enterprise: 190 / app, 1,000,000 / account."
+    }
+  ]
+}

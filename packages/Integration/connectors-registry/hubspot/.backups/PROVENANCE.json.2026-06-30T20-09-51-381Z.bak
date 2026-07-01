@@ -1,0 +1,34 @@
+{
+  "Entries": [
+    {
+      "URL": "https://developers.hubspot.com/docs/api/usage-details",
+      "AccessedAt": "2026-06-30T20:09:51.379Z",
+      "UsedFor": "HubSpot per-app rate limit table: burst (per 10 seconds) and daily limits by subscription tier",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.BatchMaxRequestCount",
+      "Excerpt": "Privately distributed apps (Any Hub) Free and Starter: 100 / app per 10 seconds, 250,000 / account per day. Professional: 190 / app, 625,000 / account. Enterprise: 190 / app, 1,000,000 / account."
+    },
+    {
+      "URL": "https://developers.hubspot.com/docs/api/usage-details",
+      "AccessedAt": "2026-06-30T20:09:51.379Z",
+      "UsedFor": "HubSpot rate limit window duration (10 seconds)",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.BatchRequestWaitTime",
+      "Excerpt": "The burst limit, detailed in the Per 10 seconds column below, applies individually per app. X-HubSpot-RateLimit-Interval-Milliseconds: The window of time...For example, a value of 10000 would be a window of 10 seconds."
+    },
+    {
+      "URL": "https://api.hubspot.com/public/api/spec/v2/specs/release/75328/version/2026-03",
+      "AccessedAt": "2026-06-30T20:09:51.379Z",
+      "UsedFor": "HubSpot OAuth 2.0 authorization code flow endpoints and private_apps API key auth scheme",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.AuthFlow",
+      "Excerpt": "securitySchemes: private_apps: {type: apiKey, name: private-app, in: header}; oauth2: {type: oauth2, flows: {authorizationCode: {authorizationUrl: \"https://app.hubspot.com/oauth/authorize\", tokenUrl: \"https://api.hubapi.com/oauth/v1/token\"}}}"
+    }
+  ]
+}

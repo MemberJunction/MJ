@@ -1,0 +1,167 @@
+{
+  "Entries": [
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T21:06:01.666Z",
+      "StructuredOutput": {
+        "IOCreated": 62,
+        "IOFCreated": 527,
+        "Skipped": 88,
+        "EnumeratedUniverse": 150
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.*"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T21:06:34.748Z",
+      "StructuredOutput": {
+        "IOCreated": 62,
+        "IOFCreated": 527,
+        "Skipped": 88,
+        "EnumeratedUniverse": 150
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.*"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T21:24:05.288Z",
+      "StructuredOutput": {
+        "IOCreated": 62,
+        "IOFCreated": 527,
+        "Skipped": 88,
+        "EnumeratedUniverse": 150
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.*"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T21:27:53.422Z",
+      "StructuredOutput": {
+        "IOCreated": 62,
+        "IOFCreated": 527,
+        "Skipped": 90,
+        "EnumeratedUniverse": 150,
+        "FloorUniverse": 152,
+        "FloorBackfilled": 2
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.*"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T21:28:19.330Z",
+      "StructuredOutput": {
+        "IOCreated": 62,
+        "IOFCreated": 527,
+        "Skipped": 90,
+        "EnumeratedUniverse": 150,
+        "FloorUniverse": 152,
+        "FloorBackfilled": 2
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.*"
+    },
+    {
+      "ScriptPath": "scripts/amend-round2.ts",
+      "ScriptRunAt": "2026-07-01T15:26:24.154Z",
+      "StructuredOutput": {
+        "amendmentApplied": 18,
+        "objectsReprocessed": 11,
+        "source": "openapi.admin.9.14.0.json documented LinkedResource/LinkedResourceWithName/scalar-Int FK fields (GAP-3/GAP-4)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.*.RelatedIntegrationObjectID (Donation.Contact/Payment, Invoice.Contact/EventRegistration, Payment.Contact/Tender, Refund.Contact/Tender, PaymentAllocation.Invoice/Payment, EventRegistration.Event/Contact, AuditLogItem.Contact, CeuRecord.Contact, Bundle.MembershipLevel, Contact.MembershipLevel, Order.contactId/invoiceId)"
+    },
+    {
+      "ScriptPath": "scripts/extract-root-config-facts.mjs",
+      "ScriptRunAt": "2026-07-01T15:56:45.432Z",
+      "StructuredOutput": {
+        "excerpt": "API request limitsCurrently, the limits on the number of API requests per minute are:40 requests per minute to get a list of contacts120 requests per minute to get a contact by identifier400 for other request types.Batch requests are limited to 5 subrequests per batch.Transitioning from API Version 1You should keep the following in mind when you transition your application from Version 1 of WildAp",
+        "contactsListPerMinute": 40,
+        "contactByIdPerMinute": 120,
+        "otherRequestTypesPerMinute": 400,
+        "batchSubrequestLimit": 5
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.BatchMaxRequestCount"
+    },
+    {
+      "ScriptPath": "scripts/extract-root-config-facts.mjs",
+      "ScriptRunAt": "2026-07-01T15:56:45.432Z",
+      "StructuredOutput": "see CrudByGapObject key in script stdout — omitted here for size; re-run script to reproduce",
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.WriteCapability"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-01T16:04:01.772Z",
+      "StructuredOutput": {
+        "IOCreated": 62,
+        "IOFCreated": 527,
+        "Skipped": 90,
+        "EnumeratedUniverse": 150,
+        "FloorUniverse": 152,
+        "FloorBackfilled": 2
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.*"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-01T16:04:41.468Z",
+      "StructuredOutput": {
+        "IOCreated": 62,
+        "IOFCreated": 527,
+        "Skipped": 90,
+        "EnumeratedUniverse": 150,
+        "FloorUniverse": 152,
+        "FloorBackfilled": 2
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.*"
+    },
+    {
+      "ScriptPath": "scripts/reprobe-account-path.mjs",
+      "ScriptRunAt": "2026-07-01T16:22:32.485Z",
+      "StructuredOutput": {
+        "object": "Account",
+        "kind": "path",
+        "claim": "/accounts",
+        "reprobe": {
+          "declaredPath": {
+            "url": "https://api.wildapricot.org/v2.3/accounts",
+            "status": 401,
+            "allow": "GET, PUT, POST, DELETE, HEAD, OPTIONS"
+          },
+          "wrongPathContrast": {
+            "url": "https://api.wildapricot.org/v2.3/nonexistentxyz",
+            "status": 404,
+            "allow": "GET, PUT, POST, DELETE, HEAD, OPTIONS"
+          }
+        },
+        "verdict": "confirmed-real",
+        "resolved": true,
+        "rationale": "401 on declared path proves the endpoint exists + auth-gates; 404 only on a genuinely wrong path. Docs (OpenAPI 9.14.0-oas3) support /accounts. Original 404 was transient. Path unchanged."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Account.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/amend-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-01T17:44:57.337Z",
+      "StructuredOutput": {
+        "object": "ContactFieldValue",
+        "field": "SystemCode",
+        "signal": "VendorDocsProseScan/OpenAPIxPK",
+        "source": "packages/Integration/connectors-registry/wild-apricot/sources/openapi.admin.9.14.0.json",
+        "excerpt": "SystemCode: \"The system code is a unique field identifier that can be used instead of ...\" / \"System-defined code associated with field. It does not change ...\"",
+        "verdict": "evidenced-PK: documented unique, stable field identifier (natural key)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.ContactFieldValue.SystemCode.IsPrimaryKey"
+    }
+  ]
+}

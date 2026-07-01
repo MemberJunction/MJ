@@ -1,0 +1,13 @@
+{
+  "ok": true,
+  "dbReachable": null,
+  "migrationLevel": null,
+  "mjapiBootable": null,
+  "generatedTreeClean": true,
+  "generatedChurn": [],
+  "staleNestedDists": [],
+  "turboDistFresh": true,
+  "staleDists": [],
+  "resolved": false,
+  "notes": []
+}

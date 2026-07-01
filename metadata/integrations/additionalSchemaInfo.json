@@ -1,0 +1,227 @@
+{
+  "wild_apricot": [
+    {
+      "TableName": "Contact",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Account",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "AttachmentData",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "AuditLogItem",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Bundle",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "CeuRecord",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "ContactFieldDescription",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "EmailDraft",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "EventId",
+          "SchemaName": "wild_apricot",
+          "RelatedTable": "Event",
+          "RelatedField": "Id"
+        }
+      ]
+    },
+    {
+      "TableName": "EmailLog",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "EntityFieldDescription",
+      "PrimaryKey": [
+        {
+          "FieldName": "SystemCode",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Event",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "EventRegistration",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "EventRegistrationType",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "EventId",
+          "SchemaName": "wild_apricot",
+          "RelatedTable": "Event",
+          "RelatedField": "Id"
+        }
+      ]
+    },
+    {
+      "TableName": "Invoice",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "MembershipGroup",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "MembershipLevel",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Order",
+      "PrimaryKey": [
+        {
+          "FieldName": "number",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Payment",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "PaymentAllocation",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Product",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Refund",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "SavedSearch",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Tender",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    }
+  ]
+}

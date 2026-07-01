@@ -1,0 +1,991 @@
+{
+  "openapi" : "3.0.1",
+  "info" : {
+    "title" : "CRM Forecasts",
+    "description" : "CRM objects such as companies, contacts, deals, line items, products, tickets, and quotes are standard objects in HubSpot’s CRM. These core building blocks support custom properties, store critical information, and play a central role in the HubSpot application.\n\n## Supported Object Types\n\nThis API provides access to collections of CRM objects, which return a map of property names to values. Each object type has its own set of default properties, which can be found by exploring the [CRM Object Properties API](https://developers.hubspot.com/docs/methods/crm-properties/crm-properties-overview).\n\n|Object Type |Properties returned by default |\n|--|--|\n| `companies` | `name`, `domain` |\n| `contacts` | `firstname`, `lastname`, `email` |\n| `deals` | `dealname`, `amount`, `closedate`, `pipeline`, `dealstage` |\n| `products` | `name`, `description`, `price` |\n| `tickets` | `content`, `hs_pipeline`, `hs_pipeline_stage`, `hs_ticket_category`, `hs_ticket_priority`, `subject` |\n\nFind a list of all properties for an object type using the [CRM Object Properties](https://developers.hubspot.com/docs/methods/crm-properties/get-properties) API. e.g. `GET https://api.hubapi.com/properties/v2/companies/properties`. Change the properties returned in the response using the `properties` array in the request body.",
+    "version" : "v3",
+    "x-hubspot-product-tier-requirements" : {
+      "marketing" : "FREE",
+      "sales" : "PROFESSIONAL",
+      "service" : "PROFESSIONAL",
+      "cms" : "FREE",
+      "commerce" : "FREE",
+      "crmHub" : "FREE",
+      "dataHub" : "FREE"
+    }
+  },
+  "servers" : [ {
+    "url" : "https://api.hubapi.com"
+  } ],
+  "tags" : [ {
+    "name" : "Basic"
+  } ],
+  "paths" : {
+    "/crm/objects/v3/{objectType}" : {
+      "get" : {
+        "tags" : [ "Basic" ],
+        "summary" : "Retrieve forecasts",
+        "description" : "Retrieve all forecasts.",
+        "operationId" : "get-/crm/objects/v3/{objectType}_/crm/objects/v3/{objectType}",
+        "parameters" : [ {
+          "name" : "objectType",
+          "in" : "path",
+          "description" : "The name of the object (`forecast`)",
+          "required" : true,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "after",
+          "in" : "query",
+          "description" : "The paging cursor token of the last successfully read resource will be returned as the `paging.next.after` JSON property of a paged response containing more results.",
+          "required" : false,
+          "style" : "form",
+          "explode" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "archived",
+          "in" : "query",
+          "description" : "Whether to return only results that have been archived.",
+          "required" : false,
+          "style" : "form",
+          "explode" : true,
+          "schema" : {
+            "type" : "boolean",
+            "default" : false
+          }
+        }, {
+          "name" : "associations",
+          "in" : "query",
+          "description" : "A comma separated list of object types to retrieve associated IDs for. If any of the specified associations do not exist, they will be ignored.",
+          "required" : false,
+          "style" : "form",
+          "explode" : true,
+          "schema" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          }
+        }, {
+          "name" : "limit",
+          "in" : "query",
+          "description" : "The maximum number of results to display per page.",
+          "required" : false,
+          "style" : "form",
+          "explode" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 10
+          }
+        }, {
+          "name" : "properties",
+          "in" : "query",
+          "description" : "A comma separated list of the properties to be returned in the response. If any of the specified properties are not present on the requested object(s), they will be ignored.",
+          "required" : false,
+          "style" : "form",
+          "explode" : true,
+          "schema" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          }
+        }, {
+          "name" : "propertiesWithHistory",
+          "in" : "query",
+          "description" : "A comma separated list of the properties to be returned along with their history of previous values. If any of the specified properties are not present on the requested object(s), they will be ignored. Usage of this parameter will reduce the maximum number of objects that can be read by a single request.",
+          "required" : false,
+          "style" : "form",
+          "explode" : true,
+          "schema" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "successful operation",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CollectionResponseSimplePublicObjectWithAssociationsForwardPaging"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "$ref" : "#/components/responses/Error"
+          }
+        },
+        "security" : [ {
+          "oauth2" : [ "oauth" ]
+        }, {
+          "oauth2" : [ "crm.objects.deals.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.subscriptions.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.services.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.orders.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.listings.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.custom.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.companies.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.custom.sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.tasks.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.custom.highly_sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.companies.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.contacts.highly_sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.appointments.sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.companies.sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "media_bridge.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.deals.highly_sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.contacts.highly_sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.companies.highly_sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.commercepayments.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.invoices.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.contacts.sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.users.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.calls.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.meetings.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.custom.sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.users.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.partner-services.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.orders.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.partner-services.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.appointments.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.projects.highly_sensitive.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.carts.write" ]
+        }, {
+          "oauth2" : [ "tickets" ]
+        }, {
+          "oauth2" : [ "crm.objects.commercepayments.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.products.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.services.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.subscriptions.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.deals.sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.contacts.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.appointments.sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.invoices.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.projects.highly_sensitive.read" ]
+        }, {
+          "oauth2" : [ "tickets.sensitive.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.custom.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.deals.write" ]
+        }, {
+          "oauth2" : [ "e-commerce" ]
+        }, {
+          "oauth2" : [ "crm.objects.appointments.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.projects.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.companies.sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.deals.highly_sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.companies.highly_sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.custom.highly_sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.goals.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.line_items.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.projects.sensitive.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.contacts.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.goals.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.line_items.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.partner-clients.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.projects.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.deals.sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.projects.sensitive.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.quotes.write" ]
+        }, {
+          "oauth2" : [ "tickets.highly_sensitive.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.leads.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.leads.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.carts.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.emails.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.quotes.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.courses.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.partner-clients.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.notes.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.courses.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.listings.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.contacts.sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.products.read" ]
+        } ]
+      }
+    },
+    "/crm/objects/v3/{objectType}/{objectId}" : {
+      "get" : {
+        "tags" : [ "Basic" ],
+        "summary" : "Retrieve forecast",
+        "description" : "Retrieve a single forecast. ",
+        "operationId" : "get-/crm/objects/v3/{objectType}/{objectId}_/crm/objects/v3/{objectType}/{objectId}",
+        "parameters" : [ {
+          "name" : "objectId",
+          "in" : "path",
+          "description" : "The ID of the forecast.",
+          "required" : true,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "objectType",
+          "in" : "path",
+          "description" : "The name of the object (`forecast`)",
+          "required" : true,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "archived",
+          "in" : "query",
+          "description" : "Whether to return only results that have been archived.",
+          "required" : false,
+          "style" : "form",
+          "explode" : true,
+          "schema" : {
+            "type" : "boolean",
+            "default" : false
+          }
+        }, {
+          "name" : "associations",
+          "in" : "query",
+          "description" : "A comma separated list of object types to retrieve associated IDs for. If any of the specified associations do not exist, they will be ignored.",
+          "required" : false,
+          "style" : "form",
+          "explode" : true,
+          "schema" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          }
+        }, {
+          "name" : "idProperty",
+          "in" : "query",
+          "description" : "The name of a property whose values are unique for this object type",
+          "required" : false,
+          "style" : "form",
+          "explode" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "properties",
+          "in" : "query",
+          "description" : "A comma separated list of the properties to be returned in the response. If any of the specified properties are not present on the requested object(s), they will be ignored.",
+          "required" : false,
+          "style" : "form",
+          "explode" : true,
+          "schema" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          }
+        }, {
+          "name" : "propertiesWithHistory",
+          "in" : "query",
+          "description" : "A comma separated list of the properties to be returned along with their history of previous values. If any of the specified properties are not present on the requested object(s), they will be ignored.",
+          "required" : false,
+          "style" : "form",
+          "explode" : true,
+          "schema" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "successful operation",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SimplePublicObjectWithAssociations"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "$ref" : "#/components/responses/Error"
+          }
+        },
+        "security" : [ {
+          "oauth2" : [ "oauth" ]
+        }, {
+          "oauth2" : [ "crm.objects.deals.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.subscriptions.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.services.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.orders.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.listings.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.custom.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.companies.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.custom.sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.tasks.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.custom.highly_sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.companies.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.contacts.highly_sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.appointments.sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.companies.sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "media_bridge.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.deals.highly_sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.contacts.highly_sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.companies.highly_sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.commercepayments.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.invoices.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.contacts.sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.users.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.calls.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.meetings.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.custom.sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.users.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.partner-services.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.orders.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.partner-services.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.appointments.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.projects.highly_sensitive.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.carts.write" ]
+        }, {
+          "oauth2" : [ "tickets" ]
+        }, {
+          "oauth2" : [ "crm.objects.commercepayments.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.products.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.services.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.subscriptions.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.deals.sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.contacts.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.appointments.sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.invoices.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.projects.highly_sensitive.read" ]
+        }, {
+          "oauth2" : [ "tickets.sensitive.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.custom.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.deals.write" ]
+        }, {
+          "oauth2" : [ "e-commerce" ]
+        }, {
+          "oauth2" : [ "crm.objects.appointments.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.projects.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.companies.sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.deals.highly_sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.companies.highly_sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.custom.highly_sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.goals.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.line_items.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.projects.sensitive.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.contacts.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.goals.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.line_items.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.partner-clients.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.projects.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.deals.sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.projects.sensitive.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.quotes.write" ]
+        }, {
+          "oauth2" : [ "tickets.highly_sensitive.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.leads.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.leads.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.carts.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.emails.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.quotes.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.courses.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.partner-clients.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.notes.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.courses.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.listings.read" ]
+        }, {
+          "oauth2" : [ "crm.objects.contacts.sensitive.read.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.products.read" ]
+        } ]
+      }
+    }
+  },
+  "components" : {
+    "schemas" : {
+      "AssociatedId" : {
+        "required" : [ "id", "type" ],
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "description" : "The ID for the association type."
+          },
+          "type" : {
+            "type" : "string",
+            "description" : "The type of associations.",
+            "example" : "deal_to_contact"
+          }
+        },
+        "description" : "Contains the id and type of an association"
+      },
+      "CollectionResponseAssociatedId" : {
+        "required" : [ "results" ],
+        "type" : "object",
+        "properties" : {
+          "paging" : {
+            "$ref" : "#/components/schemas/Paging"
+          },
+          "results" : {
+            "type" : "array",
+            "description" : "An array of associated IDs, each represented by an object of type AssociatedId.",
+            "items" : {
+              "$ref" : "#/components/schemas/AssociatedId"
+            }
+          }
+        }
+      },
+      "CollectionResponseSimplePublicObjectWithAssociationsForwardPaging" : {
+        "required" : [ "results" ],
+        "type" : "object",
+        "properties" : {
+          "paging" : {
+            "$ref" : "#/components/schemas/ForwardPaging"
+          },
+          "results" : {
+            "type" : "array",
+            "description" : "An array of SimplePublicObjectWithAssociations, each representing a CRM object and its associated data.",
+            "items" : {
+              "$ref" : "#/components/schemas/SimplePublicObjectWithAssociations"
+            }
+          }
+        }
+      },
+      "Error" : {
+        "required" : [ "category", "correlationId", "message" ],
+        "type" : "object",
+        "properties" : {
+          "category" : {
+            "type" : "string",
+            "description" : "The error category"
+          },
+          "context" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "array",
+              "items" : {
+                "type" : "string"
+              }
+            },
+            "description" : "Context about the error condition",
+            "example" : "{invalidPropertyName=[propertyValue], missingScopes=[scope1, scope2]}"
+          },
+          "correlationId" : {
+            "type" : "string",
+            "description" : "A unique identifier for the request. Include this value with any error reports or support tickets",
+            "format" : "uuid",
+            "example" : "aeb5f871-7f07-4993-9211-075dc63e7cbf"
+          },
+          "errors" : {
+            "type" : "array",
+            "description" : "further information about the error",
+            "items" : {
+              "$ref" : "#/components/schemas/ErrorDetail"
+            }
+          },
+          "links" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "description" : "A map of link names to associated URIs containing documentation about the error or recommended remediation steps"
+          },
+          "message" : {
+            "type" : "string",
+            "description" : "A human readable message describing the error along with remediation steps where appropriate",
+            "example" : "An error occurred"
+          },
+          "subCategory" : {
+            "type" : "string",
+            "description" : "A specific category that contains more specific detail about the error"
+          }
+        },
+        "example" : {
+          "message" : "Invalid input (details will vary based on the error)",
+          "correlationId" : "aeb5f871-7f07-4993-9211-075dc63e7cbf",
+          "category" : "VALIDATION_ERROR",
+          "links" : {
+            "knowledge-base" : "https://www.hubspot.com/products/service/knowledge-base"
+          }
+        }
+      },
+      "ErrorDetail" : {
+        "required" : [ "message" ],
+        "type" : "object",
+        "properties" : {
+          "code" : {
+            "type" : "string",
+            "description" : "The status code associated with the error detail"
+          },
+          "context" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "array",
+              "items" : {
+                "type" : "string"
+              }
+            },
+            "description" : "Context about the error condition",
+            "example" : "{missingScopes=[scope1, scope2]}"
+          },
+          "in" : {
+            "type" : "string",
+            "description" : "The name of the field or parameter in which the error was found."
+          },
+          "message" : {
+            "type" : "string",
+            "description" : "A human readable message describing the error along with remediation steps where appropriate"
+          },
+          "subCategory" : {
+            "type" : "string",
+            "description" : "A specific category that contains more specific detail about the error"
+          }
+        }
+      },
+      "ForwardPaging" : {
+        "type" : "object",
+        "properties" : {
+          "next" : {
+            "$ref" : "#/components/schemas/NextPage"
+          }
+        }
+      },
+      "NextPage" : {
+        "required" : [ "after" ],
+        "type" : "object",
+        "properties" : {
+          "after" : {
+            "type" : "string",
+            "description" : "A paging cursor token for retrieving subsequent pages."
+          },
+          "link" : {
+            "type" : "string",
+            "description" : "A URL that can be used to retrieve the next page results."
+          }
+        },
+        "description" : "Specifies the paging information needed to retrieve the next set of results in a paginated API response",
+        "example" : {
+          "after" : "NTI1Cg%3D%3D",
+          "link" : "?after=NTI1Cg%3D%3D"
+        }
+      },
+      "Paging" : {
+        "type" : "object",
+        "properties" : {
+          "next" : {
+            "$ref" : "#/components/schemas/NextPage"
+          },
+          "prev" : {
+            "$ref" : "#/components/schemas/PreviousPage"
+          }
+        }
+      },
+      "PreviousPage" : {
+        "required" : [ "before" ],
+        "type" : "object",
+        "properties" : {
+          "before" : {
+            "type" : "string",
+            "description" : "A paging cursor token for retrieving previous pages."
+          },
+          "link" : {
+            "type" : "string",
+            "description" : "A URL that can be used to retrieve the previous pages' results."
+          }
+        },
+        "description" : "specifies the paging information needed to retrieve the previous set of results in a paginated API response"
+      },
+      "PublicObjectWarning" : {
+        "required" : [ "category", "context", "message" ],
+        "type" : "object",
+        "properties" : {
+          "category" : {
+            "type" : "string",
+            "description" : "A string indicating the category of the warning."
+          },
+          "context" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "description" : "An object providing additional context about the warning, with string properties."
+          },
+          "message" : {
+            "type" : "string",
+            "description" : "A string containing the warning message."
+          }
+        }
+      },
+      "SimplePublicObjectWithAssociations" : {
+        "required" : [ "archived", "createdAt", "id", "properties", "updatedAt" ],
+        "type" : "object",
+        "properties" : {
+          "archived" : {
+            "type" : "boolean",
+            "description" : "Whether the object is archived."
+          },
+          "archivedAt" : {
+            "type" : "string",
+            "description" : "The timestamp when the object was archived, in ISO 8601 format.",
+            "format" : "date-time"
+          },
+          "associations" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "$ref" : "#/components/schemas/CollectionResponseAssociatedId"
+            },
+            "description" : "A list defining relationships with other objects."
+          },
+          "createdAt" : {
+            "type" : "string",
+            "description" : "The timestamp when the object was created, in ISO 8601 format.",
+            "format" : "date-time"
+          },
+          "id" : {
+            "type" : "string",
+            "description" : "The unique ID of the object."
+          },
+          "objectWriteTraceId" : {
+            "type" : "string",
+            "description" : "An identifier used for tracing the creation or update request of the object."
+          },
+          "properties" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "description" : "Key value pairs representing the properties of the object."
+          },
+          "propertiesWithHistory" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "array",
+              "items" : {
+                "$ref" : "#/components/schemas/ValueWithTimestamp"
+              }
+            },
+            "description" : "Key-value pairs representing the properties of the object along with their history."
+          },
+          "updatedAt" : {
+            "type" : "string",
+            "description" : "The timestamp when the object was last updated, in ISO 8601 format.",
+            "format" : "date-time"
+          },
+          "url" : {
+            "type" : "string",
+            "description" : "The URL on the API that provide direct navigation to the corresponding UI pages for the connectors."
+          },
+          "warnings" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/PublicObjectWarning"
+            }
+          }
+        },
+        "description" : "Represents a CRM object along with its properties, timestamps, and a set of associated object IDs grouped by association type."
+      },
+      "ValueWithTimestamp" : {
+        "required" : [ "sourceType", "timestamp", "value" ],
+        "type" : "object",
+        "properties" : {
+          "sourceId" : {
+            "type" : "string",
+            "description" : "The unique ID of the property."
+          },
+          "sourceLabel" : {
+            "type" : "string",
+            "description" : "A human-readable label."
+          },
+          "sourceType" : {
+            "type" : "string",
+            "description" : "The property type."
+          },
+          "timestamp" : {
+            "type" : "string",
+            "description" : "The timestamp when the property was updated, in ISO 8601 format.",
+            "format" : "date-time"
+          },
+          "updatedByUserId" : {
+            "type" : "integer",
+            "description" : "The ID of the user who last updated the property.",
+            "format" : "int32"
+          },
+          "value" : {
+            "type" : "string",
+            "description" : "The property value."
+          }
+        },
+        "description" : "Property model that includes timestamp."
+      }
+    },
+    "responses" : {
+      "Error" : {
+        "description" : "An error occurred.",
+        "content" : {
+          "*/*" : {
+            "schema" : {
+              "$ref" : "#/components/schemas/Error"
+            }
+          }
+        }
+      }
+    },
+    "securitySchemes" : {
+      "developer_hapikey" : {
+        "type" : "apiKey",
+        "name" : "hapikey",
+        "in" : "query"
+      },
+      "oauth2" : {
+        "type" : "oauth2",
+        "flows" : {
+          "authorizationCode" : {
+            "authorizationUrl" : "https://app.hubspot.com/oauth/authorize",
+            "tokenUrl" : "https://api.hubapi.com/oauth/v1/token",
+            "scopes" : {
+              "crm.objects.appointments.read" : "",
+              "crm.objects.appointments.sensitive.read.v2" : "",
+              "crm.objects.appointments.sensitive.write.v2" : "",
+              "crm.objects.appointments.write" : "",
+              "crm.objects.calls.read" : "",
+              "crm.objects.carts.read" : "",
+              "crm.objects.carts.write" : "",
+              "crm.objects.commercepayments.read" : "",
+              "crm.objects.commercepayments.write" : "",
+              "crm.objects.companies.highly_sensitive.read.v2" : "",
+              "crm.objects.companies.highly_sensitive.write.v2" : "",
+              "crm.objects.companies.read" : "",
+              "crm.objects.companies.sensitive.read.v2" : "",
+              "crm.objects.companies.sensitive.write.v2" : "",
+              "crm.objects.companies.write" : "",
+              "crm.objects.contacts.highly_sensitive.read.v2" : "",
+              "crm.objects.contacts.highly_sensitive.write.v2" : "",
+              "crm.objects.contacts.read" : "",
+              "crm.objects.contacts.sensitive.read.v2" : "",
+              "crm.objects.contacts.sensitive.write.v2" : "",
+              "crm.objects.contacts.write" : "",
+              "crm.objects.courses.read" : "",
+              "crm.objects.courses.write" : "",
+              "crm.objects.custom.highly_sensitive.read.v2" : "",
+              "crm.objects.custom.highly_sensitive.write.v2" : "",
+              "crm.objects.custom.read" : "",
+              "crm.objects.custom.sensitive.read.v2" : "",
+              "crm.objects.custom.sensitive.write.v2" : "",
+              "crm.objects.custom.write" : "",
+              "crm.objects.deals.highly_sensitive.read.v2" : "",
+              "crm.objects.deals.highly_sensitive.write.v2" : "",
+              "crm.objects.deals.read" : "",
+              "crm.objects.deals.sensitive.read.v2" : "",
+              "crm.objects.deals.sensitive.write.v2" : "",
+              "crm.objects.deals.write" : "",
+              "crm.objects.emails.read" : "",
+              "crm.objects.goals.read" : "",
+              "crm.objects.goals.write" : "",
+              "crm.objects.invoices.read" : "",
+              "crm.objects.invoices.write" : "",
+              "crm.objects.leads.read" : "",
+              "crm.objects.leads.write" : "",
+              "crm.objects.line_items.read" : "",
+              "crm.objects.line_items.write" : "",
+              "crm.objects.listings.read" : "",
+              "crm.objects.listings.write" : "",
+              "crm.objects.meetings.read" : "",
+              "crm.objects.notes.read" : "",
+              "crm.objects.orders.read" : "",
+              "crm.objects.orders.write" : "",
+              "crm.objects.partner-clients.read" : "",
+              "crm.objects.partner-clients.write" : "",
+              "crm.objects.partner-services.read" : "",
+              "crm.objects.partner-services.write" : "",
+              "crm.objects.products.read" : "",
+              "crm.objects.products.write" : "",
+              "crm.objects.projects.highly_sensitive.read" : "",
+              "crm.objects.projects.highly_sensitive.write" : "",
+              "crm.objects.projects.read" : "",
+              "crm.objects.projects.sensitive.read" : "",
+              "crm.objects.projects.sensitive.write" : "",
+              "crm.objects.projects.write" : "",
+              "crm.objects.quotes.read" : "",
+              "crm.objects.quotes.write" : "",
+              "crm.objects.services.read" : "",
+              "crm.objects.services.write" : "",
+              "crm.objects.subscriptions.read" : "",
+              "crm.objects.subscriptions.write" : "",
+              "crm.objects.tasks.read" : "",
+              "crm.objects.users.read" : "",
+              "crm.objects.users.write" : "",
+              "e-commerce" : "",
+              "media_bridge.read" : "",
+              "oauth" : "",
+              "tickets" : "",
+              "tickets.highly_sensitive.v2" : "",
+              "tickets.sensitive.v2" : ""
+            }
+          }
+        }
+      },
+      "private_apps" : {
+        "type" : "apiKey",
+        "name" : "private-app",
+        "in" : "header"
+      },
+      "private_apps_legacy" : {
+        "type" : "apiKey",
+        "name" : "private-app-legacy",
+        "in" : "header"
+      }
+    }
+  },
+  "x-hubspot-product-tier-requirements" : {
+    "marketing" : "FREE",
+    "sales" : "PROFESSIONAL",
+    "service" : "PROFESSIONAL",
+    "cms" : "FREE",
+    "commerce" : "FREE",
+    "crmHub" : "FREE",
+    "dataHub" : "FREE"
+  }
+}

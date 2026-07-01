@@ -1,0 +1,30 @@
+{
+  "Entries": [
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-06-30T19:27:17.339Z",
+      "StructuredOutput": {
+        "IOCreated": 58,
+        "IOFCreated": 457,
+        "Skipped": 92,
+        "EnumeratedUniverse": 150
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.*"
+    },
+    {
+      "ScriptPath": "scripts/amend-round1.ts",
+      "ScriptRunAt": "2026-06-30T20:12:40.468Z",
+      "TargetField": "io.Contact.SupportsUpdate",
+      "SchemaValidationStatus": "Passed",
+      "Note": "/accounts/{accountId}/contacts/{contactId} PUT"
+    },
+    {
+      "ScriptPath": "scripts/amend-round1.ts",
+      "ScriptRunAt": "2026-06-30T20:12:40.468Z",
+      "TargetField": "io.Contact.SupportsDelete",
+      "SchemaValidationStatus": "Passed",
+      "Note": "/accounts/{accountId}/contacts/{contactId} DELETE"
+    }
+  ]
+}

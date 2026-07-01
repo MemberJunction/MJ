@@ -1,0 +1,1115 @@
+{
+  "openapi" : "3.0.1",
+  "info" : {
+    "title" : "CRM Calling Extensions",
+    "description" : "Basepom for all HubSpot Projects",
+    "version" : "2026-03",
+    "x-hubspot-product-tier-requirements" : {
+      "marketing" : "FREE",
+      "sales" : "FREE",
+      "service" : "FREE",
+      "cms" : "FREE",
+      "commerce" : "FREE",
+      "crmHub" : "FREE",
+      "dataHub" : "FREE"
+    }
+  },
+  "servers" : [ {
+    "url" : "https://api.hubapi.com"
+  } ],
+  "tags" : [ {
+    "name" : "Advanced"
+  }, {
+    "name" : "Basic"
+  } ],
+  "paths" : {
+    "/crm/extensions/calling/2026-03/inbound-call" : {
+      "post" : {
+        "tags" : [ "Advanced" ],
+        "summary" : "Submit details of an inbound call to the CRM.",
+        "description" : "This endpoint allows you to submit information about an inbound call to the CRM system. The request must include details such as the external call ID, call status, and involved phone numbers. This operation helps in logging and managing inbound call data within the CRM.",
+        "operationId" : "post-/crm/extensions/calling/2026-03/inbound-call_/crm/v3/extensions/calling/inbound-call",
+        "parameters" : [ ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CompletedThirdPartyCallRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "successful operation",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CompletedThirdPartyCallResponse"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "$ref" : "#/components/responses/Error"
+          }
+        },
+        "security" : [ {
+          "oauth2" : [ "crm.objects.contacts.highly_sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.contacts.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.contacts.sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.schemas.contacts.write" ]
+        } ]
+      }
+    },
+    "/crm/extensions/calling/2026-03/recordings/ready" : {
+      "post" : {
+        "tags" : [ "Advanced" ],
+        "summary" : "Mark a call recording as ready for retrieval.",
+        "description" : "This endpoint is used to mark a call recording as ready. It requires the engagementId to identify the specific recording.",
+        "operationId" : "post-/crm/extensions/calling/2026-03/recordings/ready_markAsReady",
+        "parameters" : [ ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/MarkRecordingAsReadyRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "204" : {
+            "description" : "No content",
+            "content" : { }
+          },
+          "default" : {
+            "description" : "",
+            "$ref" : "#/components/responses/Error"
+          }
+        },
+        "security" : [ {
+          "oauth2" : [ "crm.objects.contacts.highly_sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.objects.contacts.write" ]
+        }, {
+          "oauth2" : [ "crm.objects.contacts.sensitive.write.v2" ]
+        }, {
+          "oauth2" : [ "crm.schemas.contacts.write" ]
+        } ]
+      }
+    },
+    "/crm/extensions/calling/2026-03/{appId}/settings" : {
+      "get" : {
+        "tags" : [ "Basic" ],
+        "summary" : "Retrieve the calling extension settings for a specific app.",
+        "description" : "Retrieve the current settings of the calling extension for the specified appId. ",
+        "operationId" : "get-/crm/extensions/calling/2026-03/{appId}/settings_get",
+        "parameters" : [ {
+          "name" : "appId",
+          "in" : "path",
+          "description" : "The unique identifier for the app whose calling extension settings are being retrieved.",
+          "required" : true,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "successful operation",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SettingsResponse"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "$ref" : "#/components/responses/Error"
+          }
+        },
+        "security" : [ {
+          "oauth2" : [ "developers-read" ]
+        } ]
+      },
+      "post" : {
+        "tags" : [ "Basic" ],
+        "summary" : "Create new calling extension settings for a specific app.",
+        "description" : "Create new settings for the calling extension associated with the specified appId.",
+        "operationId" : "post-/crm/extensions/calling/2026-03/{appId}/settings_create",
+        "parameters" : [ {
+          "name" : "appId",
+          "in" : "path",
+          "description" : "The unique identifier for the app for which new calling extension settings are being created.",
+          "required" : true,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SettingsRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "successful operation",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SettingsResponse"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "$ref" : "#/components/responses/Error"
+          }
+        },
+        "security" : [ {
+          "oauth2" : [ "developers-write" ]
+        } ]
+      },
+      "delete" : {
+        "tags" : [ "Basic" ],
+        "summary" : "Delete the calling extension settings for a specific app.",
+        "description" : "Remove the calling extension settings associated with the specified appId. This action cannot be undone.",
+        "operationId" : "delete-/crm/extensions/calling/2026-03/{appId}/settings_remove",
+        "parameters" : [ {
+          "name" : "appId",
+          "in" : "path",
+          "description" : "The unique identifier for the app whose calling extension settings are being deleted.",
+          "required" : true,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        } ],
+        "responses" : {
+          "204" : {
+            "description" : "No content",
+            "content" : { }
+          },
+          "default" : {
+            "description" : "",
+            "$ref" : "#/components/responses/Error"
+          }
+        },
+        "security" : [ {
+          "oauth2" : [ "developers-write" ]
+        } ]
+      },
+      "patch" : {
+        "tags" : [ "Basic" ],
+        "summary" : "Update the calling extension settings for a specific app.",
+        "description" : "Modify existing calling extension settings for the specified appId. Only the fields provided in the request will be updated.",
+        "operationId" : "patch-/crm/extensions/calling/2026-03/{appId}/settings_update",
+        "parameters" : [ {
+          "name" : "appId",
+          "in" : "path",
+          "description" : "The unique identifier for the app whose calling extension settings are being updated.",
+          "required" : true,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SettingsPatchRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "successful operation",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SettingsResponse"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "$ref" : "#/components/responses/Error"
+          }
+        },
+        "security" : [ {
+          "oauth2" : [ "developers-write" ]
+        } ]
+      }
+    },
+    "/crm/extensions/calling/2026-03/{appId}/settings/channel-connection" : {
+      "get" : {
+        "tags" : [ "Basic" ],
+        "summary" : "Retrieve the channel connection settings for a specific app.",
+        "description" : "Access the current channel connection settings for the specified app.",
+        "operationId" : "get-/crm/extensions/calling/2026-03/{appId}/settings/channel-connection_get",
+        "parameters" : [ {
+          "name" : "appId",
+          "in" : "path",
+          "description" : "The unique identifier for the app whose channel connection settings are to be retrieved.",
+          "required" : true,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "successful operation",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ChannelConnectionSettingsResponse"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "$ref" : "#/components/responses/Error"
+          }
+        },
+        "security" : [ {
+          "oauth2" : [ "developers-read" ]
+        } ]
+      },
+      "post" : {
+        "tags" : [ "Basic" ],
+        "summary" : "Create new channel connection settings for a specific app.",
+        "description" : "Establish new channel connection settings for the specified app.",
+        "operationId" : "post-/crm/extensions/calling/2026-03/{appId}/settings/channel-connection_create",
+        "parameters" : [ {
+          "name" : "appId",
+          "in" : "path",
+          "description" : "The unique identifier for the app for which new channel connection settings are to be created.",
+          "required" : true,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ChannelConnectionSettingsRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "successful operation",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ChannelConnectionSettingsResponse"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "$ref" : "#/components/responses/Error"
+          }
+        },
+        "security" : [ {
+          "oauth2" : [ "developers-write" ]
+        } ]
+      },
+      "delete" : {
+        "tags" : [ "Basic" ],
+        "summary" : "Remove the channel connection settings for a specific app.",
+        "description" : "Delete the channel connection settings associated with the specified app.",
+        "operationId" : "delete-/crm/extensions/calling/2026-03/{appId}/settings/channel-connection_remove",
+        "parameters" : [ {
+          "name" : "appId",
+          "in" : "path",
+          "description" : "The unique identifier for the app whose channel connection settings are to be deleted.",
+          "required" : true,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        } ],
+        "responses" : {
+          "204" : {
+            "description" : "No content",
+            "content" : { }
+          },
+          "default" : {
+            "description" : "",
+            "$ref" : "#/components/responses/Error"
+          }
+        },
+        "security" : [ {
+          "oauth2" : [ "developers-write" ]
+        } ]
+      },
+      "patch" : {
+        "tags" : [ "Basic" ],
+        "summary" : "Update the channel connection settings for a specific app.",
+        "description" : "Modify the existing channel connection settings for the specified app.",
+        "operationId" : "patch-/crm/extensions/calling/2026-03/{appId}/settings/channel-connection_update",
+        "parameters" : [ {
+          "name" : "appId",
+          "in" : "path",
+          "description" : "The unique identifier for the app whose channel connection settings are to be updated.",
+          "required" : true,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ChannelConnectionSettingsPatchRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "successful operation",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ChannelConnectionSettingsResponse"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "$ref" : "#/components/responses/Error"
+          }
+        },
+        "security" : [ {
+          "oauth2" : [ "developers-write" ]
+        } ]
+      }
+    },
+    "/crm/extensions/calling/2026-03/{appId}/settings/recording" : {
+      "get" : {
+        "tags" : [ "Basic" ],
+        "summary" : "Retrieve recording settings for an app.",
+        "description" : "Retrieve the current recording settings for a specific app using the provided app ID.",
+        "operationId" : "get-/crm/extensions/calling/2026-03/{appId}/settings/recording_get",
+        "parameters" : [ {
+          "name" : "appId",
+          "in" : "path",
+          "description" : "The unique identifier for the app whose recording settings are being retrieved.",
+          "required" : true,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "successful operation",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RecordingSettingsResponse"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "$ref" : "#/components/responses/Error"
+          }
+        },
+        "security" : [ {
+          "oauth2" : [ "developers-read" ]
+        } ]
+      },
+      "post" : {
+        "tags" : [ "Basic" ],
+        "summary" : "Create recording settings for an app.",
+        "description" : "Create new recording settings for a specific app using the provided app ID.",
+        "operationId" : "post-/crm/extensions/calling/2026-03/{appId}/settings/recording_create",
+        "parameters" : [ {
+          "name" : "appId",
+          "in" : "path",
+          "description" : "The unique identifier for the app for which new recording settings are being created.",
+          "required" : true,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RecordingSettingsRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "successful operation",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RecordingSettingsResponse"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "$ref" : "#/components/responses/Error"
+          }
+        },
+        "security" : [ {
+          "oauth2" : [ "developers-write" ]
+        } ]
+      },
+      "patch" : {
+        "tags" : [ "Basic" ],
+        "summary" : "Update recording settings for an app.",
+        "description" : "Update the recording settings for a specific app using the provided app ID.",
+        "operationId" : "patch-/crm/extensions/calling/2026-03/{appId}/settings/recording_update",
+        "parameters" : [ {
+          "name" : "appId",
+          "in" : "path",
+          "description" : "The unique identifier for the app whose recording settings are being updated.",
+          "required" : true,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RecordingSettingsPatchRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "successful operation",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RecordingSettingsResponse"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "$ref" : "#/components/responses/Error"
+          }
+        },
+        "security" : [ {
+          "oauth2" : [ "developers-write" ]
+        } ]
+      }
+    }
+  },
+  "components" : {
+    "schemas" : {
+      "ChannelConnectionSettingsPatchRequest" : {
+        "type" : "object",
+        "properties" : {
+          "isReady" : {
+            "type" : "boolean",
+            "description" : "Indicates whether the channel connection settings are ready."
+          },
+          "url" : {
+            "type" : "string",
+            "description" : "The URL for the channel connection settings."
+          }
+        }
+      },
+      "ChannelConnectionSettingsRequest" : {
+        "required" : [ "isReady", "url" ],
+        "type" : "object",
+        "properties" : {
+          "isReady" : {
+            "type" : "boolean",
+            "description" : "Indicates whether the channel connection settings are ready."
+          },
+          "url" : {
+            "type" : "string",
+            "description" : "The URL associated with the channel connection settings."
+          }
+        }
+      },
+      "ChannelConnectionSettingsResponse" : {
+        "required" : [ "createdAt", "isReady", "updatedAt", "url" ],
+        "type" : "object",
+        "properties" : {
+          "createdAt" : {
+            "type" : "string",
+            "description" : "The date and time when the channel connection settings were created.",
+            "format" : "date-time"
+          },
+          "isReady" : {
+            "type" : "boolean",
+            "description" : "Indicates whether the channel connection settings are ready for use."
+          },
+          "updatedAt" : {
+            "type" : "string",
+            "description" : "The date and time when the channel connection settings were last updated.",
+            "format" : "date-time"
+          },
+          "url" : {
+            "type" : "string",
+            "description" : "The URL associated with the channel connection settings."
+          }
+        }
+      },
+      "CompanyCallerId" : {
+        "title" : "COMPANY",
+        "required" : [ "callerIdType", "objectCoordinates" ],
+        "type" : "object",
+        "properties" : {
+          "callerIdType" : {
+            "type" : "string",
+            "description" : "Specifies the type of caller ID, which is set to 'COMPANY' by default.",
+            "default" : "COMPANY",
+            "enum" : [ "COMPANY" ]
+          },
+          "name" : {
+            "type" : "string",
+            "description" : "The name associated with the company caller ID."
+          },
+          "objectCoordinates" : {
+            "$ref" : "#/components/schemas/ObjectCoordinates"
+          }
+        },
+        "x-hubspot-sub-type-impl" : true
+      },
+      "CompletedThirdPartyCallRequest" : {
+        "required" : [ "createEngagement", "engagementProperties", "externalCallId", "finalCallStatus", "fromNumber", "potentialRecipientUserIds", "toNumber" ],
+        "type" : "object",
+        "properties" : {
+          "callStartedTimestamp" : {
+            "type" : "string",
+            "description" : "The timestamp indicating when the call started, formatted as a date-time string.",
+            "format" : "date-time"
+          },
+          "createEngagement" : {
+            "type" : "boolean",
+            "description" : "Indicates whether an engagement should be created for the call."
+          },
+          "durationSeconds" : {
+            "type" : "integer",
+            "description" : "The duration of the call in seconds.",
+            "format" : "int32"
+          },
+          "engagementProperties" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "description" : "Contains additional properties related to the engagement."
+          },
+          "externalCallId" : {
+            "type" : "string",
+            "description" : "The unique identifier for the call from an external system."
+          },
+          "finalCallStatus" : {
+            "type" : "string",
+            "description" : "The final status of the call, with accepted values including: BUSY, CALLING_CRM_USER, CANCELED, COMPLETED, CONNECTING, FAILED, HOLD, IN_PROGRESS, MISSED, NO_ANSWER, QUEUED, RINGING, UNKNOWN.",
+            "enum" : [ "BUSY", "CALLING_CRM_USER", "CANCELED", "COMPLETED", "CONNECTING", "FAILED", "HOLD", "IN_PROGRESS", "MISSED", "NO_ANSWER", "QUEUED", "RINGING", "UNKNOWN" ]
+          },
+          "fromNumber" : {
+            "$ref" : "#/components/schemas/FormattedPhoneNumber"
+          },
+          "potentialRecipientUserIds" : {
+            "type" : "array",
+            "items" : {
+              "type" : "integer",
+              "format" : "int32"
+            }
+          },
+          "toNumber" : {
+            "$ref" : "#/components/schemas/FormattedPhoneNumber"
+          },
+          "userId" : {
+            "type" : "integer",
+            "description" : "The ID of the user associated with the call.",
+            "format" : "int32"
+          }
+        }
+      },
+      "CompletedThirdPartyCallResponse" : {
+        "required" : [ "callerIdMatches" ],
+        "type" : "object",
+        "properties" : {
+          "callerIdMatches" : {
+            "type" : "array",
+            "items" : {
+              "oneOf" : [ {
+                "$ref" : "#/components/schemas/ContactCallerId"
+              }, {
+                "$ref" : "#/components/schemas/CompanyCallerId"
+              } ]
+            }
+          }
+        }
+      },
+      "ContactCallerId" : {
+        "title" : "CONTACT",
+        "required" : [ "callerIdType", "objectCoordinates" ],
+        "type" : "object",
+        "properties" : {
+          "callerIdType" : {
+            "type" : "string",
+            "description" : "Specifies the type of caller ID, with the default value being CONTACT.",
+            "default" : "CONTACT",
+            "enum" : [ "CONTACT" ]
+          },
+          "email" : {
+            "type" : "string",
+            "description" : "The email address of the contact."
+          },
+          "firstName" : {
+            "type" : "string",
+            "description" : "The first name of the contact."
+          },
+          "lastName" : {
+            "type" : "string",
+            "description" : "The last name of the contact."
+          },
+          "objectCoordinates" : {
+            "$ref" : "#/components/schemas/ObjectCoordinates"
+          }
+        },
+        "x-hubspot-sub-type-impl" : true
+      },
+      "Error" : {
+        "required" : [ "category", "correlationId", "message" ],
+        "type" : "object",
+        "properties" : {
+          "category" : {
+            "type" : "string",
+            "description" : "The error category"
+          },
+          "context" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "array",
+              "items" : {
+                "type" : "string"
+              }
+            },
+            "description" : "Context about the error condition",
+            "example" : "{invalidPropertyName=[propertyValue], missingScopes=[scope1, scope2]}"
+          },
+          "correlationId" : {
+            "type" : "string",
+            "description" : "A unique identifier for the request. Include this value with any error reports or support tickets",
+            "format" : "uuid",
+            "example" : "aeb5f871-7f07-4993-9211-075dc63e7cbf"
+          },
+          "errors" : {
+            "type" : "array",
+            "description" : "further information about the error",
+            "items" : {
+              "$ref" : "#/components/schemas/ErrorDetail"
+            }
+          },
+          "links" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "description" : "A map of link names to associated URIs containing documentation about the error or recommended remediation steps"
+          },
+          "message" : {
+            "type" : "string",
+            "description" : "A human readable message describing the error along with remediation steps where appropriate",
+            "example" : "An error occurred"
+          },
+          "subCategory" : {
+            "type" : "string",
+            "description" : "A specific category that contains more specific detail about the error"
+          }
+        },
+        "example" : {
+          "message" : "Invalid input (details will vary based on the error)",
+          "correlationId" : "aeb5f871-7f07-4993-9211-075dc63e7cbf",
+          "category" : "VALIDATION_ERROR",
+          "links" : {
+            "knowledge-base" : "https://www.hubspot.com/products/service/knowledge-base"
+          }
+        }
+      },
+      "ErrorDetail" : {
+        "required" : [ "message" ],
+        "type" : "object",
+        "properties" : {
+          "code" : {
+            "type" : "string",
+            "description" : "The status code associated with the error detail"
+          },
+          "context" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "array",
+              "items" : {
+                "type" : "string"
+              }
+            },
+            "description" : "Context about the error condition",
+            "example" : "{missingScopes=[scope1, scope2]}"
+          },
+          "in" : {
+            "type" : "string",
+            "description" : "The name of the field or parameter in which the error was found."
+          },
+          "message" : {
+            "type" : "string",
+            "description" : "A human readable message describing the error along with remediation steps where appropriate"
+          },
+          "subCategory" : {
+            "type" : "string",
+            "description" : "A specific category that contains more specific detail about the error"
+          }
+        }
+      },
+      "FormattedPhoneNumber" : {
+        "required" : [ "e164Number", "phoneNumberType" ],
+        "type" : "object",
+        "properties" : {
+          "e164Number" : {
+            "type" : "string",
+            "description" : "The phone number formatted in E.164 standard."
+          },
+          "extension" : {
+            "type" : "string",
+            "description" : "The extension number associated with the phone number."
+          },
+          "phoneNumberType" : {
+            "type" : "string",
+            "description" : "The type of phone number, with accepted values including FIXED_LINE, MOBILE, VOIP, and others.",
+            "enum" : [ "FIXED_LINE", "FIXED_LINE_OR_MOBILE", "MOBILE", "PAGER", "PERSONAL_NUMBER", "PREMIUM_RATE", "SHARED_COST", "TOLL_FREE", "UAN", "UNKNOWN", "VOICEMAIL", "VOIP" ]
+          }
+        }
+      },
+      "MarkRecordingAsReadyRequest" : {
+        "required" : [ "engagementId" ],
+        "type" : "object",
+        "properties" : {
+          "engagementId" : {
+            "type" : "integer",
+            "description" : "The unique identifier for the engagement associated with the call recording.",
+            "format" : "int64"
+          }
+        }
+      },
+      "ObjectCoordinates" : {
+        "required" : [ "objectId", "objectTypeId", "portalId" ],
+        "type" : "object",
+        "properties" : {
+          "objectId" : {
+            "type" : "integer",
+            "description" : "The unique identifier for the object.",
+            "format" : "int64"
+          },
+          "objectTypeId" : {
+            "type" : "string",
+            "description" : "The type identifier for the object."
+          },
+          "portalId" : {
+            "type" : "integer",
+            "description" : "The unique identifier for the portal.",
+            "format" : "int32"
+          }
+        }
+      },
+      "RecordingSettingsPatchRequest" : {
+        "type" : "object",
+        "properties" : {
+          "urlToRetrieveAuthedRecording" : {
+            "type" : "string",
+            "description" : "The URL used to access authenticated call recordings."
+          }
+        }
+      },
+      "RecordingSettingsRequest" : {
+        "required" : [ "urlToRetrieveAuthedRecording" ],
+        "type" : "object",
+        "properties" : {
+          "urlToRetrieveAuthedRecording" : {
+            "type" : "string",
+            "description" : "The URL used to access authenticated call recordings."
+          }
+        }
+      },
+      "RecordingSettingsResponse" : {
+        "required" : [ "urlToRetrieveAuthedRecording" ],
+        "type" : "object",
+        "properties" : {
+          "urlToRetrieveAuthedRecording" : {
+            "type" : "string",
+            "description" : "The URL used to retrieve authenticated call recordings."
+          }
+        }
+      },
+      "SettingsPatchRequest" : {
+        "type" : "object",
+        "properties" : {
+          "height" : {
+            "type" : "integer",
+            "description" : "The height setting for the calling extension interface.",
+            "format" : "int32"
+          },
+          "isReady" : {
+            "type" : "boolean",
+            "description" : "Specifies whether the calling extension is ready for use."
+          },
+          "name" : {
+            "type" : "string",
+            "description" : "The name of the calling extension."
+          },
+          "supportsCustomObjects" : {
+            "type" : "boolean",
+            "description" : "Indicates if the calling extension supports custom objects."
+          },
+          "supportsInboundCalling" : {
+            "type" : "boolean",
+            "description" : "Indicates if the calling extension supports inbound calling."
+          },
+          "url" : {
+            "type" : "string",
+            "description" : "The URL associated with the calling extension settings."
+          },
+          "usesCallingWindow" : {
+            "type" : "boolean",
+            "description" : "Indicates if the calling extension uses a calling window."
+          },
+          "usesRemote" : {
+            "type" : "boolean",
+            "description" : "Indicates if the calling extension uses a remote connection."
+          },
+          "width" : {
+            "type" : "integer",
+            "description" : "The width setting for the calling extension interface.",
+            "format" : "int32"
+          }
+        }
+      },
+      "SettingsRequest" : {
+        "required" : [ "height", "isReady", "name", "supportsCustomObjects", "supportsInboundCalling", "url", "usesCallingWindow", "usesRemote", "width" ],
+        "type" : "object",
+        "properties" : {
+          "height" : {
+            "type" : "integer",
+            "description" : "Specifies the height of the calling extension interface.",
+            "format" : "int32"
+          },
+          "isReady" : {
+            "type" : "boolean",
+            "description" : "Indicates if the calling extension is ready for use."
+          },
+          "name" : {
+            "type" : "string",
+            "description" : "The name of the calling extension."
+          },
+          "supportsCustomObjects" : {
+            "type" : "boolean",
+            "description" : "Indicates if the calling extension supports custom objects."
+          },
+          "supportsInboundCalling" : {
+            "type" : "boolean",
+            "description" : "Indicates if the calling extension supports inbound calling."
+          },
+          "url" : {
+            "type" : "string",
+            "description" : "The URL associated with the calling extension."
+          },
+          "usesCallingWindow" : {
+            "type" : "boolean",
+            "description" : "Indicates if the calling extension uses a separate calling window."
+          },
+          "usesRemote" : {
+            "type" : "boolean",
+            "description" : "Indicates if the calling extension uses remote services."
+          },
+          "width" : {
+            "type" : "integer",
+            "description" : "Specifies the width of the calling extension interface.",
+            "format" : "int32"
+          }
+        }
+      },
+      "SettingsResponse" : {
+        "required" : [ "createdAt", "height", "isReady", "name", "supportsCustomObjects", "supportsInboundCalling", "updatedAt", "url", "usesCallingWindow", "usesRemote", "width" ],
+        "type" : "object",
+        "properties" : {
+          "createdAt" : {
+            "type" : "string",
+            "description" : "The date and time when the calling extension settings were created.",
+            "format" : "date-time"
+          },
+          "height" : {
+            "type" : "integer",
+            "description" : "The height of the calling extension interface.",
+            "format" : "int32"
+          },
+          "isReady" : {
+            "type" : "boolean",
+            "description" : "Specifies whether the calling extension settings are ready for use."
+          },
+          "name" : {
+            "type" : "string",
+            "description" : "The name of the calling extension."
+          },
+          "supportsCustomObjects" : {
+            "type" : "boolean",
+            "description" : "Indicates if the calling extension supports custom objects."
+          },
+          "supportsInboundCalling" : {
+            "type" : "boolean",
+            "description" : "Indicates if the calling extension supports inbound calling."
+          },
+          "updatedAt" : {
+            "type" : "string",
+            "description" : "The date and time when the calling extension settings were last updated.",
+            "format" : "date-time"
+          },
+          "url" : {
+            "type" : "string",
+            "description" : "The URL associated with the calling extension."
+          },
+          "usesCallingWindow" : {
+            "type" : "boolean",
+            "description" : "Specifies if the calling extension uses a dedicated calling window."
+          },
+          "usesRemote" : {
+            "type" : "boolean",
+            "description" : "Indicates if the calling extension uses a remote service."
+          },
+          "width" : {
+            "type" : "integer",
+            "description" : "The width of the calling extension interface.",
+            "format" : "int32"
+          }
+        }
+      }
+    },
+    "responses" : {
+      "Error" : {
+        "description" : "An error occurred.",
+        "content" : {
+          "*/*" : {
+            "schema" : {
+              "$ref" : "#/components/schemas/Error"
+            }
+          }
+        }
+      }
+    },
+    "securitySchemes" : {
+      "developer_hapikey" : {
+        "type" : "apiKey",
+        "name" : "hapikey",
+        "in" : "query"
+      },
+      "oauth2" : {
+        "type" : "oauth2",
+        "flows" : {
+          "authorizationCode" : {
+            "authorizationUrl" : "https://app.hubspot.com/oauth/authorize",
+            "tokenUrl" : "https://api.hubapi.com/oauth/v1/token",
+            "scopes" : {
+              "crm.extensions_calling_transcripts.read" : "",
+              "crm.extensions_calling_transcripts.write" : "",
+              "crm.objects.contacts.highly_sensitive.write.v2" : "",
+              "crm.objects.contacts.sensitive.read.v2" : "",
+              "crm.objects.contacts.sensitive.write.v2" : "",
+              "crm.objects.contacts.write" : "",
+              "crm.schemas.contacts.write" : "",
+              "developers-read" : "",
+              "developers-write" : ""
+            }
+          }
+        }
+      },
+      "private_apps" : {
+        "type" : "apiKey",
+        "name" : "private-app",
+        "in" : "header"
+      },
+      "private_apps_legacy" : {
+        "type" : "apiKey",
+        "name" : "private-app-legacy",
+        "in" : "header"
+      }
+    }
+  },
+  "x-hubspot-available-client-libraries" : [ "Node", "Python", "Ruby", "PHP" ],
+  "x-hubspot-product-tier-requirements" : {
+    "marketing" : "FREE",
+    "sales" : "FREE",
+    "service" : "FREE",
+    "cms" : "FREE",
+    "commerce" : "FREE",
+    "crmHub" : "FREE",
+    "dataHub" : "FREE"
+  }
+}

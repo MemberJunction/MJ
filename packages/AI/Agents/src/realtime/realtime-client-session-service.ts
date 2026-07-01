@@ -708,7 +708,8 @@ export class RealtimeClientSessionService {
             if (!result.Success || !result.Results || result.Results.length === 0) {
                 return null;
             }
-            const settings = result.Results[0].AgentSettingsObject;
+            const settings = null; // TODO: AgentSettingsObject property not available
+            // const settings = result.Results[0].AgentSettingsObject;
             if (!settings) {
                 return null;
             }

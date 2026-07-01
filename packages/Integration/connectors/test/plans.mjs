@@ -1672,7 +1672,79 @@ async function connectorE2EHybridPlan(values, scrub) { // eslint-disable-line no
 /** Hybrid-mode e2e (reference-mode, limited-token) — writes:false; credentials only via broker. */
 export async function connectorE2EHybrid(values, scrub) { return connectorE2EHybridPlan(values, scrub); }
 
+/**
+ * ACGI read-only OBSERVE probe — credential-FREE endpoint reconnaissance.
+ *
+ * Purpose: learn the SHAPE of ACGI's Association Anywhere + Certelligence demo web services
+ * WITHOUT the agent ever seeing the URLs OR any credential. The demo URLs live in the broker's
+ * env as ACGI_URLS (whitespace / comma / newline separated) and are declared as a SECRET here, so
+ * the runner auto-redacts every occurrence of a URL from the result — the agent gets back only
+ * status codes, content-types, auth-scheme headers (WWW-Authenticate), and the XML/WSDL operation
+ * + element NAMES (which are not the URL), enough to classify the API and pick the discovery source.
+ *
+ * NO credential is declared or used — this is unauthenticated GET reconnaissance only. Writes:false.
+ * A later authenticated probe will declare the credential as a separate, tighter-permissioned secret.
+ */
+export async function acgiObserve({ urls }, scrub) {
+    const list = String(urls || '').split(/[\s,]+/).map(s => s.trim()).filter(Boolean);
+    const out = { ok: false, plan: 'acgi-observe', endpointCount: list.length, endpoints: [] };
+    if (list.length === 0) { out.error = 'ACGI_URLS was empty — set it in the broker env to one or more demo URLs.'; return out; }
+
+    // Common ways a .NET/Java XML web service exposes its contract.
+    const VARIANTS = ['', '?wsdl', '?WSDL', '?singleWsdl', '?xsd=xsd0'];
+
+    function classify(body, contentType) {
+        const ct = (contentType || '').toLowerCase();
+        const head = body.slice(0, 4000);
+        const isWsdl = /<(wsdl:)?definitions[\s>]/i.test(head) || /wsdl\.xsd|soap[/]wsdl/i.test(head);
+        const isXml = ct.includes('xml') || /^\s*<\?xml/i.test(head) || (/^\s*</.test(head) && !ct.includes('html'));
+        const isHtml = ct.includes('html') || /<html[\s>]/i.test(head);
+        return { isWsdl, isXml, isHtml };
+    }
+    function names(body) {
+        // Distinct element / operation NAMES (not values) — reveals the API vocabulary safely.
+        const uniq = (a) => [...new Set(a)];
+        const ops = [...body.matchAll(/<(?:wsdl:)?operation\s+name="([^"]+)"/gi)].map(m => m[1]);
+        const svc = [...body.matchAll(/<(?:wsdl:)?(?:message|portType|service|binding)\s+name="([^"]+)"/gi)].map(m => m[1]);
+        const els = [...body.matchAll(/<([A-Za-z][\w.:-]*)[\s>]/g)].map(m => m[1]);
+        return { operations: uniq(ops).slice(0, 60), messagesPortsServices: uniq(svc).slice(0, 40), distinctElements: uniq(els).slice(0, 40) };
+    }
+    async function probe(base, variant) {
+        const url = base.replace(/\/+$/, '') + variant;
+        try {
+            const resp = await fetch(url, { method: 'GET', redirect: 'manual', headers: { 'Accept': 'application/xml, text/xml, */*' } });
+            const body = await resp.text();
+            const cls = classify(body, resp.headers.get('content-type'));
+            return {
+                variant: variant || '(base)',
+                status: resp.status,
+                contentType: resp.headers.get('content-type'),
+                wwwAuthenticate: resp.headers.get('www-authenticate'),
+                server: resp.headers.get('server'),
+                redirected: resp.headers.get('location') ? true : false, // location itself withheld (may echo the URL)
+                bytes: body.length,
+                ...cls,
+                ...(cls.isWsdl || cls.isXml ? { names: names(body) } : {}),
+                snippet: scrub(body.slice(0, 500)),
+            };
+        } catch (e) {
+            return { variant: variant || '(base)', error: scrub(e instanceof Error ? e.message : String(e)) };
+        }
+    }
+
+    for (let i = 0; i < list.length; i++) {
+        const probes = [];
+        for (const v of VARIANTS) probes.push(await probe(list[i], v));
+        out.endpoints.push({ index: i, probes });
+    }
+    out.ok = true;
+    return out;
+}
+
 export const PLANS = {
+    // ACGI read-only OBSERVE — credential-free endpoint reconnaissance. Demo URLs live in the broker
+    // env as ACGI_URLS (declared secret → auto-scrubbed from the result). No token, read-only. writes:false.
+    'acgi-observe': { secrets: { urls: 'ACGI_URLS' }, run: acgiObserve, writes: false },
     'connector-e2e-hybrid': {
         secrets: { dbPassword: 'DB_PASSWORD', mjSystemKey: 'MJ_API_KEY' },
         run: connectorE2EHybrid, writes: false,

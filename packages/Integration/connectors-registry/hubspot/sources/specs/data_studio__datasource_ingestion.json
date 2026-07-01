@@ -1,0 +1,476 @@
+{
+  "openapi" : "3.0.1",
+  "info" : {
+    "title" : "Data Studio Datasource Ingestion",
+    "description" : "Basepom for all HubSpot Projects",
+    "version" : "2026-09-beta",
+    "x-hubspot-product-tier-requirements" : {
+      "marketing" : "FREE",
+      "sales" : "FREE",
+      "service" : "FREE",
+      "cms" : "FREE",
+      "commerce" : "FREE",
+      "crmHub" : "FREE",
+      "dataHub" : "FREE"
+    }
+  },
+  "servers" : [ {
+    "url" : "https://api.hubapi.com"
+  } ],
+  "tags" : [ {
+    "name" : "Advanced"
+  }, {
+    "name" : "Basic"
+  } ],
+  "paths" : {
+    "/data-studio/data-source/2026-09-beta" : {
+      "post" : {
+        "tags" : [ "Basic" ],
+        "operationId" : "post-/data-studio/data-source/2026-09-beta",
+        "parameters" : [ ],
+        "requestBody" : {
+          "content" : {
+            "multipart/form-data" : {
+              "schema" : {
+                "type" : "object",
+                "properties" : {
+                  "file" : {
+                    "type" : "string",
+                    "format" : "binary"
+                  },
+                  "request" : {
+                    "type" : "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses" : {
+          "default" : {
+            "description" : "",
+            "$ref" : "#/components/responses/Error"
+          }
+        },
+        "security" : [ {
+          "oauth2" : [ "data_integration.data_source.file.write" ]
+        } ]
+      }
+    },
+    "/data-studio/data-source/2026-09-beta/{datasourceId}" : {
+      "get" : {
+        "tags" : [ "Basic" ],
+        "summary" : "Retrieve data source",
+        "description" : "Retrieve detailed information about a specific data source in HubSpot Data Studio. This endpoint provides details such as the data source's name, type, creation date, and the status of the last data ingestion. It is useful for developers who need to access and manage data sources programmatically.",
+        "operationId" : "get-/data-studio/data-source/2026-09-beta/{datasourceId}",
+        "parameters" : [ {
+          "name" : "datasourceId",
+          "in" : "path",
+          "description" : "The ID of the datasource.",
+          "required" : true,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "successful operation",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/DataSourceGetResponse"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "$ref" : "#/components/responses/Error"
+          }
+        },
+        "security" : [ {
+          "oauth2" : [ "data_integration.data_source.file.read" ]
+        } ]
+      },
+      "put" : {
+        "tags" : [ "Basic" ],
+        "summary" : "Update data source",
+        "description" : "Update an existing data source in HubSpot Data Studio. This endpoint allows you to modify the details of a specific data source identified by its datasourceId. The request must include a multipart form-data body with the necessary fields to update the data source.",
+        "operationId" : "put-/data-studio/data-source/2026-09-beta/{datasourceId}",
+        "parameters" : [ {
+          "name" : "datasourceId",
+          "in" : "path",
+          "description" : "The ID of the datasource.",
+          "required" : true,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "multipart/form-data" : {
+              "schema" : {
+                "type" : "object",
+                "properties" : {
+                  "file" : {
+                    "type" : "string",
+                    "format" : "binary"
+                  },
+                  "request" : {
+                    "type" : "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "description" : "successful operation",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/DataSourceUpdateResponse"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "$ref" : "#/components/responses/Error"
+          }
+        },
+        "security" : [ {
+          "oauth2" : [ "data_integration.data_source.file.write" ]
+        } ]
+      },
+      "delete" : {
+        "tags" : [ "Basic" ],
+        "summary" : "Delete data source",
+        "description" : "Delete a data source in HubSpot Data Studio. This operation is used to remove a specific data source identified by its ID. Ensure that the data source is no longer needed before deletion, as this action cannot be undone.",
+        "operationId" : "delete-/data-studio/data-source/2026-09-beta/{datasourceId}",
+        "parameters" : [ {
+          "name" : "datasourceId",
+          "in" : "path",
+          "description" : "The ID of the datasource.",
+          "required" : true,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "default" : {
+            "description" : "",
+            "$ref" : "#/components/responses/Error"
+          }
+        },
+        "security" : [ {
+          "oauth2" : [ "data_integration.data_source.file.write" ]
+        } ]
+      }
+    },
+    "/data-studio/data-source/2026-09-beta/{datasourceId}/data-push" : {
+      "post" : {
+        "tags" : [ "Advanced" ],
+        "operationId" : "post-/data-studio/data-source/2026-09-beta/{datasourceId}/data-push_/data-studio/data-source/2026-09-beta/{datasourceId}/data-push",
+        "parameters" : [ {
+          "name" : "datasourceId",
+          "in" : "path",
+          "description" : "",
+          "required" : true,
+          "style" : "simple",
+          "explode" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/DataPushRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "successful operation",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/DataPushResponse"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "$ref" : "#/components/responses/Error"
+          }
+        },
+        "security" : [ {
+          "oauth2" : [ "data_integration.data_source.file.write" ]
+        } ]
+      }
+    }
+  },
+  "components" : {
+    "schemas" : {
+      "DataPushRequest" : {
+        "required" : [ "data" ],
+        "type" : "object",
+        "properties" : {
+          "data" : {
+            "type" : "array",
+            "items" : {
+              "type" : "object",
+              "additionalProperties" : {
+                "type" : "object",
+                "properties" : { }
+              }
+            }
+          }
+        }
+      },
+      "DataPushResponse" : {
+        "required" : [ "datasourceId", "datasourceName", "previewLink" ],
+        "type" : "object",
+        "properties" : {
+          "datasourceId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "datasourceName" : {
+            "type" : "string"
+          },
+          "previewLink" : {
+            "type" : "string"
+          }
+        }
+      },
+      "DataSourceGetResponse" : {
+        "required" : [ "columns", "createdAt", "datasourceId", "datasourceName", "datasourceType", "lastIngestionStatus" ],
+        "type" : "object",
+        "properties" : {
+          "columns" : {
+            "type" : "array",
+            "description" : "An array of FileColumn objects representing the columns in the data source.",
+            "items" : {
+              "$ref" : "#/components/schemas/FileColumn"
+            }
+          },
+          "createdAt" : {
+            "type" : "string",
+            "description" : "The creation date and time of the data source, represented as a string."
+          },
+          "datasourceId" : {
+            "type" : "integer",
+            "description" : "The unique identifier for the data source, represented as a 64-bit integer.",
+            "format" : "int64"
+          },
+          "datasourceName" : {
+            "type" : "string",
+            "description" : "The name of the data source, represented as a string."
+          },
+          "datasourceType" : {
+            "type" : "string",
+            "description" : "The type of the data source, which is a string with a valid value of 'FILE'.",
+            "enum" : [ "FILE", "JSON" ]
+          },
+          "lastIngestionStatus" : {
+            "type" : "string",
+            "description" : "The status of the last data ingestion process, represented as a string. Valid values include 'SUCCESSFUL', 'IN_PROGRESS', and 'FAILED'.",
+            "enum" : [ "FAILED", "IN_PROGRESS", "SUCCESSFUL" ]
+          }
+        }
+      },
+      "DataSourceUpdateResponse" : {
+        "required" : [ "datasourceId", "datasourceName", "previewLink" ],
+        "type" : "object",
+        "properties" : {
+          "datasourceId" : {
+            "type" : "integer",
+            "description" : "The unique identifier for the data source. It is an integer formatted as int64.",
+            "format" : "int64"
+          },
+          "datasourceName" : {
+            "type" : "string",
+            "description" : "The name of the data source. It is a string."
+          },
+          "previewLink" : {
+            "type" : "string",
+            "description" : "A URL string that provides a preview link for the data source."
+          }
+        }
+      },
+      "Error" : {
+        "required" : [ "category", "correlationId", "message" ],
+        "type" : "object",
+        "properties" : {
+          "category" : {
+            "type" : "string",
+            "description" : "The error category"
+          },
+          "context" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "array",
+              "items" : {
+                "type" : "string"
+              }
+            },
+            "description" : "Context about the error condition",
+            "example" : "{invalidPropertyName=[propertyValue], missingScopes=[scope1, scope2]}"
+          },
+          "correlationId" : {
+            "type" : "string",
+            "description" : "A unique identifier for the request. Include this value with any error reports or support tickets",
+            "format" : "uuid",
+            "example" : "aeb5f871-7f07-4993-9211-075dc63e7cbf"
+          },
+          "errors" : {
+            "type" : "array",
+            "description" : "further information about the error",
+            "items" : {
+              "$ref" : "#/components/schemas/ErrorDetail"
+            }
+          },
+          "links" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "description" : "A map of link names to associated URIs containing documentation about the error or recommended remediation steps"
+          },
+          "message" : {
+            "type" : "string",
+            "description" : "A human readable message describing the error along with remediation steps where appropriate",
+            "example" : "An error occurred"
+          },
+          "subCategory" : {
+            "type" : "string",
+            "description" : "A specific category that contains more specific detail about the error"
+          }
+        },
+        "example" : {
+          "message" : "Invalid input (details will vary based on the error)",
+          "correlationId" : "aeb5f871-7f07-4993-9211-075dc63e7cbf",
+          "category" : "VALIDATION_ERROR",
+          "links" : {
+            "knowledge-base" : "https://www.hubspot.com/products/service/knowledge-base"
+          }
+        }
+      },
+      "ErrorDetail" : {
+        "required" : [ "message" ],
+        "type" : "object",
+        "properties" : {
+          "code" : {
+            "type" : "string",
+            "description" : "The status code associated with the error detail"
+          },
+          "context" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "array",
+              "items" : {
+                "type" : "string"
+              }
+            },
+            "description" : "Context about the error condition",
+            "example" : "{missingScopes=[scope1, scope2]}"
+          },
+          "in" : {
+            "type" : "string",
+            "description" : "The name of the field or parameter in which the error was found."
+          },
+          "message" : {
+            "type" : "string",
+            "description" : "A human readable message describing the error along with remediation steps where appropriate"
+          },
+          "subCategory" : {
+            "type" : "string",
+            "description" : "A specific category that contains more specific detail about the error"
+          }
+        }
+      },
+      "FileColumn" : {
+        "required" : [ "name", "type" ],
+        "type" : "object",
+        "properties" : {
+          "name" : {
+            "type" : "string",
+            "description" : "The name of the column, represented as a string."
+          },
+          "type" : {
+            "type" : "string",
+            "description" : "The data type of the column, represented as a string."
+          }
+        }
+      }
+    },
+    "responses" : {
+      "Error" : {
+        "description" : "An error occurred.",
+        "content" : {
+          "*/*" : {
+            "schema" : {
+              "$ref" : "#/components/schemas/Error"
+            }
+          }
+        }
+      }
+    },
+    "securitySchemes" : {
+      "developer_hapikey" : {
+        "type" : "apiKey",
+        "name" : "hapikey",
+        "in" : "query"
+      },
+      "oauth2" : {
+        "type" : "oauth2",
+        "flows" : {
+          "authorizationCode" : {
+            "authorizationUrl" : "https://app.hubspot.com/oauth/authorize",
+            "tokenUrl" : "https://api.hubapi.com/oauth/v1/token",
+            "scopes" : {
+              "data_integration.data_source.file.read" : "",
+              "data_integration.data_source.file.write" : ""
+            }
+          }
+        }
+      },
+      "private_apps" : {
+        "type" : "apiKey",
+        "name" : "private-app",
+        "in" : "header"
+      },
+      "private_apps_legacy" : {
+        "type" : "apiKey",
+        "name" : "private-app-legacy",
+        "in" : "header"
+      }
+    }
+  },
+  "x-hubspot-product-tier-requirements" : {
+    "marketing" : "FREE",
+    "sales" : "FREE",
+    "service" : "FREE",
+    "cms" : "FREE",
+    "commerce" : "FREE",
+    "crmHub" : "FREE",
+    "dataHub" : "FREE"
+  }
+}

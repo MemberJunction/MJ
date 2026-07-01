@@ -1,0 +1,38 @@
+{
+  "ResultId": "abc123-result-id",
+  "State": "Complete",
+  "Contacts": [
+    {
+      "Id": 555,
+      "Url": "https://api.wildapricot.org/v2.3/accounts/123456/contacts/555",
+      "FirstName": "<scrubbed-name-1>",
+      "LastName": "<scrubbed-name-2>",
+      "Organization": "<scrubbed-org-name-2>",
+      "Email": "example+1@example.com",
+      "DisplayName": "<scrubbed-name-1> <scrubbed-name-2>",
+      "ProfileLastUpdated": "2026-03-14T10:22:31-04:00",
+      "MembershipLevel": { "Id": 42, "Name": "<scrubbed-level-1>" },
+      "MembershipEnabled": true,
+      "Status": "Active",
+      "IsAccountAdministrator": false,
+      "TermsOfUseAccepted": true,
+      "FieldValues": []
+    },
+    {
+      "Id": 556,
+      "Url": "https://api.wildapricot.org/v2.3/accounts/123456/contacts/556",
+      "FirstName": "<scrubbed-name-3>",
+      "LastName": "<scrubbed-name-4>",
+      "Organization": "<scrubbed-org-name-3>",
+      "Email": "example+2@example.com",
+      "DisplayName": "<scrubbed-name-3> <scrubbed-name-4>",
+      "ProfileLastUpdated": "2026-05-02T08:11:09-04:00",
+      "MembershipLevel": { "Id": 42, "Name": "<scrubbed-level-1>" },
+      "MembershipEnabled": true,
+      "Status": "Active",
+      "IsAccountAdministrator": false,
+      "TermsOfUseAccepted": true,
+      "FieldValues": []
+    }
+  ]
+}

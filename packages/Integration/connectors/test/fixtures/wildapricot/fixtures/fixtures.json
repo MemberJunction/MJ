@@ -1,0 +1,1315 @@
+{
+  "Transport": "http",
+  "ConfigUrlKey": "BaseURL",
+  "ConfigUrlTemplates": {
+    "tokenUrl": "{BASE}/oauth/token"
+  },
+  "Configuration": {
+    "ApiKey": "mock-admin-api-key-PLACEHOLDER",
+    "ApiVersion": "v2.3"
+  },
+  "Routes": [
+    {
+      "Path": "/v2.3/accounts/111111/EventRegistrationTypes",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Id": 75,
+          "Url": {
+            "Id": 75,
+            "Url": "https://api.wildapricot.org/v2.3/accounts/111111/eventregistrationtype/75"
+          },
+          "IsEnabled": false,
+          "EventId": 235,
+          "Name": "Example EventRegistrationType 75",
+          "Description": "<redacted>",
+          "BasePrice": 962.5,
+          "GuestPrice": 962.5,
+          "UseTaxScopeSettings": false,
+          "Availability": "example-availability-75",
+          "RegistrationCode": "example-registrationcode-75",
+          "AvailableForMembershipLevels": {},
+          "AvailableFrom": "2026-10-13",
+          "AvailableThrough": "2026-10-13",
+          "MaximumRegistrantsCount": 235,
+          "CurrentRegistrantsCount": 235,
+          "GuestRegistrationPolicy": "example-guestregistrationpolicy-75",
+          "UnavailabilityPolicy": "example-unavailabilitypolicy-75",
+          "CancellationBehaviour": "example-cancellationbehaviour-75",
+          "CancellationDaysBeforeEvent": 235,
+          "IsWaitlistEnabled": false,
+          "IsGuestRegistrationRequired": false
+        },
+        {
+          "Id": 76,
+          "Url": {
+            "Id": 76,
+            "Url": "https://api.wildapricot.org/v2.3/accounts/111111/eventregistrationtype/76"
+          },
+          "IsEnabled": true,
+          "EventId": 238,
+          "Name": "Example EventRegistrationType 76",
+          "Description": "<redacted>",
+          "BasePrice": 975,
+          "GuestPrice": 975,
+          "UseTaxScopeSettings": true,
+          "Availability": "example-availability-76",
+          "RegistrationCode": "example-registrationcode-76",
+          "AvailableForMembershipLevels": {},
+          "AvailableFrom": "2026-01-20",
+          "AvailableThrough": "2026-01-20",
+          "MaximumRegistrantsCount": 238,
+          "CurrentRegistrantsCount": 238,
+          "GuestRegistrationPolicy": "example-guestregistrationpolicy-76",
+          "UnavailabilityPolicy": "example-unavailabilitypolicy-76",
+          "CancellationBehaviour": "example-cancellationbehaviour-76",
+          "CancellationDaysBeforeEvent": 238,
+          "IsWaitlistEnabled": true,
+          "IsGuestRegistrationRequired": true
+        }
+      ]
+    },
+    {
+      "Path": "/v2.3/accounts/111111/attachments/GetInfos",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Name": "Example AttachmentData 15",
+          "MimeType": "application/pdf",
+          "Data": null
+        },
+        {
+          "Name": "Example AttachmentData 16",
+          "MimeType": "application/pdf",
+          "Data": null
+        }
+      ]
+    },
+    {
+      "Path": "/v2.3/accounts/111111/SentEmailRecipients",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "ContactId": 400,
+          "EventRegistrationId": 400,
+          "FirstName": "<scrubbed-name-130>",
+          "LastName": "<scrubbed-name-230>",
+          "Organization": "Example Org 130",
+          "Email": "example+130@example.com",
+          "RecipientName": "<scrubbed-name-130> <scrubbed-name-230>",
+          "IsDelivered": true,
+          "IsOpened": true,
+          "ClickedLinks": []
+        },
+        {
+          "ContactId": 403,
+          "EventRegistrationId": 403,
+          "FirstName": "<scrubbed-name-131>",
+          "LastName": "<scrubbed-name-231>",
+          "Organization": "Example Org 131",
+          "Email": "example+131@example.com",
+          "RecipientName": "<scrubbed-name-131> <scrubbed-name-231>",
+          "IsDelivered": false,
+          "IsOpened": false,
+          "ClickedLinks": []
+        }
+      ]
+    },
+    {
+      "Path": "/v2.3/accounts/111111/eventregistrations",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Id": 70,
+          "Url": {
+            "Id": 70,
+            "Url": "https://api.wildapricot.org/v2.3/accounts/111111/eventregistration/70"
+          },
+          "Event": {
+            "Id": 670,
+            "Name": "Example Event 70"
+          },
+          "Contact": {
+            "Id": 570,
+            "Url": "https://api.wildapricot.org/v2.3/accounts/111111/contacts/570",
+            "Name": "<scrubbed-name-70>"
+          },
+          "RegistrationType": {},
+          "RegistrationTypeId": 220,
+          "GuestRegistrationsSummary": {},
+          "DisplayName": "<scrubbed-name-70> <scrubbed-name-170>",
+          "Organization": "Example Org 70",
+          "IsCheckedIn": true,
+          "RegistrationFee": 900,
+          "PaidSum": 900,
+          "IsPaid": true,
+          "RegistrationFields": [
+            {
+              "FieldName": "Phone",
+              "SystemCode": "Phone",
+              "Value": "555-0170"
+            }
+          ],
+          "ShowToPublic": true,
+          "RegistrationDate": "2026-07-05T14:50:00-05:00",
+          "Memo": "<redacted>",
+          "IsGuestRegistration": true,
+          "OnWaitlist": true,
+          "RecreateInvoice": true,
+          "ParentRegistration": {},
+          "Status": "Complete"
+        },
+        {
+          "Id": 71,
+          "Url": {
+            "Id": 71,
+            "Url": "https://api.wildapricot.org/v2.3/accounts/111111/eventregistration/71"
+          },
+          "Event": {
+            "Id": 671,
+            "Name": "Example Event 71"
+          },
+          "Contact": {
+            "Id": 571,
+            "Url": "https://api.wildapricot.org/v2.3/accounts/111111/contacts/571",
+            "Name": "<scrubbed-name-71>"
+          },
+          "RegistrationType": {},
+          "RegistrationTypeId": 223,
+          "GuestRegistrationsSummary": {},
+          "DisplayName": "<scrubbed-name-71> <scrubbed-name-171>",
+          "Organization": "Example Org 71",
+          "IsCheckedIn": false,
+          "RegistrationFee": 912.5,
+          "PaidSum": 912.5,
+          "IsPaid": false,
+          "RegistrationFields": [
+            {
+              "FieldName": "Phone",
+              "SystemCode": "Phone",
+              "Value": "555-0171"
+            }
+          ],
+          "ShowToPublic": false,
+          "RegistrationDate": "2026-10-12T19:01:00-05:00",
+          "Memo": "<redacted>",
+          "IsGuestRegistration": false,
+          "OnWaitlist": false,
+          "RecreateInvoice": false,
+          "ParentRegistration": {},
+          "Status": "Complete"
+        }
+      ]
+    },
+    {
+      "Path": "/v2.3/accounts/111111/paymentAllocations",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Id": 110,
+          "Value": 1400,
+          "Invoice": "example-invoice-110",
+          "InvoiceDate": "2026-07-15T22:10:00-05:00",
+          "InvoiceNumber": "INV-1110",
+          "Payment": "example-payment-110",
+          "PaymentDate": "2026-07-15T22:10:00-05:00",
+          "PaymentType": "example-paymenttype-110",
+          "Refund": "example-refund-110",
+          "RefundDate": "2026-07-15T22:10:00-05:00"
+        },
+        {
+          "Id": 111,
+          "Value": 1412.5,
+          "Invoice": "example-invoice-111",
+          "InvoiceDate": "2026-10-22T03:21:00-05:00",
+          "InvoiceNumber": "INV-1111",
+          "Payment": "example-payment-111",
+          "PaymentDate": "2026-10-22T03:21:00-05:00",
+          "PaymentType": "example-paymenttype-111",
+          "Refund": "example-refund-111",
+          "RefundDate": "2026-10-22T03:21:00-05:00"
+        }
+      ]
+    },
+    {
+      "Path": "/v2.3/accounts/111111/membershiplevels",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Id": 95,
+          "Name": "Example MembershipLevel 95",
+          "Description": "<redacted>",
+          "PublicCanApply": false,
+          "Type": "Standard",
+          "BundleMembersLimit": 295,
+          "MembershipFee": 1212.5,
+          "MemberCanChangeToLevels": {},
+          "RenewalPeriod": {
+            "Type": "Anniversary",
+            "RenewalPeriod": 12
+          }
+        },
+        {
+          "Id": 96,
+          "Name": "Example MembershipLevel 96",
+          "Description": "<redacted>",
+          "PublicCanApply": true,
+          "Type": "Standard",
+          "BundleMembersLimit": 298,
+          "MembershipFee": 1225,
+          "MemberCanChangeToLevels": {},
+          "RenewalPeriod": {
+            "Type": "Anniversary",
+            "RenewalPeriod": 12
+          }
+        }
+      ]
+    },
+    {
+      "Path": "/v2.3/accounts/111111/donationfields",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "FieldName": "Example Field 60",
+          "SystemCode": "ENTI-60",
+          "DisplayType": "example-displaytype-60",
+          "IsSystem": true,
+          "Description": "<redacted>",
+          "FieldInstructions": "example-fieldinstructions-60",
+          "AllowedValues": [],
+          "Order": 190,
+          "RulesAndTermsInfo": {}
+        },
+        {
+          "FieldName": "Example Field 61",
+          "SystemCode": "ENTI-61",
+          "DisplayType": "example-displaytype-61",
+          "IsSystem": false,
+          "Description": "<redacted>",
+          "FieldInstructions": "example-fieldinstructions-61",
+          "AllowedValues": [],
+          "Order": 193,
+          "RulesAndTermsInfo": {}
+        }
+      ]
+    },
+    {
+      "Path": "/v2.3/accounts/111111/store/products",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "url": "https://api.wildapricot.org/v2.3/accounts/111111/product/115",
+          "id": 115,
+          "title": "Example Product 115",
+          "description": "<redacted>",
+          "price": {
+            "Amount": 585,
+            "Currency": "USD"
+          },
+          "status": "Complete",
+          "type": "Standard",
+          "pictures": [],
+          "tags": [
+            "example-tag"
+          ],
+          "trackInventory": false,
+          "stock": 355,
+          "productOptions": [],
+          "productVariants": [],
+          "outOfStock": false,
+          "totalStock": 355,
+          "digitalProduct": {},
+          "ecourseProduct": {},
+          "created": "2026-10-23T23:05:00-05:00"
+        },
+        {
+          "url": "https://api.wildapricot.org/v2.3/accounts/111111/product/116",
+          "id": 116,
+          "title": "Example Product 116",
+          "description": "<redacted>",
+          "price": {
+            "Amount": 590,
+            "Currency": "USD"
+          },
+          "status": "Complete",
+          "type": "Standard",
+          "pictures": [],
+          "tags": [
+            "example-tag"
+          ],
+          "trackInventory": true,
+          "stock": 358,
+          "productOptions": [],
+          "productVariants": [],
+          "outOfStock": true,
+          "totalStock": 358,
+          "digitalProduct": {},
+          "ecourseProduct": {},
+          "created": "2026-01-03T04:16:00-05:00"
+        }
+      ]
+    },
+    {
+      "Path": "/v2.3/accounts/111111/auditLogItems",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Id": 20,
+          "Url": {
+            "Id": 20,
+            "Url": "https://api.wildapricot.org/v2.3/accounts/111111/auditlogitem/20"
+          },
+          "Timestamp": "2026-01-06T04:40:00-05:00",
+          "Contact": "example-contact-20",
+          "FirstName": "<scrubbed-name-20>",
+          "LastName": "<scrubbed-name-120>",
+          "Organization": "Example Org 20",
+          "Email": "example+20@example.com",
+          "Message": "<redacted>",
+          "Severity": "Info",
+          "OrderType": "Standard",
+          "Properties": [],
+          "Document": "example-document-20",
+          "DocumentType": "example-documenttype-20",
+          "DocumentAction": "example-documentaction-20"
+        },
+        {
+          "Id": 21,
+          "Url": {
+            "Id": 21,
+            "Url": "https://api.wildapricot.org/v2.3/accounts/111111/auditlogitem/21"
+          },
+          "Timestamp": "2026-04-13T09:51:00-05:00",
+          "Contact": "example-contact-21",
+          "FirstName": "<scrubbed-name-21>",
+          "LastName": "<scrubbed-name-121>",
+          "Organization": "Example Org 21",
+          "Email": "example+21@example.com",
+          "Message": "<redacted>",
+          "Severity": "Info",
+          "OrderType": "Standard",
+          "Properties": [],
+          "Document": "example-document-21",
+          "DocumentType": "example-documenttype-21",
+          "DocumentAction": "example-documentaction-21"
+        }
+      ]
+    },
+    {
+      "Path": "/v2.3/accounts/111111/contactfields",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "FieldName": "Example Field 40",
+          "SystemCode": "CustomField_40",
+          "DisplayType": "example-displaytype-40",
+          "IsSystem": true,
+          "Description": "<redacted>",
+          "FieldInstructions": "example-fieldinstructions-40",
+          "AllowedValues": [],
+          "Order": 130,
+          "RulesAndTermsInfo": {},
+          "FieldType": "example-fieldtype-40",
+          "ExtraCharge": {},
+          "Id": 40,
+          "Access": "example-access-40",
+          "AdminOnly": true,
+          "ExistsInLevels": [],
+          "MemberAccess": "example-memberaccess-40",
+          "MemberOnly": true,
+          "IsBuiltIn": true,
+          "SupportSearch": true,
+          "IsEditable": true,
+          "RenewalPolicy": {
+            "Type": "Anniversary",
+            "RenewalPeriod": 12
+          },
+          "ProrateInApplication": true
+        },
+        {
+          "FieldName": "Example Field 41",
+          "SystemCode": "CustomField_41",
+          "DisplayType": "example-displaytype-41",
+          "IsSystem": false,
+          "Description": "<redacted>",
+          "FieldInstructions": "example-fieldinstructions-41",
+          "AllowedValues": [],
+          "Order": 133,
+          "RulesAndTermsInfo": {},
+          "FieldType": "example-fieldtype-41",
+          "ExtraCharge": {},
+          "Id": 41,
+          "Access": "example-access-41",
+          "AdminOnly": false,
+          "ExistsInLevels": [],
+          "MemberAccess": "example-memberaccess-41",
+          "MemberOnly": false,
+          "IsBuiltIn": false,
+          "SupportSearch": false,
+          "IsEditable": false,
+          "RenewalPolicy": {
+            "Type": "Anniversary",
+            "RenewalPeriod": 12
+          },
+          "ProrateInApplication": false
+        }
+      ]
+    },
+    {
+      "Path": "/v2.3/accounts/111111/savedsearches",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Id": 125,
+          "Name": "Example SavedSearch 125",
+          "Description": "<redacted>",
+          "ContactIds": [
+            625,
+            626
+          ]
+        },
+        {
+          "Id": 126,
+          "Name": "Example SavedSearch 126",
+          "Description": "<redacted>",
+          "ContactIds": [
+            626,
+            627
+          ]
+        }
+      ]
+    },
+    {
+      "Path": "/v2.3/accounts/111111/membergroups",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Id": 90,
+          "Name": "Example MembershipGroup 90",
+          "Description": "<redacted>",
+          "ContactsCount": 280,
+          "ContactIds": [
+            590,
+            591
+          ]
+        },
+        {
+          "Id": 91,
+          "Name": "Example MembershipGroup 91",
+          "Description": "<redacted>",
+          "ContactsCount": 283,
+          "ContactIds": [
+            591,
+            592
+          ]
+        }
+      ]
+    },
+    {
+      "Path": "/v2.3/accounts/111111/store/orders",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "url": "https://api.wildapricot.org/v2.3/accounts/111111/order/100",
+          "contactId": 310,
+          "number": "100",
+          "total": 1275,
+          "subTotal": 1275,
+          "isTaxesApplied": true,
+          "isTaxesIncludedTotal": true,
+          "invoiceId": 310,
+          "invoiceNumber": 310,
+          "status": "Complete",
+          "paymentStatus": "example-paymentstatus-100",
+          "internalNote": {},
+          "products": [],
+          "shippingAddress": {},
+          "billingPerson": {},
+          "comment": "<redacted>",
+          "externalNote": {},
+          "currency": {},
+          "created": "2026-01-26T20:20:00-05:00",
+          "deliveryOption": {}
+        },
+        {
+          "url": "https://api.wildapricot.org/v2.3/accounts/111111/order/101",
+          "contactId": 313,
+          "number": "101",
+          "total": 1287.5,
+          "subTotal": 1287.5,
+          "isTaxesApplied": false,
+          "isTaxesIncludedTotal": false,
+          "invoiceId": 313,
+          "invoiceNumber": 313,
+          "status": "Complete",
+          "paymentStatus": "example-paymentstatus-101",
+          "internalNote": {},
+          "products": [],
+          "shippingAddress": {},
+          "billingPerson": {},
+          "comment": "<redacted>",
+          "externalNote": {},
+          "currency": {},
+          "created": "2026-04-06T01:31:00-05:00",
+          "deliveryOption": {}
+        }
+      ]
+    },
+    {
+      "Path": "/v2.3/accounts/111111/EmailDrafts",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Id": 50,
+          "Url": {
+            "Id": 50,
+            "Url": "https://api.wildapricot.org/v2.3/accounts/111111/emaildraft/50"
+          },
+          "CreatedDate": "2026-07-27T10:10:00-05:00",
+          "Type": "Standard",
+          "Subject": "Example Subject 50",
+          "Body": "<redacted>",
+          "ReplyToName": "example-replytoname-50",
+          "ReplyToAddress": "example+50@example.com",
+          "EventId": 160,
+          "Creator": {},
+          "IsLinkTrackingAllowed": true,
+          "Recipients": [],
+          "LastChangedDate": "2026-07-27T10:10:00-05:00",
+          "Modifier": {},
+          "IsScheduled": true,
+          "ScheduledDate": "2026-07-27T10:10:00-05:00"
+        },
+        {
+          "Id": 51,
+          "Url": {
+            "Id": 51,
+            "Url": "https://api.wildapricot.org/v2.3/accounts/111111/emaildraft/51"
+          },
+          "CreatedDate": "2026-10-07T15:21:00-05:00",
+          "Type": "Standard",
+          "Subject": "Example Subject 51",
+          "Body": "<redacted>",
+          "ReplyToName": "example-replytoname-51",
+          "ReplyToAddress": "example+51@example.com",
+          "EventId": 163,
+          "Creator": {},
+          "IsLinkTrackingAllowed": false,
+          "Recipients": [],
+          "LastChangedDate": "2026-10-07T15:21:00-05:00",
+          "Modifier": {},
+          "IsScheduled": false,
+          "ScheduledDate": "2026-10-07T15:21:00-05:00"
+        }
+      ]
+    },
+    {
+      "Path": "/v2.3/accounts/111111/ceuRecords",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Id": 30,
+          "Url": {
+            "Id": 30,
+            "Url": "https://api.wildapricot.org/v2.3/accounts/111111/ceurecord/30"
+          },
+          "Contact": {
+            "Id": 530,
+            "Url": "https://api.wildapricot.org/v2.3/accounts/111111/contacts/530",
+            "Name": "<scrubbed-name-30>"
+          },
+          "RecordStatus": "example-recordstatus-30",
+          "CEUType": "Standard",
+          "CreationDate": "2026-07-22T06:30:00-05:00",
+          "LastModified": "2026-07-22T06:30:00-05:00",
+          "SourceType": "example-sourcetype-30",
+          "SourceRefId": "example-sourcerefid-30",
+          "ActivityTitle": "example-activitytitle-30",
+          "CreditsEarned": 400,
+          "StartDate": "2026-07-22T06:30:00-05:00",
+          "EndDate": "2026-07-22T06:30:00-05:00",
+          "ExpiryDate": "2026-07-22T06:30:00-05:00",
+          "InstructorProvider": "example-instructorprovider-30",
+          "PublicNotes": "<redacted>",
+          "InternalNotes": "<redacted>",
+          "CertificateUrl": "example-certificateurl-30"
+        },
+        {
+          "Id": 31,
+          "Url": {
+            "Id": 31,
+            "Url": "https://api.wildapricot.org/v2.3/accounts/111111/ceurecord/31"
+          },
+          "Contact": {
+            "Id": 531,
+            "Url": "https://api.wildapricot.org/v2.3/accounts/111111/contacts/531",
+            "Name": "<scrubbed-name-31>"
+          },
+          "RecordStatus": "example-recordstatus-31",
+          "CEUType": "Standard",
+          "CreationDate": "2026-10-02T11:41:00-05:00",
+          "LastModified": "2026-10-02T11:41:00-05:00",
+          "SourceType": "example-sourcetype-31",
+          "SourceRefId": "example-sourcerefid-31",
+          "ActivityTitle": "example-activitytitle-31",
+          "CreditsEarned": 412.5,
+          "StartDate": "2026-10-02T11:41:00-05:00",
+          "EndDate": "2026-10-02T11:41:00-05:00",
+          "ExpiryDate": "2026-10-02T11:41:00-05:00",
+          "InstructorProvider": "example-instructorprovider-31",
+          "PublicNotes": "<redacted>",
+          "InternalNotes": "<redacted>",
+          "CertificateUrl": "example-certificateurl-31"
+        }
+      ]
+    },
+    {
+      "Path": "/v2.3/accounts/111111/SentEmails",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "Emails": [
+          {
+            "Emails": "example-emails-55",
+            "EmailsIdentifiers": []
+          },
+          {
+            "Emails": "example-emails-56",
+            "EmailsIdentifiers": []
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/v2.3/accounts/111111/donations",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Contact": "example-contact-45",
+          "Payment": "example-payment-45",
+          "DonationDate": "2026-04-19T09:15:00-05:00",
+          "FirstName": "<scrubbed-name-45>",
+          "LastName": "<scrubbed-name-145>",
+          "Email": "example+45@example.com",
+          "Organization": "Example Org 45",
+          "Phone": "555-0145",
+          "Comment": "<redacted>",
+          "PublicComment": "<redacted>",
+          "PaymentMethodID": "Standard",
+          "Value": 587.5,
+          "Type": "Standard",
+          "FieldValues": [
+            {
+              "FieldName": "Phone",
+              "SystemCode": "Phone",
+              "Value": "555-0145"
+            }
+          ]
+        },
+        {
+          "Contact": "example-contact-46",
+          "Payment": "example-payment-46",
+          "DonationDate": "2026-07-26T14:26:00-05:00",
+          "FirstName": "<scrubbed-name-46>",
+          "LastName": "<scrubbed-name-146>",
+          "Email": "example+46@example.com",
+          "Organization": "Example Org 46",
+          "Phone": "555-0146",
+          "Comment": "<redacted>",
+          "PublicComment": "<redacted>",
+          "PaymentMethodID": "Standard",
+          "Value": 600,
+          "Type": "Standard",
+          "FieldValues": [
+            {
+              "FieldName": "Phone",
+              "SystemCode": "Phone",
+              "Value": "555-0146"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "Path": "/v2.3/accounts/111111/contacts",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "ResultId": "mock-result-111111",
+        "State": "Complete",
+        "Contacts": [
+          {
+            "Id": 1000,
+            "Url": {
+              "Id": 1000,
+              "Url": "https://api.wildapricot.org/v2.3/accounts/111111/contact/1000"
+            },
+            "FirstName": "<scrubbed-name-1000>",
+            "LastName": "<scrubbed-name-1100>",
+            "Organization": "Example Org 1000",
+            "Email": "example+1000@example.com",
+            "DisplayName": "<scrubbed-name-1000> <scrubbed-name-1100>",
+            "ProfileLastUpdated": "2026-01-08T08:20:00-05:00",
+            "MembershipLevel": "Example Level 1000",
+            "MembershipEnabled": true,
+            "Status": "Active",
+            "IsAccountAdministrator": true,
+            "TermsOfUseAccepted": true,
+            "FieldValues": [
+              {
+                "FieldName": "Phone",
+                "SystemCode": "Phone",
+                "Value": "555-0100"
+              }
+            ]
+          },
+          {
+            "Id": 1001,
+            "Url": {
+              "Id": 1001,
+              "Url": "https://api.wildapricot.org/v2.3/accounts/111111/contact/1001"
+            },
+            "FirstName": "<scrubbed-name-1001>",
+            "LastName": "<scrubbed-name-1101>",
+            "Organization": "Example Org 1001",
+            "Email": "example+1001@example.com",
+            "DisplayName": "<scrubbed-name-1001> <scrubbed-name-1101>",
+            "ProfileLastUpdated": "2026-04-15T13:31:00-05:00",
+            "MembershipLevel": "Example Level 1001",
+            "MembershipEnabled": false,
+            "Status": "Active",
+            "IsAccountAdministrator": false,
+            "TermsOfUseAccepted": false,
+            "FieldValues": [
+              {
+                "FieldName": "Phone",
+                "SystemCode": "Phone",
+                "Value": "555-0101"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/v2.3/accounts/111111/invoices",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "Invoices": [
+          {
+            "Id": 85,
+            "Url": {
+              "Id": 85,
+              "Url": "https://api.wildapricot.org/v2.3/accounts/111111/invoice/85"
+            },
+            "Value": 1087.5,
+            "DocumentDate": "2026-04-02T17:35:00-05:00",
+            "Contact": "example-contact-85",
+            "CreatedDate": "2026-04-02T17:35:00-05:00",
+            "CreatedBy": "example-createdby-85",
+            "UpdatedDate": "2026-04-02T17:35:00-05:00",
+            "UpdatedBy": "example-updatedby-85",
+            "DocumentNumber": "INV-1085",
+            "IsPaid": false,
+            "PaidAmount": 1087.5,
+            "OrderType": "Standard",
+            "EventRegistration": "example-eventregistration-85",
+            "OrderDetails": [],
+            "Memo": "<redacted>",
+            "PublicMemo": "<redacted>",
+            "VoidedDate": "2026-04-02T17:35:00-05:00"
+          },
+          {
+            "Id": 86,
+            "Url": {
+              "Id": 86,
+              "Url": "https://api.wildapricot.org/v2.3/accounts/111111/invoice/86"
+            },
+            "Value": 1100,
+            "DocumentDate": "2026-07-09T22:46:00-05:00",
+            "Contact": "example-contact-86",
+            "CreatedDate": "2026-07-09T22:46:00-05:00",
+            "CreatedBy": "example-createdby-86",
+            "UpdatedDate": "2026-07-09T22:46:00-05:00",
+            "UpdatedBy": "example-updatedby-86",
+            "DocumentNumber": "INV-1086",
+            "IsPaid": true,
+            "PaidAmount": 1100,
+            "OrderType": "Standard",
+            "EventRegistration": "example-eventregistration-86",
+            "OrderDetails": [],
+            "Memo": "<redacted>",
+            "PublicMemo": "<redacted>",
+            "VoidedDate": "2026-07-09T22:46:00-05:00"
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/v2.3/accounts/111111/payments",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "Payments": [
+          {
+            "Id": 105,
+            "Url": {
+              "Id": 105,
+              "Url": "https://api.wildapricot.org/v2.3/accounts/111111/payment/105"
+            },
+            "Value": 1337.5,
+            "DocumentDate": "2026-04-07T21:15:00-05:00",
+            "Contact": "example-contact-105",
+            "CreatedDate": "2026-04-07T21:15:00-05:00",
+            "CreatedBy": "example-createdby-105",
+            "UpdatedDate": "2026-04-07T21:15:00-05:00",
+            "UpdatedBy": "example-updatedby-105",
+            "Tender": {
+              "Id": 805,
+              "Name": "Cash"
+            },
+            "Comment": "<redacted>",
+            "PublicComment": "<redacted>",
+            "AllocatedValue": 1337.5,
+            "RefundedAmount": 1337.5,
+            "Type": "Standard",
+            "DonationId": 325,
+            "PaymentMethodID": "Standard",
+            "FieldValues": [
+              {
+                "FieldName": "Phone",
+                "SystemCode": "Phone",
+                "Value": "555-0105"
+              }
+            ]
+          },
+          {
+            "Id": 106,
+            "Url": {
+              "Id": 106,
+              "Url": "https://api.wildapricot.org/v2.3/accounts/111111/payment/106"
+            },
+            "Value": 1350,
+            "DocumentDate": "2026-07-14T02:26:00-05:00",
+            "Contact": "example-contact-106",
+            "CreatedDate": "2026-07-14T02:26:00-05:00",
+            "CreatedBy": "example-createdby-106",
+            "UpdatedDate": "2026-07-14T02:26:00-05:00",
+            "UpdatedBy": "example-updatedby-106",
+            "Tender": {
+              "Id": 806,
+              "Name": "Cash"
+            },
+            "Comment": "<redacted>",
+            "PublicComment": "<redacted>",
+            "AllocatedValue": 1350,
+            "RefundedAmount": 1350,
+            "Type": "Standard",
+            "DonationId": 328,
+            "PaymentMethodID": "Standard",
+            "FieldValues": [
+              {
+                "FieldName": "Phone",
+                "SystemCode": "Phone",
+                "Value": "555-0106"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/v2.3/accounts/111111/bundles",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Id": 25,
+          "Url": {
+            "Id": 25,
+            "Url": "https://api.wildapricot.org/v2.3/accounts/111111/bundle/25"
+          },
+          "Email": "example+25@example.com",
+          "ParticipantsCount": 85,
+          "Administrator": "example-administrator-25",
+          "MembershipLevel": "Example Level 25",
+          "SpacesLeft": 85,
+          "Members": [
+            525,
+            526
+          ]
+        },
+        {
+          "Id": 26,
+          "Url": {
+            "Id": 26,
+            "Url": "https://api.wildapricot.org/v2.3/accounts/111111/bundle/26"
+          },
+          "Email": "example+26@example.com",
+          "ParticipantsCount": 88,
+          "Administrator": "example-administrator-26",
+          "MembershipLevel": "Example Level 26",
+          "SpacesLeft": 88,
+          "Members": [
+            526,
+            527
+          ]
+        }
+      ]
+    },
+    {
+      "Path": "/v2.3/accounts/111111/refunds",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Id": 120,
+          "Url": {
+            "Id": 120,
+            "Url": "https://api.wildapricot.org/v2.3/accounts/111111/refund/120"
+          },
+          "Value": 1525,
+          "DocumentDate": "2026-01-04T00:00:00-05:00",
+          "Contact": "example-contact-120",
+          "CreatedDate": "2026-01-04T00:00:00-05:00",
+          "CreatedBy": "example-createdby-120",
+          "UpdatedDate": "2026-01-04T00:00:00-05:00",
+          "UpdatedBy": "example-updatedby-120",
+          "Tender": {
+            "Id": 820,
+            "Name": "Cash"
+          },
+          "Comment": "<redacted>",
+          "PublicComment": "<redacted>",
+          "SettledValue": 1525
+        },
+        {
+          "Id": 121,
+          "Url": {
+            "Id": 121,
+            "Url": "https://api.wildapricot.org/v2.3/accounts/111111/refund/121"
+          },
+          "Value": 1537.5,
+          "DocumentDate": "2026-04-11T05:11:00-05:00",
+          "Contact": "example-contact-121",
+          "CreatedDate": "2026-04-11T05:11:00-05:00",
+          "CreatedBy": "example-createdby-121",
+          "UpdatedDate": "2026-04-11T05:11:00-05:00",
+          "UpdatedBy": "example-updatedby-121",
+          "Tender": {
+            "Id": 821,
+            "Name": "Cash"
+          },
+          "Comment": "<redacted>",
+          "PublicComment": "<redacted>",
+          "SettledValue": 1537.5
+        }
+      ]
+    },
+    {
+      "Path": "/v2.3/accounts/111111/tenders",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Id": 135,
+          "Url": "https://api.wildapricot.org/v2.3/accounts/111111/tender/135",
+          "Name": "Example Tender 135",
+          "DisplayPosition": 415,
+          "IsCustom": false
+        },
+        {
+          "Id": 136,
+          "Url": "https://api.wildapricot.org/v2.3/accounts/111111/tender/136",
+          "Name": "Example Tender 136",
+          "DisplayPosition": 418,
+          "IsCustom": true
+        }
+      ]
+    },
+    {
+      "Path": "/v2.3/accounts/111111/events",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "Events": [
+          {
+            "Id": 65,
+            "Url": {
+              "Id": 65,
+              "Url": "https://api.wildapricot.org/v2.3/accounts/111111/event/65"
+            },
+            "Name": "Example Event 65",
+            "EventType": "example-eventtype-65",
+            "StartDate": "2026-04-24T13:55:00-05:00",
+            "StartTimeSpecified": false,
+            "EndDate": "2026-04-24T13:55:00-05:00",
+            "EndTimeSpecified": false,
+            "Location": "example-location-65",
+            "RegistrationEnabled": false,
+            "HasEnabledRegistrationTypes": false,
+            "AccessLevel": "example-accesslevel-65",
+            "Tags": [
+              "example-tag"
+            ],
+            "Details": [],
+            "Sessions": [],
+            "RegistrationsLimit": 205,
+            "InviteeStat": {},
+            "PendingRegistrationsCount": 205,
+            "ConfirmedRegistrationsCount": 205,
+            "CheckedInAttendeesNumber": 205
+          },
+          {
+            "Id": 66,
+            "Url": {
+              "Id": 66,
+              "Url": "https://api.wildapricot.org/v2.3/accounts/111111/event/66"
+            },
+            "Name": "Example Event 66",
+            "EventType": "example-eventtype-66",
+            "StartDate": "2026-07-04T18:06:00-05:00",
+            "StartTimeSpecified": true,
+            "EndDate": "2026-07-04T18:06:00-05:00",
+            "EndTimeSpecified": true,
+            "Location": "example-location-66",
+            "RegistrationEnabled": true,
+            "HasEnabledRegistrationTypes": true,
+            "AccessLevel": "example-accesslevel-66",
+            "Tags": [
+              "example-tag"
+            ],
+            "Details": [],
+            "Sessions": [],
+            "RegistrationsLimit": 208,
+            "InviteeStat": {},
+            "PendingRegistrationsCount": 208,
+            "ConfirmedRegistrationsCount": 208,
+            "CheckedInAttendeesNumber": 208
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/v2.3/accounts",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "Id": 111111,
+          "Name": "Example Account 1",
+          "Url": {
+            "Id": 1,
+            "Url": "https://api.wildapricot.org/v2.3/accounts/111111/account/1"
+          },
+          "PrimaryDomainName": "example-primarydomainname-1",
+          "IsFreeAccount": false,
+          "Resources": {},
+          "ContactLimitInfo": {},
+          "TimeZone": {},
+          "Currency": {},
+          "Localization": {},
+          "SquareRegisterSettings": {},
+          "PaymentSettings": {},
+          "BillingPlan": {}
+        }
+      ]
+    },
+    {
+      "Path": "/oauth/token",
+      "Method": "POST",
+      "Status": 200,
+      "Body": {
+        "access_token": "mock-token",
+        "token_type": "Bearer",
+        "expires_in": 1800
+      }
+    },
+    {
+      "Path": "/v2.3/",
+      "Method": "GET",
+      "Status": 200,
+      "Body": []
+    }
+  ],
+  "Objects": [
+    {
+      "Name": "Contact",
+      "OrderingField": "ProfileLastUpdated"
+    },
+    {
+      "Name": "Account"
+    },
+    {
+      "Name": "AttachmentData"
+    },
+    {
+      "Name": "AuditLogItem"
+    },
+    {
+      "Name": "Bundle"
+    },
+    {
+      "Name": "CeuRecord"
+    },
+    {
+      "Name": "ContactFieldDescription"
+    },
+    {
+      "Name": "Donation"
+    },
+    {
+      "Name": "EmailDraft"
+    },
+    {
+      "Name": "EmailLog"
+    },
+    {
+      "Name": "EntityFieldDescription"
+    },
+    {
+      "Name": "Event"
+    },
+    {
+      "Name": "EventRegistration"
+    },
+    {
+      "Name": "EventRegistrationType"
+    },
+    {
+      "Name": "Invoice",
+      "OrderingField": "UpdatedDate"
+    },
+    {
+      "Name": "MembershipGroup"
+    },
+    {
+      "Name": "MembershipLevel"
+    },
+    {
+      "Name": "Order"
+    },
+    {
+      "Name": "Payment",
+      "OrderingField": "UpdatedDate"
+    },
+    {
+      "Name": "PaymentAllocation"
+    },
+    {
+      "Name": "Product"
+    },
+    {
+      "Name": "Refund",
+      "OrderingField": "UpdatedDate"
+    },
+    {
+      "Name": "SavedSearch"
+    },
+    {
+      "Name": "SentEmailRecipient"
+    },
+    {
+      "Name": "Tender"
+    }
+  ],
+  "DeltaPasses": [
+    {
+      "Object": "Contact",
+      "Routes": [
+        {
+          "Path": "/v2.3/accounts/111111/contacts",
+          "Method": "GET",
+          "Status": 200,
+          "Body": {
+            "ResultId": "mock-result-delta-111111",
+            "State": "Complete",
+            "Contacts": [
+              {
+                "Id": 1000,
+                "Url": {
+                  "Id": 1000,
+                  "Url": "https://api.wildapricot.org/v2.3/accounts/111111/contact/1000"
+                },
+                "FirstName": "<scrubbed-name-1000>",
+                "LastName": "<scrubbed-name-1100>",
+                "Organization": "Example Org 1000",
+                "Email": "example+1000@example.com",
+                "DisplayName": "<scrubbed-name-1000> <scrubbed-name-1100>",
+                "ProfileLastUpdated": "2026-01-08T08:20:00-05:00",
+                "MembershipLevel": "Example Level 1000",
+                "MembershipEnabled": true,
+                "Status": "Archived",
+                "IsAccountAdministrator": true,
+                "TermsOfUseAccepted": true,
+                "FieldValues": [
+                  {
+                    "FieldName": "Phone",
+                    "SystemCode": "Phone",
+                    "Value": "555-0100"
+                  }
+                ]
+              },
+              {
+                "Id": 1002,
+                "Url": {
+                  "Id": 1002,
+                  "Url": "https://api.wildapricot.org/v2.3/accounts/111111/contact/1002"
+                },
+                "FirstName": "<scrubbed-name-1002>",
+                "LastName": "<scrubbed-name-1102>",
+                "Organization": "Example Org 1002",
+                "Email": "example+1002@example.com",
+                "DisplayName": "<scrubbed-name-1002> <scrubbed-name-1102>",
+                "ProfileLastUpdated": "2026-07-22T18:42:00-05:00",
+                "MembershipLevel": "Example Level 1002",
+                "MembershipEnabled": true,
+                "Status": "Active",
+                "IsAccountAdministrator": true,
+                "TermsOfUseAccepted": true,
+                "FieldValues": [
+                  {
+                    "FieldName": "Phone",
+                    "SystemCode": "Phone",
+                    "Value": "555-0102"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "ExpectedPresent": [
+        "1000",
+        "1002"
+      ],
+      "ExpectedUpdates": [
+        {
+          "ExternalID": "1000",
+          "Field": "Status",
+          "Value": "Archived"
+        }
+      ],
+      "ExpectedDeletes": [
+        "1001"
+      ]
+    }
+  ]
+}

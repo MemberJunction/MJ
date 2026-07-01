@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "AccessToken": {
+      "type": "string",
+      "title": "Access Token",
+      "description": "HubSpot Private App access token (API key). Found in HubSpot Account Settings > Integrations > Private Apps.",
+      "isSecret": true,
+      "order": 0
+    },
+    "ApiVersion": {
+      "type": "string",
+      "title": "API Version",
+      "description": "HubSpot API version. Default: 'v3'",
+      "isSecret": false,
+      "order": 1
+    }
+  },
+  "required": ["AccessToken"]
+}
