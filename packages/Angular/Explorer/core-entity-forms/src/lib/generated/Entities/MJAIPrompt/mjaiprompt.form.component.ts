@@ -37,7 +37,8 @@ export class MJAIPromptFormComponent extends BaseFormComponent {
             { sectionKey: 'mJAIAgents', sectionName: 'AI Agents', isExpanded: false },
             { sectionKey: 'mJActions', sectionName: 'Actions', isExpanded: false },
             { sectionKey: 'mJRecordProcesses', sectionName: 'Record Processes', isExpanded: false },
-            { sectionKey: 'mJEntityDocuments', sectionName: 'Entity Documents', isExpanded: false }
+            { sectionKey: 'mJEntityDocuments', sectionName: 'Entity Documents', isExpanded: false },
+            { sectionKey: 'mJScopedPromptParts', sectionName: 'Scoped Prompt Parts', isExpanded: false }
         ]);
     }
 }

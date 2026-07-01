@@ -1,0 +1,26 @@
+[
+  {
+    "_comments": [
+      "Binds the shared AI scope JSONType (IAISecondaryScopes) to SecondaryScopes on MJ: AI Agent Runs",
+      "so CodeGen emits a typed SecondaryScopesObject accessor. Same shape as ScopedPromptPart /",
+      "the other agent scope fields (ExecuteAgentParams.SecondaryScopes); CodeGen emits a",
+      "per-entity prefixed copy of the type (no collision). Applied via mj sync push."
+    ],
+    "fields": { "Name": "MJ: AI Agent Runs" },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "IAISecondaryScopes",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IAISecondaryScopes.ts"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agent Runs&Name=SecondaryScopes"
+          }
+        }
+      ]
+    },
+    "primaryKey": { "ID": "@lookup:MJ: Entities.Name=MJ: AI Agent Runs" }
+  }
+]
