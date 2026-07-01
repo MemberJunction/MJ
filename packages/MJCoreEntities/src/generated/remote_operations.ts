@@ -11,41 +11,6 @@
 **************************************************/
 import { BaseRemotableOperation } from "@memberjunction/core";
 
-/** Input for `AISkill.ExportMarkdown`. */
-export interface AISkillExportMarkdownInput {
-    /** The `MJ: AI Skills` ID to export. */
-    skillID: string;
-}
-
-/** Output of `AISkill.ExportMarkdown`. */
-export interface AISkillExportMarkdownOutput {
-    /** The portable SKILL.md document text. */
-    markdown: string;
-    /** The skill's Name, for the client to use as a suggested filename (e.g. `${name}.SKILL.md`). */
-    suggestedFileName: string;
-}
-
-/** Input for `AISkill.ImportMarkdown`. */
-export interface AISkillImportMarkdownInput {
-    /** The SKILL.md document text to import. */
-    markdownText: string;
-    /**
-     * When provided, updates this existing skill (and resyncs its Action/sub-agent bundling)
-     * instead of creating a new one. Caller must confirm the current user may edit it.
-     */
-    updateSkillID?: string;
-}
-
-/** Output of `AISkill.ImportMarkdown`. */
-export interface AISkillImportMarkdownOutput {
-    /** The created/updated `MJ: AI Skills` ID. */
-    skillID: string;
-    /** The skill's Name, for UI confirmation messaging. */
-    skillName: string;
-    /** Action/sub-agent names from the SKILL.md that couldn't be resolved in this instance — non-fatal. */
-    warnings: string[];
-}
-
 /** The control action to apply to a running/paused experiment session. */
 export type PredictiveStudioExperimentSessionAction = 'pause' | 'resume' | 'cancel';
 
@@ -549,38 +514,6 @@ export interface TemplateRunOutput {
     output: string;
     /** Wall-clock render time in milliseconds. */
     executionTimeMs?: number;
-}
-
-// ============================================================
-// AISkill.ExportMarkdown — Export AI Skill Markdown
-// ============================================================
-/**
- * Export AI Skill Markdown
- * Exports an MJ: AI Skills record to the portable SKILL.md format (frontmatter + Instructions body). Bundled Action/sub-agent IDs are resolved to their current Names for cross-instance portability. Implemented by AISkillExportMarkdownServerOperation in @memberjunction/ai-agents.
- * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
- * under 'AISkill.ExportMarkdown'. This generated base provides the typed contract only (client-safe).
- */
-export class AISkillExportMarkdownOperation extends BaseRemotableOperation<AISkillExportMarkdownInput, AISkillExportMarkdownOutput> {
-    public readonly OperationKey = "AISkill.ExportMarkdown";
-    public readonly ExecutionMode = 'Sync' as const;
-    public readonly RequiredScope = "aiskill:manage";
-    public readonly RequiresSystemUser = false;
-}
-
-// ============================================================
-// AISkill.ImportMarkdown — Import AI Skill Markdown
-// ============================================================
-/**
- * Import AI Skill Markdown
- * Imports a SKILL.md document, resolving Action/sub-agent names against this instance's catalog (unresolvable names become non-fatal warnings), and creates or updates the MJ: AI Skills record plus its Action/sub-agent bundling junction rows. Implemented by AISkillImportMarkdownServerOperation in @memberjunction/ai-agents.
- * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
- * under 'AISkill.ImportMarkdown'. This generated base provides the typed contract only (client-safe).
- */
-export class AISkillImportMarkdownOperation extends BaseRemotableOperation<AISkillImportMarkdownInput, AISkillImportMarkdownOutput> {
-    public readonly OperationKey = "AISkill.ImportMarkdown";
-    public readonly ExecutionMode = 'Sync' as const;
-    public readonly RequiredScope = "aiskill:manage";
-    public readonly RequiresSystemUser = false;
 }
 
 // ============================================================

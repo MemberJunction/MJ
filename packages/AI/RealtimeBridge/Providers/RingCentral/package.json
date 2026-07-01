@@ -2,7 +2,7 @@
   "name": "@memberjunction/ai-bridge-ringcentral",
   "type": "module",
   "version": "5.43.0",
-  "description": "MemberJunction: RingCentral Realtime Bridge driver (telephony). Connects the realtime agent engine to a phone call over the RingCentral Voice / Call Control API — outbound dial (RingOut / Call Control sessions), inbound webhook routing, single-party audio in/out, DTMF send/receive, and call transfer (supervise/transfer) — via an injectable telephony call SDK seam. Audio only: no video, no screen, no Meeting Controls.",
+  "description": "MemberJunction: RingCentral Realtime Bridge driver (telephony). Connects the realtime agent engine to a phone call over a registered SIP softphone (ringcentral-softphone / SIP-TLS + RTP-SRTP) — the only RingCentral transport carrying bidirectional call audio (the WebSocket Call Streaming product is receive-only). Full-duplex audio in/out, outbound dial + inbound INVITE answer, DTMF send/receive, and blind transfer — via an injectable telephony call SDK seam. Audio only: no video, no screen, no Meeting Controls.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
@@ -21,6 +21,12 @@
     "@memberjunction/global": "5.43.0",
     "@memberjunction/core-entities": "5.43.0",
     "@memberjunction/ai-bridge-base": "5.43.0"
+  },
+  "//optionalDependencies": "OPTIONAL PEER SDKs (CLAUDE rule 8, category 2): the package never statically imports these. The duplex SIP-softphone path loads `ringcentral-softphone` (a headless server-side SIP/RTP softphone — the only RingCentral product offering bidirectional call audio) + its `werift-rtp` peer (RtpPacket/RtpHeader/SrtpSession, not re-exported by the softphone package) lazily in createRingCentralSoftphone(); `@ringcentral/sdk` remains for the legacy Call-Control REST client. So the package builds and unit-tests with NONE of them installed (the SDK seams are injected with fakes). Loaded only when the RingCentral provider is configured at deployment.",
+  "optionalDependencies": {
+    "@ringcentral/sdk": "^5.0.4",
+    "ringcentral-softphone": "^1.3.9",
+    "werift-rtp": "^0.8.8"
   },
   "devDependencies": {
     "@types/node": "24.10.11",

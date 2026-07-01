@@ -182,7 +182,7 @@ import {
     ZhipuLLM,
 } from '@memberjunction/ai-zhipu';
 
-// @memberjunction/core-entities (397 classes)
+// @memberjunction/core-entities (398 classes)
 import {
     AIAgentPermissionProvider,
     AccessControlRuleProvider,
@@ -344,6 +344,7 @@ import {
     MJConversationDetailEntityExtended,
     MJConversationDetailRatingEntity,
     MJConversationEntity,
+    MJConversationWidgetInstanceEntity,
     MJCountryEntity,
     MJCredentialCategoryEntity,
     MJCredentialEntity,
@@ -865,10 +866,8 @@ import {
     PromptReasoningProvider,
 } from '@memberjunction/ai-vector-dupe';
 
-// @memberjunction/ai-agents (22 classes)
+// @memberjunction/ai-agents (20 classes)
 import {
-    AISkillExportMarkdownServerOperation,
-    AISkillImportMarkdownServerOperation,
     CSVToolLibrary,
     ClientContextChannelServer,
     DataSnapshotToolLibrary,
@@ -1342,6 +1341,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJConversationDetailEntityExtended,
     MJConversationDetailRatingEntity,
     MJConversationEntity,
+    MJConversationWidgetInstanceEntity,
     MJCountryEntity,
     MJCredentialCategoryEntity,
     MJCredentialEntity,
@@ -1765,8 +1765,6 @@ export const CLASS_REGISTRATIONS: any[] = [
     ParallelExecutionCoordinator,
     LLMReranker,
     PromptReasoningProvider,
-    AISkillExportMarkdownServerOperation,
-    AISkillImportMarkdownServerOperation,
     CSVToolLibrary,
     ClientContextChannelServer,
     DataSnapshotToolLibrary,
@@ -1999,7 +1997,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 858;
+export const CLASS_REGISTRATIONS_COUNT = 857;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

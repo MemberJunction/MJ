@@ -31,7 +31,7 @@
  */
 
 import { UserInfo, IMetadataProvider, LogError, LogStatus, RunView } from '@memberjunction/core';
-import { MJAIAgentRunStepEntity, MJAIPromptRunEntity, MJArtifactEntity, MJApplicationEntity } from '@memberjunction/core-entities';
+import { MJAIAgentRunStepEntity, MJAIPromptRunEntity, MJArtifactEntity, MJApplicationEntity, MJConversationEntity } from '@memberjunction/core-entities';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import {
     BaseRealtimeModel,
@@ -162,6 +162,14 @@ export interface PrepareClientSessionInput {
      * addressing GATE is the bridge's `RegexAddressedMatcher`. Ignored unless {@link DisableAutoResponse}.
      */
     SelfNames?: string[];
+    /**
+     * Optional server-authoritative hard ceiling on the session's wall-clock duration, in seconds.
+     * Threaded into {@link RealtimeSessionParams.MaxSessionSeconds} so a driver can bound the
+     * provider session/token, and surfaced so the transport layer (the MJServer resolver) can stamp
+     * the absolute deadline on the session for the janitor to enforce. Set for abuse-sensitive
+     * deployments (a public web-widget guest's `VoiceMaxSessionMinutes`); omitted otherwise.
+     */
+    MaxSessionSeconds?: number;
 }
 
 /**
@@ -1641,7 +1649,7 @@ export class RealtimeClientSessionService {
         driverClass?: string
     ): Promise<RealtimeSessionParams> {
         const systemPrompt = await this.buildCompanionSystemPrompt(input, coAgent, contextUser, provider, effectiveConfig);
-        const memoryContext = await this.assembleMemoryContext(input, coAgent, contextUser);
+        const memoryContext = await this.assembleMemoryContext(input, coAgent, contextUser, provider);
         const tools = this.buildStableToolSet(input.ExtraTools);
 
         // One line per mint: confirms which tools + whether the channel-direct framing actually reach
@@ -1659,7 +1667,11 @@ export class RealtimeClientSessionService {
             SystemPrompt: systemPrompt,
             Tools: tools,
             InitialContext: memoryContext || undefined,
-            Config: this.buildSessionConfigBag(input, effectiveConfig, driverClass)
+            Config: this.buildSessionConfigBag(input, effectiveConfig, driverClass),
+            // Server-authoritative duration ceiling (public web-widget voice cap). Drivers that can
+            // bound the provider session/token apply min(default, this); the janitor enforces it
+            // regardless of driver support via the session deadline stamped by the transport layer.
+            MaxSessionSeconds: input.MaxSessionSeconds,
         };
     }
 
@@ -1736,7 +1748,7 @@ export class RealtimeClientSessionService {
         const appContextSection = this.buildAppContextSection(input.AppContext);
         const priorTranscript = this.formatPriorTranscript(input.PriorTranscript);
         const history = this.formatConversationHistory(input.ConversationMessages);
-        const memoryContext = await this.assembleMemoryContext(input, coAgent, contextUser);
+        const memoryContext = await this.assembleMemoryContext(input, coAgent, contextUser, provider);
 
         return [framing, meetingFraming, coAgentPrompt, voiceManner, targetIdentity, appContextSection, priorTranscript, history, memoryContext]
             .filter(part => part && part.trim().length > 0)
@@ -1992,11 +2004,18 @@ export class RealtimeClientSessionService {
     protected async assembleMemoryContext(
         input: PrepareClientSessionInput,
         coAgent: MJAIAgentEntityExtended,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider: IMetadataProvider
     ): Promise<string> {
         const lastUserMessage = (input.ConversationMessages ?? []).filter(m => m.role === 'user').pop();
         const inputText = typeof lastUserMessage?.content === 'string' ? lastUserMessage.content : '';
         const scratch: ChatMessage[] = [];
+
+        // RV3 — returning-visitor memory: resolve this conversation's identity scope so the existing
+        // note-injection path pulls in the recap a prior session left for this returning visitor. A
+        // brand-new visitor (no resolved identity, no linked prior conversation) resolves to undefined
+        // and gets no scoped memory — exactly the loop-agent behavior before returning-visitor memory.
+        const scope = await this.resolveConversationMemoryScope(input.ConversationID, provider, contextUser);
 
         const builder = new AgentMemoryContextBuilder();
         await builder.InjectContextMemory(
@@ -2006,8 +2025,8 @@ export class RealtimeClientSessionService {
             input.CompanyID,
             contextUser,
             scratch,
-            undefined,
-            undefined,
+            scope?.entityId,
+            scope?.recordId,
             undefined,
             null
         );
@@ -2016,6 +2035,51 @@ export class RealtimeClientSessionService {
             .map(m => (typeof m.content === 'string' ? m.content : ''))
             .filter(c => c.length > 0)
             .join('\n\n');
+    }
+
+    /**
+     * Resolves the primary-scope pair a returning visitor's memory is filed under, mirroring the
+     * recap side ({@link writeReturningVisitorRecap}'s `resolveRecapScope`):
+     *
+     *   - linked visitor    → `(Conversation.LinkedEntityID, Conversation.LinkedRecordID)`
+     *   - linked anonymous  → `(the "MJ: Conversations" entity, Conversation.LastConversationID)`
+     *   - brand-new visitor → `undefined` (no scoped memory)
+     *
+     * Best-effort: any failure (no conversation id, load failure, entity not found) resolves to
+     * `undefined` so memory injection silently falls back to unscoped behavior.
+     *
+     * @param conversationId the current session's conversation id, if any.
+     * @param provider the request/session metadata provider (multi-provider-safe — never global Metadata).
+     * @param contextUser the calling user.
+     * @returns the scope pair, or undefined when this isn't a returning visitor.
+     */
+    protected async resolveConversationMemoryScope(
+        conversationId: string | undefined,
+        provider: IMetadataProvider,
+        contextUser: UserInfo
+    ): Promise<{ entityId: string; recordId: string } | undefined> {
+        try {
+            if (!conversationId) {
+                return undefined;
+            }
+            const conversation = await provider.GetEntityObject<MJConversationEntity>('MJ: Conversations', contextUser);
+            if (!conversation || !(await conversation.Load(conversationId))) {
+                return undefined;
+            }
+            if (conversation.LinkedEntityID && conversation.LinkedRecordID) {
+                return { entityId: conversation.LinkedEntityID, recordId: conversation.LinkedRecordID };
+            }
+            if (conversation.LastConversationID) {
+                const conversationsEntityId = provider.EntityByName('MJ: Conversations')?.ID;
+                if (conversationsEntityId) {
+                    return { entityId: conversationsEntityId, recordId: conversation.LastConversationID };
+                }
+            }
+            return undefined;
+        } catch (e) {
+            LogError(`[RealtimeCoAgent] resolveConversationMemoryScope failed for conversation ${conversationId}: ${e instanceof Error ? e.message : String(e)}`);
+            return undefined;
+        }
     }
 
     /**

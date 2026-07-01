@@ -41,7 +41,13 @@ import { setupRESTEndpoints } from './rest/setupRESTEndpoints.js';
 import { createOAuthCallbackHandler } from './rest/OAuthCallbackHandler.js';
 import { createSignatureWebhookHandler } from './rest/SignatureWebhookHandler.js';
 import { createMediaStreamRouter } from './rest/MediaStreamHandler.js';
-import { createMagicLinkHandler, registerMagicLinkAuthProvider, MAGIC_LINK_MOUNT_PATH } from './auth/magicLink/index.js';
+import { createMagicLinkHandler, createMagicLinkJwksRouter, registerMagicLinkAuthProvider, MAGIC_LINK_MOUNT_PATH } from './auth/magicLink/index.js';
+import { createWidgetHandler, WIDGET_MOUNT_PATH } from './realtimeWidget/index.js';
+import { createTwilioTelephonyHandler, TWILIO_TELEPHONY_MOUNT_PATH, SetTwilioTelephonyService } from './telephony/index.js';
+import { createVonageTelephonyHandler, VONAGE_TELEPHONY_MOUNT_PATH, SetVonageTelephonyService } from './telephony/index.js';
+import { RingCentralTelephonyService, SetRingCentralTelephonyService } from './telephony/index.js';
+import { createTeamsMeetingsHandler, TEAMS_MEETINGS_MOUNT_PATH, SetTeamsMeetingsService, GetTeamsMeetingsService, StartCalendarScheduler } from './telephony/index.js';
+import { InstallMediaUpgradeDispatcher } from './telephony/index.js';
 
 import { resolve } from 'node:path';
 import { DataSourceInfo, raiseEvent } from './types.js';
@@ -1004,6 +1010,7 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   // ─── Magic-link routes (MJ-issued, app-scoped external access) ───────────
   // Public router (JWKS + redeem) mounts BEFORE the auth middleware; the
   // authenticated invite-creation router mounts AFTER it (see below).
+  let widgetAuthenticatedRouter: ReturnType<typeof createWidgetHandler>['authenticatedRouter'] | undefined;
   let magicLinkAuthenticatedRouter: ReturnType<typeof createMagicLinkHandler>['authenticatedRouter'] | undefined;
   if (configInfo.magicLink?.enabled) {
     const { publicRouter, authenticatedRouter } = createMagicLinkHandler(oauthPublicUrl, configInfo.magicLink);
@@ -1012,6 +1019,82 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     app.use(MAGIC_LINK_MOUNT_PATH, cors<cors.CorsRequest>(), publicRouter);
     startupLog.LogIf('verbose', `[MagicLink] Public routes registered at ${MAGIC_LINK_MOUNT_PATH}/redeem and ${MAGIC_LINK_MOUNT_PATH}/jwks.json`);
   }
+
+  // ─── Public web widget: guest-session mint (PUBLIC, before auth mw) ───────
+  // Visitors hold no MJ JWT yet, so POST /widget/session is public. It reuses the
+  // magic-link RS256 key + `magic-link` auth provider (ensured idempotently inside
+  // createWidgetHandler), so it stands on its own even if magicLink.enabled is false.
+  if (configInfo.widget?.enabled) {
+    const { publicRouter: widgetRouter, authenticatedRouter: widgetAuthRouter } = createWidgetHandler(oauthPublicUrl, configInfo.widget);
+    widgetAuthenticatedRouter = widgetAuthRouter;
+    app.use(WIDGET_MOUNT_PATH, cors<cors.CorsRequest>(), widgetRouter);
+    // The widget reuses the magic-link RS256 key + auth provider to validate guest
+    // tokens, which validates by fetching the JWKS at MAGIC_LINK_MOUNT_PATH/jwks.json.
+    // When magic-link itself is disabled its public router (which serves JWKS) never
+    // mounts, so publish the key here — otherwise every guest token fails validation
+    // (the auth middleware can't fetch the public key) and the widget 401s.
+    if (!configInfo.magicLink?.enabled) {
+      app.use(MAGIC_LINK_MOUNT_PATH, cors<cors.CorsRequest>(), createMagicLinkJwksRouter());
+      startupLog.LogIf('verbose', `[Widget] Published reused signing key at ${MAGIC_LINK_MOUNT_PATH}/jwks.json (magic-link flow disabled)`);
+    }
+    startupLog.LogIf('verbose', `[Widget] Public routes registered at ${WIDGET_MOUNT_PATH}/session and ${WIDGET_MOUNT_PATH}/session/refresh`);
+  }
+
+  // ─── Telephony (Twilio) ingress: inbound voice webhook + Media-Streams WSS (PUBLIC) ──
+  // Carriers cannot present an MJ JWT — the X-Twilio-Signature HMAC is the gate. The
+  // public webhook router mounts BEFORE the auth middleware; the Media-Streams WSS attaches
+  // to the shared HTTP server. The outbound PlaceTwilioCall mutation reuses the same service.
+  if (configInfo.telephony?.enabled && configInfo.telephony.twilio) {
+    const twilioHandler = createTwilioTelephonyHandler(oauthPublicUrl, configInfo.telephony.twilio);
+    app.use(TWILIO_TELEPHONY_MOUNT_PATH, cors<cors.CorsRequest>(), twilioHandler.publicRouter);
+    twilioHandler.attachMediaStreamServer();
+    SetTwilioTelephonyService(twilioHandler.service);
+    startupLog.LogIf('verbose', `[Telephony] Twilio routes registered at ${TWILIO_TELEPHONY_MOUNT_PATH}/voice + Media-Streams WSS`);
+  }
+
+  // ─── Telephony (Vonage) ingress: inbound answer/event webhooks + media WSS (PUBLIC) ──
+  // Carriers cannot present an MJ JWT — the Vonage signed-request HMAC / webhook JWT is the gate.
+  // The public router mounts BEFORE the auth middleware; the media WSS attaches to the shared
+  // HTTP server. The outbound PlaceVonageCall mutation reuses the same service.
+  if (configInfo.telephony?.enabled && configInfo.telephony.vonage) {
+    const vonageHandler = createVonageTelephonyHandler(oauthPublicUrl, configInfo.telephony.vonage);
+    app.use(VONAGE_TELEPHONY_MOUNT_PATH, cors<cors.CorsRequest>(), vonageHandler.publicRouter);
+    vonageHandler.attachMediaStreamServer();
+    SetVonageTelephonyService(vonageHandler.service);
+    startupLog.LogIf('verbose', `[Telephony] Vonage routes registered at ${VONAGE_TELEPHONY_MOUNT_PATH}/answer + /event + media WSS`);
+  }
+
+  // ─── Telephony (RingCentral) ingress: SIP softphone registration (no HTTP webhook / media WSS) ──
+  // RingCentral's only bidirectional-audio transport is a registered SIP softphone — inbound calls arrive
+  // as SIP INVITEs on its own SIP/TLS connection, so there is no public webhook or media WSS to mount.
+  // start() registers the softphone fire-and-forget so SIP registration never blocks boot; the outbound
+  // PlaceRingCentralCall mutation reuses the same service via the runtime holder.
+  if (configInfo.telephony?.enabled && configInfo.telephony.ringcentral) {
+    const ringCentralService = new RingCentralTelephonyService(configInfo.telephony.ringcentral);
+    SetRingCentralTelephonyService(ringCentralService);
+    void ringCentralService.start();
+    startupLog.LogIf('verbose', `[Telephony] RingCentral SIP softphone starting (codec ${configInfo.telephony.ringcentral.codec ?? 'OPUS/16000'})`);
+  }
+
+  // ─── Teams meetings ingress: Graph change-notification webhook (PUBLIC) ──────────────
+  // Graph cannot present an MJ JWT — the subscription validationToken handshake + the per-
+  // notification clientState shared secret are the gate. The public webhook router mounts
+  // BEFORE the auth middleware. The ACS application-hosted-media audio plane is owned by the
+  // server's native ACS media adapter, which attaches transports to the shared registry
+  // (a media WSS is not needed here). The StartTeamsMeetingSession mutation reuses the same
+  // service via the runtime holder.
+  if (configInfo.telephony?.enabled && configInfo.telephony.teams?.enabled) {
+    const teamsHandler = createTeamsMeetingsHandler(configInfo.telephony.teams);
+    app.use(TEAMS_MEETINGS_MOUNT_PATH, cors<cors.CorsRequest>(), teamsHandler.publicRouter);
+    SetTeamsMeetingsService(teamsHandler.service);
+    startupLog.LogIf('verbose', `[Meetings] Teams routes registered at ${TEAMS_MEETINGS_MOUNT_PATH}/notifications`);
+  }
+
+  // Install the single path-routing WebSocket-upgrade dispatcher AFTER all media WSS routes have
+  // registered. ws 8.x has each {server}-bound WebSocketServer 400 paths it doesn't own, so the GraphQL
+  // socket and the telephony media sockets cannot coexist as separate {server} servers — this strips the
+  // auto-listeners and routes upgrades by path. No-op when no media routes registered (telephony off).
+  InstallMediaUpgradeDispatcher(httpServer, webSocketServer, graphqlRootPath);
 
   // ─── Global CORS (before auth so 401 responses include CORS headers) ─────
   // Without this, the browser blocks 401 responses from the auth middleware
@@ -1071,6 +1154,14 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   if (magicLinkAuthenticatedRouter) {
     app.use(MAGIC_LINK_MOUNT_PATH, cors<cors.CorsRequest>(), magicLinkAuthenticatedRouter);
     startupLog.LogIf('verbose', `[MagicLink] Authenticated route registered at ${MAGIC_LINK_MOUNT_PATH}/create`);
+  }
+
+  // ─── Widget authenticated route (RV4 resolve-identity) ────────────────────
+  // Mounts after the unified auth middleware so a verified visitor (post magic-link upgrade) can
+  // promote their anonymous returning-visitor trail to the verified record.
+  if (widgetAuthenticatedRouter) {
+    app.use(WIDGET_MOUNT_PATH, cors<cors.CorsRequest>(), widgetAuthenticatedRouter);
+    startupLog.LogIf('verbose', `[Widget] Authenticated route registered at ${WIDGET_MOUNT_PATH}/resolve-identity`);
   }
 
   // ─── REST API endpoints (auth already handled by unified middleware) ─────
@@ -1191,6 +1282,23 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   if (resumeUser && Metadata.Provider instanceof DatabaseProviderBase) { // global-provider-ok: server startup recovery — boot-time session janitor uses the server's own provider
     SessionJanitor.Instance.Start(Metadata.Provider, resumeUser) // global-provider-ok: server-owned background reconciler runs under the server's provider + system user
       .catch(err => console.warn(`[SessionJanitor] Startup failed: ${err}`));
+  }
+
+  // Launch the calendar / scheduled-bridge loop (M2): poll agent calendars for meeting invites and
+  // start due meeting bridges. Mirrors the SessionJanitor lifecycle (run-once + interval, timer
+  // unref'd). Gated on Teams meetings being enabled (the provider whose scheduled-join is wired) and
+  // reuses the SAME meetings service as the ingress; identities without configured calendar creds are
+  // skipped, so this is a harmless no-op until a Graph-backed identity + token are configured.
+  if (resumeUser && configInfo.telephony?.teams?.enabled) { // global-provider-ok: server-owned background poller under the server's provider + system user
+    const teamsMeetingsService = GetTeamsMeetingsService();
+    if (teamsMeetingsService) {
+      StartCalendarScheduler({
+        Provider: Metadata.Provider, // global-provider-ok: server-owned background poller under the server's single default provider + system user
+        ContextUser: resumeUser,
+        TeamsService: teamsMeetingsService,
+        TeamsConfig: configInfo.telephony.teams,
+      });
+    }
   }
 
   // Set up graceful shutdown handlers

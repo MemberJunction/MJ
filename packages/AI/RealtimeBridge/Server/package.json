@@ -24,6 +24,11 @@
     "@memberjunction/ai-bridge-base": "5.43.0",
     "rxjs": "^7.8.2"
   },
+  "//optionalDependencies": "@microsoft/microsoft-graph-client and googleapis are OPTIONAL PEER SDKs (CLAUDE rule 8, category 2): this package never statically imports either. They back the calendar + identity-provisioner seams only. GraphCalendarSource/GraphAdmin provisioning wire IGraphCalendarLike/IGraphAdminLike over @microsoft/microsoft-graph-client (calendarView delta + POST /users); GoogleCalendarSource/Google Workspace provisioning wire IGoogleCalendarLike/IGoogleWorkspaceAdminLike over googleapis (calendar.events.list syncToken + admin.users.insert). The telephony-carrier number-order path is injected via ITelephonyCarrierLike (the carrier SDK is declared by each telephony provider package, not here). All surfaces are injected behind structural interfaces so the package builds + unit-tests with no install and no network, and are loaded only when a Graph/Google-backed identity is configured at deployment.",
+  "optionalDependencies": {
+    "@microsoft/microsoft-graph-client": "^3.0.7",
+    "googleapis": "^144.0.0"
+  },
   "devDependencies": {
     "@types/node": "24.10.11",
     "ts-node-dev": "^2.0.0",

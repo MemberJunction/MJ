@@ -60,6 +60,67 @@ module.exports = {
 
   /**
    * ====================
+   * Telephony (Twilio) — dev/e2e
+   * ====================
+   * Credentials read from .env (cycled secrets stay out of source). `enabled` gates
+   * whether the public /telephony/twilio routes + Media-Streams WSS mount at boot.
+   * streamPublicUrl is the wss://<public-host>/telephony/twilio/media URL Twilio's
+   * <Connect><Stream> connects to — for LIVE inbound/audio it MUST be a publicly
+   * reachable tunnel (ngrok) pointed at this API's port, and MJAPI_PUBLIC_URL must
+   * match (the inbound webhook signature is verified against the full public URL).
+   */
+  telephony: {
+    enabled: !!(process.env.TWILIO_ACCOUNT_SID || process.env.VONAGE_APPLICATION_ID),
+    twilio: process.env.TWILIO_ACCOUNT_SID
+      ? {
+          accountSid: process.env.TWILIO_ACCOUNT_SID,
+          authToken: process.env.TWILIO_AUTH_TOKEN,
+          apiKeySid: process.env.TWILIO_API_KEY_SID || undefined,
+          apiKeySecret: process.env.TWILIO_API_KEY_SECRET || undefined,
+          streamPublicUrl: process.env.TWILIO_STREAM_PUBLIC_URL || 'wss://localhost:4008/telephony/twilio/media',
+          webhookSigningSecret: process.env.TWILIO_WEBHOOK_SIGNING_SECRET || undefined,
+        }
+      : undefined,
+    // Vonage Voice — Voice API auth is application-scoped (Application ID + RSA private key →
+    // signed JWTs); the account apiKey/apiSecret pair is carried for key-scoped ops + the
+    // signatureSecret gates webhook verification. PrivateKey is read from a PEM file path so a
+    // multi-line key never has to live in .env. enabled is gated on VONAGE_APPLICATION_ID since
+    // that (not the API key) is what actually places calls.
+    vonage: process.env.VONAGE_APPLICATION_ID
+      ? {
+          applicationId: process.env.VONAGE_APPLICATION_ID,
+          privateKey: process.env.VONAGE_PRIVATE_KEY_PATH
+            ? require('fs').readFileSync(process.env.VONAGE_PRIVATE_KEY_PATH, 'utf8')
+            : process.env.VONAGE_PRIVATE_KEY || undefined,
+          apiKey: process.env.VONAGE_API_KEY || undefined,
+          apiSecret: process.env.VONAGE_API_SECRET || undefined,
+          mediaPublicUrl: process.env.VONAGE_MEDIA_PUBLIC_URL || 'wss://localhost:4008/telephony/vonage/media',
+          signatureSecret: process.env.VONAGE_SIGNATURE_SECRET || process.env.VONAGE_API_SECRET || undefined,
+          eventUrl: process.env.VONAGE_EVENT_URL || undefined,
+        }
+      : undefined,
+  },
+
+  /**
+   * ====================
+   * Public Web Widget — dev/e2e
+   * ====================
+   * Master switch for the droppable guest support widget. When false, the public
+   * /widget/session|/session/refresh|/upgrade routes are NOT mounted and the mint
+   * falls through to the unified auth middleware (→ 401). The widget reuses the
+   * magic-link RS256 key + auth provider (initialized idempotently even when
+   * magicLink.enabled is false), so `enabled: true` is the only required field.
+   * `audience` MUST equal magicLink.audience or minted guest tokens won't validate.
+   * Per-instance config (pinned agent, allowed origins, modality, TTL, rate limit,
+   * voice ceiling) lives on the WidgetInstance row in metadata, not here.
+   */
+  widget: {
+    enabled: true,
+    audience: 'mj-magic-link',
+  },
+
+  /**
+   * ====================
    * CodeGen Overrides
    * ====================
    */

@@ -11,6 +11,7 @@ export { MagicLinkKeyManager } from './MagicLinkKeys.js';
 export { MagicLinkService } from './MagicLinkService.js';
 export {
   createMagicLinkHandler,
+  createMagicLinkJwksRouter,
   registerMagicLinkAuthProvider,
   MAGIC_LINK_MOUNT_PATH,
   MAGIC_LINK_JWKS_PATH,

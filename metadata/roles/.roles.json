@@ -11,5 +11,18 @@
       "lastModified": "2026-06-09T06:32:36.750Z",
       "checksum": "54180cf11a738544eed68a64b8b5fe38ba34c68adeaf416e6a2cefe2cdbfd8e8"
     }
+  },
+  {
+    "fields": {
+      "Name": "Widget Guest",
+      "Description": "Restricted role for anonymous public web-widget visitors (see plans/realtime/bridges-and-widget/public-web-widget.md). Grants ONLY read/create/update on Conversations + Conversation Details so a guest can hold a support conversation — and nothing else. This is the D5 authorization backstop: combined with the widget's pinned support agent, it prevents a public visitor from reaching arbitrary agents or data. Never assign to internal/SSO users."
+    },
+    "primaryKey": {
+      "ID": "4B790B85-FEBA-4AA2-ACE4-E4A70EB9C292"
+    },
+    "sync": {
+      "lastModified": "2026-06-29T21:28:24.907Z",
+      "checksum": "c28b2fe1c2cc32adff84d324a9c65f6b7ea42f742d50b91ff2ecb8e1da073855"
+    }
   }
 ]

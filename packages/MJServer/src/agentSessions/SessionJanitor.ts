@@ -170,6 +170,49 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
         return closed;
     }
 
+    /**
+     * Server-authoritative MAX-DURATION enforcement (public web-widget voice cap, public-web-widget.md
+     * W4). Closes any `Active`/`Idle` session whose stored absolute deadline (`Config_.maxSessionDeadlineIso`)
+     * has passed — a hard wall-clock ceiling that fires regardless of activity, so a public voice guest
+     * cannot run a session indefinitely (cost-bombing) even if the client ignores its own abuse guard.
+     *
+     * Only sessions that CARRY a deadline are loaded (a cheap `Config_ LIKE` pre-filter), then the exact
+     * ISO deadline is parsed and compared in JS (`Config_` is JSON, not a queryable column). Stamped
+     * `CloseReason = 'Janitor'`, idempotent + concurrency-safe like the other sweeps. Returns the count closed.
+     */
+    public async RunMaxDurationSweep(provider: IMetadataProvider, systemUser: UserInfo): Promise<number> {
+        const nowMs = Date.now();
+        // Only consider sessions that carry a deadline marker — keeps this sweep cheap (it never touches
+        // the far-more-common uncapped sessions) while the JS check below enforces the exact deadline.
+        const filter = `Status IN ('Active','Idle') AND Config LIKE '%maxSessionDeadlineIso%'`;
+        const isExpired = (session: MJAIAgentSessionEntity): boolean => {
+            const deadlineMs = this.parseSessionDeadlineMs(session.Config_);
+            return deadlineMs != null && deadlineMs <= nowMs;
+        };
+        const closed = await this.sweepAndClose(filter, provider, systemUser, 'Janitor', isExpired);
+        if (closed > 0) {
+            LogStatus(`[SessionJanitor] Max-duration sweep closed ${closed} session(s) past their hard duration cap`);
+        }
+        return closed;
+    }
+
+    /** Parses the absolute deadline (ms) from a session's `Config_` JSON, or null when absent/malformed. */
+    private parseSessionDeadlineMs(configJson: string | null | undefined): number | null {
+        if (!configJson) {
+            return null;
+        }
+        try {
+            const parsed = JSON.parse(configJson) as { maxSessionDeadlineIso?: string };
+            if (typeof parsed.maxSessionDeadlineIso !== 'string') {
+                return null;
+            }
+            const ms = Date.parse(parsed.maxSessionDeadlineIso);
+            return Number.isNaN(ms) ? null : ms;
+        } catch {
+            return null;
+        }
+    }
+
     // ----- internals -------------------------------------------------------------------------
 
     /** Register for graceful shutdown exactly once. */
@@ -197,6 +240,9 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
         this._sweepRunning = true;
         try {
             await this.RunStalenessSweep(this._provider, this._systemUser);
+            // Hard wall-clock cap (public web-widget voice). Runs alongside the idle sweep so a capped
+            // session is finalized within one sweep interval of its deadline even if it's still "active".
+            await this.RunMaxDurationSweep(this._provider, this._systemUser);
         } catch (err) {
             LogError(`SessionJanitor periodic sweep failed: ${err instanceof Error ? err.message : String(err)}`);
         } finally {
@@ -215,18 +261,32 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
         provider: IMetadataProvider,
         systemUser: UserInfo,
         closeReason: SessionCloseReason,
+        shouldClose?: (session: MJAIAgentSessionEntity) => boolean,
     ): Promise<number> {
         let closedCount = 0;
         let afterKey: CompositeKey | undefined;
 
         // eslint-disable-next-line no-constant-condition
         while (true) {
-            const page = await this.fetchPage(filter, afterKey, provider, systemUser);
-            if (page == null) {
+            const fetched = await this.fetchPage(filter, afterKey, provider, systemUser);
+            if (fetched == null) {
                 break; // load failure already logged
             }
-            if (page.length === 0) {
+            if (fetched.length === 0) {
                 break;
+            }
+            // Advance the keyset BEFORE the optional JS predicate narrows the page (we must page by the
+            // SQL-matched set, not the post-filtered subset, or pagination would stall/skip).
+            const lastFetchedId = fetched[fetched.length - 1].ID;
+            const fetchedCount = fetched.length;
+            // Optional in-JS narrowing (e.g. exact deadline check the SQL pre-filter can't express).
+            const page = shouldClose ? fetched.filter(shouldClose) : fetched;
+            if (page.length === 0) {
+                if (fetchedCount < SWEEP_PAGE_SIZE) {
+                    break;
+                }
+                afterKey = CompositeKey.FromID(lastFetchedId);
+                continue;
             }
             // Batch-load every channel for this whole page of sessions in ONE query, then hand each
             // session its own slice to CloseSession — avoids the N+1 channel read (one RunView per
@@ -248,10 +308,10 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
                     closedCount++;
                 }
             }
-            if (page.length < SWEEP_PAGE_SIZE) {
-                break; // partial page => end of data
+            if (fetchedCount < SWEEP_PAGE_SIZE) {
+                break; // partial page (by the SQL-matched set) => end of data
             }
-            afterKey = CompositeKey.FromID(page[page.length - 1].ID);
+            afterKey = CompositeKey.FromID(lastFetchedId);
         }
         return closedCount;
     }

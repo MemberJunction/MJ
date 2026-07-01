@@ -1,0 +1,39 @@
+{
+  "name": "@memberjunction/realtime-widget",
+  "type": "module",
+  "version": "5.43.0",
+  "description": "MemberJunction: Droppable, embeddable public customer-support widget (text + voice). A shadow-DOM web component that reuses ConversationsRuntime + the realtime client stack against MJAPI with a guest session JWT. No MJ login required.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "bundle": "esbuild dist/embed.js --bundle --splitting --format=esm --platform=browser --outdir=dist/embed --entry-names=mj-widget --chunk-names=chunks/[name]-[hash]",
+    "bundle:min": "esbuild dist/embed.js --bundle --splitting --minify --format=esm --platform=browser --outdir=dist/embed-min --entry-names=mj-widget --chunk-names=chunks/[name]-[hash]",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "author": "MemberJunction.com",
+  "license": "ISC",
+  "dependencies": {
+    "@memberjunction/global": "5.43.0",
+    "@memberjunction/core": "5.43.0",
+    "@memberjunction/core-entities": "5.43.0",
+    "@memberjunction/conversations-runtime": "5.43.0",
+    "@memberjunction/graphql-dataprovider": "5.43.0",
+    "@memberjunction/ai": "5.43.0",
+    "@memberjunction/ai-realtime-client": "5.43.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.11",
+    "esbuild": "^0.26.0",
+    "jsdom": "^24.0.0",
+    "typescript": "^5.9.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

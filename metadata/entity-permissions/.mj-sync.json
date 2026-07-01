@@ -12,7 +12,7 @@
     "mergeStrategy": "merge",
     "backupBeforeUpdate": true,
     "backupDirectory": ".backups",
-    "filter": "RoleID IN (SELECT ID FROM __mj.Role WHERE Name='Magic Link Baseline')",
+    "filter": "RoleID IN (SELECT ID FROM __mj.Role WHERE Name IN ('Magic Link Baseline', 'Widget Guest'))",
     "externalizeFields": [],
     "ignoreNullFields": true,
     "ignoreVirtualFields": true,
