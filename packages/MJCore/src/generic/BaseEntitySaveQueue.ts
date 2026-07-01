@@ -42,6 +42,16 @@ export class BaseEntitySaveQueue {
     }
 
     /**
+     * Fire-and-forget INSERT that waits for `dependency`'s pending tasks to settle first. Use this for
+     * self-referencing foreign keys: a child entity whose FK points at `dependency` must not INSERT
+     * until the dependency's own INSERT has landed in the database.
+     */
+    public InsertAfter(entity: BaseEntity, dependency: BaseEntity): void {
+        const label = this.labelFor('Insert', entity);
+        void this.queue.enqueue(entity, () => this.runSave(entity, label), { isOk: (ok) => ok === true, label, after: dependency });
+    }
+
+    /**
      * Fire-and-forget UPDATE chained after the entity's INSERT. `applyMutation` (if given) runs INSIDE
      * the post-INSERT task — after `finalizeSave`'s reload — so its values always survive; the save is
      * force-persisted with `IgnoreDirtyState`. Pass no mutation only when the fields are already set

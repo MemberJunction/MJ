@@ -784,19 +784,6 @@ export class EntityRecordDetailPanelComponent extends BaseAngularComponent imple
   }
 
   /**
-   * Toggle section expansion
-   */
-  toggleSection(section: 'details' | 'relationships' | 'organicKeys'): void {
-    if (section === 'details') {
-      this.detailsSectionExpanded = !this.detailsSectionExpanded;
-    } else if (section === 'relationships') {
-      this.relationshipsSectionExpanded = !this.relationshipsSectionExpanded;
-    } else {
-      this.organicKeysSectionExpanded = !this.organicKeysSectionExpanded;
-    }
-  }
-
-  /**
    * Get only related entities that have records (count > 0)
    */
   get relatedEntitiesWithRecords(): RelatedEntityData[] {

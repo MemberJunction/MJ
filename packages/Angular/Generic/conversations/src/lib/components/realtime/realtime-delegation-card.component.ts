@@ -1,5 +1,6 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { MJAccordionModule } from '@memberjunction/ng-ui-components';
 import { RealtimeDelegationCardVM, FriendlyStepLabel } from './realtime-session-state';
 import { ParsedDelegationArtifact } from '../../services/delegation-result-parser';
 
@@ -23,7 +24,7 @@ import { ParsedDelegationArtifact } from '../../services/delegation-result-parse
 @Component({
   standalone: true,
   selector: 'mj-realtime-delegation-card',
-  imports: [CommonModule],
+  imports: [CommonModule, MJAccordionModule],
   templateUrl: './realtime-delegation-card.component.html',
   styleUrl: './realtime-delegation-card.component.css'
 })
@@ -118,10 +119,5 @@ export class RealtimeDelegationCardComponent {
   public get ProvenanceTitle(): string {
     const run = this.Card.RunRef ? ` (run ${this.Card.RunRef})` : '';
     return `Result produced by ${this.Card.AgentName}'s own agent run${run} — not invented by the voice co-agent.`;
-  }
-
-  /** Toggles the done chip's inline expansion. */
-  public ToggleExpanded(): void {
-    this.Expanded = !this.Expanded;
   }
 }

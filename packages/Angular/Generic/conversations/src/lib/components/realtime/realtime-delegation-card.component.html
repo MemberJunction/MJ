@@ -32,25 +32,24 @@
     </div>
   </div>
 } @else {
-  <!-- DONE / FAILED — collapsed single-line chip, expandable inline -->
-  <div class="done">
-    <div class="done-row">
-      <button type="button"
-              class="done-chip"
-              [class.done-chip--failed]="!Card.Success"
-              (click)="ToggleExpanded()"
-              [attr.aria-expanded]="Expanded"
-              [title]="Expanded ? 'Collapse result' : 'Expand result'">
-        <i class="fa-solid done-chip__mark" [ngClass]="Card.Success ? 'fa-check' : 'fa-xmark'" aria-hidden="true"></i>
-        <span class="done-chip__agent">{{ Card.AgentName }}</span>
-        <span class="done-chip__sep" aria-hidden="true">·</span>
-        <span class="done-chip__preview">{{ ResultPreview }}</span>
-        <span class="via-badge">
-          <i class="fa-solid fa-shield-halved" [title]="ProvenanceTitle" aria-hidden="true"></i>
-          via {{ Card.AgentName }}
-        </span>
-        <i class="fa-solid done-chip__chev" [ngClass]="Expanded ? 'fa-chevron-up' : 'fa-chevron-down'" aria-hidden="true"></i>
-      </button>
+  <!-- DONE / FAILED — collapsed single-line chip, expandable inline.
+       Migrated from a bespoke done-chip button + chevron + @if(Expanded) detail to
+       mj-accordion-panel: title = result chip (mark/agent/preview/via-badge),
+       actions = artifact "View" + dev "Open run" chips, body = full result detail.
+       Failed state is carried via .done-accordion--failed on the panel. -->
+  <mj-accordion-panel class="done-accordion" [class.done-accordion--failed]="!Card.Success"
+                      Size="sm" [FlushBody]="true" [(Expanded)]="Expanded">
+    <ng-template mjAccordionTitle>
+      <i class="fa-solid done-chip__mark" [ngClass]="Card.Success ? 'fa-check' : 'fa-xmark'" aria-hidden="true"></i>
+      <span class="done-chip__agent">{{ Card.AgentName }}</span>
+      <span class="done-chip__sep" aria-hidden="true">·</span>
+      <span class="done-chip__preview">{{ ResultPreview }}</span>
+      <span class="via-badge">
+        <i class="fa-solid fa-shield-halved" [title]="ProvenanceTitle" aria-hidden="true"></i>
+        via {{ Card.AgentName }}
+      </span>
+    </ng-template>
+    <ng-template mjAccordionActions>
       @for (artifact of Artifacts; track artifact.ArtifactVersionID) {
         <button type="button" class="artifact-link" (click)="OpenArtifact($event, artifact)"
                 [title]="'View ' + artifact.Name">
@@ -66,8 +65,8 @@
           <span>Open run</span>
         </button>
       }
-    </div>
-    @if (Expanded) {
+    </ng-template>
+    <ng-template mjAccordionBody>
       <div class="done-detail">
         <div class="done-detail__body">{{ ResultText }}</div>
         @for (artifact of Artifacts; track artifact.ArtifactVersionID) {
@@ -92,6 +91,6 @@
           </div>
         }
       </div>
-    }
-  </div>
+    </ng-template>
+  </mj-accordion-panel>
 }

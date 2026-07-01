@@ -55,24 +55,23 @@
 
     <div class="cr-groups">
         @for (group of FilteredGroups; track TrackByBase($index, group)) {
-            <div class="cr-group" [class.cr-group--expanded]="group.expanded">
-                <button type="button" class="cr-group-head" (click)="ToggleGroup(group)">
-                    <i class="fa-solid fa-chevron-right cr-group-chev"
-                       [class.cr-group-chev--down]="group.expanded"></i>
+            <mj-accordion-panel Size="sm" [FlushBody]="true"
+                [Expanded]="group.expanded" (ExpandedChange)="OnGroupExpandedChange(group, $event)">
+                <ng-template mjAccordionTitle>
                     <span class="cr-group-name">{{ group.baseClassName }}</span>
                     <span class="cr-group-meta">
-                        <span class="cr-pill cr-pill--neutral">{{ group.count }}</span>
+                        <span class="mj-accordion-badge mj-accordion-badge--right">{{ group.count }}</span>
                         @if (group.uniqueKeys !== group.count) {
-                            <span class="cr-pill cr-pill--info">{{ group.uniqueKeys }} keys</span>
+                            <span class="mj-accordion-badge mj-accordion-badge--info">{{ group.uniqueKeys }} keys</span>
                         }
                         @if (group.hasOverrides) {
-                            <span class="cr-pill cr-pill--warn">
+                            <span class="mj-accordion-badge mj-accordion-badge--warning">
                                 <i class="fa-solid fa-bolt"></i> overrides
                             </span>
                         }
                     </span>
-                </button>
-                @if (group.expanded) {
+                </ng-template>
+                <ng-template mjAccordionBody>
                     <table class="cr-table">
                         <thead>
                             <tr>
@@ -110,8 +109,8 @@
                             }
                         </tbody>
                     </table>
-                }
-            </div>
+                </ng-template>
+            </mj-accordion-panel>
         }
         @if (FilteredGroups.length === 0) {
             <mj-empty-state class="cr-empty" Variant="no-results" Icon="fa-solid fa-magnifying-glass"

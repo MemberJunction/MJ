@@ -281,13 +281,15 @@
                       </div>
                     }
 
-                    <!-- Full Spec JSON Viewer -->
-                    <div class="preview-json-section">
-                      <div class="preview-json-header" (click)="toggleJsonPreview()">
-                        <i class="fa-solid" [class.fa-chevron-right]="!showJsonPreview" [class.fa-chevron-down]="showJsonPreview"></i>
+                    <!-- Full Spec JSON Viewer → accordion panel; the code editor is
+                         lazy via mjAccordionBody (not built until first expand).
+                         Pure boolean flip + Default CD → [(Expanded)]. -->
+                    <mj-accordion-panel class="preview-json-section" Size="sm"
+                                        [FlushBody]="true" [(Expanded)]="showJsonPreview">
+                      <ng-template mjAccordionTitle>
                         <strong>Full Specification (JSON)</strong>
-                      </div>
-                      @if (showJsonPreview) {
+                      </ng-template>
+                      <ng-template mjAccordionBody>
                         <div class="preview-json-content">
                           <mj-code-editor
                             [value]="getPreviewJSON()"
@@ -298,8 +300,8 @@
                             style="height: 300px; width: 100%;">
                           </mj-code-editor>
                         </div>
-                      }
-                    </div>
+                      </ng-template>
+                    </mj-accordion-panel>
                   </div>
                 }
               </div>
