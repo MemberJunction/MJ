@@ -903,22 +903,12 @@
   cursor: not-allowed;
 }
 
-/* Sort Hint */
-.sort-hint {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 10px 12px;
-  background: var(--mj-bg-surface-card);
-  border-radius: 8px;
-  font-size: 12px;
-  color: var(--mj-text-muted);
-}
-
-.sort-hint i {
-  color: var(--mj-text-disabled);
-  margin-top: 1px;
-}
+/* Positioning-only helpers for migrated <mj-alert> callouts. Box chrome
+   (bg/border/radius/padding/icon) is owned by the component; only the
+   surrounding margins from the bespoke banners are preserved here. */
+.view-config-alert-pos { margin-top: 12px; }
+.view-config-alert-pos-mb { margin-bottom: 12px; }
+.view-config-validation-pos { margin: 0 16px 12px; }
 
 /* Filter Mode Selector */
 .filter-mode-selector {
@@ -1040,23 +1030,6 @@
 }
 
 /* Smart Filter Explanation */
-.smart-filter-explanation {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 10px 12px;
-  background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface));
-  border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 25%, var(--mj-bg-surface));
-  border-radius: 8px;
-  margin-bottom: 12px;
-  font-size: 13px;
-  color: var(--mj-brand-primary);
-}
-
-.smart-filter-explanation i {
-  margin-top: 2px;
-}
-
 /* Smart Filter Examples */
 .smart-filter-examples {
   margin-bottom: 12px;
@@ -1109,28 +1082,6 @@
 
 .example-chip i {
   font-size: 11px;
-}
-
-/* Smart Filter Tip */
-.smart-filter-tip,
-.traditional-filter-tip,
-.aggregates-tip {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 10px 12px;
-  background: var(--mj-bg-surface-card);
-  border-radius: 8px;
-  font-size: 12px;
-  color: var(--mj-text-muted);
-  margin-top: 12px;
-}
-
-.smart-filter-tip i,
-.traditional-filter-tip i,
-.aggregates-tip i {
-  color: var(--mj-text-disabled);
-  margin-top: 1px;
 }
 
 /* Traditional Filter Section */
@@ -1489,19 +1440,6 @@
 .delete-btn:hover {
   background: var(--mj-status-error);
   color: var(--mj-text-inverse);
-}
-
-/* Validation Banner */
-.validation-banner {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
-  background: var(--mj-status-error-bg);
-  border-top: 1px solid var(--mj-status-error);
-  font-size: 13px;
-  color: var(--mj-status-error);
-  flex-shrink: 0;
 }
 
 /* Panel Footer */

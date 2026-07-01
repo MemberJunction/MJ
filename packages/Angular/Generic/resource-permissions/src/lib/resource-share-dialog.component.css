@@ -64,21 +64,6 @@
     padding: 0;
 }
 
-/* Alert */
-.share-alert {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 12px 20px;
-    font-size: 13px;
-}
-
-.share-alert-error {
-    background: var(--mj-bg-error);
-    color: var(--mj-status-error);
-    border-bottom: 1px solid var(--mj-border-error);
-}
-
 /* Sections */
 .share-section {
     padding: 16px 20px;

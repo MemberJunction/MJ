@@ -137,7 +137,7 @@ interface RunDetailVM {
                 @if (selected.deployState === 'idle') {
                   <div class="ps-callout info">
                     <i class="fa-solid fa-circle-info"></i>
-                    <div class="ps-small">This model is published but <strong>not operating</strong> yet — nothing scores with it. Schedule it to run regularly, or bind it to write a column. (Operate actions land next.)</div>
+                    <div class="ps-small">This model is published but <strong>not operating</strong> yet — nothing scores with it. Click <strong>Operate</strong> above to run it now, schedule it to run regularly, or write predictions back to a column.</div>
                   </div>
                 } @else {
                   @if (selectedBindings.length > 0) {
@@ -338,7 +338,7 @@ export class PSProductionComponent extends BaseAngularComponent implements OnIni
   private resolveEntityName(b: MJMLModelScoringBindingEntity): string {
     if (b.TargetEntity) return b.TargetEntity;
     if (b.TargetEntityID) {
-      const entity = this.ProviderToUse.Entities.find((e) => e.ID === b.TargetEntityID);
+      const entity = this.ProviderToUse.Entities.find((e) => UUIDsEqual(e.ID, b.TargetEntityID));
       if (entity) return entity.Name;
     }
     return '—';
@@ -356,9 +356,18 @@ export class PSProductionComponent extends BaseAngularComponent implements OnIni
     );
   }
 
-  /** Close the Operate dialog. On a successful change it already refreshed the engine (Config(true)), and the reactive `_Models` subscription re-renders the deploy state. */
-  public onOperateClose(_result: { changed: boolean }): void {
+  /**
+   * Close the Operate dialog. On a successful change the dialog already refreshed the engine
+   * (Config(true)) — the reactive `_Models` subscription re-renders the deploy state — but the
+   * on-demand run history + bindings of the SELECTED model are not part of that stream, so reload them
+   * here so a just-created run / binding shows immediately.
+   */
+  public onOperateClose(result: { changed: boolean }): void {
     this.operateOpen = false;
+    if (result.changed && this.selectedModelId) {
+      this.selectedBindings = this.bindingsForModel(this.selectedModelId);
+      void this.loadRuns(this.selectedModelId);
+    }
   }
 
   public select(id: string): void {

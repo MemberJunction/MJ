@@ -351,8 +351,13 @@ export function resolveRealtimeUi(
 
   const showComposer = isConsole && allowTextReveal && signals.disclosureShowComposer && !signals.isReviewing;
 
+  // The surface/Details panel opens ON DEMAND when earned (the Details peek, the agent's
+  // OpenSurfacePanel, content auto-reveal — all set surfacePanelEarned) — it must NOT also require the
+  // cross-session disclosure ratchet (disclosureShowPanel = SessionLevel >= 2). Coupling the two left a
+  // brand-new user (level 0) unable to open the panel via Details or the agent until the level ratcheted
+  // up across sessions (only visible after a refresh). Earned-on-demand is the panel's door at any level.
   const showSurfacePanel =
-    cfg.showSurfacePanel && isConsole && signals.disclosureShowPanel && signals.surfacePanelEarned && !signals.channelFocus;
+    cfg.showSurfacePanel && isConsole && signals.surfacePanelEarned && !signals.channelFocus;
 
   const showActivityTab = cfg.showActivityRail && (signals.hasActivity || signals.isReviewing) && isConsole;
 

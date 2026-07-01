@@ -15,7 +15,8 @@ import {
   MJDropdownComponent,
   MJEmptyStateComponent,
   MJWindowComponent,
-  MJWindowTitlebarComponent
+  MJWindowTitlebarComponent,
+  MJAlertComponent
 } from '@memberjunction/ng-ui-components';
 import { GenericShareDialogComponent } from './lib/resource-share-dialog.component';
 
@@ -37,7 +38,8 @@ import { GenericShareDialogComponent } from './lib/resource-share-dialog.compone
     MJDropdownComponent,
     MJEmptyStateComponent,
     MJWindowComponent,
-    MJWindowTitlebarComponent
+    MJWindowTitlebarComponent,
+    MJAlertComponent
   ],
   exports: [
     ResourcePermissionsComponent,

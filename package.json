@@ -91,6 +91,7 @@
     "check:ui-buttons": "./.github/scripts/check-mj-btn-override.sh",
     "check:ui:all": "./.github/scripts/check-css-hex-tokens.sh --all && ./.github/scripts/check-mj-btn-override.sh --all",
     "check:ui:adoption": "./scripts/measure-ui-adoption.sh",
+    "check:alerts": "./.github/scripts/check-alerts.sh",
     "change": "changeset",
     "version": "changeset version",
     "mergemain": "node ci/merge_main.mjs",
