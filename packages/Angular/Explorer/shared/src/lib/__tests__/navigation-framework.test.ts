@@ -7,6 +7,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NavigationService, TabQueryParamUpdateGuard } from '../navigation.service';
+import { BaseResourceComponent } from '../base-resource-component';
 
 // Mock Angular dependencies
 vi.mock('@angular/core', () => ({
@@ -21,6 +22,10 @@ vi.mock('@angular/core', () => ({
 }));
 
 vi.mock('@angular/router', () => ({}));
+
+vi.mock('@memberjunction/ng-base-types', () => ({
+  BaseAngularComponent: class {},
+}));
 
 vi.mock('@memberjunction/core', () => ({
   BaseEntity: class {},
@@ -517,5 +522,88 @@ describe('UpdateTabQueryParams guard', () => {
 
     expect(updated).toBe(false);
     expect(updateTabConfiguration).not.toHaveBeenCalled();
+  });
+});
+
+// ---- BaseResourceComponent query param glue ----
+
+describe('BaseResourceComponent UpdateQueryParams', () => {
+  function createComponent(data: { ResourceRecordID?: string; Configuration?: Record<string, unknown> }): {
+    component: BaseResourceComponent;
+    updateTabQueryParams: ReturnType<typeof vi.fn>;
+    updateActiveTabQueryParams: ReturnType<typeof vi.fn>;
+  } {
+    const component = Object.create(BaseResourceComponent.prototype) as BaseResourceComponent;
+    const updateTabQueryParams = vi.fn(() => true);
+    const updateActiveTabQueryParams = vi.fn();
+    (component as unknown as { navigationService: unknown }).navigationService = {
+      UpdateTabQueryParams: updateTabQueryParams,
+      UpdateActiveTabQueryParams: updateActiveTabQueryParams
+    };
+    component.Data = {
+      ResourceRecordID: data.ResourceRecordID || '',
+      Configuration: data.Configuration || {}
+    } as any;
+    return { component, updateTabQueryParams, updateActiveTabQueryParams };
+  }
+
+  it('uses the component tab id and builds a guard from resource data', () => {
+    const { component, updateTabQueryParams, updateActiveTabQueryParams } = createComponent({
+      ResourceRecordID: 'ID|123',
+      Configuration: {
+        tabId: 'tab-1',
+        resourceType: 'Records',
+        resourceTypeDriverClass: 'RecordResource',
+        Entity: 'Invoices',
+        recordId: 'ID|123',
+        navItemName: 'Invoice Record'
+      }
+    });
+
+    (component as any).UpdateQueryParams({ tab: 'related' });
+
+    expect(updateTabQueryParams).toHaveBeenCalledWith('tab-1', { tab: 'related' }, {
+      resourceType: 'Records',
+      driverClass: 'RecordResource',
+      recordId: 'ID|123',
+      navItemName: 'Invoice Record',
+      entity: 'Invoices'
+    });
+    expect(updateActiveTabQueryParams).not.toHaveBeenCalled();
+  });
+
+  it('prefers ParentTabId when wrapping child resource content', () => {
+    const { component, updateTabQueryParams } = createComponent({
+      ResourceRecordID: 'dashboard-1',
+      Configuration: {
+        tabId: 'configuration-tab',
+        resourceType: 'Dashboards',
+        driverClass: 'DashboardResource',
+        recordId: 'dashboard-1'
+      }
+    });
+    component.ParentTabId = 'parent-tab';
+
+    (component as any).UpdateQueryParams({ section: 'summary' });
+
+    expect(updateTabQueryParams).toHaveBeenCalledWith('parent-tab', { section: 'summary' }, expect.objectContaining({
+      resourceType: 'Dashboards',
+      driverClass: 'DashboardResource',
+      recordId: 'dashboard-1'
+    }));
+  });
+
+  it('falls back to active-tab updates when no tab id is available', () => {
+    const { component, updateTabQueryParams, updateActiveTabQueryParams } = createComponent({
+      Configuration: {
+        resourceType: 'Custom',
+        navItemName: 'Embedded'
+      }
+    });
+
+    (component as any).UpdateQueryParams({ panel: 'details' });
+
+    expect(updateActiveTabQueryParams).toHaveBeenCalledWith({ panel: 'details' });
+    expect(updateTabQueryParams).not.toHaveBeenCalled();
   });
 });
