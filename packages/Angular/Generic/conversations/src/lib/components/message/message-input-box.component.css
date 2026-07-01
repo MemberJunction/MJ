@@ -131,6 +131,17 @@
   opacity: 0.5;
 }
 
+/* Plan Mode toggle — inherits .attach-button-icon; when active it fills with the brand color
+   so the on/off state reads clearly at a glance (parallels the voice button's active state). */
+.plan-mode-button-icon--active:not(:disabled) {
+  background: var(--mj-brand-primary);
+  color: var(--mj-text-inverse);
+}
+.plan-mode-button-icon--active:not(:disabled):hover {
+  background: var(--mj-brand-primary-hover, var(--mj-brand-primary));
+  color: var(--mj-text-inverse);
+}
+
 /* Mobile adjustments: 481px - 768px */
 @media (max-width: 768px) {
   .message-input-box-container {

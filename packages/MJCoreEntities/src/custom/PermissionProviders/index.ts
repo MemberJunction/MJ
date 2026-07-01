@@ -5,6 +5,7 @@ import { ApplicationRolePermissionProvider } from './ApplicationRolePermissionPr
 import { ArtifactPermissionProvider } from './ArtifactPermissionProvider';
 import { CollectionPermissionProvider } from './CollectionPermissionProvider';
 import { AIAgentPermissionProvider } from './AIAgentPermissionProvider';
+import { AISkillPermissionProvider } from './AISkillPermissionProvider';
 import { QueryPermissionProvider } from './QueryPermissionProvider';
 import { AccessControlRuleProvider } from './AccessControlRuleProvider';
 
@@ -15,6 +16,7 @@ export { ApplicationRolePermissionProvider } from './ApplicationRolePermissionPr
 export { ArtifactPermissionProvider } from './ArtifactPermissionProvider';
 export { CollectionPermissionProvider } from './CollectionPermissionProvider';
 export { AIAgentPermissionProvider } from './AIAgentPermissionProvider';
+export { AISkillPermissionProvider } from './AISkillPermissionProvider';
 export { QueryPermissionProvider } from './QueryPermissionProvider';
 export { AccessControlRuleProvider } from './AccessControlRuleProvider';
 
@@ -32,6 +34,7 @@ export function LoadPermissionProviders(): void {
         ArtifactPermissionProvider,
         CollectionPermissionProvider,
         AIAgentPermissionProvider,
+        AISkillPermissionProvider,
         QueryPermissionProvider,
         AccessControlRuleProvider,
     ];

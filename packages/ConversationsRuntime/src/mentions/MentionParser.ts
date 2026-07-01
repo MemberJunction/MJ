@@ -17,7 +17,7 @@ import { UserInfo } from '@memberjunction/core';
 
 /** A single parsed mention. */
 export interface Mention {
-    type: 'agent' | 'user' | 'entity' | 'query';
+    type: 'agent' | 'user' | 'entity' | 'query' | 'skill';
     id: string;
     name: string;
     /** Configuration preset ID — agent mentions only. */
@@ -34,6 +34,12 @@ export interface MentionParseResult {
     userMentions: Mention[];
     /** All entity mentions (`#Entity` / `@{"type":"entity",…}`). */
     entityMentions: Mention[];
+    /**
+     * All skill mentions (`/skill-name` in the composer → `@{"type":"skill",…}` in message text).
+     * Callers map these to `ExecuteAgentParams.requestedSkillIDs`; the server intersects them
+     * with the agent's accepted skills AND the user's Run permission before any activation.
+     */
+    skillMentions: Mention[];
 }
 
 /**
@@ -144,14 +150,16 @@ export class MentionParser {
             }
         }
 
-        // Extract first agent mention, all user mentions, and all entity mentions.
+        // Extract first agent mention, all user mentions, and all entity/skill mentions.
         // Entity mentions arrive as JSON (`@{"type":"entity",…}`) from the editor and are
         // resolved against the target entity downstream (e.g. Skip's EntityMentionResolver).
+        // Skill mentions arrive the same way (`@{"type":"skill",…}`) from the `/` trigger.
         const agentMention = mentions.find((m) => m.type === 'agent') || null;
         const userMentions = mentions.filter((m) => m.type === 'user');
         const entityMentions = mentions.filter((m) => m.type === 'entity');
+        const skillMentions = mentions.filter((m) => m.type === 'skill');
 
-        return { mentions, agentMention, userMentions, entityMentions };
+        return { mentions, agentMention, userMentions, entityMentions, skillMentions };
     }
 
     /**

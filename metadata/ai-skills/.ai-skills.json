@@ -1,0 +1,54 @@
+[
+  {
+    "fields": {
+      "Name": "Report Builder",
+      "Description": "Build clean, well-structured business reports with cited data sources",
+      "Instructions": "Build clean, well-structured business reports. Cite data sources and prefer tables over prose for figures.",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-chart-column",
+      "CreatedByUserID": "@lookup:MJ: Users.Name=System"
+    },
+    "primaryKey": {
+      "ID": "2E156396-1D7C-4A5A-9CCE-821C6C1116EC"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T23:08:21.856Z",
+      "checksum": "33107e206bdde6c717f8e1d0c3cfde5802a4b9cea2d451474892425b3ea14adc"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Data Validator",
+      "Description": "Rigorously validate data for completeness, type correctness, and referential integrity",
+      "Instructions": "Rigorously validate data for completeness, type correctness, and referential integrity before proceeding.",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-circle-check",
+      "Color": "#0E7490",
+      "CreatedByUserID": "@lookup:MJ: Users.Name=System"
+    },
+    "primaryKey": {
+      "ID": "1F0C8C0C-D5B6-47CF-9CB1-2E715697173B"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T23:08:21.878Z",
+      "checksum": "3af026fec76024e57ef5030af8fe2ac4cb6b710a09cd24628eb3a33c729f885c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Email Drafter",
+      "Description": "Draft concise, professional emails matched to the audience",
+      "Instructions": "Draft concise, professional emails. Match the tone to the audience and always include a clear call to action.",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-envelope",
+      "CreatedByUserID": "@lookup:MJ: Users.Name=System"
+    },
+    "primaryKey": {
+      "ID": "F67EB5C3-1B65-4F77-855A-817DA711A6BB"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T23:08:21.893Z",
+      "checksum": "abdf3d1d03c3955dbee33140bf73cee721a6d7fc1a1a45bd83b2bfb22018f874"
+    }
+  }
+]

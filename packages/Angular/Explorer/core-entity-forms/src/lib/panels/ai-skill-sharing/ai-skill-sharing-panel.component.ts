@@ -7,29 +7,22 @@ import { MJAISkillEntity } from '@memberjunction/core-entities';
 // (see metadata/remote-operations/.remote-operations.json) — requires `mj codegen` to have run
 // against the migration that seeds them before this file compiles.
 import { AISkillExportMarkdownOperation, AISkillImportMarkdownOperation } from '@memberjunction/core-entities';
-import {
-    ResourceShareContext,
-    ResourceShareDialogResult,
-    MJResourcePermissionShareAdapter
-} from '@memberjunction/ng-resource-permissions';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
-/** `MJ: Resource Types.ID` for "AI Skills" — seeded in metadata/resource-types/.resource-types.json. */
-const AI_SKILLS_RESOURCE_TYPE_ID = 'CA99E9A5-A2A7-4B54-ABCB-10E9FD673EDA';
-
-/** `MJ: Authorizations.Name` gating the Share action — seeded in metadata/authorizations/.agent-skills.json. */
+/** `MJ: Authorizations.Name` gating the Manage Permissions action — seeded in metadata/authorizations/.agent-skills.json. */
 const CAN_SHARE_SKILLS_AUTH_NAME = 'Can Share Skills';
 
 /**
- * Adds Share / Export SKILL.md / Import SKILL.md actions to the generated `MJ: AI Skills` form via
- * the BaseFormPanel slot system (Pattern 1 — see PANELS.md) rather than a full custom form
- * override, since the generated form's field panels and related-entity grids are otherwise fine
- * as-is.
+ * Adds Manage Permissions / Export SKILL.md / Import SKILL.md actions to the generated
+ * `MJ: AI Skills` form via the BaseFormPanel slot system (Pattern 1 — see PANELS.md) rather than a
+ * full custom form override, since the generated form's field panels and related-entity grids are
+ * otherwise fine as-is.
  *
- * - Share reuses the generic `MJResourcePermissionShareAdapter` (Skills plug into the polymorphic
- *   `MJ: Resource Permissions` table like Conversations/Reports/Queries do — no bespoke adapter
- *   needed) and is gated behind the "Can Share Skills" authorization; authoring/using your own
- *   skills never requires it.
+ * - Manage Permissions opens the dedicated `<mj-skill-permissions-dialog>` (from
+ *   `@memberjunction/ng-agents`), which reads/writes the dedicated `MJ: AI Skill Permissions`
+ *   table (per-user / per-role View/Run/Edit/Delete) — the same open-by-default, dedicated-table
+ *   model AI Agents use. It is gated behind the "Can Share Skills" authorization; authoring/using
+ *   your own skills never requires it.
  * - Export/Import call the `AISkill.ExportMarkdown` / `AISkill.ImportMarkdown` Remote Operations
  *   (typed, provider-routed — see guides/REMOTE_OPERATIONS_GUIDE.md), which wrap
  *   `SkillImportExportService` in `@memberjunction/ai-agents` server-side.
@@ -48,20 +41,19 @@ const CAN_SHARE_SKILLS_AUTH_NAME = 'Can Share Skills';
 export class AISkillSharingPanel extends BaseFormPanel<MJAISkillEntity> {
     @ViewChild('importFileInput') importFileInput!: ElementRef<HTMLInputElement>;
 
-    public ShareDialogVisible = false;
-    public ShareContext: ResourceShareContext | null = null;
-    public ShareAdapter = new MJResourcePermissionShareAdapter(AI_SKILLS_RESOURCE_TYPE_ID);
+    public PermissionsDialogVisible = false;
 
     public IsExporting = false;
     public IsImporting = false;
 
     /**
-     * Whether the current user may share this skill. `BaseFormPanel` has no Provider input (the
-     * panel slot system doesn't thread one through yet), so this uses the global default provider
-     * — consistent with the rest of the not-yet-multi-provider-migrated panel system today.
+     * Whether the current user may manage this skill's permission grid (per-user / per-role
+     * View/Run/Edit/Delete on the skill). `BaseFormPanel` has no Provider input (the panel slot
+     * system doesn't thread one through yet), so this uses the global default provider —
+     * consistent with the rest of the not-yet-multi-provider-migrated panel system today.
      */
     public get CanShareSkills(): boolean {
-        const md = Metadata.Provider;
+        const md = Metadata.Provider; // global-provider-ok: BaseFormPanel slots have no Provider input; panel system is single-provider today
         if (!md?.CurrentUser) {
             return false;
         }
@@ -80,22 +72,12 @@ export class AISkillSharingPanel extends BaseFormPanel<MJAISkillEntity> {
         return !!this.Record?.IsSaved;
     }
 
-    public OpenShareDialog(): void {
-        this.ShareAdapter.Provider = Metadata.Provider;
-        this.ShareContext = {
-            ResourceID: this.Record.ID,
-            ResourceName: this.Record.Name ?? 'Untitled Skill',
-            OwnerUserID: this.Record.CreatedByUserID,
-            CurrentUserID: Metadata.Provider?.CurrentUser?.ID
-        };
-        this.ShareDialogVisible = true;
+    public OpenPermissionsDialog(): void {
+        this.PermissionsDialogVisible = true;
     }
 
-    public OnShareDialogResult(result: ResourceShareDialogResult): void {
-        this.ShareDialogVisible = false;
-        if (result.Action === 'save') {
-            MJNotificationService.Instance.CreateSimpleNotification('Sharing updated.', 'success', 3000);
-        }
+    public OnPermissionsDialogClosed(): void {
+        this.PermissionsDialogVisible = false;
     }
 
     public async ExportMarkdown(): Promise<void> {
@@ -103,7 +85,7 @@ export class AISkillSharingPanel extends BaseFormPanel<MJAISkillEntity> {
         try {
             const result = await new AISkillExportMarkdownOperation().Execute(
                 { skillID: this.Record.ID },
-                { provider: Metadata.Provider }
+                { provider: Metadata.Provider } // global-provider-ok: BaseFormPanel slots have no Provider input; panel system is single-provider today
             );
             if (!result.Success || !result.Output) {
                 MJNotificationService.Instance.CreateSimpleNotification(
@@ -143,7 +125,7 @@ export class AISkillSharingPanel extends BaseFormPanel<MJAISkillEntity> {
             const markdownText = await file.text();
             const result = await new AISkillImportMarkdownOperation().Execute(
                 { markdownText, updateSkillID: this.Record.ID },
-                { provider: Metadata.Provider }
+                { provider: Metadata.Provider } // global-provider-ok: BaseFormPanel slots have no Provider input; panel system is single-provider today
             );
             if (!result.Success || !result.Output) {
                 MJNotificationService.Instance.CreateSimpleNotification(

@@ -183,7 +183,9 @@ export class ConversationAgentService {
     conversationHistory: MJConversationDetailEntity[],
     conversationDetailId: string,
     onProgress?: AgentExecutionProgressCallback,
-    appContext?: Record<string, unknown> | null
+    appContext?: Record<string, unknown> | null,
+    planMode?: boolean,
+    requestedSkillIDs?: string[]
   ): Promise<ExecuteAgentResult | null> {
     // Warm the cached default-agent name for any synchronous consumers
     // before the runtime resolves on its own.
@@ -196,6 +198,8 @@ export class ConversationAgentService {
       conversationDetailId,
       appContext,
       onProgress,
+      ...(planMode ? { planMode: true } : {}),
+      ...(requestedSkillIDs?.length ? { requestedSkillIDs } : {}),
     });
   }
 
@@ -268,7 +272,8 @@ export class ConversationAgentService {
     sourceArtifactVersionId?: string,
     agentConfigurationPresetId?: string,
     appContext?: Record<string, unknown> | null,
-    planMode?: boolean
+    planMode?: boolean,
+    requestedSkillIDs?: string[]
   ): Promise<ExecuteAgentResult | null> {
     try {
       // Ensure AIEngineBase is configured
@@ -313,6 +318,7 @@ export class ConversationAgentService {
         ...(payload ? { Payload: payload as Record<string, unknown> } : {}),
         ...(aiConfigurationId ? { ConfigurationId: aiConfigurationId } : {}),
         ...(planMode ? { PlanMode: true } : {}),
+        ...(requestedSkillIDs?.length ? { RequestedSkillIDs: requestedSkillIDs } : {}),
         CreateArtifacts: true,
         CreateNotification: true,
         SourceArtifactId: sourceArtifactId,

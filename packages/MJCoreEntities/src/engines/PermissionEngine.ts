@@ -32,6 +32,7 @@ const DOMAIN_TO_AUDIT_ENTITIES: Record<string, string[]> = {
     'Artifact Permissions': ['MJ: Artifact Permissions'],
     'Collection Permissions': ['MJ: Collection Permissions'],
     'AI Agent Permissions': ['MJ: AI Agent Permissions'],
+    'AI Skill Permissions': ['MJ: AI Skill Permissions'],
     'Query Permissions': ['MJ: Query Permissions'],
     'Access Control Rules': ['MJ: Access Control Rules'],
 };
@@ -51,6 +52,7 @@ export const PERMISSION_DOMAIN_ICONS: Record<string, string> = {
     'Artifact Permissions': 'fa-solid fa-file-lines',
     'Collection Permissions': 'fa-solid fa-folder-open',
     'AI Agent Permissions': 'fa-solid fa-robot',
+    'AI Skill Permissions': 'fa-solid fa-wand-magic-sparkles',
     'Query Permissions': 'fa-solid fa-magnifying-glass',
     'Access Control Rules': 'fa-solid fa-lock',
 };

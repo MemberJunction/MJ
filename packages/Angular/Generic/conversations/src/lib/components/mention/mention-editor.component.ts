@@ -100,7 +100,7 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
   private mentionStartIndex: number = -1;
   private mentionQuery: string = '';
   /** Mention trigger characters: '@' for agents/users, '#' for entities */
-  private static readonly MENTION_TRIGGERS = ['@', '#'];
+  private static readonly MENTION_TRIGGERS = ['@', '#', '/'];
   /** The trigger char that opened the current mention dropdown */
   private activeTrigger: string = '@';
   private onChange: (value: string) => void = () => {};
@@ -436,22 +436,33 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
       }
     }
 
-    // Apply inline styles directly — color by mention type
+    // Apply inline styles directly — color by mention type. Skills carry their own accent Color
+    // (AISkill.Color UX metadata); when present it drives the chip, otherwise the standard skill
+    // green (--mj-status-success). Same color logic as the saved-message badge — keep in sync with
+    // message-item's renderMentionHTML.
+    const skillPalette = suggestion.type === 'skill'
+      ? { bg: suggestion.color || 'var(--mj-status-success)', border: 'rgba(255, 255, 255, 0.35)' }
+      : null;
     const palette =
-      suggestion.type === 'user'
+      skillPalette
+        ? skillPalette
+        : suggestion.type === 'user'
         ? { bg: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)', border: 'rgba(240, 147, 251, 0.4)' }
         : suggestion.type === 'entity'
           ? { bg: 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)', border: 'rgba(17, 153, 142, 0.4)' }
           : suggestion.type === 'query'
             ? { bg: 'linear-gradient(135deg, #FF6A00 0%, #FF9E2C 100%)', border: 'rgba(255, 106, 0, 0.4)' }
             : { bg: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', border: 'rgba(102, 126, 234, 0.4)' };
+    // Skills render as a sharp-cornered rectangle (vs. the rounded pill for agents/users/entities)
+    // — the shape is the at-a-glance differentiator. Same shape in the saved-message badge.
+    const chipRadius = suggestion.type === 'skill' ? '4px' : '16px';
     chip.style.cssText = `
       display: inline-flex;
       align-items: center;
       gap: 5px;
       padding: 4px 12px;
       margin: 0 3px;
-      border-radius: 16px;
+      border-radius: ${chipRadius};
       font-size: 13px;
       font-weight: 600;
       cursor: default;
@@ -492,6 +503,8 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
         icon.className = this.getIconClasses(suggestion.icon || 'fa-solid fa-table');
       } else if (suggestion.type === 'query') {
         icon.className = this.getIconClasses(suggestion.icon || 'fa-solid fa-database');
+      } else if (suggestion.type === 'skill') {
+        icon.className = this.getIconClasses(suggestion.icon || 'fa-solid fa-wand-magic-sparkles');
       } else {
         icon.className = 'fa-solid fa-robot';
       }

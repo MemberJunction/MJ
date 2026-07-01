@@ -8,6 +8,7 @@
  */
 
 import { IMetadataProvider, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { MJAISkillEntity, MJAISkillActionEntity, MJAISkillSubAgentEntity } from '@memberjunction/core-entities';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ActionEngineServer } from '@memberjunction/actions';
@@ -80,11 +81,11 @@ export class SkillImportExportService {
         ], contextUser);
 
         const actionNames = (actionRows.Success ? actionRows.Results : [])
-            .map(row => ActionEngineServer.Instance.Actions.find(a => a.ID === (row as MJAISkillActionEntity).ActionID)?.Name)
+            .map(row => ActionEngineServer.Instance.Actions.find(a => UUIDsEqual(a.ID, (row as MJAISkillActionEntity).ActionID))?.Name)
             .filter((name): name is string => !!name);
 
         const subAgentNames = (subAgentRows.Success ? subAgentRows.Results : [])
-            .map(row => AIEngine.Instance.Agents.find(a => a.ID === (row as MJAISkillSubAgentEntity).SubAgentID)?.Name)
+            .map(row => AIEngine.Instance.Agents.find(a => UUIDsEqual(a.ID, (row as MJAISkillSubAgentEntity).SubAgentID))?.Name)
             .filter((name): name is string => !!name);
 
         const markdown = SkillMarkdownConverter.Serialize({

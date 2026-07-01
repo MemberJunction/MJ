@@ -7,20 +7,7 @@
     </div>
   }
 
-  <!-- Composer mode row — sticky per-request toggles above the input box. -->
-  <div class="composer-mode-row">
-    <button type="button"
-            class="plan-mode-pill"
-            [class.active]="PlanModeEnabled"
-            [attr.aria-pressed]="PlanModeEnabled"
-            (click)="TogglePlanMode()"
-            title="Plan Mode: the agent presents a plan for your approval before it acts">
-      <i class="fa-solid fa-list-check"></i>
-      <span>Plan Mode</span>
-    </button>
-  </div>
-
-  <!-- Message Input Box (mic button lives in its in-composer toolbar) -->
+  <!-- Message Input Box (mic + Plan Mode buttons live in its in-composer toolbar) -->
   <mj-message-input-box
     #inputBox
     [placeholder]="placeholder"
@@ -36,13 +23,15 @@
     [enableRealtime]="true"
     [voiceActive]="voiceActive"
     [canStartRealtime]="canStartRealtime"
+    [enablePlanMode]="true"
+    [planModeActive]="PlanModeEnabled"
     [(value)]="messageText"
     (textSubmitted)="onTextSubmitted($event)"
     (attachmentsChanged)="onAttachmentsChanged($event)"
     (attachmentError)="onAttachmentError($event)"
-    (artifactPickerRequested)="onArtifactPickerRequested()"
     (voiceRequested)="onStartRealtime()"
-    (voiceOptionsRequested)="onRealtimeOptions()">
+    (voiceOptionsRequested)="onRealtimeOptions()"
+    (planModeToggle)="TogglePlanMode()">
   </mj-message-input-box>
 
   <!-- Voice agent/co-agent/model picker — shown when starting a call on a conversation
