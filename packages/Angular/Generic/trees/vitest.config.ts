@@ -1,11 +1,15 @@
 import { defineProject, mergeConfig } from 'vitest/config';
-import sharedConfig from '../../../../vitest.shared';
+import domSharedConfig from '../../../../vitest.dom.shared';
 
+// Single DOM preset: the existing class-level specs (tree-events, tree-types,
+// index) are pure-logic tests with no vi.mock('@angular/core'), so they run
+// fine under the jsdom/Angular compile path alongside the new *.dom.test.ts
+// component specs. See guides/ANGULAR_TESTING_GUIDE.md §3b.
 export default mergeConfig(
-  sharedConfig,
+  domSharedConfig,
   defineProject({
     test: {
-      environment: 'node',
+      name: '@memberjunction/ng-trees',
     },
   })
 );
