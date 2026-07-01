@@ -1,11 +1,14 @@
 import { defineProject, mergeConfig } from 'vitest/config';
-import sharedConfig from '../../../../vitest.shared';
+import domSharedConfig from '../../../../vitest.dom.shared';
 
+// Single DOM preset: this package's existing specs are pure type/logic tests
+// (no vi.mock('@angular/core')), so they run fine under jsdom alongside the
+// DOM-level spec for <mj-export-dialog>. See guides/ANGULAR_TESTING_GUIDE.md.
 export default mergeConfig(
-  sharedConfig,
+  domSharedConfig,
   defineProject({
     test: {
-      environment: 'node',
+      name: '@memberjunction/ng-export-service',
     },
   })
 );

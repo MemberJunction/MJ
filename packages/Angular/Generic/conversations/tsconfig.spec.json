@@ -1,0 +1,43 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["vitest/globals", "node"]
+  },
+  "include": [
+    "src/lib/components/slots/**/*.ts",
+    "src/lib/components/shared/user-picker.component.ts",
+    "src/lib/components/shared/user-picker.component.dom.test.ts",
+    "src/lib/components/notification/activity-indicator.component.ts",
+    "src/lib/components/notification/activity-indicator.component.dom.test.ts",
+    "src/lib/components/message/actionable-commands.component.ts",
+    "src/lib/components/message/actionable-commands.component.dom.test.ts",
+    "src/lib/components/dialogs/input-dialog.component.ts",
+    "src/lib/components/dialogs/input-dialog.component.dom.test.ts",
+    "src/lib/components/dialogs/rating-dialog.component.ts",
+    "src/lib/components/dialogs/rating-dialog.component.dom.test.ts",
+    "src/lib/components/mention/mention-dropdown.component.ts",
+    "src/lib/components/mention/mention-dropdown.component.dom.test.ts",
+    "src/lib/components/tasks/task-widget.component.ts",
+    "src/lib/components/tasks/task-widget.component.dom.test.ts",
+    "src/lib/components/export/export-modal.component.ts",
+    "src/lib/components/export/export-modal.component.dom.test.ts",
+    "src/lib/components/attachment/image-viewer.component.ts",
+    "src/lib/components/attachment/image-viewer.component.dom.test.ts",
+    "src/lib/components/notification/notification-badge.component.ts",
+    "src/lib/components/notification/notification-badge.component.dom.test.ts",
+    "src/lib/components/toast/toast.component.ts",
+    "src/lib/components/toast/toast.component.dom.test.ts",
+    "src/lib/components/conversation/pinned-messages-panel.component.ts",
+    "src/lib/components/conversation/pinned-messages-panel.component.dom.test.ts",
+    "src/lib/components/navigation/conversation-navigation.component.ts",
+    "src/lib/components/navigation/conversation-navigation.component.dom.test.ts",
+    "src/lib/components/tasks/tasks-dropdown.component.ts",
+    "src/lib/components/tasks/tasks-dropdown.component.dom.test.ts",
+    "src/lib/components/collection/collection-artifact-card.component.ts",
+    "src/lib/components/collection/collection-artifact-card.component.dom.test.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
+}
