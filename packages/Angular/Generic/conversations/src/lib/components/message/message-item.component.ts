@@ -19,6 +19,8 @@ import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { AgentResponseForm, FormQuestion, ChoiceQuestionType, ActionableCommand, AutomaticCommand, ConversationUtility, MJAIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
 import { FormResponseUtils } from '@memberjunction/ng-forms';
 import { MentionParserService } from '../../services/mention-parser.service';
+import { PlanModePreference } from '../../utils/plan-mode-preference';
+import { MarkdownService } from '@memberjunction/ng-markdown';
 import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
 import { UICommandHandlerService } from '../../services/ui-command-handler.service';
 import { ConversationAgentService } from '../../services/conversation-agent.service';
@@ -171,7 +173,8 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     private mentionParser: MentionParserService,
     private mentionAutocomplete: MentionAutocompleteService,
     private uiCommandHandler: UICommandHandlerService,
-    private agentService: ConversationAgentService
+    private agentService: ConversationAgentService,
+    private markdownService: MarkdownService
   ) {
     super();
   }
@@ -645,6 +648,18 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     const choiceTypes = ['buttongroup', 'radio', 'dropdown', 'checkbox'];
     if (field.type && choiceTypes.includes(field.type) && field.displayValue) {
       return FormResponseUtils.EscapeHtml(field.displayValue);
+    }
+
+    // Textarea values render as formatted Markdown — agent-authored long-form content
+    // (e.g. the approved Plan in the plan-approval response) is Markdown by convention,
+    // and the submitted-form pill should look as good as the live form's preview did.
+    // Script safety: the whole message passes through mj-markdown's stripJavaScript.
+    if (field.type === 'textarea' && typeof field.value === 'string' && field.value.trim().length > 0) {
+      try {
+        return `<div class="field-answer-markdown">${this.markdownService.parse(field.value)}</div>`;
+      } catch {
+        // fall through to the escaped-plaintext path below
+      }
     }
 
     // Delegate type-aware formatting to shared utility (no schema question available here)
@@ -1341,6 +1356,12 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       return;
     }
 
+    // Plan-approval semantics: approving a plan is a HIGHER-ORDER signal, not just a form
+    // reply — it ends the plan phase, so the conversation switches out of Plan Mode and the
+    // follow-up run executes the approved plan instead of planning again. Rejection leaves
+    // Plan Mode on so the agent re-plans (the optional feedback field steers it).
+    this.applyPlanDecision(formData);
+
     // Create formatted message using ConversationUtility
     const formMessage = ConversationUtility.CreateFormResponse(
       'formSubmit', // Generic action name
@@ -1357,6 +1378,25 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     this.afterResponseFormSubmitted.emit(
       new AfterResponseFormSubmittedEventArgs(this.message.ID, formData)
     );
+  }
+
+  /**
+   * Detects a plan-approval form submission (the Plan Mode HITL card — identified by its
+   * 'plan' + 'decision' questions, see BaseAgent.buildPlanApprovalForm) and applies the
+   * decision's conversation-level effect: APPROVE switches this conversation out of Plan
+   * Mode (plan phase complete — execute); REJECT intentionally leaves it on (re-plan).
+   */
+  private applyPlanDecision(formData: Record<string, unknown>): void {
+    const form = this.responseForm;
+    const isPlanForm =
+      !!form?.questions.some(q => q.id === 'plan') &&
+      !!form?.questions.some(q => q.id === 'decision');
+    if (!isPlanForm) {
+      return;
+    }
+    if (formData['decision'] === 'approve' && this.message.ConversationID) {
+      PlanModePreference.Set(this.message.ConversationID, false);
+    }
   }
 
   /**

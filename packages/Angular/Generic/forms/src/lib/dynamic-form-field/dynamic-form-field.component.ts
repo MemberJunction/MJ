@@ -82,6 +82,33 @@ export class DynamicFormFieldComponent implements ControlValueAccessor, OnInit {
     }
 
     /**
+     * Textarea only: whether the value renders as formatted Markdown with an Edit toggle
+     * (question.type.markdown === true). Used for rich agent-authored content the human
+     * reviews more than types — e.g. the Plan Mode approval form.
+     */
+    public get IsMarkdown(): boolean {
+        return (
+            this.QuestionType === 'textarea' &&
+            typeof this.Question.type === 'object' &&
+            'markdown' in this.Question.type &&
+            this.Question.type.markdown === true
+        );
+    }
+
+    /** Markdown textareas start in preview; the user toggles into the raw editor as needed. */
+    public MarkdownEditing = false;
+
+    /** Flip a markdown textarea between rendered preview and the raw editor. */
+    public ToggleMarkdownEditing(): void {
+        this.MarkdownEditing = !this.MarkdownEditing;
+    }
+
+    /** The current value as a string for the markdown preview (empty-safe). */
+    public get MarkdownValue(): string {
+        return typeof this.Value === 'string' ? this.Value : '';
+    }
+
+    /**
      * Available options for choice-type questions.
      */
     public get Options(): FormOption[] {

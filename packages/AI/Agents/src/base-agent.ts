@@ -10868,24 +10868,40 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
-     * Builds the editable plan-approval `AgentResponseForm`: a pre-filled textarea (so the human
-     * can edit the plan before approving) plus an Approve/Reject button group. Override to change
-     * the card's layout (e.g. split the plan into per-step checkboxes instead of one textarea).
+     * Builds the editable plan-approval `AgentResponseForm`: the Markdown-rendered plan (with an
+     * Edit toggle so the human can amend it before approving), an optional feedback field that
+     * travels back to the agent with the decision (most useful on Reject — it steers the re-plan),
+     * and an Approve/Reject button group. Override to change the card's layout (e.g. split the
+     * plan into per-step checkboxes instead of one field).
+     *
+     * Approval is a HIGHER-ORDER signal, not just a form reply: conversation hosts detect
+     * `decision === 'approve'` on this form and switch the conversation out of Plan Mode
+     * (see ng-conversations' plan-decision handling), so the follow-up run executes the approved
+     * plan instead of planning again. Rejection keeps Plan Mode on — the agent re-plans with the
+     * feedback in context.
      *
      * @protected
      */
     protected buildPlanApprovalForm(planText: string): AgentResponseForm {
         return {
             title: 'Review Plan',
-            description: 'Review the proposed plan below. Edit it if needed, then approve to proceed or reject to have the agent reconsider.',
+            description: 'Review the proposed plan below. Edit it if needed, then approve to proceed — or reject (with a note on what to change) and the agent will re-plan.',
             submitLabel: 'Submit',
             questions: [
                 {
                     id: 'plan',
                     label: 'Plan',
-                    type: { type: 'textarea' },
+                    // markdown: agents author plans in Markdown (see the plan-mode prompt
+                    // instructions); the UI renders a formatted preview with an Edit toggle.
+                    type: { type: 'textarea', markdown: true },
                     defaultValue: planText,
                     required: true
+                },
+                {
+                    id: 'reason',
+                    label: 'Feedback',
+                    type: { type: 'textarea', placeholder: 'Optional — if rejecting, tell the agent what to change and it will re-plan.' },
+                    required: false
                 },
                 {
                     id: 'decision',

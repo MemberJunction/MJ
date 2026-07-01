@@ -19,6 +19,7 @@ import { MentionAutocompleteService, MentionSuggestion } from '../../services/me
 import { MentionParserService } from '../../services/mention-parser.service';
 import { ConversationAttachmentService } from '../../services/conversation-attachment.service';
 import { Mention, MentionParseResult } from '../../models/conversation-state.model';
+import { PlanModePreference } from '../../utils/plan-mode-preference';
 import { PendingAttachment } from '../mention/mention-editor.component';
 import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -63,34 +64,23 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   @Input() appContext: Record<string, unknown> | null = null; // Application context for AI agent awareness
 
   /**
-   * Plan Mode pill state — sticky per-composer toggle, OFF by default (no behavior change unless
-   * the user turns it on). When on, the user's next message(s) request Plan Mode: the routed root
-   * agent must present a plan for approval before executing Actions/Sub-Agents. The toggle is
-   * always shown and the server enforces the `AIAgent.SupportsPlanMode` capability — a plan-mode
-   * request to an agent that doesn't support it simply no-ops the gate (see resolvePlanModeGate),
-   * so we don't need to resolve "the current agent" client-side just to hide the pill.
+   * Plan Mode toggle state — sticky PER CONVERSATION, OFF by default (no behavior change unless
+   * the user turns it on). When on, the user's next message(s) in THIS conversation request Plan
+   * Mode: the routed root agent must present a plan for approval before executing Actions/
+   * Sub-Agents. The toggle is always shown and the server enforces the `AIAgent.SupportsPlanMode`
+   * capability — a plan-mode request to an agent that doesn't support it simply no-ops the gate
+   * (see resolvePlanModeGate), so we don't need to resolve "the current agent" client-side.
    *
-   * IMPORTANT: this is a GETTER over `UserInfoEngine`'s cached setting, NOT a local field. The
-   * composer is mounted in multiple places at once (empty-state, chat-area, thread panel), and a
-   * local boolean per instance goes stale the moment another instance toggles — the exact bug where
-   * turning plan mode off "didn't stick" across the new-conversation transition. `GetSetting` is a
-   * synchronous cache hit with read-after-write freshness (pending debounced writes are consulted
-   * first), so every instance converges on the same value every change-detection pass.
+   * IMPORTANT: this is a GETTER over {@link PlanModePreference} (UserInfoEngine-backed), NOT a
+   * local field. The composer is mounted in multiple places at once (empty-state, chat-area,
+   * thread panel) — a local boolean per instance goes stale the moment another instance toggles.
+   * On the new-conversation composer (no conversationId yet) the value lives in a pending bucket
+   * that transfers to the real conversation on its first message. Approving a plan turns the
+   * conversation's flag OFF automatically (see message-item's plan-decision handling).
    */
   public get PlanModeEnabled(): boolean {
-    try {
-      const raw = UserInfoEngine.Instance.GetSetting(MessageInputComponent.PlanModePrefKey);
-      if (raw === this._planModeRawCache) return this._planModeParsedCache;
-      this._planModeRawCache = raw;
-      this._planModeParsedCache = raw ? (JSON.parse(raw) as { enabled?: boolean }).enabled === true : false;
-      return this._planModeParsedCache;
-    } catch {
-      return this._planModeParsedCache; // engine not configured yet or malformed payload — last known (default off)
-    }
+    return PlanModePreference.IsEnabled(this.conversationId);
   }
-  /** Memoization for the PlanModeEnabled getter (avoids JSON.parse on every CD pass). */
-  private _planModeRawCache: string | undefined = undefined;
-  private _planModeParsedCache = false;
 
   /**
    * Skill IDs the user requested via `/skill-name` mentions in the message being routed. Collected
@@ -326,7 +316,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
     // Warm UserInfoEngine so the PlanModeEnabled getter has the cached settings available
     // (no-op when already loaded; failure just leaves the toggle at its default OFF).
-    UserInfoEngine.Instance.Config().catch(() => { /* getter falls back to default */ });
+    PlanModePreference.Warm();
 
     // Initialize mention autocomplete (needed for parsing mentions in messages)
     await this.mentionAutocomplete.initialize(this.currentUser);
@@ -460,8 +450,6 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * string | null}` — `null` is an explicit "Auto" choice that overwrites an older pick.
    */
   private static readonly CoAgentPrefKey = 'mj.realtimeVoice.coAgent.v1';
-  /** Server-persisted Plan Mode toggle — survives component recreation (new-convo flow) and sessions. */
-  private static readonly PlanModePrefKey = 'mj.conversations.planMode.v1';
 
   /**
    * The persisted co-agent preference, loaded just before the picker opens (and read by
@@ -892,21 +880,14 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   }
 
   /**
-   * Toggle sticky Plan Mode. Writes through to `MJ: User Settings` (debounced) — the
+   * Toggle sticky Plan Mode for THIS conversation (or the pending-new bucket on the
+   * new-conversation composer). Writes through {@link PlanModePreference} — the
    * {@link PlanModeEnabled} getter reads the same cached setting, so ALL live composer
-   * instances (empty-state, chat-area, thread panel) flip together, and the value survives
-   * component recreation, navigation, and new sessions until the user turns it off.
+   * instances flip together, and the value survives component recreation and sessions
+   * until the user turns it off or approves a plan.
    */
   public TogglePlanMode(): void {
-    try {
-      const next = !this.PlanModeEnabled;
-      UserInfoEngine.Instance.SetSettingDebounced(
-        MessageInputComponent.PlanModePrefKey,
-        JSON.stringify({ enabled: next })
-      );
-    } catch (error) {
-      console.warn('[MessageInput] Failed to persist Plan Mode preference:', error);
-    }
+    PlanModePreference.Set(this.conversationId, !this.PlanModeEnabled);
   }
 
   async onSend(): Promise<void> {
@@ -1122,6 +1103,14 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     mentionResult: MentionParseResult,
     isFirstMessage: boolean
   ): Promise<void> {
+    // A Plan Mode choice made on the new-conversation composer (no conversation yet) lives in a
+    // pending bucket — the FIRST routed message claims it onto the real conversation so the
+    // toggle carries across the empty-state → chat-area transition without bleeding into other
+    // conversations.
+    if (isFirstMessage && messageDetail.ConversationID) {
+      PlanModePreference.ClaimPendingNew(messageDetail.ConversationID);
+    }
+
     // Snapshot user-requested skills once, before any routing branch, so every invocation path
     // forwards the same set for this message. Derived from the SAVED MESSAGE TEXT via the shared
     // MentionParser (`@{"type":"skill",…}` JSON mentions — same encoding as @agent/#entity), so the
