@@ -356,7 +356,9 @@ export class GraphQLAIClient {
                 $createNotification: Boolean,
                 $sourceArtifactId: String,
                 $sourceArtifactVersionId: String,
-                $fireAndForget: Boolean
+                $fireAndForget: Boolean,
+                $planMode: Boolean,
+                $requestedSkillIDs: [String!]
             ) {
                 RunAIAgent(
                     agentId: $agentId,
@@ -373,7 +375,9 @@ export class GraphQLAIClient {
                     createNotification: $createNotification,
                     sourceArtifactId: $sourceArtifactId,
                     sourceArtifactVersionId: $sourceArtifactVersionId,
-                    fireAndForget: $fireAndForget
+                    fireAndForget: $fireAndForget,
+                    planMode: $planMode,
+                    requestedSkillIDs: $requestedSkillIDs
                 ) {
                     success
                     errorMessage
@@ -425,6 +429,9 @@ export class GraphQLAIClient {
         // Add source artifact tracking for versioning (GraphQL resolver-level concern)
         if (sourceArtifactId !== undefined) variables.sourceArtifactId = sourceArtifactId;
         if (sourceArtifactVersionId !== undefined) variables.sourceArtifactVersionId = sourceArtifactVersionId;
+        // Per-request Plan Mode + user-requested skills (symmetric with the conversation-detail path).
+        if (params.planMode !== undefined) variables.planMode = params.planMode;
+        if (params.requestedSkillIDs !== undefined) variables.requestedSkillIDs = params.requestedSkillIDs;
 
         return variables;
     }

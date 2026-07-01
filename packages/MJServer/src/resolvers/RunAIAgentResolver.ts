@@ -621,7 +621,12 @@ export class RunAIAgentResolver extends ResolverBase {
         @Arg('createNotification', { nullable: true }) createNotification?: boolean,
         @Arg('sourceArtifactId', { nullable: true }) sourceArtifactId?: string,
         @Arg('sourceArtifactVersionId', { nullable: true }) sourceArtifactVersionId?: string,
-        @Arg('fireAndForget', { nullable: true }) fireAndForget?: boolean
+        @Arg('fireAndForget', { nullable: true }) fireAndForget?: boolean,
+        /** Per-request Plan Mode toggle — symmetric with RunAIAgentFromConversationDetail. */
+        @Arg('planMode', { nullable: true }) planMode?: boolean,
+        /** Skill IDs the user requested — symmetric with RunAIAgentFromConversationDetail. Intersected
+         *  server-side with the agent's accepted skills AND the user's Run permission. */
+        @Arg('requestedSkillIDs', () => [String], { nullable: true }) requestedSkillIDs?: string[]
     ): Promise<AIAgentRunResult> {
         // Check API key scope authorization for agent execution
         await this.CheckAPIKeyScopeAuthorization('agent:execute', agentId, userPayload);
@@ -635,7 +640,7 @@ export class RunAIAgentResolver extends ResolverBase {
                 p, dataSource, agentId, userPayload, messagesJson, sessionId, pubSub,
                 data, payload, lastRunId, autoPopulateLastRunPayload, configurationId,
                 conversationDetailId, createArtifacts || false, createNotification || false,
-                sourceArtifactId, sourceArtifactVersionId
+                sourceArtifactId, sourceArtifactVersionId, undefined /*conversationId*/, planMode, requestedSkillIDs
             );
 
             LogStatus(`🔥 Fire-and-forget: Agent ${agentId} execution started in background for session ${sessionId}`);
@@ -665,7 +670,11 @@ export class RunAIAgentResolver extends ResolverBase {
             createArtifacts || false,
             createNotification || false,
             sourceArtifactId,
-            sourceArtifactVersionId
+            sourceArtifactVersionId,
+            undefined, // conversationId (not pre-resolved on this path)
+            undefined, // runRef
+            planMode,
+            requestedSkillIDs
         );
     }
 
@@ -691,7 +700,11 @@ export class RunAIAgentResolver extends ResolverBase {
         @Arg('createArtifacts', { nullable: true }) createArtifacts?: boolean,
         @Arg('createNotification', { nullable: true }) createNotification?: boolean,
         @Arg('sourceArtifactId', { nullable: true }) sourceArtifactId?: string,
-        @Arg('sourceArtifactVersionId', { nullable: true }) sourceArtifactVersionId?: string
+        @Arg('sourceArtifactVersionId', { nullable: true }) sourceArtifactVersionId?: string,
+        /** Per-request Plan Mode toggle — symmetric with the other run mutations. */
+        @Arg('planMode', { nullable: true }) planMode?: boolean,
+        /** User-requested skill IDs — symmetric with the other run mutations. */
+        @Arg('requestedSkillIDs', () => [String], { nullable: true }) requestedSkillIDs?: string[]
     ): Promise<AIAgentRunResult> {
         const p = GetReadWriteProvider(providers);
         return this.executeAIAgent(
@@ -712,7 +725,11 @@ export class RunAIAgentResolver extends ResolverBase {
             createArtifacts || false,
             createNotification || false,
             sourceArtifactId,
-            sourceArtifactVersionId
+            sourceArtifactVersionId,
+            undefined, // conversationId (not pre-resolved on this path)
+            undefined, // runRef
+            planMode,
+            requestedSkillIDs
         );
     }
 
