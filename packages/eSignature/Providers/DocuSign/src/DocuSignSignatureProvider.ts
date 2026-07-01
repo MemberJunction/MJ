@@ -428,13 +428,37 @@ export class DocuSignSignatureProvider extends BaseSignatureProvider {
             // US-Letter (612 × 792 pt) — correct for Letter, approximate for A4/legal/landscape.
             const widthPt = field.pageWidthPt ?? DOCUSIGN_LETTER_WIDTH_PT;
             const heightPt = field.pageHeightPt ?? DOCUSIGN_LETTER_HEIGHT_PT;
+            // DocuSign renders a coordinate tab's content slightly ABOVE where a visual placer's box
+            // top-left sits (the tab is anchored at its top, and its rendered glyphs/graphic sit near
+            // the top of the tab box). Without correction, fields placed "on the line" float just
+            // above it. Nudge DOWN by a small per-type amount so the content seats on the line.
+            const yNudgePt = this.coordinateYNudgePt(field.type ?? 'signature');
             return {
                 pageNumber: String(field.page),
                 xPosition: String(Math.round((field.xPercent / 100) * widthPt)),
-                yPosition: String(Math.round((field.yPercent / 100) * heightPt)),
+                yPosition: String(Math.round((field.yPercent / 100) * heightPt) + yNudgePt),
             };
         }
         return null;
+    }
+
+    /** Small downward correction (points) so a coordinate-placed tab's rendered content sits ON the
+     *  target line. Tuned against DocuSign's actual rendering: the drag-and-drop placer's box top-left
+     *  maps to the tab top-left, and DocuSign renders content a bit below that. These values seat the
+     *  content's baseline on the line — text/date need a small push; signature/initials need almost
+     *  none (the graphic already renders low in its taller box). */
+    private coordinateYNudgePt(type: SignatureFieldType): number {
+        switch (type) {
+            case 'signature':
+            case 'initials':
+                return -10;
+            case 'dateSigned':
+            case 'text':
+            case 'checkbox':
+                return 0;
+            default:
+                return -5;
+        }
     }
 
     /** DocuSign marks optionality per tab via a string `optional` flag (default required). */

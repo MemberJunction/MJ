@@ -314,8 +314,8 @@ describe('DocuSignSignatureProvider', () => {
 
             const body = JSON.parse(fetchMock.mock.calls[1][1].body as string);
             const tab = body.recipients.signers[0].tabs.signHereTabs[0];
-            // No page dims supplied → US-Letter in points (612 × 792): 50%→306, 80%→634 (rounded).
-            expect(tab).toMatchObject({ documentId: '1', pageNumber: '2', xPosition: '306', yPosition: '634', optional: 'true' });
+            // No page dims → US-Letter points (612 × 792): 50%→306; 80%→634, -10pt signature y-nudge →624.
+            expect(tab).toMatchObject({ documentId: '1', pageNumber: '2', xPosition: '306', yPosition: '624', optional: 'true' });
         });
 
         it('converts coordinates against the ACTUAL page size when pageWidthPt/pageHeightPt are supplied (e.g. A4)', async () => {
@@ -339,8 +339,8 @@ describe('DocuSignSignatureProvider', () => {
 
             const body = JSON.parse(fetchMock.mock.calls[1][1].body as string);
             const tab = body.recipients.signers[0].tabs.signHereTabs[0];
-            // 50% of 595 = 298 (rounded), 80% of 842 = 674 (rounded) — the A4 dims, not 306/634.
-            expect(tab).toMatchObject({ pageNumber: '1', xPosition: '298', yPosition: '674' });
+            // 50% of 595 = 298; 80% of 842 = 674, -10pt signature y-nudge → 664 (A4 dims, not Letter).
+            expect(tab).toMatchObject({ pageNumber: '1', xPosition: '298', yPosition: '664' });
         });
 
         it('targets a single document when documentIndex is set', async () => {
