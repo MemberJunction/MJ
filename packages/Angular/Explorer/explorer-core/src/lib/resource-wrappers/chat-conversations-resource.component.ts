@@ -1015,10 +1015,14 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
 
   /**
    * Handle entity record open request from chat area (from React component grids).
-   * Uses NavigationService to open the record in a new tab.
+   * Uses a transient tab so browser Back returns to the conversation and removes
+   * the drill-in record tab rather than leaving it in the workspace.
    */
   onOpenEntityRecord(event: {entityName: string; compositeKey: CompositeKey}): void {
-    this.navigationService.OpenEntityRecord(event.entityName, event.compositeKey);
+    this.navigationService.OpenEntityRecord(event.entityName, event.compositeKey, {
+      transient: true,
+      returnToTabId: this.getTabId()
+    });
   }
 
   /**

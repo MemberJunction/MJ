@@ -710,8 +710,22 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
 
     // Find the tab that matches this URL
     const matchingTab = await this.findTabForUrl(url, config.tabs);
+    const activeTab = config.tabs.find(tab => tab.id === config.activeTabId);
 
-    if (matchingTab && matchingTab.id !== config.activeTabId) {
+    if (matchingTab && activeTab && this.shouldCloseTransientTabOnReturn(activeTab, matchingTab)) {
+      const urlParams = this.extractQueryParamsFromUrl(url);
+      this.urlBasedNavigation = true;
+      try {
+        this.workspaceManager.CloseTab(activeTab.id);
+        this.workspaceManager.SetActiveTab(matchingTab.id);
+        this.workspaceManager.UpdateTabConfiguration(matchingTab.id, {
+          queryParams: Object.keys(urlParams).length > 0 ? urlParams : undefined
+        });
+        this.navigationService.NotifyQueryParamsChanged(matchingTab.id, urlParams);
+      } finally {
+        this.urlBasedNavigation = false;
+      }
+    } else if (matchingTab && matchingTab.id !== config.activeTabId) {
       // Activate the matching tab
       this.workspaceManager.SetActiveTab(matchingTab.id);
     } else if (matchingTab && matchingTab.id === config.activeTabId) {
@@ -733,6 +747,14 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     } else if (!matchingTab) {
       await this.handleMissingTabForUrl(url);
     }
+  }
+
+  private shouldCloseTransientTabOnReturn(activeTab: WorkspaceTab, matchingTab: WorkspaceTab): boolean {
+    if (activeTab.id === matchingTab.id) {
+      return false;
+    }
+    const config = activeTab.configuration || {};
+    return config['isTransient'] === true && config['returnToTabId'] === matchingTab.id;
   }
 
   /**

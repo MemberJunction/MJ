@@ -34,4 +34,17 @@ export interface NavigationOptions {
    * Use null values to remove a query param.
    */
   queryParams?: Record<string, string | null>;
+
+  /**
+   * Mark the opened resource as a transient drill-in. Browser back/forward can
+   * remove transient tabs when returning to the tab they came from, instead of
+   * leaving a durable workspace tab behind.
+   */
+  transient?: boolean;
+
+  /**
+   * Tab to return to when closing a transient drill-in. If omitted, the active
+   * tab at navigation time is used when available.
+   */
+  returnToTabId?: string;
 }

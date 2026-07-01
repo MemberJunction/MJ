@@ -228,6 +228,11 @@ export class HomeApplication extends BaseApplication {
       return;
     }
 
+    if (this.isTransientTab(activeTab)) {
+      this.removeSnapshotForTab(activeTab);
+      return;
+    }
+
     // ALWAYS refresh the matching snapshot's label first — BEFORE the fingerprint
     // bail. A burst of configuration$ emissions (typical on save) causes multiple
     // concurrent updateCachedData calls; the first one proceeds past the fingerprint
@@ -329,6 +334,10 @@ export class HomeApplication extends BaseApplication {
       return null;
     }
 
+    if (this.isTransientTab(tab)) {
+      return null;
+    }
+
     // Skip 'custom' resource type without a specific record (app-level dashboards)
     if (resourceType.toLowerCase() === 'custom' && !tab.resourceRecordId) {
       return null;
@@ -383,7 +392,27 @@ export class HomeApplication extends BaseApplication {
    * Uses the pre-resolved label from the snapshot (no async needed).
    */
   private buildDynamicNavItems(): DynamicNavItem[] {
-    return this.recentOrphanStack.map(snapshot => this.createDynamicNavItem(snapshot));
+    return this.recentOrphanStack
+      .filter(snapshot => snapshot.configuration?.['isTransient'] !== true)
+      .map(snapshot => this.createDynamicNavItem(snapshot));
+  }
+
+  private isTransientTab(tab: WorkspaceTab): boolean {
+    return tab.configuration?.['isTransient'] === true;
+  }
+
+  private removeSnapshotForTab(tab: WorkspaceTab): void {
+    const before = this.recentOrphanStack.length;
+    this.recentOrphanStack = this.recentOrphanStack.filter(snapshot => {
+      if (tab.resourceRecordId && snapshot.resourceRecordId === tab.resourceRecordId) {
+        return false;
+      }
+      return snapshot.tabId !== tab.id;
+    });
+
+    if (this.recentOrphanStack.length !== before) {
+      this.saveStackToStorage();
+    }
   }
 
   /**
@@ -543,7 +572,12 @@ export class HomeApplication extends BaseApplication {
       // Filter out stale snapshots
       const now = Date.now();
       this.recentOrphanStack = parsed
-        .filter(s => s.resourceRecordId && s.timestamp && (now - s.timestamp) < MAX_SNAPSHOT_AGE_MS)
+        .filter(s =>
+          s.resourceRecordId &&
+          s.timestamp &&
+          (now - s.timestamp) < MAX_SNAPSHOT_AGE_MS &&
+          s.configuration?.['isTransient'] !== true
+        )
         .slice(0, HomeApplication.MAX_RECENT_ITEMS);
     } catch (err) {
       console.warn('Failed to load recent nav stack from storage:', err);

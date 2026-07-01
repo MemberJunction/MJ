@@ -1,5 +1,5 @@
 import { Injectable, OnDestroy } from '@angular/core';
-import { WorkspaceStateManager, NavItem, DynamicNavItem, TabRequest, ApplicationManager } from '@memberjunction/ng-base-application';
+import { WorkspaceStateManager, NavItem, DynamicNavItem, TabRequest, ApplicationManager, WorkspaceTab } from '@memberjunction/ng-base-application';
 import { NavigationOptions } from './navigation.interfaces';
 import { CompositeKey } from '@memberjunction/core';
 import { fromEvent, BehaviorSubject, Subject, Subscription, Observable } from 'rxjs';
@@ -449,13 +449,21 @@ export class NavigationService implements OnDestroy {
     let forceNew = this.shouldForceNewTab(options);
 
     const recordId = recordPkey.ToURLSegment();
+    const existingRecordTab = this.findExistingRecordTab(appId, entityName, recordId);
+    const returnToTabId = options?.returnToTabId || this.workspaceManager.GetActiveTabId() || undefined;
+    const shouldMarkTransient = options?.transient === true && !existingRecordTab;
     const request: TabRequest = {
       ApplicationId: appId,
       Title: `${entityName} - ${recordId}`,
       Configuration: {
         resourceType: 'Records',
         Entity: entityName,  // Must use 'Entity' (capital E) - expected by record-resource.component
-        recordId: recordId   // Also needed in Configuration for tab-container.component to populate ResourceRecordID
+        recordId: recordId,  // Also needed in Configuration for tab-container.component to populate ResourceRecordID
+        queryParams: undefined,
+        ...(shouldMarkTransient ? {
+          isTransient: true,
+          returnToTabId
+        } : {})
       },
       ResourceRecordId: recordId,
       IsPinned: options?.pinTab || false
@@ -472,6 +480,23 @@ export class NavigationService implements OnDestroy {
     }
 
     return tabId;
+  }
+
+  private findExistingRecordTab(appId: string, entityName: string, recordId: string): WorkspaceTab | null {
+    const config = this.workspaceManager.GetConfiguration();
+    const entityKey = entityName.trim().toLowerCase();
+    return config?.tabs.find(tab => {
+      if (tab.applicationId !== appId) {
+        return false;
+      }
+      const tabConfig = tab.configuration || {};
+      if (tabConfig['resourceType'] !== 'Records') {
+        return false;
+      }
+      const tabEntity = ((tabConfig['Entity'] || tabConfig['entity']) as string | undefined)?.trim().toLowerCase() || '';
+      const tabRecordId = tab.resourceRecordId || (tabConfig['recordId'] as string | undefined) || '';
+      return tabEntity === entityKey && tabRecordId === recordId;
+    }) || null;
   }
 
   /**
