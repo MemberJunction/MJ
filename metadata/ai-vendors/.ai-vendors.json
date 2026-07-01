@@ -372,5 +372,12 @@
       "lastModified": "2026-06-16T01:17:09.223Z",
       "checksum": "f778175ea41a178814c7e66627508b37ba065f47c0b258b76e1978732fd43cf4"
     }
+  },
+  {
+    "fields": {
+      "Name": "NVIDIA",
+      "Description": "NVIDIA is the developer of the Nemotron family of open-weights large language models (Nano / Super / Ultra). Nemotron models are distributed under the NVIDIA Open Model License (commercial use permitted) and are packaged as NIM microservices, also available across third-party inference providers including OpenRouter, Together AI, and Anaconda.",
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key"
+    }
   }
 ]

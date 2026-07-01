@@ -25,7 +25,8 @@ import {
   MJLeftNavContentComponent,
   MJTabNavComponent,
   MJEmptyStateComponent,
-  MJAlertComponent
+  MJAlertComponent,
+  MJAccordionModule
 } from '@memberjunction/ng-ui-components';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
@@ -172,6 +173,7 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     MJTabNavComponent,
     MJEmptyStateComponent,
     MJAlertComponent,
+    MJAccordionModule,
     ContainerDirectivesModule,
     SharedGenericModule,
     RecordProcessStudioComponent,

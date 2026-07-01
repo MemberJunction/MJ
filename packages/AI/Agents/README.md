@@ -2,6 +2,13 @@
 
 Complete framework for building and executing AI agents in MemberJunction. Provides the `BaseAgent` execution engine, pluggable agent type system (Loop and Flow agents), hierarchical sub-agent orchestration, action execution, memory management with notes and examples, payload management, conversation context with message lifecycle management, and reranker integration.
 
+It also provides two capability layers any agent can opt into:
+
+- **Skills** — reusable capability bundles (instructions + Actions + sub-agents) an agent activates mid-run via a progressive-disclosure catalog, gated per-agent (`AIAgent.AcceptsSkills`), shareable via Resource Permissions, and portable via **SKILL.md** import/export.
+- **Plan Mode** — a per-request human-in-the-loop gate (`ExecuteAgentParams.planMode`) that makes an agent present a plan and get it approved before executing any Actions or Sub-Agents, built on the existing `MJ: AI Agent Requests` pause/resume flow.
+
+**See the [Agent Skills & Plan Mode Guide](../../../guides/AGENT_SKILLS_AND_PLAN_MODE_GUIDE.md)** for the full architecture, the three-layer gate, the SKILL.md format, and the plan-approval flow.
+
 ## Architecture
 
 ```mermaid

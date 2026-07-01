@@ -419,6 +419,15 @@ export type AgentSubAgentRequest<TContext = any> = {
 }
 
 /**
+ * A skill the agent's response requested be activated (by catalog name — the agent only
+ * ever sees name + description in its prompt, per progressive disclosure).
+ */
+export type AgentSkillActivationRequest = {
+    /** Name of the skill (MJ: AI Skills.Name) to activate */
+    name: string;
+}
+
+/**
  * Represents the next step determination from an agent type.
  * 
  * Agent types analyze the output of prompt execution and determine what should
@@ -445,6 +454,10 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
      * - 'sub-agent': The agent should spawn a sub-agent to handle a specific task
      * - 'actions': The agent should perform one or more actions using the Actions framework
      * - 'chat': The agent needs to communicate with the user before proceeding
+     * - 'Skill' / 'Plan': non-terminal steps (like 'ClientTools') that never conclude a run, so
+     *   they are NOT part of the generated `MJAIAgentRun.FinalStep` union below. Use an explicit
+     *   `'Skill' as typeof nextStep.step` / `'Plan' as typeof nextStep.step` assertion at
+     *   assignment/switch sites, mirroring the existing 'ClientTools' pattern.
      *
      * Note: To expand a compacted message, set step to 'Retry', set messageIndex to the message to expand,
      * and optionally set expandReason to explain why expansion is needed. The framework will expand the message
@@ -554,6 +567,17 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
      * Each invocation maps to a registered ClientToolMetadata by Name.
      */
     clientTools?: AgentClientToolInvocation[];
+    /**
+     * Skills to activate when step is 'Skill'. Each activation appends the skill's Instructions
+     * to context and enables its bundled Actions/sub-agents for the remainder of the run — it
+     * does not spawn a nested agent run.
+     */
+    skillActivations?: AgentSkillActivationRequest[];
+    /**
+     * The plan text when step is 'Plan' (Plan Mode). Presented to the human for approval/edit
+     * via the standard response-form HITL flow before the agent may execute Actions/Sub-Agents.
+     */
+    planDetails?: { plan: string };
     /**
      * When true, the agent should terminate after executing the current step.
      * Used by ClientTools: the main loop needs `terminate: false` so it continues
@@ -987,6 +1011,23 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      * bandwidth by avoiding passing large payloads back and forth.
      */
     autoPopulateLastRunPayload?: boolean;
+
+    /**
+     * Per-request Plan Mode toggle. Defaults OFF (undefined/false) — no behavior change unless
+     * explicitly set. When true AND `agent.SupportsPlanMode` is on (the agent-level capability
+     * gate, default ON/opt-out) AND this is a root agent (depth 0), the agent must present a
+     * `Plan` next step and get human approval via the standard `MJ: AI Agent Requests` /
+     * response-form HITL flow before it may execute Actions or Sub-Agents. Ignored entirely for
+     * Realtime/session-driven and Proxy agents (those opt the capability OFF at the agent level).
+     *
+     * On a continuation run (`lastRunId` set, after the user responds to the plan-approval
+     * request), the framework re-resolves whether that prior run's plan was approved — callers
+     * do not need to re-derive or persist this themselves.
+     *
+     * @since 5.44.0
+     */
+    planMode?: boolean;
+
     /**
      * Optional AI Configuration ID to use for this agent execution.
      * When provided, this configuration will be passed to all prompts executed
@@ -1436,6 +1477,18 @@ export type AgentContextData = {
     actionDetails: string;
     /** Markdown formatted details of available client tools (name, category, description, input schema) */
     clientToolDetails?: string;
+    /** Number of skills available to this agent (per AIAgent.AcceptsSkills — 0 when 'None') */
+    skillCount?: number;
+    /**
+     * Markdown formatted CATALOG of available skills — name + description ONLY (progressive
+     * disclosure). Full `Instructions` are never injected here; they're appended to context only
+     * on activation (see `executeSkillStep` in `@memberjunction/ai-agents`).
+     */
+    skillsCatalog?: string;
+    /** Whether Plan Mode is active for this run (SupportsPlanMode + per-request planMode + root agent) */
+    planModeActive?: boolean;
+    /** Whether Plan Mode's gate has already been satisfied (a prior plan was approved on this run chain) */
+    planApproved?: boolean;
     /** Markdown formatted snapshot of the user's current application context */
     appContext?: string;
 }
@@ -1486,7 +1539,7 @@ export type AgentChatMessageMetadata = {
     /** Whether this message has expired */
     isExpired?: boolean;
     /** Type of message (for lifecycle management and logging) */
-    messageType?: 'action-result' | 'client-tool-result' | 'tool-result' | 'loop-result' | 'sub-agent-result' | 'chat' | 'system' | 'user';
+    messageType?: 'action-result' | 'client-tool-result' | 'tool-result' | 'loop-result' | 'sub-agent-result' | 'skill-activation' | 'chat' | 'system' | 'user';
     /** Name of the sub-agent (only for sub-agent-result messages) */
     subAgentName?: string;
     /** ID of the sub-agent (only for sub-agent-result messages) */

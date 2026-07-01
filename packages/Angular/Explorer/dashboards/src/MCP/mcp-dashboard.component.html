@@ -921,22 +921,25 @@
                     }
                 </div>
                 @if (SelectedLog.InputArgs) {
-                    <div style="margin-bottom:16px">
-                        <label style="display:block;font-size:0.875rem;font-weight:500;margin-bottom:6px">Input Arguments</label>
+                    <mj-accordion-panel class="mcp-log-section" Size="sm" [FlushBody]="true"
+                        [Expanded]="LogInputArgsExpanded" (ExpandedChange)="LogInputArgsExpanded = $event">
+                        <ng-template mjAccordionTitle><span>Input Arguments</span></ng-template>
                         <pre style="background:var(--mj-bg-surface-sunken,#f0f0f0);border-radius:4px;padding:12px;font-size:0.75rem;white-space:pre-wrap;word-break:break-all;overflow-y:auto;max-height:240px;margin:0">{{ formatLogJson(SelectedLog.InputArgs) }}</pre>
-                    </div>
+                    </mj-accordion-panel>
                 }
                 @if (SelectedLog.Result) {
-                    <div style="margin-bottom:16px">
-                        <label style="display:block;font-size:0.875rem;font-weight:500;margin-bottom:6px">Result</label>
+                    <mj-accordion-panel class="mcp-log-section" Size="sm" [FlushBody]="true"
+                        [Expanded]="LogResultExpanded" (ExpandedChange)="LogResultExpanded = $event">
+                        <ng-template mjAccordionTitle><span>Result</span></ng-template>
                         <pre style="background:var(--mj-bg-surface-sunken,#f0f0f0);border-radius:4px;padding:12px;font-size:0.75rem;white-space:pre-wrap;word-break:break-all;overflow-y:auto;max-height:360px;margin:0">{{ formatLogJson(SelectedLog.Result) }}</pre>
-                    </div>
+                    </mj-accordion-panel>
                 }
                 @if (SelectedLog.ErrorMessage) {
-                    <div style="margin-bottom:16px">
-                        <label style="display:block;font-size:0.875rem;font-weight:500;margin-bottom:6px;color:var(--mj-status-error-text,#c53030)">Error</label>
+                    <mj-accordion-panel class="mcp-log-section" Size="sm" [FlushBody]="true"
+                        [Expanded]="LogErrorExpanded" (ExpandedChange)="LogErrorExpanded = $event">
+                        <ng-template mjAccordionTitle><span style="color:var(--mj-status-error-text,#c53030)">Error</span></ng-template>
                         <pre style="background:var(--mj-status-error-bg,#fff5f5);border:1px solid var(--mj-status-error-border,#feb2b2);border-radius:4px;padding:12px;font-size:0.75rem;white-space:pre-wrap;word-break:break-all;margin:0;color:var(--mj-status-error-text,#c53030)">{{ SelectedLog.ErrorMessage }}</pre>
-                    </div>
+                    </mj-accordion-panel>
                 }
             </div>
             <div style="padding:12px 20px;border-top:1px solid var(--mj-border-default,#e0e0e0);display:flex;gap:8px;justify-content:flex-start">

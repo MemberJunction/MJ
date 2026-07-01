@@ -130,24 +130,19 @@
                 </div>
             </section>
 
-            <!-- Advanced Configuration Toggle -->
-            <button
-                type="button"
-                class="cap-advanced-toggle"
-                (click)="ToggleAdvancedConfig()"
+            <!-- Advanced Configuration Section (collapsible) -->
+            <mj-accordion-panel
+                Size="sm"
+                [FlushBody]="true"
+                [Expanded]="ShowAdvancedConfig"
+                (ExpandedChange)="OnAdvancedConfigExpandedChange($event)"
             >
-                <i class="fa-solid" [class.fa-chevron-down]="!ShowAdvancedConfig" [class.fa-chevron-up]="ShowAdvancedConfig"></i>
-                {{ ShowAdvancedConfig ? 'Hide' : 'Show' }} Advanced Configuration
-            </button>
-
-            <!-- Advanced Configuration Section -->
-            @if (ShowAdvancedConfig) {
-                <section class="cap-section cap-section-advanced" @slideDown>
-                    <h3 class="cap-section-title">
-                        <i class="fa-solid fa-cogs"></i>
-                        Model Configuration
-                    </h3>
-
+                <ng-template mjAccordionTitle>
+                    <i class="fa-solid fa-cogs"></i>
+                    Advanced Configuration
+                </ng-template>
+                <ng-template mjAccordionBody>
+                    <div class="cap-advanced-body">
                     <div class="cap-row">
                         <div class="cap-field">
                             <label class="cap-label">Temperature</label>
@@ -223,8 +218,9 @@
                             />
                         </div>
                     </div>
-                </section>
-            }
+                    </div>
+                </ng-template>
+            </mj-accordion-panel>
 
             <!-- Prompts Section -->
             <section class="cap-section">

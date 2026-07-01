@@ -63,6 +63,16 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   @Input() appContext: Record<string, unknown> | null = null; // Application context for AI agent awareness
 
   /**
+   * Plan Mode pill state — sticky per-composer toggle, OFF by default (no behavior change unless
+   * the user turns it on). When on, the user's next message(s) request Plan Mode: the routed root
+   * agent must present a plan for approval before executing Actions/Sub-Agents. The toggle is
+   * always shown and the server enforces the `AIAgent.SupportsPlanMode` capability — a plan-mode
+   * request to an agent that doesn't support it simply no-ops the gate (see resolvePlanModeGate),
+   * so we don't need to resolve "the current agent" client-side just to hide the pill.
+   */
+  public PlanModeEnabled = false;
+
+  /**
    * Optional default agent ID for the conversation. When set, the FIRST
    * message routes directly to this agent — skipping Sage's default
    * delegation — provided the user did not @mention a different agent
@@ -115,6 +125,8 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   private _initialMessage: string | null = null;
   private _initialAttachments: PendingAttachment[] | null = null;
   private _isComponentReady = false; // Track if component is ready to send
+  /** Conversation this input has already auto-sent its pending first message for. */
+  private _autoSentForConversationId: string | null = null;
 
   @Input()
   set initialMessage(value: string | null) {
@@ -164,6 +176,12 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     // This ensures callbacks are registered without relying on ngOnChanges timing
     if (this.streamingService && value && value.length > 0) {
       this.reconnectInProgressMessages();
+    } else if (this.streamingService) {
+      // Empty/undefined — e.g. this input was backgrounded by a conversation swap
+      // ([] is bound to non-active inputs). Drop any streaming callbacks so a hidden
+      // input isn't left subscribed; reconnectInProgressMessages re-registers when it
+      // becomes active again with a non-empty list.
+      this.unregisterAllCallbacks();
     }
   }
   get inProgressMessageIds(): string[] | undefined {
@@ -196,13 +214,19 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * the underlying `processMessage` errored.
    */
   @Output() afterAgentTurn = new EventEmitter<AfterAgentTurnEventArgs>();
-  @Output() agentRunDetected = new EventEmitter<{conversationDetailId: string; agentRunId: string}>();
-  @Output() agentRunUpdate = new EventEmitter<{conversationDetailId: string; agentRun?: any, agentRunId?: string}>(); // Emits when agent run data updates during progress
-  @Output() messageComplete = new EventEmitter<{conversationDetailId: string; agentId?: string}>(); // Emits when message completes (success or error)
-  @Output() artifactCreated = new EventEmitter<{artifactId: string; versionId: string; versionNumber: number; conversationDetailId: string; name: string}>();
+  // conversationId is carried on every agent-lifecycle event so the parent chat-area can drop
+  // events emitted by a BACKGROUND conversation's (hidden, still-streaming) input after the user
+  // has swapped conversations — preventing cross-conversation state/cache bleed. Sourced from the
+  // ConversationDetail entity's ConversationID (the captured, immutable value), never this.conversationId.
+  @Output() agentRunDetected = new EventEmitter<{conversationId: string; conversationDetailId: string; agentRunId: string}>();
+  @Output() agentRunUpdate = new EventEmitter<{conversationId: string; conversationDetailId: string; agentRun?: any, agentRunId?: string}>(); // Emits when agent run data updates during progress
+  @Output() messageComplete = new EventEmitter<{conversationId: string; conversationDetailId: string; agentId?: string}>(); // Emits when message completes (success or error)
+  @Output() artifactCreated = new EventEmitter<{conversationId: string; artifactId: string; versionId: string; versionNumber: number; conversationDetailId: string; name: string}>();
   @Output() conversationRenamed = new EventEmitter<{conversationId: string; name: string; description: string}>();
-  @Output() intentCheckStarted = new EventEmitter<void>(); // Emits when intent checking starts
-  @Output() intentCheckCompleted = new EventEmitter<void>(); // Emits when intent checking completes
+  @Output() intentCheckStarted = new EventEmitter<{conversationId: string}>(); // Emits when intent checking starts
+  @Output() intentCheckCompleted = new EventEmitter<{conversationId: string}>(); // Emits when intent checking completes (carries conversationId so the parent can drop a background conversation's completion after a swap — symmetric with intentCheckStarted)
+  @Output() initialMessageAutoSendStarted = new EventEmitter<{conversationId: string}>(); // Emitted when this input latches the pending first message for auto-send
+  @Output() initialMessageAutoSendFailed = new EventEmitter<{conversationId: string}>(); // Emitted when a latched pending first message fails before messageSent
   @Output() emptyStateSubmit = new EventEmitter<{text: string; attachments: PendingAttachment[]}>(); // Emitted when in emptyStateMode
   @Output() uploadStateChanged = new EventEmitter<{isUploading: boolean; message: string}>(); // Emits when attachment upload state changes
   @Output() artifactPickerRequested = new EventEmitter<void>(); // Emits when user clicks "Attach Artifact"
@@ -298,15 +322,29 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   private triggerInitialSend(): void {
     const message = this._initialMessage;
     const attachments = this._initialAttachments;
+    const hasContent = !!message || !!(attachments && attachments.length > 0);
+
+    if (!hasContent || !this.conversationId || UUIDsEqual(this._autoSentForConversationId, this.conversationId)) {
+      return;
+    }
+    this._autoSentForConversationId = this.conversationId;
 
     // Set pending attachments before sending
     if (attachments && attachments.length > 0) {
       this.pendingAttachments = [...attachments];
     }
 
+    Promise.resolve().then(() => {
+      this.initialMessageAutoSendStarted.emit({ conversationId: this.conversationId });
+    });
+
     // Use setTimeout to ensure we're outside of change detection cycle
-    setTimeout(() => {
-      this.sendMessageWithText(message || '');
+    setTimeout(async () => {
+      const sent = await this.sendMessageWithText(message || '');
+      if (!sent) {
+        this._autoSentForConversationId = null;
+        this.initialMessageAutoSendFailed.emit({ conversationId: this.conversationId });
+      }
     }, 100);
   }
 
@@ -817,6 +855,11 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     }
   }
 
+  /** Toggle the sticky Plan Mode pill. Applies to subsequent user-initiated sends. */
+  public TogglePlanMode(): void {
+    this.PlanModeEnabled = !this.PlanModeEnabled;
+  }
+
   async onSend(): Promise<void> {
     if (!this.canSend) return;
 
@@ -848,7 +891,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * `this.pendingAttachments` may not contain the attachment. Pass it in
    * explicitly and we merge + dedupe (by `id`) before saving.
    */
-  public async sendMessageWithText(text: string, extraAttachments?: PendingAttachment[]): Promise<void> {
+  public async sendMessageWithText(text: string, extraAttachments?: PendingAttachment[]): Promise<boolean> {
     const merged: PendingAttachment[] = (() => {
       if (!extraAttachments || extraAttachments.length === 0) {
         return [...this.pendingAttachments];
@@ -867,11 +910,11 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     const hasAttachments = merged.length > 0;
 
     if (!hasText && !hasAttachments) {
-      return;
+      return false;
     }
 
     if (this.isSending) {
-      return;
+      return false;
     }
 
     this.isSending = true;
@@ -926,7 +969,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
               console.error('Failed to roll back conversation detail after attachment rejection:', rollbackErr);
             }
             this.isSending = false;
-            return;
+            return false;
           }
         }
 
@@ -944,11 +987,14 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         const mentionResult = this.parseMentionsFromMessage(detail.Message);
         const isFirstMessage = this.conversationHistory.length === 0;
         await this.routeMessage(detail, mentionResult, isFirstMessage);
+        return true;
       } else {
         this.handleSendFailure(detail);
+        return false;
       }
     } catch (error) {
       this.handleSendError(error);
+      return false;
     } finally {
       this.isSending = false;
     }
@@ -1079,13 +1125,14 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
             messageDetail,
             this.converationManagerAgent!.ID,
             this.converationManagerAgent!.Name || 'Sage',
-            this.conversationId,
+            messageDetail.ConversationID,
             null, // Sage doesn't use payload continuity
             null, // Sage doesn't use artifact info
             sageConfigPreset // Pass the already-found config preset
           ),
           messageDetail.Message,
-          isFirstMessage
+          isFirstMessage,
+          messageDetail.ConversationID
         );
         return;
       }
@@ -1118,9 +1165,10 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     }
 
     await this.executeRouteWithNaming(
-      () => this.invokeAgentDirectly(messageDetail, agentMention, this.conversationId),
+      () => this.invokeAgentDirectly(messageDetail, agentMention, messageDetail.ConversationID),
       messageDetail.Message,
-      isFirstMessage
+      isFirstMessage,
+      messageDetail.ConversationID
     );
   }
 
@@ -1176,11 +1224,12 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       () => this.continueWithAgent(
         messageDetail,
         lastAgentId,
-        this.conversationId,
+        messageDetail.ConversationID,
         undefined // artifact version targeting unavailable without intent check
       ),
       messageDetail.Message,
-      isFirstMessage
+      isFirstMessage,
+      messageDetail.ConversationID
     );
   }
 
@@ -1195,7 +1244,8 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     await this.executeRouteWithNaming(
       () => this.processMessageThroughAgent(messageDetail, mentionResult),
       messageDetail.Message,
-      isFirstMessage
+      isFirstMessage,
+      messageDetail.ConversationID
     );
   }
 
@@ -1232,7 +1282,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     }
 
     // Emit event to show temporary "Analyzing intent..." message in conversation
-    this.intentCheckStarted.emit();
+    this.intentCheckStarted.emit({ conversationId: this.conversationId });
 
     try {
       // Build context from pre-loaded maps (if available)
@@ -1256,7 +1306,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       return { decision: 'UNSURE' as const, reasoning: 'Intent check failed with error' };
     } finally {
       // Emit event to remove temporary intent checking message
-      this.intentCheckCompleted.emit();
+      this.intentCheckCompleted.emit({ conversationId: this.conversationId });
     }
   }
 
@@ -1269,12 +1319,13 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   private async executeRouteWithNaming(
     routeFunction: () => Promise<void>,
     userMessage: string,
-    isFirstMessage: boolean
+    isFirstMessage: boolean,
+    conversationId: string
   ): Promise<void> {
     if (isFirstMessage) {
       // Fire conversation naming in background (don't await)
       // This prevents 2+ minute UI blocking if naming times out
-      this.nameConversation(userMessage);
+      this.nameConversation(userMessage, conversationId);
 
       // Execute route immediately (don't wait for naming)
       await routeFunction();
@@ -1364,6 +1415,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
           // This contains live timestamps, status, and other fields that change during execution
           if (progressAgentRun || progressAgentRunId) {
             this.agentRunUpdate.emit({
+              conversationId: conversationDetail.ConversationID,
               conversationDetailId: conversationDetail.ID,
               agentRun: progressAgentRun,
               agentRunId: progressAgentRunId
@@ -1372,6 +1424,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
             // Fallback: If we don't have the full object but have the ID, emit agentRunDetected
             // This will trigger a database query to load the agent run
             this.agentRunDetected.emit({
+              conversationId: conversationDetail.ConversationID,
               conversationDetailId: conversationDetail.ID,
               agentRunId: progressAgentRunId
             });
@@ -1430,7 +1483,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         status: 'Evaluating message...',
         relatedMessageId: userMessage.ID,
         conversationDetailId: conversationManagerMessage.ID,
-        conversationId: this.conversationId,
+        conversationId,
         conversationName: this.conversationName
       });
 
@@ -1501,7 +1554,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
       // Stage 2: Check for task graph (multi-step orchestration)
       if (result.payload?.taskGraph) {
-        await this.handleTaskGraphExecution(userMessage, result, this.conversationId, conversationManagerMessage);
+        await this.handleTaskGraphExecution(userMessage, result, conversationId, conversationManagerMessage);
         // Remove CM from active tasks
         if (taskId) {
           // Task removed in markMessageComplete() - this.activeTasks.remove(taskId);
@@ -1510,7 +1563,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       // Stage 3: Check for sub-agent invocation (single-step delegation)
       else if (result.agentRun.FinalStep === 'Success' && result.payload?.invokeAgent) {
         // Reuse the existing conversationManagerMessage instead of creating new ones
-        await this.handleSubAgentInvocation(userMessage, result, this.conversationId, conversationManagerMessage);
+        await this.handleSubAgentInvocation(userMessage, result, conversationId, conversationManagerMessage);
         // Remove CM from active tasks
         if (taskId) {
           // Task removed in markMessageComplete() - this.activeTasks.remove(taskId);
@@ -1526,13 +1579,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         // Handle artifacts if any (but NOT task graphs - those are intermediate work products)
         // Server already created artifacts - just emit event to trigger UI reload
         if (result.payload && Object.keys(result.payload).length > 0) {
-          this.artifactCreated.emit({
-            artifactId: '',
-            versionId: '',
-            versionNumber: 0,
-            conversationDetailId: conversationManagerMessage.ID,
-            name: ''
-          });
+          this.emitArtifactReload(conversationManagerMessage);
           this.messageSent.emit(conversationManagerMessage);
         }
 
@@ -1574,7 +1621,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
           this.messageSent.emit(conversationManagerMessage);
 
-          await this.handleSilentObservation(userMessage, this.conversationId);
+          await this.handleSilentObservation(userMessage, conversationId);
 
           // Clean up completion timestamp after delay
           this.cleanupCompletionTimestamp(conversationManagerMessage.ID);
@@ -1738,13 +1785,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       // Trigger artifact reload for this message
       // Artifacts were created on server during task execution and linked to this message
       // This event triggers the parent component to reload artifacts from the database
-      this.artifactCreated.emit({
-        artifactId: '', // Placeholder - reload will fetch actual artifacts from DB
-        versionId: '',
-        versionNumber: 1,
-        conversationDetailId: taskExecutionMessage.ID,
-        name: ''
-      });
+      this.emitArtifactReload(taskExecutionMessage);
 
       // Unregister streaming callback (task complete)
       const callback = this.registeredCallbacks.get(taskExecutionMessage.ID);
@@ -1765,13 +1806,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       await this.updateConversationDetail(taskExecutionMessage, `❌ **${workflowName}** - Error: ${String(error)}`, 'Error');
 
       // Trigger artifact reload even on error - partial artifacts may have been created
-      this.artifactCreated.emit({
-        artifactId: '',
-        versionId: '',
-        versionNumber: 1,
-        conversationDetailId: taskExecutionMessage.ID,
-        name: ''
-      });
+      this.emitArtifactReload(taskExecutionMessage);
 
       // Unregister streaming callback (task failed)
       const callback = this.registeredCallbacks.get(taskExecutionMessage.ID);
@@ -1945,7 +1980,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         status: 'Starting...',
         relatedMessageId: userMessage.ID,
         conversationDetailId: agentResponseMessage.ID,
-        conversationId: this.conversationId,
+        conversationId,
         conversationName: this.conversationName
       });
 
@@ -1971,6 +2006,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         artifactInfo?.versionId,
         undefined, // configurationPresetId not used in this path
         this.appContext, // Embedder-supplied app/form context
+        this.PlanModeEnabled, // per-request Plan Mode toggle
       );
 
       // Task will be removed automatically in markMessageComplete() when status changes to Complete/Error
@@ -1982,13 +2018,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
         // Server created artifacts - emit event to trigger UI reload
         if (agentResult.payload && Object.keys(agentResult.payload).length > 0) {
-          this.artifactCreated.emit({
-            artifactId: '',
-            versionId: '',
-            versionNumber: 0,
-            conversationDetailId: agentResponseMessage.ID,
-            name: ''
-          });
+          this.emitArtifactReload(agentResponseMessage);
           console.log('🎨 Server created artifact from single task execution');
           this.messageSent.emit(agentResponseMessage);
         }
@@ -2051,7 +2081,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         status: 'Starting...',
         relatedMessageId: userMessage.ID,
         conversationDetailId: agentResponseMessage.ID,
-        conversationId: this.conversationId,
+        conversationId,
         conversationName: this.conversationName
       });
 
@@ -2079,6 +2109,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         artifactInfo?.versionId,
         configurationPresetId, // Pass configuration from previous @mention for continuity
         this.appContext, // Embedder-supplied app/form context
+        this.PlanModeEnabled, // per-request Plan Mode toggle
       );
 
       // Task will be removed automatically in markMessageComplete() when status changes to Complete/Error
@@ -2096,13 +2127,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         // Always emit artifactCreated to trigger UI reload — the server may have created
         // artifacts even when the result payload is empty (e.g., remote stage server).
         // onArtifactCreated will reload from DB and discover any artifacts that exist.
-        this.artifactCreated.emit({
-          artifactId: '',
-          versionId: '',
-          versionNumber: 0,
-          conversationDetailId: agentResponseMessage.ID,
-          name: ''
-        });
+        this.emitArtifactReload(agentResponseMessage);
         this.messageSent.emit(agentResponseMessage);
 
         // Mark user message as complete
@@ -2141,13 +2166,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
           await this.updateConversationDetail(agentResponseMessage, retryResult.agentRun?.Message || `✅ **${agentName}** completed`, 'Complete', retryResult);
 
           // Always emit artifactCreated to trigger UI reload (same as initial attempt)
-          this.artifactCreated.emit({
-            artifactId: '',
-            versionId: '',
-            versionNumber: 0,
-            conversationDetailId: agentResponseMessage.ID,
-            name: ''
-          });
+          this.emitArtifactReload(agentResponseMessage);
           this.messageSent.emit(agentResponseMessage);
 
           await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
@@ -2253,7 +2272,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       status: 'Processing refinement...',
       relatedMessageId: userMessage.ID,
       conversationDetailId: statusMessage.ID,
-      conversationId: this.conversationId,
+      conversationId,
       conversationName: this.conversationName
     });
 
@@ -2294,13 +2313,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
         // Server created artifacts (handles versioning automatically) - emit event to trigger UI reload
         if (continuityResult.payload && Object.keys(continuityResult.payload).length > 0) {
-          this.artifactCreated.emit({
-            artifactId: '',
-            versionId: '',
-            versionNumber: 0,
-            conversationDetailId: agentResponseMessage.ID,
-            name: ''
-          });
+          this.emitArtifactReload(agentResponseMessage);
           console.log('🎨 Server created artifact (versioned) from agent continuity');
           this.messageSent.emit(agentResponseMessage);
         }
@@ -2344,7 +2357,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       status: 'Processing...',
       relatedMessageId: userMessage.ID,
       conversationDetailId: userMessage.ID,
-      conversationId: this.conversationId,
+      conversationId,
       conversationName: this.conversationName
     });
 
@@ -2425,13 +2438,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
           // Server created artifacts - emit event to trigger UI reload
           if (result.payload && Object.keys(result.payload).length > 0) {
-            this.artifactCreated.emit({
-              artifactId: '',
-              versionId: '',
-              versionNumber: 0,
-              conversationDetailId: agentResponseMessage.ID,
-              name: ''
-            });
+            this.emitArtifactReload(agentResponseMessage);
             this.messageSent.emit(agentResponseMessage);
           }
 
@@ -2634,7 +2641,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       status: 'Processing...',
       relatedMessageId: userMessage.ID,
       conversationDetailId: userMessage.ID,
-      conversationId: this.conversationId,
+      conversationId,
       conversationName: this.conversationName
     });
 
@@ -2692,13 +2699,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
         // Server created artifacts (handles versioning) - emit event to trigger UI reload
         if (result.payload && Object.keys(result.payload).length > 0) {
-          this.artifactCreated.emit({
-            artifactId: '',
-            versionId: '',
-            versionNumber: 0,
-            conversationDetailId: agentResponseMessage.ID,
-            name: ''
-          });
+          this.emitArtifactReload(agentResponseMessage);
           this.messageSent.emit(agentResponseMessage);
         }
 
@@ -2732,7 +2733,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * session path uses. This wrapper keeps the composer-specific concerns local:
    * mention stripping and the sidebar rename animation event.
    */
-  private async nameConversation(message: string): Promise<void> {
+  private async nameConversation(message: string, conversationId: string): Promise<void> {
     // Convert message to plain text (strips JSON-encoded mentions like @{"id":"...","name":"Sage"} to @Sage)
     const plainTextMessage = this.mentionParser.toPlainText(
       message,
@@ -2740,8 +2741,10 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       this.mentionAutocomplete.getAvailableUsers()
     );
 
+    // Use the captured conversationId (not this.conversationId): naming runs fire-and-forget
+    // in the background, so the user may have swapped conversations before it resolves.
     const result = await GenerateAndApplyConversationName({
-      ConversationId: this.conversationId,
+      ConversationId: conversationId,
       MessageText: plainTextMessage,
       Provider: this.ProviderToUse as GraphQLDataProvider,
       CurrentUser: this.currentUser
@@ -2750,7 +2753,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     if (result) {
       // Emit event for animation in conversation list
       this.conversationRenamed.emit({
-        conversationId: this.conversationId,
+        conversationId,
         name: result.Name,
         description: result.Description
       });
@@ -2803,8 +2806,27 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
     // Emit completion event to parent so it can refresh agent run data
     this.messageComplete.emit({
+      conversationId: conversationDetail.ConversationID,
       conversationDetailId: conversationDetail.ID,
       agentId: conversationDetail.AgentID || undefined
+    });
+  }
+
+  /**
+   * Emit an artifact-reload signal for {@link detail}. The artifact metadata fields are
+   * placeholders — the parent reloads the real artifacts from the DB; the only fields it
+   * consumes are conversationDetailId and conversationId (the latter lets it drop events from
+   * a background conversation after a conversation swap). conversationId is taken from the
+   * detail entity's immutable ConversationID, never this.conversationId.
+   */
+  private emitArtifactReload(detail: MJConversationDetailEntity): void {
+    this.artifactCreated.emit({
+      conversationId: detail.ConversationID,
+      artifactId: '',
+      versionId: '',
+      versionNumber: 0,
+      conversationDetailId: detail.ID,
+      name: ''
     });
   }
 

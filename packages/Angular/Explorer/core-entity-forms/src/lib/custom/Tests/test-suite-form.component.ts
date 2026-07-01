@@ -1930,6 +1930,16 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
   }
 
   /**
+   * Applies the expanded/collapsed state emitted by the filters mj-accordion-panel.
+   * The panel's Expanded is the inverse of filtersCollapsed; set (not flip) so it
+   * stays in sync, and mark for check (OnPush change detection).
+   */
+  onFiltersExpandedChange(expanded: boolean): void {
+    this.filtersCollapsed = !expanded;
+    this.cdr.markForCheck();
+  }
+
+  /**
    * Toggle keyboard shortcuts visibility and save preference
    */
   async toggleShortcuts(): Promise<void> {

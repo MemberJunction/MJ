@@ -430,42 +430,9 @@
     border-top: 1px solid var(--mj-border-default);
 }
 
-.detail-members-toggle {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    width: 100%;
-    padding: 10px 16px;
-    background: none;
-    border: none;
-    cursor: pointer;
-    font-size: 0.78rem;
-    font-weight: 600;
-    color: var(--mj-text-secondary);
-    text-align: left;
-    transition: background 0.15s ease;
-}
-
-.detail-members-toggle:hover {
-    background: var(--mj-bg-surface-hover);
-}
-
-.detail-members-toggle i {
-    font-size: 0.65rem;
-    width: 12px;
-    text-align: center;
-    color: var(--mj-text-muted);
-}
-
-.detail-members-count {
-    margin-left: auto;
-    font-size: 0.7rem;
-    font-weight: 400;
-    color: var(--mj-text-muted);
-    background: var(--mj-bg-surface-sunken);
-    padding: 1px 7px;
-    border-radius: 8px;
-}
+/* .detail-members-toggle / .detail-members-count removed: the bespoke
+   disclosure toggle + count pill were replaced by <mj-accordion-panel>
+   (header/chevron) and the standard .mj-accordion-badge--right. */
 
 .detail-members-list {
     flex: 1;

@@ -421,6 +421,101 @@ describe('LoopAgentType', () => {
             expect(result.pipeline).toEqual(pipeline);
         });
 
+        // ── Skill (non-terminal, like ClientTools/Pipeline) ─────────────
+
+        it('should accept nextStep.type "Skill" and map skills[] to skillActivations', async () => {
+            const result = await agent.DetermineNextStep(
+                mockPromptResult({
+                    taskComplete: false,
+                    nextStep: { type: 'Skill', skills: [{ name: 'Report Builder' }, { name: 'Data Validator' }] },
+                }),
+                stubParams,
+                stubPayload,
+                stubState,
+            );
+
+            // 'Skill' is emitted verbatim (the base-agent step-union cast handles it downstream).
+            expect(result.step).toBe('Skill');
+            expect(result.skillActivations).toEqual([{ name: 'Report Builder' }, { name: 'Data Validator' }]);
+        });
+
+        it('should infer type "Skill" when type is missing but nextStep.skills is present', async () => {
+            const result = await agent.DetermineNextStep(
+                mockPromptResult({
+                    taskComplete: false,
+                    nextStep: { skills: [{ name: 'Report Builder' }] },
+                }),
+                stubParams,
+                stubPayload,
+                stubState,
+            );
+
+            expect(result.step).toBe('Skill');
+            expect(result.skillActivations).toEqual([{ name: 'Report Builder' }]);
+        });
+
+        it('should return Retry when type is "Skill" but skills array is empty', async () => {
+            const result = await agent.DetermineNextStep(
+                mockPromptResult({
+                    taskComplete: false,
+                    nextStep: { type: 'Skill', skills: [] },
+                }),
+                stubParams,
+                stubPayload,
+                stubState,
+            );
+
+            expect(result.step).toBe('Retry');
+            expect(result.errorMessage).toBeTruthy();
+        });
+
+        // ── Plan (Plan Mode, non-terminal) ──────────────────────────────
+
+        it('should accept nextStep.type "Plan" and carry the plan text in planDetails', async () => {
+            const result = await agent.DetermineNextStep(
+                mockPromptResult({
+                    taskComplete: false,
+                    nextStep: { type: 'Plan', plan: 'Step 1: look up invoices. Step 2: apply discount.' },
+                }),
+                stubParams,
+                stubPayload,
+                stubState,
+            );
+
+            expect(result.step).toBe('Plan');
+            expect(result.planDetails).toEqual({ plan: 'Step 1: look up invoices. Step 2: apply discount.' });
+        });
+
+        it('should infer type "Plan" when type is missing but nextStep.plan is present', async () => {
+            const result = await agent.DetermineNextStep(
+                mockPromptResult({
+                    taskComplete: false,
+                    nextStep: { plan: 'My proposed approach.' },
+                }),
+                stubParams,
+                stubPayload,
+                stubState,
+            );
+
+            expect(result.step).toBe('Plan');
+            expect(result.planDetails).toEqual({ plan: 'My proposed approach.' });
+        });
+
+        it('should return Retry when type is "Plan" but plan text is blank', async () => {
+            const result = await agent.DetermineNextStep(
+                mockPromptResult({
+                    taskComplete: false,
+                    nextStep: { type: 'Plan', plan: '   ' },
+                }),
+                stubParams,
+                stubPayload,
+                stubState,
+            );
+
+            expect(result.step).toBe('Retry');
+            expect(result.errorMessage).toBeTruthy();
+        });
+
         it('should infer type "Pipeline" when type is missing but nextStep.pipeline has steps', async () => {
             const pipeline = { steps: [{ tool: 'get_rows', with: {} }, { first: 5 }] };
             const result = await agent.DetermineNextStep(
