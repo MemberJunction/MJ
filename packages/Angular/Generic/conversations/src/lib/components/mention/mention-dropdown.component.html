@@ -16,7 +16,9 @@
             (mousedown)="selectSuggestion(suggestion); $event.preventDefault()"
             (mouseenter)="selectedIndex = i"
             >
-            <div class="suggestion-icon">
+            <div class="suggestion-icon"
+                 [class.skill]="suggestion.type === 'skill'"
+                 [style.background]="suggestion.type === 'skill' ? (suggestion.color || null) : null">
               <!-- Agent with LogoURL image (takes precedence) -->
               @if (suggestion.type === 'agent' && suggestion.imageUrl) {
                 <img
@@ -49,6 +51,12 @@
                   [ngClass]="getIconClasses(suggestion.icon || 'fa-solid fa-database')"
                 ></i>
               }
+              <!-- Skill icon — container carries the skill's accent Color (green fallback) -->
+              @if (suggestion.type === 'skill') {
+                <i
+                  [ngClass]="getIconClasses(suggestion.icon || 'fa-solid fa-wand-magic-sparkles')"
+                ></i>
+              }
             </div>
             <div class="suggestion-content">
               <div class="suggestion-name">
@@ -63,6 +71,10 @@
                 }
                 @if (suggestion.type === 'query') {
                   <span class="suggestion-type-badge query">Query</span>
+                }
+                @if (suggestion.type === 'skill') {
+                  <span class="suggestion-type-badge skill"
+                        [style.background]="suggestion.color || null">Skill</span>
                 }
                 {{ suggestion.displayName }}
               </div>

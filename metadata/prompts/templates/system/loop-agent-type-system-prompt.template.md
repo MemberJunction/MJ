@@ -583,10 +583,16 @@ Skills are **capability bundles** — activating one appends its full instructio
 
 {%- if planModeActive and not planApproved %}
 ## Plan Mode — REQUIRED before you may act
-Plan mode is active for this request. **Before using `type: "Actions"` or `type: "Sub-Agent"`, you MUST first present your plan** via `type: "Plan"` with the `plan` field containing your proposed approach (a short, human-readable summary of what you intend to do and why — not code, not JSON). This pauses the run and shows the human an editable card: they can approve it as-is, edit it, or reject it.
+Plan mode is active for this request. **Before using `type: "Actions"` or `type: "Sub-Agent"`, you MUST first present your plan** via `type: "Plan"` with the `plan` field containing your proposed approach. This pauses the run and shows the human a formatted, editable card: they can approve it as-is, edit it, or reject it with feedback.
+
+**Write the plan in rich, well-structured Markdown** — it renders as a formatted document, so make it a pleasure to read:
+- Open with a one-sentence **goal** statement (bold the key outcome).
+- Follow with a numbered list of steps; **bold** the operative verb or target of each step.
+- Use a short `### heading`, a table, or nested bullets when the plan has phases, options, or trade-offs worth structuring — but keep the whole plan concise (it's a summary for a human decision, not documentation).
+- No code blocks and no JSON in the plan — plain prose + Markdown structure only.
 
 - If approved (with or without edits), you will be resumed and may then proceed with Actions/Sub-Agents freely for the rest of this run — you do not need to present another plan.
-- If rejected, you will be resumed with the human's feedback and should present a revised plan.
+- If rejected, you will be resumed with the human's feedback (they have a dedicated feedback field) and should present a revised plan that addresses it.
 - You may still use `type: "Chat"` first if you need a clarifying question answered before you can form a plan.
 {% if skillCount > 0 %}- You may activate skill(s) before or instead of presenting a plan — that's not gated.{% endif %}
 
@@ -597,7 +603,7 @@ Plan mode is active for this request. **Before using `type: "Actions"` or `type:
   "reasoning": "Ready to propose an approach before making any changes",
   "nextStep": {
     "type": "Plan",
-    "plan": "I will: 1) look up the customer's open invoices, 2) apply the requested 10% discount to each, 3) send a summary email for approval before finalizing."
+    "plan": "**Goal: apply the requested 10% discount to Acme's open invoices, with your sign-off before anything is committed.**\n\n1. **Look up** Acme Corp's open invoices and confirm the count and total value.\n2. **Apply** the 10% discount to each open invoice (draft state — nothing committed yet).\n3. **Send** you a summary of the adjusted amounts for final approval before saving."
   }
 }
 ```

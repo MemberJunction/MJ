@@ -127,6 +127,17 @@
   box-shadow: var(--mj-shadow-md);
 }
 
+/* Skills: standard green fallback (AISkill.Color overrides via inline style) + sharp-cornered
+   rectangle — the shape differentiates skills from the rounded agent/user/entity pills.
+   Keep color + shape in sync with the composer chip (mention-editor's createMentionChip). */
+:host ::ng-deep .mention-badge.skill {
+  background: var(--mj-status-success);
+  color: var(--mj-text-inverse);
+  border: 2px solid color-mix(in srgb, var(--mj-text-inverse) 35%, transparent);
+  border-radius: 4px;
+  box-shadow: var(--mj-shadow-md);
+}
+
 :host ::ng-deep .mention-badge i {
   font-size: 12px;
   opacity: 0.95;
@@ -1581,4 +1592,47 @@
   .attachment-strip {
     width: 100%;
   }
+}
+/* ── Markdown-rendered textarea values inside submitted form pills (e.g. the approved Plan) ── */
+:host ::ng-deep .form-response-pill .field-answer-markdown {
+  font-style: normal; /* the pill's default italic reads poorly on multi-line formatted content */
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--mj-text-primary);
+}
+:host ::ng-deep .form-response-pill .field-answer-markdown h1,
+:host ::ng-deep .form-response-pill .field-answer-markdown h2,
+:host ::ng-deep .form-response-pill .field-answer-markdown h3,
+:host ::ng-deep .form-response-pill .field-answer-markdown h4 {
+  font-size: 13.5px;
+  font-weight: 700;
+  margin: 10px 0 4px;
+  color: var(--mj-text-primary);
+}
+:host ::ng-deep .form-response-pill .field-answer-markdown p {
+  margin: 6px 0;
+}
+:host ::ng-deep .form-response-pill .field-answer-markdown ul,
+:host ::ng-deep .form-response-pill .field-answer-markdown ol {
+  margin: 6px 0;
+  padding-left: 22px;
+}
+:host ::ng-deep .form-response-pill .field-answer-markdown li {
+  margin: 3px 0;
+}
+:host ::ng-deep .form-response-pill .field-answer-markdown code {
+  font-size: 12px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--mj-status-success) 12%, transparent);
+}
+:host ::ng-deep .form-response-pill .field-answer-markdown table {
+  border-collapse: collapse;
+  margin: 8px 0;
+}
+:host ::ng-deep .form-response-pill .field-answer-markdown th,
+:host ::ng-deep .form-response-pill .field-answer-markdown td {
+  border: 1px solid color-mix(in srgb, var(--mj-status-success) 25%, transparent);
+  padding: 4px 10px;
+  font-size: 12.5px;
 }

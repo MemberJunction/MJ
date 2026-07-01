@@ -4,6 +4,9 @@
  * Exercises the real server componentry end-to-end against the live DB, WITHOUT any model calls:
  *   - AIEngineBase.GetSkillsForAgent resolution: the three-layer gate (agent AcceptsSkills
  *     None/All/Limited × skill catalog Status × per-agent grant Status).
+ *   - Skill permissions: the AISkillPermission grantee-exclusivity validator (exactly one of
+ *     UserID/RoleID) and the GetSkillsForAgent(agent, user) permission filter — owner-override,
+ *     closed-once-rows-exist, and open-by-default (no rows → visible to everyone).
  *   - GetSkillActionIDs / GetSkillSubAgentIDs bundle resolution.
  *   - SkillImportExportService round-trip: export a skill → SKILL.md → re-import → verify the new
  *     skill + its Action/sub-agent junction rows are recreated by name resolution; unknown-name
@@ -22,12 +25,14 @@
  */
 import { TestRunner, Assert, AssertEqual } from './lib/harness';
 import { bootstrapAI } from './lib/ai-bootstrap';
-import { RunView } from '@memberjunction/core';
+import { RunView, UserInfo } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import {
     MJAISkillEntity,
     MJAISkillActionEntity,
     MJAISkillSubAgentEntity,
     MJAIAgentSkillEntity,
+    MJAISkillPermissionEntity,
     MJAIAgentEntityExtended,
     AISkillExportMarkdownOperation,
     AISkillImportMarkdownOperation,
@@ -54,10 +59,11 @@ async function main(): Promise<void> {
     const bundledSubAgent = activeAgents[0];
     const grantTargetAgent = activeAgents[1];
 
-    // Track everything we create so the finally block can tear it down (junctions/grants first, then skills).
+    // Track everything we create so the finally block can tear it down (junctions/grants/permissions first, then skills).
     const createdSkillIds: string[] = [];
     const createdJunctionRows: { entity: string; id: string }[] = [];
     const createdGrantIds: string[] = [];
+    const createdPermissionIds: string[] = [];
 
     /** Helper: create an AI Skill fixture. */
     const makeSkill = async (name: string, status: MJAISkillEntity['Status'], instructions: string): Promise<MJAISkillEntity> => {
@@ -75,11 +81,14 @@ async function main(): Promise<void> {
 
     let skillActive: MJAISkillEntity;
     let skillDeprecated: MJAISkillEntity;
+    let skillOpen: MJAISkillEntity;
 
     try {
         // ── Fixtures ─────────────────────────────────────────────────────────────────────────────
         skillActive = await makeSkill(`Report Builder ${TAG}`, 'Active', 'Build formatted reports carefully. Cite sources.');
         skillDeprecated = await makeSkill(`Old Skill ${TAG}`, 'Deprecated', 'A retired skill.');
+        // A second Active skill left WITHOUT any permission rows — the open-by-default control.
+        skillOpen = await makeSkill(`Open Skill ${TAG}`, 'Active', 'An unrestricted skill anyone can run.');
 
         // Bundle one Action + one sub-agent into skillActive.
         const skAction = await provider.GetEntityObject<MJAISkillActionEntity>('MJ: AI Skill Actions', user);
@@ -121,24 +130,90 @@ async function main(): Promise<void> {
 
         suite.Test('AcceptsSkills=All includes an Active skill and excludes a Deprecated one', async () => {
             const skills = AIEngine.Instance.GetSkillsForAgent(agentAs(grantTargetAgent.ID, 'All'));
-            Assert(skills.some(s => s.ID === skillActive.ID), 'All must include the Active test skill');
-            Assert(!skills.some(s => s.ID === skillDeprecated.ID), 'All must exclude the Deprecated test skill');
+            Assert(skills.some(s => UUIDsEqual(s.ID, skillActive.ID)), 'All must include the Active test skill');
+            Assert(!skills.some(s => UUIDsEqual(s.ID, skillDeprecated.ID)), 'All must exclude the Deprecated test skill');
         });
 
         suite.Test('AcceptsSkills=Limited returns only granted Active skills', async () => {
             const granted = AIEngine.Instance.GetSkillsForAgent(agentAs(grantTargetAgent.ID, 'Limited'));
-            Assert(granted.some(s => s.ID === skillActive.ID), 'granted agent must see the granted skill');
+            Assert(granted.some(s => UUIDsEqual(s.ID, skillActive.ID)), 'granted agent must see the granted skill');
 
             // A different agent with no grant sees none of our test skills under Limited.
             const ungranted = AIEngine.Instance.GetSkillsForAgent(agentAs(bundledSubAgent.ID, 'Limited'));
-            Assert(!ungranted.some(s => s.ID === skillActive.ID), 'an agent without a grant must NOT see the skill under Limited');
+            Assert(!ungranted.some(s => UUIDsEqual(s.ID, skillActive.ID)), 'an agent without a grant must NOT see the skill under Limited');
         });
 
         suite.Test('GetSkillActionIDs / GetSkillSubAgentIDs return the bundled IDs', async () => {
             const actionIds = AIEngine.Instance.GetSkillActionIDs(skillActive.ID);
             const subIds = AIEngine.Instance.GetSkillSubAgentIDs(skillActive.ID);
-            Assert(actionIds.includes(anyAction!.ID), 'bundled action ID must be returned');
-            Assert(subIds.includes(bundledSubAgent.ID), 'bundled sub-agent ID must be returned');
+            Assert(actionIds.some(id => UUIDsEqual(id, anyAction!.ID)), 'bundled action ID must be returned');
+            Assert(subIds.some(id => UUIDsEqual(id, bundledSubAgent.ID)), 'bundled sub-agent ID must be returned');
+        });
+
+        // ── Permissions: grantee-exclusivity validator + GetSkillsForAgent user filter ───────────────
+        /** Helper: build an AISkillPermission and attempt to save it, returning the entity (saved or not). */
+        const makePermission = async (
+            skillId: string,
+            opts: { userId?: string | null; roleId?: string | null; canRun?: boolean }
+        ): Promise<MJAISkillPermissionEntity> => {
+            const p = await provider.GetEntityObject<MJAISkillPermissionEntity>('MJ: AI Skill Permissions', user);
+            p.NewRecord();
+            p.SkillID = skillId;
+            p.UserID = opts.userId ?? null;
+            p.RoleID = opts.roleId ?? null;
+            p.CanRun = opts.canRun ?? false;
+            return p;
+        };
+
+        suite.Test('AISkillPermission rejects a row with BOTH a User and a Role (grantee-exclusivity validator)', async () => {
+            const anyRole = provider.Roles?.[0];
+            Assert(!!anyRole, 'need at least one Role in the instance to test grantee exclusivity');
+            const p = await makePermission(skillOpen.ID, { userId: user.ID, roleId: anyRole!.ID, canRun: true });
+            const saved = await p.Save();
+            Assert(!saved, 'save must FAIL when both UserID and RoleID are set');
+            Assert(
+                (p.LatestResult?.CompleteMessage ?? '').toLowerCase().includes('role') ||
+                (p.LatestResult?.CompleteMessage ?? '').toLowerCase().includes('user'),
+                'failure message should mention the grantee exclusivity rule'
+            );
+            // Rejected rows never persist — nothing to track for cleanup.
+        });
+
+        suite.Test('AISkillPermission rejects a row with NEITHER a User nor a Role', async () => {
+            const p = await makePermission(skillOpen.ID, { userId: null, roleId: null, canRun: true });
+            const saved = await p.Save();
+            Assert(!saved, 'save must FAIL when neither UserID nor RoleID is set');
+        });
+
+        suite.Test('AISkillPermission accepts a row with exactly one grantee (a User)', async () => {
+            const p = await makePermission(skillActive.ID, { userId: user.ID, canRun: true });
+            const saved = await p.Save();
+            Assert(saved, `save should SUCCEED with a single grantee: ${p.LatestResult?.CompleteMessage}`);
+            createdPermissionIds.push(p.ID);
+            // Refresh so GetSkillsForAgent sees the new permission row (skillActive is now "closed").
+            await AIEngine.Instance.Config(true, user);
+        });
+
+        // A fabricated non-owner user with no roles — GetSkillsForAgent reads only .ID + .UserRoles, so a
+        // stand-in suffices to exercise the permission filter without provisioning a second real account.
+        const nonOwner = ({ ID: 'F0F0F0F0-1111-2222-3333-444455556666', UserRoles: [] }) as unknown as UserInfo;
+
+        suite.Test('GetSkillsForAgent(agent) WITHOUT a user applies no permission filter', async () => {
+            const skills = AIEngine.Instance.GetSkillsForAgent(agentAs(grantTargetAgent.ID, 'All'));
+            Assert(skills.some(s => UUIDsEqual(s.ID, skillActive.ID)), 'unfiltered call includes the restricted skill');
+            Assert(skills.some(s => UUIDsEqual(s.ID, skillOpen.ID)), 'unfiltered call includes the open skill');
+        });
+
+        suite.Test('GetSkillsForAgent(agent, owner) returns owner-authored skills even when permission rows exist', async () => {
+            const skills = AIEngine.Instance.GetSkillsForAgent(agentAs(grantTargetAgent.ID, 'All'), user);
+            Assert(skills.some(s => UUIDsEqual(s.ID, skillActive.ID)), 'owner sees their own skill despite a restrictive row');
+            Assert(skills.some(s => UUIDsEqual(s.ID, skillOpen.ID)), 'owner sees the open skill');
+        });
+
+        suite.Test('GetSkillsForAgent(agent, nonOwner) excludes a skill with rows the user is not in, but keeps open-by-default skills', async () => {
+            const skills = AIEngine.Instance.GetSkillsForAgent(agentAs(grantTargetAgent.ID, 'All'), nonOwner);
+            Assert(!skills.some(s => UUIDsEqual(s.ID, skillActive.ID)), 'non-owner is denied a skill whose rows do not grant them (closed once rows exist)');
+            Assert(skills.some(s => UUIDsEqual(s.ID, skillOpen.ID)), 'a skill with NO permission rows stays open to everyone (open-by-default)');
         });
 
         // ── SKILL.md round-trip via the service ─────────────────────────────────────────────────────
@@ -207,20 +282,21 @@ async function main(): Promise<void> {
         });
 
         const failures = await suite.Run();
-        await cleanup(provider, user, createdGrantIds, createdJunctionRows, createdSkillIds);
+        await cleanup(provider, user, createdGrantIds, createdJunctionRows, createdPermissionIds, createdSkillIds);
         process.exit(failures > 0 ? 1 : 0);
     } catch (error) {
-        await cleanup(provider, user, createdGrantIds, createdJunctionRows, createdSkillIds);
+        await cleanup(provider, user, createdGrantIds, createdJunctionRows, createdPermissionIds, createdSkillIds);
         throw error;
     }
 }
 
-/** Tear down in FK-safe order: grants + junctions first, then the skills. */
+/** Tear down in FK-safe order: grants + junctions + permissions first, then the skills. */
 async function cleanup(
     provider: Awaited<ReturnType<typeof bootstrapAI>>['provider'],
     user: Awaited<ReturnType<typeof bootstrapAI>>['user'],
     grantIds: string[],
     junctionRows: { entity: string; id: string }[],
+    permissionIds: string[],
     skillIds: string[],
 ): Promise<void> {
     const del = async (entityName: string, id: string) => {
@@ -231,6 +307,7 @@ async function cleanup(
     };
     for (const id of grantIds) await del('MJ: AI Agent Skills', id);
     for (const row of junctionRows) await del(row.entity, row.id);
+    for (const id of permissionIds) await del('MJ: AI Skill Permissions', id);
     for (const id of skillIds) await del('MJ: AI Skills', id);
 }
 
