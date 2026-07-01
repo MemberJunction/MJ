@@ -14,9 +14,9 @@
       "MJ: Entity Fields": [
         {
           "fields": {
-            "JSONType": "ISecondaryScopes",
+            "JSONType": "IAISecondaryScopes",
             "JSONTypeIsArray": false,
-            "JSONTypeDefinition": "@file:JSONType-interfaces/ISecondaryScopes.ts"
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IAISecondaryScopes.ts"
           },
           "_comments": [
             "SecondaryScopes field — open map of secondary scope dimensions"

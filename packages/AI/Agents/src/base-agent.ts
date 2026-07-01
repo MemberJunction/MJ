@@ -48,7 +48,7 @@ import { AIEngine } from '@memberjunction/aiengine';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import { AgentMemoryContextBuilder } from './agent-memory-context-builder';
-import { PromptComponentResolver, injectScopedPromptParts } from './prompt-component-resolver';
+import { PromptComponentResolver, InjectScopedPromptParts } from './prompt-component-resolver';
 import { AgentPreExecutionRAGResult } from './agent-pre-execution-rag';
 import {
     AIPromptParams,
@@ -2875,7 +2875,7 @@ export class BaseAgent {
                 MJGlobal.Instance.ClassFactory.CreateInstance<PromptComponentResolver>(PromptComponentResolver) ??
                 new PromptComponentResolver();
 
-            injectScopedPromptParts(
+            InjectScopedPromptParts(
                 resolver,
                 prompts[0].PromptID,
                 { primaryScopeEntityId, primaryScopeRecordId, secondaryScopes },

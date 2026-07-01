@@ -180,7 +180,7 @@ export class PromptComponentResolver {
  * onto the front of `conversationMessages` (mirroring how memory/RAG inject). No-op when nothing
  * resolves. Returns the included parts (for observability).
  */
-export function injectScopedPromptParts(
+export function InjectScopedPromptParts(
     resolver: PromptComponentResolver,
     promptID: string,
     scope: PromptComponentScope,
