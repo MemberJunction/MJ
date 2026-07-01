@@ -102,7 +102,7 @@ interface ProgressUpdate {
                 <ng-template mjAccordionTitle>
                   <i class="fa-solid fa-sliders"></i>
                   <span>Test Variables</span>
-                  <span class="variables-count-badge">{{ availableVariables.length }}</span>
+                  <span class="mj-accordion-badge mj-accordion-badge--right">{{ availableVariables.length }}</span>
                 </ng-template>
                 <ng-template mjAccordionBody>
                   <div class="variables-content">
@@ -157,7 +157,7 @@ interface ProgressUpdate {
               <mj-accordion-panel Size="sm" [FlushBody]="true" [Expanded]="showAdvancedOptions" (ExpandedChange)="onAdvancedOptionsExpandedChange($event)">
                 <ng-template mjAccordionTitle>
                   <span>Advanced Options</span>
-                  <span class="test-count-badge">{{ suiteTests.length }} tests</span>
+                  <span class="mj-accordion-badge mj-accordion-badge--right">{{ suiteTests.length }} tests</span>
                 </ng-template>
                 <ng-template mjAccordionBody>
                   <div class="advanced-content">
@@ -375,7 +375,7 @@ interface ProgressUpdate {
                 <mj-accordion-panel Size="sm" [FlushBody]="true" [Expanded]="showAdvancedOptions" (ExpandedChange)="onAdvancedOptionsExpandedChange($event)">
                   <ng-template mjAccordionTitle>
                     <span>Advanced Options</span>
-                    <span class="test-count-badge">{{ suiteTests.length }} tests</span>
+                    <span class="mj-accordion-badge mj-accordion-badge--right">{{ suiteTests.length }} tests</span>
                   </ng-template>
                   <ng-template mjAccordionBody>
                     <div class="advanced-content">
@@ -1447,16 +1447,9 @@ interface ProgressUpdate {
     }
 
     /* Advanced Options - Progressive Disclosure */
-    /* .advanced-options-section / .advanced-toggle chrome is now owned by <mj-accordion-panel>. */
-    .test-count-badge {
-      margin-left: auto;
-      padding: 2px 8px;
-      background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
-      color: var(--mj-brand-primary-hover);
-      border-radius: 10px;
-      font-size: 11px;
-      font-weight: 500;
-    }
+    /* .advanced-options-section / .advanced-toggle chrome is now owned by <mj-accordion-panel>.
+       The former .test-count-badge count pill was replaced by the standard
+       .mj-accordion-badge--right. */
 
     .advanced-content {
       padding: 0 12px 12px 12px;
@@ -1644,16 +1637,9 @@ interface ProgressUpdate {
       font-size: 12px;
     }
 
-    /* .variables-section / .variables-toggle chrome is now owned by <mj-accordion-panel>. */
-    .variables-count-badge {
-      margin-left: auto;
-      padding: 2px 8px;
-      background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
-      color: var(--mj-brand-primary-hover);
-      border-radius: 10px;
-      font-size: 11px;
-      font-weight: 500;
-    }
+    /* .variables-section / .variables-toggle chrome is now owned by <mj-accordion-panel>.
+       The former .variables-count-badge count pill was replaced by the standard
+       .mj-accordion-badge--right. */
 
     .variables-content {
       padding: 0 12px 12px 12px;

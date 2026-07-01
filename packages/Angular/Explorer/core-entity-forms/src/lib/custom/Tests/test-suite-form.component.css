@@ -859,27 +859,10 @@
 /* Filters disclosure migrated to <mj-accordion-panel>. The bespoke
    .analytics-filters wrapper card chrome, the .filters-header bar (+ hover),
    and the .filters-header > i chevron are now owned by the accordion and were
-   removed. The title-slot styling (.filters-title / .filter-summary) and the
-   body content (.filters-content) are kept below. */
-
-.filters-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--test-text-secondary);
-}
-
-.filters-title i {
-  color: var(--test-primary);
-}
-
-.filter-summary {
-  font-weight: 400;
-  color: var(--test-text-muted);
-  margin-left: 8px;
-}
+   removed. The title-slot layout (.filters-title flex row) and font are now
+   provided by the accordion title + Size="sm"; the collapsed summary uses the
+   shared .mj-accordion-badge (--muted --right). Only the body content
+   (.filters-content) styling is kept below. */
 
 .filters-content {
   display: flex;

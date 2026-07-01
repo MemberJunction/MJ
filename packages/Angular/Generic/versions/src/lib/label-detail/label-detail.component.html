@@ -347,7 +347,8 @@
                   [Expanded]="group.IsExpanded" (ExpandedChange)="ToggleSnapshotGroup(group)">
                 <ng-template mjAccordionTitle>
                   <i [class]="group.EntityIcon" class="group-entity-icon"></i>
-                  <span class="group-name">{{group.EntityName}} <span class="group-count-inline">{{group.Items.length}}</span></span>
+                  <span class="group-name">{{group.EntityName}}</span>
+                  <span class="mj-accordion-badge mj-accordion-badge--right">{{group.Items.length}}</span>
                 </ng-template>
                 <ng-template mjAccordionBody>
                   <div class="group-content">
@@ -506,7 +507,7 @@
                     <ng-template mjAccordionTitle>
                       <i [class]="resolveEntityIconByName(group.EntityName)" class="diff-group-icon"></i>
                       <span class="diff-group-name">{{group.EntityName}}</span>
-                      <span class="diff-group-count change-modified">
+                      <span class="mj-accordion-badge mj-accordion-badge--warning mj-accordion-badge--right">
                         {{group.Records.length}} modified
                       </span>
                     </ng-template>

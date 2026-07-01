@@ -113,14 +113,7 @@
     flex: 1;
 }
 
-.mj-related-count {
-    background: var(--mj-bg-surface-card);
-    color: var(--mj-text-muted);
-    font-size: 0.7rem;
-    padding: 1px 7px;
-    border-radius: 10px;
-    font-weight: 500;
-}
+/* .mj-related-count removed — replaced by the standard .mj-accordion-badge--right. */
 
 .mj-related-loading {
     padding: 16px;

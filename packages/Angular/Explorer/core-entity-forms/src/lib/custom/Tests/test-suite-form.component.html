@@ -500,18 +500,16 @@
           <mj-accordion-panel Size="sm" [FlushBody]="true"
             [Expanded]="!filtersCollapsed" (ExpandedChange)="onFiltersExpandedChange($event)">
             <ng-template mjAccordionTitle>
-              <span class="filters-title">
-                <i class="fas fa-filter"></i>
-                Filters
-                @if (filtersCollapsed) {
-                  <span class="filter-summary">
-                    {{ analyticsTimeRange === 'all' ? 'All Time' : analyticsTimeRange }}
-                    @if (selectedTags.length > 0) {
-                      <span> · {{ selectedTags.length }} tags</span>
-                    }
-                  </span>
-                }
-              </span>
+              <i class="fas fa-filter" style="color: var(--test-primary);"></i>
+              Filters
+              @if (filtersCollapsed) {
+                <span class="mj-accordion-badge mj-accordion-badge--right mj-accordion-badge--muted">
+                  {{ analyticsTimeRange === 'all' ? 'All Time' : analyticsTimeRange }}
+                  @if (selectedTags.length > 0) {
+                    <span> · {{ selectedTags.length }} tags</span>
+                  }
+                </span>
+              }
             </ng-template>
             <ng-template mjAccordionBody>
               <div class="filters-content">

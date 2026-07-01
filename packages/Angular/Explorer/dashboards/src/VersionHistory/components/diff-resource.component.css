@@ -202,15 +202,10 @@
     gap: 6px;
 }
 
-.badge {
-    display: inline-flex;
-    align-items: center;
-    padding: 3px 10px;
-    border-radius: 12px;
-    font-size: 12px;
-    font-weight: 600;
-    border: none;
-}
+/* Entity-group count badges migrated to <mj-accordion-badge> (--success /
+   --error / --warning); the bespoke .badge base rule was removed. The
+   .change-added/-removed/-modified color classes remain — they're still used by
+   the summary stats, diff items, diff fields, and filter pills below. */
 
 /* Entity group items */
 .entity-group-items {

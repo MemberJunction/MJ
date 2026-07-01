@@ -1,14 +1,6 @@
-/* cls-org-ctx wrapper + head chrome now owned by <mj-accordion-panel>. */
-.cls-org-ctx-title { flex: 1; }
-.cls-org-ctx-dirty {
-    font-size: 0.72rem;
-    font-weight: 600;
-    color: var(--mj-status-warning-text);
-    background: color-mix(in srgb, var(--mj-status-warning) 12%, var(--mj-bg-surface));
-    border: 1px solid var(--mj-status-warning-border, var(--mj-border-default));
-    border-radius: 999px;
-    padding: 2px 8px;
-}
+/* cls-org-ctx wrapper + head chrome now owned by <mj-accordion-panel>.
+   Title label + "Unsaved" pill now use the accordion's own title layout +
+   canonical .mj-accordion-badge--warning --right — bespoke rules deleted. */
 .cls-org-ctx-body {
     padding: 14px;
 }

@@ -1,9 +1,9 @@
 <mj-accordion-panel Size="sm" [FlushBody]="true" [Expanded]="Expanded" (ExpandedChange)="onExpandedChange($event)">
     <ng-template mjAccordionTitle>
         <i class="fa-solid fa-building"></i>
-        <span class="cls-org-ctx-title">Organization domain context</span>
+        <span>Organization domain context</span>
         @if (HasUnsavedChanges) {
-            <span class="cls-org-ctx-dirty">Unsaved</span>
+            <span class="mj-accordion-badge mj-accordion-badge--warning mj-accordion-badge--right">Unsaved</span>
         }
     </ng-template>
     <ng-template mjAccordionBody>

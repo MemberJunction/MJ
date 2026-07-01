@@ -730,21 +730,7 @@
     flex: 1;
 }
 
-.group-count-inline {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 20px;
-    height: 20px;
-    padding: 0 6px;
-    margin-left: 6px;
-    background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
-    color: var(--mj-brand-primary);
-    border-radius: 10px;
-    font-size: 12px;
-    font-weight: 600;
-    vertical-align: middle;
-}
+/* .group-count-inline removed — replaced by the standard .mj-accordion-badge--right. */
 
 .group-content {
     border-top: 1px solid var(--mj-border-default);
@@ -1041,12 +1027,8 @@
     flex: 1;
 }
 
-.diff-group-count {
-    font-size: 12px;
-    font-weight: 600;
-    padding: 2px 10px;
-    border-radius: 10px;
-}
+/* .diff-group-count removed — the "N modified" count now uses the standard
+   .mj-accordion-badge--warning --right (warning-tinted status count). */
 
 .diff-group-content {
     border-top: 1px solid var(--mj-border-default);

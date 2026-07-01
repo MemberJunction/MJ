@@ -105,14 +105,7 @@
     flex: 1;
 }
 
-.count {
-    padding: 2px 8px;
-    background: var(--mj-bg-surface-sunken);
-    border-radius: 10px;
-    font-size: 11px;
-    color: var(--mj-text-secondary);
-    font-weight: 600;
-}
+/* .count removed — replaced by the standard .mj-accordion-badge--right. */
 
 .rows {
     display: flex;

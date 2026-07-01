@@ -1251,14 +1251,8 @@
 
 /* Section header (title row + chevron) now owned by <mj-accordion-panel>. */
 
-.panel-count {
-  margin-left: auto;
-  background: var(--mj-bg-surface-card);
-  padding: 1px 6px;
-  border-radius: 8px;
-  font-size: 10px;
-  color: var(--mj-text-disabled);
-}
+/* Section count pill migrated to <mj-accordion-badge mj-accordion-badge--right>;
+   bespoke .panel-count rule removed. */
 
 /* App hierarchy in panel */
 .panel-app-header {

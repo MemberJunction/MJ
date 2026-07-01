@@ -899,8 +899,9 @@
 /* Field-group disclosure migrated to <mj-accordion-panel>. The bespoke
    .field-group separators, .group-header bar + .group-header:hover, and the
    .expand-icon chevron are now owned by the accordion and were removed. The
-   title-slot content styling (.group-icon / .group-label / .group-count) is
-   kept below. */
+   title-slot content styling (.group-icon / .group-label) is kept below. The
+   field-group count now uses the shared .mj-accordion-badge; .group-count below
+   is retained only for the non-accordion relationship / organic-key titles. */
 
 .group-icon {
     font-size: 16px;

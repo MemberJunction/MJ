@@ -117,29 +117,8 @@
     letter-spacing: -0.2px;
 }
 .cr-group-meta { display: inline-flex; gap: 6px; }
-
-.cr-pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    font-size: 10.5px;
-    font-weight: 600;
-    padding: 2px 8px;
-    border-radius: 100px;
-    line-height: 1.4;
-}
-.cr-pill--neutral {
-    background: var(--mj-bg-surface-sunken);
-    color: var(--mj-text-secondary);
-}
-.cr-pill--info {
-    background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
-    color: var(--mj-brand-primary);
-}
-.cr-pill--warn {
-    background: color-mix(in srgb, var(--mj-status-warning) 16%, transparent);
-    color: color-mix(in srgb, var(--mj-status-warning) 70%, var(--mj-text-primary));
-}
+/* Count/keys/overrides pills migrated to <mj-accordion-badge> (--right / --info /
+   --warning). The bespoke .cr-pill* rules were removed. */
 
 /* Table */
 .cr-table {

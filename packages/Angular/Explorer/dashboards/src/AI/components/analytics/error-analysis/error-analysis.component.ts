@@ -122,7 +122,7 @@ const FIELDS = [
                                 </div>
                             </div>
                             <div class="error-group__right">
-                                <span class="error-count-badge">{{ group.Count }}</span>
+                                <span class="mj-accordion-badge mj-accordion-badge--error">{{ group.Count }}</span>
                                 <div class="last-error-time">{{ group.LastErrorTime }}</div>
                             </div>
                         </div>
@@ -289,19 +289,8 @@ const FIELDS = [
             flex-shrink: 0;
         }
 
-        .error-count-badge {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            min-width: 28px;
-            height: 24px;
-            padding: 0 8px;
-            border-radius: 12px;
-            background: color-mix(in srgb, var(--mj-status-error) 12%, var(--mj-bg-surface));
-            color: var(--mj-status-error);
-            font-size: 12px;
-            font-weight: 700;
-        }
+        /* Count pill now uses the canonical .mj-accordion-badge--error (token-driven,
+           dark-mode-safe) — the bespoke .error-count-badge rule was deleted. */
 
         .last-error-time {
             font-size: 12px;
