@@ -1,0 +1,18 @@
+[
+  {
+    "fields": {
+      "Name": "Can Share Skills",
+      "ParentID": null,
+      "IsActive": true,
+      "UseAuditLog": true,
+      "Description": "Grants the ability to share an authored AI Skill with other users or roles via Resource Permissions (ResourceType 'AI Skills'). Authoring and using your own skills does not require this authorization; only the share action is gated."
+    },
+    "primaryKey": {
+      "ID": "10D6D3A8-EA24-493D-A963-39723F9A2B91"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T01:12:01.262Z",
+      "checksum": "65a3430ff244f09ec87c8e5834aa07a8a79e173c0f9052ccb083cb3942213238"
+    }
+  }
+]
