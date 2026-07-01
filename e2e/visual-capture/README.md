@@ -1,4 +1,4 @@
-# e2e/screenshots — ad-hoc visual capture scripts
+# e2e/visual-capture — ad-hoc visual capture scripts
 
 Browser-driven **screenshot-capture** helpers (not test specs). Each drives a
 **running** MJExplorer via `playwright-cli` and writes full-page PNGs in both
@@ -21,12 +21,18 @@ target page.
 Run from the **repo root**, e.g.:
 
 ```bash
-e2e/screenshots/navpanel-shot.sh nav-panel-baseline 1 1 1
+e2e/visual-capture/navpanel-shot.sh nav-panel-baseline 1 1 1
 ```
 
 Each script prints where it wrote its `-light.png` / `-dark.png` pair. Output
 lands under `plans/complete/collapsible-section-screenshots/<surface>/` (the
 archived home of the collapsible-migration captures).
+
+> ⚠️ **Reusing one of these for active work?** Their output `DIR=` is hardcoded
+> to the completed migration's archive under `plans/complete/…`. Before
+> re-running for a new/in-flight surface, repoint `DIR=` **out of** `complete/`
+> (e.g. to `plans/<your-active-plan>-screenshots/…`) so fresh captures don't
+> land in a "done" archive.
 
 | Script | Captures |
 |--------|----------|

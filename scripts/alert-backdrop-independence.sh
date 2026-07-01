@@ -21,6 +21,8 @@ set -eu
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 COMP="$ROOT/packages/Angular/Generic/ui-components/src/lib/alert/alert.component.ts"
 TOKENS_SCSS="$ROOT/packages/Angular/Generic/shared/src/lib/_tokens.scss"
+# NOTE: writes into the completed alert-migration archive; repoint out of
+# plans/complete/ if reusing for active work.
 OUT="$ROOT/plans/complete/alert-screenshots/backdrop-independence.html"
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 

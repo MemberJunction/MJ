@@ -4,7 +4,7 @@
 # themes, forcing the section expand/collapse state via the Angular debug API so
 # the [Fill] entities tree + capped Favorites/Recent bodies are visible.
 #
-# Usage: e2e/screenshots/navpanel-shot.sh <out-basename> <fav 0|1> <recent 0|1> <entities 0|1>
+# Usage: e2e/visual-capture/navpanel-shot.sh <out-basename> <fav 0|1> <recent 0|1> <entities 0|1>
 # Writes: plans/complete/collapsible-section-screenshots/nav-panel-fill/<out>-light.png and -dark.png
 #
 # Prereq: dev server up, playwright-cli already navigated to a data-explorer entity page.

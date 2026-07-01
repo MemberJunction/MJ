@@ -5,7 +5,7 @@
 # debug API. Prereq: playwright-cli already on a connection's entity-map editor
 # (app-visual-field-editor mounted).
 #
-# Usage: e2e/screenshots/integration-fieldmaps-shot.sh <out-basename> <fieldmaps 0|1> <syncinfo 0|1>
+# Usage: e2e/visual-capture/integration-fieldmaps-shot.sh <out-basename> <fieldmaps 0|1> <syncinfo 0|1>
 # Writes: plans/complete/collapsible-section-screenshots/integration-field-maps/<out>-light.png and -dark.png
 
 set -eu

@@ -5,7 +5,7 @@
 # Prereq: playwright-cli on the ERD (Admin > Data & Schema) with an entity selected
 # (mj-entity-details mounted).
 #
-# Usage: e2e/screenshots/erd-details-shot.sh <out-basename> <fields 0|1> <related 0|1>
+# Usage: e2e/visual-capture/erd-details-shot.sh <out-basename> <fields 0|1> <related 0|1>
 # Writes: plans/complete/collapsible-section-screenshots/erd-entity-details/<out>-light.png and -dark.png
 
 set -eu

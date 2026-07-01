@@ -4,7 +4,7 @@
 # in both themes, forcing the section expand flags via the Angular debug API.
 # Prereq: playwright-cli with the MCP log detail panel open (a log row clicked).
 #
-# Usage: e2e/screenshots/mcp-log-shot.sh <out-basename>
+# Usage: e2e/visual-capture/mcp-log-shot.sh <out-basename>
 # Writes: plans/complete/collapsible-section-screenshots/mcp-log-detail/<out>-light.png and -dark.png
 
 set -eu

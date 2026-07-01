@@ -4,7 +4,7 @@
 # accordions in both themes, forcing the section expand flags via the Angular
 # debug API. Prereq: playwright-cli with the Edit Application dialog open.
 #
-# Usage: e2e/screenshots/app-dialog-shot.sh <out-basename>
+# Usage: e2e/visual-capture/app-dialog-shot.sh <out-basename>
 # Writes: plans/complete/collapsible-section-screenshots/app-dialog/<out>-light.png and -dark.png
 
 set -eu

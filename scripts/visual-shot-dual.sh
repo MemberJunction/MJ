@@ -22,6 +22,9 @@
 set -eu
 OUT="${1:?usage: visual-shot-dual.sh <out-basename> [force-js]}"
 FORCE="${2:-}"
+# NOTE: points into the completed alert-migration archive. Reusing this for
+# active work? Repoint DIR out of plans/complete/ so captures don't land in a
+# "done" archive.
 DIR="plans/complete/alert-screenshots/migrated"
 mkdir -p "$DIR"
 

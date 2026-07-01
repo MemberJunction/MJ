@@ -5,7 +5,7 @@
 # Angular debug API (the foblex canvas node-selection is hard to drive headless).
 # Prereq: playwright-cli on an agent's Flow Configuration (canvas) with >=1 step.
 #
-# Usage: e2e/screenshots/agent-props-shot.sh <out-basename>
+# Usage: e2e/visual-capture/agent-props-shot.sh <out-basename>
 # Writes: plans/complete/collapsible-section-screenshots/agent-properties/<out>-light.png and -dark.png
 
 set -eu
