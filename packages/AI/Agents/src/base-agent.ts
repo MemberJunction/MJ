@@ -8622,7 +8622,8 @@ The context is now within limits. Please retry your request with the recovered c
         previousDecision?: BaseAgentNextStep<SR, SC>,
         parentStepId?: string,
         subAgentPayloadOverride?: any,
-        stepCount: number = 0
+        stepCount: number = 0,
+        resolvedSubAgentEntity?: MJAIAgentEntityExtended
     ): Promise<BaseAgentNextStep<SR, SC>> {
         const subAgentRequest = previousDecision.subAgent as AgentSubAgentRequest<SC>;
         // Check for cancellation before starting
@@ -8664,9 +8665,15 @@ The context is now within limits. Please retry your request with the recovered c
             parentAgentHierarchy: this._agentHierarchy
         };
         
-        // Get sub-agent entity to access payload paths
-        const subAgentEntity = AIEngine.Instance.Agents.find(a => a.Name === subAgentRequest.name &&
-                                                            UUIDsEqual(a.ParentID, params.agent.ID));
+        // Get sub-agent entity to access payload paths. Prefer the entity the caller already
+        // resolved (resolveSubAgentByName — covers ParentID children AND runtime-granted
+        // sub-agents from skill activations / subAgentChanges); fall back to the ParentID
+        // lookup, then the effective set, for any legacy direct callers of this method.
+        const subAgentEntity = resolvedSubAgentEntity
+            ?? AIEngine.Instance.Agents.find(a => a.Name === subAgentRequest.name &&
+                                                  UUIDsEqual(a.ParentID, params.agent.ID))
+            ?? this.getEffectiveSubAgentsForValidation(params.agent.ID).find(
+                   a => a.Name.trim().toLowerCase() === subAgentRequest.name?.trim().toLowerCase());
         if (!subAgentEntity) {
             throw new Error(`Sub-agent '${subAgentRequest.name}' not found`);
         }
@@ -9017,18 +9024,27 @@ The context is now within limits. Please retry your request with the recovered c
                 previousDecision,
                 parentStepId,
                 subAgentPayloadOverride,
-                stepCount
+                stepCount,
+                resolved.subAgentEntity
             );
         }
 
-        this.logError(`Sub-agent '${name}' not found or not active for agent '${params.agent.Name}'`, {
+        // Execution-time resolution failure. Count it against the shared validation-retry cap
+        // (MAX_VALIDATION_RETRIES) so a model that keeps picking an unresolvable sub-agent fails
+        // the run with a clear guardrail message instead of looping forever, and tell the model
+        // exactly which sub-agents ARE available so it can self-correct on the next turn.
+        const availableNames = this.getEffectiveSubAgentsForValidation(params.agent.ID)
+            .map(a => a.Name).join(', ') || '(none)';
+        this.logError(`Sub-agent '${name}' not found or not active for agent '${params.agent.Name}'. Available sub-agents: ${availableNames}`, {
             agent: params.agent,
             category: 'SubAgentExecution'
         });
+        this._generalValidationRetryCount++;
         return {
             step: 'Retry',
             terminate: false,
-            errorMessage: `Sub-agent '${name}' not found or not active`,
+            errorMessage: `Sub-agent '${name}' not found or not active. Available sub-agents: ${availableNames}. ` +
+                `Pick one of the available sub-agents, or complete the task another way — do not request '${name}' again.`,
             previousPayload: previousDecision.newPayload,
             newPayload: previousDecision.newPayload
         };
@@ -9073,6 +9089,18 @@ The context is now within limits. Please retry your request with the recovered c
             if (relatedAgent) {
                 return { subAgentEntity: relatedAgent, relationship: rel };
             }
+        }
+        // 3) Runtime-granted sub-agents (skill activation / caller subAgentChanges): resolve from
+        // the SAME effective set the prompt offered and validateSubAgentNextStep approved. Without
+        // this branch, a skill-granted sub-agent passes validation but fails execution ("not found
+        // or not active") — and because the catalog keeps offering it, the model re-picks the same
+        // sub-agent forever (observed live: Research Agent looping 36+ turns on the skill-granted
+        // Infographic Agent). No relationship row exists for these, so they dispatch child-style.
+        const effectiveAgent = this.getEffectiveSubAgentsForValidation(params.agent.ID).find(a =>
+            a.Status === 'Active' && a.Name.trim().toLowerCase() === normalized
+        );
+        if (effectiveAgent) {
+            return { subAgentEntity: effectiveAgent };
         }
         return undefined;
     }
