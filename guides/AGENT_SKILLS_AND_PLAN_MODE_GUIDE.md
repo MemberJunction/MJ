@@ -44,6 +44,25 @@ At runtime a fourth, orthogonal gate also applies: an activated skill's bundled 
 
 `Action`/`Agent` bundle IDs are read via `GetSkillActionIDs(skillID)` / `GetSkillSubAgentIDs(skillID)`; the engine returns IDs only and lets callers resolve the full entities against their own `ActionEngineServer` / `AIEngine` caches (no cross-package dependency).
 
+### 1.2a The double activation gate (v5.45) — availability vs. trigger
+
+The §1.2 gates answer *"may this agent+user use this skill at all?"* (**availability**). A second, orthogonal dimension answers *"who may pull the trigger?"* (**activation**), added after live testing showed an `AcceptsSkills='All'` agent correctly — but surprisingly — self-activating a skill the user never requested:
+
+| Column | Values | Default | Governs |
+|---|---|---|---|
+| `AISkill.ActivationMode` | `Auto` / `RequestedOnly` | **`RequestedOnly`** | May this *skill* ever be self-activated? |
+| `AIAgent.SkillActivationMode` | `Auto` / `RequestedOnly` | **`RequestedOnly`** | May this *agent* ever self-activate skills? |
+
+**Self-activation** (the skill appearing in the agent's prompt catalog + an agent-initiated `Skill` step) requires **`Auto` on BOTH sides** — resolved by `AIEngineBase.GetAutoActivatableSkillsForAgent(agent, user?)`, which is `GetSkillsForAgent(...)` further filtered by the two dials. The catalog injection, `validateSkillNextStep`, and `resolveSkillActivations` all use this auto set.
+
+**The requested path is NOT gated by ActivationMode.** A user's explicit `/skill` mention (→ `ExecuteAgentParams.requestedSkillIDs` → `preActivateRequestedSkills`) honors a `RequestedOnly` skill — that's the mode's whole point — subject to all §1.2 availability gates.
+
+Because both defaults are `RequestedOnly`, the **Auto × Auto "super agent" posture** (an agent that expands its own tool surface at runtime) always requires two deliberate opt-ins and can never arise accidentally — the defense against *skill leakage into an agent*. Configuration recipes:
+
+- **Research assistant** that should reach for web/search/visualization skills on its own judgment: agent `SkillActivationMode='Auto'` + those skills `ActivationMode='Auto'`.
+- **Consequential skill** (e.g. Communications — it *sends things*): keep `ActivationMode='RequestedOnly'`. No agent, regardless of posture, can self-activate it; users must `/skill` it in explicitly, and the skill's own confirm-before-send instructions still gate the act.
+- **Locked-down agent**: `SkillActivationMode='RequestedOnly'` — its prompt catalog is empty; skills only enter its runs when the user asks.
+
 ### 1.3 The runtime flow (Loop agent)
 
 ```
@@ -76,6 +95,38 @@ Key implementation notes (all in [`base-agent.ts`](../packages/AI/Agents/src/bas
 - **`_effectiveSubAgents`** mirrors `_effectiveActions` so a runtime-added sub-agent (from a skill) validates correctly in `validateSubAgentNextStep`. (This closed a pre-existing gap in the `subAgentChanges` mechanism that affected any consumer, not just Skills.)
 
 `executeSkillStep` is decomposed into `resolveSkillActivations` / `buildSkillActivationMessage` / `enableSkillCapabilities` / `recordSkillActivationStep`, all `protected` — override any one for fine-grained control (custom instruction formatting, a licensing check on activation, cascading grants via `'all-subagents'`, etc.) without re-implementing the step.
+
+### 1.3a Observability — `AIAgentRunStep.Skills` (v5.45)
+
+Every step touched by a skill records the linkage on `AIAgentRunStep.Skills` — a JSON-typed column (`Array<AgentSkillInvocation> | null`, generated accessor `SkillsObject`) so skill involvement is **auditable per step**, not inferred:
+
+```typescript
+type AgentSkillInvocation = {
+    SkillID: string;
+    SkillName: string;                       // identity as of activation
+    ActivationType: 'requested' | 'auto';    // /skill mention vs. agent self-activation
+    Provenance: {                            // the gate values that admitted it
+        AgentAcceptsSkills: string;
+        SkillActivationMode: string;
+        AgentSkillActivationMode: string;
+        RequestedBy: 'user-request' | 'agent-decision';
+    };
+    Reason?: string;                         // agent-stated rationale (auto only)
+}
+```
+
+Population rules (all in `createStepEntity` + the activation paths):
+
+| Step type | `Skills` contains |
+|---|---|
+| **Skill** | The activation(s) that step performed — with `Reason` when the model self-activated (the loop response's `skills:[{name, reason}]` now carries an optional one-sentence rationale) |
+| **Prompt** | The **full set of skills in effect** for that turn — prompt injection is never invisible |
+| **Actions** / **Sub-Agent** | The skill(s) through which the executed tool became available. **`NULL` means the tool was a native grant** — native authority takes precedence over skill attribution (`getSkillAttributionForAction` / `getSkillAttributionForSubAgent`) |
+| anything else | `NULL` |
+
+The runtime type twin is `AgentSkillInvocation` in `@memberjunction/ai-core-plus`; the CodeGen JSON-type interface lives at `metadata/entities/JSONType-interfaces/AgentSkillInvocation.ts` — keep them in sync.
+
+**UX**: the agent-run form renders this end to end — `Skill`/`Plan` step nodes get dedicated icons, any step with `Skills` shows per-skill chips (auto-activations get a warning accent — the agent expanded its own surface), and the step drill-in panel gains a **Skills tab** showing each invocation's activation type, provenance-of-authority grid, and reason.
 
 ### 1.4 Realtime and proxy agents
 
@@ -156,18 +207,23 @@ Both are exposed as typed, provider-routed **Remote Operations** — `AISkill.Ex
 
 Plan Mode makes an agent **present a plan and get human approval before it executes any Actions or Sub-Agents**. It's a per-request opt-in built on the **existing** `MJ: AI Agent Requests` human-in-the-loop (HITL) pause/resume infrastructure — it adds no new persistence mechanism.
 
-Two independent switches, resolved once per run in `BaseAgent.resolvePlanModeGate`:
+Three switches, resolved once per run in `BaseAgent.resolvePlanModeGate`:
 
 | Switch | Column / param | Default | Meaning |
 |---|---|---|---|
 | **Capability** | `AIAgent.SupportsPlanMode` (BIT) | `1` (ON, opt-out) | Whether this agent *can* use plan mode at all |
 | **Per-request** | `ExecuteAgentParams.planMode` | `undefined` (OFF) | Whether *this run* should be gated |
+| **Mandate** (v5.45) | `AIAgent.RequirePlanMode` (BIT) | `0` (OFF) | Forces plan mode on **every** root run of this agent, regardless of the per-request flag. `SupportsPlanMode` is irrelevant when set. |
 
-Plan Mode is **active** only when: `SupportsPlanMode` **AND** `planMode === true` **AND** the agent is the **root** (depth 0). Because the per-request toggle defaults OFF, **default runtime behavior is unchanged** — nothing is gated unless a caller explicitly opts in. Realtime agents are seeded `SupportsPlanMode = 0` (they skip plan mode structurally); Remote Proxy agents will be too when that type ships.
+Plan Mode is **active** when the agent is the **root** (depth 0) **AND** (`RequirePlanMode` **OR** (`SupportsPlanMode` **AND** `planMode === true`)). Because both the per-request toggle and the mandate default OFF, **default runtime behavior is unchanged** — nothing is gated unless a caller opts in or an admin mandates it. Set `RequirePlanMode` on high-consequence agents (anything with outbound-communication capabilities) where human review must not depend on the caller remembering a toggle. Realtime agents are seeded `SupportsPlanMode = 0` (they skip plan mode structurally); Remote Proxy agents will be too when that type ships.
+
+Every plan-mode run is stamped **`AIAgentRun.PlanMode = 1`** (v5.45) — the run-header UX renders a "Plan Mode" chip from it, and it's the anchor for future plan-drift audits (approved plan vs. steps that actually executed).
 
 ### 2.2 The gate
 
 While Plan Mode is **active and not yet approved**, `validateNextStep` demotes any `Actions` or `Sub-Agent` next step to `Retry` with an explanatory message — the agent literally cannot execute until it presents a plan. **Everything else stays allowed**: `Chat` (ask a clarifying question first), `Skill` (load a skill's instructions before planning), `ForEach`/`While`, `ClientTools`, `Retry`.
+
+**After approval, skill activations are blocked** (v5.45): a post-approval agent-initiated `Skill` step is demoted to `Retry` directing the agent to present an *updated plan* — otherwise the agent could widen its tool surface beyond what the human reviewed. The rule's shape: activations are legal only **before** approval (pre-activated `/skill` requests land before planning; pre-approval self-activations are visible in the plan), so the reviewed plan always reflects the full capability set.
 
 The prompt template surfaces a "Plan Mode — REQUIRED before you may act" section, gated on `{% if planModeActive and not planApproved %}`.
 
@@ -206,7 +262,9 @@ Two subtleties worth calling out (both are load-bearing correctness points):
 
 ## 3. Schema at a glance
 
-Migration [`V202606301200__v5.44.x__Agent_Skills_And_Plan_Mode.sql`](../migrations/v5). New tables: `AISkill`, `AISkillAction`, `AISkillSubAgent`, `AIAgentSkill`, `AISkillPermission` (User **xor** Role grantee + `CanView`/`CanRun`/`CanEdit`/`CanDelete`). Additive columns: `AIAgent.SupportsPlanMode` (default 1), `AIAgent.AcceptsSkills` (default `'None'`), `AISkill.IconClass` + `AISkill.Color` (UX metadata for the `/skill` picker). `AIAgentRunStep.StepType` CHECK extended with `'Plan'` and `'Skill'`. Composition junctions (`AISkillAction`/`AISkillSubAgent`) are intentionally **status-less** — member lifecycle is governed by `Action.Status`/`AIAgent.Status`; `Status` lives only on the grant (`AIAgentSkill`) and the catalog (`AISkill`). The `MJ: Permission Domains` catalog row for `AI Skill Permissions → MJAISkillPermissionProvider` is seeded via metadata sync (`metadata/permission-domains/`), not the migration.
+**v5.44** — Migration [`V202606301200__v5.44.x__Agent_Skills_And_Plan_Mode.sql`](../migrations/v5). New tables: `AISkill`, `AISkillAction`, `AISkillSubAgent`, `AIAgentSkill`, `AISkillPermission` (User **xor** Role grantee + `CanView`/`CanRun`/`CanEdit`/`CanDelete`). Additive columns: `AIAgent.SupportsPlanMode` (default 1), `AIAgent.AcceptsSkills` (default `'None'`), `AISkill.IconClass` + `AISkill.Color` (UX metadata for the `/skill` picker). `AIAgentRunStep.StepType` CHECK extended with `'Plan'` and `'Skill'`. Composition junctions (`AISkillAction`/`AISkillSubAgent`) are intentionally **status-less** — member lifecycle is governed by `Action.Status`/`AIAgent.Status`; `Status` lives only on the grant (`AIAgentSkill`) and the catalog (`AISkill`). The `MJ: Permission Domains` catalog row for `AI Skill Permissions → MJAISkillPermissionProvider` is seeded via metadata sync (`metadata/permission-domains/`), not the migration.
+
+**v5.45** — Migration [`V202607020230__v5.45.x__AISkill_ActivationMode.sql`](../migrations/v5). Additive columns: `AISkill.ActivationMode` + `AIAgent.SkillActivationMode` (both `'Auto'`/`'RequestedOnly'`, default **`'RequestedOnly'`** — the double activation gate, §1.2a), `AIAgent.RequirePlanMode` (BIT, default 0 — mandatory plan mode, §2.1), `AIAgentRun.PlanMode` (BIT, default 0 — run-level stamp), `AIAgentRunStep.Skills` (NVARCHAR MAX, JSON-typed `Array<AgentSkillInvocation>` — per-step observability, §1.3a). The `Skills` JSON-type binding is seeded via metadata sync (`metadata/entities/.entity-field-jsontype-agent-run-step-skills.json` + `JSONType-interfaces/AgentSkillInvocation.ts`).
 
 ---
 
@@ -214,7 +272,9 @@ Migration [`V202606301200__v5.44.x__Agent_Skills_And_Plan_Mode.sql`](../migratio
 
 | Concern | File |
 |---|---|
-| Skill resolution + gate + user filter | `packages/AI/BaseAIEngine/src/BaseAIEngine.ts` (`GetSkillsForAgent(agent, user?)`, `SkillPermissions`, `GetSkillActionIDs`/`…SubAgentIDs`) |
+| Skill resolution + gate + user filter | `packages/AI/BaseAIEngine/src/BaseAIEngine.ts` (`GetSkillsForAgent(agent, user?)`, `GetAutoActivatableSkillsForAgent(agent, user?)` — the double gate, `SkillPermissions`, `GetSkillActionIDs`/`…SubAgentIDs`) |
+| Skill observability (provenance capture + per-step attribution) | `packages/AI/Agents/src/base-agent.ts` (`buildSkillInvocation`, `getSkillAttributionForAction`/`…ForSubAgent`, `createStepEntity` `skills` param); type in `packages/AI/CorePlus/src/agent-types.ts` (`AgentSkillInvocation`) |
+| Skill observability UX (run header chip, step chips, Skills tab) | `packages/Angular/Explorer/core-entity-forms/src/lib/custom/ai-agent-run/` (`ai-agent-run.component.*`, `ai-agent-run-step-node.component.*`, `ai-agent-run-step-detail.component.*`) |
 | Skill permission runtime helper | `packages/AI/BaseAIEngine/src/AISkillPermissionHelper.ts` (open-by-default, cached) |
 | Skill permission unified provider | `packages/MJCoreEntities/src/custom/PermissionProviders/AISkillPermissionProvider.ts` (+ `index.ts` `LoadPermissionProviders`) |
 | Grantee-exclusivity validator | `packages/MJCoreEntitiesServer/src/custom/MJAISkillPermissionEntityServer.server.ts` |

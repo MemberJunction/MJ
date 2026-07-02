@@ -239,3 +239,217 @@ describe('notifyDroppedSkillRequests (dropped-request detection)', () => {
         expect(droppedReasonKind('Limited')).toBe('not-available');
     });
 });
+
+// =============================================================================
+// v5.45 — Skill Activation Governance & Observability
+// =============================================================================
+
+interface MockGatedSkill extends MockSkill {
+    ActivationMode: string;
+}
+interface MockGatedAgent {
+    ID: string;
+    AcceptsSkills: string;
+    SkillActivationMode: string;
+}
+interface MockInvocation {
+    SkillID: string;
+    SkillName: string;
+    ActivationType: 'requested' | 'auto';
+    Provenance: {
+        AgentAcceptsSkills: string;
+        SkillActivationMode: string;
+        AgentSkillActivationMode: string;
+        RequestedBy: 'user-request' | 'agent-decision';
+    };
+    Reason?: string;
+}
+
+// Mirrors AIEngineBase.GetAutoActivatableSkillsForAgent's double gate as consumed by
+// validateSkillNextStep / resolveSkillActivations / the prompt catalog: self-activation
+// requires 'Auto' on BOTH the agent AND the skill, on top of the availability set.
+function selectAutoActivatable(agent: MockGatedAgent, availableSkills: MockGatedSkill[]): MockGatedSkill[] {
+    if (agent.SkillActivationMode !== 'Auto') return [];
+    return availableSkills.filter(s => s.ActivationMode === 'Auto');
+}
+
+// Mirrors BaseAgent.buildSkillInvocation.
+function buildSkillInvocation(
+    skill: MockGatedSkill,
+    agent: MockGatedAgent,
+    activationType: 'requested' | 'auto',
+    reason?: string
+): MockInvocation {
+    return {
+        SkillID: skill.ID,
+        SkillName: skill.Name,
+        ActivationType: activationType,
+        Provenance: {
+            AgentAcceptsSkills: agent.AcceptsSkills,
+            SkillActivationMode: skill.ActivationMode,
+            AgentSkillActivationMode: agent.SkillActivationMode,
+            RequestedBy: activationType === 'requested' ? 'user-request' : 'agent-decision'
+        },
+        ...(reason ? { Reason: reason } : {})
+    };
+}
+
+// Mirrors BaseAgent.getSkillAttributionForAction: native grants take precedence (undefined =
+// "the agent had this tool anyway"); otherwise the invocations whose skill bundles the action.
+function attributeAction(
+    actionId: string,
+    invocations: MockInvocation[],
+    nativeActionIds: string[],
+    skillActionBundles: Record<string, string[]>
+): MockInvocation[] | undefined {
+    if (invocations.length === 0 || !actionId) return undefined;
+    if (nativeActionIds.includes(actionId)) return undefined;
+    const granting = invocations.filter(inv => (skillActionBundles[inv.SkillID] ?? []).includes(actionId));
+    return granting.length > 0 ? granting : undefined;
+}
+
+// Mirrors the validateSkillNextStep plan-phase pre-check: agent-initiated activations are only
+// legal BEFORE plan approval so the reviewed plan always reflects the widened tool surface.
+function planPhaseBlocksSkillActivation(planModeActive: boolean, planApproved: boolean): boolean {
+    return planModeActive && planApproved;
+}
+
+// Mirrors createStepEntity's Skills default: Prompt steps carry everything currently in effect;
+// other step types only carry what the caller attributes explicitly.
+function skillsForStep(
+    stepType: string,
+    explicit: MockInvocation[] | undefined,
+    inEffect: MockInvocation[]
+): MockInvocation[] | undefined {
+    const result = explicit ?? (stepType === 'Prompt' && inEffect.length > 0 ? inEffect : undefined);
+    return result && result.length > 0 ? result : undefined;
+}
+
+const GATED_SKILLS: MockGatedSkill[] = [
+    { ID: 's1', Name: 'Web Research', Instructions: 'Research well.', ActivationMode: 'Auto' },
+    { ID: 's2', Name: 'Communications', Instructions: 'Confirm before sending.', ActivationMode: 'RequestedOnly' },
+];
+const AUTO_AGENT: MockGatedAgent = { ID: 'a1', AcceptsSkills: 'All', SkillActivationMode: 'Auto' };
+const RESTRICTED_AGENT: MockGatedAgent = { ID: 'a2', AcceptsSkills: 'All', SkillActivationMode: 'RequestedOnly' };
+
+describe('double activation gate (self-activation eligibility)', () => {
+    it('Auto agent × Auto skill → self-activatable', () => {
+        expect(selectAutoActivatable(AUTO_AGENT, GATED_SKILLS).map(s => s.ID)).toEqual(['s1']);
+    });
+
+    it('RequestedOnly agent → nothing self-activatable, even Auto skills', () => {
+        expect(selectAutoActivatable(RESTRICTED_AGENT, GATED_SKILLS)).toHaveLength(0);
+    });
+
+    it('RequestedOnly skill never self-activatable, even for an Auto agent', () => {
+        const onlyRequested = GATED_SKILLS.filter(s => s.ID === 's2');
+        expect(selectAutoActivatable(AUTO_AGENT, onlyRequested)).toHaveLength(0);
+    });
+
+    it('empty availability set stays empty regardless of gate posture', () => {
+        expect(selectAutoActivatable(AUTO_AGENT, [])).toHaveLength(0);
+    });
+});
+
+describe('buildSkillInvocation (provenance of authority)', () => {
+    it('captures the gate values in effect at activation time', () => {
+        const inv = buildSkillInvocation(GATED_SKILLS[0], AUTO_AGENT, 'auto', 'need web data');
+        expect(inv.Provenance).toEqual({
+            AgentAcceptsSkills: 'All',
+            SkillActivationMode: 'Auto',
+            AgentSkillActivationMode: 'Auto',
+            RequestedBy: 'agent-decision'
+        });
+        expect(inv.Reason).toBe('need web data');
+    });
+
+    it("maps 'requested' to RequestedBy='user-request' and omits Reason when none given", () => {
+        const inv = buildSkillInvocation(GATED_SKILLS[1], RESTRICTED_AGENT, 'requested');
+        expect(inv.ActivationType).toBe('requested');
+        expect(inv.Provenance.RequestedBy).toBe('user-request');
+        expect('Reason' in inv).toBe(false);
+    });
+
+    it('records the skill identity as of activation (ID + Name)', () => {
+        const inv = buildSkillInvocation(GATED_SKILLS[0], AUTO_AGENT, 'auto');
+        expect(inv.SkillID).toBe('s1');
+        expect(inv.SkillName).toBe('Web Research');
+    });
+});
+
+describe('getSkillAttributionForAction (native precedence)', () => {
+    const invocations = [buildSkillInvocation(GATED_SKILLS[0], AUTO_AGENT, 'auto')];
+    const bundles = { s1: ['act-search', 'act-summarize'] };
+
+    it('attributes a skill-granted action to its invocation(s)', () => {
+        const result = attributeAction('act-search', invocations, [], bundles);
+        expect(result).toHaveLength(1);
+        expect(result![0].SkillID).toBe('s1');
+    });
+
+    it('returns undefined (native) when the agent has the action natively — even if a skill also bundles it', () => {
+        expect(attributeAction('act-search', invocations, ['act-search'], bundles)).toBeUndefined();
+    });
+
+    it('returns undefined when no activated skill bundles the action', () => {
+        expect(attributeAction('act-unrelated', invocations, [], bundles)).toBeUndefined();
+    });
+
+    it('returns undefined when no skills are active at all', () => {
+        expect(attributeAction('act-search', [], [], bundles)).toBeUndefined();
+    });
+});
+
+describe('plan-phase skill activation rule', () => {
+    it('allows activation before the plan is approved (plan reflects the widened surface)', () => {
+        expect(planPhaseBlocksSkillActivation(true, false)).toBe(false);
+    });
+
+    it('BLOCKS agent-initiated activation after plan approval (re-plan required)', () => {
+        expect(planPhaseBlocksSkillActivation(true, true)).toBe(true);
+    });
+
+    it('never blocks outside plan mode', () => {
+        expect(planPhaseBlocksSkillActivation(false, false)).toBe(false);
+        expect(planPhaseBlocksSkillActivation(false, true)).toBe(false);
+    });
+});
+
+describe('per-step Skills population (createStepEntity default)', () => {
+    const inEffect = [buildSkillInvocation(GATED_SKILLS[0], AUTO_AGENT, 'requested')];
+
+    it('Prompt steps default to the full set of skills in effect', () => {
+        expect(skillsForStep('Prompt', undefined, inEffect)).toEqual(inEffect);
+    });
+
+    it('Prompt steps carry nothing when no skills are active (Skills stays NULL)', () => {
+        expect(skillsForStep('Prompt', undefined, [])).toBeUndefined();
+    });
+
+    it('non-Prompt steps carry nothing unless the caller attributes explicitly', () => {
+        expect(skillsForStep('Actions', undefined, inEffect)).toBeUndefined();
+        expect(skillsForStep('Actions', inEffect, [])).toEqual(inEffect);
+    });
+
+    it('an explicit empty attribution collapses to undefined (never persist "[]")', () => {
+        expect(skillsForStep('Actions', [], inEffect)).toBeUndefined();
+    });
+});
+
+describe('skillActivations reason threading (LoopAgentType mapping)', () => {
+    // Mirrors loop-agent-type.ts: response.nextStep.skills → retVal.skillActivations
+    function mapSkills(skills: Array<{ name: string; reason?: string }>) {
+        return skills.map(skill => ({ name: skill.name, ...(skill.reason ? { reason: skill.reason } : {}) }));
+    }
+
+    it('carries the reason through when the model supplies one', () => {
+        expect(mapSkills([{ name: 'Web Research', reason: 'user asked for current dates' }]))
+            .toEqual([{ name: 'Web Research', reason: 'user asked for current dates' }]);
+    });
+
+    it('omits the reason key entirely when absent', () => {
+        const mapped = mapSkills([{ name: 'Web Research' }]);
+        expect(mapped).toEqual([{ name: 'Web Research' }]);
+        expect('reason' in mapped[0]).toBe(false);
+    });
+});
