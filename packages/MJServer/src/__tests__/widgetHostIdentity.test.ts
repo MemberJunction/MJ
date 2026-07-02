@@ -65,6 +65,24 @@ describe('verifyHostAssertion', () => {
         const token = sign(kp.privatePem, { given_name: 'NoEmail' });
         expect(verifyHostAssertion(token, kp.publicPem, WIDGET_KEY)).toEqual({ ok: false, errorCode: 'no_email' });
     });
+
+    it('rejects an assertion with no exp (unbounded lifetime)', () => {
+        const kp = keypair();
+        // Sign directly with no expiresIn so the token carries iat but no exp.
+        const token = jwt.sign({ email: 'x@y.com' }, kp.privatePem, { algorithm: 'RS256', audience: WIDGET_KEY });
+        expect(verifyHostAssertion(token, kp.publicPem, WIDGET_KEY)).toEqual({ ok: false, errorCode: 'expired' });
+    });
+
+    it('rejects an assertion older than the maxAge cap even when its exp is still in the future', () => {
+        const kp = keypair();
+        const nowSec = Math.floor(Date.now() / 1000);
+        // iat one hour ago (well past the 10m maxAge) with a far-future exp — the age cap must still reject it.
+        const token = jwt.sign({ email: 'x@y.com', iat: nowSec - 3600, exp: nowSec + 3600 }, kp.privatePem, {
+            algorithm: 'RS256',
+            audience: WIDGET_KEY,
+        });
+        expect(verifyHostAssertion(token, kp.publicPem, WIDGET_KEY)).toEqual({ ok: false, errorCode: 'expired' });
+    });
 });
 
 describe('buildWidgetGuestClaims with hostIdentity', () => {

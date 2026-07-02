@@ -6,6 +6,14 @@ import { BaseAuthProvider } from '../BaseAuthProvider.js';
 /** Why a host-assertion verification failed (mirrors the public web-widget mint error codes). */
 export type HostAssertionError = 'missing' | 'bad_signature' | 'expired' | 'no_email' | 'no_key';
 
+/**
+ * Absolute ceiling on a host assertion's age (measured from its `iat`), independent of the host-chosen
+ * `exp`. Even if a host mints a long-lived — or `exp`-less — assertion, MJ refuses to accept it beyond
+ * this window. Enforces the "short-lived" contract the strategy assumes rather than trusting the host to
+ * honor it. Effective lifetime is therefore min(assertion `exp`, `iat` + this).
+ */
+const HOST_ASSERTION_MAX_AGE_SECONDS = 600; // 10 minutes
+
 /** Result of verifying a host-signed identity assertion. `userInfo` is present iff `ok` is true. */
 export interface HostAssertionVerifyResult {
   ok: boolean;
@@ -54,7 +62,9 @@ export class HostIdentityProvider extends BaseAuthProvider {
   /**
    * Verifies a host-signed RS256 assertion against the host's STATIC public key (PEM) and extracts the
    * asserted visitor identity. The assertion's `aud` must equal `expectedAudience` (the widget key, bound
-   * at the host) and it must carry an `email`. Never throws — returns a structured result.
+   * at the host) and it must carry an `email`. It must also be short-lived: it must declare its own `exp`
+   * AND be no older than {@link HOST_ASSERTION_MAX_AGE_SECONDS} since `iat` — so a misbehaving host cannot
+   * mint an unbounded token. Never throws — returns a structured result.
    *
    * SECURITY: `hostPublicKeyPem` MUST originate from an independent trust path (the registered
    * `WidgetInstance.HostPublicKey`, set out-of-band by an administrator) — NEVER from the same request
@@ -74,10 +84,21 @@ export class HostIdentityProvider extends BaseAuthProvider {
     }
     let payload: JwtPayload;
     try {
-      payload = jwt.verify(assertion, hostPublicKeyPem, { algorithms: ['RS256'], audience: expectedAudience }) as JwtPayload;
+      // maxAge caps the assertion's age from `iat` regardless of the host-chosen `exp` (and requires `iat`
+      // to be present); jsonwebtoken surfaces a breach as TokenExpiredError, same as a normal expiry.
+      payload = jwt.verify(assertion, hostPublicKeyPem, {
+        algorithms: ['RS256'],
+        audience: expectedAudience,
+        maxAge: HOST_ASSERTION_MAX_AGE_SECONDS,
+      }) as JwtPayload;
     } catch (e) {
-      // jsonwebtoken throws TokenExpiredError for expiry; everything else is a signature/format fault.
+      // jsonwebtoken throws TokenExpiredError for expiry / maxAge; everything else is a signature/format fault.
       return { ok: false, errorCode: e instanceof jwt.TokenExpiredError ? 'expired' : 'bad_signature' };
+    }
+    // Require an explicit expiry: we refuse to treat an unbounded assertion as valid even inside the maxAge
+    // window, so the host's "short-lived" contract is enforced, not merely assumed.
+    if (typeof payload.exp !== 'number') {
+      return { ok: false, errorCode: 'expired' };
     }
     const userInfo = this.extractUserInfo(payload);
     if (!userInfo.email) {
