@@ -288,7 +288,11 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
     }
     private CalculateUserCanView(): boolean {
         const md = this.ProviderToUse as unknown as IMetadataProvider;
-        const bOwner = UUIDsEqual(this.UserID, md.CurrentUser.ID);
+        // Prefer the context user (set on server-side / per-request rendering) over the global
+        // current user, consistent with CalculateUserCanEdit/CalculateUserCanDelete. Without this,
+        // server-side view-list filtering would evaluate visibility against the wrong user.
+        const user: UserInfo = this.ContextCurrentUser || md.CurrentUser;
+        const bOwner = UUIDsEqual(this.UserID, user.ID);
         if (bOwner) {
             return true
         }
@@ -302,7 +306,7 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
             // `.filter(v => v.UserCanView)` — aborting the whole filter and leaving the view
             // selector empty ("No saved views yet") whenever an entity had any view shared by
             // another user, taking the current user's own views down with it.
-            const permLevel = ResourcePermissionEngine.Instance.GetUserResourcePermissionLevel(this.ViewResourceTypeID, this.ID, md.CurrentUser);
+            const permLevel = ResourcePermissionEngine.Instance.GetUserResourcePermissionLevel(this.ViewResourceTypeID, this.ID, user);
             if (permLevel) // any permission level allows view access
                 return true;
             else // perm level not found so return false
@@ -332,6 +336,7 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
     protected ResetCachedCanUserSettings() {
         this._cachedCanUserEdit = null;
         this._cachedUserCanDelete = null;
+        this._cachedCanUserView = null;
     }
 
     private CalculateUserCanDelete(): boolean {
