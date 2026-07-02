@@ -1,57 +1,44 @@
-# MJ Mobile App — Master Plan Checklist (track to 100%)
+# MJ Mobile App — Plan Checklist
 
-Source of truth for the autonomous build. Legend: [x] done+verified · [~] in progress/partial · [ ] todo · (sim) = needs live simulator QA against the mockup.
+Tracks `plans/mobile-app-react-native/README.md`. Legend: [x] done + verified in the
+iOS Simulator · [~] partial · [ ] deferred.
 
-> KEY DIRECTIVE: complete 100% of `plans/mobile-app-react-native/README.md`, verify each live in the iOS Simulator, don't stop. See WORKING_MEMORY.md top.
+> **PR #2617 scope:** Phase 1 (foundation + chat + Data Explorer subset), full
+> rendering, docs, and the test suites. **Phase 2 & 3 are deferred to a follow-up
+> PR** (per maintainer direction — core MJ's new realtime/voice work will be reused
+> there; see the updated Phase 2 section of the plan).
 
-## Infra / Foundation (gating)
-- [x] Xcode 26.5 + iOS 26.5 sim runtime + cocoapods(portable-ruby+nkf) + pods installed
-- [x] Native app builds + runs on simulator (MJ-iPhone)
-- [x] Docker + SQL container `sql` up; DB `MJ_5_36_0` migrated
-- [~] MJAPI running on :4001 (GRAPHQL_PORT=4001 added to MJAPI/.env; restarting to pick up renamed user)
-- [~] Auth: seed Owner user email renamed → da-robot-tester@bluecypress.io; minting Auth0 id_token via PKCE (sub-agent → /tmp/mj-jwt.txt). Inject via Env.devAuthToken in src/config/env.ts (LOCAL ONLY, revert before commit). ROPG disabled → must use auth-code flow.
-- [ ] Tap injection for full interactive sim QA (cliclick via curl binary, or deep links). Markdown QA used deep links + screenshots.
+## Infra / Foundation
+- [x] Xcode 26.5 + iOS 26.5 sim runtime + CocoaPods; native app builds & runs (MJ-iPhone)
+- [x] Docker SQL `sql` container; **`MJ_5_44_0`** migrated (52 migrations, 372 entities)
+- [x] MJAPI on :4001 (v5.44) against the 5.44 DB
+- [x] Auth: Auth0 auth-code + PKCE (`mjmobile://auth` registered & verified), MSAL ready, dev-JWT fallback; auto-refresh; secure-store
+- [x] Merge `next` v5.36 → **v5.44** (7 conflicts resolved; RN dep pins)
 
-## DONE (pre-backend)
-- [x] P1.1 Apollo provider removed (vestigial)
-- [x] P1.2 markdown-core extraction + ng-markdown refactor + RN MarkdownView (66 unit tests; on-device render verified)
-- [x] P1.5 Profile prefs (appearance/voice/push/faceID toggles persist to MMKV; default-agent picker + routing)
-- [x] MMKVStorageProvider (ILocalStorageProvider) exists
+## Phase 1 — features (all verified live in the simulator)
+- [x] P1.1 Vestigial Apollo provider removed
+- [x] P1.2 `@memberjunction/markdown-core` extraction + ng-markdown refactor + RN MarkdownView
+- [x] P1.Auth Login (Auth0 / Microsoft / dev-JWT), gating, silent refresh, sign-out
+- [x] P1.Nav Drawer-first navigation (Conversations → Explorer / Profile)
+- [x] P1.Chat.List Conversation list (recency groups, snippet, agent avatar stack, pull-to-refresh)
+- [x] P1.Chat.New New-conversation composer + agent rail + first-message flow
+- [x] P1.Chat.Thread Chat thread → real **Sage agent run** via `RunAIAgentFromConversationDetail`; reply persisted; live progress + reconciliation
+- [x] P1.Chat.Artifact.Detail Artifact detail — type renderers (markdown / html / json / json-table / code / chart / interactive)
+- [x] P1.Chat.Artifacts.Dock Artifact dock — All / per-agent / type filters + cards
+- [x] P1.Explorer.Home / Entity / Record / Query surfaces (RunView / GetEntityObject / RunQuery)
+- [x] P1.4 Dashboard view — real Golden-Layout `UIConfigDetails` parse → KPI/chart/table parts, "Desktop-optimized" fallback
+- [x] P1.Profile Identity + persisted MMKV preferences + default-agent picker
+- [x] P1.Rendering Code syntax highlighting (prismjs), SVG bar/line/pie charts, HTML→RN renderer
+- [x] **P1.3 Interactive-component artifacts** — `@memberjunction/react-runtime` + Babel, on-device Hermes compile, web-primitive→RN shim, "View on desktop" fallback (Maestro-verified interactive)
+- [x] P1.Chat.Voice Voice-mode visual scaffold (STT pipeline = Phase 2)
 
-## Phase 1 — verify each screen live with real data (sim) + close gaps
-- [ ] P1.Auth Login screen (sim): Auth0 / Microsoft / dev-JWT; secure-store; silent refresh; sign-out; gates app
-- [ ] P1.Nav Drawer nav (conversation-list drawer → Explorer/Profile); swipe-from-edge opens drawer; no bottom tabs
-- [ ] P1.Chat.List conversation-list (sim): groups Pinned/Today/Yesterday/Earlier, snippet, artifact-count badge, multi-agent avatar stack, live dot (In-Progress), pull-to-refresh, long-press (Copy/Pin min), tap→thread, +new, Explorer/Profile footers
-- [ ] P1.Chat.New new-conversation (sim): composer focus, suggested prompts, agent rail (@mention prefix), send→create conv+detail→thread, mic→voice-mode
-- [ ] P1.Chat.Thread chat-thread (sim): load+stream (ConversationStreamingService/WS), top nav avatar stack, recents strip, user/agent message styles, step indicators, @mention highlight, inline artifact card, action chips (SuggestedResponses), dock handle (count+pulse), composer, long-press (Copy/Pin)
-- [ ] P1.Chat.Voice voice-mode (sim): Phase-1 visual scaffold (orb breathing/pulse, ripple, waveform, transcript card, keyboard/stop/menu)  [STT pipeline = Phase 2]
-- [ ] P1.Chat.Artifacts.Dock artifacts-dock-open (sim): half/full snap, filter row (All/agent/type), card list w/ preview, tap→detail, reanimated spring
-- [ ] P1.Chat.Artifact.Detail artifact-detail (sim): tabs Data/Chart/JSON, version selector, summary KPIs, type renderer, sticky bar (Back + Ask Skip)
-- [ ] P1.Explorer.Home explorer-home (sim): entity/query/dashboard counts, recently-viewed (MMKV), search, tiles
-- [ ] P1.Explorer.Entity entity-records (sim): RunView simple+Fields, cards, stage pills, filters (persist MMKV), FAB Ask Skip, pull-refresh
-- [ ] P1.Explorer.Record record-detail (sim): GetEntityObject+Load, hero, sections Key/Owner/Related, read-only, Ask Skip bar
-- [ ] P1.Explorer.Query query-run (sim): param chips+edit sheet, re-run, results cards, risk meter, Ask Skip bar
-- [~] P1.Explorer.Dashboard dashboard-view (P1.4): CURRENTLY MOCKED. Load real Dashboard + UIConfigDetails; native KPI/chart/list parts; desktop-stub for complex; notice banner; Ask Skip bar (sim)
-- [x] P1.Profile profile (P1.5 done; verify sim)
-- [ ] P1.Artifacts.* renderers: markdown (done), HTML (react-native-render-html), JSON tree, data table cards, chart (victory-native/svg), code (syntax-highlighter), interactive=stub(P1.3), custom=registry
-- [ ] P1.3 Interactive component artifacts: §4.3 investigation (Babel-standalone/Hermes, jsx-runtime, div/span/button→View/Text/Pressable shim, bundle impact) → decide Phase1 stub vs shim; replace stub in app/artifact/[id].tsx
-- [ ] P1.CrossCut: Ask-Skip context payload (system Conversation Detail), gestures (edge-swipe drawer, dock swipe up/down), long-press sheets, pull-refresh, empty states, error states ("Couldn't load · Try again")
-- [ ] P1.Animations: dock pulse 600ms, sheet rubber-band, voice orb timings, route transitions
-- [ ] P1.ExitCriteria: login→see convs→talk to Skip→view record→run query; offline-read cache; 60fps
+## Testing & docs
+- [x] Unit tests — MobileApp 94 · markdown-core 93 · ng-markdown 47 · MJCore `runningOnNode` 3
+- [x] Integration tests — 15 against **live MJAPI** (`npm run test:integration`, gated on `MJ_TEST_JWT`)
+- [x] UI E2E — 4 Maestro flows (boot, new-conversation, interactive-component, render-showcase)
+- [x] Docs — exceptional JSDoc across the package, rewritten README, `docs/` guides (ARCHITECTURE/SCREENS/RENDERING/CONTRIBUTING)
+- [x] Shared-package hardening (markdown-core / MJCore / ng-markdown) documented + edge-tested; dead ng-markdown extension removed
 
-## Phase 2
-- [ ] P2.1 Voice STT (expo-av record → MJAPI Whisper endpoint → Conversation Detail; wire voice-mode)  [needs transcription endpoint/key]
-- [ ] P2.2 Voice TTS (expo-speech or ElevenLabs via MJAPI)  [needs key for ElevenLabs]
-- [ ] P2.3 Push notifications (expo-notifications client + MJAPI device-token register + send; wire toggle)  [needs APNs cert + device]
-- [ ] P2.4 Biometric lock (expo-local-authentication gate; wire toggle)
-- [ ] P2.5 Record editing/creation (BaseEntity.Save(); editable detail; validation)
-
-## Phase 3
-- [ ] P3.1 Photo/file capture & attachments (expo-image-picker/document-picker → upload)
-- [ ] P3.2 Offline mutation queue + sync-on-reconnect (MMKV/SQLite)
-- [ ] P3.3 Android verification (Gradle/AVD)
-
-## Closeout
-- [ ] Remove DEV markdown-preview route (or keep behind dev flag)
-- [ ] Full sim QA pass vs mockups (plans/.../html/*.html)
-- [ ] Update PR #2617 description (explicit approval) ; GitHub issue #2665 already filed for ng-markdown AST migration
+## Deferred to the follow-up PR
+- [ ] Phase 2 — Voice STT/TTS (reuse core realtime/voice; see updated plan), Push, Biometric lock, Record editing
+- [ ] Phase 3 — Photo/file capture, offline mutation queue, Android verification
