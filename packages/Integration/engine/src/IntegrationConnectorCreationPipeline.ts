@@ -467,8 +467,31 @@ export class IntegrationConnectorCreationPipeline {
                         continue;
                     }
                     emitter.entityGenerated(obj.Name, obj.Name);
+                } else if (verdict.Strategy === 'synthetic') {
+                    // Synthetic content-hash identity: the field doesn't exist on the source, so create it
+                    // as a single-PK IOF. ApplyAll then materializes the column, and ToExternalRecord stamps
+                    // a deterministic content hash into it at sync (plan §4) so the keyless table is syncable.
+                    const iof = await md.GetEntityObject<MJIntegrationObjectFieldEntity>('MJ: Integration Object Fields', opts.ContextUser);
+                    iof.NewRecord();
+                    iof.IntegrationObjectID = obj.ID;
+                    iof.Name = verdict.Nominee;
+                    iof.Type = 'String';
+                    iof.IsPrimaryKey = true;
+                    iof.IsUniqueKey = true;
+                    iof.IsReadOnly = true;
+                    iof.IsRequired = false;
+                    iof.AllowsNull = false;
+                    iof.Status = 'Active';
+                    iof.Description = 'Synthetic content-hash identity — no natural PK exists in the source; a deterministic content hash is stamped at sync so the table is syncable + dedupable (plan §4).';
+                    const saved = await iof.Save();
+                    if (!saved) {
+                        emitter.stageError('PKClassify', `Failed to create synthetic PK ${obj.Name}.${verdict.Nominee}: ${iof.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+                        unresolved.push(obj.Name);
+                        continue;
+                    }
+                    emitter.entityGenerated(obj.Name, obj.Name);
                 } else {
-                    // Classifier nominated a field that's not in our cache — refuse silently and skip.
+                    // Classifier nominated a natural field that's not in our cache — refuse silently and skip.
                     unresolved.push(obj.Name);
                     emitter.entitySkippedNoPK(obj.Name);
                 }

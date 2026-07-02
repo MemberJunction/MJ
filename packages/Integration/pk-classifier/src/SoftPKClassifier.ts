@@ -14,12 +14,29 @@ export type PKClassifierStrategy =
     | 'none';
 
 /**
- * Canonical name of the synthetic identity-hash column nominated by the
- * synthetic-fallback tier. The framework materializes this column (an identity
- * hash of the record) so a table that has no provable natural PK is still
- * syncable (plan.md §4).
+ * Canonical name of the synthetic identity-key column nominated by the
+ * synthetic-fallback tier. `StagePKClassify` creates this as a real IOF (single
+ * PK), ApplyAll materializes the column, and `BaseRESTIntegrationConnector.ToExternalRecord`
+ * stamps a deterministic content hash into it at sync time — so a table with no
+ * provable natural PK is still syncable + dedupable (plan.md §4).
+ *
+ * IMPORTANT: this name is deliberately NOT `__mj_`-prefixed. A `__mj_`-prefixed
+ * name is treated as a framework-reserved/hidden column by CodeGen + the schema
+ * builder and is NEVER materialized as a business PK — which is exactly why the
+ * earlier `__mj_integration_IdentityHash` produced a "confident-but-dropped"
+ * verdict (nominated but never created downstream). A plain name materializes.
  */
-export const SYNTHETIC_PK_FIELD_NAME = '__mj_integration_IdentityHash' as const;
+export const SYNTHETIC_PK_FIELD_NAME = 'IdentityKey' as const;
+
+/**
+ * Minimum sample-row count before the statistical / composite tiers are trusted.
+ * Below this, "unique across the sample" is likely coincidental (a 2-row sample
+ * makes almost any column-combination look unique), so those tiers are skipped and
+ * the classifier falls through to the LLM tier or the honest synthetic fallback.
+ * This is the significance gate that stops thin-sample false positives (e.g.
+ * nominating a boolean flag like `IsDelivered`, or a nullable-member composite).
+ */
+export const MIN_STATISTICAL_SAMPLE = 8 as const;
 
 /** Result returned by SoftPKClassifier.Classify(). */
 export interface PKClassifierResult {
@@ -143,8 +160,9 @@ export class SoftPKClassifier {
             };
         }
 
-        // 3) Statistical (when sample rows present)
-        if (opts.sampleRows && opts.sampleRows.length > 0) {
+        // 3) Statistical — only on an ADEQUATE sample (significance gate). A tiny sample makes
+        //    coincidental uniqueness look real, so below the floor we skip to LLM / synthetic.
+        if (opts.sampleRows && opts.sampleRows.length >= MIN_STATISTICAL_SAMPLE) {
             const statMatch = this.statisticalUniqueness(opts.fields, opts.sampleRows);
             if (statMatch && statMatch.confidence >= floor) {
                 return {
@@ -160,7 +178,9 @@ export class SoftPKClassifier {
 
         // 3b) Composite uniqueness (when no single column is unique) — try minimal
         //     2- then 3-col concatenated key sets; smallest unique+stable set wins.
-        if (opts.sampleRows && opts.sampleRows.length > 0) {
+        //     Same significance gate: a composite over a thin sample is almost always a
+        //     coincidence (the [ContactId, IsDelivered] / nullable-member false positives).
+        if (opts.sampleRows && opts.sampleRows.length >= MIN_STATISTICAL_SAMPLE) {
             const maxSetSize = opts.maxCompositeKeySize ?? 3;
             const compMatch = this.compositeUniqueness(opts.fields, opts.sampleRows, maxSetSize);
             if (compMatch && compMatch.confidence >= floor) {
@@ -214,29 +234,33 @@ export class SoftPKClassifier {
     }
 
     /**
-     * Terminal tier. Default is the **honest 'none'** verdict — NO fabrication. A PK is emitted only
-     * on real evidence (naming + streamed-data statistics at p<0.05, with the LLM as a tiebreaker);
-     * when none of those resolve, the entity is simply not generated until a PK does (surfaced, not
-     * guessed). The synthetic identity-hash fallback is now OFF by default (opt-in only) — it was
-     * never materialized downstream, so emitting it only produced a confident-but-dropped verdict.
+     * Terminal tier. NO natural-key fabrication — a *natural* PK is emitted only on real evidence
+     * (naming + adequate-sample statistics, LLM tiebreaker). When none resolve, the honest outcome for
+     * a genuinely-keyless object is **a synthetic content-hash identity key**, which is now the DEFAULT
+     * (`syntheticFallback ?? true`). This is safe + correct because the whole path is real: `StagePKClassify`
+     * creates the `IdentityKey` IOF, ApplyAll materializes the column, and `ToExternalRecord` stamps a
+     * deterministic content hash into it (plan.md §4) so the table syncs + dedupes. The earlier OFF-by-default
+     * behavior existed only because the reserved `__mj_`-named field was never materialized — fixed by the
+     * non-reserved name + the pipeline wiring. Pass `syntheticFallback: false` to opt OUT (leave keyless
+     * objects ungenerated) for the rare case that's desired.
      */
     private finalVerdict(opts: ClassifyOptions, prefix?: string): PKClassifierResult {
         const note = prefix ? `${prefix} ` : '';
-        if (opts.syntheticFallback ?? false) {
+        if (opts.syntheticFallback ?? true) {
             return {
                 Confident: true,
                 Nominee: SYNTHETIC_PK_FIELD_NAME,
                 NomineeFields: [SYNTHETIC_PK_FIELD_NAME],
                 Confidence: 0.7,
                 Strategy: 'synthetic',
-                Reason: `${note}No natural PK proven via universal-convention, naming, statistical, composite, or LLM strategies. Falling back to a synthetic identity-hash key "${SYNTHETIC_PK_FIELD_NAME}" so the table remains syncable (plan.md §4).`,
+                Reason: `${note}No natural PK proven via universal-convention, naming, statistical, composite, or LLM strategies. Falling back to a synthetic content-hash identity key "${SYNTHETIC_PK_FIELD_NAME}" so the table remains syncable + dedupable (plan.md §4).`,
             };
         }
         return {
             Confident: false,
             Confidence: 0,
             Strategy: 'none',
-            Reason: `${note}No confident PK candidate via universal-convention, naming, statistical, composite, or LLM strategies, and synthetic fallback is disabled. IO row persists; MJ entity not generated until a PK resolves.`,
+            Reason: `${note}No confident PK candidate via universal-convention, naming, statistical, composite, or LLM strategies, and synthetic fallback is explicitly disabled. IO row persists; MJ entity not generated until a PK resolves.`,
         };
     }
 
@@ -278,6 +302,7 @@ export class SoftPKClassifier {
     ): { fieldName: string; confidence: number; reason: string } | undefined {
         const candidates: Array<{ fieldName: string; uniqueRatio: number; nullRatio: number }> = [];
         for (const f of fields) {
+            if (f.AllowsNull === true) continue; // a source-declared-nullable field can't be a PK member
             const values = rows.map(r => r[f.Name]);
             const nonNull = values.filter(v => this.isPresent(v));
             const nullRatio = 1 - (nonNull.length / rows.length);
@@ -335,6 +360,7 @@ export class SoftPKClassifier {
         rows: Array<Record<string, unknown>>
     ): string[] {
         return fields
+            .filter(f => f.AllowsNull !== true) // source-declared-nullable fields can't be PK members
             .filter(f => rows.every(r => this.isPresent(r[f.Name])))
             .map(f => f.Name);
     }

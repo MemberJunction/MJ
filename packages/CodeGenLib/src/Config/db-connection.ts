@@ -70,7 +70,9 @@ export function buildSqlConfig(): mssql.config {
        * spUpdateExistingEntityFieldsFromSchema run beyond the default.
        */
       requestTimeout,
-      encrypt: true,
+      // Encryption defaults ON. Set DB_ENCRYPT=false to disable TLS entirely for a local/Docker
+      // SQL Server whose self-signed cert the mssql TLS layer rejects. Only 'false' disables.
+      encrypt: (process.env.DB_ENCRYPT ?? 'true').toLowerCase() !== 'false',
       instanceName: dbInstanceName && dbInstanceName.trim().length > 0 ? dbInstanceName : undefined,
       trustServerCertificate: dbTrustServerCertificate === 'Y',
     },

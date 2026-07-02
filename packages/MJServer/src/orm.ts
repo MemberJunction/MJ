@@ -17,7 +17,11 @@ const createMSSQLConfig = (): sql.config => {
       acquireTimeoutMillis: configInfo.databaseSettings.connectionPool?.acquireTimeoutMillis ?? 30000,
     },
     options: {
-      encrypt: true, // Use encryption
+      // Encryption defaults ON (production behavior). Set DB_ENCRYPT=false to disable TLS
+      // entirely — required for a local/Docker SQL Server presenting a self-signed cert that
+      // the mssql client's TLS layer rejects (DEPTH_ZERO_SELF_SIGNED_CERT) even with
+      // trustServerCertificate. Only the literal 'false' disables; anything else stays ON.
+      encrypt: (process.env.DB_ENCRYPT ?? 'true').toLowerCase() !== 'false',
       enableArithAbort: true,
     },
   };
