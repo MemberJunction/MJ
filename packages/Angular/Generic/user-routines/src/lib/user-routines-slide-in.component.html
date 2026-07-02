@@ -1,0 +1,23 @@
+<mj-slide-panel Mode="slide" Title="" [Visible]="Visible" [WidthPx]="WidthPx" [MinWidthPx]="480"
+  (Closed)="OnPanelClosed()">
+  @if (Visible) {
+    <div class="ur-slidein">
+      <mj-user-routines-command-center #commandCenter
+        [Provider]="Provider"
+        [ShowHeader]="true"
+        [ShowClose]="true"
+        (CloseRequested)="Close()"
+        (BeforeRoutineCreated)="BeforeRoutineCreated.emit($event)"
+        (AfterRoutineCreated)="AfterRoutineCreated.emit($event)"
+        (BeforeRoutinePaused)="BeforeRoutinePaused.emit($event)"
+        (AfterRoutinePaused)="AfterRoutinePaused.emit($event)"
+        (BeforeRoutineRunNow)="BeforeRoutineRunNow.emit($event)"
+        (AfterRoutineRunNow)="AfterRoutineRunNow.emit($event)"
+        (BeforeRoutineDeleted)="BeforeRoutineDeleted.emit($event)"
+        (AfterRoutineDeleted)="AfterRoutineDeleted.emit($event)"
+        (RoutineSelected)="RoutineSelected.emit($event)"
+        (HistoryRecordOpened)="HistoryRecordOpened.emit($event)">
+      </mj-user-routines-command-center>
+    </div>
+  }
+</mj-slide-panel>

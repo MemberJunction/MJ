@@ -71,6 +71,13 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   @Input() currentUser!: UserInfo;
   @Input() activeContext?: 'library' | 'task';
   @Input() contextItemId?: string;
+  /**
+   * Show the Routines section at the very bottom of the left sidebar. Default true;
+   * hosts that don't want routines (or embed a reduced chat surface) set false.
+   * The section additionally hides itself when the current user lacks Read
+   * permission on 'MJ: User Routines'.
+   */
+  @Input() ShowRoutines: boolean = true;
 
   // Navigation properties for external control (deep linking from URL)
   @Input() set activeTabInput(value: 'conversations' | 'collections' | 'tasks' | undefined) {

@@ -14,8 +14,22 @@
           "TemplateText": "@file:templates/user-routine-notification.html",
           "Priority": 100,
           "IsActive": true
+        },
+        "primaryKey": {
+          "ID": "178E4F9A-5734-4E08-AEDF-12399CB7A33E"
+        },
+        "sync": {
+          "lastModified": "2026-07-02T23:25:39.706Z",
+          "checksum": "ceb2b87feeaaa65df31e737b7259e7565b952d6c27fb15c20cbb728ac73ee60f"
         }
       }
     ]
+  },
+  "primaryKey": {
+    "ID": "22318847-C039-4DC2-9E87-D54D33F9EF98"
+  },
+  "sync": {
+    "lastModified": "2026-07-02T23:25:37.613Z",
+    "checksum": "ae00ad221d0ecfa3da2b358c047352b083edd40968e8a29b15f40e12fe72d896"
   }
 }

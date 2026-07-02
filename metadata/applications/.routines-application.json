@@ -1,0 +1,22 @@
+{
+  "fields": {
+    "Name": "Routines",
+    "Description": "Schedule AI agents to run for you on a cron cadence — with monitoring, change detection, run history, and in-app or email notifications.",
+    "Icon": "fa-solid fa-business-time",
+    "DefaultForNewUser": false,
+    "DefaultSequence": 1020,
+    "Color": "#0ea5e9",
+    "DefaultNavItems": [
+      {
+        "Label": "My Routines",
+        "Icon": "fa-solid fa-business-time",
+        "ResourceType": "Custom",
+        "DriverClass": "UserRoutines",
+        "isDefault": true
+      }
+    ]
+  },
+  "relatedEntities": {
+    "MJ: Application Entities": []
+  }
+}

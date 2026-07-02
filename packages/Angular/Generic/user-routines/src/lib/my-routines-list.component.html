@@ -1,0 +1,113 @@
+<!-- Loading -->
+@if (IsLoading) {
+  <div class="routines-loading">
+    <mj-loading text="Loading routines..." size="medium"></mj-loading>
+  </div>
+}
+
+<!-- Empty: no routines at all -->
+@if (!IsLoading && Routines.length === 0) {
+  <mj-empty-state
+    Size="large"
+    Icon="fa-solid fa-business-time"
+    Title="No Routines Yet"
+    Message="Routines run an AI agent for you on a schedule — and can watch for changes and notify you."
+    ActionText="Create Your First Routine"
+    ActionIcon="fa-solid fa-plus"
+    (Action)="CreateRequested.emit()">
+  </mj-empty-state>
+}
+
+<!-- Empty: filters exclude everything -->
+@if (!IsLoading && Routines.length > 0 && FilteredRoutines.length === 0) {
+  <mj-empty-state
+    Variant="no-results"
+    Icon="fa-solid fa-filter-circle-xmark"
+    Title="No Matching Routines"
+    Message="No routines match your current search or filters.">
+  </mj-empty-state>
+}
+
+<!-- Card list -->
+@if (!IsLoading && FilteredRoutines.length > 0) {
+  <div class="routines-grid">
+    @for (routine of FilteredRoutines; track routine.ID) {
+      <div class="routine-card">
+        <div class="routine-card-header">
+          <div class="routine-target-icon" [title]="AgentName(routine)">
+            <i [class]="AgentIcon(routine)"></i>
+          </div>
+          <div class="routine-card-title">
+            <h3 class="routine-name" [title]="routine.Name">{{ routine.Name }}</h3>
+            <div class="routine-target-line" [title]="AgentName(routine)">
+              {{ AgentName(routine) }}
+            </div>
+          </div>
+          <span [class]="ChipClass(StatusVariant(routine.Status))">{{ routine.Status }}</span>
+        </div>
+
+        @if (routine.Description) {
+          <p class="routine-description" [title]="routine.Description">{{ routine.Description }}</p>
+        }
+
+        <div class="routine-meta">
+          <div class="routine-meta-row">
+            <i class="fa-solid" [class.fa-clock]="routine.RoutineType === 'Scheduled'" [class.fa-eye]="routine.RoutineType === 'Monitoring'"></i>
+            <span class="routine-type-badge">{{ routine.RoutineType }}</span>
+            <span class="routine-cron" [title]="routine.CronExpression">{{ DescribeCron(routine.CronExpression) }}</span>
+            <span class="routine-tz">({{ routine.Timezone }})</span>
+          </div>
+          <div class="routine-meta-row">
+            <i class="fa-solid fa-backward-step"></i>
+            <span>Last run:</span>
+            @if (routine.LastRunAt) {
+              <span>{{ RelativeTime(routine.LastRunAt) }}</span>
+              @if (routine.LastRunStatus) {
+                <span [class]="ChipClass(LastRunVariant(routine.LastRunStatus))">{{ routine.LastRunStatus }}</span>
+              }
+            } @else {
+              <span class="routine-meta-muted">never</span>
+            }
+          </div>
+          <div class="routine-meta-row">
+            <i class="fa-solid fa-forward-step"></i>
+            <span>Next run:</span>
+            @if (routine.NextRunAt) {
+              <span>{{ RelativeTime(routine.NextRunAt) }}</span>
+            } @else {
+              <span class="routine-meta-muted">not scheduled</span>
+            }
+          </div>
+        </div>
+
+        <div class="routine-card-actions">
+          <button mjButton variant="outline" size="sm"
+            [disabled]="RunNowDisabled(routine)"
+            [title]="routine.Status === 'Active' ? 'Queue a run now (dispatcher picks it up within a minute)' : 'Only Active routines can be run'"
+            (click)="RunNow(routine)">
+            <i class="fa-solid fa-play"></i> Run now
+          </button>
+          <button mjButton variant="outline" size="sm"
+            [disabled]="BusyRoutineIDs.has(routine.ID)"
+            [title]="routine.Status === 'Active' ? 'Pause this routine' : 'Resume this routine'"
+            (click)="ToggleStatus(routine)">
+            <i class="fa-solid" [class.fa-circle-pause]="routine.Status === 'Active'" [class.fa-circle-play]="routine.Status !== 'Active'"></i>
+            {{ routine.Status === 'Active' ? 'Pause' : 'Resume' }}
+          </button>
+          <span class="routine-actions-spacer"></span>
+          <button mjButton variant="flat" size="sm" title="Edit routine" (click)="EditRequested.emit(routine)">
+            <i class="fa-solid fa-pen"></i>
+          </button>
+          <button mjButton variant="flat" size="sm" title="View run history" (click)="OpenHistory(routine)">
+            <i class="fa-solid fa-timeline"></i>
+          </button>
+          <button mjButton variant="flat" size="sm" title="Delete routine"
+            [disabled]="BusyRoutineIDs.has(routine.ID)"
+            (click)="DeleteRoutine(routine)">
+            <i class="fa-solid fa-trash-can"></i>
+          </button>
+        </div>
+      </div>
+    }
+  </div>
+}

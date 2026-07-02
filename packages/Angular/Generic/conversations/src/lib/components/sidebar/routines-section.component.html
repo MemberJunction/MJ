@@ -1,0 +1,40 @@
+@if (IsVisible) {
+  <div class="crs-section">
+    <button type="button" class="crs-header" title="Open routines" (click)="OpenRoutines()">
+      <i class="fa-solid fa-business-time crs-mark"></i>
+      <span class="crs-title">Routines</span>
+      @if (TotalCount > 0) {
+        <span class="crs-count">{{ TotalCount }}</span>
+      }
+      <span class="crs-spacer"></span>
+      <span class="crs-add" role="button" title="New routine" (click)="NewRoutine($event)">
+        <i class="fa-solid fa-plus"></i>
+      </span>
+    </button>
+
+    @if (TopRoutines.length > 0) {
+      <div class="crs-rows">
+        @for (routine of TopRoutines; track routine.ID) {
+          <button type="button" class="crs-row" [title]="routine.Name" (click)="OpenRoutine(routine, $event)">
+            <span [class]="StatusDotClass(routine)"></span>
+            <i class="crs-agent-icon" [class]="AgentIcon(routine)"></i>
+            <span class="crs-row-main">
+              <span class="crs-row-name">{{ routine.Name }}</span>
+              <span class="crs-row-summary">{{ RoutineSummary(routine) }}</span>
+            </span>
+          </button>
+        }
+      </div>
+    } @else {
+      <div class="crs-empty">No routines yet — click + to create one.</div>
+    }
+
+    <mj-user-routines-slide-in
+      [Provider]="Provider"
+      [(Visible)]="SlideInVisible"
+      [InitialRoutineID]="SlideInRoutineID"
+      [StartInNewRoutine]="SlideInNewRoutine"
+      (Closed)="OnSlideInClosed()">
+    </mj-user-routines-slide-in>
+  </div>
+}

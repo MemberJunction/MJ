@@ -1,0 +1,46 @@
+@if (IsLoading) {
+  <div class="history-loading">
+    <mj-loading text="Loading run history..." size="medium"></mj-loading>
+  </div>
+} @else if (LoadError) {
+  <mj-alert Variant="error" [Message]="LoadError"></mj-alert>
+} @else if (Runs.length === 0) {
+  <mj-empty-state
+    Icon="fa-solid fa-business-time"
+    Title="No Runs Yet"
+    Message="This routine hasn't run yet. Once the dispatcher executes it, each run will appear here.">
+  </mj-empty-state>
+} @else {
+  <div class="history-list">
+    @for (run of Runs; track run.ID) {
+      <div class="history-row">
+        <div class="history-row-main">
+          <span [class]="ChipClass(run.Status)">{{ run.Status }}</span>
+          <span class="history-started" [title]="(run.StartedAt | date: 'long') ?? ''">{{ run.StartedAt | date: 'medium' }}</span>
+          <span class="history-relative">{{ RelativeTime(run.StartedAt) }}</span>
+          @if (Duration(run.StartedAt, run.CompletedAt); as duration) {
+            <span class="history-duration"><i class="fa-solid fa-stopwatch"></i> {{ duration }}</span>
+          }
+          <span class="history-spacer"></span>
+          @if (run.NotificationSent) {
+            <span class="history-notified" title="A notification was sent for this run">
+              <i class="fa-solid fa-bell"></i>
+            </span>
+          }
+          @if (LinkFor(run); as link) {
+            <button mjButton variant="outline" size="sm" [title]="'Open the linked ' + link.Label + ' record'"
+              (click)="OpenLink(run)">
+              <i class="fa-solid fa-arrow-up-right-from-square"></i> {{ link.Label }}
+            </button>
+          }
+        </div>
+        @if (run.ResultSummary) {
+          <div class="history-summary">{{ run.ResultSummary }}</div>
+        }
+        @if (run.Status === 'Failed' && run.ErrorMessage) {
+          <div class="history-error">{{ run.ErrorMessage }}</div>
+        }
+      </div>
+    }
+  </div>
+}

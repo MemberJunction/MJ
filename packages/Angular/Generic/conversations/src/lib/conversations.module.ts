@@ -13,6 +13,7 @@ import { CodeEditorModule } from '@memberjunction/ng-code-editor';
 import { ArtifactsModule } from '@memberjunction/ng-artifacts';
 import { TestingModule } from '@memberjunction/ng-testing';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
+import { UserRoutinesModule } from '@memberjunction/ng-user-routines';
 
 // Markdown module
 import { MarkdownModule } from '@memberjunction/ng-markdown';
@@ -33,6 +34,7 @@ import { ConversationMessageRatingComponent } from './components/message/convers
 import { ConversationWorkspaceComponent } from './components/workspace/conversation-workspace.component';
 import { ConversationNavigationComponent } from './components/navigation/conversation-navigation.component';
 import { ConversationSidebarComponent } from './components/sidebar/conversation-sidebar.component';
+import { RoutinesSectionComponent } from './components/sidebar/routines-section.component';
 import { ConversationListComponent } from './components/conversation/conversation-list.component';
 import { ConversationChatAreaComponent } from './components/conversation/conversation-chat-area.component';
 import { ConversationEmptyStateComponent } from './components/conversation/conversation-empty-state.component';
@@ -125,6 +127,7 @@ const COMPONENTS = [
   ConversationWorkspaceComponent,
   ConversationNavigationComponent,
   ConversationSidebarComponent,
+  RoutinesSectionComponent,
   ConversationListComponent,
   ConversationChatAreaComponent,
   ConversationEmptyStateComponent,
@@ -184,6 +187,7 @@ const COMPONENTS = [
     ArtifactsModule,
     TestingModule,
     SharedGenericModule,
+    UserRoutinesModule,
     MarkdownModule,
     DynamicFormsModule,
     ResourcePermissionsModule,
