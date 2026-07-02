@@ -15,6 +15,53 @@ function dialectFor(key: SqlDialectKey): SQLParserDialect {
 }
 
 /**
+ * AST node `type` values that represent a write / DDL / DCL statement. Mirrors the parser's own write
+ * set; used to catch writes the parser reports only at the TOP level (see {@link astContainsWriteNode}).
+ */
+const WRITE_NODE_TYPES = new Set<string>([
+    "insert", "update", "delete", "merge", "replace", "drop", "create", "alter", "truncate",
+    "rename", "call", "exec", "execute", "grant", "revoke", "use", "load", "copy", "do",
+]);
+
+/**
+ * Deep-walk a node-sql-parser AST and report whether ANY node is a write/DDL statement. `HasWriteStatement`
+ * only inspects TOP-level statement types, so a write hidden in a CTE body — e.g.
+ * `WITH x AS (INSERT ... RETURNING *) SELECT * FROM x`, which parses as a top-level `select` — evades it.
+ * Walking every node catches writes nested anywhere (CTE, subquery). Identifiers can't false-positive:
+ * this matches the node `type`, and a column/table literally named `update` is an identifier node, not
+ * an `update` node.
+ */
+function astContainsWriteNode(node: unknown): boolean {
+    if (!node || typeof node !== "object") {
+        return false;
+    }
+    if (Array.isArray(node)) {
+        return node.some(astContainsWriteNode);
+    }
+    const obj = node as Record<string, unknown>;
+    const type = obj.type;
+    if (typeof type === "string" && WRITE_NODE_TYPES.has(type.toLowerCase())) {
+        return true;
+    }
+    return Object.values(obj).some(astContainsWriteNode);
+}
+
+/**
+ * True only when the parsed AST is a SINGLE statement carrying a recognized (string) `type`. A native
+ * read must be exactly one statement; node-sql-parser mis-parses some write forms (notably T-SQL
+ * `WITH ... INSERT`) into an ARRAY of `type: null` nodes that slip past the type-based checks — so
+ * anything that isn't a single, typed statement is refused under uncertainty.
+ */
+function isSingleTypedStatement(ast: unknown): boolean {
+    const statements = Array.isArray(ast) ? ast : [ast];
+    if (statements.length !== 1) {
+        return false;
+    }
+    const stmt = statements[0];
+    return !!stmt && typeof stmt === "object" && typeof (stmt as Record<string, unknown>).type === "string";
+}
+
+/**
  * Read-only enforcement for the native-query path (`RunNativeQuery`).
  *
  * External Data Sources are read-only by contract, but a stored Query's fully-rendered SQL is
@@ -73,6 +120,22 @@ export function assertReadOnlyNativeQuery(sql: string, dialectKey: SqlDialectKey
     if (parser.StatementKind === "select-into") {
         throw new Error(
             "External native query rejected: SELECT ... INTO creates a table — External Data Sources are read-only.",
+        );
+    }
+    // Fail-closed AST checks — the type-based checks above only see the TOP-level statement, so they miss
+    // (a) a write hidden inside a CTE body (`WITH x AS (INSERT/UPDATE ... RETURNING) SELECT ...`, which
+    // parses as a top-level `select`), and (b) forms the parser mis-parses to untyped nodes (T-SQL
+    // `WITH ... INSERT` → an array of `type: null` nodes). Deep-walk for any write node, then require a
+    // single, typed statement.
+    const ast = parser.AST;
+    if (astContainsWriteNode(ast)) {
+        throw new Error(
+            "External native query rejected: a write/DDL statement nested in a CTE or subquery is not permitted — External Data Sources are read-only.",
+        );
+    }
+    if (!isSingleTypedStatement(ast)) {
+        throw new Error(
+            "External native query rejected: only a single, well-formed read statement is allowed — refusing under uncertainty (External Data Sources are read-only).",
         );
     }
 }

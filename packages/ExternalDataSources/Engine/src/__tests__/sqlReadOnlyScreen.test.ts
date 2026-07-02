@@ -30,6 +30,12 @@ describe("assertReadOnlyNativeQuery", () => {
         it("a comment-prefixed SELECT is allowed (comment-stripping doesn't over-reject reads)", () => {
             expect(() => assertReadOnlyNativeQuery("/* report header */ SELECT id FROM orders", "ansi")).not.toThrow();
         });
+        it("a read-only CTE feeding a SELECT is allowed (deep write-walk must not over-reject)", () => {
+            expect(() => assertReadOnlyNativeQuery("WITH t AS (SELECT id FROM orders WHERE status = 'a') SELECT * FROM t", "ansi")).not.toThrow();
+        });
+        it("a UNION of reads is allowed", () => {
+            expect(() => assertReadOnlyNativeQuery("SELECT id FROM a UNION SELECT id FROM b", "ansi")).not.toThrow();
+        });
     });
 
     describe("rejects writes / DDL (read-only enforcement)", () => {
@@ -41,6 +47,18 @@ describe("assertReadOnlyNativeQuery", () => {
             ["data-modifying CTE", "WITH t AS (SELECT 1 AS x) DELETE FROM orders"],
         ])("rejects %s", (_label, sql) => {
             expect(() => assertReadOnlyNativeQuery(sql, "ansi")).toThrow();
+        });
+        // Writable CTE bodies parse as a top-level `select`, so HasWriteStatement misses them — the deep
+        // AST write-walk catches the nested INSERT/UPDATE.
+        it("rejects an INSERT nested in a CTE body (ansi)", () => {
+            expect(() => assertReadOnlyNativeQuery("WITH t AS (INSERT INTO logs VALUES (1) RETURNING *) SELECT * FROM t", "ansi")).toThrow(/read-only|write/i);
+        });
+        it("rejects an UPDATE nested in a CTE body (ansi)", () => {
+            expect(() => assertReadOnlyNativeQuery("WITH t AS (UPDATE accounts SET balance = 0 RETURNING *) SELECT * FROM t", "ansi")).toThrow(/read-only|write/i);
+        });
+        // T-SQL WITH...INSERT mis-parses to an array of type:null nodes — the single-typed-statement guard catches it.
+        it("rejects a T-SQL WITH ... INSERT (sqlserver)", () => {
+            expect(() => assertReadOnlyNativeQuery("WITH t AS (SELECT * FROM x) INSERT INTO y SELECT * FROM t", "sqlserver")).toThrow(/read-only|write|single/i);
         });
         it("rejects TRUNCATE (ansi)", () => {
             expect(() => assertReadOnlyNativeQuery("TRUNCATE TABLE orders", "ansi")).toThrow();
