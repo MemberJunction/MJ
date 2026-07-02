@@ -5,11 +5,16 @@ shared `base.css`. **These are standalone HTML prototypes for design sign-off on
 see [`../plan.md` §6.3](../plan.md) for the "do not port these classes" implementation
 rules. This file records *why* the design landed where it did.
 
+> ✅ **Selected direction: C · Editorial Split.** A and B are retained here as the
+> alternatives considered (see the decision trail). Because the reusable picker +
+> `mjButton` usage is identical across all three, only **C's layout** carries forward to
+> implementation — the principles and standards below apply regardless.
+
 | File | Direction | In one line |
 |---|---|---|
-| `Login A - Centered Focus.html` | **A · Centered Focus** | One calm card centered on a tinted page. Most conservative. |
-| `Login B - Immersive Brand.html` | **B · Immersive Brand** | A navy brand stage (left) + an elevated form card (right), centered as a balanced pair. |
-| `Login C - Editorial Split.html` | **C · Editorial Split** | Two-pane split — a navy brand panel (logo + welcome) beside a quiet form. |
+| `Login C - Editorial Split.html` | **C · Editorial Split** ✅ **(selected)** | Two-pane split — a brand panel (logo + welcome) beside a quiet form. |
+| `Login A - Centered Focus.html` | A · Centered Focus | One calm card centered on a tinted page. Most conservative. |
+| `Login B - Immersive Brand.html` | B · Immersive Brand | A flat brand stage (left) + an elevated form card (right), centered as a balanced pair. |
 | `base.css` | shared | Tokens + the `mjButton`-mirroring provider rows every concept reuses. |
 | `index.html` | gallery | Side-by-side preview of A/B/C (review only). |
 
@@ -90,10 +95,8 @@ rules. This file records *why* the design landed where it did.
 
 ## What's still a design choice (open)
 
-- Which direction (A / B / C) to ship — the picker + `mjButton` usage is identical
-  across all three, so the layout is the only decision.
-- Whether B's brand stage wants subtle **abstract** (non-logo) background interest now
-  that the watermark is gone.
+- ~~Which direction (A / B / C) to ship~~ — **decided: C · Editorial Split.** A/B kept
+  as alternatives-considered for reference.
 - **Scaling to many providers (deferred — noted, not designed).** The picker is a
   vertical list sized for a handful of IdPs (the common case). Beyond ~6 it grows tall;
   revisit then with a scrollable list (`max-height` + overflow) or a search/filter.
