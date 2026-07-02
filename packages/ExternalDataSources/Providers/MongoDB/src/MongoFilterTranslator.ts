@@ -17,6 +17,8 @@
  * filter-AST translator" called for in the External Data Sources design.
  */
 
+import { ObjectId } from 'mongodb';
+
 type MongoFilter = Record<string, unknown>;
 type Primitive = string | number | boolean | null;
 
@@ -145,8 +147,8 @@ class Parser {
       const value = this.parseValue();
       return MongoFilterTranslator.Comparison(field, t.value, value);
     }
-    if (this.isKw('IN')) { this.next(); return { [field]: { $in: this.parseValueList() } }; }
-    if (this.isKw('NOT')) { this.next(); if (!this.isKw('IN')) throw new Error("Expected IN after NOT."); this.next(); return { [field]: { $nin: this.parseValueList() } }; }
+    if (this.isKw('IN')) { this.next(); return { [field]: { $in: this.parseValueList().map(v => MongoFilterTranslator.CoerceObjectId(field, v)) } }; }
+    if (this.isKw('NOT')) { this.next(); if (!this.isKw('IN')) throw new Error("Expected IN after NOT."); this.next(); return { [field]: { $nin: this.parseValueList().map(v => MongoFilterTranslator.CoerceObjectId(field, v)) } }; }
     if (this.isKw('IS')) {
       this.next();
       const negated = this.isKw('NOT');
@@ -194,15 +196,30 @@ export class MongoFilterTranslator {
   }
 
   public static Comparison(field: string, op: string, value: Primitive): MongoFilter {
+    const v = MongoFilterTranslator.CoerceObjectId(field, value);
     switch (op) {
-      case '=': return { [field]: { $eq: value } };
-      case '!=': return { [field]: { $ne: value } };
-      case '>': return { [field]: { $gt: value } };
-      case '<': return { [field]: { $lt: value } };
-      case '>=': return { [field]: { $gte: value } };
-      case '<=': return { [field]: { $lte: value } };
+      case '=': return { [field]: { $eq: v } };
+      case '!=': return { [field]: { $ne: v } };
+      case '>': return { [field]: { $gt: v } };
+      case '<': return { [field]: { $lt: v } };
+      case '>=': return { [field]: { $gte: v } };
+      case '<=': return { [field]: { $lte: v } };
       default: throw new Error(`Unsupported operator '${op}' in filter.`);
     }
+  }
+
+  /**
+   * Coerce a value for MongoDB when the target field is `_id`. Mongo's default `_id` is a 12-byte
+   * `ObjectId`, but MJ carries key/filter values as strings — so `{_id: "507f..."}` matches nothing.
+   * When the field is `_id` and the value is a 24-char hex string, wrap it as an `ObjectId`. All other
+   * fields and non-ObjectId `_id` shapes (e.g. a string `_id`) pass through unchanged. Shared by the
+   * driver's `LoadSingle` and this translator's comparison / IN paths so the behavior is uniform.
+   */
+  public static CoerceObjectId(field: string, value: unknown): unknown {
+    if (field === '_id' && typeof value === 'string' && /^[0-9a-fA-F]{24}$/.test(value)) {
+      return new ObjectId(value);
+    }
+    return value;
   }
 
   /** Convert a SQL LIKE pattern to an anchored, regex-escaped pattern (% -> .*, _ -> .). */

@@ -175,9 +175,10 @@ export class MongoExternalDataSourceDriver extends BaseExternalDataSourceDriver<
     contextUser?: UserInfo,
   ): Promise<TRow | null> {
     const db = await this.getConnection(dataSource, contextUser);
-    const filter: Record<string, ExternalQueryParameter["value"]> = {};
+    const filter: Record<string, unknown> = {};
     for (const pk of primaryKeys) {
-      filter[pk.name] = pk.value;
+      // Coerce a string _id to ObjectId (Mongo's default key type) so load-by-PK actually resolves.
+      filter[pk.name] = MongoFilterTranslator.CoerceObjectId(pk.name, pk.value);
     }
     const doc = await db.collection(objectName).findOne(filter);
     return (doc as unknown as TRow) ?? null;
@@ -186,11 +187,16 @@ export class MongoExternalDataSourceDriver extends BaseExternalDataSourceDriver<
   public async RunNativeQuery<TRow extends ExternalRow = ExternalRow>(
     dataSource: MJExternalDataSourceEntity,
     queryText: string,
-    _params: ExternalQueryParameter[] | undefined,
+    params: ExternalQueryParameter[] | undefined,
     contextUser?: UserInfo,
   ): Promise<ExternalQueryResult<TRow>> {
     const start = Date.now();
     try {
+      // Bound parameters aren't supported for the Mongo aggregation-pipeline native form — fail loud
+      // rather than silently ignoring declared params (which would run a different query than intended).
+      if (params && params.length > 0) {
+        throw new Error('MongoDB native queries do not support bound parameters; embed values directly in the pipeline JSON.');
+      }
       return await this.withConnectionRetry(dataSource, async () => {
         const db = await this.getConnection(dataSource, contextUser);
         const spec = JSON.parse(queryText) as MongoNativeQuery;

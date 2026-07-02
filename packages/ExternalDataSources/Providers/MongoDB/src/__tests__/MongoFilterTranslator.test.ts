@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { ObjectId } from 'mongodb';
 import { MongoFilterTranslator } from '../MongoFilterTranslator';
 
 const t = (sql: string) => MongoFilterTranslator.Translate(sql);
@@ -83,5 +84,36 @@ describe('MongoFilterTranslator', () => {
     expect(() => t('amount BETWEEN 1 AND 10')).toThrow();
     expect(() => t('status =')).toThrow();
     expect(() => t('@#$')).toThrow();
+  });
+
+  describe('_id ObjectId coercion', () => {
+    const hex = '507f1f77bcf86cd799439011';
+
+    it('coerces a 24-hex _id equality value to an ObjectId', () => {
+      const f = t(`_id = '${hex}'`) as { _id: { $eq: unknown } };
+      expect(f._id.$eq).toBeInstanceOf(ObjectId);
+      expect((f._id.$eq as ObjectId).toString()).toBe(hex);
+    });
+
+    it('coerces _id values inside IN / NOT IN lists', () => {
+      const inF = t(`_id IN ('${hex}')`) as { _id: { $in: unknown[] } };
+      expect(inF._id.$in[0]).toBeInstanceOf(ObjectId);
+      const ninF = t(`_id NOT IN ('${hex}')`) as { _id: { $nin: unknown[] } };
+      expect(ninF._id.$nin[0]).toBeInstanceOf(ObjectId);
+    });
+
+    it('leaves a non-hex _id string untouched (supports string-keyed collections)', () => {
+      expect(t("_id = 'not-an-objectid'")).toEqual({ _id: { $eq: 'not-an-objectid' } });
+    });
+
+    it('does not coerce a non-_id field even when the value looks like a hex ObjectId', () => {
+      expect(t(`token = '${hex}'`)).toEqual({ token: { $eq: hex } });
+    });
+
+    it('CoerceObjectId is a pure, uniform helper (used by LoadSingle too)', () => {
+      expect(MongoFilterTranslator.CoerceObjectId('_id', hex)).toBeInstanceOf(ObjectId);
+      expect(MongoFilterTranslator.CoerceObjectId('_id', 42)).toBe(42);      // non-string passes through
+      expect(MongoFilterTranslator.CoerceObjectId('name', hex)).toBe(hex);   // non-_id passes through
+    });
   });
 });
