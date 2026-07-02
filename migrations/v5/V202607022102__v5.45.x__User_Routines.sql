@@ -15,6 +15,10 @@
 -- pattern used for Skills & Plan Mode. One addition beyond that spec:
 -- UserRoutine.RequestedSkillIDs, which lets a routine pre-activate AI Skills
 -- for its target agent on every run (5.45 skills-framework synergy).
+-- Post-review refinements: StartAt/EndAt activation window; recipient Sequence;
+-- NotificationTemplateID (MJ Template-driven notifications, seeded default);
+-- run telemetry via linkage only (AgentRunID/PromptRunID/ActionExecutionLogID
+-- — no duplicated TokensUsed/Cost columns).
 --
 -- Row-level owner access, the dispatcher job, entity permissions, and the
 -- Routines app metadata are configured via metadata sync in the code phase —
@@ -38,6 +42,9 @@ CREATE TABLE ${flyway:defaultSchema}.UserRoutine (
     StartingPayload  NVARCHAR(MAX)    NULL,
     RequestedSkillIDs NVARCHAR(MAX)   NULL,
     CronExpression   NVARCHAR(100)    NOT NULL,
+    StartAt          DATETIMEOFFSET   NULL,
+    EndAt            DATETIMEOFFSET   NULL,
+    NotificationTemplateID UNIQUEIDENTIFIER NULL,
     Timezone         NVARCHAR(100)    NOT NULL CONSTRAINT DF_UserRoutine_Timezone DEFAULT ('UTC'),
     NextRunAt        DATETIMEOFFSET   NULL,
     LastRunAt        DATETIMEOFFSET   NULL,
@@ -51,6 +58,8 @@ CREATE TABLE ${flyway:defaultSchema}.UserRoutine (
         REFERENCES ${flyway:defaultSchema}.[User] (ID),
     CONSTRAINT FK_UserRoutine_Environment FOREIGN KEY (EnvironmentID)
         REFERENCES ${flyway:defaultSchema}.Environment (ID),
+    CONSTRAINT FK_UserRoutine_NotificationTemplate FOREIGN KEY (NotificationTemplateID)
+        REFERENCES ${flyway:defaultSchema}.Template (ID),
     CONSTRAINT CK_UserRoutine_Status
         CHECK (Status IN ('Active', 'Paused', 'Disabled')),
     CONSTRAINT CK_UserRoutine_RoutineType
@@ -113,6 +122,18 @@ EXEC sp_addextendedproperty @name = N'MS_Description',
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
     @level1type = N'TABLE',  @level1name = N'UserRoutine', @level2type = N'COLUMN', @level2name = N'CronExpression';
 EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Optional activation window start. An Active routine does not run before this time; once current time passes StartAt the dispatcher begins scheduling it. NULL = eligible immediately.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'UserRoutine', @level2type = N'COLUMN', @level2name = N'StartAt';
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Optional activation window end. An Active routine stops running once current time passes EndAt — automatic sunset without changing Status. NULL = no end.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'UserRoutine', @level2type = N'COLUMN', @level2name = N'EndAt';
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Optional MJ Template used to render routine notifications from the runs output data (result summary, status, target info) via the standard MJ templating architecture. When NULL, the system default routine-notification template (seeded via metadata, resolvable per instance — not hardcoded) is used.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'UserRoutine', @level2type = N'COLUMN', @level2name = N'NotificationTemplateID';
+EXEC sp_addextendedproperty @name = N'MS_Description',
     @value = N'IANA timezone used when evaluating CronExpression (e.g. America/Chicago).',
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
     @level1type = N'TABLE',  @level1name = N'UserRoutine', @level2type = N'COLUMN', @level2name = N'Timezone';
@@ -155,6 +176,7 @@ CREATE TABLE ${flyway:defaultSchema}.UserRoutineRecipient (
     UserID     UNIQUEIDENTIFIER NULL,
     Email      NVARCHAR(255)    NULL,
     Channel    NVARCHAR(20)     NOT NULL CONSTRAINT DF_UserRoutineRecipient_Channel DEFAULT ('InApp'),
+    Sequence   INT              NOT NULL CONSTRAINT DF_UserRoutineRecipient_Sequence DEFAULT (0),
     CONSTRAINT PK_UserRoutineRecipient PRIMARY KEY (ID),
     CONSTRAINT FK_UserRoutineRecipient_Routine FOREIGN KEY (RoutineID)
         REFERENCES ${flyway:defaultSchema}.UserRoutine (ID),
@@ -181,6 +203,10 @@ EXEC sp_addextendedproperty @name = N'MS_Description',
     @value = N'Delivery channel for this recipient: InApp or Email.',
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
     @level1type = N'TABLE',  @level1name = N'UserRoutineRecipient', @level2type = N'COLUMN', @level2name = N'Channel';
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Explicit display/notification ordering of recipients within a routine (ascending).',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'UserRoutineRecipient', @level2type = N'COLUMN', @level2name = N'Sequence';
 
 
 -- ============================================================================
@@ -193,8 +219,8 @@ CREATE TABLE ${flyway:defaultSchema}.UserRoutineRun (
     CompletedAt       DATETIMEOFFSET   NULL,
     Status            NVARCHAR(20)     NOT NULL CONSTRAINT DF_UserRoutineRun_Status DEFAULT ('Running'),
     AgentRunID        UNIQUEIDENTIFIER NULL,
-    TokensUsed        INT              NULL,
-    Cost              DECIMAL(18,6)    NULL,
+    PromptRunID       UNIQUEIDENTIFIER NULL,
+    ActionExecutionLogID UNIQUEIDENTIFIER NULL,
     ResultSummary     NVARCHAR(MAX)    NULL,
     ResultHash        NVARCHAR(100)    NULL,
     NotificationSent  BIT              NOT NULL CONSTRAINT DF_UserRoutineRun_NotificationSent DEFAULT (0),
@@ -204,6 +230,10 @@ CREATE TABLE ${flyway:defaultSchema}.UserRoutineRun (
         REFERENCES ${flyway:defaultSchema}.UserRoutine (ID),
     CONSTRAINT FK_UserRoutineRun_AgentRun FOREIGN KEY (AgentRunID)
         REFERENCES ${flyway:defaultSchema}.AIAgentRun (ID),
+    CONSTRAINT FK_UserRoutineRun_PromptRun FOREIGN KEY (PromptRunID)
+        REFERENCES ${flyway:defaultSchema}.AIPromptRun (ID),
+    CONSTRAINT FK_UserRoutineRun_ActionExecutionLog FOREIGN KEY (ActionExecutionLogID)
+        REFERENCES ${flyway:defaultSchema}.ActionExecutionLog (ID),
     CONSTRAINT CK_UserRoutineRun_Status
         CHECK (Status IN ('Running', 'Success', 'Failed', 'Skipped'))
 );
@@ -230,13 +260,13 @@ EXEC sp_addextendedproperty @name = N'MS_Description',
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
     @level1type = N'TABLE',  @level1name = N'UserRoutineRun', @level2type = N'COLUMN', @level2name = N'AgentRunID';
 EXEC sp_addextendedproperty @name = N'MS_Description',
-    @value = N'Total tokens used by this run (if applicable).',
+    @value = N'For Prompt targets, links to the MJ: AI Prompt Runs record for this execution — tokens, cost, and full telemetry live there (never duplicated here).',
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
-    @level1type = N'TABLE',  @level1name = N'UserRoutineRun', @level2type = N'COLUMN', @level2name = N'TokensUsed';
+    @level1type = N'TABLE',  @level1name = N'UserRoutineRun', @level2type = N'COLUMN', @level2name = N'PromptRunID';
 EXEC sp_addextendedproperty @name = N'MS_Description',
-    @value = N'Total cost of this run (if applicable).',
+    @value = N'For Action targets, links to the MJ: Action Execution Logs record for this execution — params, results, and telemetry live there (never duplicated here).',
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
-    @level1type = N'TABLE',  @level1name = N'UserRoutineRun', @level2type = N'COLUMN', @level2name = N'Cost';
+    @level1type = N'TABLE',  @level1name = N'UserRoutineRun', @level2type = N'COLUMN', @level2name = N'ActionExecutionLogID';
 EXEC sp_addextendedproperty @name = N'MS_Description',
     @value = N'Human-readable summary of the run result.',
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
@@ -321,213 +351,6 @@ EXEC sp_addextendedproperty @name = N'MS_Description',
 -- =============================================================================
 -- =============================================================================
 -- =============================================================================
-
-/* SQL generated to create new entity MJ: User Routines */
-
-      INSERT INTO [${flyway:defaultSchema}].[Entity] (
-         [ID],
-         [Name],
-         [DisplayName],
-         [Description],
-         [NameSuffix],
-         [BaseTable],
-         [BaseView],
-         [SchemaName],
-         [IncludeInAPI],
-         [AllowUserSearchAPI],
-         [AllowCaching]
-         , [TrackRecordChanges]
-         , [AuditRecordAccess]
-         , [AuditViewRuns]
-         , [AllowAllRowsAPI]
-         , [AllowCreateAPI]
-         , [AllowUpdateAPI]
-         , [AllowDeleteAPI]
-         , [UserViewMaxRows]
-         , [__mj_CreatedAt]
-         , [__mj_UpdatedAt]
-      )
-      VALUES (
-         '0b84a3d0-2114-42a0-a0f0-7848e86e9fbf',
-         'MJ: User Routines',
-         'User Routines',
-         NULL,
-         NULL,
-         'UserRoutine',
-         'vwUserRoutines',
-         '${flyway:defaultSchema}',
-         1,
-         1,
-         1
-         , 1
-         , 0
-         , 0
-         , 0
-         , 1
-         , 1
-         , 1
-         , 1000
-         , GETUTCDATE()
-         , GETUTCDATE()
-      );
-
-/* SQL generated to add new entity MJ: User Routines to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
-INSERT INTO [${flyway:defaultSchema}].[ApplicationEntity]
-                                       ([ApplicationID], [EntityID], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '0b84a3d0-2114-42a0-a0f0-7848e86e9fbf', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
-
-/* SQL generated to add new permission for entity MJ: User Routines for role UI */
-INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
-                                                   ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('0b84a3d0-2114-42a0-a0f0-7848e86e9fbf', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE());
-
-/* SQL generated to add new permission for entity MJ: User Routines for role Developer */
-INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
-                                                   ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('0b84a3d0-2114-42a0-a0f0-7848e86e9fbf', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
-
-/* SQL generated to add new permission for entity MJ: User Routines for role Integration */
-INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
-                                                   ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('0b84a3d0-2114-42a0-a0f0-7848e86e9fbf', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
-
-/* SQL generated to create new entity MJ: User Routine Recipients */
-
-      INSERT INTO [${flyway:defaultSchema}].[Entity] (
-         [ID],
-         [Name],
-         [DisplayName],
-         [Description],
-         [NameSuffix],
-         [BaseTable],
-         [BaseView],
-         [SchemaName],
-         [IncludeInAPI],
-         [AllowUserSearchAPI],
-         [AllowCaching]
-         , [TrackRecordChanges]
-         , [AuditRecordAccess]
-         , [AuditViewRuns]
-         , [AllowAllRowsAPI]
-         , [AllowCreateAPI]
-         , [AllowUpdateAPI]
-         , [AllowDeleteAPI]
-         , [UserViewMaxRows]
-         , [__mj_CreatedAt]
-         , [__mj_UpdatedAt]
-      )
-      VALUES (
-         'd16d839c-eb7c-4b9d-ba03-f33ed00f984d',
-         'MJ: User Routine Recipients',
-         'User Routine Recipients',
-         NULL,
-         NULL,
-         'UserRoutineRecipient',
-         'vwUserRoutineRecipients',
-         '${flyway:defaultSchema}',
-         1,
-         1,
-         1
-         , 1
-         , 0
-         , 0
-         , 0
-         , 1
-         , 1
-         , 1
-         , 1000
-         , GETUTCDATE()
-         , GETUTCDATE()
-      );
-
-/* SQL generated to add new entity MJ: User Routine Recipients to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
-INSERT INTO [${flyway:defaultSchema}].[ApplicationEntity]
-                                       ([ApplicationID], [EntityID], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', 'd16d839c-eb7c-4b9d-ba03-f33ed00f984d', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
-
-/* SQL generated to add new permission for entity MJ: User Routine Recipients for role UI */
-INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
-                                                   ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('d16d839c-eb7c-4b9d-ba03-f33ed00f984d', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE());
-
-/* SQL generated to add new permission for entity MJ: User Routine Recipients for role Developer */
-INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
-                                                   ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('d16d839c-eb7c-4b9d-ba03-f33ed00f984d', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
-
-/* SQL generated to add new permission for entity MJ: User Routine Recipients for role Integration */
-INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
-                                                   ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('d16d839c-eb7c-4b9d-ba03-f33ed00f984d', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
-
-/* SQL generated to create new entity MJ: User Routine Runs */
-
-      INSERT INTO [${flyway:defaultSchema}].[Entity] (
-         [ID],
-         [Name],
-         [DisplayName],
-         [Description],
-         [NameSuffix],
-         [BaseTable],
-         [BaseView],
-         [SchemaName],
-         [IncludeInAPI],
-         [AllowUserSearchAPI],
-         [AllowCaching]
-         , [TrackRecordChanges]
-         , [AuditRecordAccess]
-         , [AuditViewRuns]
-         , [AllowAllRowsAPI]
-         , [AllowCreateAPI]
-         , [AllowUpdateAPI]
-         , [AllowDeleteAPI]
-         , [UserViewMaxRows]
-         , [__mj_CreatedAt]
-         , [__mj_UpdatedAt]
-      )
-      VALUES (
-         '79deeb22-4476-4081-a66d-65ea58d1df6e',
-         'MJ: User Routine Runs',
-         'User Routine Runs',
-         NULL,
-         NULL,
-         'UserRoutineRun',
-         'vwUserRoutineRuns',
-         '${flyway:defaultSchema}',
-         1,
-         1,
-         1
-         , 1
-         , 0
-         , 0
-         , 0
-         , 1
-         , 1
-         , 1
-         , 1000
-         , GETUTCDATE()
-         , GETUTCDATE()
-      );
-
-/* SQL generated to add new entity MJ: User Routine Runs to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
-INSERT INTO [${flyway:defaultSchema}].[ApplicationEntity]
-                                       ([ApplicationID], [EntityID], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '79deeb22-4476-4081-a66d-65ea58d1df6e', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
-
-/* SQL generated to add new permission for entity MJ: User Routine Runs for role UI */
-INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
-                                                   ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('79deeb22-4476-4081-a66d-65ea58d1df6e', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE());
-
-/* SQL generated to add new permission for entity MJ: User Routine Runs for role Developer */
-INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
-                                                   ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('79deeb22-4476-4081-a66d-65ea58d1df6e', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
-
-/* SQL generated to add new permission for entity MJ: User Routine Runs for role Integration */
-INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
-                                                   ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('79deeb22-4476-4081-a66d-65ea58d1df6e', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
 
 /* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.UserRoutineRun */
 ALTER TABLE [${flyway:defaultSchema}].[UserRoutineRun] ADD [__mj_CreatedAt] DATETIMEOFFSET NULL;
@@ -627,7 +450,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'bacd9b12-3479-45af-a1f4-1772d3032758' OR (EntityID = '79DEEB22-4476-4081-A66D-65EA58D1DF6E' AND Name = 'ID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '042f5e76-86f4-46ca-9dac-86285eebbde1' OR (EntityID = '79DEEB22-4476-4081-A66D-65EA58D1DF6E' AND Name = 'PromptRunID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -660,88 +483,23 @@ GO
          )
          VALUES
          (
-            'bacd9b12-3479-45af-a1f4-1772d3032758',
+            '042f5e76-86f4-46ca-9dac-86285eebbde1',
             '79DEEB22-4476-4081-A66D-65EA58D1DF6E', -- Entity: MJ: User Routine Runs
-            100001,
-            'ID',
-            'ID',
-            NULL,
+            100021,
+            'PromptRunID',
+            'Prompt Run ID',
+            'For Prompt targets, links to the MJ: AI Prompt Runs record for this execution — tokens, cost, and full telemetry live there (never duplicated here).',
             'uniqueidentifier',
             16,
             0,
             0,
-            0,
-            'newsequentialid()',
-            0,
-            0,
-            0,
-            0,
-            NULL,
+            1,
             NULL,
             0,
             1,
             0,
             0,
-            1,
-            1,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '0650ec9f-d461-4c43-b8e9-f8aa781e4653' OR (EntityID = '79DEEB22-4476-4081-A66D-65EA58D1DF6E' AND Name = 'RoutineID')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '0650ec9f-d461-4c43-b8e9-f8aa781e4653',
-            '79DEEB22-4476-4081-A66D-65EA58D1DF6E', -- Entity: MJ: User Routine Runs
-            100002,
-            'RoutineID',
-            'Routine ID',
-            'Routine this run belongs to.',
-            'uniqueidentifier',
-            16,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF',
+            '7C1C98D0-3978-4CE8-8E3F-C90301E59767',
             'ID',
             0,
             0,
@@ -757,7 +515,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'f5382cd1-8e8e-4ffa-9c34-51441701faaf' OR (EntityID = '79DEEB22-4476-4081-A66D-65EA58D1DF6E' AND Name = 'StartedAt')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '992929b4-4d57-409e-a9c0-d335ae40b4e6' OR (EntityID = '79DEEB22-4476-4081-A66D-65EA58D1DF6E' AND Name = 'ActionExecutionLogID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -790,27 +548,27 @@ GO
          )
          VALUES
          (
-            'f5382cd1-8e8e-4ffa-9c34-51441701faaf',
+            '992929b4-4d57-409e-a9c0-d335ae40b4e6',
             '79DEEB22-4476-4081-A66D-65EA58D1DF6E', -- Entity: MJ: User Routine Runs
-            100003,
-            'StartedAt',
-            'Started At',
-            'When the run started.',
-            'datetimeoffset',
-            10,
-            34,
-            7,
+            100022,
+            'ActionExecutionLogID',
+            'Action Execution Log ID',
+            'For Action targets, links to the MJ: Action Execution Logs record for this execution — params, results, and telemetry live there (never duplicated here).',
+            'uniqueidentifier',
+            16,
             0,
-            'sysdatetimeoffset()',
+            0,
+            1,
+            NULL,
             0,
             1,
             0,
             0,
-            NULL,
-            NULL,
+            '3E248F34-2837-EF11-86D4-6045BDEE16E6',
+            'ID',
             0,
             0,
-            0,
+            1,
             0,
             0,
             0,
@@ -822,7 +580,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '24bf1a72-e38e-485d-b7ae-ae860a52de8e' OR (EntityID = '79DEEB22-4476-4081-A66D-65EA58D1DF6E' AND Name = 'CompletedAt')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'ce8cf679-6616-44f8-8517-2c72a35b4e82' OR (EntityID = '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF' AND Name = 'StartAt')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -855,12 +613,12 @@ GO
          )
          VALUES
          (
-            '24bf1a72-e38e-485d-b7ae-ae860a52de8e',
-            '79DEEB22-4476-4081-A66D-65EA58D1DF6E', -- Entity: MJ: User Routine Runs
-            100004,
-            'CompletedAt',
-            'Completed At',
-            'When the run completed (null while running).',
+            'ce8cf679-6616-44f8-8517-2c72a35b4e82',
+            '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF', -- Entity: MJ: User Routines
+            100040,
+            'StartAt',
+            'Start At',
+            'Optional activation window start. An Active routine does not run before this time; once current time passes StartAt the dispatcher begins scheduling it. NULL = eligible immediately.',
             'datetimeoffset',
             10,
             34,
@@ -887,7 +645,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '90bf74b0-bd70-406c-bf65-672f18325a15' OR (EntityID = '79DEEB22-4476-4081-A66D-65EA58D1DF6E' AND Name = 'Status')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '10d26515-e0c0-4547-8993-4415bcca7936' OR (EntityID = '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF' AND Name = 'EndAt')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -920,18 +678,18 @@ GO
          )
          VALUES
          (
-            '90bf74b0-bd70-406c-bf65-672f18325a15',
-            '79DEEB22-4476-4081-A66D-65EA58D1DF6E', -- Entity: MJ: User Routine Runs
-            100005,
-            'Status',
-            'Status',
-            'Run outcome.',
-            'nvarchar',
-            40,
-            0,
-            0,
-            0,
-            'Running',
+            '10d26515-e0c0-4547-8993-4415bcca7936',
+            '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF', -- Entity: MJ: User Routines
+            100041,
+            'EndAt',
+            'End At',
+            'Optional activation window end. An Active routine stops running once current time passes EndAt — automatic sunset without changing Status. NULL = no end.',
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            1,
+            NULL,
             0,
             1,
             0,
@@ -952,7 +710,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '542a538c-ef81-43f3-9357-8828da1a7d17' OR (EntityID = '79DEEB22-4476-4081-A66D-65EA58D1DF6E' AND Name = 'AgentRunID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'ec798c59-09aa-47ea-9e32-4ae6f20b7c16' OR (EntityID = '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF' AND Name = 'NotificationTemplateID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -985,12 +743,12 @@ GO
          )
          VALUES
          (
-            '542a538c-ef81-43f3-9357-8828da1a7d17',
-            '79DEEB22-4476-4081-A66D-65EA58D1DF6E', -- Entity: MJ: User Routine Runs
-            100006,
-            'AgentRunID',
-            'Agent Run ID',
-            'Linked AI Agent Run when the routine target is an agent.',
+            'ec798c59-09aa-47ea-9e32-4ae6f20b7c16',
+            '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF', -- Entity: MJ: User Routines
+            100042,
+            'NotificationTemplateID',
+            'Notification Template ID',
+            'Optional MJ Template used to render routine notifications from the runs output data (result summary, status, target info) via the standard MJ templating architecture. When NULL, the system default routine-notification template (seeded via metadata, resolvable per instance — not hardcoded) is used.',
             'uniqueidentifier',
             16,
             0,
@@ -1001,7 +759,7 @@ GO
             1,
             0,
             0,
-            '5190AF93-4C39-4429-BDAA-0AEB492A0256',
+            '48248F34-2837-EF11-86D4-6045BDEE16E6',
             'ID',
             0,
             0,
@@ -1017,7 +775,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '871ca82b-1308-4576-8d78-9891b2e692e8' OR (EntityID = '79DEEB22-4476-4081-A66D-65EA58D1DF6E' AND Name = 'TokensUsed')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'c69fdfa3-eaf1-4f84-861b-37b4e6fc7a97' OR (EntityID = 'D16D839C-EB7C-4B9D-BA03-F33ED00F984D' AND Name = 'Sequence')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1050,276 +808,16 @@ GO
          )
          VALUES
          (
-            '871ca82b-1308-4576-8d78-9891b2e692e8',
-            '79DEEB22-4476-4081-A66D-65EA58D1DF6E', -- Entity: MJ: User Routine Runs
-            100007,
-            'TokensUsed',
-            'Tokens Used',
-            'Total tokens used by this run (if applicable).',
+            'c69fdfa3-eaf1-4f84-861b-37b4e6fc7a97',
+            'D16D839C-EB7C-4B9D-BA03-F33ED00F984D', -- Entity: MJ: User Routine Recipients
+            100014,
+            'Sequence',
+            'Sequence',
+            'Explicit display/notification ordering of recipients within a routine (ascending).',
             'int',
             4,
             10,
             0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '8975c433-ed4c-45da-9a0c-960b2ff28498' OR (EntityID = '79DEEB22-4476-4081-A66D-65EA58D1DF6E' AND Name = 'Cost')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '8975c433-ed4c-45da-9a0c-960b2ff28498',
-            '79DEEB22-4476-4081-A66D-65EA58D1DF6E', -- Entity: MJ: User Routine Runs
-            100008,
-            'Cost',
-            'Cost',
-            'Total cost of this run (if applicable).',
-            'decimal',
-            9,
-            18,
-            6,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '00eb6327-247e-4806-be34-b636c3c100dd' OR (EntityID = '79DEEB22-4476-4081-A66D-65EA58D1DF6E' AND Name = 'ResultSummary')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '00eb6327-247e-4806-be34-b636c3c100dd',
-            '79DEEB22-4476-4081-A66D-65EA58D1DF6E', -- Entity: MJ: User Routine Runs
-            100009,
-            'ResultSummary',
-            'Result Summary',
-            'Human-readable summary of the run result.',
-            'nvarchar',
-            -1,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '861be2d7-9ae9-4a48-8be0-1ecc40109cb4' OR (EntityID = '79DEEB22-4476-4081-A66D-65EA58D1DF6E' AND Name = 'ResultHash')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '861be2d7-9ae9-4a48-8be0-1ecc40109cb4',
-            '79DEEB22-4476-4081-A66D-65EA58D1DF6E', -- Entity: MJ: User Routine Runs
-            100010,
-            'ResultHash',
-            'Result Hash',
-            'Hash of the result, compared against the routine LastResultHash for OnChange detection.',
-            'nvarchar',
-            200,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '5273d85c-22bc-46d8-92d9-7df90bf515a8' OR (EntityID = '79DEEB22-4476-4081-A66D-65EA58D1DF6E' AND Name = 'NotificationSent')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '5273d85c-22bc-46d8-92d9-7df90bf515a8',
-            '79DEEB22-4476-4081-A66D-65EA58D1DF6E', -- Entity: MJ: User Routine Runs
-            100011,
-            'NotificationSent',
-            'Notification Sent',
-            'Whether a notification was dispatched for this run.',
-            'bit',
-            1,
-            1,
-            0,
             0,
             '(0)',
             0,
@@ -1340,2362 +838,34 @@ GO
          )
       END;
 
-/* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '7d622035-a538-46a4-bdd4-3d92bd9ae8ac' OR (EntityID = '79DEEB22-4476-4081-A66D-65EA58D1DF6E' AND Name = 'ErrorMessage')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '7d622035-a538-46a4-bdd4-3d92bd9ae8ac',
-            '79DEEB22-4476-4081-A66D-65EA58D1DF6E', -- Entity: MJ: User Routine Runs
-            100012,
-            'ErrorMessage',
-            'Error Message',
-            'Error detail when Status is Failed.',
-            'nvarchar',
-            -1,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '76e17476-33ec-4188-9282-ecae73b1f6d2' OR (EntityID = '79DEEB22-4476-4081-A66D-65EA58D1DF6E' AND Name = '__mj_CreatedAt')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '76e17476-33ec-4188-9282-ecae73b1f6d2',
-            '79DEEB22-4476-4081-A66D-65EA58D1DF6E', -- Entity: MJ: User Routine Runs
-            100013,
-            '__mj_CreatedAt',
-            'Created At',
-            NULL,
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            0,
-            'getutcdate()',
-            0,
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '443c7e10-3865-4ded-a64f-36a5a800bb8f' OR (EntityID = '79DEEB22-4476-4081-A66D-65EA58D1DF6E' AND Name = '__mj_UpdatedAt')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '443c7e10-3865-4ded-a64f-36a5a800bb8f',
-            '79DEEB22-4476-4081-A66D-65EA58D1DF6E', -- Entity: MJ: User Routine Runs
-            100014,
-            '__mj_UpdatedAt',
-            'Updated At',
-            NULL,
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            0,
-            'getutcdate()',
-            0,
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'e6cdd3c1-f544-4c36-8acb-3e301658593c' OR (EntityID = '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF' AND Name = 'ID')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'e6cdd3c1-f544-4c36-8acb-3e301658593c',
-            '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF', -- Entity: MJ: User Routines
-            100001,
-            'ID',
-            'ID',
-            NULL,
-            'uniqueidentifier',
-            16,
-            0,
-            0,
-            0,
-            'newsequentialid()',
-            0,
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            1,
-            1,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '886e4edb-2f48-49c1-bc8a-2362348a28f7' OR (EntityID = '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF' AND Name = 'UserID')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '886e4edb-2f48-49c1-bc8a-2362348a28f7',
-            '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF', -- Entity: MJ: User Routines
-            100002,
-            'UserID',
-            'User ID',
-            'Owner of the routine. Routines are private to their owner (row-level access).',
-            'uniqueidentifier',
-            16,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            'E1238F34-2837-EF11-86D4-6045BDEE16E6',
-            'ID',
-            0,
-            0,
-            1,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '6e569abd-eee9-463c-94fe-4f0771b896a5' OR (EntityID = '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF' AND Name = 'EnvironmentID')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '6e569abd-eee9-463c-94fe-4f0771b896a5',
-            '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF', -- Entity: MJ: User Routines
-            100003,
-            'EnvironmentID',
-            'Environment ID',
-            'Optional environment scope for the routine.',
-            'uniqueidentifier',
-            16,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            '72975471-6AAB-45C6-B58A-3F1115C921C3',
-            'ID',
-            0,
-            0,
-            1,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '5eda642f-47fd-4904-9b24-06f8713a1f44' OR (EntityID = '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF' AND Name = 'Name')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '5eda642f-47fd-4904-9b24-06f8713a1f44',
-            '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF', -- Entity: MJ: User Routines
-            100004,
-            'Name',
-            'Name',
-            'User-facing routine name.',
-            'nvarchar',
-            510,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            1,
-            1,
-            0,
-            1,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '638ee40b-88ad-4e89-9c13-7f28e9565a73' OR (EntityID = '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF' AND Name = 'Description')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '638ee40b-88ad-4e89-9c13-7f28e9565a73',
-            '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF', -- Entity: MJ: User Routines
-            100005,
-            'Description',
-            'Description',
-            'Optional description of what the routine does.',
-            'nvarchar',
-            -1,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'a806c9af-6745-4056-b775-f93ff395cd5f' OR (EntityID = '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF' AND Name = 'Status')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'a806c9af-6745-4056-b775-f93ff395cd5f',
-            '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF', -- Entity: MJ: User Routines
-            100006,
-            'Status',
-            'Status',
-            'Lifecycle status: Active (eligible to run), Paused (temporarily off), Disabled (off).',
-            'nvarchar',
-            40,
-            0,
-            0,
-            0,
-            'Active',
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '3ec61ffc-11a9-4336-94ef-ab00e5633f5d' OR (EntityID = '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF' AND Name = 'RoutineType')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '3ec61ffc-11a9-4336-94ef-ab00e5633f5d',
-            '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF', -- Entity: MJ: User Routines
-            100007,
-            'RoutineType',
-            'Routine Type',
-            'Scheduled (always notify per NotifyCondition) or Monitoring (intended for OnChange detection via result hashing).',
-            'nvarchar',
-            40,
-            0,
-            0,
-            0,
-            'Scheduled',
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'edb8dc83-1f84-49c3-913e-d7f97793218a' OR (EntityID = '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF' AND Name = 'TargetType')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'edb8dc83-1f84-49c3-913e-d7f97793218a',
-            '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF', -- Entity: MJ: User Routines
-            100008,
-            'TargetType',
-            'Target Type',
-            'What kind of target this routine runs: Agent, Action, or Prompt. Determines how TargetID is interpreted.',
-            'nvarchar',
-            40,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '82ce2ddc-5ddf-4891-9669-7b0f8ecf12c5' OR (EntityID = '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF' AND Name = 'TargetID')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '82ce2ddc-5ddf-4891-9669-7b0f8ecf12c5',
-            '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF', -- Entity: MJ: User Routines
-            100009,
-            'TargetID',
-            'Target ID',
-            'Polymorphic reference resolved by TargetType (AIAgent.ID, Action.ID, or AIPrompt.ID). No FK because the target table varies.',
-            'uniqueidentifier',
-            16,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'df35475f-e7ad-45ea-8e45-14b6a0fec8fa' OR (EntityID = '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF' AND Name = 'InitialMessage')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'df35475f-e7ad-45ea-8e45-14b6a0fec8fa',
-            '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF', -- Entity: MJ: User Routines
-            100010,
-            'InitialMessage',
-            'Initial Message',
-            'For Agent targets, the user message sent to the agent on each run.',
-            'nvarchar',
-            -1,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'fb4cf985-cf03-4c1e-bb46-3922a11ff8d4' OR (EntityID = '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF' AND Name = 'StartingPayload')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'fb4cf985-cf03-4c1e-bb46-3922a11ff8d4',
-            '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF', -- Entity: MJ: User Routines
-            100011,
-            'StartingPayload',
-            'Starting Payload',
-            'Optional JSON starting payload passed to the target on each run.',
-            'nvarchar',
-            -1,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'f3c39fe4-33b8-412b-a754-4b77492e7692' OR (EntityID = '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF' AND Name = 'RequestedSkillIDs')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'f3c39fe4-33b8-412b-a754-4b77492e7692',
-            '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF', -- Entity: MJ: User Routines
-            100012,
-            'RequestedSkillIDs',
-            'Requested Skill I Ds',
-            'Optional JSON array of MJ: AI Skills IDs to pre-activate when the routine target is an Agent — threaded as ExecuteAgentParams.requestedSkillIDs so the agent starts each scheduled run with the requested skills'' instructions and tools in effect (subject to all availability gates; ActivationMode does not gate this explicit-request path). Ignored for Action/Prompt targets.',
-            'nvarchar',
-            -1,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'fb211013-131c-4dda-b867-d78609aacc30' OR (EntityID = '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF' AND Name = 'CronExpression')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'fb211013-131c-4dda-b867-d78609aacc30',
-            '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF', -- Entity: MJ: User Routines
-            100013,
-            'CronExpression',
-            'Cron Expression',
-            'Standard cron expression evaluated by the dispatcher to determine when the routine is due.',
-            'nvarchar',
-            200,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '8f652618-639b-4fc5-8714-19b8dc9aa055' OR (EntityID = '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF' AND Name = 'Timezone')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '8f652618-639b-4fc5-8714-19b8dc9aa055',
-            '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF', -- Entity: MJ: User Routines
-            100014,
-            'Timezone',
-            'Timezone',
-            'IANA timezone used when evaluating CronExpression (e.g. America/Chicago).',
-            'nvarchar',
-            200,
-            0,
-            0,
-            0,
-            'UTC',
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '4eaf86c3-efdd-4062-a32d-3a1a865c6f6c' OR (EntityID = '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF' AND Name = 'NextRunAt')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '4eaf86c3-efdd-4062-a32d-3a1a865c6f6c',
-            '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF', -- Entity: MJ: User Routines
-            100015,
-            'NextRunAt',
-            'Next Run At',
-            'Next scheduled run time, computed after each run.',
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '8f87b46a-0fb6-41b6-9b18-1992cb0e6eac' OR (EntityID = '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF' AND Name = 'LastRunAt')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '8f87b46a-0fb6-41b6-9b18-1992cb0e6eac',
-            '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF', -- Entity: MJ: User Routines
-            100016,
-            'LastRunAt',
-            'Last Run At',
-            'Timestamp of the most recent run.',
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '30486eab-f8d4-41c2-bbf3-1b1bcce51595' OR (EntityID = '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF' AND Name = 'LastRunStatus')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '30486eab-f8d4-41c2-bbf3-1b1bcce51595',
-            '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF', -- Entity: MJ: User Routines
-            100017,
-            'LastRunStatus',
-            'Last Run Status',
-            'Outcome of the most recent run.',
-            'nvarchar',
-            40,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '154f5ef8-2601-4f39-b802-e40e32a0e344' OR (EntityID = '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF' AND Name = 'LastResultHash')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '154f5ef8-2601-4f39-b802-e40e32a0e344',
-            '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF', -- Entity: MJ: User Routines
-            100018,
-            'LastResultHash',
-            'Last Result Hash',
-            'Hash of the most recent result, used by Monitoring routines to detect change for OnChange notifications.',
-            'nvarchar',
-            200,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'e40ab87d-4739-4b99-b4ff-c893924e0e11' OR (EntityID = '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF' AND Name = 'NotifyCondition')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'e40ab87d-4739-4b99-b4ff-c893924e0e11',
-            '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF', -- Entity: MJ: User Routines
-            100019,
-            'NotifyCondition',
-            'Notify Condition',
-            'When to notify: Always, OnSuccess, OnFailure, or OnChange (result differs from prior run).',
-            'nvarchar',
-            40,
-            0,
-            0,
-            0,
-            'Always',
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b34ffa2c-5eb2-4ea5-b418-8497b778c523' OR (EntityID = '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF' AND Name = 'NotifyViaInApp')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'b34ffa2c-5eb2-4ea5-b418-8497b778c523',
-            '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF', -- Entity: MJ: User Routines
-            100020,
-            'NotifyViaInApp',
-            'Notify Via In App',
-            'Deliver notifications via in-app notification.',
-            'bit',
-            1,
-            1,
-            0,
-            0,
-            '(1)',
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '25b8b87b-99f6-4c6f-ab9f-8bb52b0d10fe' OR (EntityID = '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF' AND Name = 'NotifyViaEmail')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '25b8b87b-99f6-4c6f-ab9f-8bb52b0d10fe',
-            '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF', -- Entity: MJ: User Routines
-            100021,
-            'NotifyViaEmail',
-            'Notify Via Email',
-            'Deliver notifications via email.',
-            'bit',
-            1,
-            1,
-            0,
-            0,
-            '(0)',
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '09901538-4e73-48d3-a2a9-0d58cfd573b6' OR (EntityID = '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF' AND Name = '__mj_CreatedAt')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '09901538-4e73-48d3-a2a9-0d58cfd573b6',
-            '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF', -- Entity: MJ: User Routines
-            100022,
-            '__mj_CreatedAt',
-            'Created At',
-            NULL,
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            0,
-            'getutcdate()',
-            0,
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '2b6e5ad9-a3c6-4555-82cc-25f5fb2c8fa6' OR (EntityID = '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF' AND Name = '__mj_UpdatedAt')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '2b6e5ad9-a3c6-4555-82cc-25f5fb2c8fa6',
-            '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF', -- Entity: MJ: User Routines
-            100023,
-            '__mj_UpdatedAt',
-            'Updated At',
-            NULL,
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            0,
-            'getutcdate()',
-            0,
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'f8845d00-3412-4ba5-9503-b11105660ed2' OR (EntityID = 'D16D839C-EB7C-4B9D-BA03-F33ED00F984D' AND Name = 'ID')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'f8845d00-3412-4ba5-9503-b11105660ed2',
-            'D16D839C-EB7C-4B9D-BA03-F33ED00F984D', -- Entity: MJ: User Routine Recipients
-            100001,
-            'ID',
-            'ID',
-            NULL,
-            'uniqueidentifier',
-            16,
-            0,
-            0,
-            0,
-            'newsequentialid()',
-            0,
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            1,
-            1,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '962cfbf5-6990-4cc4-a6cc-ebfc4f2ea53b' OR (EntityID = 'D16D839C-EB7C-4B9D-BA03-F33ED00F984D' AND Name = 'RoutineID')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '962cfbf5-6990-4cc4-a6cc-ebfc4f2ea53b',
-            'D16D839C-EB7C-4B9D-BA03-F33ED00F984D', -- Entity: MJ: User Routine Recipients
-            100002,
-            'RoutineID',
-            'Routine ID',
-            'Routine this recipient belongs to.',
-            'uniqueidentifier',
-            16,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF',
-            'ID',
-            0,
-            0,
-            1,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '80cc4c7a-1050-4a3f-8d0c-31a5b3af51b2' OR (EntityID = 'D16D839C-EB7C-4B9D-BA03-F33ED00F984D' AND Name = 'UserID')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '80cc4c7a-1050-4a3f-8d0c-31a5b3af51b2',
-            'D16D839C-EB7C-4B9D-BA03-F33ED00F984D', -- Entity: MJ: User Routine Recipients
-            100003,
-            'UserID',
-            'User ID',
-            'Internal MJ user recipient (when notifying an existing user). Either UserID or Email is set.',
-            'uniqueidentifier',
-            16,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            'E1238F34-2837-EF11-86D4-6045BDEE16E6',
-            'ID',
-            0,
-            0,
-            1,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '432d0046-a581-4eb6-a96c-7fd3ead95c46' OR (EntityID = 'D16D839C-EB7C-4B9D-BA03-F33ED00F984D' AND Name = 'Email')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '432d0046-a581-4eb6-a96c-7fd3ead95c46',
-            'D16D839C-EB7C-4B9D-BA03-F33ED00F984D', -- Entity: MJ: User Routine Recipients
-            100004,
-            'Email',
-            'Email',
-            'External email recipient (when notifying a non-user). Either UserID or Email is set.',
-            'nvarchar',
-            510,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'c5ac3ca5-f63f-430d-aec3-ca3def51e502' OR (EntityID = 'D16D839C-EB7C-4B9D-BA03-F33ED00F984D' AND Name = 'Channel')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'c5ac3ca5-f63f-430d-aec3-ca3def51e502',
-            'D16D839C-EB7C-4B9D-BA03-F33ED00F984D', -- Entity: MJ: User Routine Recipients
-            100005,
-            'Channel',
-            'Channel',
-            'Delivery channel for this recipient: InApp or Email.',
-            'nvarchar',
-            40,
-            0,
-            0,
-            0,
-            'InApp',
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'ee45d6b4-9020-4880-8d3a-a0e6a84445c4' OR (EntityID = 'D16D839C-EB7C-4B9D-BA03-F33ED00F984D' AND Name = '__mj_CreatedAt')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'ee45d6b4-9020-4880-8d3a-a0e6a84445c4',
-            'D16D839C-EB7C-4B9D-BA03-F33ED00F984D', -- Entity: MJ: User Routine Recipients
-            100006,
-            '__mj_CreatedAt',
-            'Created At',
-            NULL,
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            0,
-            'getutcdate()',
-            0,
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '950e0fe2-5fe3-4d54-8893-4a259ae945e9' OR (EntityID = 'D16D839C-EB7C-4B9D-BA03-F33ED00F984D' AND Name = '__mj_UpdatedAt')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '950e0fe2-5fe3-4d54-8893-4a259ae945e9',
-            'D16D839C-EB7C-4B9D-BA03-F33ED00F984D', -- Entity: MJ: User Routine Recipients
-            100007,
-            '__mj_UpdatedAt',
-            'Updated At',
-            NULL,
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            0,
-            'getutcdate()',
-            0,
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert entity field value with ID 364bb46d-f718-4020-ab4f-5a352830be32 */
-INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
-                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
-                                    VALUES
-                                       ('364bb46d-f718-4020-ab4f-5a352830be32', 'A806C9AF-6745-4056-B775-F93FF395CD5F', 1, 'Active', 'Active', GETUTCDATE(), GETUTCDATE());
-
-/* SQL text to insert entity field value with ID 62dd3a0f-d5b0-48ac-a40a-783e88718be4 */
-INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
-                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
-                                    VALUES
-                                       ('62dd3a0f-d5b0-48ac-a40a-783e88718be4', 'A806C9AF-6745-4056-B775-F93FF395CD5F', 2, 'Disabled', 'Disabled', GETUTCDATE(), GETUTCDATE());
-
-/* SQL text to insert entity field value with ID 009e9447-0e40-497d-82fc-cea15dd75aca */
-INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
-                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
-                                    VALUES
-                                       ('009e9447-0e40-497d-82fc-cea15dd75aca', 'A806C9AF-6745-4056-B775-F93FF395CD5F', 3, 'Paused', 'Paused', GETUTCDATE(), GETUTCDATE());
-
-/* SQL text to update ValueListType for entity field ID A806C9AF-6745-4056-B775-F93FF395CD5F */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='A806C9AF-6745-4056-B775-F93FF395CD5F';
-
-/* SQL text to insert entity field value with ID dfceb883-f91c-49a1-b46e-937bcfc443e5 */
-INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
-                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
-                                    VALUES
-                                       ('dfceb883-f91c-49a1-b46e-937bcfc443e5', '3EC61FFC-11A9-4336-94EF-AB00E5633F5D', 1, 'Monitoring', 'Monitoring', GETUTCDATE(), GETUTCDATE());
-
-/* SQL text to insert entity field value with ID 5f95ef0d-ace8-4538-a12a-c89f8fe1d2ae */
-INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
-                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
-                                    VALUES
-                                       ('5f95ef0d-ace8-4538-a12a-c89f8fe1d2ae', '3EC61FFC-11A9-4336-94EF-AB00E5633F5D', 2, 'Scheduled', 'Scheduled', GETUTCDATE(), GETUTCDATE());
-
-/* SQL text to update ValueListType for entity field ID 3EC61FFC-11A9-4336-94EF-AB00E5633F5D */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='3EC61FFC-11A9-4336-94EF-AB00E5633F5D';
-
-/* SQL text to insert entity field value with ID 59040c7a-35a5-4603-8c71-2c70ff41f80e */
-INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
-                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
-                                    VALUES
-                                       ('59040c7a-35a5-4603-8c71-2c70ff41f80e', 'EDB8DC83-1F84-49C3-913E-D7F97793218A', 1, 'Action', 'Action', GETUTCDATE(), GETUTCDATE());
-
-/* SQL text to insert entity field value with ID 9bfe5bb7-564b-44f2-9b16-0b69091448b9 */
-INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
-                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
-                                    VALUES
-                                       ('9bfe5bb7-564b-44f2-9b16-0b69091448b9', 'EDB8DC83-1F84-49C3-913E-D7F97793218A', 2, 'Agent', 'Agent', GETUTCDATE(), GETUTCDATE());
-
-/* SQL text to insert entity field value with ID 567562e8-198b-46d8-bca7-ed926f120831 */
-INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
-                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
-                                    VALUES
-                                       ('567562e8-198b-46d8-bca7-ed926f120831', 'EDB8DC83-1F84-49C3-913E-D7F97793218A', 3, 'Prompt', 'Prompt', GETUTCDATE(), GETUTCDATE());
-
-/* SQL text to update ValueListType for entity field ID EDB8DC83-1F84-49C3-913E-D7F97793218A */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='EDB8DC83-1F84-49C3-913E-D7F97793218A';
-
-/* SQL text to insert entity field value with ID 32ea6918-d7e3-48f6-afcd-d76f76a1c487 */
-INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
-                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
-                                    VALUES
-                                       ('32ea6918-d7e3-48f6-afcd-d76f76a1c487', '30486EAB-F8D4-41C2-BBF3-1B1BCCE51595', 1, 'Failed', 'Failed', GETUTCDATE(), GETUTCDATE());
-
-/* SQL text to insert entity field value with ID 8f9db7b9-58a3-4b43-b7f4-242fc14cae7d */
-INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
-                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
-                                    VALUES
-                                       ('8f9db7b9-58a3-4b43-b7f4-242fc14cae7d', '30486EAB-F8D4-41C2-BBF3-1B1BCCE51595', 2, 'Running', 'Running', GETUTCDATE(), GETUTCDATE());
-
-/* SQL text to insert entity field value with ID 4a90381f-d84b-4884-aa0e-a2ceaac477d7 */
-INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
-                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
-                                    VALUES
-                                       ('4a90381f-d84b-4884-aa0e-a2ceaac477d7', '30486EAB-F8D4-41C2-BBF3-1B1BCCE51595', 3, 'Skipped', 'Skipped', GETUTCDATE(), GETUTCDATE());
-
-/* SQL text to insert entity field value with ID 1a4fe222-f1bd-4ba1-bc43-7b3fec6505d8 */
-INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
-                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
-                                    VALUES
-                                       ('1a4fe222-f1bd-4ba1-bc43-7b3fec6505d8', '30486EAB-F8D4-41C2-BBF3-1B1BCCE51595', 4, 'Success', 'Success', GETUTCDATE(), GETUTCDATE());
-
-/* SQL text to update ValueListType for entity field ID 30486EAB-F8D4-41C2-BBF3-1B1BCCE51595 */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='30486EAB-F8D4-41C2-BBF3-1B1BCCE51595';
-
-/* SQL text to insert entity field value with ID f2907cb3-9779-4dd8-af47-d2bc354aecaa */
-INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
-                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
-                                    VALUES
-                                       ('f2907cb3-9779-4dd8-af47-d2bc354aecaa', 'E40AB87D-4739-4B99-B4FF-C893924E0E11', 1, 'Always', 'Always', GETUTCDATE(), GETUTCDATE());
-
-/* SQL text to insert entity field value with ID c7688a3d-32de-474e-9362-072c3c89479a */
-INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
-                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
-                                    VALUES
-                                       ('c7688a3d-32de-474e-9362-072c3c89479a', 'E40AB87D-4739-4B99-B4FF-C893924E0E11', 2, 'OnChange', 'OnChange', GETUTCDATE(), GETUTCDATE());
-
-/* SQL text to insert entity field value with ID 7108bbd0-4613-40a3-99e4-8eac08ea7d52 */
-INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
-                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
-                                    VALUES
-                                       ('7108bbd0-4613-40a3-99e4-8eac08ea7d52', 'E40AB87D-4739-4B99-B4FF-C893924E0E11', 3, 'OnFailure', 'OnFailure', GETUTCDATE(), GETUTCDATE());
-
-/* SQL text to insert entity field value with ID 8e3ce5b4-43c4-49e3-b304-3f07b0596537 */
-INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
-                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
-                                    VALUES
-                                       ('8e3ce5b4-43c4-49e3-b304-3f07b0596537', 'E40AB87D-4739-4B99-B4FF-C893924E0E11', 4, 'OnSuccess', 'OnSuccess', GETUTCDATE(), GETUTCDATE());
-
-/* SQL text to update ValueListType for entity field ID E40AB87D-4739-4B99-B4FF-C893924E0E11 */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='E40AB87D-4739-4B99-B4FF-C893924E0E11';
-
-/* SQL text to insert entity field value with ID 79491ad2-9caf-488a-97aa-56061bcb1375 */
-INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
-                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
-                                    VALUES
-                                       ('79491ad2-9caf-488a-97aa-56061bcb1375', 'C5AC3CA5-F63F-430D-AEC3-CA3DEF51E502', 1, 'Email', 'Email', GETUTCDATE(), GETUTCDATE());
-
-/* SQL text to insert entity field value with ID d05edf6d-1135-4419-8b99-900aee5b861e */
-INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
-                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
-                                    VALUES
-                                       ('d05edf6d-1135-4419-8b99-900aee5b861e', 'C5AC3CA5-F63F-430D-AEC3-CA3DEF51E502', 2, 'InApp', 'InApp', GETUTCDATE(), GETUTCDATE());
-
-/* SQL text to update ValueListType for entity field ID C5AC3CA5-F63F-430D-AEC3-CA3DEF51E502 */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='C5AC3CA5-F63F-430D-AEC3-CA3DEF51E502';
-
-/* SQL text to insert entity field value with ID 2465c09c-1fd8-4443-b3db-9bcab0c3e527 */
-INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
-                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
-                                    VALUES
-                                       ('2465c09c-1fd8-4443-b3db-9bcab0c3e527', '90BF74B0-BD70-406C-BF65-672F18325A15', 1, 'Failed', 'Failed', GETUTCDATE(), GETUTCDATE());
-
-/* SQL text to insert entity field value with ID e63890fd-3e32-4fbc-9dd0-28152d57190e */
-INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
-                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
-                                    VALUES
-                                       ('e63890fd-3e32-4fbc-9dd0-28152d57190e', '90BF74B0-BD70-406C-BF65-672F18325A15', 2, 'Running', 'Running', GETUTCDATE(), GETUTCDATE());
-
-/* SQL text to insert entity field value with ID fd168414-9407-481c-a0cc-f544fa1d1ae5 */
-INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
-                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
-                                    VALUES
-                                       ('fd168414-9407-481c-a0cc-f544fa1d1ae5', '90BF74B0-BD70-406C-BF65-672F18325A15', 3, 'Skipped', 'Skipped', GETUTCDATE(), GETUTCDATE());
-
-/* SQL text to insert entity field value with ID d0d5b53d-63d6-499c-a2e4-72bfc3ae5eb4 */
-INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
-                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
-                                    VALUES
-                                       ('d0d5b53d-63d6-499c-a2e4-72bfc3ae5eb4', '90BF74B0-BD70-406C-BF65-672F18325A15', 4, 'Success', 'Success', GETUTCDATE(), GETUTCDATE());
-
-/* SQL text to update ValueListType for entity field ID 90BF74B0-BD70-406C-BF65-672F18325A15 */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='90BF74B0-BD70-406C-BF65-672F18325A15';
-
-
-/* Create Entity Relationship: MJ: AI Agent Runs -> MJ: User Routine Runs (One To Many via AgentRunID) */
+/* Create Entity Relationship: MJ: Action Execution Logs -> MJ: User Routine Runs (One To Many via ActionExecutionLogID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '289e83ef-74a1-4846-99ad-0ad25350591d'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '8a7352e1-8b9c-46c6-89f5-6920fd58de62'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('289e83ef-74a1-4846-99ad-0ad25350591d', '5190AF93-4C39-4429-BDAA-0AEB492A0256', '79DEEB22-4476-4081-A66D-65EA58D1DF6E', 'AgentRunID', 'One To Many', 1, 1, 14, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('8a7352e1-8b9c-46c6-89f5-6920fd58de62', '3E248F34-2837-EF11-86D4-6045BDEE16E6', '79DEEB22-4476-4081-A66D-65EA58D1DF6E', 'ActionExecutionLogID', 'One To Many', 1, 1, 2, GETUTCDATE(), GETUTCDATE())
    END;
 
 
-/* Create Entity Relationship: MJ: Environments -> MJ: User Routines (One To Many via EnvironmentID) */
+/* Create Entity Relationship: MJ: Templates -> MJ: User Routines (One To Many via NotificationTemplateID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '5dc8b8c5-193b-487e-a1b1-a07662d82b12'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '6b2aea9a-45bb-4188-b75f-b6c53a6303fd'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('5dc8b8c5-193b-487e-a1b1-a07662d82b12', '72975471-6AAB-45C6-B58A-3F1115C921C3', '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF', 'EnvironmentID', 'One To Many', 1, 1, 8, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('6b2aea9a-45bb-4188-b75f-b6c53a6303fd', '48248F34-2837-EF11-86D4-6045BDEE16E6', '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF', 'NotificationTemplateID', 'One To Many', 1, 1, 9, GETUTCDATE(), GETUTCDATE())
    END;
 
 
-/* Create Entity Relationship: MJ: Users -> MJ: User Routine Recipients (One To Many via UserID) */
+/* Create Entity Relationship: MJ: AI Prompt Runs -> MJ: User Routine Runs (One To Many via PromptRunID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'f25ce848-7a63-4999-b7c4-61a0e7266fe4'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'b3c2acee-c4a4-4a86-ae1d-9f0dc4f3580b'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('f25ce848-7a63-4999-b7c4-61a0e7266fe4', 'E1238F34-2837-EF11-86D4-6045BDEE16E6', 'D16D839C-EB7C-4B9D-BA03-F33ED00F984D', 'UserID', 'One To Many', 1, 1, 108, GETUTCDATE(), GETUTCDATE())
-   END;
-
-
-/* Create Entity Relationship: MJ: Users -> MJ: User Routines (One To Many via UserID) */
-   IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'cf4b3e67-266e-45bf-bac9-4bb2c54572ba'
-   )
-   BEGIN
-      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('cf4b3e67-266e-45bf-bac9-4bb2c54572ba', 'E1238F34-2837-EF11-86D4-6045BDEE16E6', '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF', 'UserID', 'One To Many', 1, 1, 109, GETUTCDATE(), GETUTCDATE())
-   END;
-
-
-/* Create Entity Relationship: MJ: User Routines -> MJ: User Routine Recipients (One To Many via RoutineID) */
-   IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'ffb0b090-18c4-498c-ba8b-58a455baf367'
-   )
-   BEGIN
-      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('ffb0b090-18c4-498c-ba8b-58a455baf367', '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF', 'D16D839C-EB7C-4B9D-BA03-F33ED00F984D', 'RoutineID', 'One To Many', 1, 1, 1, GETUTCDATE(), GETUTCDATE())
-   END;
-
-
-/* Create Entity Relationship: MJ: User Routines -> MJ: User Routine Runs (One To Many via RoutineID) */
-   IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '038a02bb-1a64-4bda-b39a-724a0fda9de5'
-   )
-   BEGIN
-      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('038a02bb-1a64-4bda-b39a-724a0fda9de5', '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF', '79DEEB22-4476-4081-A66D-65EA58D1DF6E', 'RoutineID', 'One To Many', 1, 1, 2, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('b3c2acee-c4a4-4a86-ae1d-9f0dc4f3580b', '7C1C98D0-3978-4CE8-8E3F-C90301E59767', '79DEEB22-4476-4081-A66D-65EA58D1DF6E', 'PromptRunID', 'One To Many', 1, 1, 8, GETUTCDATE(), GETUTCDATE())
    END;
 
 /* Index for Foreign Keys for UserRoutineRecipient */
@@ -3725,9 +895,6 @@ IF NOT EXISTS (
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_UserRoutineRecipient_UserID ON [${flyway:defaultSchema}].[UserRoutineRecipient] ([UserID]);
 
-/* SQL text to update entity field related entity name field map for entity field ID 962CFBF5-6990-4CC4-A6CC-EBFC4F2EA53B */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='962CFBF5-6990-4CC4-A6CC-EBFC4F2EA53B', @RelatedEntityNameFieldMap='Routine';
-
 /* Index for Foreign Keys for UserRoutineRun */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -3755,14 +922,65 @@ IF NOT EXISTS (
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_UserRoutineRun_AgentRunID ON [${flyway:defaultSchema}].[UserRoutineRun] ([AgentRunID]);
 
-/* SQL text to update entity field related entity name field map for entity field ID 0650EC9F-D461-4C43-B8E9-F8AA781E4653 */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='0650EC9F-D461-4C43-B8E9-F8AA781E4653', @RelatedEntityNameFieldMap='Routine';
+-- Index for foreign key PromptRunID in table UserRoutineRun
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_UserRoutineRun_PromptRunID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[UserRoutineRun]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_UserRoutineRun_PromptRunID ON [${flyway:defaultSchema}].[UserRoutineRun] ([PromptRunID]);
 
-/* SQL text to update entity field related entity name field map for entity field ID 80CC4C7A-1050-4A3F-8D0C-31A5B3AF51B2 */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='80CC4C7A-1050-4A3F-8D0C-31A5B3AF51B2', @RelatedEntityNameFieldMap='User';
+-- Index for foreign key ActionExecutionLogID in table UserRoutineRun
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_UserRoutineRun_ActionExecutionLogID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[UserRoutineRun]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_UserRoutineRun_ActionExecutionLogID ON [${flyway:defaultSchema}].[UserRoutineRun] ([ActionExecutionLogID]);
 
-/* SQL text to update entity field related entity name field map for entity field ID 542A538C-EF81-43F3-9357-8828DA1A7D17 */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='542A538C-EF81-43F3-9357-8828DA1A7D17', @RelatedEntityNameFieldMap='AgentRun';
+/* SQL text to update entity field related entity name field map for entity field ID 042F5E76-86F4-46CA-9DAC-86285EEBBDE1 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='042F5E76-86F4-46CA-9DAC-86285EEBBDE1', @RelatedEntityNameFieldMap='PromptRun';
+
+/* Index for Foreign Keys for UserRoutine */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: User Routines
+-- Item: Index for Foreign Keys
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+-- Index for foreign key UserID in table UserRoutine
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_UserRoutine_UserID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[UserRoutine]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_UserRoutine_UserID ON [${flyway:defaultSchema}].[UserRoutine] ([UserID]);
+
+-- Index for foreign key EnvironmentID in table UserRoutine
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_UserRoutine_EnvironmentID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[UserRoutine]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_UserRoutine_EnvironmentID ON [${flyway:defaultSchema}].[UserRoutine] ([EnvironmentID]);
+
+-- Index for foreign key NotificationTemplateID in table UserRoutine
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_UserRoutine_NotificationTemplateID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[UserRoutine]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_UserRoutine_NotificationTemplateID ON [${flyway:defaultSchema}].[UserRoutine] ([NotificationTemplateID]);
+
+/* SQL text to update entity field related entity name field map for entity field ID EC798C59-09AA-47EA-9E32-4AE6F20B7C16 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='EC798C59-09AA-47EA-9E32-4AE6F20B7C16', @RelatedEntityNameFieldMap='NotificationTemplate';
 
 /* Base View SQL for MJ: User Routine Recipients */
 -----------------------------------------------------------------
@@ -3839,7 +1057,8 @@ CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateUserRoutineRecipient]
     @UserID uniqueidentifier = NULL,
     @Email_Clear bit = 0,
     @Email nvarchar(255) = NULL,
-    @Channel nvarchar(20) = NULL
+    @Channel nvarchar(20) = NULL,
+    @Sequence int = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -3854,7 +1073,8 @@ BEGIN
                 [RoutineID],
                 [UserID],
                 [Email],
-                [Channel]
+                [Channel],
+                [Sequence]
             )
         OUTPUT INSERTED.[ID] INTO @InsertedRow
         VALUES
@@ -3863,7 +1083,8 @@ BEGIN
                 @RoutineID,
                 CASE WHEN @UserID_Clear = 1 THEN NULL ELSE ISNULL(@UserID, NULL) END,
                 CASE WHEN @Email_Clear = 1 THEN NULL ELSE ISNULL(@Email, NULL) END,
-                ISNULL(@Channel, 'InApp')
+                ISNULL(@Channel, 'InApp'),
+                ISNULL(@Sequence, 0)
             )
     END
     ELSE
@@ -3874,7 +1095,8 @@ BEGIN
                 [RoutineID],
                 [UserID],
                 [Email],
-                [Channel]
+                [Channel],
+                [Sequence]
             )
         OUTPUT INSERTED.[ID] INTO @InsertedRow
         VALUES
@@ -3882,7 +1104,8 @@ BEGIN
                 @RoutineID,
                 CASE WHEN @UserID_Clear = 1 THEN NULL ELSE ISNULL(@UserID, NULL) END,
                 CASE WHEN @Email_Clear = 1 THEN NULL ELSE ISNULL(@Email, NULL) END,
-                ISNULL(@Channel, 'InApp')
+                ISNULL(@Channel, 'InApp'),
+                ISNULL(@Sequence, 0)
             )
     END
     -- return the new record from the base view, which might have some calculated fields
@@ -3919,7 +1142,8 @@ CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateUserRoutineRecipient]
     @UserID uniqueidentifier = NULL,
     @Email_Clear bit = 0,
     @Email nvarchar(255) = NULL,
-    @Channel nvarchar(20) = NULL
+    @Channel nvarchar(20) = NULL,
+    @Sequence int = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -3929,7 +1153,8 @@ BEGIN
         [RoutineID] = ISNULL(@RoutineID, [RoutineID]),
         [UserID] = CASE WHEN @UserID_Clear = 1 THEN NULL ELSE ISNULL(@UserID, [UserID]) END,
         [Email] = CASE WHEN @Email_Clear = 1 THEN NULL ELSE ISNULL(@Email, [Email]) END,
-        [Channel] = ISNULL(@Channel, [Channel])
+        [Channel] = ISNULL(@Channel, [Channel]),
+        [Sequence] = ISNULL(@Sequence, [Sequence])
     WHERE
         [ID] = @ID
 
@@ -3950,30 +1175,6 @@ END
 GO
 
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateUserRoutineRecipient] TO [cdp_Developer], [cdp_Integration]
-GO
-
-------------------------------------------------------------
------ TRIGGER FOR __mj_UpdatedAt field for the UserRoutineRecipient table
-------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[trgUpdateUserRoutineRecipient]', 'TR') IS NOT NULL
-    DROP TRIGGER [${flyway:defaultSchema}].[trgUpdateUserRoutineRecipient];
-GO
-CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateUserRoutineRecipient
-ON [${flyway:defaultSchema}].[UserRoutineRecipient]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE
-        [${flyway:defaultSchema}].[UserRoutineRecipient]
-    SET
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM
-        [${flyway:defaultSchema}].[UserRoutineRecipient] AS _organicTable
-    INNER JOIN
-        INSERTED AS I ON
-        _organicTable.[ID] = I.[ID];
-END;
 GO
 
 /* spUpdate Permissions for MJ: User Routine Recipients */
@@ -4022,356 +1223,6 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteUserRoutineRecipient] TO [cd
 
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteUserRoutineRecipient] TO [cdp_Developer], [cdp_Integration];
 
-/* Base View SQL for MJ: User Routine Runs */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: User Routine Runs
--- Item: vwUserRoutineRuns
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-------------------------------------------------------------
------ BASE VIEW FOR ENTITY:      MJ: User Routine Runs
------               SCHEMA:      ${flyway:defaultSchema}
------               BASE TABLE:  UserRoutineRun
------               PRIMARY KEY: ID
-------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[vwUserRoutineRuns]', 'V') IS NOT NULL
-    DROP VIEW [${flyway:defaultSchema}].[vwUserRoutineRuns];
-GO
-
-CREATE VIEW [${flyway:defaultSchema}].[vwUserRoutineRuns]
-AS
-SELECT
-    u.*,
-    MJUserRoutine_RoutineID.[Name] AS [Routine],
-    MJAIAgentRun_AgentRunID.[RunName] AS [AgentRun]
-FROM
-    [${flyway:defaultSchema}].[UserRoutineRun] AS u
-INNER JOIN
-    [${flyway:defaultSchema}].[UserRoutine] AS MJUserRoutine_RoutineID
-  ON
-    [u].[RoutineID] = MJUserRoutine_RoutineID.[ID]
-LEFT OUTER JOIN
-    [${flyway:defaultSchema}].[AIAgentRun] AS MJAIAgentRun_AgentRunID
-  ON
-    [u].[AgentRunID] = MJAIAgentRun_AgentRunID.[ID]
-GO
-GRANT SELECT ON [${flyway:defaultSchema}].[vwUserRoutineRuns] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
-
-/* Base View Permissions SQL for MJ: User Routine Runs */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: User Routine Runs
--- Item: Permissions for vwUserRoutineRuns
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-GRANT SELECT ON [${flyway:defaultSchema}].[vwUserRoutineRuns] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
-
-/* spCreate SQL for MJ: User Routine Runs */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: User Routine Runs
--- Item: spCreateUserRoutineRun
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-------------------------------------------------------------
------ CREATE PROCEDURE FOR UserRoutineRun
-------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[spCreateUserRoutineRun]', 'P') IS NOT NULL
-    DROP PROCEDURE [${flyway:defaultSchema}].[spCreateUserRoutineRun];
-GO
-
-CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateUserRoutineRun]
-    @ID uniqueidentifier = NULL,
-    @RoutineID uniqueidentifier,
-    @StartedAt datetimeoffset = NULL,
-    @CompletedAt_Clear bit = 0,
-    @CompletedAt datetimeoffset = NULL,
-    @Status nvarchar(20) = NULL,
-    @AgentRunID_Clear bit = 0,
-    @AgentRunID uniqueidentifier = NULL,
-    @TokensUsed_Clear bit = 0,
-    @TokensUsed int = NULL,
-    @Cost_Clear bit = 0,
-    @Cost decimal(18, 6) = NULL,
-    @ResultSummary_Clear bit = 0,
-    @ResultSummary nvarchar(MAX) = NULL,
-    @ResultHash_Clear bit = 0,
-    @ResultHash nvarchar(100) = NULL,
-    @NotificationSent bit = NULL,
-    @ErrorMessage_Clear bit = 0,
-    @ErrorMessage nvarchar(MAX) = NULL
-AS
-BEGIN
-    SET NOCOUNT ON;
-    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-
-    IF @ID IS NOT NULL
-    BEGIN
-        -- User provided a value, use it
-        INSERT INTO [${flyway:defaultSchema}].[UserRoutineRun]
-            (
-                [ID],
-                [RoutineID],
-                [StartedAt],
-                [CompletedAt],
-                [Status],
-                [AgentRunID],
-                [TokensUsed],
-                [Cost],
-                [ResultSummary],
-                [ResultHash],
-                [NotificationSent],
-                [ErrorMessage]
-            )
-        OUTPUT INSERTED.[ID] INTO @InsertedRow
-        VALUES
-            (
-                @ID,
-                @RoutineID,
-                ISNULL(@StartedAt, sysdatetimeoffset()),
-                CASE WHEN @CompletedAt_Clear = 1 THEN NULL ELSE ISNULL(@CompletedAt, NULL) END,
-                ISNULL(@Status, 'Running'),
-                CASE WHEN @AgentRunID_Clear = 1 THEN NULL ELSE ISNULL(@AgentRunID, NULL) END,
-                CASE WHEN @TokensUsed_Clear = 1 THEN NULL ELSE ISNULL(@TokensUsed, NULL) END,
-                CASE WHEN @Cost_Clear = 1 THEN NULL ELSE ISNULL(@Cost, NULL) END,
-                CASE WHEN @ResultSummary_Clear = 1 THEN NULL ELSE ISNULL(@ResultSummary, NULL) END,
-                CASE WHEN @ResultHash_Clear = 1 THEN NULL ELSE ISNULL(@ResultHash, NULL) END,
-                ISNULL(@NotificationSent, 0),
-                CASE WHEN @ErrorMessage_Clear = 1 THEN NULL ELSE ISNULL(@ErrorMessage, NULL) END
-            )
-    END
-    ELSE
-    BEGIN
-        -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
-        INSERT INTO [${flyway:defaultSchema}].[UserRoutineRun]
-            (
-                [RoutineID],
-                [StartedAt],
-                [CompletedAt],
-                [Status],
-                [AgentRunID],
-                [TokensUsed],
-                [Cost],
-                [ResultSummary],
-                [ResultHash],
-                [NotificationSent],
-                [ErrorMessage]
-            )
-        OUTPUT INSERTED.[ID] INTO @InsertedRow
-        VALUES
-            (
-                @RoutineID,
-                ISNULL(@StartedAt, sysdatetimeoffset()),
-                CASE WHEN @CompletedAt_Clear = 1 THEN NULL ELSE ISNULL(@CompletedAt, NULL) END,
-                ISNULL(@Status, 'Running'),
-                CASE WHEN @AgentRunID_Clear = 1 THEN NULL ELSE ISNULL(@AgentRunID, NULL) END,
-                CASE WHEN @TokensUsed_Clear = 1 THEN NULL ELSE ISNULL(@TokensUsed, NULL) END,
-                CASE WHEN @Cost_Clear = 1 THEN NULL ELSE ISNULL(@Cost, NULL) END,
-                CASE WHEN @ResultSummary_Clear = 1 THEN NULL ELSE ISNULL(@ResultSummary, NULL) END,
-                CASE WHEN @ResultHash_Clear = 1 THEN NULL ELSE ISNULL(@ResultHash, NULL) END,
-                ISNULL(@NotificationSent, 0),
-                CASE WHEN @ErrorMessage_Clear = 1 THEN NULL ELSE ISNULL(@ErrorMessage, NULL) END
-            )
-    END
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [${flyway:defaultSchema}].[vwUserRoutineRuns] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
-END
-GO
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateUserRoutineRun] TO [cdp_Developer], [cdp_Integration];
-
-/* spCreate Permissions for MJ: User Routine Runs */
-
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateUserRoutineRun] TO [cdp_Developer], [cdp_Integration];
-
-/* spUpdate SQL for MJ: User Routine Runs */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: User Routine Runs
--- Item: spUpdateUserRoutineRun
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-------------------------------------------------------------
------ UPDATE PROCEDURE FOR UserRoutineRun
-------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[spUpdateUserRoutineRun]', 'P') IS NOT NULL
-    DROP PROCEDURE [${flyway:defaultSchema}].[spUpdateUserRoutineRun];
-GO
-
-CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateUserRoutineRun]
-    @ID uniqueidentifier,
-    @RoutineID uniqueidentifier = NULL,
-    @StartedAt datetimeoffset = NULL,
-    @CompletedAt_Clear bit = 0,
-    @CompletedAt datetimeoffset = NULL,
-    @Status nvarchar(20) = NULL,
-    @AgentRunID_Clear bit = 0,
-    @AgentRunID uniqueidentifier = NULL,
-    @TokensUsed_Clear bit = 0,
-    @TokensUsed int = NULL,
-    @Cost_Clear bit = 0,
-    @Cost decimal(18, 6) = NULL,
-    @ResultSummary_Clear bit = 0,
-    @ResultSummary nvarchar(MAX) = NULL,
-    @ResultHash_Clear bit = 0,
-    @ResultHash nvarchar(100) = NULL,
-    @NotificationSent bit = NULL,
-    @ErrorMessage_Clear bit = 0,
-    @ErrorMessage nvarchar(MAX) = NULL
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE
-        [${flyway:defaultSchema}].[UserRoutineRun]
-    SET
-        [RoutineID] = ISNULL(@RoutineID, [RoutineID]),
-        [StartedAt] = ISNULL(@StartedAt, [StartedAt]),
-        [CompletedAt] = CASE WHEN @CompletedAt_Clear = 1 THEN NULL ELSE ISNULL(@CompletedAt, [CompletedAt]) END,
-        [Status] = ISNULL(@Status, [Status]),
-        [AgentRunID] = CASE WHEN @AgentRunID_Clear = 1 THEN NULL ELSE ISNULL(@AgentRunID, [AgentRunID]) END,
-        [TokensUsed] = CASE WHEN @TokensUsed_Clear = 1 THEN NULL ELSE ISNULL(@TokensUsed, [TokensUsed]) END,
-        [Cost] = CASE WHEN @Cost_Clear = 1 THEN NULL ELSE ISNULL(@Cost, [Cost]) END,
-        [ResultSummary] = CASE WHEN @ResultSummary_Clear = 1 THEN NULL ELSE ISNULL(@ResultSummary, [ResultSummary]) END,
-        [ResultHash] = CASE WHEN @ResultHash_Clear = 1 THEN NULL ELSE ISNULL(@ResultHash, [ResultHash]) END,
-        [NotificationSent] = ISNULL(@NotificationSent, [NotificationSent]),
-        [ErrorMessage] = CASE WHEN @ErrorMessage_Clear = 1 THEN NULL ELSE ISNULL(@ErrorMessage, [ErrorMessage]) END
-    WHERE
-        [ID] = @ID
-
-    -- Check if the update was successful
-    IF @@ROWCOUNT = 0
-        -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
-        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwUserRoutineRuns] WHERE 1=0
-    ELSE
-        -- Return the updated record so the caller can see the updated values and any calculated fields
-        SELECT
-                                        *
-                                    FROM
-                                        [${flyway:defaultSchema}].[vwUserRoutineRuns]
-                                    WHERE
-                                        [ID] = @ID
-                                    
-END
-GO
-
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateUserRoutineRun] TO [cdp_Developer], [cdp_Integration]
-GO
-
-------------------------------------------------------------
------ TRIGGER FOR __mj_UpdatedAt field for the UserRoutineRun table
-------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[trgUpdateUserRoutineRun]', 'TR') IS NOT NULL
-    DROP TRIGGER [${flyway:defaultSchema}].[trgUpdateUserRoutineRun];
-GO
-CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateUserRoutineRun
-ON [${flyway:defaultSchema}].[UserRoutineRun]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE
-        [${flyway:defaultSchema}].[UserRoutineRun]
-    SET
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM
-        [${flyway:defaultSchema}].[UserRoutineRun] AS _organicTable
-    INNER JOIN
-        INSERTED AS I ON
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-
-/* spUpdate Permissions for MJ: User Routine Runs */
-
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateUserRoutineRun] TO [cdp_Developer], [cdp_Integration];
-
-/* spDelete SQL for MJ: User Routine Runs */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: User Routine Runs
--- Item: spDeleteUserRoutineRun
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-------------------------------------------------------------
------ DELETE PROCEDURE FOR UserRoutineRun
-------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[spDeleteUserRoutineRun]', 'P') IS NOT NULL
-    DROP PROCEDURE [${flyway:defaultSchema}].[spDeleteUserRoutineRun];
-GO
-
-CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteUserRoutineRun]
-    @ID uniqueidentifier
-AS
-BEGIN
-    SET NOCOUNT ON;
-
-    DELETE FROM
-        [${flyway:defaultSchema}].[UserRoutineRun]
-    WHERE
-        [ID] = @ID
-
-
-    -- Check if the delete was successful
-    IF @@ROWCOUNT = 0
-        SELECT NULL AS [ID] -- Return NULL for all primary key fields to indicate no record was deleted
-    ELSE
-        SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
-END
-GO
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteUserRoutineRun] TO [cdp_Developer], [cdp_Integration];
-
-/* spDelete Permissions for MJ: User Routine Runs */
-
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteUserRoutineRun] TO [cdp_Developer], [cdp_Integration];
-
-/* Index for Foreign Keys for UserRoutine */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: User Routines
--- Item: Index for Foreign Keys
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
--- Index for foreign key UserID in table UserRoutine
-IF NOT EXISTS (
-    SELECT 1
-    FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_UserRoutine_UserID' 
-    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[UserRoutine]')
-)
-CREATE INDEX IDX_AUTO_MJ_FKEY_UserRoutine_UserID ON [${flyway:defaultSchema}].[UserRoutine] ([UserID]);
-
--- Index for foreign key EnvironmentID in table UserRoutine
-IF NOT EXISTS (
-    SELECT 1
-    FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_UserRoutine_EnvironmentID' 
-    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[UserRoutine]')
-)
-CREATE INDEX IDX_AUTO_MJ_FKEY_UserRoutine_EnvironmentID ON [${flyway:defaultSchema}].[UserRoutine] ([EnvironmentID]);
-
-/* SQL text to update entity field related entity name field map for entity field ID 886E4EDB-2F48-49C1-BC8A-2362348A28F7 */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='886E4EDB-2F48-49C1-BC8A-2362348A28F7', @RelatedEntityNameFieldMap='User';
-
-/* SQL text to update entity field related entity name field map for entity field ID 6E569ABD-EEE9-463C-94FE-4F0771B896A5 */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='6E569ABD-EEE9-463C-94FE-4F0771B896A5', @RelatedEntityNameFieldMap='Environment';
-
 /* Base View SQL for MJ: User Routines */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -4397,7 +1248,8 @@ AS
 SELECT
     u.*,
     MJUser_UserID.[Name] AS [User],
-    MJEnvironment_EnvironmentID.[Name] AS [Environment]
+    MJEnvironment_EnvironmentID.[Name] AS [Environment],
+    MJTemplate_NotificationTemplateID.[Name] AS [NotificationTemplate]
 FROM
     [${flyway:defaultSchema}].[UserRoutine] AS u
 INNER JOIN
@@ -4408,6 +1260,10 @@ LEFT OUTER JOIN
     [${flyway:defaultSchema}].[Environment] AS MJEnvironment_EnvironmentID
   ON
     [u].[EnvironmentID] = MJEnvironment_EnvironmentID.[ID]
+LEFT OUTER JOIN
+    [${flyway:defaultSchema}].[Template] AS MJTemplate_NotificationTemplateID
+  ON
+    [u].[NotificationTemplateID] = MJTemplate_NotificationTemplateID.[ID]
 GO
 GRANT SELECT ON [${flyway:defaultSchema}].[vwUserRoutines] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
 
@@ -4459,6 +1315,12 @@ CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateUserRoutine]
     @RequestedSkillIDs_Clear bit = 0,
     @RequestedSkillIDs nvarchar(MAX) = NULL,
     @CronExpression nvarchar(100),
+    @StartAt_Clear bit = 0,
+    @StartAt datetimeoffset = NULL,
+    @EndAt_Clear bit = 0,
+    @EndAt datetimeoffset = NULL,
+    @NotificationTemplateID_Clear bit = 0,
+    @NotificationTemplateID uniqueidentifier = NULL,
     @Timezone nvarchar(100) = NULL,
     @NextRunAt_Clear bit = 0,
     @NextRunAt datetimeoffset = NULL,
@@ -4494,6 +1356,9 @@ BEGIN
                 [StartingPayload],
                 [RequestedSkillIDs],
                 [CronExpression],
+                [StartAt],
+                [EndAt],
+                [NotificationTemplateID],
                 [Timezone],
                 [NextRunAt],
                 [LastRunAt],
@@ -4519,6 +1384,9 @@ BEGIN
                 CASE WHEN @StartingPayload_Clear = 1 THEN NULL ELSE ISNULL(@StartingPayload, NULL) END,
                 CASE WHEN @RequestedSkillIDs_Clear = 1 THEN NULL ELSE ISNULL(@RequestedSkillIDs, NULL) END,
                 @CronExpression,
+                CASE WHEN @StartAt_Clear = 1 THEN NULL ELSE ISNULL(@StartAt, NULL) END,
+                CASE WHEN @EndAt_Clear = 1 THEN NULL ELSE ISNULL(@EndAt, NULL) END,
+                CASE WHEN @NotificationTemplateID_Clear = 1 THEN NULL ELSE ISNULL(@NotificationTemplateID, NULL) END,
                 ISNULL(@Timezone, 'UTC'),
                 CASE WHEN @NextRunAt_Clear = 1 THEN NULL ELSE ISNULL(@NextRunAt, NULL) END,
                 CASE WHEN @LastRunAt_Clear = 1 THEN NULL ELSE ISNULL(@LastRunAt, NULL) END,
@@ -4546,6 +1414,9 @@ BEGIN
                 [StartingPayload],
                 [RequestedSkillIDs],
                 [CronExpression],
+                [StartAt],
+                [EndAt],
+                [NotificationTemplateID],
                 [Timezone],
                 [NextRunAt],
                 [LastRunAt],
@@ -4570,6 +1441,9 @@ BEGIN
                 CASE WHEN @StartingPayload_Clear = 1 THEN NULL ELSE ISNULL(@StartingPayload, NULL) END,
                 CASE WHEN @RequestedSkillIDs_Clear = 1 THEN NULL ELSE ISNULL(@RequestedSkillIDs, NULL) END,
                 @CronExpression,
+                CASE WHEN @StartAt_Clear = 1 THEN NULL ELSE ISNULL(@StartAt, NULL) END,
+                CASE WHEN @EndAt_Clear = 1 THEN NULL ELSE ISNULL(@EndAt, NULL) END,
+                CASE WHEN @NotificationTemplateID_Clear = 1 THEN NULL ELSE ISNULL(@NotificationTemplateID, NULL) END,
                 ISNULL(@Timezone, 'UTC'),
                 CASE WHEN @NextRunAt_Clear = 1 THEN NULL ELSE ISNULL(@NextRunAt, NULL) END,
                 CASE WHEN @LastRunAt_Clear = 1 THEN NULL ELSE ISNULL(@LastRunAt, NULL) END,
@@ -4626,6 +1500,12 @@ CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateUserRoutine]
     @RequestedSkillIDs_Clear bit = 0,
     @RequestedSkillIDs nvarchar(MAX) = NULL,
     @CronExpression nvarchar(100) = NULL,
+    @StartAt_Clear bit = 0,
+    @StartAt datetimeoffset = NULL,
+    @EndAt_Clear bit = 0,
+    @EndAt datetimeoffset = NULL,
+    @NotificationTemplateID_Clear bit = 0,
+    @NotificationTemplateID uniqueidentifier = NULL,
     @Timezone nvarchar(100) = NULL,
     @NextRunAt_Clear bit = 0,
     @NextRunAt datetimeoffset = NULL,
@@ -4656,6 +1536,9 @@ BEGIN
         [StartingPayload] = CASE WHEN @StartingPayload_Clear = 1 THEN NULL ELSE ISNULL(@StartingPayload, [StartingPayload]) END,
         [RequestedSkillIDs] = CASE WHEN @RequestedSkillIDs_Clear = 1 THEN NULL ELSE ISNULL(@RequestedSkillIDs, [RequestedSkillIDs]) END,
         [CronExpression] = ISNULL(@CronExpression, [CronExpression]),
+        [StartAt] = CASE WHEN @StartAt_Clear = 1 THEN NULL ELSE ISNULL(@StartAt, [StartAt]) END,
+        [EndAt] = CASE WHEN @EndAt_Clear = 1 THEN NULL ELSE ISNULL(@EndAt, [EndAt]) END,
+        [NotificationTemplateID] = CASE WHEN @NotificationTemplateID_Clear = 1 THEN NULL ELSE ISNULL(@NotificationTemplateID, [NotificationTemplateID]) END,
         [Timezone] = ISNULL(@Timezone, [Timezone]),
         [NextRunAt] = CASE WHEN @NextRunAt_Clear = 1 THEN NULL ELSE ISNULL(@NextRunAt, [NextRunAt]) END,
         [LastRunAt] = CASE WHEN @LastRunAt_Clear = 1 THEN NULL ELSE ISNULL(@LastRunAt, [LastRunAt]) END,
@@ -4684,30 +1567,6 @@ END
 GO
 
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateUserRoutine] TO [cdp_Developer], [cdp_Integration]
-GO
-
-------------------------------------------------------------
------ TRIGGER FOR __mj_UpdatedAt field for the UserRoutine table
-------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[trgUpdateUserRoutine]', 'TR') IS NOT NULL
-    DROP TRIGGER [${flyway:defaultSchema}].[trgUpdateUserRoutine];
-GO
-CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateUserRoutine
-ON [${flyway:defaultSchema}].[UserRoutine]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE
-        [${flyway:defaultSchema}].[UserRoutine]
-    SET
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM
-        [${flyway:defaultSchema}].[UserRoutine] AS _organicTable
-    INNER JOIN
-        INSERTED AS I ON
-        _organicTable.[ID] = I.[ID];
-END;
 GO
 
 /* spUpdate Permissions for MJ: User Routines */
@@ -4755,6 +1614,757 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteUserRoutine] TO [cdp_Develop
 /* spDelete Permissions for MJ: User Routines */
 
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteUserRoutine] TO [cdp_Developer], [cdp_Integration];
+
+/* SQL text to update entity field related entity name field map for entity field ID 992929B4-4D57-409E-A9C0-D335AE40B4E6 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='992929B4-4D57-409E-A9C0-D335AE40B4E6', @RelatedEntityNameFieldMap='ActionExecutionLog';
+
+/* Base View SQL for MJ: User Routine Runs */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: User Routine Runs
+-- Item: vwUserRoutineRuns
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- BASE VIEW FOR ENTITY:      MJ: User Routine Runs
+-----               SCHEMA:      ${flyway:defaultSchema}
+-----               BASE TABLE:  UserRoutineRun
+-----               PRIMARY KEY: ID
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[vwUserRoutineRuns]', 'V') IS NOT NULL
+    DROP VIEW [${flyway:defaultSchema}].[vwUserRoutineRuns];
+GO
+
+CREATE VIEW [${flyway:defaultSchema}].[vwUserRoutineRuns]
+AS
+SELECT
+    u.*,
+    MJUserRoutine_RoutineID.[Name] AS [Routine],
+    MJAIAgentRun_AgentRunID.[RunName] AS [AgentRun],
+    MJAIPromptRun_PromptRunID.[RunName] AS [PromptRun],
+    MJActionExecutionLog_ActionExecutionLogID.[Action] AS [ActionExecutionLog]
+FROM
+    [${flyway:defaultSchema}].[UserRoutineRun] AS u
+INNER JOIN
+    [${flyway:defaultSchema}].[UserRoutine] AS MJUserRoutine_RoutineID
+  ON
+    [u].[RoutineID] = MJUserRoutine_RoutineID.[ID]
+LEFT OUTER JOIN
+    [${flyway:defaultSchema}].[AIAgentRun] AS MJAIAgentRun_AgentRunID
+  ON
+    [u].[AgentRunID] = MJAIAgentRun_AgentRunID.[ID]
+LEFT OUTER JOIN
+    [${flyway:defaultSchema}].[AIPromptRun] AS MJAIPromptRun_PromptRunID
+  ON
+    [u].[PromptRunID] = MJAIPromptRun_PromptRunID.[ID]
+LEFT OUTER JOIN
+    [${flyway:defaultSchema}].[vwActionExecutionLogs] AS MJActionExecutionLog_ActionExecutionLogID
+  ON
+    [u].[ActionExecutionLogID] = MJActionExecutionLog_ActionExecutionLogID.[ID]
+GO
+GRANT SELECT ON [${flyway:defaultSchema}].[vwUserRoutineRuns] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
+
+/* Base View Permissions SQL for MJ: User Routine Runs */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: User Routine Runs
+-- Item: Permissions for vwUserRoutineRuns
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+GRANT SELECT ON [${flyway:defaultSchema}].[vwUserRoutineRuns] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
+
+/* spCreate SQL for MJ: User Routine Runs */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: User Routine Runs
+-- Item: spCreateUserRoutineRun
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- CREATE PROCEDURE FOR UserRoutineRun
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spCreateUserRoutineRun]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spCreateUserRoutineRun];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateUserRoutineRun]
+    @ID uniqueidentifier = NULL,
+    @RoutineID uniqueidentifier,
+    @StartedAt datetimeoffset = NULL,
+    @CompletedAt_Clear bit = 0,
+    @CompletedAt datetimeoffset = NULL,
+    @Status nvarchar(20) = NULL,
+    @AgentRunID_Clear bit = 0,
+    @AgentRunID uniqueidentifier = NULL,
+    @PromptRunID_Clear bit = 0,
+    @PromptRunID uniqueidentifier = NULL,
+    @ActionExecutionLogID_Clear bit = 0,
+    @ActionExecutionLogID uniqueidentifier = NULL,
+    @ResultSummary_Clear bit = 0,
+    @ResultSummary nvarchar(MAX) = NULL,
+    @ResultHash_Clear bit = 0,
+    @ResultHash nvarchar(100) = NULL,
+    @NotificationSent bit = NULL,
+    @ErrorMessage_Clear bit = 0,
+    @ErrorMessage nvarchar(MAX) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+
+    IF @ID IS NOT NULL
+    BEGIN
+        -- User provided a value, use it
+        INSERT INTO [${flyway:defaultSchema}].[UserRoutineRun]
+            (
+                [ID],
+                [RoutineID],
+                [StartedAt],
+                [CompletedAt],
+                [Status],
+                [AgentRunID],
+                [PromptRunID],
+                [ActionExecutionLogID],
+                [ResultSummary],
+                [ResultHash],
+                [NotificationSent],
+                [ErrorMessage]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @ID,
+                @RoutineID,
+                ISNULL(@StartedAt, sysdatetimeoffset()),
+                CASE WHEN @CompletedAt_Clear = 1 THEN NULL ELSE ISNULL(@CompletedAt, NULL) END,
+                ISNULL(@Status, 'Running'),
+                CASE WHEN @AgentRunID_Clear = 1 THEN NULL ELSE ISNULL(@AgentRunID, NULL) END,
+                CASE WHEN @PromptRunID_Clear = 1 THEN NULL ELSE ISNULL(@PromptRunID, NULL) END,
+                CASE WHEN @ActionExecutionLogID_Clear = 1 THEN NULL ELSE ISNULL(@ActionExecutionLogID, NULL) END,
+                CASE WHEN @ResultSummary_Clear = 1 THEN NULL ELSE ISNULL(@ResultSummary, NULL) END,
+                CASE WHEN @ResultHash_Clear = 1 THEN NULL ELSE ISNULL(@ResultHash, NULL) END,
+                ISNULL(@NotificationSent, 0),
+                CASE WHEN @ErrorMessage_Clear = 1 THEN NULL ELSE ISNULL(@ErrorMessage, NULL) END
+            )
+    END
+    ELSE
+    BEGIN
+        -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
+        INSERT INTO [${flyway:defaultSchema}].[UserRoutineRun]
+            (
+                [RoutineID],
+                [StartedAt],
+                [CompletedAt],
+                [Status],
+                [AgentRunID],
+                [PromptRunID],
+                [ActionExecutionLogID],
+                [ResultSummary],
+                [ResultHash],
+                [NotificationSent],
+                [ErrorMessage]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @RoutineID,
+                ISNULL(@StartedAt, sysdatetimeoffset()),
+                CASE WHEN @CompletedAt_Clear = 1 THEN NULL ELSE ISNULL(@CompletedAt, NULL) END,
+                ISNULL(@Status, 'Running'),
+                CASE WHEN @AgentRunID_Clear = 1 THEN NULL ELSE ISNULL(@AgentRunID, NULL) END,
+                CASE WHEN @PromptRunID_Clear = 1 THEN NULL ELSE ISNULL(@PromptRunID, NULL) END,
+                CASE WHEN @ActionExecutionLogID_Clear = 1 THEN NULL ELSE ISNULL(@ActionExecutionLogID, NULL) END,
+                CASE WHEN @ResultSummary_Clear = 1 THEN NULL ELSE ISNULL(@ResultSummary, NULL) END,
+                CASE WHEN @ResultHash_Clear = 1 THEN NULL ELSE ISNULL(@ResultHash, NULL) END,
+                ISNULL(@NotificationSent, 0),
+                CASE WHEN @ErrorMessage_Clear = 1 THEN NULL ELSE ISNULL(@ErrorMessage, NULL) END
+            )
+    END
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [${flyway:defaultSchema}].[vwUserRoutineRuns] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateUserRoutineRun] TO [cdp_Developer], [cdp_Integration];
+
+/* spCreate Permissions for MJ: User Routine Runs */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateUserRoutineRun] TO [cdp_Developer], [cdp_Integration];
+
+/* spUpdate SQL for MJ: User Routine Runs */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: User Routine Runs
+-- Item: spUpdateUserRoutineRun
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- UPDATE PROCEDURE FOR UserRoutineRun
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spUpdateUserRoutineRun]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spUpdateUserRoutineRun];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateUserRoutineRun]
+    @ID uniqueidentifier,
+    @RoutineID uniqueidentifier = NULL,
+    @StartedAt datetimeoffset = NULL,
+    @CompletedAt_Clear bit = 0,
+    @CompletedAt datetimeoffset = NULL,
+    @Status nvarchar(20) = NULL,
+    @AgentRunID_Clear bit = 0,
+    @AgentRunID uniqueidentifier = NULL,
+    @PromptRunID_Clear bit = 0,
+    @PromptRunID uniqueidentifier = NULL,
+    @ActionExecutionLogID_Clear bit = 0,
+    @ActionExecutionLogID uniqueidentifier = NULL,
+    @ResultSummary_Clear bit = 0,
+    @ResultSummary nvarchar(MAX) = NULL,
+    @ResultHash_Clear bit = 0,
+    @ResultHash nvarchar(100) = NULL,
+    @NotificationSent bit = NULL,
+    @ErrorMessage_Clear bit = 0,
+    @ErrorMessage nvarchar(MAX) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[UserRoutineRun]
+    SET
+        [RoutineID] = ISNULL(@RoutineID, [RoutineID]),
+        [StartedAt] = ISNULL(@StartedAt, [StartedAt]),
+        [CompletedAt] = CASE WHEN @CompletedAt_Clear = 1 THEN NULL ELSE ISNULL(@CompletedAt, [CompletedAt]) END,
+        [Status] = ISNULL(@Status, [Status]),
+        [AgentRunID] = CASE WHEN @AgentRunID_Clear = 1 THEN NULL ELSE ISNULL(@AgentRunID, [AgentRunID]) END,
+        [PromptRunID] = CASE WHEN @PromptRunID_Clear = 1 THEN NULL ELSE ISNULL(@PromptRunID, [PromptRunID]) END,
+        [ActionExecutionLogID] = CASE WHEN @ActionExecutionLogID_Clear = 1 THEN NULL ELSE ISNULL(@ActionExecutionLogID, [ActionExecutionLogID]) END,
+        [ResultSummary] = CASE WHEN @ResultSummary_Clear = 1 THEN NULL ELSE ISNULL(@ResultSummary, [ResultSummary]) END,
+        [ResultHash] = CASE WHEN @ResultHash_Clear = 1 THEN NULL ELSE ISNULL(@ResultHash, [ResultHash]) END,
+        [NotificationSent] = ISNULL(@NotificationSent, [NotificationSent]),
+        [ErrorMessage] = CASE WHEN @ErrorMessage_Clear = 1 THEN NULL ELSE ISNULL(@ErrorMessage, [ErrorMessage]) END
+    WHERE
+        [ID] = @ID
+
+    -- Check if the update was successful
+    IF @@ROWCOUNT = 0
+        -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
+        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwUserRoutineRuns] WHERE 1=0
+    ELSE
+        -- Return the updated record so the caller can see the updated values and any calculated fields
+        SELECT
+                                        *
+                                    FROM
+                                        [${flyway:defaultSchema}].[vwUserRoutineRuns]
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateUserRoutineRun] TO [cdp_Developer], [cdp_Integration]
+GO
+
+/* spUpdate Permissions for MJ: User Routine Runs */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateUserRoutineRun] TO [cdp_Developer], [cdp_Integration];
+
+/* spDelete SQL for MJ: User Routine Runs */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: User Routine Runs
+-- Item: spDeleteUserRoutineRun
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- DELETE PROCEDURE FOR UserRoutineRun
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spDeleteUserRoutineRun]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spDeleteUserRoutineRun];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteUserRoutineRun]
+    @ID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM
+        [${flyway:defaultSchema}].[UserRoutineRun]
+    WHERE
+        [ID] = @ID
+
+
+    -- Check if the delete was successful
+    IF @@ROWCOUNT = 0
+        SELECT NULL AS [ID] -- Return NULL for all primary key fields to indicate no record was deleted
+    ELSE
+        SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteUserRoutineRun] TO [cdp_Developer], [cdp_Integration];
+
+/* spDelete Permissions for MJ: User Routine Runs */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteUserRoutineRun] TO [cdp_Developer], [cdp_Integration];
+
+/* spDelete SQL for MJ: AI Prompt Runs */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: AI Prompt Runs
+-- Item: spDeleteAIPromptRun
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- DELETE PROCEDURE FOR AIPromptRun
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spDeleteAIPromptRun]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spDeleteAIPromptRun];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteAIPromptRun]
+    @ID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+    -- Cascade delete from AIPromptRunMedia using cursor to call spDeleteAIPromptRunMedia
+    DECLARE @MJAIPromptRunMedias_PromptRunIDID uniqueidentifier
+    DECLARE cascade_delete_MJAIPromptRunMedias_PromptRunID_cursor CURSOR FOR 
+        SELECT [ID]
+        FROM [${flyway:defaultSchema}].[AIPromptRunMedia]
+        WHERE [PromptRunID] = @ID
+    
+    OPEN cascade_delete_MJAIPromptRunMedias_PromptRunID_cursor
+    FETCH NEXT FROM cascade_delete_MJAIPromptRunMedias_PromptRunID_cursor INTO @MJAIPromptRunMedias_PromptRunIDID
+    
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        EXEC [${flyway:defaultSchema}].[spDeleteAIPromptRunMedia] @ID = @MJAIPromptRunMedias_PromptRunIDID
+        
+        FETCH NEXT FROM cascade_delete_MJAIPromptRunMedias_PromptRunID_cursor INTO @MJAIPromptRunMedias_PromptRunIDID
+    END
+    
+    CLOSE cascade_delete_MJAIPromptRunMedias_PromptRunID_cursor
+    DEALLOCATE cascade_delete_MJAIPromptRunMedias_PromptRunID_cursor
+    
+    -- Cascade update on AIPromptRun using cursor to call spUpdateAIPromptRun
+    DECLARE @MJAIPromptRuns_ParentIDID uniqueidentifier
+    DECLARE @MJAIPromptRuns_ParentID_PromptID uniqueidentifier
+    DECLARE @MJAIPromptRuns_ParentID_ModelID uniqueidentifier
+    DECLARE @MJAIPromptRuns_ParentID_VendorID uniqueidentifier
+    DECLARE @MJAIPromptRuns_ParentID_AgentID uniqueidentifier
+    DECLARE @MJAIPromptRuns_ParentID_ConfigurationID uniqueidentifier
+    DECLARE @MJAIPromptRuns_ParentID_RunAt datetimeoffset
+    DECLARE @MJAIPromptRuns_ParentID_CompletedAt datetimeoffset
+    DECLARE @MJAIPromptRuns_ParentID_ExecutionTimeMS int
+    DECLARE @MJAIPromptRuns_ParentID_Messages nvarchar(MAX)
+    DECLARE @MJAIPromptRuns_ParentID_Result nvarchar(MAX)
+    DECLARE @MJAIPromptRuns_ParentID_TokensUsed int
+    DECLARE @MJAIPromptRuns_ParentID_TokensPrompt int
+    DECLARE @MJAIPromptRuns_ParentID_TokensCompletion int
+    DECLARE @MJAIPromptRuns_ParentID_TotalCost decimal(18, 6)
+    DECLARE @MJAIPromptRuns_ParentID_Success bit
+    DECLARE @MJAIPromptRuns_ParentID_ErrorMessage nvarchar(MAX)
+    DECLARE @MJAIPromptRuns_ParentID_ParentID uniqueidentifier
+    DECLARE @MJAIPromptRuns_ParentID_RunType nvarchar(20)
+    DECLARE @MJAIPromptRuns_ParentID_ExecutionOrder int
+    DECLARE @MJAIPromptRuns_ParentID_AgentRunID uniqueidentifier
+    DECLARE @MJAIPromptRuns_ParentID_Cost decimal(19, 8)
+    DECLARE @MJAIPromptRuns_ParentID_CostCurrency nvarchar(10)
+    DECLARE @MJAIPromptRuns_ParentID_TokensUsedRollup int
+    DECLARE @MJAIPromptRuns_ParentID_TokensPromptRollup int
+    DECLARE @MJAIPromptRuns_ParentID_TokensCompletionRollup int
+    DECLARE @MJAIPromptRuns_ParentID_Temperature decimal(3, 2)
+    DECLARE @MJAIPromptRuns_ParentID_TopP decimal(3, 2)
+    DECLARE @MJAIPromptRuns_ParentID_TopK int
+    DECLARE @MJAIPromptRuns_ParentID_MinP decimal(3, 2)
+    DECLARE @MJAIPromptRuns_ParentID_FrequencyPenalty decimal(3, 2)
+    DECLARE @MJAIPromptRuns_ParentID_PresencePenalty decimal(3, 2)
+    DECLARE @MJAIPromptRuns_ParentID_Seed int
+    DECLARE @MJAIPromptRuns_ParentID_StopSequences nvarchar(MAX)
+    DECLARE @MJAIPromptRuns_ParentID_ResponseFormat nvarchar(50)
+    DECLARE @MJAIPromptRuns_ParentID_LogProbs bit
+    DECLARE @MJAIPromptRuns_ParentID_TopLogProbs int
+    DECLARE @MJAIPromptRuns_ParentID_DescendantCost decimal(18, 6)
+    DECLARE @MJAIPromptRuns_ParentID_ValidationAttemptCount int
+    DECLARE @MJAIPromptRuns_ParentID_SuccessfulValidationCount int
+    DECLARE @MJAIPromptRuns_ParentID_FinalValidationPassed bit
+    DECLARE @MJAIPromptRuns_ParentID_ValidationBehavior nvarchar(50)
+    DECLARE @MJAIPromptRuns_ParentID_RetryStrategy nvarchar(50)
+    DECLARE @MJAIPromptRuns_ParentID_MaxRetriesConfigured int
+    DECLARE @MJAIPromptRuns_ParentID_FinalValidationError nvarchar(500)
+    DECLARE @MJAIPromptRuns_ParentID_ValidationErrorCount int
+    DECLARE @MJAIPromptRuns_ParentID_CommonValidationError nvarchar(255)
+    DECLARE @MJAIPromptRuns_ParentID_FirstAttemptAt datetimeoffset
+    DECLARE @MJAIPromptRuns_ParentID_LastAttemptAt datetimeoffset
+    DECLARE @MJAIPromptRuns_ParentID_TotalRetryDurationMS int
+    DECLARE @MJAIPromptRuns_ParentID_ValidationAttempts nvarchar(MAX)
+    DECLARE @MJAIPromptRuns_ParentID_ValidationSummary nvarchar(MAX)
+    DECLARE @MJAIPromptRuns_ParentID_FailoverAttempts int
+    DECLARE @MJAIPromptRuns_ParentID_FailoverErrors nvarchar(MAX)
+    DECLARE @MJAIPromptRuns_ParentID_FailoverDurations nvarchar(MAX)
+    DECLARE @MJAIPromptRuns_ParentID_OriginalModelID uniqueidentifier
+    DECLARE @MJAIPromptRuns_ParentID_OriginalRequestStartTime datetimeoffset
+    DECLARE @MJAIPromptRuns_ParentID_TotalFailoverDuration int
+    DECLARE @MJAIPromptRuns_ParentID_RerunFromPromptRunID uniqueidentifier
+    DECLARE @MJAIPromptRuns_ParentID_ModelSelection nvarchar(MAX)
+    DECLARE @MJAIPromptRuns_ParentID_Status nvarchar(50)
+    DECLARE @MJAIPromptRuns_ParentID_Cancelled bit
+    DECLARE @MJAIPromptRuns_ParentID_CancellationReason nvarchar(MAX)
+    DECLARE @MJAIPromptRuns_ParentID_ModelPowerRank int
+    DECLARE @MJAIPromptRuns_ParentID_SelectionStrategy nvarchar(50)
+    DECLARE @MJAIPromptRuns_ParentID_CacheHit bit
+    DECLARE @MJAIPromptRuns_ParentID_CacheKey nvarchar(500)
+    DECLARE @MJAIPromptRuns_ParentID_JudgeID uniqueidentifier
+    DECLARE @MJAIPromptRuns_ParentID_JudgeScore float(53)
+    DECLARE @MJAIPromptRuns_ParentID_WasSelectedResult bit
+    DECLARE @MJAIPromptRuns_ParentID_StreamingEnabled bit
+    DECLARE @MJAIPromptRuns_ParentID_FirstTokenTime int
+    DECLARE @MJAIPromptRuns_ParentID_ErrorDetails nvarchar(MAX)
+    DECLARE @MJAIPromptRuns_ParentID_ChildPromptID uniqueidentifier
+    DECLARE @MJAIPromptRuns_ParentID_QueueTime int
+    DECLARE @MJAIPromptRuns_ParentID_PromptTime int
+    DECLARE @MJAIPromptRuns_ParentID_CompletionTime int
+    DECLARE @MJAIPromptRuns_ParentID_ModelSpecificResponseDetails nvarchar(MAX)
+    DECLARE @MJAIPromptRuns_ParentID_EffortLevel int
+    DECLARE @MJAIPromptRuns_ParentID_RunName nvarchar(255)
+    DECLARE @MJAIPromptRuns_ParentID_Comments nvarchar(MAX)
+    DECLARE @MJAIPromptRuns_ParentID_TestRunID uniqueidentifier
+    DECLARE @MJAIPromptRuns_ParentID_AssistantPrefill nvarchar(MAX)
+    DECLARE @MJAIPromptRuns_ParentID_TokensCacheRead int
+    DECLARE @MJAIPromptRuns_ParentID_TokensCacheWrite int
+    DECLARE @MJAIPromptRuns_ParentID_TokensCacheReadRollup int
+    DECLARE @MJAIPromptRuns_ParentID_TokensCacheWriteRollup int
+    DECLARE cascade_update_MJAIPromptRuns_ParentID_cursor CURSOR FOR
+        SELECT [ID], [PromptID], [ModelID], [VendorID], [AgentID], [ConfigurationID], [RunAt], [CompletedAt], [ExecutionTimeMS], [Messages], [Result], [TokensUsed], [TokensPrompt], [TokensCompletion], [TotalCost], [Success], [ErrorMessage], [ParentID], [RunType], [ExecutionOrder], [AgentRunID], [Cost], [CostCurrency], [TokensUsedRollup], [TokensPromptRollup], [TokensCompletionRollup], [Temperature], [TopP], [TopK], [MinP], [FrequencyPenalty], [PresencePenalty], [Seed], [StopSequences], [ResponseFormat], [LogProbs], [TopLogProbs], [DescendantCost], [ValidationAttemptCount], [SuccessfulValidationCount], [FinalValidationPassed], [ValidationBehavior], [RetryStrategy], [MaxRetriesConfigured], [FinalValidationError], [ValidationErrorCount], [CommonValidationError], [FirstAttemptAt], [LastAttemptAt], [TotalRetryDurationMS], [ValidationAttempts], [ValidationSummary], [FailoverAttempts], [FailoverErrors], [FailoverDurations], [OriginalModelID], [OriginalRequestStartTime], [TotalFailoverDuration], [RerunFromPromptRunID], [ModelSelection], [Status], [Cancelled], [CancellationReason], [ModelPowerRank], [SelectionStrategy], [CacheHit], [CacheKey], [JudgeID], [JudgeScore], [WasSelectedResult], [StreamingEnabled], [FirstTokenTime], [ErrorDetails], [ChildPromptID], [QueueTime], [PromptTime], [CompletionTime], [ModelSpecificResponseDetails], [EffortLevel], [RunName], [Comments], [TestRunID], [AssistantPrefill], [TokensCacheRead], [TokensCacheWrite], [TokensCacheReadRollup], [TokensCacheWriteRollup]
+        FROM [${flyway:defaultSchema}].[AIPromptRun]
+        WHERE [ParentID] = @ID
+
+    OPEN cascade_update_MJAIPromptRuns_ParentID_cursor
+    FETCH NEXT FROM cascade_update_MJAIPromptRuns_ParentID_cursor INTO @MJAIPromptRuns_ParentIDID, @MJAIPromptRuns_ParentID_PromptID, @MJAIPromptRuns_ParentID_ModelID, @MJAIPromptRuns_ParentID_VendorID, @MJAIPromptRuns_ParentID_AgentID, @MJAIPromptRuns_ParentID_ConfigurationID, @MJAIPromptRuns_ParentID_RunAt, @MJAIPromptRuns_ParentID_CompletedAt, @MJAIPromptRuns_ParentID_ExecutionTimeMS, @MJAIPromptRuns_ParentID_Messages, @MJAIPromptRuns_ParentID_Result, @MJAIPromptRuns_ParentID_TokensUsed, @MJAIPromptRuns_ParentID_TokensPrompt, @MJAIPromptRuns_ParentID_TokensCompletion, @MJAIPromptRuns_ParentID_TotalCost, @MJAIPromptRuns_ParentID_Success, @MJAIPromptRuns_ParentID_ErrorMessage, @MJAIPromptRuns_ParentID_ParentID, @MJAIPromptRuns_ParentID_RunType, @MJAIPromptRuns_ParentID_ExecutionOrder, @MJAIPromptRuns_ParentID_AgentRunID, @MJAIPromptRuns_ParentID_Cost, @MJAIPromptRuns_ParentID_CostCurrency, @MJAIPromptRuns_ParentID_TokensUsedRollup, @MJAIPromptRuns_ParentID_TokensPromptRollup, @MJAIPromptRuns_ParentID_TokensCompletionRollup, @MJAIPromptRuns_ParentID_Temperature, @MJAIPromptRuns_ParentID_TopP, @MJAIPromptRuns_ParentID_TopK, @MJAIPromptRuns_ParentID_MinP, @MJAIPromptRuns_ParentID_FrequencyPenalty, @MJAIPromptRuns_ParentID_PresencePenalty, @MJAIPromptRuns_ParentID_Seed, @MJAIPromptRuns_ParentID_StopSequences, @MJAIPromptRuns_ParentID_ResponseFormat, @MJAIPromptRuns_ParentID_LogProbs, @MJAIPromptRuns_ParentID_TopLogProbs, @MJAIPromptRuns_ParentID_DescendantCost, @MJAIPromptRuns_ParentID_ValidationAttemptCount, @MJAIPromptRuns_ParentID_SuccessfulValidationCount, @MJAIPromptRuns_ParentID_FinalValidationPassed, @MJAIPromptRuns_ParentID_ValidationBehavior, @MJAIPromptRuns_ParentID_RetryStrategy, @MJAIPromptRuns_ParentID_MaxRetriesConfigured, @MJAIPromptRuns_ParentID_FinalValidationError, @MJAIPromptRuns_ParentID_ValidationErrorCount, @MJAIPromptRuns_ParentID_CommonValidationError, @MJAIPromptRuns_ParentID_FirstAttemptAt, @MJAIPromptRuns_ParentID_LastAttemptAt, @MJAIPromptRuns_ParentID_TotalRetryDurationMS, @MJAIPromptRuns_ParentID_ValidationAttempts, @MJAIPromptRuns_ParentID_ValidationSummary, @MJAIPromptRuns_ParentID_FailoverAttempts, @MJAIPromptRuns_ParentID_FailoverErrors, @MJAIPromptRuns_ParentID_FailoverDurations, @MJAIPromptRuns_ParentID_OriginalModelID, @MJAIPromptRuns_ParentID_OriginalRequestStartTime, @MJAIPromptRuns_ParentID_TotalFailoverDuration, @MJAIPromptRuns_ParentID_RerunFromPromptRunID, @MJAIPromptRuns_ParentID_ModelSelection, @MJAIPromptRuns_ParentID_Status, @MJAIPromptRuns_ParentID_Cancelled, @MJAIPromptRuns_ParentID_CancellationReason, @MJAIPromptRuns_ParentID_ModelPowerRank, @MJAIPromptRuns_ParentID_SelectionStrategy, @MJAIPromptRuns_ParentID_CacheHit, @MJAIPromptRuns_ParentID_CacheKey, @MJAIPromptRuns_ParentID_JudgeID, @MJAIPromptRuns_ParentID_JudgeScore, @MJAIPromptRuns_ParentID_WasSelectedResult, @MJAIPromptRuns_ParentID_StreamingEnabled, @MJAIPromptRuns_ParentID_FirstTokenTime, @MJAIPromptRuns_ParentID_ErrorDetails, @MJAIPromptRuns_ParentID_ChildPromptID, @MJAIPromptRuns_ParentID_QueueTime, @MJAIPromptRuns_ParentID_PromptTime, @MJAIPromptRuns_ParentID_CompletionTime, @MJAIPromptRuns_ParentID_ModelSpecificResponseDetails, @MJAIPromptRuns_ParentID_EffortLevel, @MJAIPromptRuns_ParentID_RunName, @MJAIPromptRuns_ParentID_Comments, @MJAIPromptRuns_ParentID_TestRunID, @MJAIPromptRuns_ParentID_AssistantPrefill, @MJAIPromptRuns_ParentID_TokensCacheRead, @MJAIPromptRuns_ParentID_TokensCacheWrite, @MJAIPromptRuns_ParentID_TokensCacheReadRollup, @MJAIPromptRuns_ParentID_TokensCacheWriteRollup
+
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        -- Set the FK field to NULL
+        SET @MJAIPromptRuns_ParentID_ParentID = NULL
+
+        -- Call the update SP for the related entity
+        EXEC [${flyway:defaultSchema}].[spUpdateAIPromptRun] @ID = @MJAIPromptRuns_ParentIDID, @PromptID = @MJAIPromptRuns_ParentID_PromptID, @ModelID = @MJAIPromptRuns_ParentID_ModelID, @VendorID = @MJAIPromptRuns_ParentID_VendorID, @AgentID = @MJAIPromptRuns_ParentID_AgentID, @ConfigurationID = @MJAIPromptRuns_ParentID_ConfigurationID, @RunAt = @MJAIPromptRuns_ParentID_RunAt, @CompletedAt = @MJAIPromptRuns_ParentID_CompletedAt, @ExecutionTimeMS = @MJAIPromptRuns_ParentID_ExecutionTimeMS, @Messages = @MJAIPromptRuns_ParentID_Messages, @Result = @MJAIPromptRuns_ParentID_Result, @TokensUsed = @MJAIPromptRuns_ParentID_TokensUsed, @TokensPrompt = @MJAIPromptRuns_ParentID_TokensPrompt, @TokensCompletion = @MJAIPromptRuns_ParentID_TokensCompletion, @TotalCost = @MJAIPromptRuns_ParentID_TotalCost, @Success = @MJAIPromptRuns_ParentID_Success, @ErrorMessage = @MJAIPromptRuns_ParentID_ErrorMessage, @ParentID_Clear = 1, @ParentID = @MJAIPromptRuns_ParentID_ParentID, @RunType = @MJAIPromptRuns_ParentID_RunType, @ExecutionOrder = @MJAIPromptRuns_ParentID_ExecutionOrder, @AgentRunID = @MJAIPromptRuns_ParentID_AgentRunID, @Cost = @MJAIPromptRuns_ParentID_Cost, @CostCurrency = @MJAIPromptRuns_ParentID_CostCurrency, @TokensUsedRollup = @MJAIPromptRuns_ParentID_TokensUsedRollup, @TokensPromptRollup = @MJAIPromptRuns_ParentID_TokensPromptRollup, @TokensCompletionRollup = @MJAIPromptRuns_ParentID_TokensCompletionRollup, @Temperature = @MJAIPromptRuns_ParentID_Temperature, @TopP = @MJAIPromptRuns_ParentID_TopP, @TopK = @MJAIPromptRuns_ParentID_TopK, @MinP = @MJAIPromptRuns_ParentID_MinP, @FrequencyPenalty = @MJAIPromptRuns_ParentID_FrequencyPenalty, @PresencePenalty = @MJAIPromptRuns_ParentID_PresencePenalty, @Seed = @MJAIPromptRuns_ParentID_Seed, @StopSequences = @MJAIPromptRuns_ParentID_StopSequences, @ResponseFormat = @MJAIPromptRuns_ParentID_ResponseFormat, @LogProbs = @MJAIPromptRuns_ParentID_LogProbs, @TopLogProbs = @MJAIPromptRuns_ParentID_TopLogProbs, @DescendantCost = @MJAIPromptRuns_ParentID_DescendantCost, @ValidationAttemptCount = @MJAIPromptRuns_ParentID_ValidationAttemptCount, @SuccessfulValidationCount = @MJAIPromptRuns_ParentID_SuccessfulValidationCount, @FinalValidationPassed = @MJAIPromptRuns_ParentID_FinalValidationPassed, @ValidationBehavior = @MJAIPromptRuns_ParentID_ValidationBehavior, @RetryStrategy = @MJAIPromptRuns_ParentID_RetryStrategy, @MaxRetriesConfigured = @MJAIPromptRuns_ParentID_MaxRetriesConfigured, @FinalValidationError = @MJAIPromptRuns_ParentID_FinalValidationError, @ValidationErrorCount = @MJAIPromptRuns_ParentID_ValidationErrorCount, @CommonValidationError = @MJAIPromptRuns_ParentID_CommonValidationError, @FirstAttemptAt = @MJAIPromptRuns_ParentID_FirstAttemptAt, @LastAttemptAt = @MJAIPromptRuns_ParentID_LastAttemptAt, @TotalRetryDurationMS = @MJAIPromptRuns_ParentID_TotalRetryDurationMS, @ValidationAttempts = @MJAIPromptRuns_ParentID_ValidationAttempts, @ValidationSummary = @MJAIPromptRuns_ParentID_ValidationSummary, @FailoverAttempts = @MJAIPromptRuns_ParentID_FailoverAttempts, @FailoverErrors = @MJAIPromptRuns_ParentID_FailoverErrors, @FailoverDurations = @MJAIPromptRuns_ParentID_FailoverDurations, @OriginalModelID = @MJAIPromptRuns_ParentID_OriginalModelID, @OriginalRequestStartTime = @MJAIPromptRuns_ParentID_OriginalRequestStartTime, @TotalFailoverDuration = @MJAIPromptRuns_ParentID_TotalFailoverDuration, @RerunFromPromptRunID = @MJAIPromptRuns_ParentID_RerunFromPromptRunID, @ModelSelection = @MJAIPromptRuns_ParentID_ModelSelection, @Status = @MJAIPromptRuns_ParentID_Status, @Cancelled = @MJAIPromptRuns_ParentID_Cancelled, @CancellationReason = @MJAIPromptRuns_ParentID_CancellationReason, @ModelPowerRank = @MJAIPromptRuns_ParentID_ModelPowerRank, @SelectionStrategy = @MJAIPromptRuns_ParentID_SelectionStrategy, @CacheHit = @MJAIPromptRuns_ParentID_CacheHit, @CacheKey = @MJAIPromptRuns_ParentID_CacheKey, @JudgeID = @MJAIPromptRuns_ParentID_JudgeID, @JudgeScore = @MJAIPromptRuns_ParentID_JudgeScore, @WasSelectedResult = @MJAIPromptRuns_ParentID_WasSelectedResult, @StreamingEnabled = @MJAIPromptRuns_ParentID_StreamingEnabled, @FirstTokenTime = @MJAIPromptRuns_ParentID_FirstTokenTime, @ErrorDetails = @MJAIPromptRuns_ParentID_ErrorDetails, @ChildPromptID = @MJAIPromptRuns_ParentID_ChildPromptID, @QueueTime = @MJAIPromptRuns_ParentID_QueueTime, @PromptTime = @MJAIPromptRuns_ParentID_PromptTime, @CompletionTime = @MJAIPromptRuns_ParentID_CompletionTime, @ModelSpecificResponseDetails = @MJAIPromptRuns_ParentID_ModelSpecificResponseDetails, @EffortLevel = @MJAIPromptRuns_ParentID_EffortLevel, @RunName = @MJAIPromptRuns_ParentID_RunName, @Comments = @MJAIPromptRuns_ParentID_Comments, @TestRunID = @MJAIPromptRuns_ParentID_TestRunID, @AssistantPrefill = @MJAIPromptRuns_ParentID_AssistantPrefill, @TokensCacheRead = @MJAIPromptRuns_ParentID_TokensCacheRead, @TokensCacheWrite = @MJAIPromptRuns_ParentID_TokensCacheWrite, @TokensCacheReadRollup = @MJAIPromptRuns_ParentID_TokensCacheReadRollup, @TokensCacheWriteRollup = @MJAIPromptRuns_ParentID_TokensCacheWriteRollup
+
+        FETCH NEXT FROM cascade_update_MJAIPromptRuns_ParentID_cursor INTO @MJAIPromptRuns_ParentIDID, @MJAIPromptRuns_ParentID_PromptID, @MJAIPromptRuns_ParentID_ModelID, @MJAIPromptRuns_ParentID_VendorID, @MJAIPromptRuns_ParentID_AgentID, @MJAIPromptRuns_ParentID_ConfigurationID, @MJAIPromptRuns_ParentID_RunAt, @MJAIPromptRuns_ParentID_CompletedAt, @MJAIPromptRuns_ParentID_ExecutionTimeMS, @MJAIPromptRuns_ParentID_Messages, @MJAIPromptRuns_ParentID_Result, @MJAIPromptRuns_ParentID_TokensUsed, @MJAIPromptRuns_ParentID_TokensPrompt, @MJAIPromptRuns_ParentID_TokensCompletion, @MJAIPromptRuns_ParentID_TotalCost, @MJAIPromptRuns_ParentID_Success, @MJAIPromptRuns_ParentID_ErrorMessage, @MJAIPromptRuns_ParentID_ParentID, @MJAIPromptRuns_ParentID_RunType, @MJAIPromptRuns_ParentID_ExecutionOrder, @MJAIPromptRuns_ParentID_AgentRunID, @MJAIPromptRuns_ParentID_Cost, @MJAIPromptRuns_ParentID_CostCurrency, @MJAIPromptRuns_ParentID_TokensUsedRollup, @MJAIPromptRuns_ParentID_TokensPromptRollup, @MJAIPromptRuns_ParentID_TokensCompletionRollup, @MJAIPromptRuns_ParentID_Temperature, @MJAIPromptRuns_ParentID_TopP, @MJAIPromptRuns_ParentID_TopK, @MJAIPromptRuns_ParentID_MinP, @MJAIPromptRuns_ParentID_FrequencyPenalty, @MJAIPromptRuns_ParentID_PresencePenalty, @MJAIPromptRuns_ParentID_Seed, @MJAIPromptRuns_ParentID_StopSequences, @MJAIPromptRuns_ParentID_ResponseFormat, @MJAIPromptRuns_ParentID_LogProbs, @MJAIPromptRuns_ParentID_TopLogProbs, @MJAIPromptRuns_ParentID_DescendantCost, @MJAIPromptRuns_ParentID_ValidationAttemptCount, @MJAIPromptRuns_ParentID_SuccessfulValidationCount, @MJAIPromptRuns_ParentID_FinalValidationPassed, @MJAIPromptRuns_ParentID_ValidationBehavior, @MJAIPromptRuns_ParentID_RetryStrategy, @MJAIPromptRuns_ParentID_MaxRetriesConfigured, @MJAIPromptRuns_ParentID_FinalValidationError, @MJAIPromptRuns_ParentID_ValidationErrorCount, @MJAIPromptRuns_ParentID_CommonValidationError, @MJAIPromptRuns_ParentID_FirstAttemptAt, @MJAIPromptRuns_ParentID_LastAttemptAt, @MJAIPromptRuns_ParentID_TotalRetryDurationMS, @MJAIPromptRuns_ParentID_ValidationAttempts, @MJAIPromptRuns_ParentID_ValidationSummary, @MJAIPromptRuns_ParentID_FailoverAttempts, @MJAIPromptRuns_ParentID_FailoverErrors, @MJAIPromptRuns_ParentID_FailoverDurations, @MJAIPromptRuns_ParentID_OriginalModelID, @MJAIPromptRuns_ParentID_OriginalRequestStartTime, @MJAIPromptRuns_ParentID_TotalFailoverDuration, @MJAIPromptRuns_ParentID_RerunFromPromptRunID, @MJAIPromptRuns_ParentID_ModelSelection, @MJAIPromptRuns_ParentID_Status, @MJAIPromptRuns_ParentID_Cancelled, @MJAIPromptRuns_ParentID_CancellationReason, @MJAIPromptRuns_ParentID_ModelPowerRank, @MJAIPromptRuns_ParentID_SelectionStrategy, @MJAIPromptRuns_ParentID_CacheHit, @MJAIPromptRuns_ParentID_CacheKey, @MJAIPromptRuns_ParentID_JudgeID, @MJAIPromptRuns_ParentID_JudgeScore, @MJAIPromptRuns_ParentID_WasSelectedResult, @MJAIPromptRuns_ParentID_StreamingEnabled, @MJAIPromptRuns_ParentID_FirstTokenTime, @MJAIPromptRuns_ParentID_ErrorDetails, @MJAIPromptRuns_ParentID_ChildPromptID, @MJAIPromptRuns_ParentID_QueueTime, @MJAIPromptRuns_ParentID_PromptTime, @MJAIPromptRuns_ParentID_CompletionTime, @MJAIPromptRuns_ParentID_ModelSpecificResponseDetails, @MJAIPromptRuns_ParentID_EffortLevel, @MJAIPromptRuns_ParentID_RunName, @MJAIPromptRuns_ParentID_Comments, @MJAIPromptRuns_ParentID_TestRunID, @MJAIPromptRuns_ParentID_AssistantPrefill, @MJAIPromptRuns_ParentID_TokensCacheRead, @MJAIPromptRuns_ParentID_TokensCacheWrite, @MJAIPromptRuns_ParentID_TokensCacheReadRollup, @MJAIPromptRuns_ParentID_TokensCacheWriteRollup
+    END
+
+    CLOSE cascade_update_MJAIPromptRuns_ParentID_cursor
+    DEALLOCATE cascade_update_MJAIPromptRuns_ParentID_cursor
+    
+    -- Cascade update on AIPromptRun using cursor to call spUpdateAIPromptRun
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunIDID uniqueidentifier
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_PromptID uniqueidentifier
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_ModelID uniqueidentifier
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_VendorID uniqueidentifier
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_AgentID uniqueidentifier
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_ConfigurationID uniqueidentifier
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_RunAt datetimeoffset
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_CompletedAt datetimeoffset
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_ExecutionTimeMS int
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_Messages nvarchar(MAX)
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_Result nvarchar(MAX)
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_TokensUsed int
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_TokensPrompt int
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_TokensCompletion int
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_TotalCost decimal(18, 6)
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_Success bit
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_ErrorMessage nvarchar(MAX)
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_ParentID uniqueidentifier
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_RunType nvarchar(20)
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_ExecutionOrder int
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_AgentRunID uniqueidentifier
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_Cost decimal(19, 8)
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_CostCurrency nvarchar(10)
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_TokensUsedRollup int
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_TokensPromptRollup int
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_TokensCompletionRollup int
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_Temperature decimal(3, 2)
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_TopP decimal(3, 2)
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_TopK int
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_MinP decimal(3, 2)
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_FrequencyPenalty decimal(3, 2)
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_PresencePenalty decimal(3, 2)
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_Seed int
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_StopSequences nvarchar(MAX)
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_ResponseFormat nvarchar(50)
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_LogProbs bit
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_TopLogProbs int
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_DescendantCost decimal(18, 6)
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_ValidationAttemptCount int
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_SuccessfulValidationCount int
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_FinalValidationPassed bit
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_ValidationBehavior nvarchar(50)
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_RetryStrategy nvarchar(50)
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_MaxRetriesConfigured int
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_FinalValidationError nvarchar(500)
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_ValidationErrorCount int
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_CommonValidationError nvarchar(255)
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_FirstAttemptAt datetimeoffset
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_LastAttemptAt datetimeoffset
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_TotalRetryDurationMS int
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_ValidationAttempts nvarchar(MAX)
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_ValidationSummary nvarchar(MAX)
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_FailoverAttempts int
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_FailoverErrors nvarchar(MAX)
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_FailoverDurations nvarchar(MAX)
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_OriginalModelID uniqueidentifier
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_OriginalRequestStartTime datetimeoffset
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_TotalFailoverDuration int
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_RerunFromPromptRunID uniqueidentifier
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_ModelSelection nvarchar(MAX)
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_Status nvarchar(50)
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_Cancelled bit
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_CancellationReason nvarchar(MAX)
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_ModelPowerRank int
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_SelectionStrategy nvarchar(50)
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_CacheHit bit
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_CacheKey nvarchar(500)
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_JudgeID uniqueidentifier
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_JudgeScore float(53)
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_WasSelectedResult bit
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_StreamingEnabled bit
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_FirstTokenTime int
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_ErrorDetails nvarchar(MAX)
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_ChildPromptID uniqueidentifier
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_QueueTime int
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_PromptTime int
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_CompletionTime int
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_ModelSpecificResponseDetails nvarchar(MAX)
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_EffortLevel int
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_RunName nvarchar(255)
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_Comments nvarchar(MAX)
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_TestRunID uniqueidentifier
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_AssistantPrefill nvarchar(MAX)
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_TokensCacheRead int
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_TokensCacheWrite int
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_TokensCacheReadRollup int
+    DECLARE @MJAIPromptRuns_RerunFromPromptRunID_TokensCacheWriteRollup int
+    DECLARE cascade_update_MJAIPromptRuns_RerunFromPromptRunID_cursor CURSOR FOR
+        SELECT [ID], [PromptID], [ModelID], [VendorID], [AgentID], [ConfigurationID], [RunAt], [CompletedAt], [ExecutionTimeMS], [Messages], [Result], [TokensUsed], [TokensPrompt], [TokensCompletion], [TotalCost], [Success], [ErrorMessage], [ParentID], [RunType], [ExecutionOrder], [AgentRunID], [Cost], [CostCurrency], [TokensUsedRollup], [TokensPromptRollup], [TokensCompletionRollup], [Temperature], [TopP], [TopK], [MinP], [FrequencyPenalty], [PresencePenalty], [Seed], [StopSequences], [ResponseFormat], [LogProbs], [TopLogProbs], [DescendantCost], [ValidationAttemptCount], [SuccessfulValidationCount], [FinalValidationPassed], [ValidationBehavior], [RetryStrategy], [MaxRetriesConfigured], [FinalValidationError], [ValidationErrorCount], [CommonValidationError], [FirstAttemptAt], [LastAttemptAt], [TotalRetryDurationMS], [ValidationAttempts], [ValidationSummary], [FailoverAttempts], [FailoverErrors], [FailoverDurations], [OriginalModelID], [OriginalRequestStartTime], [TotalFailoverDuration], [RerunFromPromptRunID], [ModelSelection], [Status], [Cancelled], [CancellationReason], [ModelPowerRank], [SelectionStrategy], [CacheHit], [CacheKey], [JudgeID], [JudgeScore], [WasSelectedResult], [StreamingEnabled], [FirstTokenTime], [ErrorDetails], [ChildPromptID], [QueueTime], [PromptTime], [CompletionTime], [ModelSpecificResponseDetails], [EffortLevel], [RunName], [Comments], [TestRunID], [AssistantPrefill], [TokensCacheRead], [TokensCacheWrite], [TokensCacheReadRollup], [TokensCacheWriteRollup]
+        FROM [${flyway:defaultSchema}].[AIPromptRun]
+        WHERE [RerunFromPromptRunID] = @ID
+
+    OPEN cascade_update_MJAIPromptRuns_RerunFromPromptRunID_cursor
+    FETCH NEXT FROM cascade_update_MJAIPromptRuns_RerunFromPromptRunID_cursor INTO @MJAIPromptRuns_RerunFromPromptRunIDID, @MJAIPromptRuns_RerunFromPromptRunID_PromptID, @MJAIPromptRuns_RerunFromPromptRunID_ModelID, @MJAIPromptRuns_RerunFromPromptRunID_VendorID, @MJAIPromptRuns_RerunFromPromptRunID_AgentID, @MJAIPromptRuns_RerunFromPromptRunID_ConfigurationID, @MJAIPromptRuns_RerunFromPromptRunID_RunAt, @MJAIPromptRuns_RerunFromPromptRunID_CompletedAt, @MJAIPromptRuns_RerunFromPromptRunID_ExecutionTimeMS, @MJAIPromptRuns_RerunFromPromptRunID_Messages, @MJAIPromptRuns_RerunFromPromptRunID_Result, @MJAIPromptRuns_RerunFromPromptRunID_TokensUsed, @MJAIPromptRuns_RerunFromPromptRunID_TokensPrompt, @MJAIPromptRuns_RerunFromPromptRunID_TokensCompletion, @MJAIPromptRuns_RerunFromPromptRunID_TotalCost, @MJAIPromptRuns_RerunFromPromptRunID_Success, @MJAIPromptRuns_RerunFromPromptRunID_ErrorMessage, @MJAIPromptRuns_RerunFromPromptRunID_ParentID, @MJAIPromptRuns_RerunFromPromptRunID_RunType, @MJAIPromptRuns_RerunFromPromptRunID_ExecutionOrder, @MJAIPromptRuns_RerunFromPromptRunID_AgentRunID, @MJAIPromptRuns_RerunFromPromptRunID_Cost, @MJAIPromptRuns_RerunFromPromptRunID_CostCurrency, @MJAIPromptRuns_RerunFromPromptRunID_TokensUsedRollup, @MJAIPromptRuns_RerunFromPromptRunID_TokensPromptRollup, @MJAIPromptRuns_RerunFromPromptRunID_TokensCompletionRollup, @MJAIPromptRuns_RerunFromPromptRunID_Temperature, @MJAIPromptRuns_RerunFromPromptRunID_TopP, @MJAIPromptRuns_RerunFromPromptRunID_TopK, @MJAIPromptRuns_RerunFromPromptRunID_MinP, @MJAIPromptRuns_RerunFromPromptRunID_FrequencyPenalty, @MJAIPromptRuns_RerunFromPromptRunID_PresencePenalty, @MJAIPromptRuns_RerunFromPromptRunID_Seed, @MJAIPromptRuns_RerunFromPromptRunID_StopSequences, @MJAIPromptRuns_RerunFromPromptRunID_ResponseFormat, @MJAIPromptRuns_RerunFromPromptRunID_LogProbs, @MJAIPromptRuns_RerunFromPromptRunID_TopLogProbs, @MJAIPromptRuns_RerunFromPromptRunID_DescendantCost, @MJAIPromptRuns_RerunFromPromptRunID_ValidationAttemptCount, @MJAIPromptRuns_RerunFromPromptRunID_SuccessfulValidationCount, @MJAIPromptRuns_RerunFromPromptRunID_FinalValidationPassed, @MJAIPromptRuns_RerunFromPromptRunID_ValidationBehavior, @MJAIPromptRuns_RerunFromPromptRunID_RetryStrategy, @MJAIPromptRuns_RerunFromPromptRunID_MaxRetriesConfigured, @MJAIPromptRuns_RerunFromPromptRunID_FinalValidationError, @MJAIPromptRuns_RerunFromPromptRunID_ValidationErrorCount, @MJAIPromptRuns_RerunFromPromptRunID_CommonValidationError, @MJAIPromptRuns_RerunFromPromptRunID_FirstAttemptAt, @MJAIPromptRuns_RerunFromPromptRunID_LastAttemptAt, @MJAIPromptRuns_RerunFromPromptRunID_TotalRetryDurationMS, @MJAIPromptRuns_RerunFromPromptRunID_ValidationAttempts, @MJAIPromptRuns_RerunFromPromptRunID_ValidationSummary, @MJAIPromptRuns_RerunFromPromptRunID_FailoverAttempts, @MJAIPromptRuns_RerunFromPromptRunID_FailoverErrors, @MJAIPromptRuns_RerunFromPromptRunID_FailoverDurations, @MJAIPromptRuns_RerunFromPromptRunID_OriginalModelID, @MJAIPromptRuns_RerunFromPromptRunID_OriginalRequestStartTime, @MJAIPromptRuns_RerunFromPromptRunID_TotalFailoverDuration, @MJAIPromptRuns_RerunFromPromptRunID_RerunFromPromptRunID, @MJAIPromptRuns_RerunFromPromptRunID_ModelSelection, @MJAIPromptRuns_RerunFromPromptRunID_Status, @MJAIPromptRuns_RerunFromPromptRunID_Cancelled, @MJAIPromptRuns_RerunFromPromptRunID_CancellationReason, @MJAIPromptRuns_RerunFromPromptRunID_ModelPowerRank, @MJAIPromptRuns_RerunFromPromptRunID_SelectionStrategy, @MJAIPromptRuns_RerunFromPromptRunID_CacheHit, @MJAIPromptRuns_RerunFromPromptRunID_CacheKey, @MJAIPromptRuns_RerunFromPromptRunID_JudgeID, @MJAIPromptRuns_RerunFromPromptRunID_JudgeScore, @MJAIPromptRuns_RerunFromPromptRunID_WasSelectedResult, @MJAIPromptRuns_RerunFromPromptRunID_StreamingEnabled, @MJAIPromptRuns_RerunFromPromptRunID_FirstTokenTime, @MJAIPromptRuns_RerunFromPromptRunID_ErrorDetails, @MJAIPromptRuns_RerunFromPromptRunID_ChildPromptID, @MJAIPromptRuns_RerunFromPromptRunID_QueueTime, @MJAIPromptRuns_RerunFromPromptRunID_PromptTime, @MJAIPromptRuns_RerunFromPromptRunID_CompletionTime, @MJAIPromptRuns_RerunFromPromptRunID_ModelSpecificResponseDetails, @MJAIPromptRuns_RerunFromPromptRunID_EffortLevel, @MJAIPromptRuns_RerunFromPromptRunID_RunName, @MJAIPromptRuns_RerunFromPromptRunID_Comments, @MJAIPromptRuns_RerunFromPromptRunID_TestRunID, @MJAIPromptRuns_RerunFromPromptRunID_AssistantPrefill, @MJAIPromptRuns_RerunFromPromptRunID_TokensCacheRead, @MJAIPromptRuns_RerunFromPromptRunID_TokensCacheWrite, @MJAIPromptRuns_RerunFromPromptRunID_TokensCacheReadRollup, @MJAIPromptRuns_RerunFromPromptRunID_TokensCacheWriteRollup
+
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        -- Set the FK field to NULL
+        SET @MJAIPromptRuns_RerunFromPromptRunID_RerunFromPromptRunID = NULL
+
+        -- Call the update SP for the related entity
+        EXEC [${flyway:defaultSchema}].[spUpdateAIPromptRun] @ID = @MJAIPromptRuns_RerunFromPromptRunIDID, @PromptID = @MJAIPromptRuns_RerunFromPromptRunID_PromptID, @ModelID = @MJAIPromptRuns_RerunFromPromptRunID_ModelID, @VendorID = @MJAIPromptRuns_RerunFromPromptRunID_VendorID, @AgentID = @MJAIPromptRuns_RerunFromPromptRunID_AgentID, @ConfigurationID = @MJAIPromptRuns_RerunFromPromptRunID_ConfigurationID, @RunAt = @MJAIPromptRuns_RerunFromPromptRunID_RunAt, @CompletedAt = @MJAIPromptRuns_RerunFromPromptRunID_CompletedAt, @ExecutionTimeMS = @MJAIPromptRuns_RerunFromPromptRunID_ExecutionTimeMS, @Messages = @MJAIPromptRuns_RerunFromPromptRunID_Messages, @Result = @MJAIPromptRuns_RerunFromPromptRunID_Result, @TokensUsed = @MJAIPromptRuns_RerunFromPromptRunID_TokensUsed, @TokensPrompt = @MJAIPromptRuns_RerunFromPromptRunID_TokensPrompt, @TokensCompletion = @MJAIPromptRuns_RerunFromPromptRunID_TokensCompletion, @TotalCost = @MJAIPromptRuns_RerunFromPromptRunID_TotalCost, @Success = @MJAIPromptRuns_RerunFromPromptRunID_Success, @ErrorMessage = @MJAIPromptRuns_RerunFromPromptRunID_ErrorMessage, @ParentID = @MJAIPromptRuns_RerunFromPromptRunID_ParentID, @RunType = @MJAIPromptRuns_RerunFromPromptRunID_RunType, @ExecutionOrder = @MJAIPromptRuns_RerunFromPromptRunID_ExecutionOrder, @AgentRunID = @MJAIPromptRuns_RerunFromPromptRunID_AgentRunID, @Cost = @MJAIPromptRuns_RerunFromPromptRunID_Cost, @CostCurrency = @MJAIPromptRuns_RerunFromPromptRunID_CostCurrency, @TokensUsedRollup = @MJAIPromptRuns_RerunFromPromptRunID_TokensUsedRollup, @TokensPromptRollup = @MJAIPromptRuns_RerunFromPromptRunID_TokensPromptRollup, @TokensCompletionRollup = @MJAIPromptRuns_RerunFromPromptRunID_TokensCompletionRollup, @Temperature = @MJAIPromptRuns_RerunFromPromptRunID_Temperature, @TopP = @MJAIPromptRuns_RerunFromPromptRunID_TopP, @TopK = @MJAIPromptRuns_RerunFromPromptRunID_TopK, @MinP = @MJAIPromptRuns_RerunFromPromptRunID_MinP, @FrequencyPenalty = @MJAIPromptRuns_RerunFromPromptRunID_FrequencyPenalty, @PresencePenalty = @MJAIPromptRuns_RerunFromPromptRunID_PresencePenalty, @Seed = @MJAIPromptRuns_RerunFromPromptRunID_Seed, @StopSequences = @MJAIPromptRuns_RerunFromPromptRunID_StopSequences, @ResponseFormat = @MJAIPromptRuns_RerunFromPromptRunID_ResponseFormat, @LogProbs = @MJAIPromptRuns_RerunFromPromptRunID_LogProbs, @TopLogProbs = @MJAIPromptRuns_RerunFromPromptRunID_TopLogProbs, @DescendantCost = @MJAIPromptRuns_RerunFromPromptRunID_DescendantCost, @ValidationAttemptCount = @MJAIPromptRuns_RerunFromPromptRunID_ValidationAttemptCount, @SuccessfulValidationCount = @MJAIPromptRuns_RerunFromPromptRunID_SuccessfulValidationCount, @FinalValidationPassed = @MJAIPromptRuns_RerunFromPromptRunID_FinalValidationPassed, @ValidationBehavior = @MJAIPromptRuns_RerunFromPromptRunID_ValidationBehavior, @RetryStrategy = @MJAIPromptRuns_RerunFromPromptRunID_RetryStrategy, @MaxRetriesConfigured = @MJAIPromptRuns_RerunFromPromptRunID_MaxRetriesConfigured, @FinalValidationError = @MJAIPromptRuns_RerunFromPromptRunID_FinalValidationError, @ValidationErrorCount = @MJAIPromptRuns_RerunFromPromptRunID_ValidationErrorCount, @CommonValidationError = @MJAIPromptRuns_RerunFromPromptRunID_CommonValidationError, @FirstAttemptAt = @MJAIPromptRuns_RerunFromPromptRunID_FirstAttemptAt, @LastAttemptAt = @MJAIPromptRuns_RerunFromPromptRunID_LastAttemptAt, @TotalRetryDurationMS = @MJAIPromptRuns_RerunFromPromptRunID_TotalRetryDurationMS, @ValidationAttempts = @MJAIPromptRuns_RerunFromPromptRunID_ValidationAttempts, @ValidationSummary = @MJAIPromptRuns_RerunFromPromptRunID_ValidationSummary, @FailoverAttempts = @MJAIPromptRuns_RerunFromPromptRunID_FailoverAttempts, @FailoverErrors = @MJAIPromptRuns_RerunFromPromptRunID_FailoverErrors, @FailoverDurations = @MJAIPromptRuns_RerunFromPromptRunID_FailoverDurations, @OriginalModelID = @MJAIPromptRuns_RerunFromPromptRunID_OriginalModelID, @OriginalRequestStartTime = @MJAIPromptRuns_RerunFromPromptRunID_OriginalRequestStartTime, @TotalFailoverDuration = @MJAIPromptRuns_RerunFromPromptRunID_TotalFailoverDuration, @RerunFromPromptRunID_Clear = 1, @RerunFromPromptRunID = @MJAIPromptRuns_RerunFromPromptRunID_RerunFromPromptRunID, @ModelSelection = @MJAIPromptRuns_RerunFromPromptRunID_ModelSelection, @Status = @MJAIPromptRuns_RerunFromPromptRunID_Status, @Cancelled = @MJAIPromptRuns_RerunFromPromptRunID_Cancelled, @CancellationReason = @MJAIPromptRuns_RerunFromPromptRunID_CancellationReason, @ModelPowerRank = @MJAIPromptRuns_RerunFromPromptRunID_ModelPowerRank, @SelectionStrategy = @MJAIPromptRuns_RerunFromPromptRunID_SelectionStrategy, @CacheHit = @MJAIPromptRuns_RerunFromPromptRunID_CacheHit, @CacheKey = @MJAIPromptRuns_RerunFromPromptRunID_CacheKey, @JudgeID = @MJAIPromptRuns_RerunFromPromptRunID_JudgeID, @JudgeScore = @MJAIPromptRuns_RerunFromPromptRunID_JudgeScore, @WasSelectedResult = @MJAIPromptRuns_RerunFromPromptRunID_WasSelectedResult, @StreamingEnabled = @MJAIPromptRuns_RerunFromPromptRunID_StreamingEnabled, @FirstTokenTime = @MJAIPromptRuns_RerunFromPromptRunID_FirstTokenTime, @ErrorDetails = @MJAIPromptRuns_RerunFromPromptRunID_ErrorDetails, @ChildPromptID = @MJAIPromptRuns_RerunFromPromptRunID_ChildPromptID, @QueueTime = @MJAIPromptRuns_RerunFromPromptRunID_QueueTime, @PromptTime = @MJAIPromptRuns_RerunFromPromptRunID_PromptTime, @CompletionTime = @MJAIPromptRuns_RerunFromPromptRunID_CompletionTime, @ModelSpecificResponseDetails = @MJAIPromptRuns_RerunFromPromptRunID_ModelSpecificResponseDetails, @EffortLevel = @MJAIPromptRuns_RerunFromPromptRunID_EffortLevel, @RunName = @MJAIPromptRuns_RerunFromPromptRunID_RunName, @Comments = @MJAIPromptRuns_RerunFromPromptRunID_Comments, @TestRunID = @MJAIPromptRuns_RerunFromPromptRunID_TestRunID, @AssistantPrefill = @MJAIPromptRuns_RerunFromPromptRunID_AssistantPrefill, @TokensCacheRead = @MJAIPromptRuns_RerunFromPromptRunID_TokensCacheRead, @TokensCacheWrite = @MJAIPromptRuns_RerunFromPromptRunID_TokensCacheWrite, @TokensCacheReadRollup = @MJAIPromptRuns_RerunFromPromptRunID_TokensCacheReadRollup, @TokensCacheWriteRollup = @MJAIPromptRuns_RerunFromPromptRunID_TokensCacheWriteRollup
+
+        FETCH NEXT FROM cascade_update_MJAIPromptRuns_RerunFromPromptRunID_cursor INTO @MJAIPromptRuns_RerunFromPromptRunIDID, @MJAIPromptRuns_RerunFromPromptRunID_PromptID, @MJAIPromptRuns_RerunFromPromptRunID_ModelID, @MJAIPromptRuns_RerunFromPromptRunID_VendorID, @MJAIPromptRuns_RerunFromPromptRunID_AgentID, @MJAIPromptRuns_RerunFromPromptRunID_ConfigurationID, @MJAIPromptRuns_RerunFromPromptRunID_RunAt, @MJAIPromptRuns_RerunFromPromptRunID_CompletedAt, @MJAIPromptRuns_RerunFromPromptRunID_ExecutionTimeMS, @MJAIPromptRuns_RerunFromPromptRunID_Messages, @MJAIPromptRuns_RerunFromPromptRunID_Result, @MJAIPromptRuns_RerunFromPromptRunID_TokensUsed, @MJAIPromptRuns_RerunFromPromptRunID_TokensPrompt, @MJAIPromptRuns_RerunFromPromptRunID_TokensCompletion, @MJAIPromptRuns_RerunFromPromptRunID_TotalCost, @MJAIPromptRuns_RerunFromPromptRunID_Success, @MJAIPromptRuns_RerunFromPromptRunID_ErrorMessage, @MJAIPromptRuns_RerunFromPromptRunID_ParentID, @MJAIPromptRuns_RerunFromPromptRunID_RunType, @MJAIPromptRuns_RerunFromPromptRunID_ExecutionOrder, @MJAIPromptRuns_RerunFromPromptRunID_AgentRunID, @MJAIPromptRuns_RerunFromPromptRunID_Cost, @MJAIPromptRuns_RerunFromPromptRunID_CostCurrency, @MJAIPromptRuns_RerunFromPromptRunID_TokensUsedRollup, @MJAIPromptRuns_RerunFromPromptRunID_TokensPromptRollup, @MJAIPromptRuns_RerunFromPromptRunID_TokensCompletionRollup, @MJAIPromptRuns_RerunFromPromptRunID_Temperature, @MJAIPromptRuns_RerunFromPromptRunID_TopP, @MJAIPromptRuns_RerunFromPromptRunID_TopK, @MJAIPromptRuns_RerunFromPromptRunID_MinP, @MJAIPromptRuns_RerunFromPromptRunID_FrequencyPenalty, @MJAIPromptRuns_RerunFromPromptRunID_PresencePenalty, @MJAIPromptRuns_RerunFromPromptRunID_Seed, @MJAIPromptRuns_RerunFromPromptRunID_StopSequences, @MJAIPromptRuns_RerunFromPromptRunID_ResponseFormat, @MJAIPromptRuns_RerunFromPromptRunID_LogProbs, @MJAIPromptRuns_RerunFromPromptRunID_TopLogProbs, @MJAIPromptRuns_RerunFromPromptRunID_DescendantCost, @MJAIPromptRuns_RerunFromPromptRunID_ValidationAttemptCount, @MJAIPromptRuns_RerunFromPromptRunID_SuccessfulValidationCount, @MJAIPromptRuns_RerunFromPromptRunID_FinalValidationPassed, @MJAIPromptRuns_RerunFromPromptRunID_ValidationBehavior, @MJAIPromptRuns_RerunFromPromptRunID_RetryStrategy, @MJAIPromptRuns_RerunFromPromptRunID_MaxRetriesConfigured, @MJAIPromptRuns_RerunFromPromptRunID_FinalValidationError, @MJAIPromptRuns_RerunFromPromptRunID_ValidationErrorCount, @MJAIPromptRuns_RerunFromPromptRunID_CommonValidationError, @MJAIPromptRuns_RerunFromPromptRunID_FirstAttemptAt, @MJAIPromptRuns_RerunFromPromptRunID_LastAttemptAt, @MJAIPromptRuns_RerunFromPromptRunID_TotalRetryDurationMS, @MJAIPromptRuns_RerunFromPromptRunID_ValidationAttempts, @MJAIPromptRuns_RerunFromPromptRunID_ValidationSummary, @MJAIPromptRuns_RerunFromPromptRunID_FailoverAttempts, @MJAIPromptRuns_RerunFromPromptRunID_FailoverErrors, @MJAIPromptRuns_RerunFromPromptRunID_FailoverDurations, @MJAIPromptRuns_RerunFromPromptRunID_OriginalModelID, @MJAIPromptRuns_RerunFromPromptRunID_OriginalRequestStartTime, @MJAIPromptRuns_RerunFromPromptRunID_TotalFailoverDuration, @MJAIPromptRuns_RerunFromPromptRunID_RerunFromPromptRunID, @MJAIPromptRuns_RerunFromPromptRunID_ModelSelection, @MJAIPromptRuns_RerunFromPromptRunID_Status, @MJAIPromptRuns_RerunFromPromptRunID_Cancelled, @MJAIPromptRuns_RerunFromPromptRunID_CancellationReason, @MJAIPromptRuns_RerunFromPromptRunID_ModelPowerRank, @MJAIPromptRuns_RerunFromPromptRunID_SelectionStrategy, @MJAIPromptRuns_RerunFromPromptRunID_CacheHit, @MJAIPromptRuns_RerunFromPromptRunID_CacheKey, @MJAIPromptRuns_RerunFromPromptRunID_JudgeID, @MJAIPromptRuns_RerunFromPromptRunID_JudgeScore, @MJAIPromptRuns_RerunFromPromptRunID_WasSelectedResult, @MJAIPromptRuns_RerunFromPromptRunID_StreamingEnabled, @MJAIPromptRuns_RerunFromPromptRunID_FirstTokenTime, @MJAIPromptRuns_RerunFromPromptRunID_ErrorDetails, @MJAIPromptRuns_RerunFromPromptRunID_ChildPromptID, @MJAIPromptRuns_RerunFromPromptRunID_QueueTime, @MJAIPromptRuns_RerunFromPromptRunID_PromptTime, @MJAIPromptRuns_RerunFromPromptRunID_CompletionTime, @MJAIPromptRuns_RerunFromPromptRunID_ModelSpecificResponseDetails, @MJAIPromptRuns_RerunFromPromptRunID_EffortLevel, @MJAIPromptRuns_RerunFromPromptRunID_RunName, @MJAIPromptRuns_RerunFromPromptRunID_Comments, @MJAIPromptRuns_RerunFromPromptRunID_TestRunID, @MJAIPromptRuns_RerunFromPromptRunID_AssistantPrefill, @MJAIPromptRuns_RerunFromPromptRunID_TokensCacheRead, @MJAIPromptRuns_RerunFromPromptRunID_TokensCacheWrite, @MJAIPromptRuns_RerunFromPromptRunID_TokensCacheReadRollup, @MJAIPromptRuns_RerunFromPromptRunID_TokensCacheWriteRollup
+    END
+
+    CLOSE cascade_update_MJAIPromptRuns_RerunFromPromptRunID_cursor
+    DEALLOCATE cascade_update_MJAIPromptRuns_RerunFromPromptRunID_cursor
+    
+    -- Cascade update on AIResultCache using cursor to call spUpdateAIResultCache
+    DECLARE @MJAIResultCache_PromptRunIDID uniqueidentifier
+    DECLARE @MJAIResultCache_PromptRunID_AIPromptID uniqueidentifier
+    DECLARE @MJAIResultCache_PromptRunID_AIModelID uniqueidentifier
+    DECLARE @MJAIResultCache_PromptRunID_RunAt datetimeoffset
+    DECLARE @MJAIResultCache_PromptRunID_PromptText nvarchar(MAX)
+    DECLARE @MJAIResultCache_PromptRunID_ResultText nvarchar(MAX)
+    DECLARE @MJAIResultCache_PromptRunID_Status nvarchar(50)
+    DECLARE @MJAIResultCache_PromptRunID_ExpiredOn datetimeoffset
+    DECLARE @MJAIResultCache_PromptRunID_VendorID uniqueidentifier
+    DECLARE @MJAIResultCache_PromptRunID_AgentID uniqueidentifier
+    DECLARE @MJAIResultCache_PromptRunID_ConfigurationID uniqueidentifier
+    DECLARE @MJAIResultCache_PromptRunID_PromptEmbedding varbinary
+    DECLARE @MJAIResultCache_PromptRunID_PromptRunID uniqueidentifier
+    DECLARE cascade_update_MJAIResultCache_PromptRunID_cursor CURSOR FOR
+        SELECT [ID], [AIPromptID], [AIModelID], [RunAt], [PromptText], [ResultText], [Status], [ExpiredOn], [VendorID], [AgentID], [ConfigurationID], [PromptEmbedding], [PromptRunID]
+        FROM [${flyway:defaultSchema}].[AIResultCache]
+        WHERE [PromptRunID] = @ID
+
+    OPEN cascade_update_MJAIResultCache_PromptRunID_cursor
+    FETCH NEXT FROM cascade_update_MJAIResultCache_PromptRunID_cursor INTO @MJAIResultCache_PromptRunIDID, @MJAIResultCache_PromptRunID_AIPromptID, @MJAIResultCache_PromptRunID_AIModelID, @MJAIResultCache_PromptRunID_RunAt, @MJAIResultCache_PromptRunID_PromptText, @MJAIResultCache_PromptRunID_ResultText, @MJAIResultCache_PromptRunID_Status, @MJAIResultCache_PromptRunID_ExpiredOn, @MJAIResultCache_PromptRunID_VendorID, @MJAIResultCache_PromptRunID_AgentID, @MJAIResultCache_PromptRunID_ConfigurationID, @MJAIResultCache_PromptRunID_PromptEmbedding, @MJAIResultCache_PromptRunID_PromptRunID
+
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        -- Set the FK field to NULL
+        SET @MJAIResultCache_PromptRunID_PromptRunID = NULL
+
+        -- Call the update SP for the related entity
+        EXEC [${flyway:defaultSchema}].[spUpdateAIResultCache] @ID = @MJAIResultCache_PromptRunIDID, @AIPromptID = @MJAIResultCache_PromptRunID_AIPromptID, @AIModelID = @MJAIResultCache_PromptRunID_AIModelID, @RunAt = @MJAIResultCache_PromptRunID_RunAt, @PromptText = @MJAIResultCache_PromptRunID_PromptText, @ResultText = @MJAIResultCache_PromptRunID_ResultText, @Status = @MJAIResultCache_PromptRunID_Status, @ExpiredOn = @MJAIResultCache_PromptRunID_ExpiredOn, @VendorID = @MJAIResultCache_PromptRunID_VendorID, @AgentID = @MJAIResultCache_PromptRunID_AgentID, @ConfigurationID = @MJAIResultCache_PromptRunID_ConfigurationID, @PromptEmbedding = @MJAIResultCache_PromptRunID_PromptEmbedding, @PromptRunID_Clear = 1, @PromptRunID = @MJAIResultCache_PromptRunID_PromptRunID
+
+        FETCH NEXT FROM cascade_update_MJAIResultCache_PromptRunID_cursor INTO @MJAIResultCache_PromptRunIDID, @MJAIResultCache_PromptRunID_AIPromptID, @MJAIResultCache_PromptRunID_AIModelID, @MJAIResultCache_PromptRunID_RunAt, @MJAIResultCache_PromptRunID_PromptText, @MJAIResultCache_PromptRunID_ResultText, @MJAIResultCache_PromptRunID_Status, @MJAIResultCache_PromptRunID_ExpiredOn, @MJAIResultCache_PromptRunID_VendorID, @MJAIResultCache_PromptRunID_AgentID, @MJAIResultCache_PromptRunID_ConfigurationID, @MJAIResultCache_PromptRunID_PromptEmbedding, @MJAIResultCache_PromptRunID_PromptRunID
+    END
+
+    CLOSE cascade_update_MJAIResultCache_PromptRunID_cursor
+    DEALLOCATE cascade_update_MJAIResultCache_PromptRunID_cursor
+    
+    -- Cascade update on ContentItemTag using cursor to call spUpdateContentItemTag
+    DECLARE @MJContentItemTags_AIPromptRunIDID uniqueidentifier
+    DECLARE @MJContentItemTags_AIPromptRunID_ItemID uniqueidentifier
+    DECLARE @MJContentItemTags_AIPromptRunID_Tag nvarchar(200)
+    DECLARE @MJContentItemTags_AIPromptRunID_Weight numeric(5, 4)
+    DECLARE @MJContentItemTags_AIPromptRunID_TagID uniqueidentifier
+    DECLARE @MJContentItemTags_AIPromptRunID_AIPromptRunID uniqueidentifier
+    DECLARE @MJContentItemTags_AIPromptRunID_Reasoning nvarchar(MAX)
+    DECLARE cascade_update_MJContentItemTags_AIPromptRunID_cursor CURSOR FOR
+        SELECT [ID], [ItemID], [Tag], [Weight], [TagID], [AIPromptRunID], [Reasoning]
+        FROM [${flyway:defaultSchema}].[ContentItemTag]
+        WHERE [AIPromptRunID] = @ID
+
+    OPEN cascade_update_MJContentItemTags_AIPromptRunID_cursor
+    FETCH NEXT FROM cascade_update_MJContentItemTags_AIPromptRunID_cursor INTO @MJContentItemTags_AIPromptRunIDID, @MJContentItemTags_AIPromptRunID_ItemID, @MJContentItemTags_AIPromptRunID_Tag, @MJContentItemTags_AIPromptRunID_Weight, @MJContentItemTags_AIPromptRunID_TagID, @MJContentItemTags_AIPromptRunID_AIPromptRunID, @MJContentItemTags_AIPromptRunID_Reasoning
+
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        -- Set the FK field to NULL
+        SET @MJContentItemTags_AIPromptRunID_AIPromptRunID = NULL
+
+        -- Call the update SP for the related entity
+        EXEC [${flyway:defaultSchema}].[spUpdateContentItemTag] @ID = @MJContentItemTags_AIPromptRunIDID, @ItemID = @MJContentItemTags_AIPromptRunID_ItemID, @Tag = @MJContentItemTags_AIPromptRunID_Tag, @Weight = @MJContentItemTags_AIPromptRunID_Weight, @TagID = @MJContentItemTags_AIPromptRunID_TagID, @AIPromptRunID_Clear = 1, @AIPromptRunID = @MJContentItemTags_AIPromptRunID_AIPromptRunID, @Reasoning = @MJContentItemTags_AIPromptRunID_Reasoning
+
+        FETCH NEXT FROM cascade_update_MJContentItemTags_AIPromptRunID_cursor INTO @MJContentItemTags_AIPromptRunIDID, @MJContentItemTags_AIPromptRunID_ItemID, @MJContentItemTags_AIPromptRunID_Tag, @MJContentItemTags_AIPromptRunID_Weight, @MJContentItemTags_AIPromptRunID_TagID, @MJContentItemTags_AIPromptRunID_AIPromptRunID, @MJContentItemTags_AIPromptRunID_Reasoning
+    END
+
+    CLOSE cascade_update_MJContentItemTags_AIPromptRunID_cursor
+    DEALLOCATE cascade_update_MJContentItemTags_AIPromptRunID_cursor
+    
+    -- Cascade delete from ContentProcessRunPromptRun using cursor to call spDeleteContentProcessRunPromptRun
+    DECLARE @MJContentProcessRunPromptRuns_AIPromptRunIDID uniqueidentifier
+    DECLARE cascade_delete_MJContentProcessRunPromptRuns_AIPromptRunID_cursor CURSOR FOR 
+        SELECT [ID]
+        FROM [${flyway:defaultSchema}].[ContentProcessRunPromptRun]
+        WHERE [AIPromptRunID] = @ID
+    
+    OPEN cascade_delete_MJContentProcessRunPromptRuns_AIPromptRunID_cursor
+    FETCH NEXT FROM cascade_delete_MJContentProcessRunPromptRuns_AIPromptRunID_cursor INTO @MJContentProcessRunPromptRuns_AIPromptRunIDID
+    
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        EXEC [${flyway:defaultSchema}].[spDeleteContentProcessRunPromptRun] @ID = @MJContentProcessRunPromptRuns_AIPromptRunIDID
+        
+        FETCH NEXT FROM cascade_delete_MJContentProcessRunPromptRuns_AIPromptRunID_cursor INTO @MJContentProcessRunPromptRuns_AIPromptRunIDID
+    END
+    
+    CLOSE cascade_delete_MJContentProcessRunPromptRuns_AIPromptRunID_cursor
+    DEALLOCATE cascade_delete_MJContentProcessRunPromptRuns_AIPromptRunID_cursor
+    
+    -- Cascade update on DuplicateRunDetailMatch using cursor to call spUpdateDuplicateRunDetailMatch
+    DECLARE @MJDuplicateRunDetailMatches_AIPromptRunIDID uniqueidentifier
+    DECLARE @MJDuplicateRunDetailMatches_AIPromptRunID_DuplicateRunDetailID uniqueidentifier
+    DECLARE @MJDuplicateRunDetailMatches_AIPromptRunID_MatchSource nvarchar(20)
+    DECLARE @MJDuplicateRunDetailMatches_AIPromptRunID_MatchRecordID nvarchar(500)
+    DECLARE @MJDuplicateRunDetailMatches_AIPromptRunID_MatchProbability numeric(12, 11)
+    DECLARE @MJDuplicateRunDetailMatches_AIPromptRunID_MatchedAt datetimeoffset
+    DECLARE @MJDuplicateRunDetailMatches_AIPromptRunID_Action nvarchar(20)
+    DECLARE @MJDuplicateRunDetailMatches_AIPromptRunID_ApprovalStatus nvarchar(20)
+    DECLARE @MJDuplicateRunDetailMatches_AIPromptRunID_RecordMergeLogID uniqueidentifier
+    DECLARE @MJDuplicateRunDetailMatches_AIPromptRunID_MergeStatus nvarchar(20)
+    DECLARE @MJDuplicateRunDetailMatches_AIPromptRunID_MergedAt datetimeoffset
+    DECLARE @MJDuplicateRunDetailMatches_AIPromptRunID_RecordMetadata nvarchar(MAX)
+    DECLARE @MJDuplicateRunDetailMatches_AIPromptRunID_AIAgentRunID uniqueidentifier
+    DECLARE @MJDuplicateRunDetailMatches_AIPromptRunID_AIPromptRunID uniqueidentifier
+    DECLARE @MJDuplicateRunDetailMatches_AIPromptRunID_LLMRecommendation nvarchar(20)
+    DECLARE @MJDuplicateRunDetailMatches_AIPromptRunID_LLMConfidence numeric(12, 11)
+    DECLARE @MJDuplicateRunDetailMatches_AIPromptRunID_LLMReasoning nvarchar(MAX)
+    DECLARE @MJDuplicateRunDetailMatches_AIPromptRunID_LLMProposedSurvivorRecordID nvarchar(500)
+    DECLARE @MJDuplicateRunDetailMatches_AIPromptRunID_LLMProposedFieldMap nvarchar(MAX)
+    DECLARE cascade_update_MJDuplicateRunDetailMatches_AIPromptRunID_cursor CURSOR FOR
+        SELECT [ID], [DuplicateRunDetailID], [MatchSource], [MatchRecordID], [MatchProbability], [MatchedAt], [Action], [ApprovalStatus], [RecordMergeLogID], [MergeStatus], [MergedAt], [RecordMetadata], [AIAgentRunID], [AIPromptRunID], [LLMRecommendation], [LLMConfidence], [LLMReasoning], [LLMProposedSurvivorRecordID], [LLMProposedFieldMap]
+        FROM [${flyway:defaultSchema}].[DuplicateRunDetailMatch]
+        WHERE [AIPromptRunID] = @ID
+
+    OPEN cascade_update_MJDuplicateRunDetailMatches_AIPromptRunID_cursor
+    FETCH NEXT FROM cascade_update_MJDuplicateRunDetailMatches_AIPromptRunID_cursor INTO @MJDuplicateRunDetailMatches_AIPromptRunIDID, @MJDuplicateRunDetailMatches_AIPromptRunID_DuplicateRunDetailID, @MJDuplicateRunDetailMatches_AIPromptRunID_MatchSource, @MJDuplicateRunDetailMatches_AIPromptRunID_MatchRecordID, @MJDuplicateRunDetailMatches_AIPromptRunID_MatchProbability, @MJDuplicateRunDetailMatches_AIPromptRunID_MatchedAt, @MJDuplicateRunDetailMatches_AIPromptRunID_Action, @MJDuplicateRunDetailMatches_AIPromptRunID_ApprovalStatus, @MJDuplicateRunDetailMatches_AIPromptRunID_RecordMergeLogID, @MJDuplicateRunDetailMatches_AIPromptRunID_MergeStatus, @MJDuplicateRunDetailMatches_AIPromptRunID_MergedAt, @MJDuplicateRunDetailMatches_AIPromptRunID_RecordMetadata, @MJDuplicateRunDetailMatches_AIPromptRunID_AIAgentRunID, @MJDuplicateRunDetailMatches_AIPromptRunID_AIPromptRunID, @MJDuplicateRunDetailMatches_AIPromptRunID_LLMRecommendation, @MJDuplicateRunDetailMatches_AIPromptRunID_LLMConfidence, @MJDuplicateRunDetailMatches_AIPromptRunID_LLMReasoning, @MJDuplicateRunDetailMatches_AIPromptRunID_LLMProposedSurvivorRecordID, @MJDuplicateRunDetailMatches_AIPromptRunID_LLMProposedFieldMap
+
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        -- Set the FK field to NULL
+        SET @MJDuplicateRunDetailMatches_AIPromptRunID_AIPromptRunID = NULL
+
+        -- Call the update SP for the related entity
+        EXEC [${flyway:defaultSchema}].[spUpdateDuplicateRunDetailMatch] @ID = @MJDuplicateRunDetailMatches_AIPromptRunIDID, @DuplicateRunDetailID = @MJDuplicateRunDetailMatches_AIPromptRunID_DuplicateRunDetailID, @MatchSource = @MJDuplicateRunDetailMatches_AIPromptRunID_MatchSource, @MatchRecordID = @MJDuplicateRunDetailMatches_AIPromptRunID_MatchRecordID, @MatchProbability = @MJDuplicateRunDetailMatches_AIPromptRunID_MatchProbability, @MatchedAt = @MJDuplicateRunDetailMatches_AIPromptRunID_MatchedAt, @Action = @MJDuplicateRunDetailMatches_AIPromptRunID_Action, @ApprovalStatus = @MJDuplicateRunDetailMatches_AIPromptRunID_ApprovalStatus, @RecordMergeLogID = @MJDuplicateRunDetailMatches_AIPromptRunID_RecordMergeLogID, @MergeStatus = @MJDuplicateRunDetailMatches_AIPromptRunID_MergeStatus, @MergedAt = @MJDuplicateRunDetailMatches_AIPromptRunID_MergedAt, @RecordMetadata = @MJDuplicateRunDetailMatches_AIPromptRunID_RecordMetadata, @AIAgentRunID = @MJDuplicateRunDetailMatches_AIPromptRunID_AIAgentRunID, @AIPromptRunID_Clear = 1, @AIPromptRunID = @MJDuplicateRunDetailMatches_AIPromptRunID_AIPromptRunID, @LLMRecommendation = @MJDuplicateRunDetailMatches_AIPromptRunID_LLMRecommendation, @LLMConfidence = @MJDuplicateRunDetailMatches_AIPromptRunID_LLMConfidence, @LLMReasoning = @MJDuplicateRunDetailMatches_AIPromptRunID_LLMReasoning, @LLMProposedSurvivorRecordID = @MJDuplicateRunDetailMatches_AIPromptRunID_LLMProposedSurvivorRecordID, @LLMProposedFieldMap = @MJDuplicateRunDetailMatches_AIPromptRunID_LLMProposedFieldMap
+
+        FETCH NEXT FROM cascade_update_MJDuplicateRunDetailMatches_AIPromptRunID_cursor INTO @MJDuplicateRunDetailMatches_AIPromptRunIDID, @MJDuplicateRunDetailMatches_AIPromptRunID_DuplicateRunDetailID, @MJDuplicateRunDetailMatches_AIPromptRunID_MatchSource, @MJDuplicateRunDetailMatches_AIPromptRunID_MatchRecordID, @MJDuplicateRunDetailMatches_AIPromptRunID_MatchProbability, @MJDuplicateRunDetailMatches_AIPromptRunID_MatchedAt, @MJDuplicateRunDetailMatches_AIPromptRunID_Action, @MJDuplicateRunDetailMatches_AIPromptRunID_ApprovalStatus, @MJDuplicateRunDetailMatches_AIPromptRunID_RecordMergeLogID, @MJDuplicateRunDetailMatches_AIPromptRunID_MergeStatus, @MJDuplicateRunDetailMatches_AIPromptRunID_MergedAt, @MJDuplicateRunDetailMatches_AIPromptRunID_RecordMetadata, @MJDuplicateRunDetailMatches_AIPromptRunID_AIAgentRunID, @MJDuplicateRunDetailMatches_AIPromptRunID_AIPromptRunID, @MJDuplicateRunDetailMatches_AIPromptRunID_LLMRecommendation, @MJDuplicateRunDetailMatches_AIPromptRunID_LLMConfidence, @MJDuplicateRunDetailMatches_AIPromptRunID_LLMReasoning, @MJDuplicateRunDetailMatches_AIPromptRunID_LLMProposedSurvivorRecordID, @MJDuplicateRunDetailMatches_AIPromptRunID_LLMProposedFieldMap
+    END
+
+    CLOSE cascade_update_MJDuplicateRunDetailMatches_AIPromptRunID_cursor
+    DEALLOCATE cascade_update_MJDuplicateRunDetailMatches_AIPromptRunID_cursor
+    
+    -- Cascade update on UserRoutineRun using cursor to call spUpdateUserRoutineRun
+    DECLARE @MJUserRoutineRuns_PromptRunIDID uniqueidentifier
+    DECLARE @MJUserRoutineRuns_PromptRunID_RoutineID uniqueidentifier
+    DECLARE @MJUserRoutineRuns_PromptRunID_StartedAt datetimeoffset
+    DECLARE @MJUserRoutineRuns_PromptRunID_CompletedAt datetimeoffset
+    DECLARE @MJUserRoutineRuns_PromptRunID_Status nvarchar(20)
+    DECLARE @MJUserRoutineRuns_PromptRunID_AgentRunID uniqueidentifier
+    DECLARE @MJUserRoutineRuns_PromptRunID_PromptRunID uniqueidentifier
+    DECLARE @MJUserRoutineRuns_PromptRunID_ActionExecutionLogID uniqueidentifier
+    DECLARE @MJUserRoutineRuns_PromptRunID_ResultSummary nvarchar(MAX)
+    DECLARE @MJUserRoutineRuns_PromptRunID_ResultHash nvarchar(100)
+    DECLARE @MJUserRoutineRuns_PromptRunID_NotificationSent bit
+    DECLARE @MJUserRoutineRuns_PromptRunID_ErrorMessage nvarchar(MAX)
+    DECLARE cascade_update_MJUserRoutineRuns_PromptRunID_cursor CURSOR FOR
+        SELECT [ID], [RoutineID], [StartedAt], [CompletedAt], [Status], [AgentRunID], [PromptRunID], [ActionExecutionLogID], [ResultSummary], [ResultHash], [NotificationSent], [ErrorMessage]
+        FROM [${flyway:defaultSchema}].[UserRoutineRun]
+        WHERE [PromptRunID] = @ID
+
+    OPEN cascade_update_MJUserRoutineRuns_PromptRunID_cursor
+    FETCH NEXT FROM cascade_update_MJUserRoutineRuns_PromptRunID_cursor INTO @MJUserRoutineRuns_PromptRunIDID, @MJUserRoutineRuns_PromptRunID_RoutineID, @MJUserRoutineRuns_PromptRunID_StartedAt, @MJUserRoutineRuns_PromptRunID_CompletedAt, @MJUserRoutineRuns_PromptRunID_Status, @MJUserRoutineRuns_PromptRunID_AgentRunID, @MJUserRoutineRuns_PromptRunID_PromptRunID, @MJUserRoutineRuns_PromptRunID_ActionExecutionLogID, @MJUserRoutineRuns_PromptRunID_ResultSummary, @MJUserRoutineRuns_PromptRunID_ResultHash, @MJUserRoutineRuns_PromptRunID_NotificationSent, @MJUserRoutineRuns_PromptRunID_ErrorMessage
+
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        -- Set the FK field to NULL
+        SET @MJUserRoutineRuns_PromptRunID_PromptRunID = NULL
+
+        -- Call the update SP for the related entity
+        EXEC [${flyway:defaultSchema}].[spUpdateUserRoutineRun] @ID = @MJUserRoutineRuns_PromptRunIDID, @RoutineID = @MJUserRoutineRuns_PromptRunID_RoutineID, @StartedAt = @MJUserRoutineRuns_PromptRunID_StartedAt, @CompletedAt = @MJUserRoutineRuns_PromptRunID_CompletedAt, @Status = @MJUserRoutineRuns_PromptRunID_Status, @AgentRunID = @MJUserRoutineRuns_PromptRunID_AgentRunID, @PromptRunID_Clear = 1, @PromptRunID = @MJUserRoutineRuns_PromptRunID_PromptRunID, @ActionExecutionLogID = @MJUserRoutineRuns_PromptRunID_ActionExecutionLogID, @ResultSummary = @MJUserRoutineRuns_PromptRunID_ResultSummary, @ResultHash = @MJUserRoutineRuns_PromptRunID_ResultHash, @NotificationSent = @MJUserRoutineRuns_PromptRunID_NotificationSent, @ErrorMessage = @MJUserRoutineRuns_PromptRunID_ErrorMessage
+
+        FETCH NEXT FROM cascade_update_MJUserRoutineRuns_PromptRunID_cursor INTO @MJUserRoutineRuns_PromptRunIDID, @MJUserRoutineRuns_PromptRunID_RoutineID, @MJUserRoutineRuns_PromptRunID_StartedAt, @MJUserRoutineRuns_PromptRunID_CompletedAt, @MJUserRoutineRuns_PromptRunID_Status, @MJUserRoutineRuns_PromptRunID_AgentRunID, @MJUserRoutineRuns_PromptRunID_PromptRunID, @MJUserRoutineRuns_PromptRunID_ActionExecutionLogID, @MJUserRoutineRuns_PromptRunID_ResultSummary, @MJUserRoutineRuns_PromptRunID_ResultHash, @MJUserRoutineRuns_PromptRunID_NotificationSent, @MJUserRoutineRuns_PromptRunID_ErrorMessage
+    END
+
+    CLOSE cascade_update_MJUserRoutineRuns_PromptRunID_cursor
+    DEALLOCATE cascade_update_MJUserRoutineRuns_PromptRunID_cursor
+    
+
+    DELETE FROM
+        [${flyway:defaultSchema}].[AIPromptRun]
+    WHERE
+        [ID] = @ID
+
+
+    -- Check if the delete was successful
+    IF @@ROWCOUNT = 0
+        SELECT NULL AS [ID] -- Return NULL for all primary key fields to indicate no record was deleted
+    ELSE
+        SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIPromptRun] TO [cdp_Developer], [cdp_Integration];
+
+/* spDelete Permissions for MJ: AI Prompt Runs */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIPromptRun] TO [cdp_Developer], [cdp_Integration];
 
 /* spDelete SQL for MJ: AI Agent Runs */
 -----------------------------------------------------------------
@@ -5401,19 +3011,19 @@ BEGIN
     DECLARE @MJUserRoutineRuns_AgentRunID_CompletedAt datetimeoffset
     DECLARE @MJUserRoutineRuns_AgentRunID_Status nvarchar(20)
     DECLARE @MJUserRoutineRuns_AgentRunID_AgentRunID uniqueidentifier
-    DECLARE @MJUserRoutineRuns_AgentRunID_TokensUsed int
-    DECLARE @MJUserRoutineRuns_AgentRunID_Cost decimal(18, 6)
+    DECLARE @MJUserRoutineRuns_AgentRunID_PromptRunID uniqueidentifier
+    DECLARE @MJUserRoutineRuns_AgentRunID_ActionExecutionLogID uniqueidentifier
     DECLARE @MJUserRoutineRuns_AgentRunID_ResultSummary nvarchar(MAX)
     DECLARE @MJUserRoutineRuns_AgentRunID_ResultHash nvarchar(100)
     DECLARE @MJUserRoutineRuns_AgentRunID_NotificationSent bit
     DECLARE @MJUserRoutineRuns_AgentRunID_ErrorMessage nvarchar(MAX)
     DECLARE cascade_update_MJUserRoutineRuns_AgentRunID_cursor CURSOR FOR
-        SELECT [ID], [RoutineID], [StartedAt], [CompletedAt], [Status], [AgentRunID], [TokensUsed], [Cost], [ResultSummary], [ResultHash], [NotificationSent], [ErrorMessage]
+        SELECT [ID], [RoutineID], [StartedAt], [CompletedAt], [Status], [AgentRunID], [PromptRunID], [ActionExecutionLogID], [ResultSummary], [ResultHash], [NotificationSent], [ErrorMessage]
         FROM [${flyway:defaultSchema}].[UserRoutineRun]
         WHERE [AgentRunID] = @ID
 
     OPEN cascade_update_MJUserRoutineRuns_AgentRunID_cursor
-    FETCH NEXT FROM cascade_update_MJUserRoutineRuns_AgentRunID_cursor INTO @MJUserRoutineRuns_AgentRunIDID, @MJUserRoutineRuns_AgentRunID_RoutineID, @MJUserRoutineRuns_AgentRunID_StartedAt, @MJUserRoutineRuns_AgentRunID_CompletedAt, @MJUserRoutineRuns_AgentRunID_Status, @MJUserRoutineRuns_AgentRunID_AgentRunID, @MJUserRoutineRuns_AgentRunID_TokensUsed, @MJUserRoutineRuns_AgentRunID_Cost, @MJUserRoutineRuns_AgentRunID_ResultSummary, @MJUserRoutineRuns_AgentRunID_ResultHash, @MJUserRoutineRuns_AgentRunID_NotificationSent, @MJUserRoutineRuns_AgentRunID_ErrorMessage
+    FETCH NEXT FROM cascade_update_MJUserRoutineRuns_AgentRunID_cursor INTO @MJUserRoutineRuns_AgentRunIDID, @MJUserRoutineRuns_AgentRunID_RoutineID, @MJUserRoutineRuns_AgentRunID_StartedAt, @MJUserRoutineRuns_AgentRunID_CompletedAt, @MJUserRoutineRuns_AgentRunID_Status, @MJUserRoutineRuns_AgentRunID_AgentRunID, @MJUserRoutineRuns_AgentRunID_PromptRunID, @MJUserRoutineRuns_AgentRunID_ActionExecutionLogID, @MJUserRoutineRuns_AgentRunID_ResultSummary, @MJUserRoutineRuns_AgentRunID_ResultHash, @MJUserRoutineRuns_AgentRunID_NotificationSent, @MJUserRoutineRuns_AgentRunID_ErrorMessage
 
     WHILE @@FETCH_STATUS = 0
     BEGIN
@@ -5421,9 +3031,9 @@ BEGIN
         SET @MJUserRoutineRuns_AgentRunID_AgentRunID = NULL
 
         -- Call the update SP for the related entity
-        EXEC [${flyway:defaultSchema}].[spUpdateUserRoutineRun] @ID = @MJUserRoutineRuns_AgentRunIDID, @RoutineID = @MJUserRoutineRuns_AgentRunID_RoutineID, @StartedAt = @MJUserRoutineRuns_AgentRunID_StartedAt, @CompletedAt = @MJUserRoutineRuns_AgentRunID_CompletedAt, @Status = @MJUserRoutineRuns_AgentRunID_Status, @AgentRunID_Clear = 1, @AgentRunID = @MJUserRoutineRuns_AgentRunID_AgentRunID, @TokensUsed = @MJUserRoutineRuns_AgentRunID_TokensUsed, @Cost = @MJUserRoutineRuns_AgentRunID_Cost, @ResultSummary = @MJUserRoutineRuns_AgentRunID_ResultSummary, @ResultHash = @MJUserRoutineRuns_AgentRunID_ResultHash, @NotificationSent = @MJUserRoutineRuns_AgentRunID_NotificationSent, @ErrorMessage = @MJUserRoutineRuns_AgentRunID_ErrorMessage
+        EXEC [${flyway:defaultSchema}].[spUpdateUserRoutineRun] @ID = @MJUserRoutineRuns_AgentRunIDID, @RoutineID = @MJUserRoutineRuns_AgentRunID_RoutineID, @StartedAt = @MJUserRoutineRuns_AgentRunID_StartedAt, @CompletedAt = @MJUserRoutineRuns_AgentRunID_CompletedAt, @Status = @MJUserRoutineRuns_AgentRunID_Status, @AgentRunID_Clear = 1, @AgentRunID = @MJUserRoutineRuns_AgentRunID_AgentRunID, @PromptRunID = @MJUserRoutineRuns_AgentRunID_PromptRunID, @ActionExecutionLogID = @MJUserRoutineRuns_AgentRunID_ActionExecutionLogID, @ResultSummary = @MJUserRoutineRuns_AgentRunID_ResultSummary, @ResultHash = @MJUserRoutineRuns_AgentRunID_ResultHash, @NotificationSent = @MJUserRoutineRuns_AgentRunID_NotificationSent, @ErrorMessage = @MJUserRoutineRuns_AgentRunID_ErrorMessage
 
-        FETCH NEXT FROM cascade_update_MJUserRoutineRuns_AgentRunID_cursor INTO @MJUserRoutineRuns_AgentRunIDID, @MJUserRoutineRuns_AgentRunID_RoutineID, @MJUserRoutineRuns_AgentRunID_StartedAt, @MJUserRoutineRuns_AgentRunID_CompletedAt, @MJUserRoutineRuns_AgentRunID_Status, @MJUserRoutineRuns_AgentRunID_AgentRunID, @MJUserRoutineRuns_AgentRunID_TokensUsed, @MJUserRoutineRuns_AgentRunID_Cost, @MJUserRoutineRuns_AgentRunID_ResultSummary, @MJUserRoutineRuns_AgentRunID_ResultHash, @MJUserRoutineRuns_AgentRunID_NotificationSent, @MJUserRoutineRuns_AgentRunID_ErrorMessage
+        FETCH NEXT FROM cascade_update_MJUserRoutineRuns_AgentRunID_cursor INTO @MJUserRoutineRuns_AgentRunIDID, @MJUserRoutineRuns_AgentRunID_RoutineID, @MJUserRoutineRuns_AgentRunID_StartedAt, @MJUserRoutineRuns_AgentRunID_CompletedAt, @MJUserRoutineRuns_AgentRunID_Status, @MJUserRoutineRuns_AgentRunID_AgentRunID, @MJUserRoutineRuns_AgentRunID_PromptRunID, @MJUserRoutineRuns_AgentRunID_ActionExecutionLogID, @MJUserRoutineRuns_AgentRunID_ResultSummary, @MJUserRoutineRuns_AgentRunID_ResultHash, @MJUserRoutineRuns_AgentRunID_NotificationSent, @MJUserRoutineRuns_AgentRunID_ErrorMessage
     END
 
     CLOSE cascade_update_MJUserRoutineRuns_AgentRunID_cursor
@@ -5451,7 +3061,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIAgentRun] TO [cdp_Develope
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'd41d22cf-f119-4b9e-b5e2-527fd1e59aea' OR (EntityID = '79DEEB22-4476-4081-A66D-65EA58D1DF6E' AND Name = 'Routine')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'fdbba871-a2c4-4fe8-b5a5-fe8be9ef2676' OR (EntityID = '79DEEB22-4476-4081-A66D-65EA58D1DF6E' AND Name = '__mj_CreatedAt')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -5484,21 +3094,21 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIAgentRun] TO [cdp_Develope
          )
          VALUES
          (
-            'd41d22cf-f119-4b9e-b5e2-527fd1e59aea',
+            'fdbba871-a2c4-4fe8-b5a5-fe8be9ef2676',
             '79DEEB22-4476-4081-A66D-65EA58D1DF6E', -- Entity: MJ: User Routine Runs
-            100029,
-            'Routine',
-            'Routine',
+            100027,
+            '__mj_CreatedAt',
+            'Created At',
             NULL,
-            'nvarchar',
-            510,
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            0,
+            'getutcdate()',
             0,
             0,
             0,
-            NULL,
-            0,
-            0,
-            1,
             0,
             NULL,
             NULL,
@@ -5516,7 +3126,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIAgentRun] TO [cdp_Develope
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '4ec40307-758c-44ef-991b-59e8fbd18205' OR (EntityID = '79DEEB22-4476-4081-A66D-65EA58D1DF6E' AND Name = 'AgentRun')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '4e70709c-051e-41ed-899d-6160e43240bd' OR (EntityID = '79DEEB22-4476-4081-A66D-65EA58D1DF6E' AND Name = '__mj_UpdatedAt')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -5549,11 +3159,76 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIAgentRun] TO [cdp_Develope
          )
          VALUES
          (
-            '4ec40307-758c-44ef-991b-59e8fbd18205',
+            '4e70709c-051e-41ed-899d-6160e43240bd',
             '79DEEB22-4476-4081-A66D-65EA58D1DF6E', -- Entity: MJ: User Routine Runs
-            100030,
-            'AgentRun',
-            'Agent Run',
+            100028,
+            '__mj_UpdatedAt',
+            'Updated At',
+            NULL,
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            0,
+            'getutcdate()',
+            0,
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b9821de3-e8f9-4337-98e1-7ffa27a0059e' OR (EntityID = '79DEEB22-4476-4081-A66D-65EA58D1DF6E' AND Name = 'PromptRun')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'b9821de3-e8f9-4337-98e1-7ffa27a0059e',
+            '79DEEB22-4476-4081-A66D-65EA58D1DF6E', -- Entity: MJ: User Routine Runs
+            100031,
+            'PromptRun',
+            'Prompt Run',
             NULL,
             'nvarchar',
             510,
@@ -5581,7 +3256,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIAgentRun] TO [cdp_Develope
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'd0febeb0-4a65-4993-a436-dcbe392200c9' OR (EntityID = '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF' AND Name = 'User')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'aa7bd68a-9265-416f-ba06-3d65720ac4f7' OR (EntityID = '79DEEB22-4476-4081-A66D-65EA58D1DF6E' AND Name = 'ActionExecutionLog')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -5614,17 +3289,17 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIAgentRun] TO [cdp_Develope
          )
          VALUES
          (
-            'd0febeb0-4a65-4993-a436-dcbe392200c9',
-            '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF', -- Entity: MJ: User Routines
-            100047,
-            'User',
-            'User',
+            'aa7bd68a-9265-416f-ba06-3d65720ac4f7',
+            '79DEEB22-4476-4081-A66D-65EA58D1DF6E', -- Entity: MJ: User Routine Runs
+            100032,
+            'ActionExecutionLog',
+            'Action Execution Log',
             NULL,
             'nvarchar',
-            200,
+            850,
             0,
             0,
-            0,
+            1,
             NULL,
             0,
             0,
@@ -5646,7 +3321,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIAgentRun] TO [cdp_Develope
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '68f556cd-ddf5-4d1b-9a94-f1d37e32f184' OR (EntityID = '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF' AND Name = 'Environment')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '18956989-4d61-4ce1-8595-fbb84e63b64e' OR (EntityID = '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF' AND Name = '__mj_CreatedAt')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -5679,11 +3354,141 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIAgentRun] TO [cdp_Develope
          )
          VALUES
          (
-            '68f556cd-ddf5-4d1b-9a94-f1d37e32f184',
+            '18956989-4d61-4ce1-8595-fbb84e63b64e',
             '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF', -- Entity: MJ: User Routines
-            100048,
-            'Environment',
-            'Environment',
+            100051,
+            '__mj_CreatedAt',
+            'Created At',
+            NULL,
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            0,
+            'getutcdate()',
+            0,
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '64ebf933-d88f-47e8-aefe-258ffbb6679f' OR (EntityID = '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF' AND Name = '__mj_UpdatedAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '64ebf933-d88f-47e8-aefe-258ffbb6679f',
+            '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF', -- Entity: MJ: User Routines
+            100052,
+            '__mj_UpdatedAt',
+            'Updated At',
+            NULL,
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            0,
+            'getutcdate()',
+            0,
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '3234308e-91e6-4f14-af68-c9e5f93ec52e' OR (EntityID = '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF' AND Name = 'NotificationTemplate')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '3234308e-91e6-4f14-af68-c9e5f93ec52e',
+            '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF', -- Entity: MJ: User Routines
+            100055,
+            'NotificationTemplate',
+            'Notification Template',
             NULL,
             'nvarchar',
             510,
@@ -5711,7 +3516,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIAgentRun] TO [cdp_Develope
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '85a026f9-9207-4e41-bd74-598fd81dee37' OR (EntityID = 'D16D839C-EB7C-4B9D-BA03-F33ED00F984D' AND Name = 'Routine')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '3b8f2d15-4d0e-4b04-815b-43cf94298579' OR (EntityID = 'D16D839C-EB7C-4B9D-BA03-F33ED00F984D' AND Name = '__mj_CreatedAt')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -5744,21 +3549,21 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIAgentRun] TO [cdp_Develope
          )
          VALUES
          (
-            '85a026f9-9207-4e41-bd74-598fd81dee37',
+            '3b8f2d15-4d0e-4b04-815b-43cf94298579',
             'D16D839C-EB7C-4B9D-BA03-F33ED00F984D', -- Entity: MJ: User Routine Recipients
             100015,
-            'Routine',
-            'Routine',
+            '__mj_CreatedAt',
+            'Created At',
             NULL,
-            'nvarchar',
-            510,
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            0,
+            'getutcdate()',
             0,
             0,
             0,
-            NULL,
-            0,
-            0,
-            1,
             0,
             NULL,
             NULL,
@@ -5776,7 +3581,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIAgentRun] TO [cdp_Develope
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '5b5fb11e-06d7-49e4-9b46-90f22b2fee99' OR (EntityID = 'D16D839C-EB7C-4B9D-BA03-F33ED00F984D' AND Name = 'User')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '070ac53d-d36b-4ce2-b7fa-ec6347fc91f4' OR (EntityID = 'D16D839C-EB7C-4B9D-BA03-F33ED00F984D' AND Name = '__mj_UpdatedAt')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -5809,21 +3614,21 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIAgentRun] TO [cdp_Develope
          )
          VALUES
          (
-            '5b5fb11e-06d7-49e4-9b46-90f22b2fee99',
+            '070ac53d-d36b-4ce2-b7fa-ec6347fc91f4',
             'D16D839C-EB7C-4B9D-BA03-F33ED00F984D', -- Entity: MJ: User Routine Recipients
             100016,
-            'User',
-            'User',
+            '__mj_UpdatedAt',
+            'Updated At',
             NULL,
-            'nvarchar',
-            200,
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            0,
+            'getutcdate()',
             0,
             0,
-            1,
-            NULL,
             0,
-            0,
-            1,
             0,
             NULL,
             NULL,
@@ -5842,135 +3647,132 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIAgentRun] TO [cdp_Develope
 /* Set field properties for entity */
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET IsNameField = 1
-               WHERE ID = '432D0046-A581-4EB6-A96C-7FD3EAD95C46'
-               AND AutoUpdateIsNameField = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = '432D0046-A581-4EB6-A96C-7FD3EAD95C46'
+               WHERE ID = 'C69FDFA3-EAF1-4F84-861B-37B4E6FC7A97'
                AND AutoUpdateDefaultInView = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET DefaultInView = 1
-               WHERE ID = 'C5AC3CA5-F63F-430D-AEC3-CA3DEF51E502'
-               AND AutoUpdateDefaultInView = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET DefaultInView = 1
-               WHERE ID = '85A026F9-9207-4E41-BD74-598FD81DEE37'
-               AND AutoUpdateDefaultInView = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET DefaultInView = 1
-               WHERE ID = '5B5FB11E-06D7-49E4-9B46-90F22B2FEE99'
-               AND AutoUpdateDefaultInView = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '432D0046-A581-4EB6-A96C-7FD3EAD95C46'
-               AND AutoUpdateIncludeInUserSearchAPI = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '5B5FB11E-06D7-49E4-9B46-90F22B2FEE99'
-               AND AutoUpdateIncludeInUserSearchAPI = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET UserSearchPredicateAPI = 'BeginsWith'
-               WHERE ID = '5B5FB11E-06D7-49E4-9B46-90F22B2FEE99'
-               AND AutoUpdateUserSearchPredicate = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET UserSearchPredicateAPI = 'Exact'
-               WHERE ID = '432D0046-A581-4EB6-A96C-7FD3EAD95C46'
-               AND AutoUpdateUserSearchPredicate = 1;
 
 /* Set field properties for entity */
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = 'F5382CD1-8E8E-4FFA-9C34-51441701FAAF'
-               AND AutoUpdateDefaultInView = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET DefaultInView = 1
-               WHERE ID = '24BF1A72-E38E-485D-B7AE-AE860A52DE8E'
-               AND AutoUpdateDefaultInView = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET DefaultInView = 1
-               WHERE ID = '90BF74B0-BD70-406C-BF65-672F18325A15'
-               AND AutoUpdateDefaultInView = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET DefaultInView = 1
-               WHERE ID = '871CA82B-1308-4576-8D78-9891B2E692E8'
-               AND AutoUpdateDefaultInView = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET DefaultInView = 1
-               WHERE ID = '8975C433-ED4C-45DA-9A0C-960B2FF28498'
-               AND AutoUpdateDefaultInView = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET DefaultInView = 1
-               WHERE ID = 'D41D22CF-F119-4B9E-B5E2-527FD1E59AEA'
+               WHERE ID = '00EB6327-247E-4806-BE34-B636C3C100DD'
                AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET IncludeInUserSearchAPI = 1
-               WHERE ID = '90BF74B0-BD70-406C-BF65-672F18325A15'
+               WHERE ID = '00EB6327-247E-4806-BE34-B636C3C100DD'
                AND AutoUpdateIncludeInUserSearchAPI = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = 'D41D22CF-F119-4B9E-B5E2-527FD1E59AEA'
-               AND AutoUpdateIncludeInUserSearchAPI = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET UserSearchPredicateAPI = 'Exact'
-               WHERE ID = '90BF74B0-BD70-406C-BF65-672F18325A15'
-               AND AutoUpdateUserSearchPredicate = 1;
-
-/* Set field properties for entity */
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET DefaultInView = 1
-               WHERE ID = 'A806C9AF-6745-4056-B775-F93FF395CD5F'
-               AND AutoUpdateDefaultInView = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET DefaultInView = 1
-               WHERE ID = '3EC61FFC-11A9-4336-94EF-AB00E5633F5D'
-               AND AutoUpdateDefaultInView = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET DefaultInView = 1
-               WHERE ID = 'EDB8DC83-1F84-49C3-913E-D7F97793218A'
-               AND AutoUpdateDefaultInView = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET DefaultInView = 1
-               WHERE ID = '4EAF86C3-EFDD-4062-A32D-3A1A865C6F6C'
-               AND AutoUpdateDefaultInView = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET DefaultInView = 1
-               WHERE ID = '30486EAB-F8D4-41C2-BBF3-1B1BCCE51595'
-               AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET UserSearchPredicateAPI = 'BeginsWith'
-               WHERE ID = '5EDA642F-47FD-4904-9B24-06F8713A1F44'
+               WHERE ID = 'D41D22CF-F119-4B9E-B5E2-527FD1E59AEA'
                AND AutoUpdateUserSearchPredicate = 1;
 
-/* Set categories for 16 fields */
+/* Set categories for 10 fields */
+
+-- UPDATE Entity Field Category Info MJ: User Routine Recipients.ID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'F8845D00-3412-4BA5-9503-B11105660ED2' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: User Routine Recipients.__mj_CreatedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'System Metadata',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '3B8F2D15-4D0E-4B04-815B-43CF94298579' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: User Routine Recipients.__mj_UpdatedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'System Metadata',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '070AC53D-D36B-4CE2-B7FA-EC6347FC91F4' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: User Routine Recipients.RoutineID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Routine',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '962CFBF5-6990-4CC4-A6CC-EBFC4F2EA53B' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: User Routine Recipients.Routine 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Routine Name',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '85A026F9-9207-4E41-BD74-598FD81DEE37' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: User Routine Recipients.UserID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   DisplayName = 'User',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '80CC4C7A-1050-4A3F-8D0C-31A5B3AF51B2' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: User Routine Recipients.Email 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'Email',
+   CodeType = NULL
+WHERE 
+   ID = '432D0046-A581-4EB6-A96C-7FD3EAD95C46' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: User Routine Recipients.Channel 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Channel',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'C5AC3CA5-F63F-430D-AEC3-CA3DEF51E502' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: User Routine Recipients.User 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   DisplayName = 'User Name',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '5B5FB11E-06D7-49E4-9B46-90F22B2FEE99' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: User Routine Recipients.Sequence 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Recipient Configuration',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'C69FDFA3-EAF1-4F84-861B-37B4E6FC7A97' AND AutoUpdateCategory = 1;
+
+/* Set categories for 18 fields */
 
 -- UPDATE Entity Field Category Info MJ: User Routine Runs.ID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'System Metadata',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
@@ -5980,8 +3782,8 @@ WHERE
 -- UPDATE Entity Field Category Info MJ: User Routine Runs.RoutineID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Routine Information',
    GeneratedFormSection = 'Category',
+   DisplayName = 'Routine',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -5990,8 +3792,8 @@ WHERE
 -- UPDATE Entity Field Category Info MJ: User Routine Runs.Routine 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Routine Information',
    GeneratedFormSection = 'Category',
+   DisplayName = 'Routine Name',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -6000,7 +3802,6 @@ WHERE
 -- UPDATE Entity Field Category Info MJ: User Routine Runs.StartedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Execution Timeline',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
@@ -6010,7 +3811,6 @@ WHERE
 -- UPDATE Entity Field Category Info MJ: User Routine Runs.CompletedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Execution Timeline',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
@@ -6020,37 +3820,33 @@ WHERE
 -- UPDATE Entity Field Category Info MJ: User Routine Runs.Status 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Execution Status',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
    ID = '90BF74B0-BD70-406C-BF65-672F18325A15' AND AutoUpdateCategory = 1;
 
--- UPDATE Entity Field Category Info MJ: User Routine Runs.ErrorMessage 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Execution Status',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '7D622035-A538-46A4-BDD4-3D92BD9AE8AC' AND AutoUpdateCategory = 1;
-
 -- UPDATE Entity Field Category Info MJ: User Routine Runs.NotificationSent 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Execution Status',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
    ID = '5273D85C-22BC-46D8-92D9-7DF90BF515A8' AND AutoUpdateCategory = 1;
 
+-- UPDATE Entity Field Category Info MJ: User Routine Runs.ErrorMessage 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '7D622035-A538-46A4-BDD4-3D92BD9AE8AC' AND AutoUpdateCategory = 1;
+
 -- UPDATE Entity Field Category Info MJ: User Routine Runs.AgentRunID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Agent Integration',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
@@ -6060,37 +3856,55 @@ WHERE
 -- UPDATE Entity Field Category Info MJ: User Routine Runs.AgentRun 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Agent Integration',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
    ID = '4EC40307-758C-44EF-991B-59E8FBD18205' AND AutoUpdateCategory = 1;
 
--- UPDATE Entity Field Category Info MJ: User Routine Runs.TokensUsed 
+-- UPDATE Entity Field Category Info MJ: User Routine Runs.PromptRunID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Performance Metrics',
+   Category = 'Prompt Integration',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '871CA82B-1308-4576-8D78-9891B2E692E8' AND AutoUpdateCategory = 1;
+   ID = '042F5E76-86F4-46CA-9DAC-86285EEBBDE1' AND AutoUpdateCategory = 1;
 
--- UPDATE Entity Field Category Info MJ: User Routine Runs.Cost 
+-- UPDATE Entity Field Category Info MJ: User Routine Runs.PromptRun 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Performance Metrics',
+   Category = 'Prompt Integration',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '8975C433-ED4C-45DA-9A0C-960B2FF28498' AND AutoUpdateCategory = 1;
+   ID = 'B9821DE3-E8F9-4337-98E1-7FFA27A0059E' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: User Routine Runs.ActionExecutionLogID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Action Integration',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '992929B4-4D57-409E-A9C0-D335AE40B4E6' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: User Routine Runs.ActionExecutionLog 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Action Integration',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'AA7BD68A-9265-416F-BA06-3D65720AC4F7' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: User Routine Runs.ResultSummary 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Result Data',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
@@ -6100,7 +3914,6 @@ WHERE
 -- UPDATE Entity Field Category Info MJ: User Routine Runs.ResultHash 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Result Data',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
@@ -6115,7 +3928,7 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '76E17476-33EC-4188-9282-ECAE73B1F6D2' AND AutoUpdateCategory = 1;
+   ID = 'FDBBA871-A2C4-4FE8-B5A5-FE8BE9EF2676' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: User Routine Runs.__mj_UpdatedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -6125,268 +3938,30 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '443C7E10-3865-4DED-A64F-36A5A800BB8F' AND AutoUpdateCategory = 1;
+   ID = '4E70709C-051E-41ED-899D-6160E43240BD' AND AutoUpdateCategory = 1;
 
-/* Set entity icon to fa fa-play-circle */
+/* Update FieldCategoryInfo setting for entity */
 
-               UPDATE [${flyway:defaultSchema}].[Entity]
-               SET [Icon] = 'fa fa-play-circle', [__mj_UpdatedAt] = GETUTCDATE()
-               WHERE [ID] = '79DEEB22-4476-4081-A66D-65EA58D1DF6E';
+               UPDATE [${flyway:defaultSchema}].[EntitySetting]
+               SET [Value] = '{"Prompt Integration":{"icon":"fa fa-comment-dots","description":"Links and references for AI prompt execution records"},"Action Integration":{"icon":"fa fa-bolt","description":"Links and references for action execution logs"}}', [__mj_UpdatedAt] = GETUTCDATE()
+               WHERE [EntityID] = '79DEEB22-4476-4081-A66D-65EA58D1DF6E' AND [Name] = 'FieldCategoryInfo';
 
-/* Insert FieldCategoryInfo setting for entity */
+/* Update FieldCategoryIcons setting (legacy) */
 
-               INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('acfd4867-410c-4575-9420-4ff52f2544e8', '79DEEB22-4476-4081-A66D-65EA58D1DF6E', 'FieldCategoryInfo', '{"Routine Information":{"icon":"fa fa-tasks","description":"Reference information linking this run to a specific routine"},"Execution Timeline":{"icon":"fa fa-clock","description":"Start and completion timestamps for the execution"},"Execution Status":{"icon":"fa fa-check-circle","description":"Current status, error details, and notification status"},"Agent Integration":{"icon":"fa fa-robot","description":"Information related to linked AI agent executions"},"Performance Metrics":{"icon":"fa fa-chart-line","description":"Resource usage and financial cost metrics"},"Result Data":{"icon":"fa fa-file-alt","description":"Summary and identification hash of the routine result"},"System Metadata":{"icon":"fa fa-cog","description":"System-managed audit and tracking fields"}}', GETUTCDATE(), GETUTCDATE());
+               UPDATE [${flyway:defaultSchema}].[EntitySetting]
+               SET [Value] = '{"Prompt Integration":"fa fa-comment-dots","Action Integration":"fa fa-bolt"}', [__mj_UpdatedAt] = GETUTCDATE()
+               WHERE [EntityID] = '79DEEB22-4476-4081-A66D-65EA58D1DF6E' AND [Name] = 'FieldCategoryIcons';
 
-/* Insert FieldCategoryIcons setting (legacy) */
-
-               INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('28937449-f279-44c1-9669-45be56355c0b', '79DEEB22-4476-4081-A66D-65EA58D1DF6E', 'FieldCategoryIcons', '{"Routine Information":"fa fa-tasks","Execution Timeline":"fa fa-clock","Execution Status":"fa fa-check-circle","Agent Integration":"fa fa-robot","Performance Metrics":"fa fa-chart-line","Result Data":"fa fa-file-alt","System Metadata":"fa fa-cog"}', GETUTCDATE(), GETUTCDATE());
-
-/* Set DefaultForNewUser=true for NEW entity (category: supporting, confidence: high) */
-
-         UPDATE [${flyway:defaultSchema}].[ApplicationEntity]
-         SET [DefaultForNewUser] = 1, [__mj_UpdatedAt] = GETUTCDATE()
-         WHERE [EntityID] = '79DEEB22-4476-4081-A66D-65EA58D1DF6E';
-
-/* Set categories for 25 fields */
+/* Set categories for 29 fields */
 
 -- UPDATE Entity Field Category Info MJ: User Routines.ID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'System Metadata',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
    ID = 'E6CDD3C1-F544-4C36-8ACB-3E301658593C' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: User Routines.UserID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Routine Ownership',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'User',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '886E4EDB-2F48-49C1-BC8A-2362348A28F7' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: User Routines.EnvironmentID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Routine Ownership',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Environment',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '6E569ABD-EEE9-463C-94FE-4F0771B896A5' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: User Routines.User 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Routine Ownership',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'User Name',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'D0FEBEB0-4A65-4993-A436-DCBE392200C9' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: User Routines.Environment 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Routine Ownership',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Environment Name',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '68F556CD-DDF5-4D1B-9A94-F1D37E32F184' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: User Routines.Name 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Routine Configuration',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '5EDA642F-47FD-4904-9B24-06F8713A1F44' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: User Routines.Description 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Routine Configuration',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '638EE40B-88AD-4E89-9C13-7F28E9565A73' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: User Routines.Status 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Routine Configuration',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'A806C9AF-6745-4056-B775-F93FF395CD5F' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: User Routines.RoutineType 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Routine Configuration',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '3EC61FFC-11A9-4336-94EF-AB00E5633F5D' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: User Routines.TargetType 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Execution Details',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'EDB8DC83-1F84-49C3-913E-D7F97793218A' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: User Routines.TargetID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Execution Details',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Target',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '82CE2DDC-5DDF-4891-9669-7B0F8ECF12C5' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: User Routines.InitialMessage 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Execution Details',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'DF35475F-E7AD-45EA-8E45-14B6A0FEC8FA' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: User Routines.StartingPayload 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Execution Details',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'FB4CF985-CF03-4C1E-BB46-3922A11FF8D4' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: User Routines.RequestedSkillIDs 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Execution Details',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Requested Skills',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'F3C39FE4-33B8-412B-A754-4B77492E7692' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: User Routines.CronExpression 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Scheduling and Notifications',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'FB211013-131C-4DDA-B867-D78609AACC30' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: User Routines.Timezone 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Scheduling and Notifications',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '8F652618-639B-4FC5-8714-19B8DC9AA055' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: User Routines.NextRunAt 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Scheduling and Notifications',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '4EAF86C3-EFDD-4062-A32D-3A1A865C6F6C' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: User Routines.LastRunAt 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Scheduling and Notifications',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '8F87B46A-0FB6-41B6-9B18-1992CB0E6EAC' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: User Routines.LastRunStatus 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Scheduling and Notifications',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '30486EAB-F8D4-41C2-BBF3-1B1BCCE51595' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: User Routines.LastResultHash 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Scheduling and Notifications',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '154F5EF8-2601-4F39-B802-E40E32A0E344' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: User Routines.NotifyCondition 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Scheduling and Notifications',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'E40AB87D-4739-4B99-B4FF-C893924E0E11' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: User Routines.NotifyViaInApp 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Scheduling and Notifications',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Notify Via In-App',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'B34FFA2C-5EB2-4EA5-B418-8497B778C523' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: User Routines.NotifyViaEmail 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Scheduling and Notifications',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '25B8B87B-99F6-4C6F-AB9F-8BB52B0D10FE' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: User Routines.__mj_CreatedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -6396,7 +3971,7 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '09901538-4E73-48D3-A2A9-0D58CFD573B6' AND AutoUpdateCategory = 1;
+   ID = '18956989-4D61-4CE1-8595-FBB84E63B64E' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: User Routines.__mj_UpdatedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -6406,143 +3981,249 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '2B6E5AD9-A3C6-4555-82CC-25F5FB2C8FA6' AND AutoUpdateCategory = 1;
+   ID = '64EBF933-D88F-47E8-AEFE-258FFBB6679F' AND AutoUpdateCategory = 1;
 
-/* Set entity icon to fa fa-sync-alt */
-
-               UPDATE [${flyway:defaultSchema}].[Entity]
-               SET [Icon] = 'fa fa-sync-alt', [__mj_UpdatedAt] = GETUTCDATE()
-               WHERE [ID] = '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF';
-
-/* Insert FieldCategoryInfo setting for entity */
-
-               INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('bc7d0f63-8746-4357-ab0c-e7f1e6bda8e9', '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF', 'FieldCategoryInfo', '{"Routine Ownership":{"icon":"fa fa-user-shield","description":"Information regarding who owns the routine and its environment scope"},"Routine Configuration":{"icon":"fa fa-cogs","description":"General settings defining the routine''s name, purpose, and lifecycle status"},"Execution Details":{"icon":"fa fa-play-circle","description":"Technical parameters for the routine''s target execution and payloads"},"Scheduling and Notifications":{"icon":"fa fa-calendar-alt","description":"Timing, recurrence, notification preferences, and run history"},"System Metadata":{"icon":"fa fa-database","description":"System-managed audit and tracking fields"}}', GETUTCDATE(), GETUTCDATE());
-
-/* Insert FieldCategoryIcons setting (legacy) */
-
-               INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('33546f59-10d6-4ca1-a91e-f6aa7af2a2b7', '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF', 'FieldCategoryIcons', '{"Routine Ownership":"fa fa-user-shield","Routine Configuration":"fa fa-cogs","Execution Details":"fa fa-play-circle","Scheduling and Notifications":"fa fa-calendar-alt","System Metadata":"fa fa-database"}', GETUTCDATE(), GETUTCDATE());
-
-/* Set DefaultForNewUser=true for NEW entity (category: primary, confidence: high) */
-
-         UPDATE [${flyway:defaultSchema}].[ApplicationEntity]
-         SET [DefaultForNewUser] = 1, [__mj_UpdatedAt] = GETUTCDATE()
-         WHERE [EntityID] = '0B84A3D0-2114-42A0-A0F0-7848E86E9FBF';
-
-/* Set categories for 9 fields */
-
--- UPDATE Entity Field Category Info MJ: User Routine Recipients.ID 
+-- UPDATE Entity Field Category Info MJ: User Routines.UserID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'System Metadata',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'User ID',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '886E4EDB-2F48-49C1-BC8A-2362348A28F7' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: User Routines.EnvironmentID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Environment ID',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '6E569ABD-EEE9-463C-94FE-4F0771B896A5' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: User Routines.User 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   DisplayName = 'User',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'D0FEBEB0-4A65-4993-A436-DCBE392200C9' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: User Routines.Environment 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Environment',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '68F556CD-DDF5-4D1B-9A94-F1D37E32F184' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: User Routines.Name 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'F8845D00-3412-4BA5-9503-B11105660ED2' AND AutoUpdateCategory = 1;
+   ID = '5EDA642F-47FD-4904-9B24-06F8713A1F44' AND AutoUpdateCategory = 1;
 
--- UPDATE Entity Field Category Info MJ: User Routine Recipients.RoutineID 
+-- UPDATE Entity Field Category Info MJ: User Routines.Description 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Routine Context',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '962CFBF5-6990-4CC4-A6CC-EBFC4F2EA53B' AND AutoUpdateCategory = 1;
+   ID = '638EE40B-88AD-4E89-9C13-7F28E9565A73' AND AutoUpdateCategory = 1;
 
--- UPDATE Entity Field Category Info MJ: User Routine Recipients.UserID 
+-- UPDATE Entity Field Category Info MJ: User Routines.Status 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Recipient Configuration',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '80CC4C7A-1050-4A3F-8D0C-31A5B3AF51B2' AND AutoUpdateCategory = 1;
+   ID = 'A806C9AF-6745-4056-B775-F93FF395CD5F' AND AutoUpdateCategory = 1;
 
--- UPDATE Entity Field Category Info MJ: User Routine Recipients.Email 
+-- UPDATE Entity Field Category Info MJ: User Routines.RoutineType 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Recipient Configuration',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Email Address',
-   ExtendedType = 'Email',
-   CodeType = NULL
-WHERE 
-   ID = '432D0046-A581-4EB6-A96C-7FD3EAD95C46' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: User Routine Recipients.Channel 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Recipient Configuration',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Delivery Channel',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'C5AC3CA5-F63F-430D-AEC3-CA3DEF51E502' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: User Routine Recipients.__mj_CreatedAt 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'System Metadata',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'EE45D6B4-9020-4880-8D3A-A0E6A84445C4' AND AutoUpdateCategory = 1;
+   ID = '3EC61FFC-11A9-4336-94EF-AB00E5633F5D' AND AutoUpdateCategory = 1;
 
--- UPDATE Entity Field Category Info MJ: User Routine Recipients.__mj_UpdatedAt 
+-- UPDATE Entity Field Category Info MJ: User Routines.TargetType 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'System Metadata',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '950E0FE2-5FE3-4D54-8893-4A259AE945E9' AND AutoUpdateCategory = 1;
+   ID = 'EDB8DC83-1F84-49C3-913E-D7F97793218A' AND AutoUpdateCategory = 1;
 
--- UPDATE Entity Field Category Info MJ: User Routine Recipients.Routine 
+-- UPDATE Entity Field Category Info MJ: User Routines.TargetID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Routine Context',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Target ID',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '82CE2DDC-5DDF-4891-9669-7B0F8ECF12C5' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: User Routines.InitialMessage 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '85A026F9-9207-4E41-BD74-598FD81DEE37' AND AutoUpdateCategory = 1;
+   ID = 'DF35475F-E7AD-45EA-8E45-14B6A0FEC8FA' AND AutoUpdateCategory = 1;
 
--- UPDATE Entity Field Category Info MJ: User Routine Recipients.User 
+-- UPDATE Entity Field Category Info MJ: User Routines.StartingPayload 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Recipient Configuration',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '5B5FB11E-06D7-49E4-9B46-90F22B2FEE99' AND AutoUpdateCategory = 1;
+   ID = 'FB4CF985-CF03-4C1E-BB46-3922A11FF8D4' AND AutoUpdateCategory = 1;
 
-/* Set entity icon to fa fa-paper-plane */
+-- UPDATE Entity Field Category Info MJ: User Routines.RequestedSkillIDs 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Requested Skill IDs',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'F3C39FE4-33B8-412B-A754-4B77492E7692' AND AutoUpdateCategory = 1;
 
-               UPDATE [${flyway:defaultSchema}].[Entity]
-               SET [Icon] = 'fa fa-paper-plane', [__mj_UpdatedAt] = GETUTCDATE()
-               WHERE [ID] = 'D16D839C-EB7C-4B9D-BA03-F33ED00F984D';
+-- UPDATE Entity Field Category Info MJ: User Routines.CronExpression 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'FB211013-131C-4DDA-B867-D78609AACC30' AND AutoUpdateCategory = 1;
 
-/* Insert FieldCategoryInfo setting for entity */
+-- UPDATE Entity Field Category Info MJ: User Routines.StartAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Scheduling and Notifications',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'CE8CF679-6616-44F8-8517-2C72A35B4E82' AND AutoUpdateCategory = 1;
 
-               INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('9c3a5691-fef8-4b12-9e9d-9de4177af80d', 'D16D839C-EB7C-4B9D-BA03-F33ED00F984D', 'FieldCategoryInfo', '{"Recipient Configuration":{"icon":"fa fa-address-card","description":"Details of the recipient, including user links, email addresses, and notification channels"},"Routine Context":{"icon":"fa fa-sync","description":"Information about the routine associated with this recipient configuration"},"System Metadata":{"icon":"fa fa-cog","description":"System-managed identifiers and audit timestamps"}}', GETUTCDATE(), GETUTCDATE());
+-- UPDATE Entity Field Category Info MJ: User Routines.EndAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Scheduling and Notifications',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '10D26515-E0C0-4547-8993-4415BCCA7936' AND AutoUpdateCategory = 1;
 
-/* Insert FieldCategoryIcons setting (legacy) */
+-- UPDATE Entity Field Category Info MJ: User Routines.NotificationTemplateID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Scheduling and Notifications',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'EC798C59-09AA-47EA-9E32-4AE6F20B7C16' AND AutoUpdateCategory = 1;
 
-               INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('2abeaa3e-3b31-41dd-8dba-c4604aa3f6bb', 'D16D839C-EB7C-4B9D-BA03-F33ED00F984D', 'FieldCategoryIcons', '{"Recipient Configuration":"fa fa-address-card","Routine Context":"fa fa-sync","System Metadata":"fa fa-cog"}', GETUTCDATE(), GETUTCDATE());
+-- UPDATE Entity Field Category Info MJ: User Routines.NotificationTemplate 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Scheduling and Notifications',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '3234308E-91E6-4F14-AF68-C9E5F93EC52E' AND AutoUpdateCategory = 1;
 
-/* Set DefaultForNewUser=false for NEW entity (category: supporting, confidence: high) */
+-- UPDATE Entity Field Category Info MJ: User Routines.Timezone 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '8F652618-639B-4FC5-8714-19B8DC9AA055' AND AutoUpdateCategory = 1;
 
-         UPDATE [${flyway:defaultSchema}].[ApplicationEntity]
-         SET [DefaultForNewUser] = 0, [__mj_UpdatedAt] = GETUTCDATE()
-         WHERE [EntityID] = 'D16D839C-EB7C-4B9D-BA03-F33ED00F984D';
+-- UPDATE Entity Field Category Info MJ: User Routines.NextRunAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '4EAF86C3-EFDD-4062-A32D-3A1A865C6F6C' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: User Routines.LastRunAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '8F87B46A-0FB6-41B6-9B18-1992CB0E6EAC' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: User Routines.LastRunStatus 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '30486EAB-F8D4-41C2-BBF3-1B1BCCE51595' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: User Routines.LastResultHash 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '154F5EF8-2601-4F39-B802-E40E32A0E344' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: User Routines.NotifyCondition 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'E40AB87D-4739-4B99-B4FF-C893924E0E11' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: User Routines.NotifyViaInApp 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'B34FFA2C-5EB2-4EA5-B418-8497B778C523' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: User Routines.NotifyViaEmail 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '25B8B87B-99F6-4C6F-AB9F-8BB52B0D10FE' AND AutoUpdateCategory = 1;
 

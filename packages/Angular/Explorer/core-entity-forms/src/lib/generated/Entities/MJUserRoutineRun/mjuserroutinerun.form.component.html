@@ -14,7 +14,7 @@
     <mj-collapsible-panel
         SectionKey="routineInformation"
         SectionName="Routine Information"
-        Icon="fa fa-tasks"
+        Icon="fa fa-info-circle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -33,7 +33,7 @@
     <mj-collapsible-panel
         SectionKey="executionTimeline"
         SectionName="Execution Timeline"
-        Icon="fa fa-clock"
+        Icon="fa fa-calendar"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -59,7 +59,7 @@
     <mj-collapsible-panel
         SectionKey="executionStatus"
         SectionName="Execution Status"
-        Icon="fa fa-check-circle"
+        Icon="fa fa-flag"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -93,7 +93,7 @@
     <mj-collapsible-panel
         SectionKey="agentIntegration"
         SectionName="Agent Integration"
-        Icon="fa fa-robot"
+        Icon="fa fa-info-circle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -108,28 +108,40 @@
 
     </mj-collapsible-panel>
 
-    <!-- Performance Metrics Section -->
+    <!-- Prompt Integration Section -->
     <mj-collapsible-panel
-        SectionKey="performanceMetrics"
-        SectionName="Performance Metrics"
-        Icon="fa fa-chart-line"
+        SectionKey="promptIntegration"
+        SectionName="Prompt Integration"
+        Icon="fa fa-comment-dots"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
-            [ShowLabel]="true"
-            FieldName="TokensUsed"
-            Type="number"
+            [ShowLabel]="false"
+            FieldName="PromptRunID"
+            Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
+            LinkType="Record"
         ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Action Integration Section -->
+    <mj-collapsible-panel
+        SectionKey="actionIntegration"
+        SectionName="Action Integration"
+        Icon="fa fa-bolt"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
-            [ShowLabel]="true"
-            FieldName="Cost"
-            Type="number"
+            [ShowLabel]="false"
+            FieldName="ActionExecutionLogID"
+            Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
+            LinkType="Record"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -138,7 +150,7 @@
     <mj-collapsible-panel
         SectionKey="resultData"
         SectionName="Result Data"
-        Icon="fa fa-file-alt"
+        Icon="fa fa-info-circle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 

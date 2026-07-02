@@ -19,7 +19,8 @@ export class MJUserRoutineRunFormComponent extends BaseFormComponent {
             { sectionKey: 'executionTimeline', sectionName: 'Execution Timeline', isExpanded: true },
             { sectionKey: 'executionStatus', sectionName: 'Execution Status', isExpanded: true },
             { sectionKey: 'agentIntegration', sectionName: 'Agent Integration', isExpanded: true },
-            { sectionKey: 'performanceMetrics', sectionName: 'Performance Metrics', isExpanded: true },
+            { sectionKey: 'promptIntegration', sectionName: 'Prompt Integration', isExpanded: true },
+            { sectionKey: 'actionIntegration', sectionName: 'Action Integration', isExpanded: true },
             { sectionKey: 'resultData', sectionName: 'Result Data', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);

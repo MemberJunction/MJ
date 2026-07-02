@@ -1034,6 +1034,9 @@ export class MJActionExecutionLog_ {
     @Field(() => [MJProcessRunDetail_])
     MJProcessRunDetails_ActionExecutionLogIDArray: MJProcessRunDetail_[]; // Link to MJProcessRunDetails
     
+    @Field(() => [MJUserRoutineRun_])
+    MJUserRoutineRuns_ActionExecutionLogIDArray: MJUserRoutineRun_[]; // Link to MJUserRoutineRuns
+    
 }
 
 //****************************************************************************
@@ -1176,6 +1179,16 @@ export class MJActionExecutionLogResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwProcessRunDetails')} WHERE ${provider.QuoteIdentifier('ActionExecutionLogID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Process Run Details', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, [mjactionexecutionlog_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Process Run Details', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJUserRoutineRun_])
+    async MJUserRoutineRuns_ActionExecutionLogIDArray(@Root() mjactionexecutionlog_: MJActionExecutionLog_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: User Routine Runs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwUserRoutineRuns')} WHERE ${provider.QuoteIdentifier('ActionExecutionLogID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: User Routine Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjactionexecutionlog_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: User Routine Runs', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -18102,6 +18115,9 @@ export class MJAIPromptRun_ {
     @Field(() => [MJDuplicateRunDetailMatch_])
     MJDuplicateRunDetailMatches_AIPromptRunIDArray: MJDuplicateRunDetailMatch_[]; // Link to MJDuplicateRunDetailMatches
     
+    @Field(() => [MJUserRoutineRun_])
+    MJUserRoutineRuns_PromptRunIDArray: MJUserRoutineRun_[]; // Link to MJUserRoutineRuns
+    
 }
 
 //****************************************************************************
@@ -18772,6 +18788,16 @@ export class MJAIPromptRunResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwDuplicateRunDetailMatches')} WHERE ${provider.QuoteIdentifier('AIPromptRunID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Duplicate Run Detail Matches', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, [mjaipromptrun_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Duplicate Run Detail Matches', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJUserRoutineRun_])
+    async MJUserRoutineRuns_PromptRunIDArray(@Root() mjaipromptrun_: MJAIPromptRun_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: User Routine Runs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwUserRoutineRuns')} WHERE ${provider.QuoteIdentifier('PromptRunID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: User Routine Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjaipromptrun_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: User Routine Runs', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -84473,6 +84499,9 @@ export class MJTemplate_ {
     @Field(() => [MJEntityDocument_])
     MJEntityDocuments_TemplateIDArray: MJEntityDocument_[]; // Link to MJEntityDocuments
     
+    @Field(() => [MJUserRoutine_])
+    MJUserRoutines_NotificationTemplateIDArray: MJUserRoutine_[]; // Link to MJUserRoutines
+    
 }
 
 //****************************************************************************
@@ -84685,6 +84714,16 @@ export class MJTemplateResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwEntityDocuments')} WHERE ${provider.QuoteIdentifier('TemplateID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Entity Documents', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, [mjtemplate_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Entity Documents', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJUserRoutine_])
+    async MJUserRoutines_NotificationTemplateIDArray(@Root() mjtemplate_: MJTemplate_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: User Routines', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwUserRoutines')} WHERE ${provider.QuoteIdentifier('NotificationTemplateID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: User Routines', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjtemplate_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: User Routines', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -89019,6 +89058,9 @@ export class MJUserRoutineRecipient_ {
     @MaxLength(20)
     Channel: string;
         
+    @Field(() => Int, {description: `Explicit display/notification ordering of recipients within a routine (ascending).`}) 
+    Sequence: number;
+        
     @Field() 
     _mj__CreatedAt: Date;
         
@@ -89055,6 +89097,9 @@ export class CreateMJUserRoutineRecipientInput {
     @Field({ nullable: true })
     Channel?: string;
 
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -89079,6 +89124,9 @@ export class UpdateMJUserRoutineRecipientInput {
 
     @Field({ nullable: true })
     Channel?: string;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -89200,11 +89248,13 @@ export class MJUserRoutineRun_ {
     @MaxLength(36)
     AgentRunID?: string;
         
-    @Field(() => Int, {nullable: true, description: `Total tokens used by this run (if applicable).`}) 
-    TokensUsed?: number;
+    @Field({nullable: true, description: `For Prompt targets, links to the MJ: AI Prompt Runs record for this execution — tokens, cost, and full telemetry live there (never duplicated here).`}) 
+    @MaxLength(36)
+    PromptRunID?: string;
         
-    @Field(() => Float, {nullable: true, description: `Total cost of this run (if applicable).`}) 
-    Cost?: number;
+    @Field({nullable: true, description: `For Action targets, links to the MJ: Action Execution Logs record for this execution — params, results, and telemetry live there (never duplicated here).`}) 
+    @MaxLength(36)
+    ActionExecutionLogID?: string;
         
     @Field({nullable: true, description: `Human-readable summary of the run result.`}) 
     ResultSummary?: string;
@@ -89233,6 +89283,14 @@ export class MJUserRoutineRun_ {
     @MaxLength(255)
     AgentRun?: string;
         
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    PromptRun?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(425)
+    ActionExecutionLog?: string;
+        
 }
 
 //****************************************************************************
@@ -89258,11 +89316,11 @@ export class CreateMJUserRoutineRunInput {
     @Field({ nullable: true })
     AgentRunID: string | null;
 
-    @Field(() => Int, { nullable: true })
-    TokensUsed: number | null;
+    @Field({ nullable: true })
+    PromptRunID: string | null;
 
-    @Field(() => Float, { nullable: true })
-    Cost: number | null;
+    @Field({ nullable: true })
+    ActionExecutionLogID: string | null;
 
     @Field({ nullable: true })
     ResultSummary: string | null;
@@ -89304,11 +89362,11 @@ export class UpdateMJUserRoutineRunInput {
     @Field({ nullable: true })
     AgentRunID?: string | null;
 
-    @Field(() => Int, { nullable: true })
-    TokensUsed?: number | null;
+    @Field({ nullable: true })
+    PromptRunID?: string | null;
 
-    @Field(() => Float, { nullable: true })
-    Cost?: number | null;
+    @Field({ nullable: true })
+    ActionExecutionLogID?: string | null;
 
     @Field({ nullable: true })
     ResultSummary?: string | null;
@@ -89468,6 +89526,16 @@ export class MJUserRoutine_ {
     @MaxLength(100)
     CronExpression: string;
         
+    @Field({nullable: true, description: `Optional activation window start. An Active routine does not run before this time; once current time passes StartAt the dispatcher begins scheduling it. NULL = eligible immediately.`}) 
+    StartAt?: Date;
+        
+    @Field({nullable: true, description: `Optional activation window end. An Active routine stops running once current time passes EndAt — automatic sunset without changing Status. NULL = no end.`}) 
+    EndAt?: Date;
+        
+    @Field({nullable: true, description: `Optional MJ Template used to render routine notifications from the runs output data (result summary, status, target info) via the standard MJ templating architecture. When NULL, the system default routine-notification template (seeded via metadata, resolvable per instance — not hardcoded) is used.`}) 
+    @MaxLength(36)
+    NotificationTemplateID?: string;
+        
     @Field({description: `IANA timezone used when evaluating CronExpression (e.g. America/Chicago).`}) 
     @MaxLength(100)
     Timezone: string;
@@ -89509,6 +89577,10 @@ export class MJUserRoutine_ {
     @Field({nullable: true}) 
     @MaxLength(255)
     Environment?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    NotificationTemplate?: string;
         
     @Field(() => [MJUserRoutineRecipient_])
     MJUserRoutineRecipients_RoutineIDArray: MJUserRoutineRecipient_[]; // Link to MJUserRoutineRecipients
@@ -89561,6 +89633,15 @@ export class CreateMJUserRoutineInput {
 
     @Field({ nullable: true })
     CronExpression?: string;
+
+    @Field({ nullable: true })
+    StartAt: Date | null;
+
+    @Field({ nullable: true })
+    EndAt: Date | null;
+
+    @Field({ nullable: true })
+    NotificationTemplateID: string | null;
 
     @Field({ nullable: true })
     Timezone?: string;
@@ -89634,6 +89715,15 @@ export class UpdateMJUserRoutineInput {
 
     @Field({ nullable: true })
     CronExpression?: string;
+
+    @Field({ nullable: true })
+    StartAt?: Date | null;
+
+    @Field({ nullable: true })
+    EndAt?: Date | null;
+
+    @Field({ nullable: true })
+    NotificationTemplateID?: string | null;
 
     @Field({ nullable: true })
     Timezone?: string;

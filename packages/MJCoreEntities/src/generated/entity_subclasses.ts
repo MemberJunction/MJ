@@ -30385,13 +30385,13 @@ export const MJUserRoutineRecipientSchema = z.object({
         * * Default Value: newsequentialid()`),
     RoutineID: z.string().describe(`
         * * Field Name: RoutineID
-        * * Display Name: Routine ID
+        * * Display Name: Routine
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: User Routines (vwUserRoutines.ID)
         * * Description: Routine this recipient belongs to.`),
     UserID: z.string().nullable().describe(`
         * * Field Name: UserID
-        * * Display Name: User ID
+        * * Display Name: User
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
         * * Description: Internal MJ user recipient (when notifying an existing user). Either UserID or Email is set.`),
@@ -30402,7 +30402,7 @@ export const MJUserRoutineRecipientSchema = z.object({
         * * Description: External email recipient (when notifying a non-user). Either UserID or Email is set.`),
     Channel: z.union([z.literal('Email'), z.literal('InApp')]).describe(`
         * * Field Name: Channel
-        * * Display Name: Delivery Channel
+        * * Display Name: Channel
         * * SQL Data Type: nvarchar(20)
         * * Default Value: InApp
     * * Value List Type: List
@@ -30410,6 +30410,12 @@ export const MJUserRoutineRecipientSchema = z.object({
     *   * Email
     *   * InApp
         * * Description: Delivery channel for this recipient: InApp or Email.`),
+    Sequence: z.number().describe(`
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Explicit display/notification ordering of recipients within a routine (ascending).`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
@@ -30422,11 +30428,11 @@ export const MJUserRoutineRecipientSchema = z.object({
         * * Default Value: getutcdate()`),
     Routine: z.string().describe(`
         * * Field Name: Routine
-        * * Display Name: Routine
+        * * Display Name: Routine Name
         * * SQL Data Type: nvarchar(255)`),
     User: z.string().nullable().describe(`
         * * Field Name: User
-        * * Display Name: User
+        * * Display Name: User Name
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -30443,7 +30449,7 @@ export const MJUserRoutineRunSchema = z.object({
         * * Default Value: newsequentialid()`),
     RoutineID: z.string().describe(`
         * * Field Name: RoutineID
-        * * Display Name: Routine ID
+        * * Display Name: Routine
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: User Routines (vwUserRoutines.ID)
         * * Description: Routine this run belongs to.`),
@@ -30476,16 +30482,18 @@ export const MJUserRoutineRunSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
         * * Description: Linked AI Agent Run when the routine target is an agent.`),
-    TokensUsed: z.number().nullable().describe(`
-        * * Field Name: TokensUsed
-        * * Display Name: Tokens Used
-        * * SQL Data Type: int
-        * * Description: Total tokens used by this run (if applicable).`),
-    Cost: z.number().nullable().describe(`
-        * * Field Name: Cost
-        * * Display Name: Cost
-        * * SQL Data Type: decimal(18, 6)
-        * * Description: Total cost of this run (if applicable).`),
+    PromptRunID: z.string().nullable().describe(`
+        * * Field Name: PromptRunID
+        * * Display Name: Prompt Run ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Prompt Runs (vwAIPromptRuns.ID)
+        * * Description: For Prompt targets, links to the MJ: AI Prompt Runs record for this execution — tokens, cost, and full telemetry live there (never duplicated here).`),
+    ActionExecutionLogID: z.string().nullable().describe(`
+        * * Field Name: ActionExecutionLogID
+        * * Display Name: Action Execution Log ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Action Execution Logs (vwActionExecutionLogs.ID)
+        * * Description: For Action targets, links to the MJ: Action Execution Logs record for this execution — params, results, and telemetry live there (never duplicated here).`),
     ResultSummary: z.string().nullable().describe(`
         * * Field Name: ResultSummary
         * * Display Name: Result Summary
@@ -30519,12 +30527,20 @@ export const MJUserRoutineRunSchema = z.object({
         * * Default Value: getutcdate()`),
     Routine: z.string().describe(`
         * * Field Name: Routine
-        * * Display Name: Routine
+        * * Display Name: Routine Name
         * * SQL Data Type: nvarchar(255)`),
     AgentRun: z.string().nullable().describe(`
         * * Field Name: AgentRun
         * * Display Name: Agent Run
         * * SQL Data Type: nvarchar(255)`),
+    PromptRun: z.string().nullable().describe(`
+        * * Field Name: PromptRun
+        * * Display Name: Prompt Run
+        * * SQL Data Type: nvarchar(255)`),
+    ActionExecutionLog: z.string().nullable().describe(`
+        * * Field Name: ActionExecutionLog
+        * * Display Name: Action Execution Log
+        * * SQL Data Type: nvarchar(425)`),
 });
 
 export type MJUserRoutineRunEntityType = z.infer<typeof MJUserRoutineRunSchema>;
@@ -30540,13 +30556,13 @@ export const MJUserRoutineSchema = z.object({
         * * Default Value: newsequentialid()`),
     UserID: z.string().describe(`
         * * Field Name: UserID
-        * * Display Name: User
+        * * Display Name: User ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
         * * Description: Owner of the routine. Routines are private to their owner (row-level access).`),
     EnvironmentID: z.string().nullable().describe(`
         * * Field Name: EnvironmentID
-        * * Display Name: Environment
+        * * Display Name: Environment ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Environments (vwEnvironments.ID)
         * * Description: Optional environment scope for the routine.`),
@@ -30593,7 +30609,7 @@ export const MJUserRoutineSchema = z.object({
         * * Description: What kind of target this routine runs: Agent, Action, or Prompt. Determines how TargetID is interpreted.`),
     TargetID: z.string().describe(`
         * * Field Name: TargetID
-        * * Display Name: Target
+        * * Display Name: Target ID
         * * SQL Data Type: uniqueidentifier
         * * Description: Polymorphic reference resolved by TargetType (AIAgent.ID, Action.ID, or AIPrompt.ID). No FK because the target table varies.`),
     InitialMessage: z.string().nullable().describe(`
@@ -30608,7 +30624,7 @@ export const MJUserRoutineSchema = z.object({
         * * Description: Optional JSON starting payload passed to the target on each run.`),
     RequestedSkillIDs: z.string().nullable().describe(`
         * * Field Name: RequestedSkillIDs
-        * * Display Name: Requested Skills
+        * * Display Name: Requested Skill IDs
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Optional JSON array of MJ: AI Skills IDs to pre-activate when the routine target is an Agent — threaded as ExecuteAgentParams.requestedSkillIDs so the agent starts each scheduled run with the requested skills' instructions and tools in effect (subject to all availability gates; ActivationMode does not gate this explicit-request path). Ignored for Action/Prompt targets.`),
     CronExpression: z.string().describe(`
@@ -30616,6 +30632,22 @@ export const MJUserRoutineSchema = z.object({
         * * Display Name: Cron Expression
         * * SQL Data Type: nvarchar(100)
         * * Description: Standard cron expression evaluated by the dispatcher to determine when the routine is due.`),
+    StartAt: z.date().nullable().describe(`
+        * * Field Name: StartAt
+        * * Display Name: Start At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Optional activation window start. An Active routine does not run before this time; once current time passes StartAt the dispatcher begins scheduling it. NULL = eligible immediately.`),
+    EndAt: z.date().nullable().describe(`
+        * * Field Name: EndAt
+        * * Display Name: End At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Optional activation window end. An Active routine stops running once current time passes EndAt — automatic sunset without changing Status. NULL = no end.`),
+    NotificationTemplateID: z.string().nullable().describe(`
+        * * Field Name: NotificationTemplateID
+        * * Display Name: Notification Template ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Templates (vwTemplates.ID)
+        * * Description: Optional MJ Template used to render routine notifications from the runs output data (result summary, status, target info) via the standard MJ templating architecture. When NULL, the system default routine-notification template (seeded via metadata, resolvable per instance — not hardcoded) is used.`),
     Timezone: z.string().describe(`
         * * Field Name: Timezone
         * * Display Name: Timezone
@@ -30684,11 +30716,15 @@ export const MJUserRoutineSchema = z.object({
         * * Default Value: getutcdate()`),
     User: z.string().describe(`
         * * Field Name: User
-        * * Display Name: User Name
+        * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
     Environment: z.string().nullable().describe(`
         * * Field Name: Environment
-        * * Display Name: Environment Name
+        * * Display Name: Environment
+        * * SQL Data Type: nvarchar(255)`),
+    NotificationTemplate: z.string().nullable().describe(`
+        * * Field Name: NotificationTemplate
+        * * Display Name: Notification Template
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -111386,7 +111422,7 @@ export class MJUserRoutineRecipientEntity extends BaseEntity<MJUserRoutineRecipi
 
     /**
     * * Field Name: RoutineID
-    * * Display Name: Routine ID
+    * * Display Name: Routine
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: User Routines (vwUserRoutines.ID)
     * * Description: Routine this recipient belongs to.
@@ -111400,7 +111436,7 @@ export class MJUserRoutineRecipientEntity extends BaseEntity<MJUserRoutineRecipi
 
     /**
     * * Field Name: UserID
-    * * Display Name: User ID
+    * * Display Name: User
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     * * Description: Internal MJ user recipient (when notifying an existing user). Either UserID or Email is set.
@@ -111427,7 +111463,7 @@ export class MJUserRoutineRecipientEntity extends BaseEntity<MJUserRoutineRecipi
 
     /**
     * * Field Name: Channel
-    * * Display Name: Delivery Channel
+    * * Display Name: Channel
     * * SQL Data Type: nvarchar(20)
     * * Default Value: InApp
     * * Value List Type: List
@@ -111441,6 +111477,20 @@ export class MJUserRoutineRecipientEntity extends BaseEntity<MJUserRoutineRecipi
     }
     set Channel(value: 'Email' | 'InApp') {
         this.Set('Channel', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Explicit display/notification ordering of recipients within a routine (ascending).
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
     }
 
     /**
@@ -111465,7 +111515,7 @@ export class MJUserRoutineRecipientEntity extends BaseEntity<MJUserRoutineRecipi
 
     /**
     * * Field Name: Routine
-    * * Display Name: Routine
+    * * Display Name: Routine Name
     * * SQL Data Type: nvarchar(255)
     */
     get Routine(): string {
@@ -111474,7 +111524,7 @@ export class MJUserRoutineRecipientEntity extends BaseEntity<MJUserRoutineRecipi
 
     /**
     * * Field Name: User
-    * * Display Name: User
+    * * Display Name: User Name
     * * SQL Data Type: nvarchar(100)
     */
     get User(): string | null {
@@ -111527,7 +111577,7 @@ export class MJUserRoutineRunEntity extends BaseEntity<MJUserRoutineRunEntityTyp
 
     /**
     * * Field Name: RoutineID
-    * * Display Name: Routine ID
+    * * Display Name: Routine
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: User Routines (vwUserRoutines.ID)
     * * Description: Routine this run belongs to.
@@ -111601,29 +111651,31 @@ export class MJUserRoutineRunEntity extends BaseEntity<MJUserRoutineRunEntityTyp
     }
 
     /**
-    * * Field Name: TokensUsed
-    * * Display Name: Tokens Used
-    * * SQL Data Type: int
-    * * Description: Total tokens used by this run (if applicable).
+    * * Field Name: PromptRunID
+    * * Display Name: Prompt Run ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Prompt Runs (vwAIPromptRuns.ID)
+    * * Description: For Prompt targets, links to the MJ: AI Prompt Runs record for this execution — tokens, cost, and full telemetry live there (never duplicated here).
     */
-    get TokensUsed(): number | null {
-        return this.Get('TokensUsed');
+    get PromptRunID(): string | null {
+        return this.Get('PromptRunID');
     }
-    set TokensUsed(value: number | null) {
-        this.Set('TokensUsed', value);
+    set PromptRunID(value: string | null) {
+        this.Set('PromptRunID', value);
     }
 
     /**
-    * * Field Name: Cost
-    * * Display Name: Cost
-    * * SQL Data Type: decimal(18, 6)
-    * * Description: Total cost of this run (if applicable).
+    * * Field Name: ActionExecutionLogID
+    * * Display Name: Action Execution Log ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Action Execution Logs (vwActionExecutionLogs.ID)
+    * * Description: For Action targets, links to the MJ: Action Execution Logs record for this execution — params, results, and telemetry live there (never duplicated here).
     */
-    get Cost(): number | null {
-        return this.Get('Cost');
+    get ActionExecutionLogID(): string | null {
+        return this.Get('ActionExecutionLogID');
     }
-    set Cost(value: number | null) {
-        this.Set('Cost', value);
+    set ActionExecutionLogID(value: string | null) {
+        this.Set('ActionExecutionLogID', value);
     }
 
     /**
@@ -111701,7 +111753,7 @@ export class MJUserRoutineRunEntity extends BaseEntity<MJUserRoutineRunEntityTyp
 
     /**
     * * Field Name: Routine
-    * * Display Name: Routine
+    * * Display Name: Routine Name
     * * SQL Data Type: nvarchar(255)
     */
     get Routine(): string {
@@ -111715,6 +111767,24 @@ export class MJUserRoutineRunEntity extends BaseEntity<MJUserRoutineRunEntityTyp
     */
     get AgentRun(): string | null {
         return this.Get('AgentRun');
+    }
+
+    /**
+    * * Field Name: PromptRun
+    * * Display Name: Prompt Run
+    * * SQL Data Type: nvarchar(255)
+    */
+    get PromptRun(): string | null {
+        return this.Get('PromptRun');
+    }
+
+    /**
+    * * Field Name: ActionExecutionLog
+    * * Display Name: Action Execution Log
+    * * SQL Data Type: nvarchar(425)
+    */
+    get ActionExecutionLog(): string | null {
+        return this.Get('ActionExecutionLog');
     }
 }
 
@@ -111763,7 +111833,7 @@ export class MJUserRoutineEntity extends BaseEntity<MJUserRoutineEntityType> {
 
     /**
     * * Field Name: UserID
-    * * Display Name: User
+    * * Display Name: User ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     * * Description: Owner of the routine. Routines are private to their owner (row-level access).
@@ -111777,7 +111847,7 @@ export class MJUserRoutineEntity extends BaseEntity<MJUserRoutineEntityType> {
 
     /**
     * * Field Name: EnvironmentID
-    * * Display Name: Environment
+    * * Display Name: Environment ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Environments (vwEnvironments.ID)
     * * Description: Optional environment scope for the routine.
@@ -111872,7 +111942,7 @@ export class MJUserRoutineEntity extends BaseEntity<MJUserRoutineEntityType> {
 
     /**
     * * Field Name: TargetID
-    * * Display Name: Target
+    * * Display Name: Target ID
     * * SQL Data Type: uniqueidentifier
     * * Description: Polymorphic reference resolved by TargetType (AIAgent.ID, Action.ID, or AIPrompt.ID). No FK because the target table varies.
     */
@@ -111911,7 +111981,7 @@ export class MJUserRoutineEntity extends BaseEntity<MJUserRoutineEntityType> {
 
     /**
     * * Field Name: RequestedSkillIDs
-    * * Display Name: Requested Skills
+    * * Display Name: Requested Skill IDs
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Optional JSON array of MJ: AI Skills IDs to pre-activate when the routine target is an Agent — threaded as ExecuteAgentParams.requestedSkillIDs so the agent starts each scheduled run with the requested skills' instructions and tools in effect (subject to all availability gates; ActivationMode does not gate this explicit-request path). Ignored for Action/Prompt targets.
     */
@@ -111933,6 +112003,46 @@ export class MJUserRoutineEntity extends BaseEntity<MJUserRoutineEntityType> {
     }
     set CronExpression(value: string) {
         this.Set('CronExpression', value);
+    }
+
+    /**
+    * * Field Name: StartAt
+    * * Display Name: Start At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Optional activation window start. An Active routine does not run before this time; once current time passes StartAt the dispatcher begins scheduling it. NULL = eligible immediately.
+    */
+    get StartAt(): Date | null {
+        return this.Get('StartAt');
+    }
+    set StartAt(value: Date | null) {
+        this.Set('StartAt', value);
+    }
+
+    /**
+    * * Field Name: EndAt
+    * * Display Name: End At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Optional activation window end. An Active routine stops running once current time passes EndAt — automatic sunset without changing Status. NULL = no end.
+    */
+    get EndAt(): Date | null {
+        return this.Get('EndAt');
+    }
+    set EndAt(value: Date | null) {
+        this.Set('EndAt', value);
+    }
+
+    /**
+    * * Field Name: NotificationTemplateID
+    * * Display Name: Notification Template ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Templates (vwTemplates.ID)
+    * * Description: Optional MJ Template used to render routine notifications from the runs output data (result summary, status, target info) via the standard MJ templating architecture. When NULL, the system default routine-notification template (seeded via metadata, resolvable per instance — not hardcoded) is used.
+    */
+    get NotificationTemplateID(): string | null {
+        return this.Get('NotificationTemplateID');
+    }
+    set NotificationTemplateID(value: string | null) {
+        this.Set('NotificationTemplateID', value);
     }
 
     /**
@@ -112077,7 +112187,7 @@ export class MJUserRoutineEntity extends BaseEntity<MJUserRoutineEntityType> {
 
     /**
     * * Field Name: User
-    * * Display Name: User Name
+    * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
     get User(): string {
@@ -112086,11 +112196,20 @@ export class MJUserRoutineEntity extends BaseEntity<MJUserRoutineEntityType> {
 
     /**
     * * Field Name: Environment
-    * * Display Name: Environment Name
+    * * Display Name: Environment
     * * SQL Data Type: nvarchar(255)
     */
     get Environment(): string | null {
         return this.Get('Environment');
+    }
+
+    /**
+    * * Field Name: NotificationTemplate
+    * * Display Name: Notification Template
+    * * SQL Data Type: nvarchar(255)
+    */
+    get NotificationTemplate(): string | null {
+        return this.Get('NotificationTemplate');
     }
 }
 
