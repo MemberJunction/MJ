@@ -35,8 +35,16 @@ export interface ExternalViewParams {
   fields?: string[];
   /** Filter expression in the data source's FilterDialect (a SQL WHERE body, or a driver-translated AST for non-SQL sources). */
   filter?: string;
-  /** Order-by expression in the data source's dialect. */
+  /** Order-by expression in the data source's dialect (caller-supplied; screened for read-only safety). */
   orderBy?: string;
+  /**
+   * Fallback ordering columns — raw, unquoted identifier names from MJ metadata (the entity's primary
+   * key) — the driver applies ONLY when {@link orderBy} is absent, to make offset pagination
+   * deterministic. Each driver applies them per its own dialect: SQL drivers quote each identifier
+   * (so mixed-case / reserved-word PK columns resolve on case-sensitive dialects); MongoDB uses them
+   * as raw field names. Trusted (PK names from introspected metadata), so NOT clause-screened.
+   */
+  defaultOrderByColumns?: readonly string[];
   /** Maximum rows to return (page size). */
   maxRows?: number;
   /** Zero-based row offset for pagination. */

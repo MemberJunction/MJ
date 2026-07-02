@@ -114,12 +114,28 @@ export abstract class BaseSqlExternalDataSourceDriver<TConnection = unknown> ext
       this.screenReadOnlyClause(params.orderBy, 'orderby');
     }
     const projection = params.fields?.length ? params.fields.map((f) => this.quoteIdent(f)).join(', ') : '*';
-    let sql = `SELECT ${this.selectTopClause(params)}${projection} FROM ${target}`;
+    const effectiveParams = this.applyDefaultOrderBy(params);
+    let sql = `SELECT ${this.selectTopClause(effectiveParams)}${projection} FROM ${target}`;
     if (params.filter) {
       sql += ` WHERE ${params.filter}`;
     }
-    sql += this.orderAndPageClause(params);
+    sql += this.orderAndPageClause(effectiveParams);
     return sql;
+  }
+
+  /**
+   * Resolve the effective ordering: a caller-supplied {@link ExternalViewParams.orderBy} always wins
+   * (it was already screened). Otherwise, when the router supplied {@link ExternalViewParams.defaultOrderByColumns}
+   * (the entity's primary key, for deterministic offset paging), materialize them into an ORDER BY with
+   * each identifier QUOTED per this dialect — a bare mixed-case / reserved-word PK column would fail to
+   * resolve on a case-sensitive dialect. These names come from trusted MJ metadata, so they are not screened.
+   */
+  protected applyDefaultOrderBy(params: ExternalViewParams): ExternalViewParams {
+    if (params.orderBy || !params.defaultOrderByColumns?.length) {
+      return params;
+    }
+    const quoted = params.defaultOrderByColumns.map((c) => this.quoteIdent(c)).join(', ');
+    return { ...params, orderBy: quoted };
   }
 
   /** Map a dialect object-type token to MJ's external object type. Case-insensitive `VIEW` → view. */

@@ -130,18 +130,19 @@ describe('ExternalDataSourceReadRouterImpl', () => {
       expect(viewParams.maxRows).toBe(250); // per-source override caps below the hard default
     });
 
-    it('defaults orderBy to the entity primary key when paginating without an explicit order', async () => {
+    it('passes the entity PK as defaultOrderByColumns (raw, for the driver to quote) when paginating without an explicit order', async () => {
       const driver = makeFakeDriver();
       (driver.RunView as ReturnType<typeof vi.fn>).mockResolvedValue({ success: true, rows: [], executionTimeMs: 1 });
       mockResolve(driver);
 
-      // Paginated read (StartRow set) with NO OrderBy → orderBy should default to the PK for
-      // deterministic paging. PK comes from the entity's introspected fields.
+      // Paginated read (StartRow set) with NO OrderBy → the router passes the raw PK name(s) as
+      // defaultOrderByColumns so the driver can quote them per-dialect; it does NOT pre-build orderBy.
       const entity = new EntityInfo({ Name: 'Sales', ExternalDataSourceID: 'ds-1', BaseTable: 'sales', Fields: [{ Name: 'ID', IsPrimaryKey: true }] });
       await impl.RunViewExternal(entity, { EntityName: 'Sales', StartRow: 20, MaxRows: 10 });
 
       const [, viewParams] = (driver.RunView as ReturnType<typeof vi.fn>).mock.calls[0];
-      expect(viewParams.orderBy).toBe('ID');
+      expect(viewParams.orderBy).toBeUndefined();
+      expect(viewParams.defaultOrderByColumns).toEqual(['ID']);
       expect(viewParams.offset).toBe(20);
     });
 
@@ -151,11 +152,12 @@ describe('ExternalDataSourceReadRouterImpl', () => {
       mockResolve(driver);
 
       const entity = new EntityInfo({ Name: 'Sales', ExternalDataSourceID: 'ds-1', BaseTable: 'sales', Fields: [{ Name: 'ID', IsPrimaryKey: true }] });
-      // caller order is respected even when paginating
+      // caller order is respected even when paginating (and no default columns are added)
       await impl.RunViewExternal(entity, { EntityName: 'Sales', StartRow: 5, MaxRows: 10, OrderBy: 'Name ASC' });
       expect((driver.RunView as ReturnType<typeof vi.fn>).mock.calls[0][1].orderBy).toBe('Name ASC');
+      expect((driver.RunView as ReturnType<typeof vi.fn>).mock.calls[0][1].defaultOrderByColumns).toBeUndefined();
 
-      // no pagination → no synthesized order
+      // no pagination → no synthesized order at all
       vi.restoreAllMocks();
       const driver2 = makeFakeDriver();
       (driver2.RunView as ReturnType<typeof vi.fn>).mockResolvedValue({ success: true, rows: [], executionTimeMs: 1 });
@@ -163,6 +165,7 @@ describe('ExternalDataSourceReadRouterImpl', () => {
       const entity2 = new EntityInfo({ Name: 'Sales', ExternalDataSourceID: 'ds-1', BaseTable: 'sales', Fields: [{ Name: 'ID', IsPrimaryKey: true }] });
       await impl.RunViewExternal(entity2, { EntityName: 'Sales', MaxRows: 10 });
       expect((driver2.RunView as ReturnType<typeof vi.fn>).mock.calls[0][1].orderBy).toBeUndefined();
+      expect((driver2.RunView as ReturnType<typeof vi.fn>).mock.calls[0][1].defaultOrderByColumns).toBeUndefined();
     });
 
     it('returns a failed RunViewResult (not a throw) when the driver reports failure', async () => {

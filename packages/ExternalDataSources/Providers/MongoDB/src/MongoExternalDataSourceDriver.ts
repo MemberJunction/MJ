@@ -149,7 +149,13 @@ export class MongoExternalDataSourceDriver extends BaseExternalDataSourceDriver<
         const filter = MongoFilterTranslator.Translate(params.filter, { caseInsensitiveLike: config.caseInsensitiveLike });
         const options: FindOptions = {};
         if (params.fields?.length) options.projection = this.buildProjection(params.fields);
-        if (params.orderBy) options.sort = this.parseSort(params.orderBy);
+        if (params.orderBy) {
+          options.sort = this.parseSort(params.orderBy);
+        } else if (params.defaultOrderByColumns?.length) {
+          // Deterministic paging fallback: sort ascending by the entity's primary key field(s).
+          // Mongo field names are case-sensitive but need no quoting, so they're used verbatim.
+          options.sort = Object.fromEntries(params.defaultOrderByColumns.map((c) => [c, 1]));
+        }
         if (params.offset != null) options.skip = params.offset;
         if (params.maxRows != null) options.limit = params.maxRows;
 

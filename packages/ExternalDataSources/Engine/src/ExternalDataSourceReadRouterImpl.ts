@@ -64,13 +64,16 @@ export class ExternalDataSourceReadRouterImpl extends ExternalDataSourceReadRout
       const offset = params.StartRow && params.StartRow > 0 ? params.StartRow : undefined;
       // Deterministic paging: OFFSET-based paging needs a stable ORDER BY or pages can repeat/skip
       // rows (T-SQL even forces a synthesized no-op ORDER BY when none is given). When the caller
-      // supplied no order and we're paginating, default to the entity's introspected primary key so
-      // page boundaries are well-defined uniformly across every SQL dialect. PK names come from MJ
-      // metadata (trusted), so they bypass the caller-clause keyword screen applied upstream.
-      let orderBy = (params.OrderBy as string) || undefined;
+      // supplied no order and we're paginating, fall back to the entity's introspected primary key.
+      // We pass the raw PK names to the driver (not a pre-built clause) so each driver applies them
+      // per its own dialect — SQL drivers QUOTE each identifier (mixed-case / reserved-word PK columns
+      // must be quoted to resolve on case-sensitive dialects), MongoDB uses them raw. PK names come
+      // from MJ metadata (trusted), so they bypass the caller-clause keyword screen applied upstream.
+      const orderBy = (params.OrderBy as string) || undefined;
+      let defaultOrderByColumns: string[] | undefined;
       if (!orderBy && offset != null) {
         if (entity.PrimaryKeys.length > 0) {
-          orderBy = entity.PrimaryKeys.map((pk) => pk.Name).join(', ');
+          defaultOrderByColumns = entity.PrimaryKeys.map((pk) => pk.Name);
         } else {
           // Offset paging with neither a caller OrderBy nor a primary key would yield
           // nondeterministic pages (rows can repeat/vanish). Fail clearly instead of silently.
@@ -85,6 +88,7 @@ export class ExternalDataSourceReadRouterImpl extends ExternalDataSourceReadRout
         fields: params.Fields && params.Fields.length ? params.Fields : undefined,
         filter: (params.ExtraFilter as string) || undefined,
         orderBy,
+        defaultOrderByColumns,
         // Row limit: the requested count (explicit MaxRows, else the entity's UserViewMaxRows, else
         // the absent-case default) capped by the per-source / hard ceiling so even a huge explicit
         // MaxRows can't stream a whole remote table (§M3 — fail-closed against a metered source).

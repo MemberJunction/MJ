@@ -78,6 +78,21 @@ describe('PostgresExternalDataSourceDriver — SQL building', () => {
       const sql = d.sel('"s"."t"', { objectName: 't', maxRows: Number('5; DROP'), offset: Number('1; DROP') });
       expect(sql).not.toContain('DROP');
     });
+
+    it('quotes defaultOrderByColumns into the ORDER BY when no caller orderBy (mixed-case PK paging fix)', () => {
+      const sql = d.sel('"s"."t"', { objectName: 't', defaultOrderByColumns: ['CustomerId'], maxRows: 10, offset: 20 });
+      expect(sql).toBe('SELECT * FROM "s"."t" ORDER BY "CustomerId" LIMIT 10 OFFSET 20');
+    });
+
+    it('quotes each column of a composite defaultOrderByColumns', () => {
+      const sql = d.sel('"s"."t"', { objectName: 't', defaultOrderByColumns: ['OrgID', 'Seq'], offset: 5 });
+      expect(sql).toBe('SELECT * FROM "s"."t" ORDER BY "OrgID", "Seq" OFFSET 5');
+    });
+
+    it('lets a caller-supplied orderBy win over defaultOrderByColumns', () => {
+      const sql = d.sel('"s"."t"', { objectName: 't', orderBy: 'name DESC', defaultOrderByColumns: ['id'], offset: 5 });
+      expect(sql).toBe('SELECT * FROM "s"."t" ORDER BY name DESC OFFSET 5');
+    });
   });
 
   describe('buildPrimaryKeyWhere (composite-key aware, quoted, parameter-bound)', () => {
