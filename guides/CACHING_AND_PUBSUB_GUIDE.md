@@ -1906,7 +1906,7 @@ const status = LocalCacheManager.Instance.GetRunViewCacheStatus(fingerprint);
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `ServerAutoCacheMaxRows` | 250 | Max row count for auto-caching unfiltered RunView results (0 = disabled) |
-| `DedupLingerMs` | 5,000 ms | How long resolved RunViews results stay available for instant replay |
+| `DedupLingerMs` | 5,000 ms | How long resolved RunViews results stay available for instant replay. Entries are **write-invalidated**: a BaseEntity save/delete/remote-invalidate for any entity a batch's params touch drops its lingered AND in-flight entries, so an identical call after a write always re-executes instead of replaying pre-write rows. Params addressed only by ViewID/ViewName (no EntityName) are not tracked. |
 
 ### ProviderBase Client-Side Fast-Start
 

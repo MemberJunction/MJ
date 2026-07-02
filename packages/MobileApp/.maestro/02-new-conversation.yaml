@@ -1,0 +1,13 @@
+# New-conversation navigation: from the Conversations home, open the composer
+# and confirm the new-conversation surface (agent rail + prompt) renders.
+appId: org.memberjunction.mobile
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "Conversations"
+    timeout: 30000
+- tapOn: "New conversation"
+# The new-conversation screen shows the agent rail heading, which is unique to it.
+- extendedWaitUntil:
+    visible: "Or talk to an agent"
+    timeout: 15000
