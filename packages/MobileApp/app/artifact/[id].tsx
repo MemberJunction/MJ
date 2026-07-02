@@ -7,6 +7,8 @@ import { Chart } from '@/components/charts/Chart';
 import { highlightCode } from '@/components/markdown/highlight';
 import { useArtifact } from '@/hooks/useConversations';
 import type { LoadedArtifact } from '@/data/services/artifacts';
+import { DesktopFallback, InteractiveComponentRenderer } from '@/interactive/InteractiveComponentRenderer';
+import { assessSpec } from '@/interactive/mobile-safety';
 import { Colors, Radius, Shadow, Type } from '@/theme/tokens';
 
 /** Horizontal padding applied by the scroll body, used to size charts. */
@@ -116,6 +118,8 @@ function ArtifactContent({ artifact }: { artifact: LoadedArtifact }) {
             return artifact.chart
                 ? <View style={styles.chartCard}><Chart spec={artifact.chart} width={contentWidth - 28} /></View>
                 : <Text style={styles.code}>{JSON.stringify(artifact.json, null, 2)}</Text>;
+        case 'interactive':
+            return <InteractiveArtifact artifact={artifact} />;
         case 'html':
             return <HtmlRenderer html={artifact.content} />;
         case 'code':
@@ -126,6 +130,19 @@ function ArtifactContent({ artifact }: { artifact: LoadedArtifact }) {
         default:
             return <Text style={styles.text}>{artifact.content}</Text>;
     }
+}
+
+/**
+ * Interactive artifact dispatcher: renders the react-runtime component natively
+ * when the spec is mobile-safe (no external libraries / child dependencies),
+ * otherwise shows the "view on desktop" fallback with the specific reason.
+ */
+function InteractiveArtifact({ artifact }: { artifact: LoadedArtifact }) {
+    const assessment = assessSpec(artifact.spec);
+    if (artifact.spec && assessment.renderable) {
+        return <InteractiveComponentRenderer spec={artifact.spec} />;
+    }
+    return <DesktopFallback reason={assessment.reason} />;
 }
 
 /**

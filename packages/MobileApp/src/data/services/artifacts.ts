@@ -12,10 +12,12 @@ import type {
     MJConversationArtifactEntity,
     MJConversationArtifactVersionEntity,
 } from '@memberjunction/core-entities';
+import type { ComponentSpec } from '@memberjunction/react-runtime';
 import { parseChartSpec, type ChartSpec } from '@/components/charts/chart-spec';
+import { toInteractiveSpec } from '@/data/services/interactive-components';
 
 /** The renderer the UI should use for an artifact's content, chosen by {@link classify}. */
-export type ArtifactRenderKind = 'json-table' | 'json' | 'markdown' | 'code' | 'html' | 'chart' | 'text';
+export type ArtifactRenderKind = 'json-table' | 'json' | 'markdown' | 'code' | 'html' | 'chart' | 'interactive' | 'text';
 
 /** A fully-loaded artifact: metadata, latest-version content, and any parsed payload the chosen renderer needs. */
 export type LoadedArtifact = {
@@ -35,6 +37,8 @@ export type LoadedArtifact = {
     json?: unknown;
     /** When kind is chart, the normalized chart spec. */
     chart?: ChartSpec;
+    /** When kind is interactive, the parsed react-runtime component spec. */
+    spec?: ComponentSpec;
     /** When kind is code, a best-effort source language hint for highlighting. */
     language?: string;
 };
@@ -45,6 +49,7 @@ type Classification = {
     rows?: Record<string, unknown>[];
     json?: unknown;
     chart?: ChartSpec;
+    spec?: ComponentSpec;
     language?: string;
 };
 
@@ -81,6 +86,11 @@ function classify(typeName: string, content: string): Classification {
             const parsed: unknown = JSON.parse(trimmed);
             const chart = parseChartSpec(parsed);
             if (chart) return { kind: 'chart', chart, json: parsed };
+            // Interactive react-runtime component specs carry both a `name` and a
+            // `code` body — charts (chartType/data) and plain data JSON never do,
+            // so this branch can't reclassify them.
+            const spec = toInteractiveSpec(parsed, typeName);
+            if (spec) return { kind: 'interactive', spec };
             if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === 'object' && parsed[0] !== null) {
                 return { kind: 'json-table', rows: parsed as Record<string, unknown>[] };
             }
@@ -133,7 +143,7 @@ export async function loadArtifact(artifactId: string, contextUser?: UserInfo): 
     const versions = versionsResult.Success ? (versionsResult.Results ?? []) : [];
     const latest = versions[0];
     const content = latest?.Content ?? '';
-    const { kind, rows, json, chart, language } = classify(artifact.ArtifactType ?? '', content);
+    const { kind, rows, json, chart, spec, language } = classify(artifact.ArtifactType ?? '', content);
 
     return {
         id: artifact.ID,
@@ -147,6 +157,7 @@ export async function loadArtifact(artifactId: string, contextUser?: UserInfo): 
         rows,
         json,
         chart,
+        spec,
         language,
     };
 }
