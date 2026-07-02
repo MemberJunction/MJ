@@ -18,6 +18,9 @@ class TestableSnowflakeDriver extends SnowflakeExternalDataSourceDriver {
   public screen(sql: string) {
     return this.screenReadOnlyNativeQuery(sql);
   }
+  public authErr(e: unknown) {
+    return this.isAuthError(e);
+  }
 }
 
 const ds = (over: Partial<MJExternalDataSourceEntity>): MJExternalDataSourceEntity =>
@@ -76,5 +79,43 @@ describe('SnowflakeExternalDataSourceDriver — read-only screen (dialect normal
   });
   it('still rejects a write even with a placeholder (normalization must not mask writes)', () => {
     expect(() => d.screen('DELETE FROM nation WHERE n_nationkey = ?')).toThrow(/read-only|write/i);
+  });
+});
+
+describe('SnowflakeExternalDataSourceDriver — offset-only paging', () => {
+  const d = new TestableSnowflakeDriver();
+
+  it('emits LIMIT before OFFSET (Snowflake requires it) when only an offset is given', () => {
+    const sql = d.sel('"s"."t"', { objectName: 't', offset: 20 });
+    expect(sql).toContain('LIMIT NULL OFFSET 20');
+  });
+
+  it('emits a normal LIMIT/OFFSET when both are given', () => {
+    const sql = d.sel('"s"."t"', { objectName: 't', maxRows: 10, offset: 20 });
+    expect(sql).toContain('LIMIT 10 OFFSET 20');
+  });
+});
+
+describe('SnowflakeExternalDataSourceDriver — isAuthError (credential-rotation self-heal)', () => {
+  const d = new TestableSnowflakeDriver();
+
+  it('recognizes Snowflake auth error codes (string and numeric)', () => {
+    expect(d.authErr({ code: '390100' })).toBe(true);
+    expect(d.authErr({ code: 390144 })).toBe(true);
+  });
+
+  it('recognizes Snowflake auth message phrases', () => {
+    expect(d.authErr(new Error('Incorrect username or password was specified.'))).toBe(true);
+    expect(d.authErr(new Error('JWT token is invalid'))).toBe(true);
+    expect(d.authErr(new Error('programmatic access token has expired'))).toBe(true);
+  });
+
+  it('still honors the base auth signals (inherited)', () => {
+    expect(d.authErr(new Error('authentication failed'))).toBe(true);
+  });
+
+  it('returns false for non-auth errors (must NOT evict+retry a normal query error)', () => {
+    expect(d.authErr(new Error("SQL compilation error: Object 'FOO' does not exist"))).toBe(false);
+    expect(d.authErr({ code: '000904' })).toBe(false);
   });
 });

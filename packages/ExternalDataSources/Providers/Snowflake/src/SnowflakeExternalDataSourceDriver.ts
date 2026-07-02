@@ -148,6 +148,30 @@ export class SnowflakeExternalDataSourceDriver extends BaseSqlExternalDataSource
     }
   }
 
+  /**
+   * Snowflake auth failures carry codes/phrases the base {@link isAuthError} doesn't recognize (its set
+   * covers PG/MySQL/SQL Server/Oracle). Without this override, {@link withConnectionRetry} never
+   * self-heals a rotated password or an expired PAT/JWT — every subsequent read fails until the process
+   * restarts. Add Snowflake's auth error codes + the stable message phrases.
+   */
+  protected isAuthError(e: unknown): boolean {
+    if (super.isAuthError(e)) {
+      return true;
+    }
+    const err = e as { code?: unknown };
+    const code = err?.code != null ? String(err.code) : '';
+    const snowflakeAuthCodes = new Set(['390100', '390101', '390104', '390144', '390195']);
+    const msg = (e instanceof Error ? e.message : String(e)).toLowerCase();
+    return (
+      snowflakeAuthCodes.has(code) ||
+      msg.includes('incorrect username or password') ||
+      msg.includes('token is invalid') ||
+      msg.includes('token has expired') ||
+      msg.includes('jwt token') ||
+      msg.includes('programmatic access token')
+    );
+  }
+
   /** Promisified statement execution against a pooled connection (acquired for the call, then released). */
   private execute<TRow extends ExternalRow = ExternalRow>(pool: SnowflakePool, sqlText: string, binds?: SnowflakeBind[]): Promise<TRow[]> {
     return pool.use((conn) => new Promise<TRow[]>((resolve, reject) => {
@@ -268,6 +292,10 @@ export class SnowflakeExternalDataSourceDriver extends BaseSqlExternalDataSource
       sql += ` LIMIT ${Number(params.maxRows)}`;
     }
     if (params.offset != null) {
+      // Snowflake requires LIMIT to precede OFFSET; when only an offset is given, use LIMIT NULL (no cap).
+      if (params.maxRows == null) {
+        sql += ` LIMIT NULL`;
+      }
       sql += ` OFFSET ${Number(params.offset)}`;
     }
     return sql;
