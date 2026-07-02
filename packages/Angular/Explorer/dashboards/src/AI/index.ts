@@ -53,5 +53,9 @@ export * from './components/analytics/realtime/realtime-sessions.component';
 export * from './components/analytics/realtime/realtime-management-data';
 export * from './components/analytics/realtime/realtime-management.component';
 
+// Realtime voice transcripts (diarized per-room meeting transcript browser)
+export * from './components/analytics/realtime/realtime-transcripts-data';
+export * from './components/analytics/realtime/realtime-transcripts.component';
+
 // Overview Hub
 export * from './components/overview/ai-overview-hub.component';

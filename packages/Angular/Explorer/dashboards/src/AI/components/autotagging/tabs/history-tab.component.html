@@ -133,10 +133,8 @@
                 </tbody>
               </table>
             } @else {
-              <div class="at-empty-state">
-                <i class="fa-solid fa-info-circle"></i>
-                <p>No per-source detail records found for this run.</p>
-              </div>
+              <mj-empty-state Size="compact" Icon="fa-solid fa-info-circle"
+                Title="No per-source detail records found for this run." />
             }
 
             <!-- Phase 4: content items processed in this run -->

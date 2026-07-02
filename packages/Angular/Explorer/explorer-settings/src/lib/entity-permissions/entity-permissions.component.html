@@ -279,19 +279,14 @@
         }
 
         @if (filteredEntityAccess.length === 0) {
-          <div class="empty-state" role="status">
-            <i class="fa-solid fa-shield-alt empty-state-icon" aria-hidden="true"></i>
-            <h3 class="empty-text">No Permissions Found</h3>
-            <p class="empty-subtext">Try adjusting your filters or refresh the data.</p>
-            <button
-              mjButton variant="primary"
-              (click)="refreshData()"
-              aria-label="Refresh permissions data"
-            >
-              <i class="fa-solid fa-refresh" aria-hidden="true"></i>
-              Refresh
-            </button>
-          </div>
+          <mj-empty-state
+            [Variant]="IsListNarrowed ? 'no-results' : 'empty'"
+            Icon="fa-solid fa-shield-halved"
+            Title="No Permissions Found"
+            Message="Try adjusting your filters or refresh the data."
+            [ActionText]="IsListNarrowed ? 'Reset filters' : 'Refresh'"
+            [ActionIcon]="IsListNarrowed ? 'fa-solid fa-rotate-left' : 'fa-solid fa-arrows-rotate'"
+            (Action)="onEmptyStateAction()" />
         }
     }
   </mj-page-body-interior>

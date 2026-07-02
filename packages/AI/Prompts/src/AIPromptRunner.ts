@@ -1,7 +1,7 @@
 import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, GetAIAPIKey, ErrorAnalyzer, AIErrorInfo, ResolveFileInputStrategy } from '@memberjunction/ai';
 import { AIModelRunner } from './AIModelRunner';
 import { ValidationAttempt, AIPromptRunResult, AIModelSelectionInfo } from '@memberjunction/ai-core-plus';
-import { LogErrorEx, LogStatus, LogStatusEx, IsVerboseLoggingEnabled, Metadata, UserInfo, IMetadataProvider } from '@memberjunction/core';
+import { BaseEntitySaveQueue, LogErrorEx, LogStatus, LogStatusEx, IsVerboseLoggingEnabled, Metadata, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { CleanJSON, MJGlobal, JSONValidator, ValidationResult, ValidationErrorInfo, ValidationErrorType, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { MJAIPromptModelEntity, MJAIModelVendorEntity, MJAIConfigurationEntity, MJAIVendorEntity, MJTemplateEntityExtended, MJAICredentialBindingEntity, MJCredentialEntity } from '@memberjunction/core-entities';
 import { MJAIModelEntityExtended, MJAIPromptEntityExtended, MJAIPromptRunEntityExtended } from "@memberjunction/ai-core-plus";
@@ -190,15 +190,15 @@ export class AIPromptRunner {
   private _provider: IMetadataProvider | null = null;
 
   /**
-   * Instance-keyed chain of in-flight AIPromptRun saves. Mirrors the BaseAgent step-save pattern:
-   * prompt-run persistence is fire-and-forget so the execution path never blocks on a DB
-   * round-trip, but saves for the SAME entity are sequenced — the initial 'Running' INSERT always
-   * completes before the finalize UPDATE, so a slow INSERT can never clobber the finalized row.
-   * Keyed by the entity INSTANCE (stable), not its ID. See {@link queuePromptRunSave}.
+   * Fire-and-forget AIPromptRun persistence. Prompt-run logging never blocks the execution path on a
+   * DB round-trip; the shared {@link BaseEntitySaveQueue} sequences saves for the SAME entity (the
+   * initial 'Running' INSERT always completes before the finalize UPDATE, and the finalize mutation
+   * runs INSIDE the post-INSERT task so a slow INSERT can never clobber the finalized row). Failures
+   * stay in this runner's structured log stream via the queue's `onError` hook.
    */
-  private _promptRunSaveChains = new Map<MJAIPromptRunEntityExtended, Promise<boolean>>();
-  /** All queued prompt-run save promises, for optional flushing via {@link WaitForPendingPromptRunSaves}. */
-  private _pendingPromptRunSaves: Promise<boolean>[] = [];
+  private _promptRunQueue = new BaseEntitySaveQueue({
+    onError: (message) => this.logError(message, { category: 'PromptRunSave' }),
+  });
 
   /**
    * Process-wide cache of parsed `OutputExample` JSON, keyed by the raw example string.
@@ -1232,8 +1232,10 @@ export class AIPromptRunner {
     consolidatedPromptRun.Status = parallelResult.successCount > 0 ? 'Completed' : 'Failed';
     consolidatedPromptRun.WasSelectedResult = true; // This is the consolidated result chosen by judge
 
-    // Persist the consolidated run fire-and-forget; chains after its INSERT via the save queue.
-    this.queuePromptRunSave(consolidatedPromptRun);
+    // Persist the consolidated run fire-and-forget; the finalize UPDATE chains after its INSERT via
+    // the save queue. These fields are set after all the awaited parallel work, so the INSERT has long
+    // landed — a plain Update (no post-INSERT callback) is race-safe here.
+    this._promptRunQueue.Update(consolidatedPromptRun);
 
     // Create additional results from all other successful results (excluding the best one)
     const additionalResults: AIPromptRunResult<T>[] = [];
@@ -2745,52 +2747,12 @@ export class AIPromptRunner {
   }
 
   /**
-   * Queues a fire-and-forget `Save()` for a prompt-run entity. Saves for the same instance are
-   * chained (via {@link _promptRunSaveChains}) so the initial INSERT always completes before any
-   * finalize UPDATE — guaranteeing a slow INSERT can't overwrite the finalized row. The whole
-   * chain runs independently of the execution flow (callers do NOT await it), so the model call
-   * is never delayed by a DB write.
-   *
-   * Save failures are logged (non-fatal): the AIPromptRun record is observability, not part of the
-   * prompt's success contract, so a rare persistence failure must not fail the prompt. The chained
-   * promise is tracked in {@link _pendingPromptRunSaves} so {@link WaitForPendingPromptRunSaves}
-   * can flush them when determinism is required (e.g. tests, or a caller that needs the rows
-   * durably written). Returns that promise.
-   */
-  private queuePromptRunSave(promptRun: MJAIPromptRunEntityExtended): Promise<boolean> {
-    const previous = this._promptRunSaveChains.get(promptRun) ?? Promise.resolve(true);
-    const current = previous
-      .then(async () => {
-        const ok = await promptRun.Save();
-        if (!ok) {
-          this.logError(`Failed to save AIPromptRun ${promptRun.ID || '(unsaved)'}: ${promptRun.LatestResult?.CompleteMessage || 'Unknown error'}`, {
-            category: 'PromptRunSave',
-            metadata: { promptRunId: promptRun.ID }
-          });
-        }
-        return ok;
-      })
-      .catch((err) => {
-        // Infrastructure-level throw (network, etc.) — log and swallow so the fire-and-forget
-        // promise never surfaces as an unhandled rejection.
-        this.logError(err instanceof Error ? err : new Error(String(err)), {
-          category: 'PromptRunSave',
-          metadata: { promptRunId: promptRun.ID }
-        });
-        return false;
-      });
-    this._promptRunSaveChains.set(promptRun, current);
-    this._pendingPromptRunSaves.push(current);
-    return current;
-  }
-
-  /**
-   * Awaits all in-flight prompt-run saves queued by this runner instance. The normal execution
-   * path does NOT call this — prompt-run persistence is intentionally fire-and-forget. Exposed for
-   * tests and for callers that need the AIPromptRun rows durably written before proceeding.
+   * Awaits all in-flight prompt-run saves queued by this runner instance. The normal execution path
+   * does NOT call this — prompt-run persistence is intentionally fire-and-forget. Exposed for tests
+   * and for callers that need the AIPromptRun rows durably written before proceeding.
    */
   public async WaitForPendingPromptRunSaves(): Promise<void> {
-    await Promise.allSettled(this._pendingPromptRunSaves);
+    await this._promptRunQueue.Flush();
   }
 
   private async createPromptRun(
@@ -2976,7 +2938,7 @@ export class AIPromptRunner {
       // NewRecord() above, so callers (and the onPromptRunCreated callback) have it immediately —
       // we don't block the model call on the INSERT. The finalize UPDATE chains after this INSERT
       // via the instance-keyed save queue, so ordering is guaranteed.
-      this.queuePromptRunSave(promptRun);
+      this._promptRunQueue.Insert(promptRun);
 
       // Invoke callback if provided. The ID is available without awaiting the save (client-generated
       // by NewRecord()), so agent-run/step linking that depends on it works immediately.
@@ -5229,14 +5191,35 @@ export class AIPromptRunner {
       totalCost: number;
     },
   ): Promise<void> {
-    try {
-      // Ensure the initial 'Running' INSERT (and its BaseEntity.finalizeSave post-save reload, which does
-      // init() + SetMany(insertedRow)) has fully landed BEFORE we mutate the final state. Mutating while the
-      // INSERT is still in flight lets the reload revert these values, and the chained UPDATE then persists
-      // the stale 'Running' row (the same race fixed in the agent-run-step queue and action-execution-log).
-      // The model call between create and update almost always covers this; a fast-failing prompt could not.
-      await this._promptRunSaveChains.get(promptRun);
+    // Fire-and-forget finalize UPDATE. The field mutations run INSIDE the post-INSERT task (after the
+    // 'Running' INSERT + its finalizeSave reload land), so the reload can never revert them and the
+    // chained UPDATE persists the finalized state — the "stuck at Running" race is structurally
+    // impossible. The execution flow does NOT await the save.
+    this._promptRunQueue.Update(promptRun, () =>
+      this.applyFinalizedPromptRunFields(promptRun, prompt, modelResult, parsedResult, endTime, executionTimeMS, validationAttempts, cumulativeTokens),
+    );
+  }
 
+  /**
+   * Populates a prompt-run's finalized fields (result, tokens, cost, timing, rollups) from the model
+   * result. Runs INSIDE the post-INSERT save task — see {@link updatePromptRun}. Errors here are
+   * logged (non-fatal): the AIPromptRun is observability, not part of the prompt's success contract.
+   */
+  private applyFinalizedPromptRunFields(
+    promptRun: MJAIPromptRunEntityExtended,
+    prompt: MJAIPromptEntityExtended,
+    modelResult: ChatResult,
+    parsedResult: { result: unknown; validationResult?: ValidationResult },
+    endTime: Date,
+    executionTimeMS: number,
+    validationAttempts?: ValidationAttempt[],
+    cumulativeTokens?: {
+      promptTokens: number;
+      completionTokens: number;
+      totalCost: number;
+    },
+  ): void {
+    try {
       promptRun.CompletedAt = endTime;
       promptRun.ExecutionTimeMS = executionTimeMS;
 
@@ -5443,10 +5426,6 @@ export class AIPromptRunner {
         promptRun.TotalCost = promptRun.Cost;
       }
 
-      // Finalize fire-and-forget. Chains after the initial INSERT (same entity instance) so the
-      // 'Running' INSERT can never overwrite this finalized 'Completed'/'Failed' state. The
-      // execution flow does NOT await this — see queuePromptRunSave / WaitForPendingPromptRunSaves.
-      this.queuePromptRunSave(promptRun);
     } catch (error) {
       this.logError(error, {
         category: 'PromptRunUpdate',

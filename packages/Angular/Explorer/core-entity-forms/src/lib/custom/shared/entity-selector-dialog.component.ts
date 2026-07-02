@@ -41,15 +41,14 @@ export interface EntitySelectorConfig {
                 <p>Loading {{ config.entityName }}...</p>
               </div>
             }
-        
+
             <!-- Entity List -->
             @if (!isLoading) {
               <div class="entity-list-container">
                 @if (filteredEntities.length === 0) {
-                  <div class="empty-state">
-                    <i class="fa-solid fa-inbox"></i>
-                    <p>No {{ config.entityName }} found</p>
-                  </div>
+                  <mj-empty-state class="empty-state"
+                    [Variant]="searchText ? 'no-results' : 'empty'"
+                    [Title]="EmptyStateTitle" />
                 } @else {
                   <div class="entity-list">
                     @for (entity of filteredEntities; track entity.ID) {
@@ -149,8 +148,7 @@ export interface EntitySelectorConfig {
             padding-left: 32px;
         }
 
-        .loading-state,
-        .empty-state {
+        .loading-state {
             flex: 1;
             display: flex;
             flex-direction: column;
@@ -160,10 +158,13 @@ export interface EntitySelectorConfig {
             gap: 12px;
         }
 
-        .loading-state i,
-        .empty-state i {
+        .loading-state i {
             font-size: 48px;
             color: var(--mj-border-default);
+        }
+
+        mj-empty-state.empty-state {
+            flex: 1;
         }
 
         .entity-list-container {
@@ -272,6 +273,13 @@ export class EntitySelectorDialogComponent extends BaseAngularComponent implemen
         private sharedService: SharedService
     ) {
     super();}
+
+    /** Title for the empty/no-results placeholder, echoing the active search term when narrowed. */
+    public get EmptyStateTitle(): string {
+        return this.searchText
+            ? `No ${this.config.entityName} match "${this.searchText}"`
+            : `No ${this.config.entityName} found`;
+    }
 
     async ngOnInit() {
         await this.loadEntities();

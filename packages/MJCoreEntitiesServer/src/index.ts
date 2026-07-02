@@ -27,10 +27,12 @@ export * from './custom/MJAIBridgeProviderChannelEntityServer.server';
 export * from './custom/MJAIAgentSessionBridgeEntityServer.server';
 export * from './custom/MJAIAgentSessionBridgeParticipantEntityServer.server';
 export * from './custom/MJAIRemoteBrowserProviderEntityServer.server';
+export * from './custom/MJAISkillPermissionEntityServer.server';
+export * from './custom/MJAISkillEntityServer.server';
 export * from './custom/json-schema-lite';
 export * from './custom/IntegrationLLMPKCallback';
 export * from './custom/util';
 
 export * from './engines/QueryEngineServer';
 export * from './engines/QueryMatchResult';
-export * from './engines/ComponentMetadataEngineServer';
+export * from './engines/ComponentMetadataEngineServer';export * from './custom/MJRemoteOperationEntityServer.server';

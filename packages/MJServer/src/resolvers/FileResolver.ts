@@ -1,6 +1,7 @@
-import { EntityPermissionType, FieldValueCollection, EntitySaveOptions } from '@memberjunction/core';
+import { EntityPermissionType, FieldValueCollection, EntitySaveOptions, LogError, UserInfo } from '@memberjunction/core';
 import { NormalizeUUID } from '@memberjunction/global';
 import { MJFileEntity, MJFileStorageProviderEntity, MJFileStorageAccountEntity } from '@memberjunction/core-entities';
+import { readRealtimeRecordingFile } from '@memberjunction/ai-agents';
 import {
   AppContext,
   Arg,
@@ -8,6 +9,7 @@ import {
   DeleteOptionsInput,
   Field,
   FieldResolver,
+  Float,
   InputType,
   Int,
   Mutation,
@@ -37,6 +39,9 @@ import {
 import { CreateMJFileInput, MJFileResolver as FileResolverBase, MJFile_, UpdateMJFileInput } from '../generated/generated.js';
 import { FieldMapper } from '@memberjunction/graphql-dataprovider';
 import { GetReadOnlyProvider } from '../util.js';
+import { configInfo } from '../config.js';
+import { MediaAccessKeyManager } from '../rest/MediaAccessKeys.js';
+import { deriveSidecarPath, parsePeaksSidecar } from './peaksSidecar.js';
 
 @InputType()
 export class CreateUploadURLInput {
@@ -312,8 +317,161 @@ export class SearchAcrossAccountsPayload {
   failedAccounts: number;
 }
 
+/**
+ * Result of {@link FileResolver.GetFileContents} — the bytes of an `MJ: Files` record returned as
+ * base64, read server-side through authenticated MJStorage (never a public pre-signed link).
+ */
+@ObjectType()
+export class FileContentsResult {
+  @Field(() => Boolean)
+  Success: boolean;
+
+  @Field(() => String, { nullable: true })
+  Base64?: string;
+
+  @Field(() => String, { nullable: true })
+  MimeType?: string;
+
+  @Field(() => String, { nullable: true })
+  ErrorMessage?: string;
+}
+
+/**
+ * Result of {@link FileResolver.CreateMediaAccessToken} — a short-lived signed token plus the
+ * authenticated streaming URL the browser hands to a `<audio>`/`<video>` element. The token is
+ * minted only after a per-user permission check on the `MJ: Files` row; the `/media/:fileId`
+ * route re-verifies it (signature + expiry + file match) on each Range request.
+ */
+@ObjectType()
+export class MediaAccessTokenResult {
+  @Field(() => Boolean)
+  Success: boolean;
+
+  @Field(() => String, { nullable: true })
+  Token?: string;
+
+  @Field(() => String, { nullable: true })
+  Url?: string;
+
+  @Field(() => Date, { nullable: true })
+  ExpiresAt?: Date;
+
+  /**
+   * The file's MIME type (from the already-loaded `MJ: Files` row). Lets the wrapper choose
+   * `<audio>` vs `<video>` WITHOUT re-downloading any bytes; the stream itself sets Content-Type.
+   */
+  @Field(() => String, { nullable: true })
+  MimeType?: string;
+
+  /**
+   * Optional precomputed waveform peaks (normalized `0..1`, one per rendered bar) read from a
+   * `peaks.json` sidecar that sits beside the file in storage. When present, the player renders the
+   * real waveform instantly with NO client-side fetch/decode of the audio. Best-effort: a missing or
+   * malformed sidecar simply omits this field — it never blocks token minting or fails the mutation.
+   */
+  @Field(() => [Float], { nullable: true })
+  Peaks?: number[];
+
+  @Field(() => String, { nullable: true })
+  ErrorMessage?: string;
+}
+
 @Resolver(MJFile_)
 export class FileResolver extends FileResolverBase {
+  /**
+   * Resolves the server's public base URL the same way callbacks/magic-link do:
+   * `publicUrl` if configured (e.g. an ngrok URL), else `baseUrl:graphqlPort`. Trailing
+   * slash stripped so callers can append `/media/...`.
+   */
+  private resolvePublicBaseUrl(): string {
+    const base = configInfo.publicUrl || `${configInfo.baseUrl}:${configInfo.graphqlPort}${configInfo.graphqlRootPath || ''}`;
+    return base.replace(/\/+$/, '');
+  }
+
+  /**
+   * Mints a short-lived signed media-access token for an `MJ: Files` record and returns the
+   * authenticated streaming URL (`<publicBase>/media/<fileId>?token=<token>`). Permission-gated
+   * IDENTICALLY to {@link GetFileContents}: the file is loaded under the CALLING USER's context, so
+   * MJ row-level security determines access. The returned token is the capability — the streaming
+   * route re-verifies it without re-checking row-level access. Never throws to the client.
+   *
+   * @param fileId The `MJ: Files` id to grant streaming access to.
+   * @returns `{ Success, Token?, Url?, ExpiresAt?, ErrorMessage? }`.
+   */
+  @Mutation(() => MediaAccessTokenResult)
+  async CreateMediaAccessToken(@Arg('fileId', () => String) fileId: string, @Ctx() context: AppContext): Promise<MediaAccessTokenResult> {
+    try {
+      const provider = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true });
+      const contextUser = this.GetUserFromPayload(context.userPayload);
+
+      // Permission gate: load the file under the USER's context. A failed load means the file
+      // does not exist OR the user lacks read access under MJ row-level security.
+      const fileEntity = await provider.GetEntityObject<MJFileEntity>('MJ: Files', contextUser);
+      const loaded = await fileEntity.Load(fileId);
+      if (!loaded) {
+        return { Success: false, ErrorMessage: 'You do not have access to this file or it does not exist.' };
+      }
+
+      // Access authorized — mint the capability token.
+      const { Token, ExpiresAt } = MediaAccessKeyManager.Instance.Sign(fileId, contextUser.ID);
+      const url = `${this.resolvePublicBaseUrl()}/media/${encodeURIComponent(fileId)}?token=${encodeURIComponent(Token)}`;
+
+      // Best-effort: surface precomputed waveform peaks from a peaks.json sidecar beside the file, so
+      // the player renders the real waveform instantly without fetching/decoding the audio. Never
+      // blocks token minting — any failure just omits Peaks.
+      const peaks = await this.tryReadPeaksSidecar(fileEntity, contextUser);
+
+      return { Success: true, Token, Url: url, ExpiresAt, MimeType: fileEntity.ContentType ?? undefined, Peaks: peaks };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      LogError(`CreateMediaAccessToken failed (file ${fileId}): ${message}`);
+      return { Success: false, ErrorMessage: message };
+    }
+  }
+
+  /**
+   * Best-effort read of a `peaks.json` waveform sidecar that sits in the SAME storage folder as the
+   * given file (a JSON array of normalized `0..1` numbers, written at capture time). Derives the
+   * folder from the file's `ProviderKey` (strips the final path segment), reads `<folder>/peaks.json`
+   * via the file's own storage driver, parses + validates it, and returns sanitized peaks. Returns
+   * `undefined` on ANY failure (no ProviderKey, no sidecar, parse error, garbage) — the caller treats
+   * peaks as a pure optimization and must never let a sidecar problem affect token minting.
+   *
+   * @param file The already-loaded (under the user's context) `MJ: Files` row.
+   * @param contextUser The calling user — used to resolve the storage driver.
+   * @returns Sanitized `0..1` peaks (length-capped), or `undefined`.
+   */
+  private async tryReadPeaksSidecar(file: MJFileEntity, contextUser: UserInfo): Promise<number[] | undefined> {
+    try {
+      // The sidecar lives next to the recording: replace the final path segment with peaks.json.
+      const sidecarPath = deriveSidecarPath(file.ProviderKey);
+      if (!sidecarPath) {
+        return undefined;
+      }
+
+      // Resolve the file's storage account → driver (mirror of readRealtimeRecordingFile's pattern).
+      await FileStorageEngine.Instance.Config(false, contextUser);
+      let accounts = FileStorageEngine.Instance.GetAccountsByProviderID(file.ProviderID);
+      if (accounts.length === 0) {
+        await FileStorageEngine.Instance.Config(true, contextUser);
+        accounts = FileStorageEngine.Instance.GetAccountsByProviderID(file.ProviderID);
+      }
+      const account = accounts[0];
+      if (!account) {
+        return undefined;
+      }
+      const driver = await FileStorageEngine.Instance.GetDriver(account.ID, contextUser);
+      const bytes = await driver.GetObject({ fullPath: sidecarPath });
+      if (!bytes || bytes.length === 0) {
+        return undefined;
+      }
+      return parsePeaksSidecar(bytes);
+    } catch {
+      // No sidecar / unreadable / parse failure — peaks are optional, never surface the error.
+      return undefined;
+    }
+  }
+
   /**
    * Builds UserContextOptions for storage operations that may require OAuth authentication.
    * This passes the current user's ID and context to allow the storage utilities to
@@ -429,6 +587,46 @@ export class FileResolver extends FileResolverBase {
     const url = await createDownloadUrl(providerEntity, file.ProviderKey ?? file.Name, userContext);
 
     return url;
+  }
+
+  /**
+   * Returns an `MJ: Files` record's bytes as base64, read server-side through authenticated MJStorage
+   * (`GetObject`) — NOT a public pre-signed link. Permission-gated: the file is first loaded under the
+   * calling user's context, so MJ row-level security determines access. Never throws to the client.
+   *
+   * @param fileId The `MJ: Files` id whose bytes to return.
+   * @returns `{ Success, Base64?, MimeType?, ErrorMessage? }`.
+   */
+  @Query(() => FileContentsResult)
+  async GetFileContents(@Arg('fileId', () => String) fileId: string, @Ctx() context: AppContext): Promise<FileContentsResult> {
+    try {
+      const provider = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true });
+      const contextUser = this.GetUserFromPayload(context.userPayload);
+
+      // Permission gate FIRST: load the file record under the USER's context. A failed load means the
+      // file does not exist OR the user lacks read access under MJ row-level security.
+      const fileEntity = await provider.GetEntityObject<MJFileEntity>('MJ: Files', contextUser);
+      const loaded = await fileEntity.Load(fileId);
+      if (!loaded) {
+        return { Success: false, ErrorMessage: 'You do not have access to this file or it does not exist.' };
+      }
+
+      // Read the bytes via authenticated MJStorage (server-side GetObject on the file's own account).
+      const result = await readRealtimeRecordingFile(fileId, contextUser, provider);
+      if (!result) {
+        return { Success: false, ErrorMessage: 'The file could not be read from storage.' };
+      }
+
+      return {
+        Success: true,
+        Base64: result.Bytes.toString('base64'),
+        MimeType: result.MimeType ?? fileEntity.ContentType ?? undefined,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      LogError(`GetFileContents failed (file ${fileId}): ${message}`);
+      return { Success: false, ErrorMessage: message };
+    }
   }
 
   @Mutation(() => MJFile_)

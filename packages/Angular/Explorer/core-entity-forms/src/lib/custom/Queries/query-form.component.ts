@@ -8,6 +8,7 @@ import { TreeBranchConfig } from '@memberjunction/ng-trees';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { CodeEditorComponent, CompositionTokenClickEvent } from '@memberjunction/ng-code-editor';
 import { NavigationService } from '@memberjunction/ng-shared';
+import { MJConfirmService } from '@memberjunction/ng-ui-components';
 import { Subject } from 'rxjs';
 
 interface CategoryTreeNode {
@@ -106,6 +107,7 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
     
     private navigationService = inject(NavigationService);
     private formPresenter = inject(MJFormPresenterService);
+    private confirmService = inject(MJConfirmService);
     private destroy$ = new Subject<void>();
 
     /**
@@ -476,7 +478,7 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
      * Delete a parameter
      */
     async deleteParameter(param: MJQueryParameterEntity) {
-        if (!confirm(`Are you sure you want to delete parameter "${param.Name}"?`)) {
+        if (!(await this.confirmService.ConfirmDelete({ title: 'Delete Parameter', message: `Delete parameter "${param.Name}"?` }))) {
             return;
         }
 
@@ -810,7 +812,7 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
      * Delete a field
      */
     async deleteField(field: MJQueryFieldEntity) {
-        if (!confirm(`Are you sure you want to delete field "${field.Name}"?`)) {
+        if (!(await this.confirmService.ConfirmDelete({ title: 'Delete Field', message: `Delete field "${field.Name}"?` }))) {
             return;
         }
 
@@ -878,7 +880,7 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
      * Delete an entity
      */
     async deleteEntity(entity: MJQueryEntityEntity) {
-        if (!confirm(`Are you sure you want to delete entity "${entity.Entity}"?`)) {
+        if (!(await this.confirmService.ConfirmDelete({ title: 'Delete Entity', message: `Delete entity "${entity.Entity}"?` }))) {
             return;
         }
 

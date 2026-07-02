@@ -6,6 +6,8 @@
       "Description": "Business-friendly orchestrator agent that helps users explore their data and build saved queries. Delegates technical SQL work to the Query Strategist sub-agent. Presents results visually with diagrams and formatted tables, hiding SQL complexity unless the user asks for it.",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
       "Status": "Active",
+      "AcceptsSkills": "All",
+      "SkillActivationMode": "Auto",
       "DefaultArtifactTypeID": "@lookup:MJ: Artifact Types.Name=Data",
       "ArtifactCreationMode": "Always",
       "ExecutionOrder": 0,
@@ -398,8 +400,8 @@
       "ID": "204FF1D6-A807-4278-B71A-9D692F19E808"
     },
     "sync": {
-      "lastModified": "2026-06-16T01:17:22.121Z",
-      "checksum": "903631bcce151f68bc1069f91fc0f7e32f477f55b22cde5a017a0936680fa4bc"
+      "lastModified": "2026-07-02T11:38:35.689Z",
+      "checksum": "de676ff11e23289e825d252c14341f7edbaa1f16c0d050dcf15ba0db2aee450f"
     }
   }
 ]

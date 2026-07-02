@@ -1,4 +1,4 @@
-import { LogError, LogErrorEx, Metadata, UserInfo, IMetadataProvider } from "@memberjunction/core";
+import { BaseEntitySaveQueue, LogError, LogErrorEx, Metadata, UserInfo, IMetadataProvider } from "@memberjunction/core";
 import { MJActionExecutionLogEntity, MJActionEntity_IRuntimeActionConfiguration, MJActionCategoryEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity } from "@memberjunction/core-entities";
 import { BaseSingleton, MJGlobal, SafeJSONParse, UUIDsEqual } from "@memberjunction/global";
 import { BaseAction } from "./BaseAction";
@@ -84,22 +84,18 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
    public GetActionByName(actionName: string): MJActionEntityExtended | undefined { return this.Base.GetActionByName(actionName); }
 
    /**
-    * Per-invocation 'started'-INSERT promises, keyed by the action-execution-log entity instance.
+    * Fire-and-forget queue for action-execution-log writes. Action-execution logging is observability —
+    * the action's result is returned regardless of whether the log row persists — so both the INSERT
+    * ('started') and the UPDATE ('ended') run off the DB round-trip critical path. `result.LogEntry.ID`
+    * is valid immediately because `NewRecord()` client-generates the uniqueidentifier PK.
     *
-    * Action-execution logging is observability — the action's result is returned regardless of whether
-    * the log row persists — so both the INSERT ('started') and the UPDATE ('ended') run fire-and-forget,
-    * keeping action execution off the DB round-trip critical path. `result.LogEntry.ID` is valid
-    * immediately because NewRecord() client-generates the uniqueidentifier PK (and AIAgentRunStep's
-    * TargetLogID is only a soft reference — no hard FK — so nothing breaks if the row lands late).
-    *
-    * Each action invocation creates its OWN log entity, so keying by instance is inherently
-    * per-invocation — many parallel actions never collide. {@link EndActionLog} awaits the matching
-    * INSERT before applying + saving the 'ended' state, so the UPDATE is a genuine dirty change against
-    * the committed INSERT and can never silently no-op (the "stuck at EndedAt=NULL / shows Running
-    * forever" bug). A WeakMap so entries are GC'd with the entity — no manual cleanup, no unbounded
-    * growth on this long-lived singleton.
+    * The queue keys by the log entity instance, so {@link EndActionLog}'s 'ended' UPDATE chains after that
+    * row's 'started' INSERT and applies its mutation *inside* the post-INSERT task — the UPDATE can never
+    * race the INSERT's reload (the "stuck at EndedAt=NULL / shows Running forever" bug is structurally
+    * impossible). The queue is self-bounding (in-flight tasks only), so it needs no flush on this
+    * long-lived singleton.
     */
-   private _logInsertPromises = new WeakMap<MJActionExecutionLogEntity, Promise<boolean>>();
+   private readonly _logQueue = new BaseEntitySaveQueue();
 
    /**
     * Engine-default wall-clock timeout applied to any action whose
@@ -506,36 +502,17 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
       if (saveRecord){
          // Fire-and-forget the 'started' INSERT (unless the caller opts out) — the action runs
          // immediately, off the DB round-trip critical path. The ID is already assigned by NewRecord(),
-         // so the returned LogEntry.ID is valid right away. Store the INSERT promise per-invocation so
-         // EndActionLog can await THIS row's INSERT before persisting the 'ended' state.
-         this._logInsertPromises.set(logEntity, this.saveActionLog(logEntity, params.Action?.Name ?? 'unknown action', 'started'));
+         // so the returned LogEntry.ID is valid right away. EndActionLog's 'ended' UPDATE chains after
+         // this INSERT (same entity key), so it can never race it.
+         this._logQueue.Insert(logEntity);
       }
 
       return logEntity;
    }
 
-   /**
-    * Saves one action-execution-log row, ALWAYS logging (never swallowing, never verbose-gated) a
-    * failure — the log is observability, so a failure must surface but must not throw into the action's
-    * success path. `phase` is purely for the error message ('started' INSERT vs 'ended' UPDATE).
-    * @returns whether the row persisted.
-    */
-   private async saveActionLog(logEntity: MJActionExecutionLogEntity, actionName: string, phase: 'started' | 'ended'): Promise<boolean> {
-      try {
-         const ok = await logEntity.Save();
-         if (!ok) {
-            LogError(`Failed to save '${phase}' action execution log for ${actionName}: ${logEntity.LatestResult?.CompleteMessage ?? 'unknown error'}`);
-         }
-         return ok;
-      } catch (err) {
-         LogError(`Error saving '${phase}' action execution log for ${actionName}: ${err instanceof Error ? err.message : String(err)}`);
-         return false;
-      }
-   }
-
    protected async EndActionLog(logEntity: MJActionExecutionLogEntity, params: RunActionParams, result: ActionResult): Promise<void> {
-      // Capture the 'ended' state NOW (accurate EndedAt + final merged params), but apply + persist it
-      // only AFTER the 'started' INSERT commits — see finalizeActionLog. Caller awaits neither save.
+      // Capture the 'ended' state NOW (accurate EndedAt + final merged params); the queued UPDATE applies
+      // + persists it only AFTER the 'started' INSERT commits (see _logQueue). Caller awaits neither save.
       const endedAt = new Date();
       // Persist the final merged param set (inputs + outputs) — Runtime actions return a fresh array
       // from the sandbox executor that lives on `result.Params`, so logging `params.Params` would lose
@@ -544,40 +521,19 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
       const finalParams = JSON.stringify(result.Params ?? params.Params);
       const resultCode = result.Result?.ResultCode;
       const message = result.Message;
-      const actionName = params.Action?.Name ?? 'unknown action';
-      // Fire-and-forget — the action's caller never blocks on the 'ended' UPDATE.
-      void this.finalizeActionLog(logEntity, actionName, endedAt, finalParams, resultCode, message);
-   }
-
-   /**
-    * Applies the captured 'ended' state and UPDATEs the log row — but only AFTER awaiting the matching
-    * 'started' INSERT. Mutating/saving while the INSERT is still in flight races its post-save
-    * dirty-reset: the reset can absorb the End mutation, mark the entity clean, and silently no-op the
-    * UPDATE — leaving the row stuck at EndedAt=NULL (the action shows "Running" forever). Awaiting the
-    * INSERT first makes the End mutation a genuine dirty change against the committed row. Fire-and-forget.
-    */
-   private async finalizeActionLog(
-      logEntity: MJActionExecutionLogEntity,
-      actionName: string,
-      endedAt: Date,
-      finalParams: string,
-      resultCode: string | undefined,
-      message: string,
-   ): Promise<void> {
-      const insert = this._logInsertPromises.get(logEntity);
-      if (insert) {
-         await insert; // ensure the 'started' INSERT fully committed before the 'ended' UPDATE
-         this._logInsertPromises.delete(logEntity);
-      }
-      logEntity.EndedAt = endedAt;
-      logEntity.Params = finalParams;
-      logEntity.ResultCode = resultCode;
-      logEntity.Message = message;
-      await this.saveActionLog(logEntity, actionName, 'ended');
+      // Fire-and-forget — the action's caller never blocks on the 'ended' UPDATE. The mutation runs
+      // INSIDE the post-INSERT task (after the 'started' INSERT lands), so it can never be reverted by
+      // the INSERT's reload. The queue is self-bounding, so no flush is needed on this long-lived singleton.
+      this._logQueue.Update(logEntity, () => {
+         logEntity.EndedAt = endedAt;
+         logEntity.Params = finalParams;
+         logEntity.ResultCode = resultCode;
+         logEntity.Message = message;
+      });
    }
 
    protected async StartAndEndActionLog(params: RunActionParams, result: ActionResult): Promise<MJActionExecutionLogEntity> {
-      // No separate INSERT — the single 'ended' save (with no insert-promise to await) does the INSERT.
+      // No separate INSERT — the single 'ended' UPDATE (force-persist on a never-inserted NewRecord) inserts.
       const logEntity: MJActionExecutionLogEntity = await this.StartActionLog(params, false);
       await this.EndActionLog(logEntity, params, result);
       return logEntity;

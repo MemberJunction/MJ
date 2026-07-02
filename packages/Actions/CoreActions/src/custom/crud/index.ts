@@ -14,3 +14,4 @@ export * from './get-record.action';
 export * from './get-records.action';
 export * from './update-record.action';
 export * from './delete-record.action';
+export * from './write-entity-fields.action';

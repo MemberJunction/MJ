@@ -2,6 +2,7 @@ import { RegisterClass } from '@memberjunction/global';
 import env from 'env-var';
 import mime from 'mime-types';
 import {
+  BuildHttpRangeHeader,
   CreatePreAuthUploadUrlPayload,
   FileSearchOptions,
   FileSearchResult,
@@ -9,6 +10,8 @@ import {
   FileStorageBase,
   GetObjectParams,
   GetObjectMetadataParams,
+  GetObjectStreamParams,
+  ObjectStreamResult,
   StorageListResult,
   StorageObjectMetadata,
 } from '../generic/FileStorageBase';
@@ -1061,8 +1064,11 @@ export class BoxFileStorage extends FileStorageBase {
       const parentPath = lastSlashIndex > 0 ? normalizedPath.substring(0, lastSlashIndex) : '';
       const folderName = lastSlashIndex > 0 ? normalizedPath.substring(lastSlashIndex + 1) : normalizedPath;
 
-      // Make sure parent folder exists
-      let parentFolderId = '0'; // Default to root
+      // Make sure parent folder exists. Default to the account's CONFIGURED root folder
+      // (this._rootFolderId), NOT the absolute account root '0' — otherwise a top-level subfolder
+      // is created under '0' while _findFolderIdByPath (which searches under the configured root)
+      // can never find it, breaking every subfolder upload.
+      let parentFolderId = this._rootFolderId;
       if (parentPath) {
         try {
           // Recursive call to ensure parent directory exists
@@ -1399,6 +1405,76 @@ export class BoxFileStorage extends FileStorageBase {
     } catch (error) {
       console.error('Error getting object', { params, error });
       throw new Error(`Failed to get object: ${params.objectId || params.fullPath}`);
+    }
+  }
+
+  /**
+   * Box supports ranged streaming via the download endpoint's `Range` header.
+   */
+  public override get SupportsStreaming(): boolean {
+    return true;
+  }
+
+  /**
+   * Streams a file's content from Box, optionally honoring a byte range.
+   *
+   * Uses `downloads.downloadFile(fileId, { headers: { range } })`, which returns a
+   * Node.js readable stream — the file is never buffered fully in memory. The Box SDK
+   * does not surface `Content-Length`/`Content-Range` from this call, so this method
+   * resolves the object's total size (and content type) via {@link GetObjectMetadata}
+   * to populate {@link ObjectStreamResult.ContentLength} / `ContentRange`. The supplied
+   * inclusive `Range` is clamped to the object size so `ContentRange.End` is always valid.
+   *
+   * @param params - Object identifier (prefer objectId) plus optional Range.
+   * @returns A Promise resolving to an {@link ObjectStreamResult}.
+   * @throws Error if the file doesn't exist or cannot be streamed.
+   */
+  public override async GetObjectStream(params: GetObjectStreamParams): Promise<ObjectStreamResult> {
+    try {
+      // Ensure we have a valid token before making API calls
+      await this._ensureValidToken();
+
+      // Validate params
+      if (!params.objectId && !params.fullPath) {
+        throw new Error('Either objectId or fullPath must be provided');
+      }
+
+      // Resolve to a file ID (fast path via objectId, slow path via fullPath)
+      const fileId = params.objectId ?? (await this._getIdFromPath(params.fullPath!));
+      if (!fileId) {
+        throw new Error(`File not found: ${params.objectId || params.fullPath}`);
+      }
+
+      // Box doesn't return size/content-type on the download stream, so fetch metadata
+      // to populate ContentLength / ContentType / ContentRange.
+      const metadata = await this.GetObjectMetadata({ objectId: fileId });
+      const total = metadata.size;
+
+      const headers = params.Range ? { range: BuildHttpRangeHeader(params.Range) } : undefined;
+      const stream = await this._client.downloads.downloadFile(fileId, headers ? { headers } : undefined);
+      if (!stream) {
+        throw new Error(`Failed to stream file: ${params.objectId || params.fullPath}`);
+      }
+
+      const result: ObjectStreamResult = {
+        Stream: stream,
+        ContentType: metadata.contentType,
+      };
+
+      if (params.Range) {
+        // Clamp the inclusive range to the object size.
+        const start = Math.min(params.Range.Start, Math.max(total - 1, 0));
+        const end = params.Range.End != null ? Math.min(params.Range.End, total - 1) : total - 1;
+        result.ContentRange = { Start: start, End: end, Total: total };
+        result.ContentLength = end - start + 1;
+      } else {
+        result.ContentLength = total;
+      }
+
+      return result;
+    } catch (error) {
+      console.error('Error streaming object', { params, error });
+      throw new Error(`Failed to stream object: ${params.objectId || params.fullPath}`);
     }
   }
 

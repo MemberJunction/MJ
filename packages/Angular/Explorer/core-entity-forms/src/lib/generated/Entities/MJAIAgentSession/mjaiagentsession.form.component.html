@@ -14,7 +14,7 @@
     <mj-collapsible-panel
         SectionKey="sessionContext"
         SectionName="Session Context"
-        Icon="fa fa-user-circle"
+        Icon="fa fa-info-circle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -51,7 +51,7 @@
     <mj-collapsible-panel
         SectionKey="sessionStatus"
         SectionName="Session Status"
-        Icon="fa fa-clock"
+        Icon="fa fa-flag"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -93,7 +93,7 @@
     <mj-collapsible-panel
         SectionKey="technicalConfiguration"
         SectionName="Technical Configuration"
-        Icon="fa fa-wrench"
+        Icon="fa fa-cog"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -128,6 +128,41 @@
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Session Recording Section -->
+    <mj-collapsible-panel
+        SectionKey="sessionRecording"
+        SectionName="Session Recording"
+        Icon="fa fa-microphone"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="RecordingMedia"
+            Type="select"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="RecordingStartedAt"
+            Type="datepicker"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="RecordingFileID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
         ></mj-form-field>
 
     </mj-collapsible-panel>

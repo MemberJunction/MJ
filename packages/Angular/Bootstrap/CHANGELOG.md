@@ -1,5 +1,98 @@
 # @memberjunction/ng-bootstrap
 
+## 5.44.0
+
+### Minor Changes
+
+- 2f9b863: Add WorkOS (AuthKit) as a first-class authentication provider — end to end, server-side JWT validation and browser-side login. A deployment can now set `type: 'workos'` (server) / `AUTH_TYPE: 'workos'` (browser) and authenticate users through WorkOS just like Auth0, Okta, MSAL, Cognito, or Google.
+  - **Server** (`@memberjunction/auth-providers`): `WorkOSProvider` extends `BaseAuthProvider`, registered via `@RegisterClass(BaseAuthProvider, 'workos')`. Maps AuthKit JWT claims to `AuthUserInfo` (with graceful fallbacks) and validates `clientId`; issuer matching, JWKS caching, and retry/backoff are inherited. Wired into `AuthProviderFactory`.
+  - **Client** (`@memberjunction/ng-auth-services`): `MJWorkOSProvider` extends `MJAuthBase`, registered via `@RegisterClass(MJAuthBase, 'workos')`. Wraps the `@workos-inc/authkit-js` SDK (`createClient`/`signIn`/`signOut`/`getUser`/`getAccessToken`) behind the standardized provider contract with semantic error classification.
+  - **Core** (`@memberjunction/core`): `AUTH_PROVIDER_TYPES` gains `WORKOS: 'workos'`.
+  - **Env typing** (`@memberjunction/ng-bootstrap`): the `AUTH_TYPE` union gains `'workos'`, plus `WORKOS_CLIENTID` / `WORKOS_REDIRECT_URI` / `WORKOS_API_HOSTNAME` / `WORKOS_DEV_MODE` keys.
+
+  Includes a full end-to-end integration guide (`packages/AuthProviders/WORKOS.md`) covering the two WorkOS-specific gotchas: the required `email` JWT Template (AuthKit access tokens omit email, which MJ keys users on) and matching the enforced `aud` claim. Additive only.
+
+### Patch Changes
+
+- Updated dependencies [3633fbb]
+- Updated dependencies [1367fbb]
+- Updated dependencies [5396d90]
+- Updated dependencies [e84c85b]
+- Updated dependencies [f8be8a0]
+- Updated dependencies [7279819]
+- Updated dependencies [d44e430]
+- Updated dependencies [6f74b17]
+- Updated dependencies [914acd4]
+- Updated dependencies [18b5bf0]
+- Updated dependencies [04f7863]
+- Updated dependencies [be5ab50]
+- Updated dependencies [45df197]
+- Updated dependencies [aa9102d]
+- Updated dependencies [2f926df]
+- Updated dependencies [0476455]
+- Updated dependencies [9f96357]
+- Updated dependencies [863a10d]
+- Updated dependencies [2f9b863]
+  - @memberjunction/ai-engine-base@5.44.0
+  - @memberjunction/ai-core-plus@5.44.0
+  - @memberjunction/ng-core-entity-forms@5.44.0
+  - @memberjunction/ng-conversations@5.44.0
+  - @memberjunction/graphql-dataprovider@5.44.0
+  - @memberjunction/core-entities@5.44.0
+  - @memberjunction/core@5.44.0
+  - @memberjunction/ng-entity-viewer@5.44.0
+  - @memberjunction/ng-clustering@5.44.0
+  - @memberjunction/ng-dashboard-viewer@5.44.0
+  - @memberjunction/ng-dashboards@5.44.0
+  - @memberjunction/ng-explorer-core@5.44.0
+  - @memberjunction/ng-explorer-settings@5.44.0
+  - @memberjunction/ai-vectors-memory@5.44.0
+  - @memberjunction/ng-shared@5.44.0
+  - @memberjunction/ng-artifacts@5.44.0
+  - @memberjunction/ai-realtime-client@5.44.0
+  - @memberjunction/ng-entity-action-ux@5.44.0
+  - @memberjunction/ng-file-storage@5.44.0
+  - @memberjunction/ng-auth-services@5.44.0
+  - @memberjunction/tag-engine-base@5.44.0
+  - @memberjunction/actions-base@5.44.0
+  - @memberjunction/communication-types@5.44.0
+  - @memberjunction/entity-communications-base@5.44.0
+
+## 5.43.0
+
+### Patch Changes
+
+- Updated dependencies [40eb4e0]
+- Updated dependencies [9f6aa87]
+- Updated dependencies [9200b13]
+- Updated dependencies [ad8d8f1]
+- Updated dependencies [a4cdfb0]
+- Updated dependencies [3eaa05a]
+  - @memberjunction/core@5.43.0
+  - @memberjunction/ai-core-plus@5.43.0
+  - @memberjunction/core-entities@5.43.0
+  - @memberjunction/ng-conversations@5.43.0
+  - @memberjunction/ai-engine-base@5.43.0
+  - @memberjunction/tag-engine-base@5.43.0
+  - @memberjunction/ai-vectors-memory@5.43.0
+  - @memberjunction/actions-base@5.43.0
+  - @memberjunction/ng-auth-services@5.43.0
+  - @memberjunction/ng-core-entity-forms@5.43.0
+  - @memberjunction/ng-dashboards@5.43.0
+  - @memberjunction/ng-explorer-core@5.43.0
+  - @memberjunction/ng-explorer-settings@5.43.0
+  - @memberjunction/ng-shared@5.43.0
+  - @memberjunction/ng-artifacts@5.43.0
+  - @memberjunction/ng-clustering@5.43.0
+  - @memberjunction/ng-dashboard-viewer@5.43.0
+  - @memberjunction/ng-entity-action-ux@5.43.0
+  - @memberjunction/ng-entity-viewer@5.43.0
+  - @memberjunction/ng-file-storage@5.43.0
+  - @memberjunction/communication-types@5.43.0
+  - @memberjunction/entity-communications-base@5.43.0
+  - @memberjunction/graphql-dataprovider@5.43.0
+  - @memberjunction/ai-realtime-client@5.43.0
+
 ## 5.42.0
 
 ### Patch Changes

@@ -1,6 +1,6 @@
 # MemberJunction Open Apps
 
-Open Apps is MemberJunction's plugin and distribution system for self-contained applications that run on the MJ platform. An Open App bundles everything needed — database schema, migrations, metadata, server-side logic, and client-side UI components — into a single installable unit managed through the MJ CLI.
+Open Apps is MemberJunction's extension and distribution system. **An Open App is its manifest** (`mj-app.json`) — the single source of truth for the app — plus whatever it optionally bundles: a database schema, migrations, metadata, server-side logic, and/or client-side UI components. Every one of those is an additive, optional block; an app declares only the blocks it needs (a manifest-only app is valid), and the whole thing installs, upgrades, and removes through the MJ CLI.
 
 ## Table of Contents
 
@@ -29,16 +29,18 @@ Open Apps is MemberJunction's plugin and distribution system for self-contained 
 
 ## Overview
 
-An Open App is a **versioned, installable extension** for MemberJunction that:
+An Open App is a **versioned, installable extension** for MemberJunction. Its manifest is the source of truth; every capability below is **optional and additive** — an app uses only what it needs:
 
-- **Owns a dedicated database schema** — preventing collisions with MJ core (`__mj`) or other apps
-- **Ships as npm packages** — server packages load into MJAPI, client packages load into MJExplorer
 - **Uses semantic versioning** — versions come from GitHub release tags
-- **Manages its own migrations** — Skyway (Flyway-compatible) runs SQL migrations scoped to the app's schema
-- **Declares metadata** — entities, actions, prompts, and UI configurations are pushed via `mj-sync`
-- **Supports dependency chains** — apps can depend on other Open Apps with semver ranges
 - **Has a full lifecycle** — install, upgrade, disable, enable, and remove via the `mj` CLI
+- **Optionally owns a dedicated database schema** — when it ships database objects, preventing collisions with MJ core (`__mj`) or other apps
+- **Optionally manages its own migrations** — Skyway (Flyway-compatible) runs SQL migrations scoped to the app's schema
+- **Optionally extends shared metadata** — entities, actions, prompts, integration catalogs, and UI configurations pushed via `mj-sync` (and symmetrically retired on remove)
+- **Optionally ships as npm packages** — server packages load into MJAPI, client packages load into MJExplorer
+- **Optionally depends on other Open Apps** — with semver ranges, resolved and installed automatically
 - **Works with any package manager** — npm, pnpm, and yarn are all supported with automatic detection
+
+The "form" of an app is just which optional blocks it declares: **manifest-only**, **metadata-extending** (e.g. an integration connector seeding `__mj`), **schema-backed** (its own schema + migrations, like `bizapps-common`), **packages-only** (code/providers), or any combination.
 
 ---
 
@@ -591,6 +593,8 @@ The `DriverClass` value must exactly match the second argument of `@RegisterClas
 
 ## App Manifest Reference
 
+> See **[`Engine/manifest.reference.jsonc`](./Engine/manifest.reference.jsonc)** for the authoritative, fully-annotated reference manifest — every block documented, with the minimal manifest-only form at the top. It's kept schema-valid by a unit test, so it never drifts from the validator. The identity fields are the only required ones; every capability block below is optional and additive.
+
 ### Identity Fields
 
 | Field | Type | Validation |
@@ -1011,9 +1015,9 @@ mj app install https://github.com/acme/mj-crm
 
 ### Schema Isolation
 
-Each app owns a dedicated SQL Server schema (e.g., `acme_crm`). This ensures:
+An app **that ships database objects** owns a dedicated SQL Server schema (e.g., `acme_crm`); apps that extend MJ purely via metadata or code declare no schema. When a schema is present, this ensures:
 - No table name collisions between apps or with MJ core (`__mj` schema)
-- Clean removal — `DROP SCHEMA CASCADE` removes all app tables
+- Clean removal — `DROP SCHEMA CASCADE` removes all app tables (metadata-extending apps are retired symmetrically via mj-sync deletion instead)
 - Clear ownership — every table belongs to exactly one app
 
 ### Dependency Resolution

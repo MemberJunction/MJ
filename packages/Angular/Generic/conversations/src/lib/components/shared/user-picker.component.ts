@@ -2,6 +2,7 @@ import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetect
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 import { FormsModule } from '@angular/forms';
+import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 import { UserInfo, RunView } from '@memberjunction/core';
 import { MJUserEntity } from '@memberjunction/core-entities';
 
@@ -16,7 +17,7 @@ export interface UserSearchResult {
 @Component({
     selector: 'mj-user-picker',
     standalone: true,
-    imports: [FormsModule],
+    imports: [FormsModule, MJEmptyStateComponent],
     template: `
         <div class="user-picker">
             <div class="search-input-wrapper">
@@ -55,10 +56,8 @@ export interface UserSearchResult {
 
             @if (showResults && searchResults.length === 0 && searchQuery.length >= 2 && !isSearching) {
                 <div class="search-results-dropdown">
-                    <div class="no-results">
-                        <i class="fa-solid fa-user-slash"></i>
-                        <span>No users found</span>
-                    </div>
+                    <mj-empty-state Variant="no-results" Size="compact"
+                        Icon="fa-solid fa-user-slash" Title="No users found" />
                 </div>
             }
         </div>
@@ -181,23 +180,6 @@ export interface UserSearchResult {
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-        }
-
-        .no-results {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 8px;
-            padding: 24px;
-            color: #9CA3AF;
-        }
-
-        .no-results i {
-            font-size: 32px;
-        }
-
-        .no-results span {
-            font-size: 14px;
         }
     `]
 })

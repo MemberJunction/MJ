@@ -14,18 +14,8 @@
   justify-content: center;
 }
 
-.modify-error {
-  margin: 16px;
-  padding: 12px 16px;
-  background: var(--mj-status-error-bg);
-  color: var(--mj-status-error-text);
-  border: 1px solid var(--mj-status-error-border);
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 0.875rem;
-}
+/* positions the load-error mj-alert (margin-less component otherwise) */
+.modify-error { margin: 16px; }
 
 /* ── Header ───────────────────────────────────────────────────────────────── */
 

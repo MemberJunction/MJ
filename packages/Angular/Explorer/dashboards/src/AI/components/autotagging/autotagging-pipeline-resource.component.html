@@ -129,10 +129,8 @@
                 }
               </div>
             } @else if (!IsLoadingDuplicates) {
-              <div class="at-dedup-empty">
-                <i class="fa-solid fa-check-circle"></i>
-                <p>No pending duplicates. Click "Load Duplicates" to check.</p>
-              </div>
+              <mj-empty-state class="at-dedup-empty" Variant="success" Icon="fa-solid fa-circle-check"
+                Title="No pending duplicates" Message="Click Load Duplicates to check." />
             }
           </div>
         </div>

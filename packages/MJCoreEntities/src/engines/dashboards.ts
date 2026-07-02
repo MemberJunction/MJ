@@ -131,35 +131,35 @@ export class DashboardEngine extends BaseEngine<DashboardEngine> {
     // ========================================
 
     public get Dashboards(): MJDashboardEntityExtended[] {
-        return this._dashboards;
+        return this.GetConfigData<MJDashboardEntityExtended>('_dashboards');
     }
 
     public get DashboardPartTypes(): MJDashboardPartTypeEntity[] {
-        return this._partTypes;
+        return this.GetConfigData<MJDashboardPartTypeEntity>('_partTypes');
     }
 
     public get DashboardUserPreferences(): MJDashboardUserPreferenceEntity[] {
-        return this._dashboardUserPreferences;
+        return this.GetConfigData<MJDashboardUserPreferenceEntity>('_dashboardUserPreferences');
     }
 
     public get DashboardCategories(): MJDashboardCategoryEntity[] {
-        return this._dashboardCategories;
+        return this.GetConfigData<MJDashboardCategoryEntity>('_dashboardCategories');
     }
 
     public get DashboardUserStates(): MJDashboardUserStateEntity[] {
-        return this._dashboardUserStates;
+        return this.GetConfigData<MJDashboardUserStateEntity>('_dashboardUserStates');
     }
 
     public get DashboardPermissions(): MJDashboardPermissionEntity[] {
-        return this._dashboardPermissions;
+        return this.GetConfigData<MJDashboardPermissionEntity>('_dashboardPermissions');
     }
 
     public get DashboardCategoryPermissions(): MJDashboardCategoryPermissionEntity[] {
-        return this._dashboardCategoryPermissions;
+        return this.GetConfigData<MJDashboardCategoryPermissionEntity>('_dashboardCategoryPermissions');
     }
 
     public get DashboardCategoryLinks(): MJDashboardCategoryLinkEntity[] {
-        return this._dashboardCategoryLinks;
+        return this.GetConfigData<MJDashboardCategoryLinkEntity>('_dashboardCategoryLinks');
     }
 
     // ========================================

@@ -211,7 +211,37 @@ function detectSchemaNotGenerated(entityName: string, errorMessage: string): Sch
 export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     public constructor() {
         super();
+        this.MaxColumnsPerTable = IntegrationEngine.computeMaxColumnsPerTable();
     }
+
+    /**
+     * SQL Server's hard per-table column limit is 1024; the framework reserves headroom for its own
+     * sync/system columns (the __mj_integration_* set + ID + timestamps), so the effective ceiling is 1000.
+     * MJ_INTEGRATION_MAX_COLUMNS_PER_TABLE can only LOWER this, never raise it past 1000.
+     */
+    public static readonly MAX_COLUMNS_CEILING = 1000;
+
+    /**
+     * Effective per-table column limit — read from MJ_INTEGRATION_MAX_COLUMNS_PER_TABLE at startup and
+     * clamped to [1, MAX_COLUMNS_CEILING] (defaults to the ceiling when unset). Objects whose column count
+     * exceeds this are auto-disabled at apply time (reversible) instead of failing CREATE TABLE.
+     */
+    public readonly MaxColumnsPerTable: number;
+
+    /** Reads + clamps the column limit from env at startup; logs once when a configured value is clamped down. */
+    private static computeMaxColumnsPerTable(): number {
+        const ceiling = IntegrationEngine.MAX_COLUMNS_CEILING;
+        const raw = parseInt(process.env.MJ_INTEGRATION_MAX_COLUMNS_PER_TABLE ?? '', 10);
+        if (Number.isFinite(raw) && raw > 0) {
+            if (raw > ceiling) {
+                LogStatusEx({ message: `[IntegrationEngine] MJ_INTEGRATION_MAX_COLUMNS_PER_TABLE=${raw} exceeds the maximum ${ceiling} (SQL Server's 1024-column limit minus framework column headroom) — clamped to ${ceiling}.` });
+                return ceiling;
+            }
+            return raw;
+        }
+        return ceiling;
+    }
+
     private readonly fieldMappingEngine = new FieldMappingEngine();
     private readonly matchEngine = new MatchEngine();
     private readonly watermarkService = new WatermarkService();

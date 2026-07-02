@@ -124,6 +124,7 @@
 .gc-history-clear:hover { background: var(--mj-bg-surface-hover); color: var(--mj-text-primary); }
 
 .gc-history-empty {
+    width: 100%;
     padding: 20px 16px;
     color: var(--mj-text-muted);
     font-size: 12px;
@@ -400,6 +401,7 @@
 }
 
 .gc-ent-empty {
+    width: 100%;
     padding: 30px 18px;
     color: var(--mj-text-muted);
     text-align: center;

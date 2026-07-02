@@ -102,7 +102,9 @@
             [isNewConversation]="isNewUnsavedConversation"
             [pendingMessage]="pendingMessageToSend"
             [pendingAttachments]="pendingAttachmentsToSend"
+            [pendingMessageConversationId]="pendingMessageConversationId"
             [pendingArtifactId]="pendingArtifactId"
+            [pendingArtifactConversationId]="pendingArtifactConversationId"
             [pendingArtifactVersionNumber]="pendingArtifactVersionNumber"
             (conversationRenamed)="onConversationRenamed($event)"
             (openEntityRecord)="onOpenEntityRecord($event)"
@@ -113,8 +115,8 @@
             (realtimeConversationReady)="onRealtimeConversationReady($event)"
             (threadOpened)="onThreadOpened($event)"
             (threadClosed)="onThreadClosed()"
-            (pendingArtifactConsumed)="pendingArtifactId = null; pendingArtifactVersionNumber = null"
-            (pendingMessageConsumed)="pendingMessageToSend = null; pendingAttachmentsToSend = null"
+            (pendingArtifactConsumed)="pendingArtifactId = null; pendingArtifactConversationId = null; pendingArtifactVersionNumber = null"
+            (pendingMessageConsumed)="pendingMessageToSend = null; pendingAttachmentsToSend = null; pendingMessageConversationId = null"
             (pendingMessageRequested)="onPendingMessageRequested($event)">
           </mj-conversation-chat-area>
         </div>

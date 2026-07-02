@@ -8,29 +8,19 @@
 
 import { RegisterClass } from '@memberjunction/global';
 import { BaseRemotableOperation, IMetadataProvider, UserInfo } from '@memberjunction/core';
-import { MJProcessRunEntity } from '@memberjunction/core-entities';
+import {
+    MJProcessRunEntity,
+    RecordProcessGetRunStatusOperation,
+    type RecordProcessGetRunStatusInput,
+    type RecordProcessGetRunStatusOutput,
+} from '@memberjunction/core-entities';
 
-/** Input for {@link RecordProcessGetRunStatusOperation}. */
-export interface RecordProcessGetRunStatusInput {
-    /** The `MJ: Process Runs` ID to read. */
-    processRunID: string;
-}
+// RecordProcessGetRunStatusInput / Output + the typed base are now CodeGen-emitted into
+// @memberjunction/core-entities (generated/remote_operations.ts) and imported above.
 
-/** Output of {@link RecordProcessGetRunStatusOperation}. */
-export interface RecordProcessGetRunStatusOutput {
-    status: string;
-    processed: number;
-    total: number | null;
-    success: number;
-    error: number;
-    skipped: number;
-}
-
-/** Returns the live status and counts of a Process Run. */
+/** Returns the live status and counts of a Process Run; the server body for the generated `RecordProcess.GetRunStatus` base. */
 @RegisterClass(BaseRemotableOperation, 'RecordProcess.GetRunStatus')
-export class RecordProcessGetRunStatusOperation extends BaseRemotableOperation<RecordProcessGetRunStatusInput, RecordProcessGetRunStatusOutput> {
-    public readonly OperationKey = 'RecordProcess.GetRunStatus';
-    public readonly RequiredScope = 'recordprocess:execute';
+export class RecordProcessGetRunStatusServerOperation extends RecordProcessGetRunStatusOperation {
 
     protected async InternalExecute(input: RecordProcessGetRunStatusInput, provider: IMetadataProvider, user: UserInfo): Promise<RecordProcessGetRunStatusOutput> {
         if (!input?.processRunID) {

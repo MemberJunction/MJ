@@ -158,7 +158,8 @@ const TREEMAP_COLORS = [
                     </div>
                     <div class="chart-body">
                         @if (DailyBars.length === 0) {
-                            <div class="panel-empty">No cost data for selected period</div>
+                            <mj-empty-state Size="compact" Variant="empty" Icon="fa-solid fa-chart-column"
+                                Title="No cost data for selected period" />
                         } @else {
                             <div class="bar-chart">
                                 <div class="bar-chart-area">
@@ -193,7 +194,8 @@ const TREEMAP_COLORS = [
                     </div>
                     <div class="treemap-body">
                         @if (TreemapCells.length === 0) {
-                            <div class="panel-empty">No vendor cost data</div>
+                            <mj-empty-state Size="compact" Variant="empty" Icon="fa-solid fa-chart-pie"
+                                Title="No vendor cost data" />
                         } @else {
                             <div class="treemap-grid">
                                 @for (cell of TreemapCells; track cell.Label) {
@@ -392,13 +394,6 @@ const TREEMAP_COLORS = [
         .panel-header__icon {
             font-size: 13px;
             color: var(--mj-brand-primary);
-        }
-
-        .panel-empty {
-            text-align: center;
-            padding: 32px;
-            color: var(--mj-text-disabled);
-            font-size: 13px;
         }
 
         .export-btn {

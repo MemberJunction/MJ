@@ -154,23 +154,11 @@
     padding: 0;
 }
 
-.at-empty-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    padding: 32px 16px;
-    color: var(--mj-text-disabled);
-}
-
-.at-empty-state i {
-    font-size: 28px;
-}
-
-.at-empty-state p {
-    margin: 0;
-    font-size: 13px;
+/* Makes a no-selection <mj-empty-state> fill its detail pane (host centers its
+   own content; this just lets it grow). */
+.at-fill {
+    flex: 1;
+    min-height: 0;
 }
 
 /* ══════ KPI STRIP ══════ */

@@ -1,4 +1,5 @@
-import { EntityInfo, EntityFieldInfo, EntityPermissionInfo } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, IMetadataProvider, UserInfo } from '@memberjunction/core';
+import { MJGlobal } from '@memberjunction/global';
 import { DatabasePlatform, SQLDialect } from '@memberjunction/sql-dialect';
 
 // ─── CONNECTION ABSTRACTION ──────────────────────────────────────────────────
@@ -142,6 +143,24 @@ export interface CodeGenConnection {
     beginTransaction(): Promise<CodeGenTransaction>;
 }
 
+/**
+ * Bundle returned by {@link CodeGenDatabaseProvider.SetupDataSource} that
+ * gives the orchestrator everything it needs to begin a CodeGen run:
+ * the per-platform metadata provider, a dialect-aware connection, the
+ * "owner" user used as the audit principal for generated rows, and a
+ * human-readable connection-info string for log output.
+ */
+export interface DataSourceResult {
+    /** The configured per-platform metadata provider (SQL Server or PostgreSQL). */
+    provider: IMetadataProvider;
+    /** Database-agnostic connection used by all platform-neutral CodeGen code. */
+    connection: CodeGenConnection;
+    /** The "owner" user (or the first available user) used for audit fields. */
+    currentUser: UserInfo;
+    /** Display-only connection summary (e.g. `host:port/database`). */
+    connectionInfo: string;
+}
+
 
 /**
  * Union type for stored procedure / function types (Create, Update, Delete).
@@ -239,6 +258,35 @@ export abstract class CodeGenDatabaseProvider {
      * The database platform key (e.g., 'sqlserver', 'postgresql').
      */
     abstract get PlatformKey(): DatabasePlatform;
+
+    /**
+     * Set up the per-platform data source for a CodeGen run: open a
+     * connection pool, configure the metadata provider, build the
+     * {@link CodeGenConnection}, and resolve the audit user.
+     *
+     * **Where this lives and why** — the orchestrator (`RunCodeGenBase`)
+     * used to switch on `configInfo.dbPlatform` inline and call private
+     * `setupSQLServerDataSource()` / `setupPostgreSQLDataSource()` methods.
+     * That bypassed the existing factory pattern (see e.g.
+     * `manage-metadata.ts`'s `get dbProvider()`, which dispatches via
+     * `MJGlobal.Instance.ClassFactory.CreateInstance(CodeGenDatabaseProvider, platform)`)
+     * and meant adding a third platform would require touching the
+     * orchestrator. Moving the setup here puts it behind the same
+     * factory: subclasses register via `@RegisterClass(CodeGenDatabaseProvider, '<platform>')`
+     * and the orchestrator just resolves + calls.
+     *
+     * Subclasses are responsible for:
+     *  - opening their pool (typically via a module-cached helper such as
+     *    `MSSQLConnection()` / `PGConnection()` so multiple `setupDataSource()`
+     *    calls reuse the same pool)
+     *  - configuring + setting their metadata provider via `SetProvider(...)`
+     *    when appropriate
+     *  - loading the audit user (currently SQL Server uses `UserCache`,
+     *    PostgreSQL hand-queries `vwUsers`/`vwUserRoles` — see implementations
+     *    for the deliberate asymmetry note)
+     *  - emitting spinner status via `status_logging` helpers when desired
+     */
+    abstract SetupDataSource(): Promise<DataSourceResult>;
 
     /**
      * Whether this dialect can handle a base view that LEFT-JOINs itself to read
@@ -1214,4 +1262,36 @@ export interface PhasedExecutionResult {
     phase: 'tvf' | 'view' | 'functions' | 'permissions' | null;
     /** Underlying error when `success` is false. */
     error?: Error;
+}
+
+/**
+ * Resolve the concrete {@link CodeGenDatabaseProvider} registered for a given
+ * platform via `MJGlobal.Instance.ClassFactory`. This is the single source of
+ * truth for platform dispatch — the orchestrator (`RunCodeGenBase.setupDataSource()`)
+ * delegates to this function rather than re-implementing the lookup. Tests
+ * import this function directly so they exercise the real dispatch logic
+ * instead of a transcribed copy.
+ *
+ * `ClassFactory.CreateInstance` returns the abstract base class itself on a
+ * missed registration lookup (it does not throw). We disambiguate by checking
+ * `constructor === CodeGenDatabaseProvider` and throw a descriptive error so
+ * the failure mode reads as "no provider registered" instead of a cryptic
+ * "is not a constructor" / "is not a function" downstream.
+ *
+ * @param platform The `dbPlatform` key — typically `'sqlserver'` or `'postgresql'`.
+ * @returns The resolved provider subclass instance.
+ * @throws Error if no provider is registered for the given platform.
+ */
+export function resolveCodeGenDatabaseProvider(platform: DatabasePlatform): CodeGenDatabaseProvider {
+    const provider = MJGlobal.Instance.ClassFactory.CreateInstance<CodeGenDatabaseProvider>(
+        CodeGenDatabaseProvider,
+        platform,
+    );
+    if (!provider || provider.constructor === CodeGenDatabaseProvider) {
+        throw new Error(
+            `CodeGen database provider for dbPlatform='${platform}' not found. Ensure the corresponding ` +
+            `provider class is registered via @RegisterClass(CodeGenDatabaseProvider, '${platform}').`,
+        );
+    }
+    return provider;
 }

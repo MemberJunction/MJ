@@ -6,38 +6,30 @@
  */
 
 import { RegisterClass } from '@memberjunction/global';
-import { BaseRemotableOperation, IMetadataProvider, UserInfo } from '@memberjunction/core';
+import { BaseRemotableOperation, IMetadataProvider, RemoteOpServerContext, UserInfo } from '@memberjunction/core';
 import { MJProcessRunEntity } from '@memberjunction/core-entities';
+import {
+    RecordProcessRunNowOperation,
+    RecordProcessPauseRunOperation,
+    RecordProcessCancelRunOperation,
+    RecordProcessResumeRunOperation,
+    type RecordProcessRunNowInput,
+    type RecordProcessRunNowOutput,
+    type ProcessRunControlInput,
+    type ProcessRunControlOutput,
+} from '@memberjunction/core-entities';
 import { RecordProcessExecutor } from '../RecordProcessExecutor';
 
-/** Input for `RecordProcess.RunNow`. */
-export interface RecordProcessRunNowInput {
-    recordProcessID: string;
-    /** When set, processes just this single record instead of the configured scope. */
-    singleRecordID?: string;
-}
-
-/** Output of `RecordProcess.RunNow`. */
-export interface RecordProcessRunNowOutput {
-    processRunID?: string;
-    status: string;
-    processed: number;
-    success: number;
-    error: number;
-    skipped: number;
-}
-
 /**
- * Runs a Record Process on demand. Marked `LongRunning` (the handle is a `ProcessRunID`); the
- * detached/attached streaming consumption is added in RO-3 — this currently awaits completion.
+ * Server implementation of `RecordProcess.RunNow` — runs a Record Process on demand, honoring an optional
+ * dry-run (compute-only preview) and runtime scope override (the rows a UI selected). Extends the
+ * client-safe {@link RecordProcessRunNowOperation} base in `-base` (which carries the key + typed I/O) and
+ * supplies the server body; registered last so it wins server-side dispatch. Marked `LongRunning` (the
+ * handle is a `ProcessRunID`).
  */
 @RegisterClass(BaseRemotableOperation, 'RecordProcess.RunNow')
-export class RecordProcessRunNowOperation extends BaseRemotableOperation<RecordProcessRunNowInput, RecordProcessRunNowOutput> {
-    public readonly OperationKey = 'RecordProcess.RunNow';
-    public readonly RequiredScope = 'recordprocess:execute';
-    public readonly ExecutionMode = 'LongRunning' as const;
-
-    protected async InternalExecute(input: RecordProcessRunNowInput, provider: IMetadataProvider, user: UserInfo): Promise<RecordProcessRunNowOutput> {
+export class RecordProcessRunNowServerOperation extends RecordProcessRunNowOperation {
+    protected async InternalExecute(input: RecordProcessRunNowInput, provider: IMetadataProvider, user: UserInfo, context: RemoteOpServerContext): Promise<RecordProcessRunNowOutput> {
         if (!input?.recordProcessID) {
             throw new Error('recordProcessID is required');
         }
@@ -46,6 +38,19 @@ export class RecordProcessRunNowOperation extends BaseRemotableOperation<RecordP
             provider,
             triggeredBy: 'OnDemand',
             singleRecordID: input.singleRecordID,
+            dryRun: input.dryRun,
+            scope: input.scope,
+            // RO-3: forward the executor's per-batch progress as typed RemoteOpProgress, so an `attached`
+            // caller's onProgress (and, over the wire, the progress channel) sees live run progress.
+            onProgress: (p) =>
+                context.emitProgress({
+                    OperationKey: this.OperationKey,
+                    Processed: p.Processed,
+                    Total: p.Total ?? undefined,
+                    Status: 'Running',
+                    Message: `Processed ${p.Processed}${p.Total != null ? ` of ${p.Total}` : ''} record(s)`,
+                    Payload: { Success: p.Success, Error: p.Error, Skipped: p.Skipped, CurrentRecordID: p.CurrentRecordID },
+                }),
         });
         return {
             processRunID: result.ProcessRunID,
@@ -54,19 +59,13 @@ export class RecordProcessRunNowOperation extends BaseRemotableOperation<RecordP
             success: result.Success,
             error: result.Error,
             skipped: result.Skipped,
+            errorMessage: result.ErrorMessage,
         };
     }
 }
 
-/** Input for the pause/resume/cancel control operations. */
-export interface ProcessRunControlInput {
-    processRunID: string;
-}
-
-/** Output of the control operations. */
-export interface ProcessRunControlOutput {
-    status: string;
-}
+// ProcessRunControlInput / ProcessRunControlOutput are now CodeGen-emitted into @memberjunction/core-entities
+// (generated/remote_operations.ts) from the MJ: Remote Operations rows, and imported above.
 
 /** Sets `CancellationRequested` on a run to the given value, returning the run's status. */
 async function setCancellation(processRunID: string, value: boolean, provider: IMetadataProvider, user: UserInfo): Promise<ProcessRunControlOutput> {
@@ -86,11 +85,12 @@ async function setCancellation(processRunID: string, value: boolean, provider: I
     return { status: run.Status };
 }
 
+// Each server operation extends its CodeGen-emitted base (which carries OperationKey / ExecutionMode /
+// RequiredScope / RequiresSystemUser from metadata) and supplies only the InternalExecute body + @RegisterClass.
+
 /** Requests a graceful pause of a running process (honored at the next checkpoint). */
 @RegisterClass(BaseRemotableOperation, 'RecordProcess.PauseRun')
-export class RecordProcessPauseRunOperation extends BaseRemotableOperation<ProcessRunControlInput, ProcessRunControlOutput> {
-    public readonly OperationKey = 'RecordProcess.PauseRun';
-    public readonly RequiredScope = 'recordprocess:execute';
+export class RecordProcessPauseRunServerOperation extends RecordProcessPauseRunOperation {
     protected async InternalExecute(input: ProcessRunControlInput, provider: IMetadataProvider, user: UserInfo): Promise<ProcessRunControlOutput> {
         return setCancellation(input.processRunID, true, provider, user);
     }
@@ -98,9 +98,7 @@ export class RecordProcessPauseRunOperation extends BaseRemotableOperation<Proce
 
 /** Requests cancellation of a running process (honored at the next checkpoint). */
 @RegisterClass(BaseRemotableOperation, 'RecordProcess.CancelRun')
-export class RecordProcessCancelRunOperation extends BaseRemotableOperation<ProcessRunControlInput, ProcessRunControlOutput> {
-    public readonly OperationKey = 'RecordProcess.CancelRun';
-    public readonly RequiredScope = 'recordprocess:execute';
+export class RecordProcessCancelRunServerOperation extends RecordProcessCancelRunOperation {
     protected async InternalExecute(input: ProcessRunControlInput, provider: IMetadataProvider, user: UserInfo): Promise<ProcessRunControlOutput> {
         return setCancellation(input.processRunID, true, provider, user);
     }
@@ -108,9 +106,7 @@ export class RecordProcessCancelRunOperation extends BaseRemotableOperation<Proc
 
 /** Clears a paused run's cancellation flag so it can be resumed by a subsequent run. */
 @RegisterClass(BaseRemotableOperation, 'RecordProcess.ResumeRun')
-export class RecordProcessResumeRunOperation extends BaseRemotableOperation<ProcessRunControlInput, ProcessRunControlOutput> {
-    public readonly OperationKey = 'RecordProcess.ResumeRun';
-    public readonly RequiredScope = 'recordprocess:execute';
+export class RecordProcessResumeRunServerOperation extends RecordProcessResumeRunOperation {
     protected async InternalExecute(input: ProcessRunControlInput, provider: IMetadataProvider, user: UserInfo): Promise<ProcessRunControlOutput> {
         return setCancellation(input.processRunID, false, provider, user);
     }

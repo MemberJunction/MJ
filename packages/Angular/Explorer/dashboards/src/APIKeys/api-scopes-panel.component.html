@@ -58,11 +58,9 @@
       }
       <!-- Empty State -->
       @if (ScopeTree.length === 0) {
-        <div class="empty-state">
-          <i class="fa-solid fa-shield-halved"></i>
-          <span>No scopes configured</span>
-          <p>Create scopes to define API access permissions</p>
-        </div>
+        <mj-empty-state Icon="fa-solid fa-shield-halved"
+          Title="No scopes configured"
+          Message="Create scopes to define API access permissions" />
       }
     </div>
     <!-- Recursive Node Template -->

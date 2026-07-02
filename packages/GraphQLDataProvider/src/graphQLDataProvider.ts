@@ -12,11 +12,11 @@ import { BaseEntity, BaseEntityEvent, IEntityDataProvider, IMetadataProvider, IR
          TransactionGroupBase, TransactionItem, DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput,
          EntityRecordNameResult, IRunReportProvider, RunReportResult, RunReportParams, RecordDependency, RecordMergeRequest, RecordMergeResult,
          RunQueryResult, PotentialDuplicateRequest, PotentialDuplicateResponse, CompositeKey, EntityDeleteOptions,
-         RunQueryParams, BaseEntityResult, QueryExecutionSpec,
+         RunQueryParams, RunQueryEnrichment, BaseEntityResult, QueryExecutionSpec,
          RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewWithCacheCheckResult,
          RunQueryWithCacheCheckParams, RunQueriesWithCacheCheckResponse, RunQueryWithCacheCheckResult,
          KeyValuePair, getGraphQLTypeNameBase, AggregateExpression, InMemoryLocalStorageProvider,
-         SearchEntityParams, EntitySearchResult, ScoredCandidate, RemoteOpInvokeOptions, RemoteOpResult } from "@memberjunction/core";
+         SearchEntityParams, EntitySearchResult, ScoredCandidate, RemoteOpInvokeOptions, RemoteOpResult, RemoteOpProgress } from "@memberjunction/core";
 import { MJGlobal, MJEventType, UUIDsEqual, GetGlobalObjectStore } from "@memberjunction/global";
 import { MJUserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 
@@ -54,6 +54,14 @@ export type AuthenticationErrorCallback = (error: Error) => void;
  * per query in the field-list builders.
  */
 const SharedFieldMapper = new FieldMapper();
+
+/** RO-3 attached-progress subscription opened per-call (filtered by a client-generated channelId). */
+const REMOTE_OP_PROGRESS_SUBSCRIPTION = gql`subscription RemoteOperationProgress($channelId: ID!) {
+    RemoteOperationProgress(channelId: $channelId) {
+        ChannelId
+        ProgressJSON
+    }
+}`;
 
 /**
  * The GraphQLProviderConfigData class is used to configure the GraphQLDataProvider. It is passed to the Config method of the GraphQLDataProvider
@@ -497,10 +505,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             return this.RunAdhocQuery(params.SQL, params.MaxRows, undefined, params.StartRow);
         }
         else if (params.QueryID) {
-            return this.RunQueryByID(params.QueryID, params.CategoryID, params.CategoryPath, contextUser, params.Parameters, params.MaxRows, params.StartRow);
+            return this.RunQueryByID(params.QueryID, params.CategoryID, params.CategoryPath, contextUser, params.Parameters, params.MaxRows, params.StartRow, params.Enrichment);
         }
         else if (params.QueryName) {
-            return this.RunQueryByName(params.QueryName, params.CategoryID, params.CategoryPath, contextUser, params.Parameters, params.MaxRows, params.StartRow);
+            return this.RunQueryByName(params.QueryName, params.CategoryID, params.CategoryPath, contextUser, params.Parameters, params.MaxRows, params.StartRow, params.Enrichment);
         }
         else {
             throw new Error("No SQL, QueryID, or QueryName provided to RunQuery");
@@ -568,7 +576,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             MaxRows: p.MaxRows,
             StartRow: p.StartRow,
             ForceAuditLog: p.ForceAuditLog,
-            AuditLogDescription: p.AuditLogDescription
+            AuditLogDescription: p.AuditLogDescription,
+            Enrichment: p.Enrichment
         }));
 
         const result = await this.ExecuteGQL(query, { input });
@@ -579,17 +588,17 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         return [];
     }
 
-    public async RunQueryByID(QueryID: string, CategoryID?: string, CategoryPath?: string, contextUser?: UserInfo, Parameters?: Record<string, any>, MaxRows?: number, StartRow?: number): Promise<RunQueryResult> {
+    public async RunQueryByID(QueryID: string, CategoryID?: string, CategoryPath?: string, contextUser?: UserInfo, Parameters?: Record<string, any>, MaxRows?: number, StartRow?: number, Enrichment?: RunQueryEnrichment): Promise<RunQueryResult> {
         const query = gql`
-            query GetQueryDataQuery($QueryID: String!, $CategoryID: String, $CategoryPath: String, $Parameters: JSONObject, $MaxRows: Int, $StartRow: Int) {
-                GetQueryData(QueryID: $QueryID, CategoryID: $CategoryID, CategoryPath: $CategoryPath, Parameters: $Parameters, MaxRows: $MaxRows, StartRow: $StartRow) {
+            query GetQueryDataQuery($QueryID: String!, $CategoryID: String, $CategoryPath: String, $Parameters: JSONObject, $MaxRows: Int, $StartRow: Int, $Enrichment: JSONObject) {
+                GetQueryData(QueryID: $QueryID, CategoryID: $CategoryID, CategoryPath: $CategoryPath, Parameters: $Parameters, MaxRows: $MaxRows, StartRow: $StartRow, Enrichment: $Enrichment) {
                     ${this.QueryReturnFieldList}
                 }
             }
         `;
-    
+
         // Build the variables object, adding optional parameters if defined.
-        const variables: { QueryID: string; CategoryID?: string; CategoryPath?: string; Parameters?: Record<string, any>; MaxRows?: number; StartRow?: number } = { QueryID };
+        const variables: { QueryID: string; CategoryID?: string; CategoryPath?: string; Parameters?: Record<string, any>; MaxRows?: number; StartRow?: number; Enrichment?: RunQueryEnrichment } = { QueryID };
         if (CategoryID !== undefined) {
             variables.CategoryID = CategoryID;
         }
@@ -605,24 +614,27 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         if (StartRow !== undefined) {
             variables.StartRow = StartRow;
         }
-    
+        if (Enrichment !== undefined) {
+            variables.Enrichment = Enrichment;
+        }
+
         const result = await this.ExecuteGQL(query, variables);
         if (result && result.GetQueryData) {
             return this.TransformQueryPayload(result.GetQueryData);
         }
     }
     
-    public async RunQueryByName(QueryName: string, CategoryID?: string, CategoryPath?: string, contextUser?: UserInfo, Parameters?: Record<string, any>, MaxRows?: number, StartRow?: number): Promise<RunQueryResult> {
+    public async RunQueryByName(QueryName: string, CategoryID?: string, CategoryPath?: string, contextUser?: UserInfo, Parameters?: Record<string, any>, MaxRows?: number, StartRow?: number, Enrichment?: RunQueryEnrichment): Promise<RunQueryResult> {
         const query = gql`
-            query GetQueryDataByNameQuery($QueryName: String!, $CategoryID: String, $CategoryPath: String, $Parameters: JSONObject, $MaxRows: Int, $StartRow: Int) {
-                GetQueryDataByName(QueryName: $QueryName, CategoryID: $CategoryID, CategoryPath: $CategoryPath, Parameters: $Parameters, MaxRows: $MaxRows, StartRow: $StartRow) {
+            query GetQueryDataByNameQuery($QueryName: String!, $CategoryID: String, $CategoryPath: String, $Parameters: JSONObject, $MaxRows: Int, $StartRow: Int, $Enrichment: JSONObject) {
+                GetQueryDataByName(QueryName: $QueryName, CategoryID: $CategoryID, CategoryPath: $CategoryPath, Parameters: $Parameters, MaxRows: $MaxRows, StartRow: $StartRow, Enrichment: $Enrichment) {
                     ${this.QueryReturnFieldList}
                 }
             }
         `;
-    
+
         // Build the variables object, adding optional parameters if defined.
-        const variables: { QueryName: string; CategoryID?: string; CategoryPath?: string; Parameters?: Record<string, any>; MaxRows?: number; StartRow?: number } = { QueryName };
+        const variables: { QueryName: string; CategoryID?: string; CategoryPath?: string; Parameters?: Record<string, any>; MaxRows?: number; StartRow?: number; Enrichment?: RunQueryEnrichment } = { QueryName };
         if (CategoryID !== undefined) {
             variables.CategoryID = CategoryID;
         }
@@ -638,7 +650,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         if (StartRow !== undefined) {
             variables.StartRow = StartRow;
         }
-    
+        if (Enrichment !== undefined) {
+            variables.Enrichment = Enrichment;
+        }
+
         const result = await this.ExecuteGQL(query, variables);
         if (result && result.GetQueryDataByName) {
             return this.TransformQueryPayload(result.GetQueryDataByName);
@@ -704,6 +719,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     StartRow: item.params.StartRow ?? null,
                     ForceAuditLog: item.params.ForceAuditLog || false,
                     AuditLogDescription: item.params.AuditLogDescription || null,
+                    Enrichment: item.params.Enrichment || null,
                 },
                 cacheStatus: item.cacheStatus ? {
                     maxUpdatedAt: item.cacheStatus.maxUpdatedAt,
@@ -1606,8 +1622,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * key validation still runs in `ProviderBase.RouteOperation` before this is called.
      */
     protected override async InternalRouteOperation<TInput = unknown, TOutput = unknown>(operationKey: string, input: TInput, options: RemoteOpInvokeOptions): Promise<RemoteOpResult<TOutput>> {
-        const mutation = gql`mutation ExecuteRemoteOperation($operationKey: String!, $inputJSON: String!, $invokeMode: String!) {
-            ExecuteRemoteOperation(input: { operationKey: $operationKey, inputJSON: $inputJSON, invokeMode: $invokeMode }) {
+        const mutation = gql`mutation ExecuteRemoteOperation($operationKey: String!, $inputJSON: String!, $invokeMode: String!, $progressChannelId: String) {
+            ExecuteRemoteOperation(input: { operationKey: $operationKey, inputJSON: $inputJSON, invokeMode: $invokeMode, progressChannelId: $progressChannelId }) {
                 success
                 resultCode
                 outputJSON
@@ -1615,11 +1631,40 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 errorMessage
             }
         }`;
+
+        // RO-3 attached over-the-wire: when the caller wants progress, open a channel + subscribe to it BEFORE
+        // the mutation, forward each RemoteOpProgress to onProgress, and tear it down when the call ends.
+        // Progress is best-effort — a progress-channel error never fails the operation itself.
+        let progressChannelId: string | undefined;
+        let progressSub: { unsubscribe(): void } | undefined;
+        if (options.onProgress) {
+            progressChannelId = this.GenerateUUID();
+            progressSub = this.subscribe(REMOTE_OP_PROGRESS_SUBSCRIPTION, { channelId: progressChannelId }).subscribe({
+                next: (data: { RemoteOperationProgress?: { ProgressJSON?: string } }) => {
+                    const json = data?.RemoteOperationProgress?.ProgressJSON;
+                    if (json) {
+                        try {
+                            options.onProgress!(JSON.parse(json) as RemoteOpProgress);
+                        } catch {
+                            /* ignore a malformed progress envelope */
+                        }
+                    }
+                },
+                error: () => {
+                    /* best-effort: swallow progress-channel errors so they never fail the call */
+                },
+            });
+            // Give the subscription socket a moment to establish before the op runs, so a fast op's early
+            // progress isn't missed. Negligible for LongRunning ops (the only ones that emit progress).
+            await new Promise((resolve) => setTimeout(resolve, 400));
+        }
+
         try {
             const data = await this.ExecuteGQL(mutation, {
                 operationKey,
                 inputJSON: JSON.stringify(input ?? null),
                 invokeMode: options.mode ?? 'attached',
+                progressChannelId: progressChannelId ?? null,
             });
             const r = data?.ExecuteRemoteOperation;
             if (!r) {
@@ -1634,6 +1679,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             };
         } catch (e) {
             return { Success: false, ResultCode: 'TRANSPORT_ERROR', ErrorMessage: e instanceof Error ? e.message : String(e) };
+        } finally {
+            progressSub?.unsubscribe();
         }
     }
 
@@ -2836,6 +2883,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 // freshly-refreshed token instead of reusing the stale one.
                 connectionParams: () => ({
                     Authorization: 'Bearer ' + this.ConfigData.Token,
+                    // Also carry the API keys (if configured) so API-key / MCP / Node clients can authenticate
+                    // the subscription socket — the server validates these the same way it does the HTTP headers.
+                    ...(this.ConfigData.MJAPIKey ? { 'x-mj-api-key': this.ConfigData.MJAPIKey } : {}),
+                    ...(this.ConfigData.UserAPIKey ? { 'x-mj-user-api-key': this.ConfigData.UserAPIKey } : {}),
                 }),
                 keepAlive: 30000, // Send keepalive ping every 30 seconds
                 retryAttempts: 3,

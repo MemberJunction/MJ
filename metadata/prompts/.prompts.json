@@ -194,8 +194,8 @@
       "ID": "FF7D441F-36E1-458A-B548-0FC2208923BE"
     },
     "sync": {
-      "lastModified": "2026-06-16T01:17:16.512Z",
-      "checksum": "add9790b59e6c76fba66cda0f54d7322be6a3bae93e3a13762844461836b8f1d"
+      "lastModified": "2026-07-02T03:13:43.328Z",
+      "checksum": "42187e2ad645d427c7c067000b16acd9a4efab41f87770ae3724a0ed30896d07"
     }
   },
   {
@@ -1375,6 +1375,21 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemma 4 31B Instruct",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
+            "Priority": 100
+          },
+          "primaryKey": {
+            "ID": "17DC3AA9-138C-4E82-A536-3FE06160318E"
+          },
+          "sync": {
+            "lastModified": "2026-07-02T03:13:43.382Z",
+            "checksum": "f9e269e1c9538b29583f8ad0948eb7aac0a42b4a6c510a5ad439367670382205"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
             "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.1 Flash-Lite",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
             "Priority": 20
@@ -1673,6 +1688,54 @@
     "sync": {
       "lastModified": "2026-05-05T15:49:00.413Z",
       "checksum": "58c5a32b26dbd537e582dbf4e529ecb30e9a1ac298435277fe32df922914eb48"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Generate Remote Operation Code",
+      "Description": "Authors the TypeScript body of a Remote Operation's InternalExecute method from its Description + typed Input/Output contract, against the ambient input/provider/user/context. Used by MJRemoteOperationEntityServer for GenerationType=AI operations.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/system/remote-operation-generation.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Highest",
+      "ParallelizationMode": "None",
+      "OutputType": "object",
+      "OutputExample": "",
+      "ValidationBehavior": "Strict",
+      "MaxRetries": 3,
+      "RetryDelayMS": 1000,
+      "RetryStrategy": "Fixed",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=Actions&Parent=MJ: System"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.1 Flash-Lite",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 11
+          },
+          "primaryKey": {
+            "ID": "90F01050-8CC7-4004-A404-551DE6B5E83F"
+          },
+          "sync": {
+            "lastModified": "2026-06-26T21:32:04.410Z",
+            "checksum": "ffd5b9eff3841d49c631cb7772a65010a059ac43aff2b953fa14672b0936741b"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "DA1A8AB7-16B9-497B-BB80-3AB1D7D253EF"
+    },
+    "sync": {
+      "lastModified": "2026-06-26T21:32:04.364Z",
+      "checksum": "b2c8ac82fb635bcd641ce3a7514401c56fe2a1d1c520be06c4fbef24df260b26"
     }
   }
 ]

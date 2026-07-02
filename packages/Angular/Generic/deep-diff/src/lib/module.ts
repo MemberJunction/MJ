@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 
 import { DeepDiffDialogComponent } from './deep-diff-dialog.component';
 import { DeepDiffComponent } from './deep-diff.component';
+import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 
 @NgModule({
   declarations: [
@@ -12,7 +13,8 @@ import { DeepDiffComponent } from './deep-diff.component';
   ],
   imports: [
     CommonModule,
-    FormsModule
+    FormsModule,
+    MJEmptyStateComponent
   ],
   exports: [
     DeepDiffComponent,

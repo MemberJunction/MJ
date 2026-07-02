@@ -14,7 +14,7 @@
     <mj-collapsible-panel
         SectionKey="messageCore"
         SectionName="Message Core"
-        Icon="fa fa-comment"
+        Icon="fa fa-info-circle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -113,7 +113,7 @@
     <mj-collapsible-panel
         SectionKey="userFeedbackInsights"
         SectionName="User Feedback & Insights"
-        Icon="fa fa-star"
+        Icon="fa fa-user"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -147,7 +147,7 @@
     <mj-collapsible-panel
         SectionKey="relatedEntities"
         SectionName="Related Entities"
-        Icon="fa fa-sitemap"
+        Icon="fa fa-info-circle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -211,7 +211,7 @@
     <mj-collapsible-panel
         SectionKey="interactiveElements"
         SectionName="Interactive Elements"
-        Icon="fa fa-hand-pointer"
+        Icon="fa fa-info-circle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -235,6 +235,48 @@
             [ShowLabel]="true"
             FieldName="AutomaticCommands"
             Type="code"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Media and Timing Section -->
+    <mj-collapsible-panel
+        SectionKey="mediaAndTiming"
+        SectionName="Media and Timing"
+        Icon="fa fa-play-circle"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="TurnEndedAt"
+            Type="datepicker"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="UtteranceStartMs"
+            Type="number"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="UtteranceEndMs"
+            Type="number"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="MediaType"
+            Type="select"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>

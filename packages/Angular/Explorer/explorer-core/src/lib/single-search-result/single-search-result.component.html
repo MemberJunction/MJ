@@ -35,19 +35,19 @@
 
   <!-- No results -->
   @if (SearchState === 'no-results') {
-    <div class="empty-state">
-      <i class="fa-solid fa-magnifying-glass empty-icon"></i>
-      <p>No results found for "<strong>{{ searchInput }}</strong>" in {{ entity }}</p>
+    <mj-empty-state
+      Variant="no-results"
+      Icon="fa-solid fa-magnifying-glass">
+      <p class="search-result-empty-message">No results found for "<strong>{{ searchInput }}</strong>" in {{ entity }}</p>
       <p class="empty-hint">Try a different search term or entity</p>
-    </div>
+    </mj-empty-state>
   }
 
   <!-- Single result — auto-navigating to entity form -->
   @if (SearchState === 'single-result') {
-    <div class="single-result-state">
-      <i class="fa-solid fa-arrow-right redirect-icon"></i>
-      <p>Found 1 result &mdash; opening record...</p>
-    </div>
+    <mj-empty-state
+      Icon="fa-solid fa-arrow-right"
+      Title="Found 1 result — opening record..." />
   }
 
   <!-- Entity Viewer (2+ results) -->

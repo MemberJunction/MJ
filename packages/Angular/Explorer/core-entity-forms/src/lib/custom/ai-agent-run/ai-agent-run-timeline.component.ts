@@ -244,7 +244,9 @@ export class AIAgentRunTimelineComponent extends BaseAngularComponent implements
       'Actions': 'fa-wrench',
       'Validation': 'fa-square-check',
       'ForEach': 'fa-repeat',
-      'While': 'fa-rotate'
+      'While': 'fa-rotate',
+      'Skill': 'fa-wand-magic-sparkles',
+      'Plan': 'fa-clipboard-check'
     };
     return iconMap[stepType] || 'fa-circle';
   }

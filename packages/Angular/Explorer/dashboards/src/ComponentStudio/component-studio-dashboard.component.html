@@ -157,13 +157,9 @@
         }
       } @else {
         <!-- Enhanced Empty State -->
-        <div class="empty-state">
-          <div class="empty-state-content">
-            <div class="empty-state-icon">
-              <i class="fa-solid fa-rocket"></i>
-            </div>
-            <h2>Ready to Build</h2>
-            <p>Select a component from the browser or create a new one to get started</p>
+        <mj-empty-state Size="large" Icon="fa-solid fa-rocket"
+          Title="Ready to Build"
+          Message="Select a component from the browser or create a new one to get started">
             <div class="empty-state-actions">
               <button mjButton variant="primary" (click)="OnNewComponent()">
                 <span class="fa-solid fa-plus"></span> New Component
@@ -187,8 +183,7 @@
                 <i class="fa-solid fa-edit"></i> Form
               </button>
             </div>
-          </div>
-        </div>
+        </mj-empty-state>
       }
     </div>
 

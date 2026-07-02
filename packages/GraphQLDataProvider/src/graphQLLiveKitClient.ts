@@ -106,6 +106,12 @@ export interface LiveKitRecordingResult {
   EgressID: string;
   /** The raw egress status. */
   Status: string;
+  /**
+   * The `MJ: Files` row id of the registered recording — present on a successful **stop** once the egress
+   * MP4 has been registered against the Meeting-Room Conversation. Absent while recording, or when the
+   * meeting-recording storage provider isn't configured.
+   */
+  RecordingFileID?: string;
 }
 
 /** Typed wrapper over the LiveKit room GraphQL mutations. */
@@ -205,6 +211,28 @@ export class GraphQLLiveKitClient {
   }
 
   /**
+   * Ends the meeting for EVERYONE: stops every agent bot bridged into a room (by room name, via the
+   * server roster). Works even for a participant who only *joined* and never tracked bridge ids locally.
+   * Returns `true` when the teardown ran. Best-effort: any failure resolves `false`.
+   *
+   * @param roomName The room to end.
+   */
+  public async EndRoom(roomName: string): Promise<boolean> {
+    try {
+      const mutation = gql`
+        mutation EndLiveKitRoom($roomName: String!) {
+          EndLiveKitRoom(roomName: $roomName)
+        }
+      `;
+      const result = await this._dataProvider.ExecuteGQL(mutation, { roomName });
+      return result?.EndLiveKitRoom === true;
+    } catch (e: any) {
+      LogError('GraphQLLiveKitClient.EndRoom failed', undefined, e);
+      return false;
+    }
+  }
+
+  /**
    * Invites MJ users to a room — the server sends each a "Live Room Invite" notification (in-app +
    * MJ Comms when configured) whose in-app entry joins the room when clicked. Best-effort.
    *
@@ -295,6 +323,7 @@ export class GraphQLLiveKitClient {
             ErrorMessage
             EgressID
             Status
+            RecordingFileID
           }
         }
       `,

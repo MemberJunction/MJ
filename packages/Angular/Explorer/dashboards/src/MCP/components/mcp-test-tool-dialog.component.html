@@ -261,18 +261,12 @@
   <div class="step-content results-step">
     <div class="results-container">
       <!-- Success/Error Header -->
-      <div class="result-header" [class.success]="ExecutionResult?.Success" [class.error]="!ExecutionResult?.Success">
-        @if (ExecutionResult?.Success) {
-          <i class="fa-solid fa-check-circle"></i>
-          <span class="result-status">Execution Successful</span>
-        } @else {
-          <i class="fa-solid fa-times-circle"></i>
-          <span class="result-status">Execution Failed</span>
-        }
+      <mj-alert [Variant]="ExecutionResult?.Success ? 'success' : 'error'">
+        <span class="result-status">{{ ExecutionResult?.Success ? 'Execution Successful' : 'Execution Failed' }}</span>
         @if (ExecutionResult?.DurationMs) {
-          <span class="duration">{{ ExecutionResult?.DurationMs }}ms</span>
+          <span actions class="duration">{{ ExecutionResult?.DurationMs }}ms</span>
         }
-      </div>
+      </mj-alert>
       <!-- Executed Tool Info -->
       <div class="execution-info">
         <div class="info-row">
@@ -290,10 +284,9 @@
       </div>
       <!-- Error Message -->
       @if (ExecutionResult?.ErrorMessage) {
-        <div class="error-panel">
-          <h4><i class="fa-solid fa-exclamation-triangle"></i> Error</h4>
+        <mj-alert Variant="error" Title="Error">
           <pre class="error-message">{{ ExecutionResult?.ErrorMessage }}</pre>
-        </div>
+        </mj-alert>
       }
       <!-- Result Data -->
       @if (ExecutionResult?.Result) {

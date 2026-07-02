@@ -1,0 +1,29 @@
+/* ViewEncapsulation.None — namespaced under .fc-* to avoid leakage. */
+mj-agent-flow-flowchart { display: block; width: 100%; height: 100%; }
+
+.fc-wrap { position: relative; width: 100%; height: 100%; }
+
+.fc-toolbar {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  display: flex;
+  gap: 6px;
+  z-index: 3;
+}
+.fc-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  border: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface-card);
+  color: var(--mj-text-secondary);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+}
+.fc-btn:hover { color: var(--mj-text-primary); border-color: var(--mj-brand-primary); }
+
+.fc-wrap .flow-svg { cursor: grab; }
+.fc-wrap .flow-svg:active { cursor: grabbing; }

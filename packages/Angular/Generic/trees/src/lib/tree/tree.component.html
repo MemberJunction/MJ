@@ -43,10 +43,8 @@
 
   <!-- Empty State -->
   @if (IsLoaded && Nodes.length === 0 && !ErrorMessage && !IsLoading) {
-    <div class="tree-empty">
-      <i [class]="EmptyIcon + ' tree-empty__icon'"></i>
-      <span class="tree-empty__message">{{ EmptyMessage }}</span>
-    </div>
+    <mj-empty-state class="tree-empty" Size="compact"
+      [Icon]="EmptyIcon" [Title]="EmptyMessage" />
   }
 
   <!-- Tree Content -->

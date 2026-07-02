@@ -4,6 +4,7 @@ import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { RunView, Metadata } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { MJConfirmService } from '@memberjunction/ng-ui-components';
 import { CredentialCategoryEditPanelComponent } from '@memberjunction/ng-credentials';
 interface CategoryNode {
     category: MJCredentialCategoryEntity;
@@ -36,7 +37,8 @@ export class CredentialsCategoriesResourceComponent extends BaseResourceComponen
     @ViewChild('categoryEditPanel') categoryEditPanel!: CredentialCategoryEditPanelComponent;
 
     constructor(
-        private cdr: ChangeDetectorRef) {
+        private cdr: ChangeDetectorRef,
+        private confirm: MJConfirmService) {
         super();
     }
 
@@ -240,7 +242,11 @@ export class CredentialsCategoriesResourceComponent extends BaseResourceComponen
             return;
         }
 
-        const confirmed = confirm(`Are you sure you want to delete "${node.category.Name}"? This action cannot be undone.`);
+        const confirmed = await this.confirm.ConfirmDelete({
+            title: 'Delete category',
+            message: `Delete "${node.category.Name}"?`,
+            detail: 'This action cannot be undone.',
+        });
         if (!confirmed) return;
 
         try {
@@ -314,6 +320,15 @@ export class CredentialsCategoriesResourceComponent extends BaseResourceComponen
     public clearSearch(): void {
         this.searchText = '';
         this.cdr.markForCheck();
+    }
+
+    /** Empty-state CTA: clear search when narrowing, otherwise create. */
+    public onEmptyStateAction(): void {
+        if (this.searchText) {
+            this.clearSearch();
+        } else {
+            this.createNewCategory();
+        }
     }
 
     public expandAll(): void {

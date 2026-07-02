@@ -266,6 +266,11 @@ export interface RunAgentParams {
     AutoPopulateLastRunPayload?: boolean;
     /** Configuration ID to use */
     ConfigurationId?: string;
+    /** Whether Plan Mode is requested for this run (requires the agent's SupportsPlanMode capability) */
+    PlanMode?: boolean;
+    /** Skill IDs the user requested via `/skill-name` mentions. Server intersects these with the
+     *  agent's accepted skills AND the user's Run permission before any are activated. */
+    RequestedSkillIDs?: string[];
     /** Optional conversation detail ID (triggers artifact/notification creation) */
     ConversationDetailId?: string;
     /** Whether to create artifacts from the agent's payload */
@@ -301,6 +306,11 @@ export interface RunAgentFromConversationDetailParams {
     AutoPopulateLastRunPayload?: boolean;
     /** Configuration ID to use */
     ConfigurationId?: string;
+    /** Whether Plan Mode is requested for this run (requires the agent's SupportsPlanMode capability) */
+    PlanMode?: boolean;
+    /** Skill IDs the user requested via `/skill-name` mentions. Server intersects these with the
+     *  agent's accepted skills AND the user's Run permission before any are activated. */
+    RequestedSkillIDs?: string[];
     /** Whether to create artifacts from the agent's payload */
     CreateArtifacts?: boolean;
     /** Whether to create a user notification on completion */

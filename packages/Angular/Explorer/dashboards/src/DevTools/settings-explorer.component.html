@@ -46,15 +46,13 @@
     <div class="se-body">
         <div class="se-list">
             @if (FilteredRows.length === 0) {
-                <div class="se-empty">
-                    @if (SearchQuery) {
-                        <i class="fa-solid fa-magnifying-glass"></i>
-                        <span>No matches for "{{ SearchQuery }}"</span>
-                    } @else {
-                        <i class="fa-regular fa-folder-open"></i>
-                        <span>No {{ Scope === 'user' ? 'user settings' : 'instance configurations' }} are defined.</span>
-                    }
-                </div>
+                @if (SearchQuery) {
+                    <mj-empty-state class="se-empty" Variant="no-results" Icon="fa-solid fa-magnifying-glass"
+                        [Title]="'No matches for “' + SearchQuery + '”'" />
+                } @else {
+                    <mj-empty-state class="se-empty" Icon="fa-regular fa-folder-open"
+                        [Title]="'No ' + (Scope === 'user' ? 'user settings' : 'instance configurations') + ' are defined.'" />
+                }
             } @else {
                 <table class="se-table">
                     <thead>

@@ -474,38 +474,6 @@
   color: var(--mj-text-secondary);
 }
 
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  text-align: center;
-  color: var(--mj-text-muted);
-  background: var(--mj-bg-surface);
-  border-radius: 8px;
-  padding: 40px;
-}
-
-.empty-icon {
-  font-size: 64px;
-  color: var(--mj-border-default);
-  margin-bottom: 24px;
-}
-
-.empty-state h3 {
-  margin: 0 0 8px 0;
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--mj-text-primary);
-}
-
-.empty-state p {
-  margin: 0;
-  font-size: 14px;
-  max-width: 400px;
-  color: var(--mj-text-secondary);
-}
 
 /* ============================================
    CONCEPT D: HOME VIEW LAYOUT
@@ -830,10 +798,10 @@
 
 .quick-access-panel {
   position: fixed;
-  top: 0;
+  top: 60px;
   right: 0;
   width: 320px;
-  height: 100%;
+  height: calc(100% - 60px);
   background: var(--mj-bg-surface);
   border-left: 1px solid var(--mj-border-default);
   z-index: 50;
@@ -878,53 +846,6 @@
 .qa-body {
   flex: 1;
   overflow-y: auto;
-}
-
-.qa-section {
-  border-bottom: 1px solid var(--mj-border-default);
-}
-
-.qa-section-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.8px;
-  color: var(--mj-text-muted);
-  cursor: pointer;
-  user-select: none;
-}
-
-.qa-section-header .qa-section-icon {
-  font-size: 12px;
-}
-
-.qa-section-header .qa-section-count {
-  background: var(--mj-bg-surface-card);
-  padding: 0 6px;
-  border-radius: 8px;
-  font-size: 10px;
-  margin-left: auto;
-}
-
-.qa-section-header .qa-section-chevron {
-  font-size: 10px;
-  transition: transform 0.15s;
-}
-
-.qa-section.collapsed .qa-section-chevron {
-  transform: rotate(-90deg);
-}
-
-.qa-section-body {
-  padding: 0 8px 8px;
-}
-
-.qa-section.collapsed .qa-section-body {
-  display: none;
 }
 
 .qa-item {
@@ -995,24 +916,6 @@
   border-radius: 8px;
   min-width: 16px;
   text-align: center;
-}
-
-/* No results state for home view */
-.home-no-results {
-  text-align: center;
-  padding: 40px 20px;
-  color: var(--mj-text-muted);
-}
-
-.home-no-results i {
-  font-size: 28px;
-  margin-bottom: 10px;
-  display: block;
-}
-
-.home-no-results p {
-  font-size: 14px;
-  margin: 0;
 }
 
 .detail-panel {
@@ -1133,29 +1036,6 @@
 .toggle-label {
   font-size: 12px;
   font-weight: 500;
-}
-
-/* ============================================
-   EMPTY STATE VARIANTS
-   ============================================ */
-
-.empty-state.small {
-  height: auto;
-  padding: 32px;
-  background: var(--mj-bg-surface-card);
-}
-
-.empty-state.small .empty-icon {
-  font-size: 40px;
-  margin-bottom: 16px;
-}
-
-.empty-state.small h3 {
-  font-size: 16px;
-}
-
-.empty-state.small p {
-  font-size: 13px;
 }
 
 /* ============================================
