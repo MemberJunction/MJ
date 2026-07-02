@@ -764,7 +764,8 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     if (success) {
       this.isConfigPanelOpen = false;
       this.clearPendingNewViewState();
-      await this.viewSelectorRef?.LoadViews();
+      // The view selector re-derives its lists reactively from UserViewEngine's cache
+      // (BaseEntity save auto-invalidates the engine); we only need to reload the grid data.
       await this.entityViewerRef?.LoadData();
     }
 
@@ -945,7 +946,8 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     this.viewModified = false;
     this.isConfigPanelOpen = false;
     this.currentGridState = this.loadUserDefaultGridState();
-    await this.viewSelectorRef?.LoadViews();
+    // The view selector re-derives its lists reactively from UserViewEngine's cache
+    // (BaseEntity delete auto-invalidates the engine), so no explicit reload is needed here.
     this.ViewSelected.emit(null);
     this.SelectedViewChange.emit(null);
     this.AfterViewDelete.emit({ ViewID: viewId, ViewName: viewName });
@@ -1161,7 +1163,8 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
       return;
     }
 
-    await this.viewSelectorRef?.LoadViews();
+    // The view selector re-derives its lists reactively from UserViewEngine's cache
+    // (BaseEntity save auto-invalidates the engine), so no explicit reload is needed here.
     this.AfterViewSave.emit({ View: newView, IsNew: true });
   }
 
