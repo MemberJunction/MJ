@@ -536,6 +536,7 @@
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
       "Status": "Active",
       "AcceptsSkills": "All",
+      "SkillActivationMode": "Auto",
       "ExecutionOrder": 1,
       "ExposeAsAction": true,
       "DefaultArtifactTypeID": "@lookup:MJ: Artifact Types.Name=Marketing Content",
@@ -1112,8 +1113,8 @@
       "ID": "4A7B4F1D-C536-409F-9206-F36FDEE64EDF"
     },
     "sync": {
-      "lastModified": "2026-07-01T23:32:33.092Z",
-      "checksum": "7d6f69aadf51db5b7327403847ee4416b0b5965cc76dc4a4ec2fa0f17d1b6110"
+      "lastModified": "2026-07-02T11:38:35.115Z",
+      "checksum": "661de8f6196eb2b93108bd41f31ecf28c60b811b611ba3c01666751b61b3cbf6"
     }
   }
 ]

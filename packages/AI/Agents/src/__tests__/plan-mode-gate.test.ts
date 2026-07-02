@@ -10,6 +10,7 @@ import { describe, it, expect } from 'vitest';
 interface MockAgent {
     ID: string;
     SupportsPlanMode?: boolean;
+    RequirePlanMode?: boolean;
 }
 
 interface MockParams {
@@ -28,9 +29,12 @@ interface MockStep {
 }
 
 // Mirrors BaseAgent.resolvePlanModeGate's `active` resolution (the depth check is inlined here as
-// a boolean since it doesn't depend on RunView).
+// a boolean since it doesn't depend on RunView). RequirePlanMode (v5.45) forces plan mode on
+// every root run regardless of the per-request flag — SupportsPlanMode is irrelevant when set.
 function isPlanModeActive(params: MockParams, depth: number): boolean {
-    return !!(params.agent.SupportsPlanMode && params.planMode === true && depth === 0);
+    const requiredByAgent = params.agent.RequirePlanMode === true;
+    const requestedByCaller = !!(params.agent.SupportsPlanMode && params.planMode === true);
+    return depth === 0 && (requiredByAgent || requestedByCaller);
 }
 
 // Mirrors BaseAgent.resolvePlanModeGate's `approved` resolution once `active` is true, given the
@@ -66,6 +70,29 @@ describe('resolvePlanModeGate — active resolution', () => {
 
     it('is active for a root agent with SupportsPlanMode + planMode both true', () => {
         expect(isPlanModeActive({ agent: { ID: 'a1', SupportsPlanMode: true }, planMode: true }, 0)).toBe(true);
+    });
+});
+
+describe('resolvePlanModeGate — RequirePlanMode (mandatory HITL, v5.45)', () => {
+    it('forces plan mode active even when the caller did not request it', () => {
+        expect(isPlanModeActive({ agent: { ID: 'a1', SupportsPlanMode: true, RequirePlanMode: true } }, 0)).toBe(true);
+    });
+
+    it('forces plan mode active even when the caller explicitly opted OUT', () => {
+        expect(isPlanModeActive({ agent: { ID: 'a1', SupportsPlanMode: true, RequirePlanMode: true }, planMode: false }, 0)).toBe(true);
+    });
+
+    it('SupportsPlanMode is irrelevant when RequirePlanMode is set', () => {
+        expect(isPlanModeActive({ agent: { ID: 'a1', SupportsPlanMode: false, RequirePlanMode: true } }, 0)).toBe(true);
+    });
+
+    it('does NOT apply to sub-agents (depth > 0) — plan mode remains root-only', () => {
+        expect(isPlanModeActive({ agent: { ID: 'a1', RequirePlanMode: true } }, 1)).toBe(false);
+    });
+
+    it('RequirePlanMode=false (default) leaves the opt-in path unchanged', () => {
+        expect(isPlanModeActive({ agent: { ID: 'a1', SupportsPlanMode: true, RequirePlanMode: false }, planMode: true }, 0)).toBe(true);
+        expect(isPlanModeActive({ agent: { ID: 'a1', SupportsPlanMode: true, RequirePlanMode: false } }, 0)).toBe(false);
     });
 });
 

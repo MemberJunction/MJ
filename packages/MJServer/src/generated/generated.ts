@@ -7676,6 +7676,9 @@ detailed information about what validation rules failed.`})
     @Field({nullable: true, description: `Human-readable notes and comments about this agent run step`}) 
     Comments?: string;
         
+    @Field({nullable: true, description: `JSON array of skill-invocation records (AgentSkillInvocation[]) associating this step with the skills involved in it, or NULL when no skills are in play. Each record carries SkillID, SkillName, ActivationType (requested = user /skill mention; auto = agent self-activation), Provenance of authority (the gate values that admitted the skill: AcceptsSkills, both ActivationMode dials, and who requested it), and an optional agent-stated Reason when self-activated. Population: Skill steps record the activation(s) they performed; Prompt steps record the full set of skills in effect for that turn; Actions and Sub-Agent steps record the skill(s) through which the executed tool became available (NULL means the tool was a native grant).`}) 
+    Skills?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     AgentRun?: string;
@@ -7761,6 +7764,9 @@ export class CreateMJAIAgentRunStepInput {
     @Field({ nullable: true })
     Comments: string | null;
 
+    @Field({ nullable: true })
+    Skills: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -7830,6 +7836,9 @@ export class UpdateMJAIAgentRunStepInput {
 
     @Field({ nullable: true })
     Comments?: string | null;
+
+    @Field({ nullable: true })
+    Skills?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -8121,6 +8130,9 @@ each time the agent processes a prompt step.`})
     @MaxLength(36)
     AgentSessionID?: string;
         
+    @Field(() => Boolean, {description: `1 when this run executed under plan mode (whether via the per-request planMode flag or the agent's RequirePlanMode setting). Drives plan-mode indicators in the run UX and supports plan-drift auditing (comparing the approved plan against the steps that actually executed).`}) 
+    PlanMode: boolean;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Agent?: string;
@@ -8367,6 +8379,9 @@ export class CreateMJAIAgentRunInput {
     @Field({ nullable: true })
     AgentSessionID: string | null;
 
+    @Field(() => Boolean, { nullable: true })
+    PlanMode?: boolean;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -8520,6 +8535,9 @@ export class UpdateMJAIAgentRunInput {
 
     @Field({ nullable: true })
     AgentSessionID?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    PlanMode?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -11344,6 +11362,13 @@ if this limit is exceeded.`})
     @MaxLength(20)
     AcceptsSkills: string;
         
+    @Field({description: `Controls whether this agent may ever self-activate skills from its prompt catalog. Auto: the agent sees its allowed skills whose own ActivationMode is Auto (double gate) and may activate them mid-run on its own judgment. RequestedOnly (default): the agent's prompt catalog is empty and skills only enter a run via an explicit user request (/skill mention). Orthogonal to AcceptsSkills, which governs which skills are available at all; this governs who may pull the activation trigger.`}) 
+    @MaxLength(20)
+    SkillActivationMode: string;
+        
+    @Field(() => Boolean, {description: `When 1, every root-level run of this agent executes in plan mode regardless of the per-request planMode flag — the agent must present a plan and receive human approval before any Actions or Sub-Agent steps execute. SupportsPlanMode is irrelevant when this is set. Use for high-consequence agents (e.g. ones with outbound-communication capabilities) where human-in-the-loop review is mandatory.`}) 
+    RequirePlanMode: boolean;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Parent?: string;
@@ -11727,6 +11752,12 @@ export class CreateMJAIAgentInput {
     @Field({ nullable: true })
     AcceptsSkills?: string;
 
+    @Field({ nullable: true })
+    SkillActivationMode?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    RequirePlanMode?: boolean;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -11952,6 +11983,12 @@ export class UpdateMJAIAgentInput {
 
     @Field({ nullable: true })
     AcceptsSkills?: string;
+
+    @Field({ nullable: true })
+    SkillActivationMode?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    RequirePlanMode?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -20844,6 +20881,10 @@ export class MJAISkill_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({description: `Controls whether this skill may ever be self-activated by an agent. Auto: the skill may appear in accepting agents' prompt catalogs and be activated mid-run on agent judgment — but only for agents whose own SkillActivationMode is also Auto (double gate). RequestedOnly (default): the skill is excluded from prompt catalogs entirely and can only be activated when the user explicitly requests it for the run (a /skill mention flowing through ExecuteAgentParams.requestedSkillIDs). All other activation gates (AcceptsSkills, skill Status, per-agent assignment, user Run permission) apply unchanged in both modes.`}) 
+    @MaxLength(20)
+    ActivationMode: string;
+        
     @Field() 
     @MaxLength(100)
     CreatedByUser: string;
@@ -20894,6 +20935,9 @@ export class CreateMJAISkillInput {
     @Field({ nullable: true })
     CreatedByUserID?: string;
 
+    @Field({ nullable: true })
+    ActivationMode?: string;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -20930,6 +20974,9 @@ export class UpdateMJAISkillInput {
 
     @Field({ nullable: true })
     CreatedByUserID?: string;
+
+    @Field({ nullable: true })
+    ActivationMode?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
