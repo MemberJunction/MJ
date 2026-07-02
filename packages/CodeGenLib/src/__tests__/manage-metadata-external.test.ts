@@ -56,6 +56,13 @@ describe('External-entity field sync — data-loss guards', () => {
       expect(sql).not.toContain("'bbb'");
     });
 
+    it('clears FK dependents (EntityFieldValue) BEFORE deleting the EntityField rows', () => {
+      const sql = mm.removeSQL('mj', existing, ['ID', 'Name']);
+      const valueIdx = sql.indexOf('EntityFieldValue');
+      expect(valueIdx).toBeGreaterThanOrEqual(0); // FK dependents cleared
+      expect(valueIdx).toBeLessThan(sql.lastIndexOf("'ccc'")); // ...before the final EntityField delete
+    });
+
     it('would remove ALL fields given an empty introspection — exactly the wipe that externalObjectIsSyncable prevents', () => {
       const sql = mm.removeSQL('mj', existing, []);
       expect(sql).toContain("'aaa'");

@@ -64,8 +64,10 @@ export function mapExternalNativeTypeToMJ(nativeType: string): MappedFieldType {
   if (INT_TYPES.has(base)) return plain('int');
   if (BIGINT_TYPES.has(base)) return plain('bigint');
   if (DECIMAL_TYPES.has(base)) {
-    // NUMBER/NUMERIC carry (precision, scale); default to (18,0) when unspecified to preserve precision.
-    return { Type: 'decimal', Length: null, Precision: arg1 ?? 18, Scale: arg2 ?? 0 };
+    // NUMBER/NUMERIC carry (precision, scale); default to (18,0) when unspecified. A non-positive or
+    // wildcard precision (e.g. Oracle NUMBER(*,0) where '*' isn't a number) also falls back to 18 so
+    // we never emit an invalid decimal(0,0).
+    return { Type: 'decimal', Length: null, Precision: arg1 != null && arg1 > 0 ? arg1 : 18, Scale: arg2 ?? 0 };
   }
   if (FLOAT_TYPES.has(base)) return plain('float');
   if (DATE_TYPES.has(base)) return plain('date');

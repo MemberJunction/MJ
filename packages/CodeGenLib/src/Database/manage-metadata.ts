@@ -1457,10 +1457,39 @@ export class ManageMetadataBase {
     * ClassFactory) and sync its `EntityField` rows to match — the remote equivalent of reading the
     * local INFORMATION_SCHEMA for a virtual/view entity. No-op when there are no external entities.
     */
+   /**
+    * Whether the current database's `Entity` table has the `ExternalDataSourceID` column. External
+    * Data Sources ship as a SQL Server migration only, so on any database/schema that predates it
+    * (PostgreSQL today) the column is absent — and ANY raw SQL referencing it throws
+    * "column does not exist" and aborts the entire CodeGen run, even for a pure MJ-DB schema with no
+    * external entities. Callers gate EDS-specific queries on this so CodeGen stays green everywhere
+    * and auto-activates once the column lands on other platforms (mirrors the PG stored-proc guard in
+    * metadataSupportObjects.ts). Cross-platform via INFORMATION_SCHEMA; cached for the run (the schema
+    * cannot change mid-run).
+    */
+   private _entityHasExternalDataSourceColumn: boolean | null = null;
+   protected async entityHasExternalDataSourceColumn(pool: CodeGenConnection): Promise<boolean> {
+      if (this._entityHasExternalDataSourceColumn === null) {
+         const sql = `SELECT COUNT(*) AS ColExists FROM INFORMATION_SCHEMA.COLUMNS ` +
+                     `WHERE TABLE_SCHEMA = '${mj_core_schema()}' AND TABLE_NAME = 'Entity' AND COLUMN_NAME = 'ExternalDataSourceID'`;
+         const result = await this.runQuery(pool, sql);
+         const row = (result.recordset?.[0] ?? {}) as Record<string, unknown>;
+         const cnt = row.ColExists ?? row.colexists ?? 0;
+         this._entityHasExternalDataSourceColumn = Number(cnt) > 0;
+      }
+      return this._entityHasExternalDataSourceColumn;
+   }
+
    protected async manageExternalEntities(pool: CodeGenConnection, currentUser: UserInfo): Promise<{success: boolean, anyUpdates: boolean, relationshipsUpdated: boolean}> {
       let bSuccess = true;
       let anyUpdates = false;
       let relationshipsUpdated = false;
+      // EDS is provisioned only where its (SQL Server) migration ran. On a database whose Entity table
+      // lacks ExternalDataSourceID (e.g. PostgreSQL), there can be no external entities — and the query
+      // below would throw and abort the whole CodeGen run — so skip cleanly.
+      if (!(await this.entityHasExternalDataSourceColumn(pool))) {
+         return {success: true, anyUpdates: false, relationshipsUpdated: false};
+      }
       const sql = `SELECT * FROM ${this.qs(mj_core_schema(), 'vwEntities')} WHERE ExternalDataSourceID IS NOT NULL`;
       const result = await this.runQuery(pool, sql);
       const externalEntities = result.recordset;
@@ -1524,7 +1553,11 @@ export class ManageMetadataBase {
       if (removeIds.length === 0) {
          return '';
       }
-      return `DELETE FROM ${this.qs(schema, 'EntityField')} WHERE ID IN (${removeIds.map(id => `'${id}'`).join(',')})`;
+      const idList = removeIds.map(id => `'${id}'`).join(',');
+      // Clear FK dependents (value-list entries) before the EntityField delete to avoid an FK violation,
+      // mirroring spDeleteUnneededEntityFields. Emitted as two statements separated by the platform terminator.
+      return `DELETE FROM ${this.qs(schema, 'EntityFieldValue')} WHERE EntityFieldID IN (${idList});\n` +
+             `DELETE FROM ${this.qs(schema, 'EntityField')} WHERE ID IN (${idList})`;
    }
 
    /**
@@ -1537,8 +1570,18 @@ export class ManageMetadataBase {
       let bSuccess = true;
       let bUpdated = false;
       let bRelationshipsUpdated = false;
+      // Introspection reaches a live remote system. A connection/auth/network failure there must NOT
+      // fail the whole CodeGen run (which also regenerates every MJ-DB entity) — treat it as a
+      // recoverable warning-skip, leaving this entity's existing fields untouched. Genuine errors in
+      // the field-sync logic below still fail (caught by the outer try/catch as success:false).
+      let descriptor: Awaited<ReturnType<typeof router.IntrospectExternalSchema>>;
       try {
-         const descriptor = await router.IntrospectExternalSchema(externalEntity.ExternalDataSourceID, externalEntity.SchemaName || undefined, currentUser);
+         descriptor = await router.IntrospectExternalSchema(externalEntity.ExternalDataSourceID, externalEntity.SchemaName || undefined, currentUser);
+      } catch (e: unknown) {
+         logStatus(`   ⚠️  External entity ${externalEntity.Name}: remote schema introspection failed (${e instanceof Error ? e.message : String(e)}) — skipping this entity (left untouched); CodeGen run continues.`);
+         return {success: true, updatedEntity: false, relationshipsUpdated: false};
+      }
+      try {
          // Find the remote object backing this entity (prefer ExternalObjectName; fall back to
          // BaseTable/Name). Match on bare or schema-qualified name, case-insensitively.
          const target = (externalEntity.ExternalObjectName || externalEntity.BaseTable || externalEntity.Name || '').trim().toLowerCase();
@@ -3319,13 +3362,19 @@ export class ManageMetadataBase {
     */
    protected async ensureCreatedAtUpdatedAtFieldsExist(pool: CodeGenConnection, excludeSchemas: string[]): Promise<boolean> {
       try {
+         // Only exclude external entities where the ExternalDataSourceID column exists (SQL Server today).
+         // On PostgreSQL the column is absent, so referencing it here would throw and fail CodeGen; external
+         // entities cannot exist there anyway, so the predicate is simply omitted.
+         const externalEntityClause = (await this.entityHasExternalDataSourceColumn(pool))
+            ? 'ExternalDataSourceID IS NULL AND -- external entities have no physical base table to add __mj_ system columns to (data is remote)'
+            : '';
          const sqlEntities = `SELECT
                                  *
                               FROM
                                  ${this.qs(mj_core_schema(), 'vwEntities')}
                               WHERE
                                  VirtualEntity = ${this.boolLit(false)} AND
-                                 ExternalDataSourceID IS NULL AND -- external entities have no physical base table to add __mj_ system columns to (data is remote)
+                                 ${externalEntityClause}
                                  TrackRecordChanges = ${this.boolLit(true)} AND
                                  SchemaName NOT IN (${excludeSchemas.map(s => `'${s}'`).join(',')})`;
          const entitiesResult = await this.runQuery(pool, sqlEntities);
