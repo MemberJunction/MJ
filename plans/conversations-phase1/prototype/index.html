@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Conversations — Phase 1 prototype</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+
+<div class="app panel-open" id="app">
+
+  <!-- ============ LEFT RAIL ============ -->
+  <aside class="rail">
+    <div class="rail__brand">
+      <div class="rail__logo">MJ</div>
+      <div>
+        <div class="rail__brand-name">MemberJunction</div>
+        <div class="rail__brand-sub">Conversations</div>
+      </div>
+    </div>
+
+    <button class="btn rail__new" id="newConvBtn"><i class="fa-solid fa-plus"></i> New conversation</button>
+
+    <div class="rail__scroll">
+      <div class="rail__group-head"><i class="fa-solid fa-chevron-down chev"></i> Workspace</div>
+      <div class="navitem" data-view="routines" id="navRoutines"><span class="fi"><i class="fa-solid fa-clock-rotate-left"></i></span> Routines <span class="count" id="routineCount">3</span></div>
+      <div class="navitem" data-view="skills" id="navSkills"><span class="fi"><i class="fa-solid fa-wand-magic-sparkles"></i></span> Skills <span class="count" id="skillCount">4</span></div>
+
+      <div class="rail__group-head" style="margin-top:14px;"><i class="fa-solid fa-chevron-down chev"></i> Projects</div>
+
+      <!-- Acme Renewal (active project, expanded) -->
+      <div class="folder active"><span class="fi"><i class="fa-solid fa-folder-open"></i></span> Acme Renewal <span class="count" id="acmeCount">3</span></div>
+      <div class="conv-list" id="acmeConvs">
+        <div class="conv active" data-conv="q3"><span class="ci"><i class="fa-solid fa-comment"></i></span><span class="ctitle">Q3 Pipeline Review</span></div>
+        <div class="conv" data-conv="renewal"><span class="ci"><i class="fa-regular fa-comment"></i></span><span class="ctitle">Renewal terms draft</span></div>
+        <div class="conv" data-conv="stakeholders"><span class="ci"><i class="fa-regular fa-comment"></i></span><span class="ctitle">Stakeholder map</span></div>
+      </div>
+
+      <div class="folder"><span class="fi"><i class="fa-solid fa-folder"></i></span> Northwind Expansion <span class="count">5</span></div>
+      <div class="folder"><span class="fi"><i class="fa-solid fa-folder"></i></span> Product Analytics <span class="count">2</span></div>
+
+      <div class="rail__group-head" style="margin-top:14px;"><i class="fa-solid fa-chevron-down chev"></i> Shared</div>
+      <div class="conv" data-conv="group"><span class="ci"><i class="fa-solid fa-users"></i></span><span class="ctitle">Budget planning</span><span class="fork-tag">P2 preview</span></div>
+
+      <div class="rail__group-head" style="margin-top:14px;"><i class="fa-solid fa-chevron-down chev"></i> Direct</div>
+      <div class="conv" data-conv="skip"><span class="ci"><i class="fa-solid fa-satellite-dish"></i></span><span class="ctitle">Skip Analyst</span><span class="temp-tag">remote</span></div>
+      <div class="conv" data-conv="scratch"><span class="ci"><i class="fa-regular fa-comment"></i></span><span class="ctitle">Quick questions</span></div>
+    </div>
+
+    <div class="rail__foot">
+      <div class="rail__avatar">AM</div>
+      <div style="flex:1;min-width:0;">
+        <div class="rail__user-name">Alex Morgan</div>
+        <div class="rail__user-org">Acme Corp · Admin</div>
+      </div>
+      <button class="icon-btn" id="helpBtn" title="Keyboard shortcuts (?)"><i class="fa-regular fa-keyboard"></i></button>
+      <button class="icon-btn" id="themeBtn" title="Toggle light / dark"><i class="fa-solid fa-circle-half-stroke"></i></button>
+    </div>
+  </aside>
+
+  <!-- ============ CENTER ============ -->
+  <main class="main">
+
+    <!-- ======== CHAT VIEW ======== -->
+    <div class="view" id="chatView">
+      <header class="chead">
+        <div class="chead__title-wrap">
+          <div class="chead__bread" id="convBread"><i class="fa-solid fa-folder"></i> Acme Renewal <i class="fa-solid fa-chevron-right"></i> <span>Conversation</span></div>
+          <div class="chead__title" id="convTitle">Q3 Pipeline Review</div>
+        </div>
+        <div class="chead__actions">
+          <!-- group roster (group conversations only) -->
+          <div class="roster" id="roster" hidden>
+            <span class="roster-avs" id="rosterAvs"></span>
+            <button class="btn secondary sm" id="inviteBtn"><i class="fa-solid fa-user-plus"></i> Invite</button>
+          </div>
+          <!-- remote pill (proxy conversations only) -->
+          <span class="pill remote-pill" id="remotePill" hidden><i class="fa-solid fa-satellite-dish"></i> Remote agent</span>
+
+          <!-- long-thread TOC -->
+          <div class="toc-chip" id="tocChip" hidden>
+            <button class="toc-btn" id="tocBtn"><i class="fa-solid fa-list-ul"></i> Jump to <i class="fa-solid fa-chevron-down" style="font-size:9px;"></i></button>
+            <div class="toc-menu" id="tocMenu"></div>
+          </div>
+
+          <!-- context gauge chip -->
+          <div class="ctx-chip ramp-ok" id="ctxChip" style="--pct:38;">
+            <span class="ring"></span>
+            <span class="pctnum" id="ctxPct">38%</span>
+            <div class="chip-pop">
+              <div class="spread" style="margin-bottom:7px;">
+                <strong style="font-size:12px;">Context window</strong>
+                <span class="small muted" id="ctxModel">Sage · GPT-4.1 · 1M</span>
+              </div>
+              <div class="barline ramp-ok" id="ctxBar" style="--pct:38;"><i></i></div>
+              <div class="kv"><span class="k">Used</span><span class="v" id="ctxUsed">382K / 1M</span></div>
+              <div class="kv"><span class="k">This turn</span><span class="v" id="ctxTurn">+6.1K tok</span></div>
+              <hr class="divider" style="margin:8px 0;">
+              <div class="kv"><span class="k">Run cost</span><span class="v" id="ctxCost">$0.74</span></div>
+              <div class="kv"><span class="k">Avg / msg</span><span class="v" id="ctxAvg">$0.031</span></div>
+            </div>
+          </div>
+
+          <div class="head-toggle on" id="memToggle" title="Memory on for this conversation">
+            <span class="track"></span><span>Memory</span>
+          </div>
+          <div class="head-toggle temp" id="tempToggle" title="Temporary chat — nothing is saved">
+            <span class="track"></span><span>Temporary</span>
+          </div>
+          <button class="icon-btn" id="panelToggle" title="Toggle right panel"><i class="fa-solid fa-table-columns"></i></button>
+        </div>
+      </header>
+
+      <div class="thread-wrap" id="threadWrap">
+        <div class="temp-banner" id="tempBanner" style="display:none;">
+          <span class="dot"></span>
+          <span><strong>Temporary chat</strong> · nothing here is saved, and stored memory won't be used.</span>
+        </div>
+        <div id="threadHost"></div>
+      </div>
+
+      <div class="composer-wrap">
+        <div class="composer-stack" id="composer">
+          <div class="quote-stack" id="quoteStack"></div>
+          <div class="composer-mention-row" id="mentionRow"></div>
+          <textarea class="composer-input" id="composerInput" rows="1" placeholder="Message Sage…"></textarea>
+          <div class="composer-bar">
+            <div class="composer-tools">
+              <button class="icon-btn" title="Attach"><i class="fa-solid fa-paperclip"></i></button>
+              <button class="icon-btn" id="paletteBtn" title="Command palette (⌘K)"><i class="fa-solid fa-bolt"></i></button>
+              <span class="cap-note" id="capNote"><i class="fa-solid fa-circle-info"></i> Plan toggle shows only on plan-capable agents</span>
+            </div>
+            <button class="btn" id="sendBtn"><i class="fa-solid fa-paper-plane"></i> <span id="sendLabel">Send</span></button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======== ROUTINES VIEW ======== -->
+    <div class="view alt-view" id="routinesView" hidden>
+      <header class="chead">
+        <div class="chead__title-wrap">
+          <div class="chead__bread"><i class="fa-solid fa-clock-rotate-left"></i> Workspace <i class="fa-solid fa-chevron-right"></i> <span>Routines</span></div>
+          <div class="chead__title">My Routines</div>
+        </div>
+        <div class="chead__actions">
+          <div class="seg" id="routineTabs">
+            <button class="seg-btn active" data-rtab="list">My routines</button>
+            <button class="seg-btn" data-rtab="upcoming">Upcoming</button>
+            <button class="seg-btn" data-rtab="alerts">Alerts <span class="mini-badge" id="alertBadge">2</span></button>
+          </div>
+          <button class="btn" id="newRoutineBtn"><i class="fa-solid fa-plus"></i> New routine</button>
+        </div>
+      </header>
+      <div class="alt-scroll" id="routinesBody"></div>
+    </div>
+
+    <!-- ======== SKILLS VIEW ======== -->
+    <div class="view alt-view" id="skillsView" hidden>
+      <header class="chead">
+        <div class="chead__title-wrap">
+          <div class="chead__bread"><i class="fa-solid fa-wand-magic-sparkles"></i> Workspace <i class="fa-solid fa-chevron-right"></i> <span>Skills</span></div>
+          <div class="chead__title">Skills</div>
+        </div>
+        <div class="chead__actions">
+          <div class="agent-scope" id="skillAgentScope">
+            <span class="small muted">Enabling for</span>
+            <span class="mention-chip" style="cursor:default;"><i class="fa-solid fa-robot"></i> Sage</span>
+            <span class="small muted">Accepts skills:</span>
+            <div class="seg sm" id="acceptsSeg">
+              <button class="seg-btn" data-acc="None">None</button>
+              <button class="seg-btn active" data-acc="Limited">Limited</button>
+              <button class="seg-btn" data-acc="All">All</button>
+            </div>
+          </div>
+          <button class="btn" id="newSkillBtn"><i class="fa-solid fa-plus"></i> New skill</button>
+        </div>
+      </header>
+      <div class="alt-scroll" id="skillsBody"></div>
+    </div>
+
+  </main>
+
+  <!-- ============ RIGHT PANEL ============ -->
+  <aside class="right" id="right">
+    <div class="right__head" id="rightHead">
+      <span class="ptitle"><i class="fa-solid fa-brain"></i> What I remember</span>
+      <button class="icon-btn" id="rightClose" title="Collapse panel" style="margin-left:auto;"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="right__body" id="rightBody"></div>
+    <div class="right__foot" id="rightFoot"></div>
+  </aside>
+
+</div>
+
+<!-- ============ OVERLAYS ============ -->
+<div class="scrim" id="shareScrim"></div>
+<div class="scrim palette-scrim" id="paletteScrim"></div>
+<div class="scrim" id="forkScrim"></div>
+<div class="scrim" id="cheatScrim"></div>
+<div class="scrim" id="inviteScrim"></div>
+
+<!-- Routine slide-in -->
+<div class="slidein-scrim" id="routineScrim"></div>
+<div class="slidein" id="routineSlidein"></div>
+
+<div class="toast-wrap" id="toastWrap"></div>
+
+<!-- Try this legend -->
+<div id="tryThisHost">
+  <div class="trythis" id="tryThis">
+    <div class="trythis__head" id="tryThisHead">
+      <span class="tt-title"><i class="fa-solid fa-hand-pointer"></i> Try this</span>
+      <span class="small muted">what's clickable</span>
+      <i class="fa-solid fa-chevron-down tt-chev"></i>
+    </div>
+    <div class="trythis__body">
+      <div class="tt-group">In this thread</div>
+      <div class="tt-item"><span class="tt-n">1</span><span>Flip <b>Plan</b> on the Sage pill → <b>Send</b> → editable plan card. <b>Approve &amp; run</b> — watch <b>skills activate</b> between steps.</span></div>
+      <div class="tt-item"><span class="tt-n">2</span><span>Say <b>"always loop in Dana on summaries"</b> → an <b>"I'll remember"</b> chip, synced to the panel.</span></div>
+      <div class="tt-item"><span class="tt-n">3</span><span><b>Open</b> the artifact → <b>Edit</b> (creates v3) → <b>Share</b>. Flip the privilege toggle to gate the public link.</span></div>
+      <div class="tt-item"><span class="tt-n">4</span><span>Hover a Sage message → <b>⋯ More</b> → <b>"Turn into a routine"</b>. Or hover for <b>Quote · Fork</b> — forking opens a real branched thread.</span></div>
+      <div class="tt-item"><span class="tt-n">5</span><span>Keep chatting until the gauge passes <b>85%</b> (or ⌘K → "Simulate") → a <b>proactive nudge</b> offers Start fresh / Summarize.</span></div>
+      <div class="tt-group">Around the workspace</div>
+      <div class="tt-item"><span class="tt-n">6</span><span><b>Routines</b> in the rail → list, editor with a friendly cron builder, Upcoming agenda &amp; Alerts.</span></div>
+      <div class="tt-item"><span class="tt-n">7</span><span><b>Skills</b> in the rail → catalog, per-agent toggles, AcceptsSkills. Click the <b>Sage pill</b> in the composer to see attached skills.</span></div>
+      <div class="tt-item"><span class="tt-n">8</span><span><b>Budget planning</b> (Shared) → threaded group chat: expand a thread, accept the invite, tune notifications. <i>Phase 2 preview.</i></span></div>
+      <div class="tt-item"><span class="tt-n">9</span><span><b>Skip Analyst</b> (Direct) → remote proxy: expand <b>"Context sent"</b> receipts; note plan/skills are delegated.</span></div>
+      <div class="tt-item"><span class="tt-n">10</span><span><span class="kbd">⌘</span><span class="kbd">K</span> palette · <span class="kbd">?</span> shortcuts · <b>Jump to</b> appears on long threads.</span></div>
+      <div class="tt-foot"><button class="btn secondary sm" id="tryThisDismiss" style="width:100%;justify-content:center;">Got it — hide this</button></div>
+    </div>
+  </div>
+  <button class="trythis-fab" id="tryThisFab" title="Show 'Try this'"><i class="fa-solid fa-hand-pointer"></i></button>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
