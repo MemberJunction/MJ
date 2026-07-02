@@ -7,6 +7,7 @@ import { MJListFormComponent } from '../../generated/Entities/MJList/mjlist.form
 import { MJListEntity, MJListDetailEntity, MJListDetailEntityExtended, MJListCategoryEntity, MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import { Metadata, RunView, RunViewResult, EntityInfo, LogError, LogStatus } from '@memberjunction/core';
 import { ListShareDialogConfig, ListShareDialogResult } from '@memberjunction/ng-list-management';
+import { MJConfirmService } from '@memberjunction/ng-ui-components';
 
 export type ListSection = 'overview' | 'items' | 'sharing' | 'activity' | 'settings';
 
@@ -54,6 +55,7 @@ export interface AddableRecord {
 })
 export class MJListFormComponentExtended extends MJListFormComponent implements OnInit, OnDestroy {
     private sharedService = inject(SharedService);
+    private confirmService = inject(MJConfirmService);
 
     public override record!: MJListEntity;
 
@@ -360,7 +362,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
         const count = this.selectedItems.size;
         const confirmMessage = `Remove ${count} item${count > 1 ? 's' : ''} from this list?`;
 
-        if (!confirm(confirmMessage)) return;
+        if (!(await this.confirmService.ConfirmDelete({ message: confirmMessage }))) return;
 
         try {
             for (const id of this.selectedItems) {
