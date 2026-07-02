@@ -85,8 +85,11 @@ export class OracleExternalDataSourceDriver extends BaseSqlExternalDataSourceDri
   /** Build a fresh pool for the data source — invoked once per source by the race-safe cache. */
   private async createPool(dataSource: MJExternalDataSourceEntity, contextUser?: UserInfo): Promise<oracledb.Pool> {
     const config = this.parseConnectionConfig<OracleConnectionConfig>(dataSource);
-    // Secure-by-default: refuse plaintext to a non-local host unless explicitly opted in.
-    this.assertSecureTransport({ host: config.host, tlsEnabled: !!config.ssl, allowInsecure: config.allowInsecureTransport, dataSourceName: dataSource.Name });
+    // Secure-by-default: refuse plaintext to a non-local host unless explicitly opted in. When an
+    // explicit connectString is supplied it — not config.host — is what we actually dial, so derive
+    // the gate's host + TLS from it (see resolveTransportForGate) rather than the unused config.host.
+    const transport = this.resolveTransportForGate(config);
+    this.assertSecureTransport({ host: transport.host, tlsEnabled: transport.tlsEnabled, allowInsecure: config.allowInsecureTransport, dataSourceName: dataSource.Name });
     const cred = await this.resolveCredential<OracleCredentialValues>(dataSource, contextUser);
     const connectString = config.connectString
       ?? `${config.ssl ? 'tcps://' : ''}${config.host ?? 'localhost'}:${config.port ?? 1521}/${config.serviceName ?? dataSource.DefaultDatabase ?? 'FREE'}`;
@@ -98,6 +101,34 @@ export class OracleExternalDataSourceDriver extends BaseSqlExternalDataSourceDri
       poolMax: config.maxPoolSize ?? 5,
     });
     return pool;
+  }
+
+  /**
+   * Derive the effective (host, tlsEnabled) the secure-transport gate should inspect. When
+   * ConnectionConfig supplies an explicit `connectString` — the documented way to point Oracle at a
+   * remote host — the gate must inspect THAT, not the unused `config.host`, or a plaintext remote
+   * connect string would silently bypass the check. Recognizes Easy-Connect (`tcps://host:port/svc`)
+   * and TNS (`(ADDRESS=(PROTOCOL=TCPS)(HOST=host)...))`) forms; TCPS ⇒ encrypted. Falls back to
+   * config.host/ssl when no connectString is set. An unparseable host yields '' so the gate fails
+   * closed (treated as non-local) unless TLS or allowInsecureTransport is present.
+   */
+  protected resolveTransportForGate(config: OracleConnectionConfig): { host: string; tlsEnabled: boolean } {
+    if (!config.connectString) {
+      return { host: config.host ?? '', tlsEnabled: !!config.ssl };
+    }
+    const cs = config.connectString;
+    const tlsEnabled = /^\s*tcps:\/\//i.test(cs) || /PROTOCOL\s*=\s*tcps/i.test(cs);
+    let host = '';
+    const easyConnect = cs.match(/^\s*tcps?:\/\/([^:/]+)/i);
+    if (easyConnect) {
+      host = easyConnect[1];
+    } else {
+      const tns = cs.match(/HOST\s*=\s*([^)\s]+)/i);
+      if (tns) {
+        host = tns[1];
+      }
+    }
+    return { host, tlsEnabled };
   }
 
   protected async invalidateConnection(dataSourceId: string): Promise<void> {
@@ -175,8 +206,10 @@ export class OracleExternalDataSourceDriver extends BaseSqlExternalDataSourceDri
         for (const p of params ?? []) {
           binds[p.name] = p.value;
         }
-        const { rows, rowsAffected } = await this.query<TRow>(pool, queryText, binds);
-        return { success: true, rows, rowCount: rows.length || rowsAffected, executionTimeMs: Date.now() - start };
+        const { rows } = await this.query<TRow>(pool, queryText, binds);
+        // Read-only native queries are always SELECTs (enforced by the screen), so the row count is
+        // simply the number of rows returned — not a falsy-coalesce into rowsAffected (which is 0 for a SELECT).
+        return { success: true, rows, rowCount: rows.length, executionTimeMs: Date.now() - start };
       });
     } catch (e) {
       return { success: false, rows: [], rowCount: 0, errorMessage: this.errorText(e), executionTimeMs: Date.now() - start };

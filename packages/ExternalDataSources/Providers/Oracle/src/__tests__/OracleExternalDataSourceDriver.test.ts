@@ -19,6 +19,9 @@ class TestableOracleDriver extends OracleExternalDataSourceDriver {
   public groupFks(rows: Parameters<TestableOracleDriver['normalizeForeignKeyRows']>[0]) {
     return this.groupForeignKeys(this.normalizeForeignKeyRows(rows));
   }
+  public transport(config: Parameters<OracleExternalDataSourceDriver['resolveTransportForGate']>[0]) {
+    return this.resolveTransportForGate(config);
+  }
 }
 
 const ds = (over: Partial<MJExternalDataSourceEntity>): MJExternalDataSourceEntity =>
@@ -92,6 +95,36 @@ describe('OracleExternalDataSourceDriver — SQL building', () => {
         { Column: 'ORDER_ID', ReferencedColumn: 'ID' },
         { Column: 'ORDER_REGION', ReferencedColumn: 'REGION' },
       ]);
+    });
+  });
+
+  describe('resolveTransportForGate (secure-transport gate honors connectString)', () => {
+    it('falls back to host/ssl when no connectString is set', () => {
+      expect(d.transport({ host: 'db.example.com', ssl: false })).toEqual({ host: 'db.example.com', tlsEnabled: false });
+      expect(d.transport({ host: 'db.example.com', ssl: true })).toEqual({ host: 'db.example.com', tlsEnabled: true });
+    });
+
+    it('treats a tcps:// Easy-Connect connectString as encrypted and extracts the host', () => {
+      expect(d.transport({ connectString: 'tcps://remote-oracle:1521/svc' })).toEqual({ host: 'remote-oracle', tlsEnabled: true });
+    });
+
+    it('extracts a plaintext tcp:// remote host so the gate can reject it (the bypass being fixed)', () => {
+      // host:'localhost' is deliberately set but must be IGNORED in favor of the real connectString host.
+      expect(d.transport({ connectString: 'tcp://remote-oracle:1521/svc', host: 'localhost' })).toEqual({ host: 'remote-oracle', tlsEnabled: false });
+    });
+
+    it('recognizes TNS PROTOCOL=TCPS as encrypted and pulls HOST from the descriptor', () => {
+      const cs = '(DESCRIPTION=(ADDRESS=(PROTOCOL=TCPS)(HOST=tns-host)(PORT=1522))(CONNECT_DATA=(SERVICE_NAME=svc)))';
+      expect(d.transport({ connectString: cs })).toEqual({ host: 'tns-host', tlsEnabled: true });
+    });
+
+    it('extracts HOST from a plaintext TNS descriptor (PROTOCOL=TCP)', () => {
+      const cs = '(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=tns-plain)(PORT=1521))(CONNECT_DATA=(SERVICE_NAME=svc)))';
+      expect(d.transport({ connectString: cs })).toEqual({ host: 'tns-plain', tlsEnabled: false });
+    });
+
+    it('yields an empty host (gate fails closed) for an unparseable plaintext connectString', () => {
+      expect(d.transport({ connectString: 'remote:1521/svc' })).toEqual({ host: '', tlsEnabled: false });
     });
   });
 });
