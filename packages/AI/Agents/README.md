@@ -4,7 +4,7 @@ Complete framework for building and executing AI agents in MemberJunction. Provi
 
 It also provides two capability layers any agent can opt into:
 
-- **Skills** — reusable capability bundles (instructions + Actions + sub-agents) an agent activates mid-run via a progressive-disclosure catalog, gated per-agent (`AIAgent.AcceptsSkills`), shareable via Resource Permissions, and portable via **SKILL.md** import/export.
+- **Skills** — reusable capability bundles (instructions + Actions + sub-agents) an agent activates mid-run via a progressive-disclosure catalog. Availability is gated per-agent (`AIAgent.AcceptsSkills`); *self*-activation additionally requires the **double activation gate** (`AISkill.ActivationMode` × `AIAgent.SkillActivationMode`, both defaulting to `RequestedOnly` so autonomous skill expansion is always a deliberate double opt-in — users can still `/skill`-request any available skill). Every activation is recorded with **provenance of authority** on `AIAgentRunStep.Skills` (activation type, gate values, agent-stated reason), and Prompt/Actions/Sub-Agent steps carry per-step skill attribution. Skills are shareable via the dedicated skill-permissions model and portable via **SKILL.md** import/export.
 - **Plan Mode** — a per-request human-in-the-loop gate (`ExecuteAgentParams.planMode`) that makes an agent present a plan and get it approved before executing any Actions or Sub-Agents, built on the existing `MJ: AI Agent Requests` pause/resume flow.
 
 **See the [Agent Skills & Plan Mode Guide](../../../guides/AGENT_SKILLS_AND_PLAN_MODE_GUIDE.md)** for the full architecture, the three-layer gate, the SKILL.md format, and the plan-approval flow.
