@@ -20,24 +20,32 @@ rules. This file records *why* the design landed where it did.
 
 ## Core principles (and why)
 
-1. **Reusable, so brand-neutral by design.** The picker ships once as a shared,
-   app-agnostic component (`<mj-login-picker>` in `@memberjunction/ng-auth-services`);
-   each application supplies its own surrounding chrome. Because **apps built on MJ
-   carry different branding**, the surfaces avoid MemberJunction-specific identity:
+1. **Reusable, so brand-neutral by design — and brandable at RUNTIME, per organization
+   (ideally per channel), not per app.** The picker ships once as a shared, app-agnostic
+   component (`<mj-login-picker>` in `@memberjunction/ng-auth-services`). The end user
+   perceives they are logging into **their organization's** product (e.g. ISA's *mimo*,
+   ASAE's *Stellar*) — not MemberJunction, and not "the app" — so the surfaces carry **no**
+   MJ-specific identity and take branding as **runtime inputs resolved before login**:
    - **No product messaging.** Marketing copy ("Your data, connected.", "One workspace
      for your whole member data platform.", "Sign in to your MemberJunction workspace")
      was replaced with generic, host-agnostic text ("Welcome back", "Sign in to
      continue.", "Log in").
    - **No heavy background logos.** The oversized MJ watermark (B) and corner watermark
-     (A) were removed. A single **modest foreground logo** remains as a host-supplied
+     (A) were removed. A single **modest foreground logo** remains — a runtime-supplied
      placeholder (we show the MJ mark only as a stand-in).
-   - **Branding is injected, not baked in:** logo + product name/copy by the host; brand
-     color via the themeable `--mj-*` tokens (override `--mj-brand-primary` et al.).
+   - **Branding is resolved at runtime, per tenant/channel — never baked into a build.**
+     Logo, product name, and brand color (token override) are resolved **per organization**,
+     and ideally **per channel** (BCSaaS), from tenant config served pre-auth (e.g. by
+     host/subdomain, alongside the public provider-catalog endpoint) — **not** a per-app
+     or per-build customization each app maintains on its own.
 
-2. **"Powered by MemberJunction" on every surface.** Precisely *because* the host brand
-   varies, the MJ attribution must always appear. It sits at the bottom of the
-   form/card (a shared `.powered-by`), so it's visible on desktop **and** mobile even
-   when a brand panel collapses.
+2. **"Powered by MemberJunction" — shown by default, removable by CONFIG (never a code
+   change).** The attribution sits at the bottom of the form/card (a shared `.powered-by`),
+   visible on desktop **and** mobile even when a brand panel collapses. It is **on by
+   default**, but **full white-label (attribution removed) is a supported, paid tier** — so
+   hiding it must be a **per-tenant configuration flag**, never a code fork or a per-app
+   customization. (In-app, a "Powered by" credit may still appear post-login; the *login*
+   attribution follows the tenant's white-label entitlement.)
 
 3. **Provider rows are the real `mjButton`, not copied CSS.** Each row is
    `<button mjButton variant="secondary">` (single-provider CTA = `variant="primary"`).
@@ -97,6 +105,14 @@ rules. This file records *why* the design landed where it did.
 
 - ~~Which direction (A / B / C) to ship~~ — **decided: C · Editorial Split.** A/B kept
   as alternatives-considered for reference.
+- **Per-organization / per-channel branding resolution (needs design).** How the login
+  resolves *which tenant's* branding — logo, product name, brand color, and the
+  white-label (hide-"Powered by") flag — **before** the user authenticates: e.g. by
+  host/subdomain → organization, or a channel identifier (BCSaaS), served pre-auth
+  alongside the public provider-catalog endpoint. This is what makes a user feel they're
+  signing into *their org's* product (ISA's *mimo*, ASAE's *Stellar*). Includes where the
+  config lives (per-tenant metadata) and the admin surface to manage it + the white-label
+  entitlement.
 - **Scaling to many providers (deferred — noted, not designed).** The picker is a
   vertical list sized for a handful of IdPs (the common case). Beyond ~6 it grows tall;
   revisit then with a scrollable list (`max-height` + overflow) or a search/filter.
