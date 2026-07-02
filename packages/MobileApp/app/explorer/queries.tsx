@@ -6,7 +6,19 @@ import { Icons } from '@/components/Icon';
 import { useQueries } from '@/hooks/useExplorer';
 import { Colors, Radius, Shadow, Type } from '@/theme/tokens';
 
-/** Saved-query picker — choose a query to run. */
+/**
+ * Saved-query picker screen.
+ *
+ * Route: `/explorer/queries` (Expo Router, `app/explorer/queries.tsx`).
+ * Purpose: searchable list of saved MJ queries; choose one to run.
+ * Data: `useQueries()` -> explorer service `loadQueries()`, which reads the
+ * in-memory MJ `Metadata.Queries` list filtered to `Status === 'Approved'` (id,
+ * name, description, category) — no network call. Client-side substring filter
+ * over name/description.
+ * Interactions: type to filter; tap a row -> `router.push` to
+ * `/explorer/query/[id]` (the query is executed on that screen).
+ * Mockup: `plans/mobile-app-react-native/html/query-run.html` (shared).
+ */
 export default function QueriesScreen() {
     const queries = useQueries();
     const [search, setSearch] = useState('');

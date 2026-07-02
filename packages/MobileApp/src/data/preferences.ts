@@ -17,8 +17,10 @@ import { MMKV } from 'react-native-mmkv';
  */
 export const prefsStorage = new MMKV({ id: 'mj-mobile-prefs' });
 
+/** The three appearance choices a user can select (`'system'` follows the OS). */
 export type AppearanceMode = 'light' | 'dark' | 'system';
 
+/** Canonical MMKV key names for each persisted preference. */
 export const PrefKeys = {
   appearance: 'pref.appearance',
   defaultAgentId: 'pref.defaultAgentId',
@@ -28,8 +30,10 @@ export const PrefKeys = {
   faceIdLock: 'pref.faceIdLock',
 } as const;
 
+/** Order the appearance toggle advances through: System → Light → Dark → (wrap). */
 export const APPEARANCE_CYCLE: AppearanceMode[] = ['system', 'light', 'dark'];
 
+/** Human-readable label for each appearance mode. */
 export const APPEARANCE_LABEL: Record<AppearanceMode, string> = {
   system: 'System',
   light: 'Light',
@@ -56,10 +60,12 @@ export function setDefaultAgent(id: string, name: string): void {
   prefsStorage.set(PrefKeys.defaultAgentName, name);
 }
 
+/** Read the persisted default-agent display name, or `undefined` if unset. */
 export function getDefaultAgentName(): string | undefined {
   return prefsStorage.getString(PrefKeys.defaultAgentName);
 }
 
+/** Read the persisted default-agent id, or `undefined` if unset. */
 export function getDefaultAgentId(): string | undefined {
   return prefsStorage.getString(PrefKeys.defaultAgentId);
 }

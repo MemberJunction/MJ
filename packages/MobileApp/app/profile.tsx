@@ -19,14 +19,27 @@ import {
 import { Colors, Radius, Shadow, Type } from '@/theme/tokens';
 
 /**
- * Profile & settings.
- * Spec: plans/mobile-app-react-native/html/profile.html
+ * Profile & settings screen.
  *
- * Identity comes from the MJ current user. Preferences (default agent,
- * appearance, voice/push/Face-ID toggles) persist to MMKV via the prefs store.
- * Voice/push/Face-ID are functionally inert until Phase 2 wires the features,
- * but the chosen state is saved now so those features can read it. Full dark
- * rendering for the Appearance choice is a Phase 2 task (theme/tokens.ts).
+ * Route: `/profile` (Expo Router, `app/profile.tsx`).
+ * Purpose: show the signed-in user's identity, expose per-user preferences, and
+ *   provide sign-out.
+ * Data:
+ *   - Identity: `Metadata().CurrentUser` from `@memberjunction/core` (name,
+ *     email, title, initials), gated on `useMJ().status === 'ready'`;
+ *     workspace host derived from `Env.graphqlUrl`.
+ *   - Preferences: MMKV-backed via `react-native-mmkv` hooks
+ *     (`useMMKVString`/`useMMKVBoolean` over `prefsStorage`/`PrefKeys`) —
+ *     appearance, default agent, voice/push/Face-ID toggles. Writes go through
+ *     the `@/data/preferences` helpers (`cycleAppearance`, `setDefaultAgent`).
+ *   - `useAgents()` populates the default-agent picker.
+ *   - `useMJ()` provides `signOut` and `authMethod`.
+ *   Note: voice/push/Face-ID toggles persist their state but are functionally
+ *   inert until Phase 2 wires the underlying features; full dark rendering for
+ *   the Appearance choice is likewise a Phase 2 task.
+ * Interactions: open the default-agent picker ({@link AgentPickerModal}), cycle
+ *   appearance, flip toggles, sign out (-> `/login`).
+ * Mockup: `plans/mobile-app-react-native/html/profile.html`.
  */
 export default function ProfileScreen() {
     const { signOut, authMethod, status } = useMJ();
@@ -149,6 +162,11 @@ export default function ProfileScreen() {
     );
 }
 
+/**
+ * Tappable settings row: icon + label + optional sub-label, with an optional
+ * trailing `value` and/or chevron `arrow`. Inert (non-pressable) when `onPress`
+ * is omitted.
+ */
 function SettingRow({ icon, label, sub, value, arrow, onPress }: { icon: React.ReactNode; label: string; sub?: string; value?: string; arrow?: boolean; onPress?: () => void }) {
     return (
         <Pressable style={styles.row} onPress={onPress} disabled={!onPress}>
@@ -163,6 +181,7 @@ function SettingRow({ icon, label, sub, value, arrow, onPress }: { icon: React.R
     );
 }
 
+/** Settings row with a trailing on/off switch; the whole row toggles `value` via `onToggle`. */
 function ToggleRow({ icon, label, sub, value, onToggle }: { icon: React.ReactNode; label: string; sub?: string; value: boolean; onToggle: () => void }) {
     return (
         <Pressable style={styles.row} onPress={onToggle}>
@@ -178,6 +197,15 @@ function ToggleRow({ icon, label, sub, value, onToggle }: { icon: React.ReactNod
     );
 }
 
+/**
+ * Bottom-sheet modal for choosing the default agent. Lists `useAgents()` results,
+ * marks the currently `selectedName`, and reports the pick via `onSelect(id, name)`.
+ *
+ * @param visible  whether the sheet is shown.
+ * @param selectedName  name of the currently selected default agent (for the checkmark).
+ * @param onClose  dismiss without changing the selection.
+ * @param onSelect  invoked with the chosen agent's id + name.
+ */
 function AgentPickerModal({ visible, selectedName, onClose, onSelect }: { visible: boolean; selectedName?: string; onClose: () => void; onSelect: (id: string, name: string) => void }) {
     const { agents, loading } = useAgents();
     return (

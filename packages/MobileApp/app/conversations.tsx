@@ -11,12 +11,20 @@ import { useMJ } from '@/providers/mj-provider';
 import { Colors, Radius, Shadow, Spacing, Type } from '@/theme/tokens';
 
 /**
- * Conversation list — global nav root.
- * Real data only; no mock fallback. The boot gate (app/index.tsx) routes
- * users to /login when not authenticated, so this screen always renders
- * for a connected user.
+ * Conversation list — the app's global navigation root (post-login home).
  *
- * Spec: plans/mobile-app-react-native/index.html · B1
+ * Route: `/conversations` (Expo Router, `app/conversations.tsx`); the boot gate
+ *   (`app/index.tsx`) redirects a connected user here.
+ * Purpose: list the user's MJ conversations, grouped by recency, with entry
+ *   points to start a new one and to jump into a thread.
+ * Data: `useConversations()` hook (MJ `Conversations` via RunView) supplying
+ *   `{ conversations, loading, error, refresh }`; `groupConversations()`
+ *   (`@/data/adapt`) buckets them into pinned / today / yesterday / earlier;
+ *   `useMJ()` for connection `status` (gates the pull-to-refresh spinner). Real
+ *   data only — no mock fallback.
+ * Interactions: pull-to-refresh, "New conversation" -> `/new-conversation`,
+ *   tap a row -> `/chat/[id]`, footer nav -> `/explorer` and `/profile`.
+ * Mockup: `plans/mobile-app-react-native/html/conversation-list.html`.
  */
 export default function ConversationsScreen() {
     const { status } = useMJ();
@@ -136,6 +144,7 @@ export default function ConversationsScreen() {
     );
 }
 
+/** Recency-group header (e.g. "Today · 3"), with an optional leading icon. */
 function Section({ label, icon }: { label: string; icon?: React.ReactNode }) {
     return (
         <View style={styles.section}>
@@ -145,6 +154,11 @@ function Section({ label, icon }: { label: string; icon?: React.ReactNode }) {
     );
 }
 
+/**
+ * Single conversation list row — agent avatars, title, snippet, and metadata
+ * (agent names, message count, live/pinned/unread badges). Tapping navigates to
+ * `/chat/[id]` with the conversation's id.
+ */
 function ConversationRow({ conv }: { conv: ConversationSummary }) {
     return (
         <Pressable
@@ -184,6 +198,7 @@ function ConversationRow({ conv }: { conv: ConversationSummary }) {
     );
 }
 
+/** Bottom-of-list navigation card: links to Data Explorer and Profile. */
 function FooterNav() {
     return (
         <View style={styles.footer}>

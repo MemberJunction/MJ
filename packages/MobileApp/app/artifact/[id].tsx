@@ -13,7 +13,12 @@ import { Colors, Radius, Shadow, Type } from '@/theme/tokens';
 const BODY_PADDING = 16;
 
 /**
- * Single-artifact detail. Renders by classified content kind:
+ * Single-artifact detail screen.
+ *
+ * Route: `/artifact/:id` (Expo Router, `app/artifact/[id].tsx`).
+ * The `id` route param is the conversation artifact's ID.
+ * Purpose: render one MJ conversation artifact, dispatching on its classified
+ * content kind:
  *   json-table → key/value cards per row
  *   json       → pretty-printed JSON
  *   markdown   → lightweight markdown (headings/bold/bullets)
@@ -23,8 +28,14 @@ const BODY_PADDING = 16;
  *   text       → plain
  * Interactive components are a Phase 2 item (react-runtime) — shown as a
  * "view on desktop" notice for now (see plan §4.3).
- *
- * Spec: plans/mobile-app-react-native/html/artifact-detail.html
+ * Data: `useArtifact(id)` -> artifacts service `loadArtifact()`, which uses
+ * `Metadata.GetEntityObject('MJ: Conversation Artifacts')` for the header and a
+ * `RunView` over `MJ: Conversation Artifact Versions` to read the latest
+ * version's `Content` (then classifies it into the `kind` above). Header shows
+ * type name and version (`vN of M`).
+ * Interactions: back chevron and "Back to conversation" -> `router.back()`; mic
+ * button -> `/voice-mode`.
+ * Mockup: `plans/mobile-app-react-native/html/artifact-detail.html`.
  */
 export default function ArtifactDetailScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
@@ -73,6 +84,7 @@ export default function ArtifactDetailScreen() {
     );
 }
 
+/** Dispatches a loaded artifact to the renderer matching its classified `kind`. */
 function ArtifactContent({ artifact }: { artifact: LoadedArtifact }) {
     const { width } = useWindowDimensions();
     const contentWidth = width - BODY_PADDING * 2;
@@ -156,6 +168,7 @@ function MarkdownView({ source }: { source: string }) {
     );
 }
 
+/** Inline `**bold**` → `<Text>` runs; non-bold spans pass through unchanged. */
 function renderBold(text: string): React.ReactNode {
     const parts = text.split(/(\*\*[^*]+\*\*)/g);
     return parts.map((part, idx) =>

@@ -1,8 +1,15 @@
+/**
+ * Overlapping avatar stack that visualizes which agents took part in a
+ * conversation. Purely presentational — it derives every dimension from `size`
+ * and renders each agent's `initial` on a disc tinted with its `color`.
+ */
 import { StyleSheet, Text, View } from 'react-native';
 import { Colors } from '@/theme/tokens';
 import type { ConversationParticipantAgent } from '@/data/types';
 
+/** Props for {@link AgentAvatarStack}. */
 type Props = {
+    /** Agents to render, left-to-right; each supplies `id`, `color`, and `initial`. */
     agents: ConversationParticipantAgent[];
     /** Diameter of each avatar disc. Default 30. */
     size?: number;
@@ -17,6 +24,7 @@ type Props = {
  * into a one-agent-per-thread shape.
  */
 export function AgentAvatarStack({ agents, size = 30, borderColor = Colors.bg }: Props) {
+    // All spacing/typography derive from `size` so the stack scales as one unit.
     const overlap = Math.round(size * 0.32);
     const fontSize = Math.round(size * 0.36);
     const borderWidth = Math.max(1.5, Math.round(size * 0.06));

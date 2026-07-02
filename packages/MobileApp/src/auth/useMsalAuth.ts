@@ -15,6 +15,12 @@ import { getDiscovery, getRedirectUri, exchangeCodeForTokens, type MJAuthTokens 
  *
  * Caller is responsible for booting the GraphQL provider with the idToken
  * after a successful sign-in.
+ *
+ * @returns An object with:
+ *  - `signIn`: opens the browser, completes the PKCE flow, persists and returns
+ *    the {@link MJAuthTokens} bundle. Throws if the request isn't ready, the
+ *    user cancels/errors, or no code/verifier is present.
+ *  - `ready`: `true` once the underlying auth request has initialized.
  */
 export function useMsalAuth() {
     const discovery = getDiscovery();

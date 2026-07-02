@@ -9,9 +9,15 @@ import {
 } from '@/auth/auth0';
 
 /**
- * Hook for the Auth0 OAuth flow.
- * Returns a `signIn()` that opens the in-app browser, completes the
- * Authorization Code + PKCE flow, and returns the persisted token bundle.
+ * React hook for the Auth0 login flow. Configures an expo-auth-session
+ * Authorization Code + PKCE request against the Auth0 tenant and exposes a
+ * `signIn()` that drives the in-app browser and token exchange.
+ *
+ * @returns An object with:
+ *  - `signIn`: opens the browser, completes the PKCE flow, persists and
+ *    returns the {@link Auth0Tokens} bundle. Throws if the request isn't ready,
+ *    the user cancels/errors, or no code/verifier is present.
+ *  - `ready`: `true` once the underlying auth request has initialized.
  */
 export function useAuth0Auth() {
     const discovery = getAuth0Discovery();

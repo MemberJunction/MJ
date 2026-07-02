@@ -1,3 +1,8 @@
+/**
+ * Connection/auth status UI for the MJ provider: a thin floating banner plus the
+ * sign-in sheet it opens. Reads live status from the {@link useMJ} provider and
+ * drives sign-in through MSAL ({@link useMsalAuth}) or a pasted dev JWT.
+ */
 import { useState } from 'react';
 import {
     ActivityIndicator,
@@ -59,8 +64,17 @@ export function MJStatusBanner() {
     );
 }
 
+/** Which authentication method the sign-in sheet is currently showing. */
 type SignInTab = 'microsoft' | 'dev-token';
 
+/**
+ * Bottom-sheet modal offering two ways to authenticate to MJAPI:
+ * the Microsoft (MSAL) OAuth flow, or pasting a raw dev JWT for quick testing.
+ * On success it boots the MJ provider and closes; failures surface inline.
+ *
+ * @param props.open    Whether the sheet is visible.
+ * @param props.onClose Called to dismiss the sheet (also invoked on success).
+ */
 function SignInModal({ open, onClose }: { open: boolean; onClose: () => void }) {
     const { setDevToken, bootWithMsalTokens, status, error } = useMJ();
     const { signIn: signInMsal, ready: msalReady } = useMsalAuth();
@@ -70,6 +84,7 @@ function SignInModal({ open, onClose }: { open: boolean; onClose: () => void }) 
     const [submitting, setSubmitting] = useState(false);
     const [msalError, setMsalError] = useState<string | null>(null);
 
+    // Run the MSAL interactive flow, then hand the returned tokens to the MJ provider.
     const handleMsalSignIn = async () => {
         setMsalError(null);
         setSubmitting(true);
@@ -84,6 +99,7 @@ function SignInModal({ open, onClose }: { open: boolean; onClose: () => void }) 
         }
     };
 
+    // Store the pasted JWT (via expo-secure-store) and boot the provider with it.
     const handleDevTokenSubmit = async () => {
         const trimmed = token.trim();
         if (!trimmed) return;
@@ -195,6 +211,7 @@ function SignInModal({ open, onClose }: { open: boolean; onClose: () => void }) 
     );
 }
 
+/** Read-only label/value row (monospace value) used to display config like tenant/client IDs. */
 function KV({ k, v }: { k: string; v: string }) {
     return (
         <View style={styles.kvRow}>

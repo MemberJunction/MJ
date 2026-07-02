@@ -3,6 +3,12 @@
  * Light theme only for Phase 1. Dark theme is a Phase 2 decision.
  */
 
+/**
+ * Semantic color palette. Grouped into surfaces (page/card backgrounds), ink
+ * (text at three emphasis levels + inverse), hairline lines, brand + per-agent
+ * identity colors (used for avatars and syntax highlighting), and status tones
+ * (positive/warn/danger) each with a `*Soft` translucent fill for banners.
+ */
 export const Colors = {
   // Surfaces
   bg: '#fafaf7',
@@ -40,6 +46,7 @@ export const Colors = {
   dangerSoft: 'rgba(200,74,57,0.12)',
 } as const;
 
+/** Spacing scale in px (`xs`=4 … `xxxl`=32) for padding, margins, and gaps. */
 export const Spacing = {
   xs: 4,
   sm: 8,
@@ -50,6 +57,7 @@ export const Spacing = {
   xxxl: 32,
 } as const;
 
+/** Corner-radius scale in px, plus named values (`composer`, `pill` for fully-rounded). */
 export const Radius = {
   sm: 8,
   md: 11,
@@ -60,6 +68,10 @@ export const Radius = {
   pill: 999,
 } as const;
 
+/**
+ * Typography tokens: font sizes (`caption`…`display`, in px) and font-weight
+ * strings (`regular`…`bold`) usable directly as RN `fontWeight` values.
+ */
 export const Type = {
   // Sizes
   caption: 11,
@@ -77,6 +89,10 @@ export const Type = {
   bold: '700',
 } as const;
 
+/**
+ * Elevation presets (iOS shadow* props + Android `elevation`) at three depths:
+ * `card` (subtle), `cardLarge` (modals/inputs), and `fab` (floating action button).
+ */
 export const Shadow = {
   card: {
     shadowColor: '#0d0d10',

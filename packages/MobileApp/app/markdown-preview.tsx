@@ -107,6 +107,21 @@ function greet(name: string): string {
 End of preview.
 `;
 
+/**
+ * DEV HARNESS — not a shipping screen; not linked from in-app navigation.
+ *
+ * Route: `/markdown-preview` (Expo Router, `app/markdown-preview.tsx`), reached
+ *   via deep link:
+ *   `xcrun simctl openurl booted "org.memberjunction.mobile:///markdown-preview"`.
+ * Purpose: on-device render showcase / QA for the native rendering stack with no
+ *   auth or backend — the markdown renderer ({@link MarkdownView}, markdown-core
+ *   AST -> RN), the SVG-capable {@link Chart} component (pie/bar/line specs), and
+ *   the dependency-free {@link HtmlRenderer} (HTML -> RN, no WebView), all fed by
+ *   the static `CODE_SAMPLE` / `SAMPLE_HTML` / `SAMPLE` fixtures above.
+ * Interactions: none — scrollable static gallery; `chartWidth` is derived from
+ *   `useWindowDimensions()`.
+ * Mockup: none (dev harness).
+ */
 export default function MarkdownPreviewScreen() {
     const { width } = useWindowDimensions();
     const chartWidth = width - Spacing.lg * 2;

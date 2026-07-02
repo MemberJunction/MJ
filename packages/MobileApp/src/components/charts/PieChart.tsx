@@ -1,3 +1,10 @@
+/**
+ * Donut (pie) chart with an inline legend, drawn with `react-native-svg`.
+ *
+ * Consumes the `ChartDatum[]` carried by a {@link ChartSpec} (see `./chart-spec`)
+ * and renders one palette-colored slice per data point sized by its share of the
+ * total. Used by the {@link Chart} dispatcher for `kind === 'pie'`.
+ */
 import { StyleSheet, Text, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { Colors, Spacing, Type } from '@/theme/tokens';
@@ -13,7 +20,9 @@ export type PieChartProps = {
     title?: string;
 };
 
+/** Outer diameter (px) of the donut SVG. */
 const DIAMETER = 132;
+/** Inner-hole radius as a fraction of the outer radius (0 = full pie, 1 = ring). */
 const INNER_RATIO = 0.58;
 
 /**
@@ -21,7 +30,11 @@ const INNER_RATIO = 0.58;
  *
  * Slices are colored from the categorical palette. The legend lists each label
  * with its value and share of the total, so the chart stays legible on a phone
- * without hover interactions.
+ * without hover interactions. Slices sweep clockwise from 12 o'clock; negative
+ * values are clamped to zero.
+ *
+ * @param props See {@link PieChartProps} — data, container width, optional title.
+ * @returns A `<View>` with the title, the `react-native-svg` donut, and the legend.
  */
 export function PieChart({ data, width, title }: PieChartProps) {
     const total = data.reduce((sum, d) => sum + Math.max(0, d.value), 0);

@@ -5,14 +5,23 @@ import { useMJ } from '@/providers/mj-provider';
 import { createConversation } from '@/data/services/agents';
 import { Colors, Spacing, Type } from '@/theme/tokens';
 
-/**
- * DEV-ONLY harness: waits for MJ to be ready, creates a conversation, then opens
- * the real chat thread with ?autosend so the normal send flow runs (working
- * indicator + Sage agent run + refresh). QA without manual typing:
- *   xcrun simctl openurl booted "org.memberjunction.mobile:///devchat"
- */
+/** Fixed QA prompt that exercises markdown rendering (heading + fenced TS code + a table). */
 const PROMPT = 'Reply in markdown ONLY (no preamble). Include: a "## Demo" heading, a one-sentence intro, then a TypeScript fenced code block showing a small function with types, then a 2-row markdown table with columns Name and Value.';
 
+/**
+ * DEV HARNESS — not a shipping screen; not linked from in-app navigation.
+ *
+ * Route: `/devchat` (Expo Router, `app/devchat.tsx`), reached via deep link:
+ *   `xcrun simctl openurl booted "org.memberjunction.mobile:///devchat"`.
+ * Purpose: automate the end-to-end send flow for QA — waits for `useMJ().status`
+ *   to be `ready`, calls `createConversation('Markdown demo')`
+ *   (`@/data/services/agents`), then `router.replace`s into `/chat/[id]` with
+ *   `?autosend={@link PROMPT}` so the real thread runs the normal send loop
+ *   (working indicator + agent run + refresh) with no manual typing.
+ * Interactions: none — fully automatic; shows a spinner + status text while it
+ *   works.
+ * Mockup: none (dev harness).
+ */
 export default function DevChat() {
     const { status } = useMJ();
     const [msg, setMsg] = useState('waiting for MJ…');

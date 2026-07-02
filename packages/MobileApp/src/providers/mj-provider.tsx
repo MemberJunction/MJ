@@ -32,9 +32,20 @@ import {
  * `useMJ()` and decide whether to render real data based on `status==='ready'`.
  */
 
+/**
+ * Provider lifecycle state:
+ * - `loading`  — booting / obtaining a token / configuring the GraphQL client.
+ * - `no-token` — no valid credential; the login screen should take over.
+ * - `ready`    — a token was obtained AND `setupGraphQLClient` succeeded; data
+ *                screens may render real data.
+ * - `error`    — boot or client setup failed (see `error`).
+ */
 export type MJStatus = 'loading' | 'no-token' | 'ready' | 'error';
+
+/** Which credential source produced the active token (`null` when signed out). */
 export type AuthMethod = 'auth0' | 'msal' | 'dev-token' | null;
 
+/** The value exposed by {@link MJContext} / {@link useMJ}. */
 type MJState = {
     status: MJStatus;
     error: Error | null;
@@ -49,21 +60,56 @@ type MJState = {
     signOut: () => Promise<void>;
 };
 
+/** expo-secure-store key under which a manually-pasted dev JWT is persisted. */
 const DEV_TOKEN_KEY = 'mj-dev-token';
 
 const MJContext = createContext<MJState | null>(null);
 
+/**
+ * Access the MJ auth/GraphQL context.
+ * @returns The current {@link MJState} (status, auth handlers, sign-out).
+ * @throws If called outside a `<MJProviderRoot>` subtree.
+ */
 export function useMJ(): MJState {
     const ctx = useContext(MJContext);
     if (!ctx) throw new Error('useMJ must be used inside <MJProviderRoot>');
     return ctx;
 }
 
+/**
+ * Root provider that owns the app's auth + GraphQL boot sequence and publishes
+ * {@link MJState} through {@link MJContext}.
+ *
+ * On mount it attempts to restore a session in priority order (dev-seed →
+ * Auth0 → MSAL → stored dev token → env dev token), refreshing expired tokens
+ * where a refresh token exists and falling through to `no-token` otherwise.
+ * For each candidate it calls {@link bootWith}, which constructs a
+ * `GraphQLProviderConfigData` (including a `refreshTokenFunction` bound to the
+ * active method) and runs `setupGraphQLClient` under a 15s timeout. Also
+ * exposes imperative handlers to boot from a fresh Auth0/MSAL login, set a dev
+ * token, and sign out.
+ *
+ * @param props.children The app subtree that consumes `useMJ()`.
+ * @returns The context provider wrapping `children`.
+ */
 export function MJProviderRoot({ children }: { children: ReactNode }) {
     const [status, setStatus] = useState<MJStatus>('loading');
     const [error, setError] = useState<Error | null>(null);
     const [authMethod, setAuthMethod] = useState<AuthMethod>(null);
 
+    /**
+     * Core boot routine: configure and start the MJ GraphQL client with a
+     * token. Builds `GraphQLProviderConfigData` with the REST/WS URLs from
+     * `Env` and a `refreshTokenFunction` that, for `auth0`/`msal`, returns a
+     * freshly-refreshed idToken (empty string on failure so the client can
+     * surface a 401 rather than hang). Races `setupGraphQLClient` against a
+     * 15s timeout so a hung MJAPI or bad token can't wedge the app in
+     * `loading`. Sets `status`/`authMethod` on success, `error`/`status:error`
+     * on failure.
+     *
+     * @param token The bearer idToken to authenticate the GraphQL client.
+     * @param method Which auth source produced `token` (drives token refresh).
+     */
     const bootWith = useCallback(async (token: string, method: AuthMethod) => {
         console.log(`[MJProvider] bootWith method=${method} tokenLen=${token.length}`);
         setStatus('loading');
@@ -103,16 +149,31 @@ export function MJProviderRoot({ children }: { children: ReactNode }) {
         }
     }, []);
 
+    /**
+     * Boot the GraphQL client from a freshly-obtained Auth0 token bundle
+     * (called by the login screen after `useAuth0Auth().signIn()`).
+     * @param tokens The Auth0 bundle; its `idToken` is used as the bearer.
+     * @throws If the bundle has no `idToken`.
+     */
     const bootWithAuth0Tokens = useCallback(async (tokens: Auth0Tokens) => {
         if (!tokens.idToken) throw new Error('Auth0 response did not include an idToken.');
         await bootWith(tokens.idToken, 'auth0');
     }, [bootWith]);
 
+    /**
+     * Boot the GraphQL client from a freshly-obtained MSAL token bundle
+     * (called by the login screen after `useMsalAuth().signIn()`).
+     * @param tokens The MSAL bundle; its `idToken` is used as the bearer.
+     * @throws If the bundle has no `idToken`.
+     */
     const bootWithMsalTokens = useCallback(async (tokens: MJAuthTokens) => {
         if (!tokens.idToken) throw new Error('MSAL response did not include an idToken.');
         await bootWith(tokens.idToken, 'msal');
     }, [bootWith]);
 
+    // One-time boot on mount: restore a session via the priority chain
+    // (dev-seed → Auth0 → MSAL → stored dev token → env dev token → no-token).
+    // `cancelled` guards against setState after unmount / re-run.
     useEffect(() => {
         let cancelled = false;
         (async () => {
@@ -204,11 +265,20 @@ export function MJProviderRoot({ children }: { children: ReactNode }) {
         return () => { cancelled = true; };
     }, [bootWith]);
 
+    /**
+     * Persist a manually-supplied dev JWT to secure-store and boot with it.
+     * @param token The raw JWT to use (and remember across launches).
+     */
     const setDevToken = useCallback(async (token: string) => {
         await SecureStore.setItemAsync(DEV_TOKEN_KEY, token);
         await bootWith(token, 'dev-token');
     }, [bootWith]);
 
+    /**
+     * Sign out: clear all stored credentials (Auth0, MSAL, and dev-token
+     * secure-store keys) and revert to the `no-token` state so the login
+     * screen takes over. Does not itself tear down the GraphQL client.
+     */
     const signOut = useCallback(async () => {
         await clearAuth0Tokens();
         await clearMsalTokens();

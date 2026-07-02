@@ -10,13 +10,24 @@ import type { DashboardPart, QueryRunResult } from '@/data/services/explorer';
 import { Colors, Radius, Shadow, Type } from '@/theme/tokens';
 
 /**
- * Dashboard view — real, best-effort mobile render of a dashboard's parts.
- * Spec: plans/mobile-app-react-native/html/dashboard-view.html
+ * Dashboard view screen — a best-effort mobile render of a dashboard's parts.
  *
- * Parts are parsed from the dashboard's Golden Layout config (see
- * `loadDashboard`). Query parts execute and render as KPI / chart / table;
- * artifact parts link into the artifact viewer; view/web/unknown parts render a
- * "Desktop-optimized" placeholder with an "Open on desktop" affordance.
+ * Route: `/explorer/dashboard/:id` (Expo Router, `app/explorer/dashboard/[id].tsx`).
+ * The `id` route param is the dashboard's ID.
+ * Purpose: render each panel of a desktop-authored MJ dashboard in a stacked,
+ * mobile-friendly way, degrading gracefully for parts that only make sense on
+ * desktop.
+ * Data: `useDashboard(id)` -> explorer service `loadDashboard()`, which uses
+ * `Metadata.GetEntityObject('MJ: Dashboards')` + `Load`, parses the dashboard's
+ * Golden Layout `UIConfigDetails` JSON into typed parts, and resolves part type
+ * names via a `RunView`. Each `query` part runs its saved query through
+ * `useQueryRun()` (MJ `RunQuery`) and is auto-classified into KPI tiles, a bar
+ * chart, or a compact table (`analyzeResult`). `artifact` parts deep-link to the
+ * artifact viewer; `view`/`weburl`/`unknown` parts render a "Desktop-optimized"
+ * placeholder with an optional "Open on desktop" link (`Linking.openURL`).
+ * Interactions: tap an artifact part -> `/artifact/[id]`; "Open on desktop" ->
+ * external browser; back chevron -> `router.back()`.
+ * Mockup: `plans/mobile-app-react-native/html/dashboard-view.html`.
  */
 export default function DashboardViewScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();

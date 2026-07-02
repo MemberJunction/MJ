@@ -26,8 +26,10 @@ import {
 import * as SecureStore from 'expo-secure-store';
 import { Env } from '@/config/env';
 
+/** expo-secure-store key holding the persisted Auth0 token bundle (JSON). */
 const STORE_KEY = 'mj-auth0-tokens';
 
+/** Persisted Auth0 token bundle. `expiresAt` is epoch-ms of the idToken's `exp` (0 if unknown). */
 export type Auth0Tokens = {
     idToken: string;
     accessToken: string;
@@ -35,10 +37,18 @@ export type Auth0Tokens = {
     expiresAt: number;
 };
 
+/**
+ * The OAuth redirect URI for the native flow, built from the app's `mjmobile`
+ * scheme. Must match the "Allowed Callback URLs" entry in Auth0 (`mjmobile://auth`).
+ */
 export function getAuth0RedirectUri(): string {
     return makeRedirectUri({ scheme: 'mjmobile', path: 'auth' });
 }
 
+/**
+ * Build the OIDC discovery document (authorize/token/logout endpoints) for the
+ * configured Auth0 tenant (`Env.auth0Domain`).
+ */
 export function getAuth0Discovery(): DiscoveryDocument {
     const domain = Env.auth0Domain;
     return {
@@ -48,6 +58,12 @@ export function getAuth0Discovery(): DiscoveryDocument {
     };
 }
 
+/**
+ * Best-effort decode of a JWT's `exp` claim to epoch-ms (base64url payload,
+ * no signature check — MJAPI validates the signature server-side).
+ * @param jwt The idToken to inspect.
+ * @returns Expiry in epoch-ms, or 0 if it can't be determined.
+ */
 function readJwtExp(jwt: string): number {
     try {
         const [, payloadB64] = jwt.split('.');
@@ -63,6 +79,7 @@ function readJwtExp(jwt: string): number {
     return 0;
 }
 
+/** Normalize an expo-auth-session token response into an {@link Auth0Tokens} bundle. */
 function bundleFromResponse(resp: TokenResponse): Auth0Tokens {
     const idToken = resp.idToken ?? '';
     return {
@@ -73,6 +90,14 @@ function bundleFromResponse(resp: TokenResponse): Auth0Tokens {
     };
 }
 
+/**
+ * Complete the Authorization Code + PKCE flow: exchange the returned `code`
+ * for tokens and persist the bundle to secure-store.
+ * @param code The authorization code from the redirect.
+ * @param codeVerifier The PKCE verifier generated for this request.
+ * @returns The exchanged (and persisted) {@link Auth0Tokens}.
+ * @throws If the token endpoint rejects the exchange.
+ */
 export async function exchangeAuth0Code(code: string, codeVerifier: string): Promise<Auth0Tokens> {
     const resp = await exchangeCodeAsync(
         {
@@ -88,10 +113,15 @@ export async function exchangeAuth0Code(code: string, codeVerifier: string): Pro
     return tokens;
 }
 
+/** Persist the token bundle to expo-secure-store (keychain on iOS). */
 export async function persistAuth0Tokens(tokens: Auth0Tokens): Promise<void> {
     await SecureStore.setItemAsync(STORE_KEY, JSON.stringify(tokens));
 }
 
+/**
+ * Load the persisted token bundle from secure-store.
+ * @returns The stored {@link Auth0Tokens}, or `null` if absent/unreadable.
+ */
 export async function loadAuth0Tokens(): Promise<Auth0Tokens | null> {
     try {
         const raw = await SecureStore.getItemAsync(STORE_KEY);
@@ -101,10 +131,17 @@ export async function loadAuth0Tokens(): Promise<Auth0Tokens | null> {
     }
 }
 
+/** Delete the persisted token bundle from secure-store (best-effort; swallows errors). */
 export async function clearAuth0Tokens(): Promise<void> {
     await SecureStore.deleteItemAsync(STORE_KEY).catch(() => undefined);
 }
 
+/**
+ * Exchange the stored refresh token for a fresh bundle (rotating refresh
+ * tokens) and persist it.
+ * @returns The refreshed (and persisted) {@link Auth0Tokens}.
+ * @throws If no refresh token is stored, or the refresh is rejected.
+ */
 export async function refreshAuth0Tokens(): Promise<Auth0Tokens> {
     const current = await loadAuth0Tokens();
     if (!current?.refreshToken) {
@@ -123,6 +160,13 @@ export async function refreshAuth0Tokens(): Promise<Auth0Tokens> {
     return tokens;
 }
 
+/**
+ * Return a currently-valid Auth0 idToken, transparently refreshing if the
+ * stored token is expired or within 60s of expiry. This is the function wired
+ * into the GraphQL client's `refreshTokenFunction` for the `auth0` method.
+ * @returns A usable idToken string.
+ * @throws If no tokens are stored, or a required refresh fails.
+ */
 export async function getValidAuth0IdToken(): Promise<string> {
     const current = await loadAuth0Tokens();
     if (!current) throw new Error('No Auth0 tokens stored.');
@@ -134,6 +178,13 @@ export async function getValidAuth0IdToken(): Promise<string> {
     return current.idToken;
 }
 
+/**
+ * Whether a bundle should be treated as expired (missing, or within 60s of
+ * `expiresAt`). Unknown expiry (`expiresAt === 0`) is treated as NOT expired —
+ * the server is the final authority.
+ * @param tokens The bundle to test (or `null`).
+ * @returns `true` when the caller should refresh / re-authenticate.
+ */
 export function isAuth0Expired(tokens: Auth0Tokens | null): boolean {
     if (!tokens) return true;
     if (!tokens.expiresAt) return false;

@@ -1,12 +1,27 @@
+/**
+ * Hand-rolled SVG icon set (Feather-style line icons) drawn with
+ * `react-native-svg`. Keeping the glyphs inline avoids pulling in an icon-font
+ * dependency and lets every icon share one consistent 24x24 stroke grid.
+ * Consume via the {@link Icons} map, e.g. `<Icons.Send size={20} />`.
+ */
 import Svg, { Circle, Path, Polyline, Rect } from 'react-native-svg';
 import type { ColorValue } from 'react-native';
 
+/** Shared props accepted by every icon in {@link Icons}. */
 type IconProps = {
+    /** Width and height of the square icon in px. Default 22. */
     size?: number;
+    /** Stroke (or fill, for solid icons) color. Default near-black `#0d0d10`. */
     color?: ColorValue;
+    /** Stroke thickness for outline icons. Default 2. */
     strokeWidth?: number;
 };
 
+/**
+ * Internal wrapper that renders a stroked 24x24 SVG canvas with rounded caps/joins.
+ * Icon definitions pass their `<Path>`/`<Circle>`/etc. children into it so they
+ * don't each repeat the `<Svg>` boilerplate.
+ */
 const D = (props: IconProps & { children: React.ReactNode }) => {
     const { size = 22, color = '#0d0d10', children } = props;
     return (
@@ -16,6 +31,11 @@ const D = (props: IconProps & { children: React.ReactNode }) => {
     );
 };
 
+/**
+ * Named icon components used across the app's chrome (nav, composer, list rows).
+ * Most are outline icons; `Pin` and `Star` are solid (filled) variants that use
+ * `color` as their fill rather than stroke.
+ */
 export const Icons = {
     Menu: (p: IconProps) => (<D {...p}><Path d="M3 6h18M3 12h18M3 18h18" /></D>),
     Plus: (p: IconProps) => (<D {...p}><Path d="M12 5v14M5 12h14" /></D>),

@@ -17,6 +17,11 @@ const ENTITY_CONVERSATION = 'MJ: Conversations';
 const ENTITY_CONVERSATION_DETAIL = 'MJ: Conversation Details';
 const ENTITY_CONVERSATION_ARTIFACT = 'MJ: Conversation Artifacts';
 
+/**
+ * A conversation (`MJ: Conversations` entity) plus the message-level metadata the
+ * list view needs — latest snippet/time, live status, and participating agents —
+ * aggregated client-side from `MJ: Conversation Details` rows.
+ */
 export type ConversationListItem = {
     entity: MJConversationEntity;
     /** Latest message body (or null if no messages yet). */
@@ -142,12 +147,14 @@ export async function loadConversations(contextUser?: UserInfo): Promise<Convers
     });
 }
 
+/** A single `MJ: Conversation Details` row paired with its resolved agent name (for AI rows). */
 export type ConversationMessage = {
     detail: MJConversationDetailEntity;
     /** Resolved agent name if Role==='AI', else null. */
     agentName: string | null;
 };
 
+/** A fully-loaded conversation: the `MJ: Conversations` entity, its ordered messages, and its artifacts. */
 export type ConversationDetailLoad = {
     conversation: MJConversationEntity;
     messages: ConversationMessage[];
@@ -156,6 +163,16 @@ export type ConversationDetailLoad = {
 
 /**
  * Load a single conversation with its message history and artifacts.
+ *
+ * Loads the `MJ: Conversations` row via `GetEntityObject().Load()`, then batches a
+ * `RunViews` for `MJ: Conversation Details` (ordered `__mj_CreatedAt ASC`),
+ * `MJ: Conversation Artifacts`, and `MJ: AI Agents` (id→name lookup for resolving
+ * each AI message's agent name).
+ *
+ * @param conversationId The `MJ: Conversations` record id.
+ * @param contextUser    Optional acting user (server-side scoping); defaults to `Metadata.CurrentUser`.
+ * @returns A {@link ConversationDetailLoad}, or `null` if the conversation can't be loaded.
+ * @throws If the conversation-details view fails.
  */
 export async function loadConversation(
     conversationId: string,

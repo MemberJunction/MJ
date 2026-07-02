@@ -22,13 +22,21 @@ import { Colors, Radius, Shadow, Type } from '@/theme/tokens';
 /**
  * Sign-in screen — boot destination when no token is stored.
  *
- * Primary action: "Continue with Auth0" (BlueCypress dev tenant).
- * Secondary: "Continue with Microsoft" (works once Azure AD redirect URI
- *   is registered — falls back to a clear error otherwise).
- * Tertiary: Developer options sheet for paste-JWT testing.
- *
- * On successful auth, MJ provider transitions to 'ready' and the boot
- * gate in app/index.tsx redirects to /conversations.
+ * Route: `/login` (Expo Router, `app/login.tsx`).
+ * Purpose: authenticate the user and hand the resulting tokens to the MJ
+ *   provider to open the data connection.
+ * Data: `useMJ()` (`bootWithAuth0Tokens` / `bootWithMsalTokens` / `setDevToken`,
+ *   plus `status`/`error`), `useAuth0Auth()` and `useMsalAuth()` (interactive
+ *   OAuth sign-in hooks exposing `signIn` + `ready`).
+ * Interactions:
+ *   - Primary: "Continue with Auth0" (BlueCypress dev tenant).
+ *   - Secondary: "Continue with Microsoft" (works once the Azure AD redirect
+ *     URI is registered — surfaces a clear error otherwise).
+ *   - Tertiary: "Developer options" opens {@link DevTokenSheet} for paste-JWT
+ *     testing.
+ *   On success the MJ provider transitions to `ready`; a `useEffect` here (and
+ *   the boot gate in `app/index.tsx`) redirects to `/conversations`.
+ * Mockup: `plans/mobile-app-react-native/html/login.html`.
  */
 export default function LoginScreen() {
     const { status, error, bootWithAuth0Tokens, bootWithMsalTokens } = useMJ();
@@ -142,6 +150,17 @@ export default function LoginScreen() {
     );
 }
 
+/**
+ * Developer-only modal sheet for pasting a raw JWT to bypass the OAuth flow.
+ *
+ * Calls `useMJ().setDevToken(token)` (stored in the iOS Keychain via
+ * expo-secure-store) so ad-hoc API testing can proceed without an IdP round
+ * trip. Closes itself on a successful connect.
+ *
+ * @param open  whether the sheet is presented.
+ * @param onClose  invoked to dismiss the sheet (on close button, backdrop, or
+ *   a successful token submit).
+ */
 function DevTokenSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
     const { setDevToken, status } = useMJ();
     const [token, setToken] = useState('');

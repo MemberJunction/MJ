@@ -11,12 +11,26 @@ import type {
 } from '@/data/types';
 import { Colors, colorForAgent } from '@/theme/tokens';
 
+/**
+ * Derive the single uppercase avatar initial from an agent/participant name.
+ *
+ * @param name Source name; may be null/empty.
+ * @returns The first letter uppercased, or `'A'` when the name is missing.
+ */
 function initialsOf(name: string | null): string {
     if (!name) return 'A';
     const trimmed = name.trim();
     return trimmed.charAt(0).toUpperCase() || 'A';
 }
 
+/**
+ * Format a timestamp as a compact, list-friendly relative label
+ * ("Now", "5m", a same-day clock time, "Yest", a weekday, or a month/day date).
+ *
+ * @param when The instant to describe.
+ * @param now  Reference "current" time (injectable for testing); defaults to `new Date()`.
+ * @returns A short human-readable label suitable for a conversation row.
+ */
 function relativeTimeLabel(when: Date, now: Date = new Date()): string {
     const diffMs = now.getTime() - when.getTime();
     const min = Math.floor(diffMs / 60_000);
@@ -34,6 +48,15 @@ function relativeTimeLabel(when: Date, now: Date = new Date()): string {
     return when.toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
 
+/**
+ * Convert a service-layer {@link ConversationListItem} (raw MJ entity + derived
+ * message metadata) into a UI-ready {@link ConversationSummary}, assigning each
+ * participating agent a stable color/initial. When no agents are known, falls
+ * back to a single "Skip" placeholder participant.
+ *
+ * @param item The loaded conversation list item from the conversations service.
+ * @returns The UI-shaped conversation summary for the list.
+ */
 export function adaptConversationToSummary(item: ConversationListItem): ConversationSummary {
     const conv = item.entity;
     const agents: ConversationParticipantAgent[] = item.agentIds.length === 0
@@ -70,6 +93,14 @@ export type GroupedConversations = {
     earlier: ConversationSummary[];
 };
 
+/**
+ * Adapt and bucket a list of conversations into Pinned / Today / Yesterday /
+ * Earlier groups. Pinned wins over date bucketing; remaining items are placed by
+ * the local calendar date of their latest activity.
+ *
+ * @param items The loaded conversation list items.
+ * @returns The four grouped, UI-shaped summary buckets.
+ */
 export function groupConversations(items: ConversationListItem[]): GroupedConversations {
     const out: GroupedConversations = { pinned: [], today: [], yesterday: [], earlier: [] };
     const now = new Date();
@@ -92,6 +123,7 @@ export function groupConversations(items: ConversationListItem[]): GroupedConver
     return out;
 }
 
+/** UI reference to an agent (id + name + derived avatar color/initial). */
 export type AdaptedAgentRef = {
     id: string;
     name: string;
@@ -99,6 +131,15 @@ export type AdaptedAgentRef = {
     initial: string;
 };
 
+/**
+ * Build an {@link AdaptedAgentRef} from a possibly-missing id/name pair,
+ * supplying safe fallbacks ("unknown" id, "Agent" name) and deriving a stable
+ * color and initial from the name.
+ *
+ * @param id   Agent id; null/undefined becomes `'unknown'`.
+ * @param name Agent display name; null/undefined becomes `'Agent'`.
+ * @returns The UI-ready agent reference.
+ */
 export function adaptAgentRef(id: string | null | undefined, name: string | null | undefined): AdaptedAgentRef {
     const safeName = name ?? 'Agent';
     return {
@@ -109,6 +150,11 @@ export function adaptAgentRef(id: string | null | undefined, name: string | null
     };
 }
 
+/**
+ * A conversation message in UI shape — a discriminated union on `kind`.
+ * `user` messages carry just their text; `agent` messages additionally carry the
+ * agent reference, run status, suggested follow-up responses, and completion time.
+ */
 export type AdaptedMessage =
     | { kind: 'user'; id: string; text: string; createdAt: Date }
     | {
@@ -122,6 +168,16 @@ export type AdaptedMessage =
         completionMs: number | null;
     };
 
+/**
+ * Convert a service-layer {@link ConversationMessage} (wrapping an MJ
+ * `MJ: Conversation Details` row) into a UI {@link AdaptedMessage}. `Role='User'`
+ * rows become `user` messages; all others ('AI'/'Error') become `agent` messages,
+ * with `SuggestedResponses` JSON safely parsed to at most four string suggestions
+ * and the body falling back to the `Error` text when `Message` is empty.
+ *
+ * @param msg The service-layer conversation message.
+ * @returns The UI-shaped message union member.
+ */
 export function adaptMessage(msg: ConversationMessage): AdaptedMessage {
     const d = msg.detail;
     const createdAt = (d as unknown as { __mj_CreatedAt?: Date | string }).__mj_CreatedAt;
@@ -158,6 +214,16 @@ export function adaptMessage(msg: ConversationMessage): AdaptedMessage {
     };
 }
 
+/**
+ * Adapt a fully-loaded conversation ({@link ConversationDetailLoad}) into the
+ * UI shape the detail screen renders: title, the de-duplicated set of
+ * participating agents (derived from message `AgentID`s), a live flag (any
+ * message still `In-Progress`), the adapted message list, and the raw artifacts.
+ *
+ * @param load The conversation, its messages, and its artifacts from the service.
+ * @returns A UI-shaped object with `id`, `title`, `participants`, `messageCount`,
+ *          `live`, `messages`, and `artifacts`.
+ */
 export function adaptConversation(load: ConversationDetailLoad) {
     const participants = new Map<string, AdaptedAgentRef>();
     for (const msg of load.messages) {

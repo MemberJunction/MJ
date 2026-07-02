@@ -28,8 +28,10 @@ import {
 import * as SecureStore from 'expo-secure-store';
 import { Env } from '@/config/env';
 
+/** expo-secure-store key holding the persisted MSAL token bundle (JSON). */
 const STORE_KEY = 'mj-msal-tokens';
 
+/** Persisted MSAL/Azure AD token bundle. */
 export type MJAuthTokens = {
     idToken: string;
     accessToken: string;
@@ -49,6 +51,10 @@ export function getRedirectUri(): string {
     });
 }
 
+/**
+ * Build the OIDC discovery document (authorize/token/logout endpoints) for the
+ * configured Azure AD authority (`Env.msalAuthority`).
+ */
 export function getDiscovery(): DiscoveryDocument {
     return {
         authorizationEndpoint: `${Env.msalAuthority}/oauth2/v2.0/authorize`,
@@ -92,6 +98,7 @@ function readJwtExp(jwt: string): number {
     return 0;
 }
 
+/** Normalize an expo-auth-session token response into an {@link MJAuthTokens} bundle. */
 function bundleFromResponse(resp: TokenResponse): MJAuthTokens {
     const idToken = resp.idToken ?? '';
     return {
@@ -103,8 +110,12 @@ function bundleFromResponse(resp: TokenResponse): MJAuthTokens {
 }
 
 /**
- * Complete the OAuth flow: exchange the auth code for tokens.
+ * Complete the OAuth flow: exchange the auth code for tokens and persist them.
  * Called from the React UI after `request.promptAsync()` resolves with a code.
+ * @param code The authorization code from the redirect.
+ * @param codeVerifier The PKCE verifier generated for this request.
+ * @returns The exchanged (and persisted) {@link MJAuthTokens}.
+ * @throws If the token endpoint rejects the exchange.
  */
 export async function exchangeCodeForTokens(code: string, codeVerifier: string): Promise<MJAuthTokens> {
     const resp = await exchangeCodeAsync(
@@ -121,10 +132,15 @@ export async function exchangeCodeForTokens(code: string, codeVerifier: string):
     return tokens;
 }
 
+/** Persist the token bundle to expo-secure-store (keychain on iOS). */
 export async function persistTokens(tokens: MJAuthTokens): Promise<void> {
     await SecureStore.setItemAsync(STORE_KEY, JSON.stringify(tokens));
 }
 
+/**
+ * Load the persisted token bundle from secure-store.
+ * @returns The stored {@link MJAuthTokens}, or `null` if absent/unreadable.
+ */
 export async function loadStoredTokens(): Promise<MJAuthTokens | null> {
     try {
         const raw = await SecureStore.getItemAsync(STORE_KEY);
@@ -135,6 +151,7 @@ export async function loadStoredTokens(): Promise<MJAuthTokens | null> {
     }
 }
 
+/** Delete the persisted token bundle from secure-store (best-effort; swallows errors). */
 export async function clearStoredTokens(): Promise<void> {
     await SecureStore.deleteItemAsync(STORE_KEY).catch(() => undefined);
 }
@@ -177,6 +194,13 @@ export async function getValidIdToken(): Promise<string> {
     return current.idToken;
 }
 
+/**
+ * Whether a bundle should be treated as expired (missing, or within 60s of
+ * `expiresAt`). Unknown expiry (`expiresAt === 0`) is treated as NOT expired —
+ * defer to the server.
+ * @param tokens The bundle to test (or `null`).
+ * @returns `true` when the caller should refresh / re-authenticate.
+ */
 export function isExpired(tokens: MJAuthTokens | null): boolean {
     if (!tokens) return true;
     if (!tokens.expiresAt) return false; // unknown expiry — let server tell us

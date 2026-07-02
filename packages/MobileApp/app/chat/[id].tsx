@@ -22,8 +22,29 @@ import { useConversation, useConversations } from '@/hooks/useConversations';
 import { Colors, Radius, Shadow, Type } from '@/theme/tokens';
 
 /**
- * Chat thread (hero) — real MJ conversation rendered from RunView.
- * Spec: plans/mobile-app-react-native/html/chat-thread.html
+ * Chat thread (hero screen) — a single MJ conversation with its agent(s).
+ *
+ * Route: `/chat/:id` (Expo Router dynamic segment, `app/chat/[id].tsx`); also
+ *   accepts an optional `?autosend=<text>` query param.
+ * Purpose: render one conversation's message list and a composer, drive the
+ *   send -> agent-run -> reply loop, and surface artifacts.
+ * Data:
+ *   - `useConversation(id)` -> `{ data, loading, error, refresh }` (the thread's
+ *     MJ `Conversations` + `Conversation Details` via RunView).
+ *   - `useConversations()` -> the full list, used to build the recents strip and
+ *     to refresh the list after a send.
+ *   - `adaptConversation` / `adaptConversationToSummary` (`@/data/adapt`) shape
+ *     raw entities into the view model.
+ *   - `sendMessage` / `getConversationDetailStatus` (`@/data/services/agents`)
+ *     post the user turn, run the agent, and poll the AI `Conversation Detail`
+ *     status until it finalizes (the push WebSocket may not deliver completion
+ *     on this client, so it polls up to 24× every 2.5s, refreshing as it goes).
+ * Interactions: type + send a message (with optimistic pending bubble + live
+ *   "Working…" progress), pull-to-refresh, tap a recents chip to switch threads,
+ *   open the artifacts dock -> `/artifacts/[id]`, tap mic -> `/voice-mode`,
+ *   `+` -> `/new-conversation`, menu -> `/conversations`. Deep-link `?autosend`
+ *   fires the send once on open for QA/deep-links.
+ * Mockup: `plans/mobile-app-react-native/html/chat-thread.html`.
  */
 export default function ChatThreadScreen() {
     const { id, autosend } = useLocalSearchParams<{ id: string; autosend?: string }>();
@@ -192,6 +213,11 @@ export default function ChatThreadScreen() {
     );
 }
 
+/**
+ * Thread header bar: menu (-> `/conversations`), centered title with agent
+ * avatar stack + participant/message counts + live dot, and `+`
+ * (-> `/new-conversation`).
+ */
 function ChatHeader({ title, participants, messageCount, live }: {
     title: string;
     participants: AdaptedAgentRef[];
@@ -224,8 +250,14 @@ function ChatHeader({ title, participants, messageCount, live }: {
     );
 }
 
+/** A recents-strip chip = a conversation summary adapted for the horizontal rail. */
 type RecentChip = ReturnType<typeof adaptConversationToSummary>;
 
+/**
+ * Horizontal strip of recent-conversation chips above the thread. Tapping a
+ * non-active chip `replace`s the route to that conversation (`/chat/[id]`),
+ * swapping threads without growing the back stack.
+ */
 function RecentsStrip({ activeId, chips }: { activeId: string; chips: RecentChip[] }) {
     return (
         <ScrollView
@@ -258,6 +290,12 @@ function RecentsStrip({ activeId, chips }: { activeId: string; chips: RecentChip
     );
 }
 
+/**
+ * Renders one message: a right-aligned bubble for `user` messages (with
+ * `@mention` highlighting), or an agent block with avatar/name/timing, a
+ * {@link MarkdownView} body, an in-progress "Working…" indicator, and any
+ * suggested-response chips.
+ */
 function MessageRenderer({ message }: { message: AdaptedMessage }) {
     if (message.kind === 'user') {
         return (
@@ -297,6 +335,7 @@ function MessageRenderer({ message }: { message: AdaptedMessage }) {
     );
 }
 
+/** Splits user text on `@mention` tokens and wraps mentions in emphasized `<Text>`. */
 function parseUserMessage(text: string): React.ReactNode {
     const parts = text.split(/(@\w+)/g);
     return parts.map((part, idx) => {
@@ -305,6 +344,11 @@ function parseUserMessage(text: string): React.ReactNode {
     });
 }
 
+/**
+ * Sticky "N artifacts in this conversation" handle above the composer. Renders
+ * nothing when `count === 0`; otherwise navigates to the artifacts dock
+ * (`/artifacts/[id]`) for this conversation.
+ */
 function ArtifactDockHandle({ conversationId, count }: { conversationId: string; count: number }) {
     if (count === 0) return null;
     return (
@@ -323,6 +367,12 @@ function ArtifactDockHandle({ conversationId, count }: { conversationId: string;
     );
 }
 
+/**
+ * Message composer: a multiline input that owns its own draft `text` state.
+ * Shows a send button when there's non-empty text (clears the draft and calls
+ * `onSend`), otherwise a mic button that opens `/voice-mode`. `disabled` blocks
+ * input/send while an agent run is in flight.
+ */
 function Composer({ onSend, disabled }: { onSend: (text: string) => void; disabled: boolean }) {
     const [text, setText] = useState('');
     const canSend = text.trim().length > 0 && !disabled;

@@ -11,6 +11,7 @@ import type { MJDashboardEntity } from '@memberjunction/core-entities';
 // Entities
 // ---------------------------------------------------------------------------
 
+/** A browsable entity row (from MJ's `Metadata.Entities`) shown in the explorer's entity list. */
 export type EntityListItem = {
     name: string;
     displayName: string;
@@ -35,6 +36,7 @@ export function loadEntities(): EntityListItem[] {
         .sort((a, b) => a.displayName.localeCompare(b.displayName));
 }
 
+/** Total number of entities known to the metadata (all, unfiltered). */
 export function entityCount(): number {
     return new Metadata().Entities.length;
 }
@@ -52,6 +54,7 @@ function primaryDisplayField(entity: EntityInfo): EntityFieldInfo | undefined {
     );
 }
 
+/** One entity record projected to a card: id, title, subtitle, and the raw field bag. */
 export type EntityRecordRow = {
     /** Composite PK serialized (entity record id). */
     id: string;
@@ -61,6 +64,7 @@ export type EntityRecordRow = {
     raw: Record<string, unknown>;
 };
 
+/** Result of {@link loadEntityRecords}: the entity metadata, the card rows, and how many were returned. */
 export type EntityRecordsLoad = {
     entity: EntityInfo;
     rows: EntityRecordRow[];
@@ -123,8 +127,10 @@ export async function loadEntityRecords(
     return { entity, rows, totalShown: rows.length };
 }
 
+/** A single displayable field of a record: its key, label, and stringified value. */
 export type RecordFieldRow = { key: string; label: string; value: string };
 
+/** Result of {@link loadRecordDetail}: the entity metadata, a title, and the projected field rows. */
 export type RecordDetailLoad = {
     entity: EntityInfo;
     title: string;
@@ -170,6 +176,7 @@ export async function loadRecordDetail(
 // Queries
 // ---------------------------------------------------------------------------
 
+/** A saved query (from MJ's `Metadata.Queries`) shown in the explorer's query list. */
 export type QueryListItem = {
     id: string;
     name: string;
@@ -177,6 +184,12 @@ export type QueryListItem = {
     category: string | null;
 };
 
+/**
+ * List the approved saved queries from metadata, sorted by name. Reads
+ * `Metadata.Queries` (already cached) — no round trip.
+ *
+ * @returns The approved queries as {@link QueryListItem}s.
+ */
 export function loadQueries(): QueryListItem[] {
     const md = new Metadata();
     return md.Queries
@@ -190,10 +203,12 @@ export function loadQueries(): QueryListItem[] {
         .sort((a, b) => a.name.localeCompare(b.name));
 }
 
+/** Count of approved saved queries in metadata. */
 export function queryCount(): number {
     return new Metadata().Queries.filter((q) => q.Status === 'Approved').length;
 }
 
+/** Result of running a saved query: column names, row objects, count, and success/error. */
 export type QueryRunResult = {
     columns: string[];
     rows: Record<string, unknown>[];
@@ -202,6 +217,17 @@ export type QueryRunResult = {
     errorMessage?: string;
 };
 
+/**
+ * Execute a saved query by id via MJ's `RunQuery`, deriving the column list from
+ * the first result row. Does not throw on query failure — inspect `success` /
+ * `errorMessage` on the returned object.
+ *
+ * @param queryId     The `Queries` record id to run.
+ * @param parameters  Optional named query parameters.
+ * @param contextUser Optional acting user (server-side scoping).
+ * @param maxRows     Row cap (default 200).
+ * @returns A {@link QueryRunResult} with columns, rows, count, and status.
+ */
 export async function runQuery(
     queryId: string,
     parameters?: Record<string, unknown>,
@@ -228,12 +254,21 @@ export async function runQuery(
 // Dashboards
 // ---------------------------------------------------------------------------
 
+/** A dashboard row shown in the explorer's dashboard list. */
 export type DashboardListItem = {
     id: string;
     name: string;
     description: string | null;
 };
 
+/**
+ * Load the dashboards the user can see, sorted by name. `RunView`s the
+ * `Dashboards` entity (`simple` result, narrowed fields). Returns `[]` on failure
+ * rather than throwing.
+ *
+ * @param contextUser Optional acting user (server-side scoping).
+ * @returns The dashboards as {@link DashboardListItem}s.
+ */
 export async function loadDashboards(contextUser?: UserInfo): Promise<DashboardListItem[]> {
     const rv = new RunView();
     const result = await rv.RunView<{ ID: string; Name: string; Description: string | null }>(

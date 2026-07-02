@@ -10,13 +10,22 @@ import type { ArtifactSummary, ArtifactTypeCategory } from '@/data/services/arti
 import { Colors, Radius, Shadow, Type, colorForAgent } from '@/theme/tokens';
 
 /**
- * All artifacts in a conversation — the expanded "dock" sheet.
+ * Conversation artifacts dock screen — the expanded "dock" sheet listing all
+ * artifacts produced in a conversation.
  *
- * Loads real artifact summaries (category + preview + agent attribution) and
- * offers a single-select filter row: All · per-agent chips · type chips
- * (Tables / Charts / Documents). Tapping a card opens the artifact detail.
- *
- * Spec: plans/mobile-app-react-native/html/artifacts-dock-open.html
+ * Route: `/artifacts/:id` (Expo Router, `app/artifacts/[id].tsx`).
+ * The `id` route param is the conversation's ID (NOT an artifact ID — contrast
+ * with `/artifact/[id]`, the single-artifact viewer this screen links into).
+ * Purpose: browse every artifact in a conversation, filterable by agent or type.
+ * Data: `useConversationArtifacts(id)` -> artifacts service
+ * `loadConversationArtifacts()`, which `RunView`s over `MJ: Conversation
+ * Artifacts` for the conversation, then joins in each artifact's latest
+ * `MJ: Conversation Artifact Versions` content (category + preview) and the
+ * producing agent's name/ID for attribution.
+ * Interactions: a single-select filter row — All · per-agent chips · type chips
+ * (Tables / Charts / Documents); tap a card -> `/artifact/[id]`; close/handle ->
+ * `router.back()`.
+ * Mockup: `plans/mobile-app-react-native/html/artifacts-dock-open.html`.
  */
 
 /** The active filter dimension: everything, a specific agent, or a category. */

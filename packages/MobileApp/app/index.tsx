@@ -5,9 +5,19 @@ import { useMJ } from '@/providers/mj-provider';
 import { Colors, Radius, Type } from '@/theme/tokens';
 
 /**
- * Boot gate. Decides where to land based on MJ provider status.
- * If 'loading' lingers past 6 seconds we show a diagnostic with a
- * "force sign out" escape hatch so a hung token can't lock the app.
+ * Boot gate / launch router — the app's entry screen.
+ *
+ * Route: `/` (Expo Router index, `app/index.tsx`).
+ * Purpose: decide where a launching user lands based on the MJ provider
+ *   `status`. Renders a connecting spinner while `loading`, an inline error
+ *   card on `error`, then redirects: `ready` -> `/conversations`, otherwise
+ *   -> `/login`. If `loading` lingers past 6 seconds it surfaces a diagnostic
+ *   with a "force sign out" escape hatch so a hung/invalid token or an
+ *   unreachable MJAPI can't permanently lock the app.
+ * Data: `useMJ()` — reads `status`/`error`, calls `signOut()` to clear tokens.
+ * Interactions: "Clear tokens & sign in again" / "Sign in again" (both call
+ *   `signOut`), otherwise fully automatic redirect via `<Redirect>`.
+ * Mockup: none — transient navigation shell / boot gate.
  */
 export default function Index() {
     const { status, error, signOut } = useMJ();

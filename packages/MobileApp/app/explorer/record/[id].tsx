@@ -6,8 +6,19 @@ import { useRecordDetail } from '@/hooks/useExplorer';
 import { Colors, Radius, Shadow, Type } from '@/theme/tokens';
 
 /**
- * Read-only record detail.
- * Spec: plans/mobile-app-react-native/html/record-detail.html
+ * Record detail screen.
+ *
+ * Route: `/explorer/record/:id` (Expo Router, `app/explorer/record/[id].tsx`).
+ * Params: `id` (record primary key) and `entity` (MJ entity name) — both read
+ * from the query string via `useLocalSearchParams`.
+ * Purpose: read-only ("view only") detail of a single record as a hero card plus
+ * a FIELDS key/value list.
+ * Data: `useRecordDetail(entity, id)` -> explorer service `loadRecordDetail()`,
+ * which uses `Metadata.GetEntityObject` + `Load` on the named entity to fetch the
+ * single record, then projects its fields into label/value pairs.
+ * Interactions: back chevron -> `router.back()`; "Ask Skip about this <entity>"
+ * bottom bar -> `/new-conversation`.
+ * Mockup: `plans/mobile-app-react-native/html/record-detail.html`.
  */
 export default function RecordDetailScreen() {
     const { id, entity } = useLocalSearchParams<{ id: string; entity: string }>();

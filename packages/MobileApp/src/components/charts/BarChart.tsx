@@ -1,3 +1,10 @@
+/**
+ * Horizontal bar chart, drawn with `react-native-svg`.
+ *
+ * Consumes the `ChartDatum[]` carried by a {@link ChartSpec} (see `./chart-spec`)
+ * and renders one labeled, palette-colored bar per data point. Used by the
+ * {@link Chart} dispatcher for `kind === 'bar'` (and as its default fallback).
+ */
 import { StyleSheet, Text, View } from 'react-native';
 import Svg, { G, Rect, Text as SvgText } from 'react-native-svg';
 import { Colors, Spacing, Type } from '@/theme/tokens';
@@ -13,9 +20,13 @@ export type BarChartProps = {
     title?: string;
 };
 
+/** Vertical space (px) allotted to each data row. */
 const ROW_HEIGHT = 30;
+/** Horizontal gutter (px) reserved on the left for category labels. */
 const LABEL_WIDTH = 92;
+/** Horizontal gutter (px) reserved on the right for the value annotation. */
 const VALUE_WIDTH = 52;
+/** Thickness (px) of each bar, centered within its row. */
 const BAR_HEIGHT = 16;
 
 /**
@@ -24,6 +35,9 @@ const BAR_HEIGHT = 16;
  * Horizontal layout is chosen for mobile: long category labels read cleanly on
  * the left, bars extend to the right, and values are annotated at the bar end.
  * Bars use the categorical palette so adjacent categories stay distinct.
+ *
+ * @param props See {@link BarChartProps} — data, container width, optional title.
+ * @returns A `<View>` wrapping the title and the `react-native-svg` plot.
  */
 export function BarChart({ data, width, title }: BarChartProps) {
     const plotHeight = Math.max(ROW_HEIGHT, data.length * ROW_HEIGHT);

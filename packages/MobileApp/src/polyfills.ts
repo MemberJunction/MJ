@@ -1,3 +1,12 @@
+/**
+ * Runtime polyfills + dev log filtering for the React Native / Hermes runtime.
+ * This module has import side effects only (no exports) and MUST be imported
+ * first in the app entry point, before any `@memberjunction/*` code: it installs
+ * a WHATWG-complete `URL`/`URLSearchParams`, backs `crypto.getRandomValues()`
+ * with expo-crypto's native CSPRNG (needed by the `uuid` package), and silences
+ * expected dev-only LogBox noise from the polling fallback path.
+ */
+
 // WHATWG-complete URL/URLSearchParams — RN's built-in URL is incomplete and throws
 // "Invalid URL" for inputs graphql-request / subscription clients pass. Must load first.
 import 'react-native-url-polyfill/auto';

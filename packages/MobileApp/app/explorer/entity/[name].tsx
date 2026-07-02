@@ -8,8 +8,19 @@ import type { EntityRecordRow } from '@/data/services/explorer';
 import { Colors, Radius, Shadow, Type } from '@/theme/tokens';
 
 /**
- * Entity records — card list, never a grid.
- * Spec: plans/mobile-app-react-native/html/entity-records.html
+ * Entity records screen.
+ *
+ * Route: `/explorer/entity/:name` (Expo Router, `app/explorer/entity/[name].tsx`).
+ * The `name` route param is the MJ entity name to browse.
+ * Purpose: read-only, card-list view of records for a chosen entity (never a grid).
+ * Data: `useEntityRecords(name)` -> explorer service `loadEntityRecords()`, which
+ * resolves the `EntityInfo` from `Metadata` and issues a `RunView` over that
+ * entity with a narrowed field set (title/subtitle projection per row). Pull to
+ * refresh re-runs the view. Client-side substring filter over title/subtitle.
+ * Interactions: search box filters in memory; pull-to-refresh; tap a card ->
+ * `/explorer/record/[id]` (passing `id` + `entity` name); floating "Ask Skip
+ * about these" -> `/new-conversation`.
+ * Mockup: `plans/mobile-app-react-native/html/entity-records.html`.
  */
 export default function EntityRecordsScreen() {
     const { name } = useLocalSearchParams<{ name: string }>();
@@ -77,6 +88,7 @@ export default function EntityRecordsScreen() {
     );
 }
 
+/** One record row as a card (title + optional subtitle); tap navigates to record detail. */
 function RecordCard({ row, entityName }: { row: EntityRecordRow; entityName: string }) {
     return (
         <Pressable

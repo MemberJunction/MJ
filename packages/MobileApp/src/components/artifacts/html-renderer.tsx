@@ -17,8 +17,11 @@ import { Colors, Radius, Spacing, Type } from '@/theme/tokens';
 // Node model + parser
 // ---------------------------------------------------------------------------
 
+/** A run of raw text between tags. */
 type HtmlTextNode = { type: 'text'; text: string };
+/** A parsed element with its lowercased `tag`, decoded `attrs`, and child nodes. */
 type HtmlElementNode = { type: 'element'; tag: string; attrs: Record<string, string>; children: HtmlNode[] };
+/** Any node in the parsed tree: either text or an element. */
 type HtmlNode = HtmlTextNode | HtmlElementNode;
 
 /** Tags that never have children / closing tags. */
@@ -242,6 +245,7 @@ function TableBlock({ node, keyPrefix }: { node: HtmlElementNode; keyPrefix: str
     );
 }
 
+/** A single table row: its `<td>`/`<th>` cells and whether it is a header row (all `<th>`). */
 type TableRow = { header: boolean; cells: HtmlElementNode[] };
 
 /** Walk a table subtree collecting rows of cells (flattens thead/tbody). */

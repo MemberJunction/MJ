@@ -14,6 +14,7 @@ import type { MJAIAgentEntity, MJConversationDetailEntity, MJConversationEntity 
 /** Default Environment ID — matches the EnvironmentID column default on MJ: Conversations. */
 const DEFAULT_ENVIRONMENT_ID = 'F51358F3-9447-4176-B313-BF8025FD8D09';
 
+/** A selectable agent (from the `MJ: AI Agents` entity) the user can address. */
 export type AgentOption = {
     id: string;
     name: string;
@@ -69,12 +70,14 @@ export async function resolveTargetAgent(
     return skip ?? agents[0];
 }
 
+/** Progress update emitted while an agent run is in flight (via the push channel). */
 export type SendProgress = {
     currentStep: string;
     percentage?: number;
     message: string;
 };
 
+/** Outcome of {@link sendMessage}: the saved user message id, the placeholder AI reply id, and whether completion must be polled. */
 export type SendResult = {
     success: boolean;
     errorMessage?: string;

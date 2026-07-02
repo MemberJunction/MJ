@@ -6,8 +6,20 @@ import { useQueryRun } from '@/hooks/useExplorer';
 import { Colors, Radius, Shadow, Type } from '@/theme/tokens';
 
 /**
- * Query results — runs a saved query and renders rows as cards.
- * Spec: plans/mobile-app-react-native/html/query-run.html
+ * Query run / results screen.
+ *
+ * Route: `/explorer/query/:id` (Expo Router, `app/explorer/query/[id].tsx`).
+ * The `id` route param is the saved query's ID.
+ * Purpose: execute a saved MJ query and render its result rows as key/value
+ * cards (first ~6 columns per row).
+ * Data: `useQueryRun(id)` -> explorer service `runQuery()`, which uses MJ
+ * `RunQuery` (NOT `RunView`) to execute the stored query and returns
+ * `{ columns, rows, rowCount, success, errorMessage }`. Runs automatically on
+ * mount and can be re-run.
+ * Interactions: header sliders button -> re-run the query; error state offers
+ * "Try again"; on success a bottom bar "Ask Skip about these results" ->
+ * `/new-conversation`.
+ * Mockup: `plans/mobile-app-react-native/html/query-run.html`.
  */
 export default function QueryRunScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();

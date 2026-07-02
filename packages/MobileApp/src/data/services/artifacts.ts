@@ -14,8 +14,10 @@ import type {
 } from '@memberjunction/core-entities';
 import { parseChartSpec, type ChartSpec } from '@/components/charts/chart-spec';
 
+/** The renderer the UI should use for an artifact's content, chosen by {@link classify}. */
 export type ArtifactRenderKind = 'json-table' | 'json' | 'markdown' | 'code' | 'html' | 'chart' | 'text';
 
+/** A fully-loaded artifact: metadata, latest-version content, and any parsed payload the chosen renderer needs. */
 export type LoadedArtifact = {
     id: string;
     name: string;
@@ -98,7 +100,15 @@ function classify(typeName: string, content: string): Classification {
 }
 
 /**
- * Load an artifact and its latest version content.
+ * Load an artifact and its latest version content, classified for rendering.
+ *
+ * Loads the `MJ: Conversation Artifacts` row via `GetEntityObject().Load()`, then
+ * `RunView`s `MJ: Conversation Artifact Versions` (ordered `Version DESC`) to get
+ * the newest content, and runs {@link classify} to pick a render kind + payload.
+ *
+ * @param artifactId  The `MJ: Conversation Artifacts` record id.
+ * @param contextUser Optional acting user (server-side scoping); defaults to `Metadata.CurrentUser`.
+ * @returns A {@link LoadedArtifact}, or `null` if the artifact can't be loaded.
  */
 export async function loadArtifact(artifactId: string, contextUser?: UserInfo): Promise<LoadedArtifact | null> {
     const md = new Metadata();

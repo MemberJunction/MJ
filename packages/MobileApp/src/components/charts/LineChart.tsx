@@ -1,3 +1,10 @@
+/**
+ * Single-series line chart, drawn with `react-native-svg`.
+ *
+ * Consumes the `ChartDatum[]` carried by a {@link ChartSpec} (see `./chart-spec`)
+ * and plots the points left-to-right with a soft area fill and min/max + first/last
+ * annotations. Used by the {@link Chart} dispatcher for `kind === 'line'`.
+ */
 import { StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Line, Path, Text as SvgText } from 'react-native-svg';
 import { Colors, Spacing, Type } from '@/theme/tokens';
@@ -15,15 +22,25 @@ export type LineChartProps = {
     title?: string;
 };
 
+/** Left inset (px) — room for the min/max y-axis value labels. */
 const PAD_LEFT = 38;
+/** Right inset (px) so the last point/label isn't clipped. */
 const PAD_RIGHT = 12;
+/** Top inset (px) above the plot area. */
 const PAD_TOP = 12;
+/** Bottom inset (px) — room for the first/last x-axis labels. */
 const PAD_BOTTOM = 22;
 
 /**
  * A minimal line chart (with soft area fill and point markers) built purely on
  * `react-native-svg`. Renders a single accent-colored series with min/max y-axis
  * annotations and first/last x-axis labels — enough context for a mobile glance.
+ *
+ * A single point is centered; the line/area are only drawn when there are 2+
+ * points. The y range spans min(0, values)..max(0, values) so zero is included.
+ *
+ * @param props See {@link LineChartProps} — data, width, optional height/title.
+ * @returns A `<View>` wrapping the title and the `react-native-svg` plot.
  */
 export function LineChart({ data, width, height = 150, title }: LineChartProps) {
     const plotW = Math.max(1, width - PAD_LEFT - PAD_RIGHT);

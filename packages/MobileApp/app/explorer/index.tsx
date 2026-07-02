@@ -5,6 +5,20 @@ import { Icons } from '@/components/Icon';
 import { useExplorerCounts } from '@/hooks/useExplorer';
 import { Colors, Radius, Shadow, Type } from '@/theme/tokens';
 
+/**
+ * Data Explorer home / hub screen.
+ *
+ * Route: `/explorer` (Expo Router, `app/explorer/index.tsx`).
+ * Purpose: landing hub for the Explorer area — three navigation tiles
+ * (Entities, Queries, Dashboards), each showing a live count.
+ * Data: `useExplorerCounts()` -> explorer service. Entity and query counts come
+ * from in-memory MJ `Metadata` (`entityCount()` / `queryCount()`); the dashboard
+ * count is the length of a `RunView` over `MJ: Dashboards`. No records are
+ * fetched here — only totals for the tile badges.
+ * Interactions: tap a tile -> `router.push` to `/explorer/entities`,
+ * `/explorer/queries`, or `/explorer/dashboards`; back chevron -> `router.back()`.
+ * Mockup: `plans/mobile-app-react-native/html/explorer-home.html`.
+ */
 export default function ExplorerHomeScreen() {
     const counts = useExplorerCounts();
 
@@ -57,6 +71,7 @@ export default function ExplorerHomeScreen() {
     );
 }
 
+/** A single tappable hub tile (icon, title, subtitle, count stat). `wide` spans the full row. */
 function Tile({
     wide, title, sub, stat, iconBg, icon, onPress,
 }: {

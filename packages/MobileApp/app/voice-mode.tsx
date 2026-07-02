@@ -5,15 +5,23 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Icons } from '@/components/Icon';
 import { Colors, Spacing, Type } from '@/theme/tokens';
 
+/** Dark background for the immersive voice takeover (intentionally static, not a theme token). */
 const DARK_BG = '#0d0d12';
 
 /**
- * Voice mode — fullscreen takeover.
- * Spec: plans/mobile-app-react-native/html/voice-mode.html
+ * Voice mode — fullscreen immersive takeover.
  *
- * Phase 1: visual scaffold with animated orb and waveform. The actual
- * STT pipeline (record → Whisper → submit as a new Conversation Detail)
- * lands in Phase 2.
+ * Route: `/voice-mode` (Expo Router, `app/voice-mode.tsx`); pushed from the
+ *   chat composer and the new-conversation mic buttons.
+ * Purpose: Phase 1 visual scaffold for hands-free voice input — an animated
+ *   pulsing orb, expanding ripples, a static waveform, and a mock live
+ *   transcript.
+ * Data: none — no MJ hooks/services yet. The real STT pipeline (record ->
+ *   Whisper -> submit as a new `Conversation Detail`) lands in Phase 2; the
+ *   transcript/conversation text shown here is placeholder.
+ * Interactions: close/back (chevron and the primary stop button both call
+ *   `router.back()`); the side control buttons are non-functional placeholders.
+ * Mockup: `plans/mobile-app-react-native/html/voice-mode.html`.
  */
 export default function VoiceModeScreen() {
     const pulse = useRef(new Animated.Value(0)).current;
@@ -100,6 +108,7 @@ export default function VoiceModeScreen() {
     );
 }
 
+/** Static bar heights (px) for the decorative waveform — placeholder until live audio levels drive it. */
 const WAVE_HEIGHTS = [18, 32, 52, 42, 28, 48, 36, 22, 40, 30, 50, 24, 38];
 
 const styles = StyleSheet.create({

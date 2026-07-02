@@ -6,7 +6,18 @@ import { Icons } from '@/components/Icon';
 import { useEntities } from '@/hooks/useExplorer';
 import { Colors, Radius, Shadow, Type } from '@/theme/tokens';
 
-/** Entity picker — choose an entity to browse its records. */
+/**
+ * Entity picker screen.
+ *
+ * Route: `/explorer/entities` (Expo Router, `app/explorer/entities.tsx`).
+ * Purpose: searchable list of MJ entities; choose one to browse its records.
+ * Data: `useEntities()` -> explorer service `loadEntities()`, which reads the
+ * in-memory MJ `Metadata.Entities` list (name, displayName, description) — no
+ * network round-trip. Client-side substring filter over displayName/name.
+ * Interactions: type to filter; tap a row -> `router.push` to
+ * `/explorer/entity/[name]` passing the entity's `name` as the route param.
+ * Mockup: `plans/mobile-app-react-native/html/entity-records.html` (shared).
+ */
 export default function EntitiesScreen() {
     const entities = useEntities();
     const [search, setSearch] = useState('');

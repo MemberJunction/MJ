@@ -10,8 +10,10 @@ import { useAgents } from '@/hooks/useAgents';
 import { createConversation } from '@/data/services/agents';
 import { Colors, Radius, Shadow, Spacing, Type } from '@/theme/tokens';
 
+/** A starter-prompt card: display `title`, the full `prompt` it inserts, plus icon/color. */
 type Suggestion = { title: string; prompt: string; color: string; icon: React.ReactNode };
 
+/** Static starter prompts shown under "Start a conversation about…"; tapping one fills the composer. */
 const SUGGESTIONS: Suggestion[] = [
     { title: "Today's pipeline", prompt: 'What does my pipeline look like today? Show open deals, owners, and what changed.', color: Colors.brand, icon: <Icons.Sparkle size={16} color={Colors.inverse} strokeWidth={2.2} /> },
     { title: "What's on my plate?", prompt: 'What are my open tasks, approvals, and follow-ups right now?', color: Colors.positive, icon: <Icons.Sliders size={16} color={Colors.inverse} strokeWidth={2.2} /> },
@@ -19,6 +21,23 @@ const SUGGESTIONS: Suggestion[] = [
     { title: 'Research an account', prompt: 'Research an account — recent news, signals, and risks.', color: Colors.agentResearch, icon: <Icons.Database size={16} color={Colors.inverse} strokeWidth={2.2} /> },
 ];
 
+/**
+ * New conversation composer — the "start a chat" launcher.
+ *
+ * Route: `/new-conversation` (Expo Router, `app/new-conversation.tsx`).
+ * Purpose: let the user compose their first message (free-form, a starter
+ *   prompt, or an `@agent`-addressed prompt), create the MJ conversation, then
+ *   hand off to the chat thread which actually runs the send.
+ * Data: `useAgents()` (available agents for the `@mention` rail, MJ `AI Agents`);
+ *   `createConversation(title)` (`@/data/services/agents`) creates the
+ *   `Conversations` record — the title is derived from the first ~6 words of the
+ *   message.
+ * Interactions: type a message and Send; tap a suggestion to prefill; tap an
+ *   agent pill to prepend `@AgentName`; mic -> `/voice-mode`. On create it
+ *   `router.replace`s to `/chat/[id]?autosend=<text>` so the first message gets
+ *   the same working-indicator + reply-polling UX as in-thread sends.
+ * Mockup: `plans/mobile-app-react-native/html/new-conversation.html`.
+ */
 export default function NewConversationScreen() {
     const { agents } = useAgents();
     const [text, setText] = useState('');
