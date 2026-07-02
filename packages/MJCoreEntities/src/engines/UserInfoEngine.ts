@@ -211,6 +211,12 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
         PropertyName: '_UserApplications',
         CacheLocal: true,
         Filter: userFilter,
+        // Short debounce (vs the 1500ms BaseEngine default). The app switcher, the
+        // Home dashboard, and the shell all derive their app lists from this cache
+        // via DataChange$, so a save from the app-config dialog should reach the UI
+        // near-instantly. Writes to this entity are rare and the per-user row set is
+        // tiny, so an occasional extra refresh costs nothing.
+        DebounceTime: 200,
       },
       {
         Type: 'entity',
@@ -1088,6 +1094,15 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
         const index = this._UserApplications.findIndex((ua) => UUIDsEqual(ua.ApplicationID, applicationId));
         if (index >= 0) {
           this._UserApplications.splice(index, 1);
+          // The debounced BaseEngine delete handler stays silent for rows already absent
+          // from the array (it can't distinguish "we spliced it" from "never matched the
+          // config's Filter"), so the code that spliced must notify observers itself —
+          // otherwise DataChange$ consumers (ApplicationManager → app switcher / Home)
+          // never learn the app was removed.
+          const config = this.Configs.find((c) => c.PropertyName === '_UserApplications');
+          if (config) {
+            this.notifyAlreadyAppliedMutation(config, 'delete', userApp);
+          }
         }
         console.log(`UserInfoEngine.UninstallApplication: Uninstalled application ${applicationId}`);
         return true;
