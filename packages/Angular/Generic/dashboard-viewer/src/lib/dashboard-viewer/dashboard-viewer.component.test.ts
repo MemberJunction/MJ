@@ -20,7 +20,18 @@ class MockEventEmitter<T = unknown> {
   }
 }
 
-vi.mock('@angular/core', () => ({
+// This is a pure-logic unit test: it constructs DashboardViewerComponent directly and drives its
+// lifecycle by hand, with no TestBed and no rendering. But the component's import graph transitively
+// pulls in many AOT-compiled Angular classes (base dashboard parts, the breadcrumb, and whole MJ
+// Angular barrels like ng-shared-generic / ng-ui-components). Those compiled files reference Angular
+// decorators and the ivy runtime at class-init time — `static ɵcmp = ɵɵdefineComponent(...)`, and
+// legacy metadata like `static propDecorators = { onClick: [{ type: HostListener, ... }] }`. Since we
+// never instantiate or render any of them, we don't need real behavior — only that every symbol they
+// touch resolves to a harmless value. So the @angular/core mock is *universally tolerant*: explicit
+// stubs for the symbols this test actually uses structurally, and a no-op fallback for everything
+// else (ivy builders return {}, any other decorator/metadata symbol returns a no-op decorator).
+// This keeps new children in the import graph from reopening this file.
+const angularCoreMock: Record<string | symbol, unknown> = {
   Component: () => (target: Function) => target,
   Directive: () => (target: Function) => target,
   Input: () => () => undefined,
@@ -34,6 +45,32 @@ vi.mock('@angular/core', () => ({
   Injector: class {},
   EnvironmentInjector: class {},
   createComponent: vi.fn(),
+};
+// ESM/promise-interop keys must NOT be synthesized, or the importer treats the module as a thenable.
+const interopKeys = new Set(['then', 'catch', 'finally', '__esModule']);
+// A value that works both as a metadata reference (`{ type: HostListener }`) and, when invoked as a
+// decorator factory (`@HostBinding()`), returns a no-op decorator.
+const noopDecoratorFactory = () => () => undefined;
+vi.mock('@angular/core', () => new Proxy(angularCoreMock, {
+  // `has` must answer too: vitest guards named-import access with `prop in module` and throws its own
+  // "export is not defined on the mock" error before `get` is ever consulted.
+  has(target, prop) {
+    if (typeof prop !== 'string' || interopKeys.has(prop)) {
+      return prop in target;
+    }
+    return true;
+  },
+  get(target, prop) {
+    if (prop in target) {
+      return target[prop];
+    }
+    if (typeof prop !== 'string' || interopKeys.has(prop)) {
+      return undefined;
+    }
+    // ivy definition builders (ɵɵdefineComponent/Directive/…) run at class-init and must return an
+    // object; every other synthesized symbol is a decorator/metadata reference.
+    return prop.startsWith('ɵ') ? () => ({}) : noopDecoratorFactory;
+  },
 }));
 
 vi.mock('@memberjunction/ng-base-types', () => ({
