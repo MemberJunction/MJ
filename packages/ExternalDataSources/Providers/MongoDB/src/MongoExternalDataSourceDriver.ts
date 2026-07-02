@@ -146,7 +146,7 @@ export class MongoExternalDataSourceDriver extends BaseExternalDataSourceDriver<
         const db = await this.getConnection(dataSource, contextUser);
         const config = this.parseConnectionConfig<MongoConnectionConfig>(dataSource);
         const coll = db.collection(params.objectName);
-        const filter = MongoFilterTranslator.translate(params.filter, { caseInsensitiveLike: config.caseInsensitiveLike });
+        const filter = MongoFilterTranslator.Translate(params.filter, { caseInsensitiveLike: config.caseInsensitiveLike });
         const options: FindOptions = {};
         if (params.fields?.length) options.projection = this.buildProjection(params.fields);
         if (params.orderBy) options.sort = this.parseSort(params.orderBy);
@@ -165,11 +165,15 @@ export class MongoExternalDataSourceDriver extends BaseExternalDataSourceDriver<
   public async LoadSingle<TRow extends ExternalRow = ExternalRow>(
     dataSource: MJExternalDataSourceEntity,
     objectName: string,
-    primaryKey: ExternalQueryParameter,
+    primaryKeys: readonly ExternalQueryParameter[],
     contextUser?: UserInfo,
   ): Promise<TRow | null> {
     const db = await this.getConnection(dataSource, contextUser);
-    const doc = await db.collection(objectName).findOne({ [primaryKey.name]: primaryKey.value });
+    const filter: Record<string, ExternalQueryParameter["value"]> = {};
+    for (const pk of primaryKeys) {
+      filter[pk.name] = pk.value;
+    }
+    const doc = await db.collection(objectName).findOne(filter);
     return (doc as unknown as TRow) ?? null;
   }
 

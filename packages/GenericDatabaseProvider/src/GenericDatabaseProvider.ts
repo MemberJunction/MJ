@@ -2511,27 +2511,6 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         return merged;
     }
 
-    protected buildExternalPrimaryKeyFilter(entityInfo: EntityInfo, compositeKey: CompositeKey): string {
-        return compositeKey.KeyValuePairs.map(val => {
-            const pk = entityInfo.PrimaryKeys.find(p => p.Name.trim().toLowerCase() === val.FieldName.trim().toLowerCase());
-            if (!pk) throw new Error(`Primary key ${val.FieldName} not found in entity ${entityInfo.Name}`);
-            if (val.Value === null || val.Value === undefined) {
-                return `${pk.Name} IS NULL`;
-            }
-            if (!pk.NeedsQuotes) {
-                // Numeric/boolean PKs interpolate unquoted — validate the value really is
-                // numeric/boolean so a string like "1 OR 1=1" can't be injected into the
-                // remote WHERE clause (string PKs go through the quote-escaped branch below).
-                const v = val.Value;
-                if (typeof v !== 'number' && typeof v !== 'boolean' && !/^-?\d+(\.\d+)?$/.test(String(v))) {
-                    throw new Error(`Invalid primary key value for '${pk.Name}' on external entity '${entityInfo.Name}': expected a numeric or boolean value.`);
-                }
-                return `${pk.Name}=${String(v)}`;
-            }
-            return `${pk.Name}='${String(val.Value).replace(/'/g, "''")}'`;
-        }).join(' AND ');
-    }
-
     /**
      * Checks the server's LocalCacheManager for cached data matching the client's request.
      * Returns the resolution if found (either 'current' or server-cached data to serve),
@@ -3624,10 +3603,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
         // ── External data source dispatch ──
         // Entities backed by an external data source have no MJ view/sproc, so proxy the
-        // single-record load through the external router as a RunView with a primary-key
-        // filter and MaxRows=1. No-op for every MJ-DB entity (ExternalDataSourceID null).
-        // Relationship loading is intentionally not supported for external entities (they
-        // are read-only leaf records); entityRelationshipsToLoad is ignored here.
+        // single-record load through the external router's LoadExternalRecord, which builds a
+        // quoted, parameter-bound primary-key predicate at the driver boundary (composite-key
+        // aware; mixed-case / reserved-word PK columns work on case-sensitive dialects). No-op
+        // for every MJ-DB entity (ExternalDataSourceID null). Relationship loading is intentionally
+        // not supported for external entities (they are read-only leaf records);
+        // entityRelationshipsToLoad is ignored here.
         if (entityInfo.ExternalDataSourceID) {
             // Refuse rather than silently bypass Row-Level Security (a remote system can't enforce it).
             this.assertExternalReadAllowedUnderRLS(entityInfo, user);
@@ -3635,10 +3616,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             if (!externalRouter) {
                 throw new Error(`Entity '${entityInfo.Name}' is backed by an external data source but no ExternalDataSourceReadRouter is registered. Ensure @memberjunction/external-data-sources is loaded.`);
             }
-            const externalFilter = this.buildExternalPrimaryKeyFilter(entityInfo, compositeKey);
-            const externalResult = await externalRouter.RunViewExternal<Record<string, unknown>>(
+            const externalResult = await externalRouter.LoadExternalRecord<Record<string, unknown>>(
                 entityInfo,
-                { EntityName: entityInfo.Name, ExtraFilter: externalFilter, MaxRows: 1 },
+                compositeKey,
                 user,
                 this,
             );

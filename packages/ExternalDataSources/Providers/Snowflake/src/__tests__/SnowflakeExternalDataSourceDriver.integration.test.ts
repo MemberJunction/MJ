@@ -110,7 +110,7 @@ describe.runIf(RUN && sdkAvailable && hasCreds)('SnowflakeExternalDataSourceDriv
   });
 
   it('LoadSingle fetches one record by key', async () => {
-    const row = await driver.LoadSingle(dataSource, 'REGION', { name: 'R_REGIONKEY', value: 0 });
+    const row = await driver.LoadSingle(dataSource, 'REGION', [{ name: 'R_REGIONKEY', value: 0 }]);
     expect(row).not.toBeNull();
     expect(row?.R_NAME).toBe('AFRICA');
   });

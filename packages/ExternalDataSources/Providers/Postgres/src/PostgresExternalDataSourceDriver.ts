@@ -138,13 +138,13 @@ export class PostgresExternalDataSourceDriver extends BaseSqlExternalDataSourceD
   public async LoadSingle<TRow extends ExternalRow = ExternalRow>(
     dataSource: MJExternalDataSourceEntity,
     objectName: string,
-    primaryKey: ExternalQueryParameter,
+    primaryKeys: readonly ExternalQueryParameter[],
     contextUser?: UserInfo,
   ): Promise<TRow | null> {
     const pool = await this.getConnection(dataSource, contextUser);
     const target = this.qualifyObject(dataSource, objectName);
-    const sql = `SELECT * FROM ${target} WHERE ${this.quoteIdent(primaryKey.name)} = $1 LIMIT 1`;
-    const res = await pool.query(sql, [primaryKey.value]);
+    const { clause, values } = this.buildPrimaryKeyWhere(primaryKeys, (i) => `$${i + 1}`);
+    const res = await pool.query(`SELECT * FROM ${target} WHERE ${clause} LIMIT 1`, values);
     return (res.rows[0] as TRow) ?? null;
   }
 

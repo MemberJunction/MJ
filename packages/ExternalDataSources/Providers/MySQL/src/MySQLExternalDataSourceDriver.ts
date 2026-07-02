@@ -146,12 +146,13 @@ export class MySQLExternalDataSourceDriver extends BaseSqlExternalDataSourceDriv
   public async LoadSingle<TRow extends ExternalRow = ExternalRow>(
     dataSource: MJExternalDataSourceEntity,
     objectName: string,
-    primaryKey: ExternalQueryParameter,
+    primaryKeys: readonly ExternalQueryParameter[],
     contextUser?: UserInfo,
   ): Promise<TRow | null> {
     const pool = await this.getConnection(dataSource, contextUser);
     const target = this.qualifyObject(dataSource, objectName);
-    const [rows] = await pool.query(`SELECT * FROM ${target} WHERE ${this.quoteIdent(primaryKey.name)} = ? LIMIT 1`, [primaryKey.value]);
+    const { clause, values } = this.buildPrimaryKeyWhere(primaryKeys, () => `?`);
+    const [rows] = await pool.query(`SELECT * FROM ${target} WHERE ${clause} LIMIT 1`, values);
     const list = rows as TRow[];
     return list[0] ?? null;
   }

@@ -3,6 +3,7 @@ import { UserInfo } from "./securityInfo";
 import { IMetadataProvider, RunViewResult, RunQueryResult } from "./interfaces";
 import { RunViewParams } from "../views/runView";
 import { RunQueryParams } from "./runQuery";
+import { CompositeKey } from "./compositeKey";
 import { ExternalSchemaDescriptor } from "./externalDataSourceTypes";
 
 /**
@@ -26,6 +27,21 @@ export abstract class ExternalDataSourceReadRouter {
   public abstract RunViewExternal<T = unknown>(
     entity: EntityInfo,
     params: RunViewParams,
+    contextUser?: UserInfo,
+    provider?: IMetadataProvider,
+  ): Promise<RunViewResult<T>>;
+
+  /**
+   * Load a single record by primary key for an entity whose `EntityInfo.ExternalDataSourceID`
+   * is set. Composite-key aware: every field of {@link CompositeKey} is matched with a quoted,
+   * parameter-bound predicate at the driver boundary (so mixed-case / reserved-word PK columns
+   * work on case-sensitive external dialects). Returns a {@link RunViewResult} whose `Results`
+   * holds the single matched row (or is empty when not found) — mirroring
+   * {@link RunViewExternal} so the provider's Load path stays uniform.
+   */
+  public abstract LoadExternalRecord<T = unknown>(
+    entity: EntityInfo,
+    compositeKey: CompositeKey,
     contextUser?: UserInfo,
     provider?: IMetadataProvider,
   ): Promise<RunViewResult<T>>;

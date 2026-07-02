@@ -194,12 +194,13 @@ export class SnowflakeExternalDataSourceDriver extends BaseSqlExternalDataSource
   public async LoadSingle<TRow extends ExternalRow = ExternalRow>(
     dataSource: MJExternalDataSourceEntity,
     objectName: string,
-    primaryKey: ExternalQueryParameter,
+    primaryKeys: readonly ExternalQueryParameter[],
     contextUser?: UserInfo,
   ): Promise<TRow | null> {
     const pool = await this.getConnection(dataSource, contextUser);
     const target = this.qualifyObject(dataSource, objectName);
-    const rows = await this.execute<TRow>(pool, `SELECT * FROM ${target} WHERE ${this.quoteIdent(primaryKey.name)} = ? LIMIT 1`, [primaryKey.value]);
+    const { clause, values } = this.buildPrimaryKeyWhere(primaryKeys, () => `?`);
+    const rows = await this.execute<TRow>(pool, `SELECT * FROM ${target} WHERE ${clause} LIMIT 1`, values);
     return rows[0] ?? null;
   }
 

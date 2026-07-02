@@ -111,7 +111,7 @@ describe.runIf(RUN)('MongoExternalDataSourceDriver (integration)', () => {
   });
 
   it('LoadSingle fetches one document by _id', async () => {
-    const row = await driver.LoadSingle(dataSource, 'customers', { name: '_id', value: 2 });
+    const row = await driver.LoadSingle(dataSource, 'customers', [{ name: '_id', value: 2 }]);
     expect(row?.name).toBe('Globex');
   });
 

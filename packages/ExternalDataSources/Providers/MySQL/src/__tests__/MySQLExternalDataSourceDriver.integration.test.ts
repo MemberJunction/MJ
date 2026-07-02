@@ -113,7 +113,7 @@ describe.runIf(RUN)('MySQLExternalDataSourceDriver (integration)', () => {
   });
 
   it('LoadSingle fetches one record by primary key', async () => {
-    const row = await driver.LoadSingle(dataSource, 'customers', { name: 'id', value: 2 });
+    const row = await driver.LoadSingle(dataSource, 'customers', [{ name: 'id', value: 2 }]);
     expect(row).not.toBeNull();
     expect(row?.name).toBe('Globex');
   });

@@ -142,15 +142,18 @@ export class OracleExternalDataSourceDriver extends BaseSqlExternalDataSourceDri
   public async LoadSingle<TRow extends ExternalRow = ExternalRow>(
     dataSource: MJExternalDataSourceEntity,
     objectName: string,
-    primaryKey: ExternalQueryParameter,
+    primaryKeys: readonly ExternalQueryParameter[],
     contextUser?: UserInfo,
   ): Promise<TRow | null> {
     const pool = await this.getConnection(dataSource, contextUser);
     const target = this.qualifyObject(dataSource, objectName);
+    const { clause, values } = this.buildPrimaryKeyWhere(primaryKeys, (i) => `:pk${i}`);
+    const binds: Record<string, ExternalQueryParameter["value"]> = {};
+    values.forEach((v, i) => { binds[`pk${i}`] = v; });
     const { rows } = await this.query<TRow>(
       pool,
-      `SELECT * FROM ${target} WHERE ${this.quoteIdent(primaryKey.name)} = :pk FETCH FIRST 1 ROWS ONLY`,
-      { pk: primaryKey.value },
+      `SELECT * FROM ${target} WHERE ${clause} FETCH FIRST 1 ROWS ONLY`,
+      binds,
     );
     return rows[0] ?? null;
   }

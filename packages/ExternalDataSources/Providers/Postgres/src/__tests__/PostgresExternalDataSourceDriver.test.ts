@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { MJExternalDataSourceEntity } from '@memberjunction/core-entities';
-import type { ExternalViewParams } from '@memberjunction/external-data-sources';
+import type { ExternalQueryParameter, ExternalViewParams } from '@memberjunction/external-data-sources';
 import { PostgresExternalDataSourceDriver } from '../PostgresExternalDataSourceDriver';
 
 // Unit-test the pure SQL-building helpers (identifier quoting, qualification,
@@ -17,6 +17,9 @@ class TestablePostgresDriver extends PostgresExternalDataSourceDriver {
   }
   public groupFks(rows: Parameters<TestablePostgresDriver['groupForeignKeys']>[0]) {
     return this.groupForeignKeys(rows);
+  }
+  public pkWhere(keys: readonly ExternalQueryParameter[], placeholder: (i: number) => string) {
+    return this.buildPrimaryKeyWhere(keys, placeholder);
   }
 }
 
@@ -74,6 +77,35 @@ describe('PostgresExternalDataSourceDriver — SQL building', () => {
     it('coerces paging values to numbers (no injection via maxRows/offset)', () => {
       const sql = d.sel('"s"."t"', { objectName: 't', maxRows: Number('5; DROP'), offset: Number('1; DROP') });
       expect(sql).not.toContain('DROP');
+    });
+  });
+
+  describe('buildPrimaryKeyWhere (composite-key aware, quoted, parameter-bound)', () => {
+    it('quotes a single PK identifier and binds its value to a placeholder', () => {
+      const { clause, values } = d.pkWhere([{ name: 'id', value: 42 }], (i) => `$${i + 1}`);
+      expect(clause).toBe('"id" = $1');
+      expect(values).toEqual([42]);
+    });
+
+    it('quotes a mixed-case PK identifier — the case-sensitivity fix for ORM-created schemas', () => {
+      // An unquoted mixed-case identifier would fold to lowercase on PostgreSQL and miss the column.
+      const { clause } = d.pkWhere([{ name: 'CustomerId', value: 7 }], (i) => `$${i + 1}`);
+      expect(clause).toBe('"CustomerId" = $1');
+    });
+
+    it('joins a composite key with AND and binds values in order', () => {
+      const { clause, values } = d.pkWhere(
+        [{ name: 'OrderId', value: 10 }, { name: 'Region', value: 'EU' }],
+        (i) => `$${i + 1}`,
+      );
+      expect(clause).toBe('"OrderId" = $1 AND "Region" = $2');
+      expect(values).toEqual([10, 'EU']);
+    });
+
+    it('never interpolates the value into the clause (injection safety)', () => {
+      const { clause, values } = d.pkWhere([{ name: 'id', value: "1 OR 1=1" }], (i) => `$${i + 1}`);
+      expect(clause).toBe('"id" = $1');
+      expect(values).toEqual(["1 OR 1=1"]);
     });
   });
 

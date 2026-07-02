@@ -1,7 +1,7 @@
 import { ExternalObjectType, ExternalSchemaRelationship } from "@memberjunction/core";
 import { MJExternalDataSourceEntity } from "@memberjunction/core-entities";
 import { BaseExternalDataSourceDriver } from "./BaseExternalDataSourceDriver";
-import { ExternalFkRow, ExternalViewParams } from "./types";
+import { ExternalFkRow, ExternalViewParams, ExternalQueryParameter } from "./types";
 import { assertReadOnlyNativeQuery, assertReadOnlyClause, type SqlDialectKey } from "./sqlReadOnlyScreen";
 
 /**
@@ -54,6 +54,26 @@ export abstract class BaseSqlExternalDataSourceDriver<TConnection = unknown> ext
    */
   protected normalizeForReadOnlyParse(sql: string): string {
     return sql;
+  }
+
+  /**
+   * Build a quoted, parameter-bound `WHERE` clause for a (possibly composite) primary key. Each key
+   * identifier is quoted via {@link quoteIdent} (so mixed-case / reserved-word PK columns work on
+   * case-sensitive dialects), and each value is returned separately for binding — never interpolated.
+   * `placeholder(i)` supplies the dialect's bind token for the i-th value (`$1` / `?` / `:1` / `@pk0`).
+   * Returns the clause and the values in bind order.
+   */
+  protected buildPrimaryKeyWhere(
+    primaryKeys: readonly ExternalQueryParameter[],
+    placeholder: (index: number) => string,
+  ): { clause: string; values: Array<ExternalQueryParameter["value"]> } {
+    const parts: string[] = [];
+    const values: Array<ExternalQueryParameter["value"]> = [];
+    primaryKeys.forEach((pk, i) => {
+      parts.push(`${this.quoteIdent(pk.name)} = ${placeholder(i)}`);
+      values.push(pk.value);
+    });
+    return { clause: parts.join(" AND "), values };
   }
 
   /**

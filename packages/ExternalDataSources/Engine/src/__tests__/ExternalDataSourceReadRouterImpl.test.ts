@@ -1,16 +1,22 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { EntityInfo, RunViewParams, RunQueryParams } from '@memberjunction/core';
+import { CompositeKey, EntityInfo, KeyValuePair, RunViewParams, RunQueryParams } from '@memberjunction/core';
 import { ExternalDataSourceReadRouterImpl } from '../ExternalDataSourceReadRouterImpl';
 import { ExternalDataSourceRouter } from '../ExternalDataSourceRouter';
 import { BaseExternalDataSourceDriver } from '../BaseExternalDataSourceDriver';
 
-/** Build a fake driver whose RunView/RunNativeQuery are spies returning canned results. */
+/** Build a fake driver whose RunView/RunNativeQuery/LoadSingle are spies returning canned results. */
 function makeFakeDriver(overrides: Partial<BaseExternalDataSourceDriver> = {}) {
   return {
     RunView: vi.fn(),
     RunNativeQuery: vi.fn(),
+    LoadSingle: vi.fn(),
     ...overrides,
   } as unknown as BaseExternalDataSourceDriver;
+}
+
+/** Build a CompositeKey from field/value pairs. */
+function compositeKey(pairs: Array<[string, unknown]>): CompositeKey {
+  return new CompositeKey(pairs.map(([f, v]) => new KeyValuePair(f, v)));
 }
 
 function mockResolve(driver: BaseExternalDataSourceDriver) {
@@ -168,6 +174,60 @@ describe('ExternalDataSourceReadRouterImpl', () => {
       const res = await impl.RunViewExternal(entity, { EntityName: 'X' });
       expect(res.Success).toBe(false);
       expect(res.ErrorMessage).toBe('boom');
+      expect(res.Results).toEqual([]);
+    });
+  });
+
+  describe('LoadExternalRecord', () => {
+    it('passes the full composite key to the driver and wraps the row in a RunViewResult', async () => {
+      const driver = makeFakeDriver();
+      (driver.LoadSingle as ReturnType<typeof vi.fn>).mockResolvedValue({ OrderId: 10, Region: 'EU', total: 5 });
+      mockResolve(driver);
+
+      const entity = new EntityInfo({ Name: 'Orders', ExternalDataSourceID: 'ds-1', ExternalObjectName: 'orders_fact', BaseTable: 'orders' });
+      const res = await impl.LoadExternalRecord(entity, compositeKey([['OrderId', 10], ['Region', 'EU']]));
+
+      expect(driver.LoadSingle).toHaveBeenCalledTimes(1);
+      const [, objectName, primaryKeys] = (driver.LoadSingle as ReturnType<typeof vi.fn>).mock.calls[0];
+      expect(objectName).toBe('orders_fact'); // ExternalObjectName preferred over BaseTable
+      expect(primaryKeys).toEqual([{ name: 'OrderId', value: 10 }, { name: 'Region', value: 'EU' }]);
+
+      expect(res.Success).toBe(true);
+      expect(res.Results).toEqual([{ OrderId: 10, Region: 'EU', total: 5 }]);
+      expect(res.RowCount).toBe(1);
+    });
+
+    it('returns an empty result set (success, no throw) when the record is not found', async () => {
+      const driver = makeFakeDriver();
+      (driver.LoadSingle as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+      mockResolve(driver);
+
+      const entity = new EntityInfo({ Name: 'Orders', ExternalDataSourceID: 'ds-1', BaseTable: 'orders' });
+      const res = await impl.LoadExternalRecord(entity, compositeKey([['ID', 999]]));
+      expect(res.Success).toBe(true);
+      expect(res.Results).toEqual([]);
+      expect(res.RowCount).toBe(0);
+    });
+
+    it('fails clearly (no driver call) when no primary key values are supplied', async () => {
+      const driver = makeFakeDriver();
+      mockResolve(driver);
+      const entity = new EntityInfo({ Name: 'Orders', ExternalDataSourceID: 'ds-1', BaseTable: 'orders' });
+      const res = await impl.LoadExternalRecord(entity, compositeKey([]));
+      expect(res.Success).toBe(false);
+      expect(res.ErrorMessage).toMatch(/no primary key/i);
+      expect(driver.LoadSingle).not.toHaveBeenCalled();
+    });
+
+    it('returns a failed RunViewResult (not a throw) when the driver throws', async () => {
+      const driver = makeFakeDriver();
+      (driver.LoadSingle as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('connection refused'));
+      mockResolve(driver);
+
+      const entity = new EntityInfo({ Name: 'Orders', ExternalDataSourceID: 'ds-1', BaseTable: 'orders' });
+      const res = await impl.LoadExternalRecord(entity, compositeKey([['ID', 1]]));
+      expect(res.Success).toBe(false);
+      expect(res.ErrorMessage).toBe('connection refused');
       expect(res.Results).toEqual([]);
     });
   });

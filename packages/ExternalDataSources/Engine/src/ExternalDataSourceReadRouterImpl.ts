@@ -1,5 +1,6 @@
 import { RegisterClass } from "@memberjunction/global";
 import {
+  CompositeKey,
   EntityInfo,
   ExternalDataSourceReadRouter,
   ExternalSchemaDescriptor,
@@ -12,7 +13,7 @@ import {
 } from "@memberjunction/core";
 import { MJExternalDataSourceEntity } from "@memberjunction/core-entities";
 import { ExternalDataSourceRouter } from "./ExternalDataSourceRouter";
-import { ExternalRow, ExternalViewParams } from "./types";
+import { ExternalQueryParameter, ExternalRow, ExternalViewParams } from "./types";
 
 /** Fallback cache TTL (seconds) when a data source has no DefaultCacheTTLSeconds configured. Matches the plan's default. */
 const DEFAULT_EXTERNAL_CACHE_TTL_SECONDS = 300;
@@ -101,6 +102,45 @@ export class ExternalDataSourceReadRouterImpl extends ExternalDataSourceReadRout
         RowCount: res.rows.length,
         TotalRowCount: res.totalRowCount ?? res.rows.length,
         ExecutionTime: res.executionTimeMs,
+        ErrorMessage: '',
+      };
+    } catch (e) {
+      return this.failView<T>(this.errorText(e), Date.now() - start);
+    }
+  }
+
+  public async LoadExternalRecord<T = unknown>(
+    entity: EntityInfo,
+    compositeKey: CompositeKey,
+    contextUser?: UserInfo,
+    provider?: IMetadataProvider,
+  ): Promise<RunViewResult<T>> {
+    const start = Date.now();
+    try {
+      const { driver, dataSource } = await ExternalDataSourceRouter.Instance.Resolve(
+        entity.ExternalDataSourceID,
+        contextUser,
+        provider,
+      );
+      const primaryKeys: ExternalQueryParameter[] = compositeKey.KeyValuePairs.map((kv) => ({
+        name: kv.FieldName,
+        value: kv.Value,
+      }));
+      if (primaryKeys.length === 0) {
+        return this.failView<T>(
+          `Cannot load external record for '${entity.Name}': no primary key values were supplied.`,
+          Date.now() - start,
+        );
+      }
+      const objectName = entity.ExternalObjectName || entity.BaseTable || entity.Name;
+      const row = await driver.LoadSingle<ExternalRow>(dataSource, objectName, primaryKeys, contextUser);
+      return {
+        Success: true,
+        // dynamic remote row -> caller's generic row type (boundary marshalling)
+        Results: (row ? [row] : []) as unknown as T[],
+        RowCount: row ? 1 : 0,
+        TotalRowCount: row ? 1 : 0,
+        ExecutionTime: Date.now() - start,
         ErrorMessage: '',
       };
     } catch (e) {

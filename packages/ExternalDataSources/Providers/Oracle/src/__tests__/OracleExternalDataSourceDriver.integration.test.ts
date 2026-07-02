@@ -115,7 +115,7 @@ describe.runIf(RUN)('OracleExternalDataSourceDriver (integration)', () => {
   });
 
   it('LoadSingle fetches one record by primary key', async () => {
-    const row = await driver.LoadSingle(dataSource, 'CUSTOMERS', { name: 'ID', value: 2 });
+    const row = await driver.LoadSingle(dataSource, 'CUSTOMERS', [{ name: 'ID', value: 2 }]);
     expect(row).not.toBeNull();
     expect(row?.NAME).toBe('Globex');
   });

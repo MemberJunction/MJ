@@ -54,11 +54,15 @@ export abstract class BaseExternalDataSourceDriver<TConnection = unknown> {
     contextUser?: UserInfo,
   ): Promise<ExternalViewResult<TRow>>;
 
-  /** Load a single remote record by its primary key. Returns null when not found. */
+  /**
+   * Load a single remote record by its primary key. Returns null when not found. Accepts the full
+   * (possibly composite) primary key as an ordered list; each driver quotes the key identifiers for
+   * its dialect and binds the values (never string-interpolates them).
+   */
   public abstract LoadSingle<TRow extends ExternalRow = ExternalRow>(
     dataSource: MJExternalDataSourceEntity,
     objectName: string,
-    primaryKey: ExternalQueryParameter,
+    primaryKeys: readonly ExternalQueryParameter[],
     contextUser?: UserInfo,
   ): Promise<TRow | null>;
 

@@ -148,14 +148,15 @@ export class SQLServerExternalDataSourceDriver extends BaseSqlExternalDataSource
   public async LoadSingle<TRow extends ExternalRow = ExternalRow>(
     dataSource: MJExternalDataSourceEntity,
     objectName: string,
-    primaryKey: ExternalQueryParameter,
+    primaryKeys: readonly ExternalQueryParameter[],
     contextUser?: UserInfo,
   ): Promise<TRow | null> {
     const pool = await this.getConnection(dataSource, contextUser);
     const target = this.qualifyObject(dataSource, objectName);
-    const res = await pool.request()
-      .input('pk', primaryKey.value)
-      .query(`SELECT TOP (1) * FROM ${target} WHERE ${this.quoteIdent(primaryKey.name)} = @pk`);
+    const { clause, values } = this.buildPrimaryKeyWhere(primaryKeys, (i) => `@pk${i}`);
+    const request = pool.request();
+    values.forEach((v, i) => request.input(`pk${i}`, v));
+    const res = await request.query(`SELECT TOP (1) * FROM ${target} WHERE ${clause}`);
     return (res.recordset[0] as unknown as TRow) ?? null;
   }
 
