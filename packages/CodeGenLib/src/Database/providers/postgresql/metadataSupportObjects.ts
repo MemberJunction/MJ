@@ -448,7 +448,7 @@ BEGIN
   -- The un-taken IF branch is not planned by PL/pgSQL, so the missing-column reference never errors.
   -- NOTE (parity): the ENTITY-level prune (vwEntitiesWithMissingBaseTables + the ExternalDataSourceID
   -- guard in manage-metadata) is likewise inert on PG until that same migration also recreates
-  -- vwEntitiesWithMissingBaseTables as SELECT e.* (mirroring SQL Server migration 1726).
+  -- vwEntitiesWithMissingBaseTables as SELECT e.* (mirroring SQL Server migration V202607021201).
   DROP TABLE IF EXISTS _del_ext_entities;
   CREATE TEMP TABLE _del_ext_entities (entity_id UUID);
   IF EXISTS (
