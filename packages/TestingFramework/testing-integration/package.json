@@ -29,6 +29,9 @@
     "dotenv": "17.2.4",
     "mssql": "^12.2.0"
   },
+  "optionalDependencies": {
+    "@memberjunction/postgresql-dataprovider": "5.42.0"
+  },
   "devDependencies": {
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"

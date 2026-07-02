@@ -31,6 +31,10 @@ export {
     bootstrapIntegrationServer,
     bootstrapIntegrationClient,
     createRunQueryFixtures,
-    teardownRunQueryFixtures
+    teardownRunQueryFixtures,
+    // RLS two-user discovery (the rls-isolation bundle's fixture) — DISCOVERED, not minted.
+    discoverRlsFixture,
+    // Tier gate predicate — the ONE source of truth honored by both the scripts and the driver.
+    IsTierEnabled
 } from '@memberjunction/testing-integration';
-export type { DbConfig, ClientConfig, TestOutcome, IntegrationCheckContext } from '@memberjunction/testing-integration';
+export type { DbConfig, ClientConfig, TestOutcome, IntegrationCheckContext, RlsFixture } from '@memberjunction/testing-integration';

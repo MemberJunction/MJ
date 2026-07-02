@@ -5,6 +5,7 @@
  * InMemoryLocalStorageProvider etc. are imported from @memberjunction/core where used).
  */
 export * from './config';
+export * from './tiers';
 export * from './instrumented-cache';
 export * from './test-runner';
 export * from './bootstrap';
@@ -19,6 +20,9 @@ export * from './IntegrationTestDriver';
 export * from './checks/server-cache.checks';
 export * from './checks/client-cache.checks';
 export * from './checks/runquery-cache.checks';
+export * from './checks/rls-isolation.checks';
+export * from './checks/dataset-cache.checks';
+export * from './checks/aggregates-cache.checks';
 
 // Side-effect only: the permanent Phase-0 smoke check (no exports of its own).
 import './checks/self-test.check';

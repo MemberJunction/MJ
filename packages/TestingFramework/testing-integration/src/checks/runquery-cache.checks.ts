@@ -303,6 +303,25 @@ export const RunQueryCacheChecks: NamedCheck[] = [
             Assert(a.Success && b.Success, `runs failed: ${a.ErrorMessage || b.ErrorMessage}`);
             AssertEqual(a.Results.length, b.Results.length, 'identical parameters must produce identical results regardless of key order');
         }
+    },
+    {
+        Id: 'runquery-cache.Q10',
+        Name: 'Q10: a TTL slot serves byte-identical row DATA on the hit (not just a matching row count)',
+        Fn: async (ctx): Promise<void> => {
+            // Q2 proves the hit's row COUNT matches and CacheHit/ExecutionTime; nothing yet
+            // proves the served row DATA is faithful (a projection/serialization regression
+            // could match counts while corrupting values). Own Parameters tag → own slot.
+            const { TtlQuery } = requireFixtures(ctx);
+            const rq = new RunQuery();
+            const params = { QueryID: TtlQuery.ID, CacheLocal: true, Parameters: { scope: 'q10' } };
+            const miss = await rq.RunQuery({ ...params }, ctx.User);
+            Assert(miss.Success, `miss failed: ${miss.ErrorMessage}`);
+            const hit = await rq.RunQuery({ ...params }, ctx.User);
+            Assert(hit.Success, `hit failed: ${hit.ErrorMessage}`);
+            AssertEqual(hit.CacheHit, true, 'second call must be a TTL cache hit');
+            AssertEqual(JSON.stringify(hit.Results), JSON.stringify(miss.Results),
+                'the cached slot must serve byte-identical row data to the miss');
+        }
     }
 ];
 

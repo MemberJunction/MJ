@@ -10,6 +10,26 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { cosmiconfig } from 'cosmiconfig';
 
+/** The database backend the integration run targets. Mirrors the repo-wide DB_PLATFORM convention. */
+export type IntegrationDbPlatform = 'sqlserver' | 'postgresql';
+
+/**
+ * Resolve the target backend from DB_PLATFORM. Mirrors the canonical
+ * resolveDbPlatformFromEnv (@memberjunction/generic-database-provider) but kept inline
+ * so the lightweight config layer doesn't pull that package's module-load cost in just
+ * to read one env var. Strict: only 'sqlserver' / 'postgresql' (case-insensitive),
+ * default 'sqlserver', throws on anything else (legacy aliases are not accepted).
+ */
+function resolveIntegrationDbPlatform(): IntegrationDbPlatform {
+    const raw = process.env.DB_PLATFORM;
+    if (raw === undefined || raw.trim() === '') return 'sqlserver';
+    const normalized = raw.trim().toLowerCase();
+    if (normalized === 'sqlserver' || normalized === 'postgresql') return normalized;
+    throw new Error(
+        `Invalid DB_PLATFORM value '${raw}'. Must be 'sqlserver' or 'postgresql' (case-insensitive).`
+    );
+}
+
 /**
  * Minimal shape of the `mj.config.cjs` we read. cosmiconfig returns an untyped
  * config; we narrow it to just the keys this library consumes.
@@ -41,6 +61,8 @@ export interface DbConfig {
     Password: string;
     Database: string;
     Schema: string;
+    /** Which backend to bootstrap. Resolved from DB_PLATFORM (default 'sqlserver'). */
+    Platform: IntegrationDbPlatform;
 }
 
 /**
@@ -62,13 +84,17 @@ export async function LoadDbConfig(): Promise<DbConfig> {
             '(DB_HOST, DB_USERNAME, DB_PASSWORD, DB_DATABASE). Run from the repo root.'
         );
     }
+    // DB_PLATFORM ∈ {sqlserver, postgresql}; throws on invalid values.
+    const platform: IntegrationDbPlatform = resolveIntegrationDbPlatform();
+    const defaultPort = platform === 'postgresql' ? 5432 : 1433;
     return {
         Host: host,
-        Port: Number(dbSettings.port ?? process.env.DB_PORT ?? 1433),
+        Port: Number(dbSettings.port ?? process.env.DB_PORT ?? defaultPort),
         User: user,
         Password: password,
         Database: database,
-        Schema: config.mjCoreSchema || dbSettings.mjCoreSchema || '__mj'
+        Schema: config.mjCoreSchema || dbSettings.mjCoreSchema || '__mj',
+        Platform: platform
     };
 }
 

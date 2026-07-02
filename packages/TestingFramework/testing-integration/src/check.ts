@@ -28,6 +28,27 @@ export interface RunQueryFixtures {
     ValidatedQuery: MJQueryEntity;
 }
 
+/**
+ * Two users with DIFFERENT effective Row-Level-Security predicates for the same
+ * entity, DISCOVERED (never minted) from the provider's RLS filters + the user
+ * cache by the `rls-isolation` bundle. Discovery has the safest possible teardown:
+ * nothing to delete. When the deployment has only RLS-exempt admins (no two users
+ * with distinct non-empty clauses), `Usable` is false and the RLS checks degrade
+ * gracefully (skip-as-pass with a logged note) rather than failing.
+ */
+export interface RlsFixture {
+    /** First discovered non-exempt user. */
+    UserA: UserInfo;
+    /** Second discovered non-exempt user, with a DIFFERENT effective RLS clause than UserA. */
+    UserB: UserInfo;
+    /** The RLS-protected entity both users can Read but with different effective predicates. */
+    EntityName: string;
+    /** True iff discovery found two distinct users with DIFFERENT non-empty Read RLS clauses. */
+    Usable: boolean;
+    /** Why the fixture is unusable (for the skip note), when Usable is false. */
+    Reason?: string;
+}
+
 /** The bootstrapped, run-scoped real provider stack handed to every check. */
 export interface IntegrationCheckContext {
     /** Resolved context user threaded from the engine (server) or bootstrap. */
@@ -42,6 +63,15 @@ export interface IntegrationCheckContext {
     Schema?: string;
     /** Bundle-specific setup state populated by the driver/script before the bundle runs. */
     Fixtures?: RunQueryFixtures;
+    /** Discovered two-user RLS fixture for the `rls-isolation` bundle (suite-scoped). */
+    RlsFixture?: RlsFixture;
+    /**
+     * The opaque per-selector `config` bag from `Test.Configuration.checks[].config`,
+     * set by the driver/script before each bundle runs. Bundles read their own keys
+     * from it (e.g. `dataset-cache` reads `datasetName`, `aggregates-cache` reads
+     * `entityName`) with sensible defaults when absent.
+     */
+    Config?: Record<string, unknown>;
 }
 
 /**

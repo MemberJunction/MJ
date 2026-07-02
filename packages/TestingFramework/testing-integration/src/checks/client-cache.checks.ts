@@ -13,6 +13,7 @@
  * original `if (process.env.RUN_MUTATION_TESTS === '1')` gate.
  */
 import { RunView, RunQuery, BaseEntity, Metadata } from '@memberjunction/core';
+import type { AggregateExpression } from '@memberjunction/core';
 import type { MJUserSettingEntity } from '@memberjunction/core-entities';
 import { Assert, AssertEqual, AssertRowShape, RowKeys } from '../test-runner';
 import { UniqueFilter } from '../instrumented-cache';
@@ -315,6 +316,30 @@ export const ClientCacheChecks: NamedCheck[] = [
             const second = await rv.RunView({ ...params });
             Assert(second.Success, `second failed: ${second.ErrorMessage}`);
             AssertEqual(second.Results.length, first.Results.length, 'revalidated results must match');
+        }
+    },
+    {
+        Id: 'client-cache.C13',
+        Name: 'C13: AggregateResults are returned in the caller\'s requested order over the GraphQL/client transport',
+        Fn: async (): Promise<void> => {
+            // Client-transport aggregate coverage: AggregateResults must be returned in the
+            // caller's requested order (interfaces.ts: "same order as input Aggregates array"),
+            // including when a semantically-equivalent view with a different Aggregates[] order
+            // was cached first. Warm with [A,B], read with [B,A], assert the second caller's order.
+            const rv = new RunView();
+            const A: AggregateExpression = { expression: 'COUNT(*)', alias: 'Cnt' };
+            const B: AggregateExpression = { expression: 'MAX(__mj_UpdatedAt)', alias: 'MaxUpd' };
+            const filter = UniqueFilter('Name', 'c13');
+
+            const warm = await rv.RunView({ EntityName: SMALL_ENTITY, ExtraFilter: filter, Aggregates: [A, B], ResultType: 'simple', CacheLocal: true });
+            Assert(warm.Success, `warm failed: ${warm.ErrorMessage}`);
+            await Sleep(5200); // outlive linger so the reversed read truly revalidates the slot
+
+            const reversed = await rv.RunView({ EntityName: SMALL_ENTITY, ExtraFilter: filter, Aggregates: [B, A], ResultType: 'simple', CacheLocal: true });
+            Assert(reversed.Success, `reversed failed: ${reversed.ErrorMessage}`);
+            Assert(reversed.AggregateResults != null && reversed.AggregateResults.length === 2, 'reversed run must return two AggregateResults');
+            AssertEqual(reversed.AggregateResults![0].alias, B.alias!, 'ORDER CONTRACT: AggregateResults[0] must be the caller\'s FIRST requested aggregate');
+            AssertEqual(reversed.AggregateResults![1].alias, A.alias!, 'ORDER CONTRACT: AggregateResults[1] must be the caller\'s SECOND requested aggregate');
         }
     }
 ];

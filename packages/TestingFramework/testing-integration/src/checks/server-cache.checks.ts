@@ -14,8 +14,10 @@
  * registered in numeric order; order is load-bearing only for the S1→S2→S3 shared
  * 's1' slot, which numeric order preserves.
  */
-import { RunView, BaseEntity, CompositeKey, Metadata } from '@memberjunction/core';
-import type { MJEntityEntity, MJUserSettingEntity } from '@memberjunction/core-entities';
+import { RunView, BaseEntity, CompositeKey, Metadata, EntityPermissionType } from '@memberjunction/core';
+import type { UserInfo } from '@memberjunction/core';
+import type { MJEntityEntity, MJUserSettingEntity, MJUserViewEntity, MJQueryEntity, MJQueryCategoryEntity } from '@memberjunction/core-entities';
+import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { Assert, AssertEqual, AssertRowShape, AssertKeysInclude, RowKeys } from '../test-runner';
 import { UniqueFilter } from '../instrumented-cache';
 import { IntegrationCheckRegistry } from '../check-registry';
@@ -565,6 +567,228 @@ export const ServerCacheChecks: NamedCheck[] = [
             Assert(result.Success, `RunView failed: ${result.ErrorMessage}`);
             AssertEqual(ctx.Storage.SetCount('RunViewCache') + ctx.Storage.GetCount('RunViewCache'), 0,
                 'Record Changes must never touch the cache regardless of its flags');
+        }
+    },
+    {
+        Id: 'server-cache.S27',
+        Name: 'S27: OrderBy is part of the cache identity — ASC and DESC on the same entity+filter never cross-serve',
+        Fn: async (ctx): Promise<void> => {
+            // S15 exercises ONE OrderBy across miss+hit; nothing yet proves two DIFFERENT
+            // OrderBy values keep independent slots. OrderBy IS in the fingerprint, so a DESC
+            // read must not be served the ASC-ordered cached rows.
+            const rv = new RunView();
+            const filter = UniqueFilter('Name', 's27');
+            const asc = await rv.RunView({ EntityName: ENTITY, ExtraFilter: filter, OrderBy: 'Name ASC', Fields: ['Name'], ResultType: 'simple' }, ctx.User);
+            Assert(asc.Success, `asc failed: ${asc.ErrorMessage}`);
+            const desc = await rv.RunView({ EntityName: ENTITY, ExtraFilter: filter, OrderBy: 'Name DESC', Fields: ['Name'], ResultType: 'simple' }, ctx.User);
+            Assert(desc.Success, `desc failed: ${desc.ErrorMessage}`);
+            AssertEqual(desc.Results.length, asc.Results.length, 'ASC and DESC must return the same row set');
+            Assert(desc.Results.length > 1, 'need 2+ rows to prove ordering');
+            const isDescending = desc.Results.every((r, i) => i === 0 || String(desc.Results[i - 1].Name).localeCompare(String(r.Name)) >= 0);
+            Assert(isDescending, 'OrderBy cross-serve: DESC results were not descending — likely served the ASC-ordered slot');
+        }
+    },
+    {
+        Id: 'server-cache.S28',
+        Name: 'S28: IgnoreMaxRows returns all rows (skips the entity UserViewMaxRows cap) even when the capped query was cached first',
+        Fn: async (ctx): Promise<void> => {
+            // IgnoreMaxRows skips the entity-level UserViewMaxRows TOP cap, so a request with
+            // IgnoreMaxRows must return all matching rows regardless of whether the capped
+            // (default) query for the same entity was cached first. Discover a capped entity
+            // whose true row count exceeds its cap; skip-pass (degrade gracefully) when none
+            // exists on this DB.
+            const rv = new RunView();
+            const capped = await rv.RunView<{ Name: string; UserViewMaxRows: number }>({
+                EntityName: 'MJ: Entities',
+                ExtraFilter: 'UserViewMaxRows > 0',
+                Fields: ['Name', 'UserViewMaxRows'],
+                ResultType: 'simple'
+            }, ctx.User);
+            Assert(capped.Success, `capped-entity discovery failed: ${capped.ErrorMessage}`);
+            if (capped.Results.length === 0) {
+                console.warn('  ⚠ S28 SKIPPED — no entity has UserViewMaxRows > 0 on this DB (collision is latent here).');
+                return;
+            }
+            // One batch of count_only (BypassCache → true DB counts, no cache interaction).
+            const counts = await rv.RunViews(
+                capped.Results.map(e => ({ EntityName: e.Name, ResultType: 'count_only' as const, BypassCache: true })),
+                ctx.User
+            );
+            const idx = counts.findIndex((c, i) => c.Success && c.TotalRowCount > capped.Results[i].UserViewMaxRows);
+            if (idx < 0) {
+                console.warn('  ⚠ S28 SKIPPED — no capped entity exceeds its UserViewMaxRows on this DB (divergence not observable).');
+                return;
+            }
+            const target = capped.Results[idx];
+            const cap = target.UserViewMaxRows;
+
+            // Warm the shared slot with the capped query (returns TOP <cap> rows).
+            const cappedRun = await rv.RunView({ EntityName: target.Name, ResultType: 'simple' }, ctx.User);
+            Assert(cappedRun.Success, `capped run failed: ${cappedRun.ErrorMessage}`);
+            // IgnoreMaxRows:true — SAME fingerprint ⇒ must NOT be served the capped slot.
+            const ignoreRun = await rv.RunView({ EntityName: target.Name, IgnoreMaxRows: true, ResultType: 'simple' }, ctx.User);
+            Assert(ignoreRun.Success, `IgnoreMaxRows run failed: ${ignoreRun.ErrorMessage}`);
+            Assert(ignoreRun.Results.length > cap,
+                `IgnoreMaxRows on '${target.Name}' (true count ${counts[idx].TotalRowCount}, cap ${cap}) returned only ` +
+                `${ignoreRun.Results.length} rows`);
+        }
+    },
+    {
+        Id: 'server-cache.S29',
+        Name: 'S29 (mutation): a stored view honors its own WhereClause through the cache (a filtered view and the plain entity query do not cross-serve)',
+        RequiresMutation: true,
+        Fn: async (ctx): Promise<void> => {
+            // A stored view carries its own WhereClause. This check verifies that after the
+            // cache is warmed with a plain unfiltered read of the entity, running a filtered
+            // stored view still returns only rows matching the view's WhereClause. Self-contained:
+            // creates and deletes a throwaway view, so no real data is touched.
+            const md = new Metadata(); // global-provider-ok: integration test — single-provider process by design
+            const rv = new RunView();
+            const filter = "Name LIKE 'MJ: A%'";
+
+            // Portability guard: the filter must discriminate on this DB (some, but not all, rows match).
+            const matching = await rv.RunView({ EntityName: ENTITY, ExtraFilter: filter, ResultType: 'count_only', BypassCache: true }, ctx.User);
+            const all = await rv.RunView({ EntityName: ENTITY, ResultType: 'count_only', BypassCache: true }, ctx.User);
+            Assert(matching.Success && all.Success, 'count probes must succeed');
+            if (matching.TotalRowCount === 0 || matching.TotalRowCount >= all.TotalRowCount) {
+                console.warn(`  ⚠ S29 SKIPPED — "${filter}" does not discriminate on this DB (${matching.TotalRowCount}/${all.TotalRowCount}).`);
+                return;
+            }
+
+            const entityInfo = md.EntityByName(ENTITY);
+            Assert(!!entityInfo, `${ENTITY} must exist`);
+            const view = await md.GetEntityObject<MJUserViewEntity>('MJ: User Views', ctx.User);
+            view.Name = `zzz-integrationtest-view-${Date.now()}`;
+            view.UserID = ctx.User.ID;
+            view.EntityID = entityInfo!.ID;
+            view.WhereClause = filter;
+            view.CustomWhereClause = true;
+            Assert(await view.Save(), `view fixture save failed: ${view.LatestResult?.CompleteMessage ?? 'unknown'}`);
+
+            try {
+                // Warm the UNFILTERED slot (a plain entity read, common anywhere in the app).
+                const plain = await rv.RunView<{ Name: string }>({ EntityName: ENTITY, ResultType: 'simple' }, ctx.User);
+                Assert(plain.Success, `plain warm failed: ${plain.ErrorMessage}`);
+
+                // Run the stored view (realistic shape: EntityName + ViewID). It must honor its
+                // own WhereClause, NOT be served the plain unfiltered slot.
+                const viewRun = await rv.RunView<{ Name: string }>({ EntityName: ENTITY, ViewID: view.ID, ResultType: 'simple' }, ctx.User);
+                Assert(viewRun.Success, `view run failed: ${viewRun.ErrorMessage}`);
+                const offFilter = viewRun.Results.filter(r => !String(r.Name).startsWith('MJ: A')).length;
+                Assert(offFilter === 0,
+                    `stored view returned ${offFilter} rows not matching its WhereClause "${filter}"`);
+                Assert(viewRun.Results.length < plain.Results.length,
+                    `stored view returned ${viewRun.Results.length} rows, same as the unfiltered query (${plain.Results.length})`);
+            } finally {
+                Assert(await view.Delete(), `view fixture delete failed: ${view.LatestResult?.CompleteMessage ?? 'unknown'}`);
+            }
+        }
+    },
+    {
+        Id: 'server-cache.S30',
+        Name: 'S30 (mutation): renaming a parent record refreshes cached child rows that denormalize its name',
+        RequiresMutation: true,
+        Fn: async (ctx): Promise<void> => {
+            // View rows can carry denormalized fields from related entities (MJ: Queries rows
+            // carry the parent Category name). This check verifies that after renaming the parent
+            // category, cached child rows reflect the new name. Self-contained: creates and
+            // deletes a throwaway Category + Query, so no real data is touched.
+            const md = new Metadata(); // global-provider-ok: integration test — single-provider process by design
+            const rv = new RunView();
+
+            const category = await md.GetEntityObject<MJQueryCategoryEntity>('MJ: Query Categories', ctx.User);
+            category.Name = `zzz-integrationtest-cat-${Date.now()}`;
+            category.UserID = ctx.User.ID;
+            Assert(await category.Save(), `category fixture save failed: ${category.LatestResult?.CompleteMessage ?? 'unknown'}`);
+            const originalName = category.Name;
+
+            const query = await md.GetEntityObject<MJQueryEntity>('MJ: Queries', ctx.User);
+            query.Name = `zzz-integrationtest-query-${Date.now()}`;
+            query.CategoryID = category.ID;
+            query.SQL = 'SELECT 1 AS X';
+            query.Status = 'Approved';
+            Assert(await query.Save(), `query fixture save failed: ${query.LatestResult?.CompleteMessage ?? 'unknown'}`);
+
+            const params = () => ({ EntityName: 'MJ: Queries', ExtraFilter: `CategoryID='${category.ID}'`, Fields: ['Name', 'Category'], ResultType: 'simple' as const });
+            try {
+                // Warm the child (Queries) cache — rows denormalize Category='<originalName>'.
+                const warm = await rv.RunView<{ Name: string; Category: string }>(params(), ctx.User);
+                Assert(warm.Success && warm.Results.length === 1, `warm failed: ${warm.ErrorMessage}`);
+                AssertEqual(warm.Results[0].Category, originalName, 'precondition: cached row denormalizes the original category name');
+
+                // Rename the PARENT category.
+                const renamed = `${originalName}-renamed`;
+                category.Name = renamed;
+                Assert(await category.Save(), `category rename failed: ${category.LatestResult?.CompleteMessage ?? 'unknown'}`);
+                await new Promise(resolve => setTimeout(resolve, 2500)); // let event-driven invalidation settle
+
+                // Ground truth: the child view now denormalizes the new name in the DB.
+                const truth = await rv.RunView<{ Category: string }>({ ...params(), BypassCache: true }, ctx.User);
+                Assert(truth.Success, `truth query failed: ${truth.ErrorMessage}`);
+                AssertEqual(truth.Results[0]?.Category, renamed, 'sanity: the DB view reflects the rename');
+
+                // The cached child query must reflect the renamed parent (freshness guarantee).
+                const after = await rv.RunView<{ Category: string }>(params(), ctx.User);
+                Assert(after.Success, `post-rename query failed: ${after.ErrorMessage}`);
+                AssertEqual(after.Results[0]?.Category, renamed,
+                    `cached child row still shows '${after.Results[0]?.Category}' after the parent was renamed to '${renamed}'`);
+            } finally {
+                await query.Delete();
+                await category.Delete();
+            }
+        }
+    },
+    {
+        Id: 'server-cache.S31',
+        Name: 'S31 (security): a user lacking read permission is never served cached rows (read-permission is enforced regardless of cache state)',
+        Fn: async (ctx): Promise<void> => {
+            // A user without read permission on an entity must never receive its rows, whether the
+            // read is served from the database or from the cache. Discover an (A can-read /
+            // B cannot-read) pair on a cacheable, RLS-free entity (prefer one with rows), warm the
+            // slot as A, and verify B is still denied via the cache path. Skip-pass (degrade
+            // gracefully) when no such pair exists on this DB.
+            const md = new Metadata(); // global-provider-ok: integration test — single-provider process by design
+            const users: UserInfo[] = UserCache.Instance.Users ?? [];
+            const rv = new RunView();
+
+            const candidates: Array<{ a: UserInfo; b: UserInfo; e: string }> = [];
+            for (const entity of md.Entities) {
+                if (!entity.AllowCaching || entity.TrustServerCacheCompletely === false) continue;
+                for (const ua of users) {
+                    if (!entity.GetUserPermisions(ua)?.CanRead) continue;
+                    if (entity.GetUserRowLevelSecurityWhereClause(ua, EntityPermissionType.Read, '') !== '') continue;
+                    for (const ub of users) {
+                        if (ua === ub || entity.GetUserPermisions(ub)?.CanRead) continue;
+                        if (entity.GetUserRowLevelSecurityWhereClause(ub, EntityPermissionType.Read, '') !== '') continue;
+                        candidates.push({ a: ua, b: ub, e: entity.Name });
+                    }
+                }
+            }
+            if (candidates.length === 0) {
+                console.warn('  ⚠ S31 SKIPPED — no (A can-read / B cannot-read) pair on a cacheable RLS-free entity on this DB.');
+                return;
+            }
+            // Prefer a row-bearing entity (bounded probe) so the bypass leaks real data.
+            let chosen = candidates[0];
+            for (const c of candidates.slice(0, 20)) {
+                const cnt = await rv.RunView({ EntityName: c.e, ResultType: 'count_only', BypassCache: true }, c.a);
+                if (cnt.Success && cnt.TotalRowCount > 0) { chosen = c; break; }
+            }
+            const { a: A, b: B, e: E } = chosen;
+            const filter = `'s31' <> 'zzz-marker'`; // always-true unique cold slot
+
+            // Precondition: B is genuinely denied a direct (uncached) read.
+            const bCold = await rv.RunView({ EntityName: E, ExtraFilter: filter, ResultType: 'simple', BypassCache: true }, B);
+            Assert(!bCold.Success, `precondition: user '${B.Email}' must be denied read on '${E}' (got Success=${bCold.Success})`);
+
+            // A warms the shared cache slot; then B reads via the cache path.
+            const aWarm = await rv.RunView({ EntityName: E, ExtraFilter: filter, ResultType: 'simple' }, A);
+            Assert(aWarm.Success, `user A warm read failed: ${aWarm.ErrorMessage}`);
+            const bWarm = await rv.RunView({ EntityName: E, ExtraFilter: filter, ResultType: 'simple' }, B);
+
+            Assert(!bWarm.Success,
+                `user '${B.Email}' has no read permission on '${E}' yet was served ${bWarm.Results.length} rows via the cache ` +
+                `(cache-hit=${bWarm.ExecutionTime === 0}) after user '${A.Email}' warmed it`);
         }
     }
 ];

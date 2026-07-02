@@ -2,12 +2,13 @@
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
     "Name": "IT02 - RunQuery Cache Integrity",
-    "Description": "Ports runquery-cache-tests.ts Q1-Q9 (TTL + smart-validation query cache modes). The whole bundle mutates the DB by design: it creates/tears down a Query Category + two Queries via a driver-level try/finally inside the bundle, and creates/deletes MJ: User Settings rows the fixture queries count.",
+    "Description": "Ports runquery-cache-tests.ts Q1-Q10 (TTL + smart-validation query cache modes). The whole bundle mutates the DB by design: it creates/tears down a Query Category + two Queries via a driver-level try/finally inside the bundle, and creates/deletes MJ: User Settings rows the fixture queries count. Q10 verifies a TTL slot serves byte-identical row data on the hit (not just a matching row count).",
     "InputDefinition": {},
     "ExpectedOutcomes": {
-      "summary": "current/stale/no_validation statuses correct; MaxRows/Parameters fingerprint separately; failed executions never cached; fixtures cleaned up."
+      "summary": "current/stale/no_validation statuses correct; MaxRows/Parameters fingerprint separately; TTL slot serves byte-identical row data on the hit; failed executions never cached; fixtures cleaned up."
     },
     "Configuration": {
+      "tier": "deterministic",
       "transport": "server",
       "checks": [
         {
@@ -21,7 +22,7 @@
     "ID": "B6F6A5A6-44D0-4F79-8A21-D224D49116CB"
   },
   "sync": {
-    "lastModified": "2026-06-23T19:37:27.702Z",
-    "checksum": "c0fd5e8bb41957ffafb9ce5ebc84c2317d9e2474ac01052045a4365bf594dc35"
+    "lastModified": "2026-06-23T20:46:07.607Z",
+    "checksum": "08f4c0b619d24779a17ec8992eae2b8c701320f67db9287095f50087fac9022f"
   }
 }

@@ -30,6 +30,12 @@ export interface TestRunSummary {
   runDateTime: Date;
   targetType: string;
   targetLogID: string;
+  // Execution context (machine / CI / run-by) — present for runs persisted with this metadata.
+  machineName?: string | null;
+  machineID?: string | null;
+  runByUserName?: string | null;
+  runByUserEmail?: string | null;
+  runContextDetails?: string | null;
 }
 
 export interface SuiteHierarchyNode {
@@ -989,6 +995,11 @@ export class TestingInstrumentationService {
       PassedChecks: number | null;
       FailedChecks: number | null;
       TotalChecks: number | null;
+      MachineName: string | null;
+      MachineID: string | null;
+      RunByUserName: string | null;
+      RunByUserEmail: string | null;
+      RunContextDetails: string | null;
     };
 
     const [testRunsResult, feedbackResult] = await rv.RunViews([
@@ -997,7 +1008,7 @@ export class TestingInstrumentationService {
         ExtraFilter: filter,
         OrderBy: 'StartedAt DESC',
         MaxRows: 1000,
-        Fields: ['ID', 'TestID', 'Test', 'Status', 'Score', 'CostUSD', 'StartedAt', 'CompletedAt', 'TargetType', 'TargetLogID', 'PassedChecks', 'FailedChecks', 'TotalChecks'],
+        Fields: ['ID', 'TestID', 'Test', 'Status', 'Score', 'CostUSD', 'StartedAt', 'CompletedAt', 'TargetType', 'TargetLogID', 'PassedChecks', 'FailedChecks', 'TotalChecks', 'MachineName', 'MachineID', 'RunByUserName', 'RunByUserEmail', 'RunContextDetails'],
         ResultType: 'simple',
         CacheLocal: true
       },
@@ -1052,7 +1063,13 @@ export class TestingInstrumentationService {
         humanIsCorrect: feedback?.IsCorrect ?? null,
         humanComments: feedback?.Comments ?? null,
         hasHumanFeedback: !!feedback,
-        feedbackId: feedback?.ID ?? null
+        feedbackId: feedback?.ID ?? null,
+        // Execution context
+        machineName: run.MachineName,
+        machineID: run.MachineID,
+        runByUserName: run.RunByUserName,
+        runByUserEmail: run.RunByUserEmail,
+        runContextDetails: run.RunContextDetails
       };
     });
   }

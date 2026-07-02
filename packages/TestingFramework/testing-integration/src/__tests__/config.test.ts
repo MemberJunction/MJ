@@ -9,7 +9,7 @@ vi.mock('cosmiconfig', () => ({
 import { LoadDbConfig, LoadClientConfig } from '../config';
 
 const ENV_KEYS = [
-    'DB_HOST', 'DB_PORT', 'DB_USERNAME', 'DB_PASSWORD', 'DB_DATABASE',
+    'DB_HOST', 'DB_PORT', 'DB_USERNAME', 'DB_PASSWORD', 'DB_DATABASE', 'DB_PLATFORM',
     'MJ_API_KEY', 'GRAPHQL_PORT', 'GRAPHQL_ROOT_PATH', 'MJAPI_URL'
 ];
 let saved: Record<string, string | undefined>;
@@ -31,13 +31,13 @@ describe('LoadDbConfig', () => {
         await expect(LoadDbConfig()).rejects.toThrow(/Missing DB settings/);
     });
 
-    it('resolves from env with Schema "__mj" and Port 1433 defaults', async () => {
+    it('resolves from env with Schema "__mj", Port 1433, and Platform "sqlserver" defaults', async () => {
         process.env.DB_HOST = 'h';
         process.env.DB_USERNAME = 'u';
         process.env.DB_PASSWORD = 'p';
         process.env.DB_DATABASE = 'd';
         const cfg = await LoadDbConfig();
-        expect(cfg).toEqual({ Host: 'h', Port: 1433, User: 'u', Password: 'p', Database: 'd', Schema: '__mj' });
+        expect(cfg).toEqual({ Host: 'h', Port: 1433, User: 'u', Password: 'p', Database: 'd', Schema: '__mj', Platform: 'sqlserver' });
     });
 
     it('lets mj.config.cjs databaseSettings take precedence over env', async () => {
@@ -49,6 +49,50 @@ describe('LoadDbConfig', () => {
         expect(cfg.Host).toBe('cfghost');
         expect(cfg.Port).toBe(1500);
         expect(cfg.Schema).toBe('custom');
+    });
+
+    // D5.5 — platform selection seam: the integration suites run the SAME check code
+    // against whichever backend DB_PLATFORM names.
+    it('selects PostgreSQL (and defaults Port to 5432) when DB_PLATFORM=postgresql', async () => {
+        process.env.DB_HOST = 'h';
+        process.env.DB_USERNAME = 'u';
+        process.env.DB_PASSWORD = 'p';
+        process.env.DB_DATABASE = 'd';
+        process.env.DB_PLATFORM = 'postgresql';
+        const cfg = await LoadDbConfig();
+        expect(cfg.Platform).toBe('postgresql');
+        expect(cfg.Port).toBe(5432);
+    });
+
+    it('selects SQL Server explicitly when DB_PLATFORM=sqlserver', async () => {
+        process.env.DB_HOST = 'h';
+        process.env.DB_USERNAME = 'u';
+        process.env.DB_PASSWORD = 'p';
+        process.env.DB_DATABASE = 'd';
+        process.env.DB_PLATFORM = 'sqlserver';
+        const cfg = await LoadDbConfig();
+        expect(cfg.Platform).toBe('sqlserver');
+        expect(cfg.Port).toBe(1433);
+    });
+
+    it('honors an explicit DB_PORT regardless of platform default', async () => {
+        process.env.DB_HOST = 'h';
+        process.env.DB_USERNAME = 'u';
+        process.env.DB_PASSWORD = 'p';
+        process.env.DB_DATABASE = 'd';
+        process.env.DB_PLATFORM = 'postgresql';
+        process.env.DB_PORT = '6000';
+        const cfg = await LoadDbConfig();
+        expect(cfg.Port).toBe(6000);
+    });
+
+    it('throws on an invalid DB_PLATFORM value', async () => {
+        process.env.DB_HOST = 'h';
+        process.env.DB_USERNAME = 'u';
+        process.env.DB_PASSWORD = 'p';
+        process.env.DB_DATABASE = 'd';
+        process.env.DB_PLATFORM = 'mysql';
+        await expect(LoadDbConfig()).rejects.toThrow(/DB_PLATFORM/);
     });
 });
 

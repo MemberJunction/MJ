@@ -636,7 +636,7 @@ interface ProgressUpdate {
                   } @else {
                     <div class="error-message">
                       <i class="fa-solid fa-exclamation-triangle"></i>
-                      <span>{{ result.errorMessage }}</span>
+                      <span>{{ failureMessage }}</span>
                     </div>
                   }
                 </div>
@@ -2025,6 +2025,45 @@ export class TestRunDialogComponent extends BaseAngularComponent implements OnIn
 
   executionLog: Array<{ timestamp: Date; message: string; type: 'info' | 'success' | 'error' }> = [];
 
+  /**
+   * User-facing text for the "Execution Failed" banner. The suite path returns
+   * success + result only (no top-level errorMessage — see RunTestResolver.executeSuite),
+   * so fall back to a summary synthesized from the suite result counts + the first
+   * failed/errored test, then a generic note. The banner must never render empty when
+   * hasError is true.
+   */
+  get failureMessage(): string {
+    const top = this.result?.errorMessage as string | undefined;
+    if (top) {
+      return top;
+    }
+    const detail = this.result?.result;
+    if (detail) {
+      // Suite path: result is a TestSuiteRunResult with per-test entries. Count anything
+      // that isn't a pass/skip — the engine's `failedTests` counts only 'Failed', not
+      // 'Error'/'Timeout', so we derive the count from the per-test statuses directly.
+      const tests: Array<{ testName?: string; status?: string; errorMessage?: string }> =
+        Array.isArray(detail.testResults) ? detail.testResults : [];
+      if (tests.length > 0) {
+        const notPassed = tests.filter(t => t.status && t.status !== 'Passed' && t.status !== 'Skipped');
+        const denom = typeof detail.totalTests === 'number' ? detail.totalTests : tests.length;
+        const summary = `${notPassed.length} of ${denom} test${denom === 1 ? '' : 's'} did not pass.`;
+        const firstWithMsg = notPassed.find(t => t.errorMessage);
+        if (firstWithMsg?.errorMessage) {
+          const who = firstWithMsg.testName ? `${firstWithMsg.testName}: ` : '';
+          return `${summary} ${who}${firstWithMsg.errorMessage}`;
+        }
+        return `${summary} See the execution log above for per-test details.`;
+      }
+      // Single-test path: result is a TestRunResult carrying its own errorMessage.
+      const single = detail.errorMessage as string | undefined;
+      if (single) {
+        return single;
+      }
+    }
+    return 'Execution failed — see the execution log above for details.';
+  }
+
   get dialogTitle(): string {
     if (this.isRunning || this.hasCompleted) {
       return 'Test Execution';
@@ -2507,7 +2546,7 @@ export class TestRunDialogComponent extends BaseAngularComponent implements OnIn
         this.addLogEntry('Suite completed successfully', 'success');
         this.executionService.CompleteRun(suiteId, 'completed', execResult);
       } else {
-        this.addLogEntry(`Suite failed: ${result.errorMessage}`, 'error');
+        this.addLogEntry(`Suite failed: ${this.failureMessage}`, 'error');
         this.executionService.CompleteRun(suiteId, 'failed', execResult);
       }
 

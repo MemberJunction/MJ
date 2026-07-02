@@ -2,12 +2,16 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 // Mock the bootstrap so the driver never touches a real DB/cache. getActiveIntegrationStorage
 // returns a minimal instrumented-storage stub (only SetCount/ResetCounts are exercised here).
+// serverProcessAlreadyClaimed is a controllable stub (default false = a properly-owned process)
+// so the D1 "can't run inside a live MJAPI" guard can be exercised both ways.
+const { mockServerClaimed } = vi.hoisted(() => ({ mockServerClaimed: vi.fn(() => false) }));
 vi.mock('../bootstrap', () => ({
     getActiveIntegrationStorage: () => ({ SetCount: (_category: string) => 0, ResetCounts: () => { /* no-op */ } }),
     getActiveIntegrationBootstrap: () => null,
     getActiveIntegrationClientBootstrap: () => null,
     bootstrapIntegrationServer: async () => { throw new Error('unit test must not self-bootstrap'); },
-    bootstrapIntegrationClient: async () => { throw new Error('unit test must not self-bootstrap'); }
+    bootstrapIntegrationClient: async () => { throw new Error('unit test must not self-bootstrap'); },
+    serverProcessAlreadyClaimed: () => mockServerClaimed()
 }));
 
 import { IntegrationTestDriver } from '../IntegrationTestDriver';
@@ -29,6 +33,11 @@ function makeContext(config: object | null): DriverExecutionContext {
 
 describe('IntegrationTestDriver bundle dispatch', () => {
     beforeEach(() => {
+        // Tier gates read process.env; keep these unit tests deterministic regardless of
+        // the ambient environment they happen to run in.
+        delete process.env.RUN_MUTATION_TESTS;
+        delete process.env.RUN_AGENT_TESTS;
+        mockServerClaimed.mockReturnValue(false);
         const reg = IntegrationCheckRegistry.Instance;
         // A unique bundle prefix per concern keeps these isolated from the real bundles.
         reg.Register({ Id: 'unitpass.A', Name: 'A', Fn: async () => { /* pass */ } });
@@ -68,6 +77,44 @@ describe('IntegrationTestDriver bundle dispatch', () => {
         expect(on.oracleResults.map(o => o.oracleType)).toEqual(['unitmut.A', 'unitmut.M']);
     });
 
+    it('RequiresMutation checks also run when RUN_MUTATION_TESTS=1 (env, no selector opt-in)', async () => {
+        process.env.RUN_MUTATION_TESTS = '1';
+        const driver = new IntegrationTestDriver();
+        const result = await driver.Execute(makeContext({ checks: [{ type: 'unitmut' }] }));
+        expect(result.oracleResults.map(o => o.oracleType)).toEqual(['unitmut.A', 'unitmut.M']);
+    });
+
+    it("a live-model Test without RUN_AGENT_TESTS skip-passes with a single 'gate' oracle", async () => {
+        const driver = new IntegrationTestDriver();
+        const result = await driver.Execute(makeContext({ tier: 'live-model', checks: [{ type: 'unitpass' }] }));
+        expect(result.status).toBe('Passed');
+        expect(result.totalChecks).toBe(1);
+        expect(result.oracleResults[0].oracleType).toBe('gate');
+        expect(result.oracleResults[0].message).toContain('RUN_AGENT_TESTS');
+    });
+
+    it('a live-model Test with RUN_AGENT_TESTS=1 actually runs its checks', async () => {
+        process.env.RUN_AGENT_TESTS = '1';
+        const driver = new IntegrationTestDriver();
+        const result = await driver.Execute(makeContext({ tier: 'live-model', checks: [{ type: 'unitpass' }] }));
+        expect(result.oracleResults.map(o => o.oracleType)).toEqual(['unitpass.A', 'unitpass.B']);
+    });
+
+    it("a mutation-tier Test without RUN_MUTATION_TESTS skip-passes with a 'gate' oracle", async () => {
+        const driver = new IntegrationTestDriver();
+        const result = await driver.Execute(makeContext({ tier: 'mutation', checks: [{ type: 'unitpass' }] }));
+        expect(result.status).toBe('Passed');
+        expect(result.oracleResults[0].oracleType).toBe('gate');
+        expect(result.oracleResults[0].message).toContain('RUN_MUTATION_TESTS');
+    });
+
+    it('a deterministic Test (default tier) runs unconditionally', async () => {
+        const driver = new IntegrationTestDriver();
+        const result = await driver.Execute(makeContext({ tier: 'deterministic', checks: [{ type: 'unitpass' }] }));
+        expect(result.status).toBe('Passed');
+        expect(result.totalChecks).toBe(2);
+    });
+
     it('unknown bundle → a single failing OracleResult (never silently dropped)', async () => {
         const driver = new IntegrationTestDriver();
         const result = await driver.Execute(makeContext({ checks: [{ type: 'nope' }] }));
@@ -80,6 +127,16 @@ describe('IntegrationTestDriver bundle dispatch', () => {
         const driver = new IntegrationTestDriver();
         const result = await driver.Execute(makeContext({ checks: [{ type: 'unitmut' }, { type: 'unitpass' }] }));
         expect(result.oracleResults.map(o => o.oracleType)).toEqual(['unitmut.A', 'unitpass.A', 'unitpass.B']);
+    });
+
+    it('a server bundle inside an already-claimed process (live MJAPI) → Error pointing to the CLI, never throws', async () => {
+        mockServerClaimed.mockReturnValue(true);
+        const driver = new IntegrationTestDriver();
+        const result = await driver.Execute(makeContext({ checks: [{ type: 'unitpass' }] }));
+        expect(result.status).toBe('Error');
+        expect(result.totalChecks).toBe(1);
+        expect(result.oracleResults[0].oracleType).toBe('error');
+        expect(result.oracleResults[0].message).toMatch(/dedicated process|test:integration|mj test suite/);
     });
 
     it('empty checks → Passed, score 0, totalChecks 0', async () => {

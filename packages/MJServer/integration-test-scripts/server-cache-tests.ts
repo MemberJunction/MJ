@@ -25,7 +25,7 @@
  * Exit code: 0 = all passed, 1 = failures, 2 = bootstrap error.
  */
 import {
-    TestRunner, EmitOutcomes, IntegrationCheckRegistry, bootstrapIntegrationServer
+    TestRunner, EmitOutcomes, IntegrationCheckRegistry, bootstrapIntegrationServer, IsTierEnabled
 } from './lib/harness';
 import type { IntegrationCheckContext } from './lib/harness';
 
@@ -40,7 +40,7 @@ async function main(): Promise<void> {
     };
 
     const suite = new TestRunner('Server-side RunView caching (SQLServerDataProvider, TrustLocalCacheCompletely)');
-    const runMutation = process.env.RUN_MUTATION_TESTS === '1';
+    const runMutation = IsTierEnabled('mutation');
     for (const check of IntegrationCheckRegistry.Instance.GetBundle('server-cache')) {
         if (check.RequiresMutation && !runMutation) {
             continue; // preserves the 23-vs-26 default behavior
@@ -52,7 +52,7 @@ async function main(): Promise<void> {
     if (process.env.EMIT_OUTCOMES) {
         await EmitOutcomes(suite, process.env.EMIT_OUTCOMES);
     }
-    await ic.Pool.close();
+    await ic.ClosePool();
     process.exit(failures > 0 ? 1 : 0);
 }
 

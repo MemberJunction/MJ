@@ -1,0 +1,31 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT06 - RLS Multi-User Cache Isolation",
+    "Description": "Proves User A's RLS-filtered cache entry can never serve User B. RLS1: two distinct effective RLS clauses yield distinct cache fingerprints (the rls:<hash> segment of GenerateRunViewFingerprint). RLS2: on the server superset slot (TrustLocalCacheCompletely), User B's identical read is a separate cold slot — not a hit on User A's slot — and no A-scoped rows leak. RLS4: an empty effective RLS clause does not change the fingerprint (RLS-exempt users keep sharing slots) while a non-empty clause does — an always-runnable fingerprint invariant that holds even on databases with no two distinct RLS users. Two-user fixture is DISCOVERED (never minted) from the provider's RLS filters + the user cache; degrades gracefully (skip-as-pass) when the DB has only RLS-exempt admins. The #1 security item from the #2824 backlog.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Distinct RLS clauses => distinct cache fingerprints (empty clause => shared slot); User B never served from User A's slot; no cross-user rows."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "rls-isolation",
+          "config": {
+            "requireTwoDistinctUsers": true
+          }
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "C5B7E959-8620-42D7-857D-92796460DF62"
+  },
+  "sync": {
+    "lastModified": "2026-06-29T16:15:47.534Z",
+    "checksum": "9fcda39d9813576fe634864a6d6e3d5841bbd300de35de0c4170f15967b433bd"
+  }
+}

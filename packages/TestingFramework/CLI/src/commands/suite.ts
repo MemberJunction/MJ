@@ -107,12 +107,18 @@ export class SuiteCommand {
                 : '';
             this.spinner.start(`Running test suite: ${suite.Name}${flakyMsg}...`);
 
+            // Integration tests share process-global singletons (LocalCacheManager, its
+            // instrumented counters, UserCache, Metadata.Provider). Two bundles running
+            // concurrently in one process would corrupt each other's counters and cache slots,
+            // so integration suites MUST run strictly serially (CANONICAL D). Force serial
+            // execution under MJ_INTEGRATION_TEST=1 regardless of any --parallel flag.
+            const integrationSerial = process.env.MJ_INTEGRATION_TEST === '1';
             const result = await engine.RunSuite(suite.ID, {
                 verbose: flags.verbose,
                 variables,
                 delayBetweenTests: flags.delay,
-                parallel: flags.parallel,
-                maxParallel: flags.maxParallel,
+                parallel: integrationSerial ? false : flags.parallel,
+                maxParallel: integrationSerial ? 1 : flags.maxParallel,
                 repeatCountOverride: flags.flakyCheck && flags.flakyCheck > 1 ? flags.flakyCheck : undefined,
             }, contextUser);
 

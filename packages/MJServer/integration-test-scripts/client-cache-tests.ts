@@ -25,7 +25,7 @@
  * Exit code: 0 = all passed, 1 = failures, 2 = bootstrap/connectivity error.
  */
 import {
-    TestRunner, EmitOutcomes, IntegrationCheckRegistry, bootstrapIntegrationClient
+    TestRunner, EmitOutcomes, IntegrationCheckRegistry, bootstrapIntegrationClient, IsTierEnabled
 } from './lib/harness';
 import type { IntegrationCheckContext } from './lib/harness';
 import { Metadata } from '@memberjunction/core';
@@ -41,7 +41,7 @@ async function main(): Promise<void> {
     };
 
     const suite = new TestRunner('Client-side RunView caching (GraphQLDataProvider → live MJAPI)');
-    const runMutation = process.env.RUN_MUTATION_TESTS === '1';
+    const runMutation = IsTierEnabled('mutation');
     for (const check of IntegrationCheckRegistry.Instance.GetBundle('client-cache')) {
         if (check.RequiresMutation && !runMutation) {
             continue;

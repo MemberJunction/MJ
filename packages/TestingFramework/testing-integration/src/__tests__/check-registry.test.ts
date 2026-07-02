@@ -34,9 +34,9 @@ describe('IntegrationCheckRegistry', () => {
 
 describe('migrated bundles (coverage-loss guard)', () => {
     const bundles: Array<[string, NamedCheck[], number]> = [
-        ['server-cache', ServerCacheChecks, 26],
-        ['client-cache', ClientCacheChecks, 12],
-        ['runquery-cache', RunQueryCacheChecks, 9]
+        ['server-cache', ServerCacheChecks, 31],
+        ['client-cache', ClientCacheChecks, 13],
+        ['runquery-cache', RunQueryCacheChecks, 10]
     ];
 
     for (const [prefix, checks, expectedCount] of bundles) {
@@ -61,9 +61,9 @@ describe('migrated bundles (coverage-loss guard)', () => {
         });
     }
 
-    it('server-cache marks exactly S17/S23/S24 as RequiresMutation', () => {
+    it('server-cache marks exactly S17/S23/S24/S29/S30 as RequiresMutation', () => {
         const mutating = ServerCacheChecks.filter(c => c.RequiresMutation).map(c => c.Id);
-        expect(mutating.sort()).toEqual(['server-cache.S17', 'server-cache.S23', 'server-cache.S24']);
+        expect(mutating.sort()).toEqual(['server-cache.S17', 'server-cache.S23', 'server-cache.S24', 'server-cache.S29', 'server-cache.S30']);
     });
 
     it('client-cache marks exactly C10 as RequiresMutation', () => {

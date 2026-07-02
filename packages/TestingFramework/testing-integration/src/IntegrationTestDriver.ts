@@ -26,34 +26,89 @@ import {
     BaseTestDriver,
     DriverExecutionContext,
     DriverExecutionResult,
-    OracleResult
+    OracleResult,
+    SuiteFixtureContext
 } from '@memberjunction/testing-engine';
+import type { UserInfo } from '@memberjunction/core';
+import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import type sql from 'mssql';
 import {
     getActiveIntegrationStorage,
     getActiveIntegrationBootstrap,
     getActiveIntegrationClientBootstrap,
     bootstrapIntegrationServer,
-    bootstrapIntegrationClient
+    bootstrapIntegrationClient,
+    serverProcessAlreadyClaimed
 } from './bootstrap';
 import type { InstrumentedLocalStorageProvider } from './instrumented-cache';
-import type { IntegrationCheckContext } from './check';
+import type { IntegrationCheckContext, RlsFixture } from './check';
 import { IntegrationCheckRegistry } from './check-registry';
-import { IntegrationTestConfig } from './types';
+import { IntegrationTestConfig, IntegrationCheckSelectionConfig } from './types';
+import { IntegrationTier, TIER_ENV_GATE, IsTierEnabled } from './tiers';
 import { TestOutcome, writeOutcomesFile } from './test-runner';
 import { createRunQueryFixtures, teardownRunQueryFixtures } from './checks/runquery-cache.checks';
+import { discoverRlsFixture } from './checks/rls-isolation.checks';
 
 const TARGET_TYPE = 'Integration Check Bundle';
-/** The one bundle that runs against the GraphQL client transport. */
-const CLIENT_BUNDLE = 'client-cache';
+/** Bundles that run against the GraphQL client transport (everything else: SQL server). */
+const CLIENT_BUNDLES = new Set(['client-cache', 'rls-isolation-client']);
 /** The one bundle that needs self-contained Query/Category fixtures. */
 const FIXTURE_BUNDLE = 'runquery-cache';
+/** Bundles that need the discovered two-user RLS fixture threaded into the context. */
+const RLS_BUNDLES = new Set(['rls-isolation', 'rls-isolation-client']);
+/** Key under SuiteFixtureContext.Data where the discovered RLS fixture is stashed. */
+const RLS_FIXTURE_KEY = 'rlsFixture';
 
 @RegisterClass(BaseTestDriver, 'IntegrationTestDriver')
 export class IntegrationTestDriver extends BaseTestDriver {
     /** The driver arms its own timeout and breaks the check loop when it fires. */
     public override supportsCancellation(): boolean {
         return true;
+    }
+
+    /**
+     * Suite-scoped setup (D6). Discovers the two-user RLS fixture ONCE per suite run and
+     * stashes it on the shared SuiteFixtureContext so every test of the suite (and the
+     * `rls-isolation` bundle's checks) reads the same pair. Best-effort: discovery has
+     * nothing to delete, so failures are non-fatal — Execute lazily re-discovers when the
+     * fixture is absent (e.g. the `mj test run` path has no suite). Only meaningful on the
+     * server transport (the user cache is a SQLServerDataProvider concept).
+     */
+    public override async SetupSuite(context: SuiteFixtureContext, _contextUser: UserInfo): Promise<void> {
+        try {
+            const users = UserCache.Instance.Users;
+            if (users && users.length > 0) {
+                context.Data[RLS_FIXTURE_KEY] = discoverRlsFixture(this.Provider, users);
+            }
+        } catch (e) {
+            this.log(`SetupSuite RLS discovery skipped: ${(e as Error).message}`);
+        }
+    }
+
+    /**
+     * Suite-scoped teardown (D6). No-op: the RLS fixture is DISCOVERED (not created), so
+     * there is nothing to delete — the safest possible teardown. Present so the engine's
+     * suite-hook lifecycle is exercised end-to-end by this driver.
+     */
+    public override async TeardownSuite(_context: SuiteFixtureContext, _contextUser: UserInfo): Promise<void> {
+        // no-op — discovery-based fixture has nothing to clean up
+    }
+
+    /**
+     * The two-user RLS fixture for the current run: the one discovered in SetupSuite when
+     * available, otherwise discovered lazily here (the no-suite `mj test run` path) and
+     * cached back onto the suite context for sibling tests.
+     */
+    private ensureRlsFixture(context: DriverExecutionContext): RlsFixture {
+        const cached = context.fixtures?.Data?.[RLS_FIXTURE_KEY] as RlsFixture | undefined;
+        if (cached) {
+            return cached;
+        }
+        const fx = discoverRlsFixture(this.Provider, UserCache.Instance.Users);
+        if (context.fixtures) {
+            context.fixtures.Data[RLS_FIXTURE_KEY] = fx;
+        }
+        return fx;
     }
 
     public async Execute(context: DriverExecutionContext): Promise<DriverExecutionResult> {
@@ -69,10 +124,15 @@ export class IntegrationTestDriver extends BaseTestDriver {
             return this.buildErrorResult(context, startTime, (err as Error).message);
         }
 
-        // 2) Env gate (gated-tier / local-dev safety net). Skip-as-Passed with a gate note
-        //    when the required env var is unset — the driver result enum has no 'Skipped'.
-        if (config.requiresEnv && process.env[config.requiresEnv] !== '1') {
-            const note = `Skipped: ${config.requiresEnv} not set`;
+        // 2) Whole-test tier gate (gated-tier / local-dev safety net). The tier decides the
+        //    env var via TIER_ENV_GATE; an explicit `requiresEnv` overrides it. When the gate
+        //    is unmet, skip-as-Passed with a gate note — the driver result enum has no 'Skipped'.
+        const tier: IntegrationTier = config.tier ?? 'deterministic';
+        const explicitGate = config.requiresEnv;
+        const gated = explicitGate ? process.env[explicitGate] !== '1' : !IsTierEnabled(tier);
+        if (gated) {
+            const gateVar = explicitGate ?? TIER_ENV_GATE[tier];
+            const note = `Skipped: ${gateVar} not set (tier '${tier}')`;
             this.logToTestRun(context, 'warn', note);
             return this.buildSkipResult(context, startTime, note);
         }
@@ -80,6 +140,21 @@ export class IntegrationTestDriver extends BaseTestDriver {
         const selectors = Array.isArray(config.checks) ? config.checks : [];
         const transport: 'server' | 'client' =
             config.transport ?? (selectors.some(s => this.bundleTransport(s.type) === 'client') ? 'client' : 'server');
+
+        // 2b) D1 host check. These suites must own their process — install the instrumented
+        //     cache as the FIRST caller of LocalCacheManager.Initialize. Inside a live MJAPI
+        //     the cache is already initialized, so they cannot run here. Fail fast with an
+        //     actionable message (run via the CLI) instead of a confusing bootstrap stack.
+        if (transport === 'server' && serverProcessAlreadyClaimed()) {
+            return this.buildErrorResult(
+                context,
+                startTime,
+                'Integration cache suites must run in a dedicated process: run `npm run test:integration`, ' +
+                'or `MJ_INTEGRATION_TEST=1 mj test suite --name "<suite>"`. They cannot run inside a live ' +
+                'MJAPI — the cache is already initialized, so the instrumented cache cannot be installed ' +
+                'first (plan decision D1).'
+            );
+        }
 
         // 3) Arm a driver-side timeout (the engine never applies one). On fire we abort the
         //    check loop between checks; partial results become a 'Timeout' result.
@@ -97,7 +172,7 @@ export class IntegrationTestDriver extends BaseTestDriver {
                 if (timedOut) {
                     break;
                 }
-                await this.runBundle(context, checkCtx, sel.type, sel.config?.runMutationTests === true, oracleResults, outcomes, () => timedOut);
+                await this.runBundle(context, checkCtx, sel.type, sel.config, oracleResults, outcomes, () => timedOut);
             }
         } catch (bootErr) {
             clearTimeout(timer);
@@ -128,7 +203,7 @@ export class IntegrationTestDriver extends BaseTestDriver {
         context: DriverExecutionContext,
         checkCtx: IntegrationCheckContext,
         bundleType: string,
-        runMutation: boolean,
+        selConfig: IntegrationCheckSelectionConfig | undefined,
         oracleResults: OracleResult[],
         outcomes: TestOutcome[],
         isTimedOut: () => boolean
@@ -142,6 +217,18 @@ export class IntegrationTestDriver extends BaseTestDriver {
             return;
         }
 
+        // Expose the selector's opaque config bag to the bundle's checks (e.g. dataset-cache
+        // reads `datasetName`, aggregates-cache reads `entityName`). Set per-bundle since the
+        // check context is shared and reused across bundles within one Execute.
+        checkCtx.Config = selConfig as Record<string, unknown> | undefined;
+
+        // The rls-isolation bundles need the discovered two-user fixture (suite-scoped via
+        // SetupSuite, or lazily discovered for the no-suite `mj test run` path).
+        if (RLS_BUNDLES.has(bundleType)) {
+            checkCtx.RlsFixture = this.ensureRlsFixture(context);
+        }
+
+        const runMutation = selConfig?.runMutationTests === true;
         const needsFixtures = bundleType === FIXTURE_BUNDLE;
         if (needsFixtures) {
             try {
@@ -155,15 +242,20 @@ export class IntegrationTestDriver extends BaseTestDriver {
             }
         }
 
+        // Per-check tier gating routed through the shared IsTierEnabled predicate (the same
+        // one the tsx scripts use) so the env gate is honored identically. A selector may also
+        // opt mutation checks in explicitly via config.runMutationTests, independent of env.
+        const mutationEnabled = IsTierEnabled('mutation') || runMutation;
+        const liveModelEnabled = IsTierEnabled('live-model');
         try {
             for (const check of bundle) {
                 if (isTimedOut()) {
                     break;
                 }
-                if (check.RequiresMutation && !runMutation) {
+                if (check.RequiresMutation && !mutationEnabled) {
                     continue;
                 }
-                if (check.RequiresLiveModel && process.env.RUN_AGENT_TESTS !== '1') {
+                if (check.RequiresLiveModel && !liveModelEnabled) {
                     continue;
                 }
                 await this.runCheck(context, checkCtx, check.Id, check.Name, check.Fn, oracleResults, outcomes);
@@ -208,9 +300,9 @@ export class IntegrationTestDriver extends BaseTestDriver {
         }
     }
 
-    /** client-cache runs on the GraphQL client transport; every other bundle on SQL server. */
+    /** client-cache / rls-isolation-client run on the GraphQL client transport; others on SQL server. */
     private bundleTransport(bundleType: string): 'server' | 'client' {
-        return bundleType === CLIENT_BUNDLE ? 'client' : 'server';
+        return CLIENT_BUNDLES.has(bundleType) ? 'client' : 'server';
     }
 
     /**

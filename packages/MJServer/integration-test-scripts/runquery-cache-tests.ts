@@ -51,7 +51,7 @@ async function main(): Promise<void> {
     if (ctx.Fixtures) {
         await teardownRunQueryFixtures(ctx, ctx.Fixtures);
     }
-    await ic.Pool.close();
+    await ic.ClosePool();
     process.exit(failures > 0 ? 1 : 0);
 }
 
