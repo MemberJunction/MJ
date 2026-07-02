@@ -14,6 +14,10 @@ import {
     type EntityListItem, type EntityRecordsLoad, type RecordDetailLoad,
     type QueryListItem, type QueryRunResult, type DashboardListItem, type DashboardLoad,
 } from '@/data/services/explorer';
+import {
+    loadRecordForEdit, saveRecord,
+    type RecordEditLoad, type RecordSaveResult, type FieldValue, type FieldValidationError,
+} from '@/data/services/record-edit';
 
 /**
  * Hub counts for the Explorer landing screen — number of entities, queries,
@@ -115,6 +119,70 @@ export function useRecordDetail(entityName: string | undefined, recordId: string
     }, [status, entityName, recordId]);
 
     return { data, loading, error };
+}
+
+/**
+ * Edit-mode companion to {@link useRecordDetail}. Loads a record into an editable
+ * form model via `loadRecordForEdit`, owns the mutable `values` bag + inline
+ * validation `errors`, and exposes `setValue`/`save` handlers. Cancellation-guarded
+ * against id changes / unmount. Save failures are captured into `errors`/the
+ * returned {@link RecordSaveResult} rather than thrown.
+ *
+ * @param entityName The entity of the record; `undefined` keeps the hook idle.
+ * @param recordId The primary key of the record; both args must be defined to load.
+ * @returns `{ load, values, errors, loading, saving, error, canUpdate, setValue, save }`.
+ */
+export function useRecordEditor(entityName: string | undefined, recordId: string | undefined) {
+    const { status } = useMJ();
+    const [load, setLoad] = useState<RecordEditLoad | null>(null);
+    const [values, setValues] = useState<Record<string, FieldValue>>({});
+    const [errors, setErrors] = useState<FieldValidationError[]>([]);
+    const [loading, setLoading] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const [error, setError] = useState<Error | null>(null);
+
+    useEffect(() => {
+        if (status !== 'ready' || !entityName || !recordId) return;
+        let cancelled = false;
+        setLoading(true);
+        setError(null);
+        (async () => {
+            try {
+                const l = await loadRecordForEdit(entityName, recordId);
+                if (cancelled) return;
+                setLoad(l);
+                setValues(l ? { ...l.values } : {});
+                setErrors([]);
+            } catch (e) {
+                if (!cancelled) setError(e instanceof Error ? e : new Error(String(e)));
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [status, entityName, recordId]);
+
+    /** Update one field value and clear any inline error previously shown for it. */
+    const setValue = useCallback((key: string, value: FieldValue) => {
+        setValues((prev) => ({ ...prev, [key]: value }));
+        setErrors((prev) => prev.filter((e) => e.key !== key));
+    }, []);
+
+    /** Validate + persist the current edits; surfaces field errors into `errors`. */
+    const save = useCallback(async (): Promise<RecordSaveResult> => {
+        if (!load) return { success: false, error: 'Nothing to save.' };
+        setSaving(true);
+        setErrors([]);
+        try {
+            const result = await saveRecord(load, values);
+            if (!result.success && result.validationErrors) setErrors(result.validationErrors);
+            return result;
+        } finally {
+            setSaving(false);
+        }
+    }, [load, values]);
+
+    return { load, values, errors, loading, saving, error, canUpdate: load?.canUpdate ?? false, setValue, save };
 }
 
 /**

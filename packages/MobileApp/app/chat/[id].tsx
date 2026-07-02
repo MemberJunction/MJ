@@ -207,7 +207,7 @@ export default function ChatThreadScreen() {
                 </ScrollView>
 
                 <ArtifactDockHandle conversationId={view.id} count={view.artifacts.length} />
-                <Composer onSend={handleSend} disabled={sending} />
+                <Composer onSend={handleSend} disabled={sending} conversationId={view.id} />
             </KeyboardAvoidingView>
         </SafeAreaView>
     );
@@ -373,7 +373,7 @@ function ArtifactDockHandle({ conversationId, count }: { conversationId: string;
  * `onSend`), otherwise a mic button that opens `/voice-mode`. `disabled` blocks
  * input/send while an agent run is in flight.
  */
-function Composer({ onSend, disabled }: { onSend: (text: string) => void; disabled: boolean }) {
+function Composer({ onSend, disabled, conversationId }: { onSend: (text: string) => void; disabled: boolean; conversationId: string }) {
     const [text, setText] = useState('');
     const canSend = text.trim().length > 0 && !disabled;
 
@@ -401,7 +401,7 @@ function Composer({ onSend, disabled }: { onSend: (text: string) => void; disabl
                         <Icons.Send size={18} color={Colors.inverse} strokeWidth={2.2} />
                     </Pressable>
                 ) : (
-                    <Pressable style={styles.micBtn} onPress={() => router.push('/voice-mode')} disabled={disabled}>
+                    <Pressable style={styles.micBtn} onPress={() => router.push({ pathname: '/voice-mode', params: { conversationId } })} disabled={disabled}>
                         <Icons.Mic size={18} color={Colors.inverse} strokeWidth={2.2} />
                     </Pressable>
                 )}

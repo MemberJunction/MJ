@@ -41,6 +41,7 @@ export const Icons = {
     Plus: (p: IconProps) => (<D {...p}><Path d="M12 5v14M5 12h14" /></D>),
     Search: (p: IconProps) => (<D {...p}><Circle cx={11} cy={11} r={7} /><Path d="M21 21l-4-4" /></D>),
     ChevronLeft: (p: IconProps) => (<D {...p}><Polyline points="15 6 9 12 15 18" /></D>),
+    Edit: (p: IconProps) => (<D {...p}><Path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" /><Path d="M18.5 2.5a2.12 2.12 0 013 3L12 15l-4 1 1-4 9.5-9.5z" /></D>),
     ChevronRight: (p: IconProps) => (<D {...p}><Polyline points="9 6 15 12 9 18" /></D>),
     ChevronUp: (p: IconProps) => (<D {...p}><Polyline points="6 15 12 9 18 15" /></D>),
     ChevronDown: (p: IconProps) => (<D {...p}><Polyline points="6 9 12 15 18 9" /></D>),
