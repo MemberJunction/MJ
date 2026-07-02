@@ -1,11 +1,18 @@
 import { MarkedExtension, Tokens } from 'marked';
 
 /**
- * The custom token emitted by the SVG renderer extension.
+ * The custom token emitted by the SVG renderer extension for a ```svg fence.
+ *
+ * This is the framework-agnostic hand-off: the web/HTML path renders it into a
+ * `.svg-rendered` wrapper, while a native path (React Native + react-native-svg)
+ * can consume {@link svgContent} directly.
  */
 export interface SvgCodeBlockToken extends Tokens.Generic {
+  /** Discriminant identifying this custom block token. */
   type: 'svgCodeBlock';
+  /** The original matched markdown source (the full ```svg … ``` fence). */
   raw: string;
+  /** The inner SVG markup, trimmed — everything between the fences. */
   svgContent: string;
 }
 

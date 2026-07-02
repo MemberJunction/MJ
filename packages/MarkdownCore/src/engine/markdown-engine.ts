@@ -54,9 +54,21 @@ export class MarkdownEngine {
   }
 
   /**
-   * Configure the marked instance with the provided options.
-   * @param config Markdown configuration (merged over defaults).
-   * @param options Engine options, e.g. an injected highlight function.
+   * (Re)build the internal marked instance from the given configuration.
+   *
+   * Each call constructs a **fresh** `Marked` instance and re-applies the full
+   * extension chain in a fixed order (html-block-repair → svg → highlight →
+   * heading ids → alerts → collapsible headings → smartypants). Ordering matters:
+   * the SVG renderer must run before the highlighter so `svg` fences are not
+   * highlighted as code.
+   *
+   * The injected highlight function is **sticky**: it is only replaced when
+   * `options.highlightFn` is explicitly provided. This lets `parseToHtml`/
+   * `parseToTokens` apply per-call config overrides (which re-invoke this method
+   * *without* options) without dropping the highlighter the host wired up once.
+   *
+   * @param config Markdown configuration; merged over {@link DEFAULT_MARKDOWN_CONFIG}.
+   * @param options Engine options, e.g. an injected {@link HighlightFunction}.
    */
   public configureMarked(config: MarkdownConfig, options?: ConfigureMarkedOptions): void {
     this.currentConfig = { ...DEFAULT_MARKDOWN_CONFIG, ...config };

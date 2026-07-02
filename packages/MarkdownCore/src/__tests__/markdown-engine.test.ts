@@ -166,4 +166,118 @@ describe('MarkdownEngine config', () => {
     expect(headings.length).toBeGreaterThanOrEqual(2);
     expect(headings.some(h => h.id === 'one')).toBe(true);
   });
+
+  it('applies a heading id prefix when configured', () => {
+    const engine = new MarkdownEngine();
+    engine.configureMarked({ enableHeadingIds: true, headingIdPrefix: 'doc-' });
+    const html = engine.parseToHtml('# Intro');
+    expect(html).toContain('id="doc-intro"');
+  });
+
+  it('getConfig returns a copy, not the internal reference', () => {
+    const engine = new MarkdownEngine();
+    const a = engine.getConfig();
+    a.enableHtml = true;
+    // Mutating the returned object must not change the engine's config.
+    expect(engine.getConfig().enableHtml).toBe(false);
+  });
+});
+
+describe('MarkdownEngine feature toggles', () => {
+  it('renders svg as a plain code block when enableSvgRenderer is false', () => {
+    const engine = new MarkdownEngine();
+    engine.configureMarked({ enableSvgRenderer: false });
+    const html = engine.parseToHtml('```svg\n<svg><circle/></svg>\n```');
+    expect(html).not.toContain('class="svg-rendered"');
+    expect(html).toContain('<pre>');
+  });
+
+  it('applies smartypants typography when enabled (default)', () => {
+    const engine = new MarkdownEngine();
+    const html = engine.parseToHtml('He said -- "hi" ...');
+    // marked emits the typographic characters as numeric HTML entities.
+    expect(html).toContain('&#8211;'); // en dash for --
+    expect(html).toContain('&#8230;'); // ellipsis for ...
+    expect(html).toContain('&#8220;'); // opening curly double-quote
+    expect(html).not.toContain('--');
+  });
+
+  it('leaves typography as ASCII when smartypants is disabled', () => {
+    const engine = new MarkdownEngine();
+    engine.configureMarked({ enableSmartypants: false });
+    const html = engine.parseToHtml('He said -- "hi" ...');
+    expect(html).toContain('--');
+    expect(html).toContain('...');
+    expect(html).not.toContain('–');
+  });
+
+  it('omits collapsible section wrappers when collapsible headings are off (default)', () => {
+    const engine = new MarkdownEngine();
+    const html = engine.parseToHtml('## Section\n\nbody');
+    expect(html).not.toContain('collapsible-section');
+  });
+
+  it('honors autoExpandLevels through the engine config', () => {
+    const engine = new MarkdownEngine();
+    engine.configureMarked({
+      enableCollapsibleHeadings: true,
+      collapsibleHeadingLevel: 2,
+      autoExpandLevels: [2]
+    });
+    const html = engine.parseToHtml('## A\n\np\n\n### B\n\nc');
+    // h3 not in autoExpandLevels → its section carries the collapsed class.
+    expect(html).toMatch(/collapsible-section collapsed" data-level="3"/);
+  });
+});
+
+describe('MarkdownEngine HTML block indentation normalization', () => {
+  // normalizeHtmlBlockIndentation only runs when enableHtml is true. It strips
+  // leading whitespace from lines inside an HTML block so marked does not treat
+  // 4-space-indented inner markup as an indented code block.
+  const parse = (md: string): string => {
+    const engine = new MarkdownEngine();
+    engine.configureMarked({ enableHtml: true });
+    return engine.parseToHtml(md);
+  };
+
+  it('renders indented nested HTML as HTML, not an escaped code block', () => {
+    const html = parse('<div>\n    <p>indented</p>\n</div>');
+    expect(html).toContain('<p>indented</p>');
+    // Should not have been escaped into a code block.
+    expect(html).not.toContain('&lt;p&gt;');
+  });
+
+  it('handles a self-closing tag line without leaving the block open', () => {
+    const html = parse('<div>\n    <img src="x" />\n</div>\n\nAfter paragraph.');
+    expect(html).toContain('<img');
+    // Content after the closed div should render as a normal paragraph.
+    expect(html).toContain('After paragraph.');
+  });
+
+  it('handles a tag that opens and closes on the same line', () => {
+    const html = parse('<section>\n    <span>inline</span>\n</section>\n\nDone.');
+    expect(html).toContain('<span>inline</span>');
+    expect(html).toContain('Done.');
+  });
+
+  it('tracks nested same-name tags via the tag stack (pop only closes the block at depth 0)', () => {
+    const md = '<div>\n    <div>\n        <p>deep</p>\n    </div>\n</div>\n\nTail.';
+    const html = parse(md);
+    expect(html).toContain('<p>deep</p>');
+    // The block only ends after BOTH </div>s, so the trailing prose is a paragraph.
+    expect(html).toContain('Tail.');
+    expect(html).not.toContain('&lt;');
+  });
+
+  it('handles mixed indentation widths inside the block', () => {
+    const md = '<ul>\n  <li>two spaces</li>\n      <li>six spaces</li>\n</ul>';
+    const html = parse(md);
+    expect(html).toContain('<li>two spaces</li>');
+    expect(html).toContain('<li>six spaces</li>');
+  });
+
+  it('does not alter ordinary prose that is not inside an HTML block', () => {
+    const html = parse('Just a sentence with a < less-than that is not a tag.');
+    expect(html).toContain('less-than');
+  });
 });

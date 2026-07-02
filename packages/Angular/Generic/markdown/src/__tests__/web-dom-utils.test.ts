@@ -51,6 +51,29 @@ describe('sanitizeSvgContent', () => {
     expect(el.querySelector('foreignObject')).toBeNull();
     expect(el.querySelector('use')).toBeNull();
   });
+
+  it('strips javascript: from xlink:href', () => {
+    const el = container('<svg><a xlink:href="javascript:evil()">x</a></svg>');
+    sanitizeSvgContent(el);
+    expect(el.querySelector('a')?.hasAttribute('xlink:href')).toBe(false);
+  });
+
+  it('keeps a local <use> reference (only external ones are removed)', () => {
+    const el = container('<svg><use href="#icon"/></svg>');
+    sanitizeSvgContent(el);
+    expect(el.querySelector('use')).not.toBeNull();
+  });
+
+  it('is a no-op on a container with no dangerous content', () => {
+    const el = container('<svg><circle cx="1" cy="1" r="1"/></svg>');
+    sanitizeSvgContent(el);
+    expect(el.querySelector('circle')).not.toBeNull();
+  });
+
+  it('does not throw on an empty container', () => {
+    const el = container('');
+    expect(() => sanitizeSvgContent(el)).not.toThrow();
+  });
 });
 
 describe('addCopyButtonsToCodeBlocks / removeCopyButtonsFromCodeBlocks', () => {
@@ -73,6 +96,39 @@ describe('addCopyButtonsToCodeBlocks / removeCopyButtonsFromCodeBlocks', () => {
     addCopyButtonsToCodeBlocks(el);
     removeCopyButtonsFromCodeBlocks(el);
     expect(el.querySelector('.code-toolbar')).toBeNull();
+  });
+
+  it('adds a copy button but no language label for a code block without a language class', () => {
+    const el = container('<pre><code>plain code</code></pre>');
+    addCopyButtonsToCodeBlocks(el);
+    expect(el.querySelector('.code-copy-btn')).not.toBeNull();
+    expect(el.querySelector('.code-language-label')).toBeNull();
+  });
+
+  it('omits the language label when showLanguageLabel is false', () => {
+    const el = container('<pre><code class="language-ts">a</code></pre>');
+    addCopyButtonsToCodeBlocks(el, { showLanguageLabel: false });
+    expect(el.querySelector('.code-copy-btn')).not.toBeNull();
+    expect(el.querySelector('.code-language-label')).toBeNull();
+  });
+
+  it('honors a custom button/toolbar class and can remove it again', () => {
+    const el = container('<pre><code class="language-js">a</code></pre>');
+    addCopyButtonsToCodeBlocks(el, { toolbarClass: 'my-bar', buttonClass: 'my-btn' });
+    expect(el.querySelector('.my-btn')).not.toBeNull();
+    removeCopyButtonsFromCodeBlocks(el, 'my-bar');
+    expect(el.querySelector('.my-bar')).toBeNull();
+  });
+
+  it('is a no-op on a container with no code blocks', () => {
+    const el = container('<p>no code here</p>');
+    expect(() => addCopyButtonsToCodeBlocks(el)).not.toThrow();
+    expect(el.querySelector('.code-toolbar')).toBeNull();
+  });
+
+  it('removeCopyButtonsFromCodeBlocks is safe when there are no toolbars', () => {
+    const el = container('<pre><code>a</code></pre>');
+    expect(() => removeCopyButtonsFromCodeBlocks(el)).not.toThrow();
   });
 });
 
@@ -115,5 +171,26 @@ describe('collapsible DOM helpers', () => {
     expandToHeading(el, 'child');
     const child = el.querySelector('[data-level="3"]') as HTMLElement;
     expect(child.classList.contains('collapsed')).toBe(false);
+  });
+
+  it('toggleCollapsibleSection expands a section that starts collapsed', () => {
+    const child = el.querySelector('[data-level="3"]') as HTMLElement;
+    expect(child.classList.contains('collapsed')).toBe(true);
+    toggleCollapsibleSection(child);
+    expect(child.classList.contains('collapsed')).toBe(false);
+    expect(child.querySelector('.collapsible-toggle')?.getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('expandToHeading is a no-op for an unknown heading id (no throw)', () => {
+    const child = el.querySelector('[data-level="3"]') as HTMLElement;
+    expect(() => expandToHeading(el, 'does-not-exist')).not.toThrow();
+    // The child that was collapsed stays collapsed — nothing was touched.
+    expect(child.classList.contains('collapsed')).toBe(true);
+  });
+
+  it('expand/collapse helpers are safe on a container with no sections', () => {
+    const empty = container('<p>nothing collapsible</p>');
+    expect(() => expandAllSections(empty)).not.toThrow();
+    expect(() => collapseAllSections(empty)).not.toThrow();
   });
 });

@@ -2,7 +2,13 @@
  * Format a language identifier for display (e.g. "ts" -> "TypeScript").
  *
  * Pure string mapping with no DOM dependency, shared by the web copy-button
- * toolbar and the React Native code-block header.
+ * toolbar and the React Native code-block header. Lookup is case-insensitive and
+ * collapses aliases to one canonical label (e.g. `js`/`javascript` → `JavaScript`,
+ * `yml`/`yaml` → `YAML`).
+ *
+ * @param language The raw language id from a fenced code block (any casing).
+ * @returns The display name for a known language, or — for an unknown id — the
+ *          input uppercased as a reasonable fallback (an empty string maps to `''`).
  */
 export function formatLanguageName(language: string): string {
   const languageMap: Record<string, string> = {
