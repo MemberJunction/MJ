@@ -303,4 +303,15 @@ export class SnowflakeExternalDataSourceDriver extends BaseSqlExternalDataSource
   protected quoteIdent(name: string): string {
     return `"${name.replace(/"/g, '""')}"`;
   }
+
+  /**
+   * Snowflake native queries are screened with the ANSI/PostgreSQL grammar, which can't parse
+   * Snowflake's `?` positional bind placeholders — neutralize them for STRUCTURE analysis only (the
+   * original SQL + binds still execute). In Snowflake `?` is always a bind placeholder (path access
+   * uses `:` / functions, not a `?` operator), so this never turns a write into a read. Identifiers
+   * are already double-quoted like PostgreSQL, so no identifier normalization is needed.
+   */
+  protected normalizeForReadOnlyParse(sql: string): string {
+    return sql.replace(/\?/g, '1');
+  }
 }

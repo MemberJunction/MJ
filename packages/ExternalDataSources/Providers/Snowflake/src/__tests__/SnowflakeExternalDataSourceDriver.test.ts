@@ -15,6 +15,9 @@ class TestableSnowflakeDriver extends SnowflakeExternalDataSourceDriver {
   public mapType(t: string) {
     return this.mapObjectType(t);
   }
+  public screen(sql: string) {
+    return this.screenReadOnlyNativeQuery(sql);
+  }
 }
 
 const ds = (over: Partial<MJExternalDataSourceEntity>): MJExternalDataSourceEntity =>
@@ -59,5 +62,19 @@ describe('SnowflakeExternalDataSourceDriver — SQL building', () => {
       expect(d.mapType('view')).toBe('view');
       expect(d.mapType('BASE TABLE')).toBe('table');
     });
+  });
+});
+
+describe('SnowflakeExternalDataSourceDriver — read-only screen (dialect normalization)', () => {
+  const d = new TestableSnowflakeDriver();
+
+  // Snowflake is screened with the ANSI/PostgreSQL grammar, which can't parse Snowflake's `?` bind
+  // placeholders. Without normalization a legitimate parameterized read is refused as unparseable.
+  // Snowflake has no integration test in CI, so this unit test is the guard against that regression.
+  it('allows a parameterized (?) read-only query', () => {
+    expect(() => d.screen('SELECT n_name, COUNT(*) FROM nation n JOIN region r ON n.n_regionkey = r.r_regionkey WHERE r.r_name = ? GROUP BY n_name')).not.toThrow();
+  });
+  it('still rejects a write even with a placeholder (normalization must not mask writes)', () => {
+    expect(() => d.screen('DELETE FROM nation WHERE n_nationkey = ?')).toThrow(/read-only|write/i);
   });
 });

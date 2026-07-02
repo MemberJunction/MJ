@@ -27,6 +27,9 @@ describe("assertReadOnlyNativeQuery", () => {
         it("a column whose name begins with 'grant' — the DCL backstop is start-anchored, no false-positive", () => {
             expect(() => assertReadOnlyNativeQuery("SELECT grant_date FROM permits", "ansi")).not.toThrow();
         });
+        it("a comment-prefixed SELECT is allowed (comment-stripping doesn't over-reject reads)", () => {
+            expect(() => assertReadOnlyNativeQuery("/* report header */ SELECT id FROM orders", "ansi")).not.toThrow();
+        });
     });
 
     describe("rejects writes / DDL (read-only enforcement)", () => {
@@ -60,6 +63,18 @@ describe("assertReadOnlyNativeQuery", () => {
         });
         it("rejects a REVOKE (DCL) statement (ansi)", () => {
             expect(() => assertReadOnlyNativeQuery("REVOKE SELECT ON orders FROM reader", "ansi")).toThrow(/GRANT|REVOKE|DENY|read-only/i);
+        });
+        // Regression: a leading SQL comment must not slip a DCL statement past the backstop. On the
+        // T-SQL dialect the parser doesn't type GRANT/DENY as a write, so the comment-stripping DCL
+        // check is the only thing that catches these.
+        it("rejects a block-comment-prefixed GRANT (sqlserver)", () => {
+            expect(() => assertReadOnlyNativeQuery("/* c */ GRANT SELECT ON dbo.Orders TO reader", "sqlserver")).toThrow(/GRANT|REVOKE|DENY|read-only/i);
+        });
+        it("rejects a line-comment-prefixed DENY (sqlserver)", () => {
+            expect(() => assertReadOnlyNativeQuery("-- grant access\nDENY SELECT ON dbo.Orders TO reader", "sqlserver")).toThrow(/GRANT|REVOKE|DENY|read-only/i);
+        });
+        it("rejects a stacked-comment-prefixed REVOKE (ansi)", () => {
+            expect(() => assertReadOnlyNativeQuery("/*a*/ /*b*/ REVOKE SELECT ON orders FROM reader", "ansi")).toThrow(/GRANT|REVOKE|DENY|read-only/i);
         });
     });
 

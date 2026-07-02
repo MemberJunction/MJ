@@ -41,7 +41,19 @@ export abstract class BaseSqlExternalDataSourceDriver<TConnection = unknown> ext
    * write/DDL. See {@link assertReadOnlyNativeQuery}.
    */
   protected screenReadOnlyNativeQuery(sql: string): void {
-    assertReadOnlyNativeQuery(sql, this.sqlDialectKey());
+    assertReadOnlyNativeQuery(this.normalizeForReadOnlyParse(sql), this.sqlDialectKey());
+  }
+
+  /**
+   * Normalize dialect-specific syntax the read-only parser can't handle, for STRUCTURE analysis ONLY
+   * — the original SQL (with its real placeholders) is still what executes. Default: no-op. Drivers
+   * whose native syntax isn't accepted by their {@link sqlDialectKey} grammar override this: e.g. the
+   * ANSI/PostgreSQL grammar used for MySQL/Snowflake can't parse `?` positional placeholders, so those
+   * drivers neutralize them here — otherwise a legitimate parameterized read is refused as unparseable.
+   * A normalization must NEVER turn a write into a read (only value/identifier-level substitutions).
+   */
+  protected normalizeForReadOnlyParse(sql: string): string {
+    return sql;
   }
 
   /**

@@ -29,8 +29,8 @@ function dialectFor(key: SqlDialectKey): SQLParserDialect {
  *     `HasWriteStatement`; unparseable data-modifying CTEs are refused by the parse gate above), or
  *   - is a `SELECT ... INTO <newtable>` — it parses as a `select` (so `HasWriteStatement` is false),
  *     but it CREATES a table as a side effect, so it's caught here via `StatementKind`, or
- *   - starts with a DCL verb (`GRANT`/`REVOKE`/`DENY`) — a start-anchored backstop, because the
- *     underlying parser doesn't reliably surface these as a write statement type for every dialect.
+ *   - starts with a DCL verb (`GRANT`/`REVOKE`/`DENY`), after leading comments/whitespace are stripped —
+ *     a backstop because the underlying parser doesn't reliably surface these as a write type per-dialect.
  *
  * Known limitation — defense-in-depth, NOT a substitute for a least-privilege source credential:
  *   - A side-effecting routine invoked from a read shape (`SELECT writing_func()`,
@@ -46,11 +46,13 @@ export function assertReadOnlyNativeQuery(sql: string, dialectKey: SqlDialectKey
         );
     }
     // DCL backstop: node-sql-parser doesn't reliably surface GRANT/REVOKE/DENY as their own write
-    // statement type for every dialect (they can parse as untyped `assign` nodes), so HasWriteStatement
-    // may miss them. A native query is a single statement (stacked already rejected above), so a
-    // start-anchored match is exact — no legitimate read begins with a DCL verb, and this can't
-    // false-positive on a `grant`/`revoke` identifier appearing mid-statement.
-    if (/^\s*(grant|revoke|deny)\b/i.test(sql)) {
+    // statement type for every dialect (T-SQL parses them as untyped `assign` nodes), so
+    // HasWriteStatement may miss them. A native query is a single statement (stacked already rejected
+    // above), so checking the leading verb is exact. Strip any leading SQL comments/whitespace FIRST so
+    // a comment prefix (`/* c */ GRANT ...`, `-- x\nGRANT ...`) can't slip a DCL statement past the
+    // anchor — this can't false-positive on a `grant`/`revoke` identifier appearing mid-statement.
+    const leadingTrimmed = sql.replace(/^(?:\s+|--[^\n]*\n?|\/\*[\s\S]*?\*\/)+/, "");
+    if (/^(grant|revoke|deny)\b/i.test(leadingTrimmed)) {
         throw new Error(
             "External native query rejected: permission (GRANT/REVOKE/DENY) statements are not permitted — External Data Sources are read-only.",
         );
@@ -93,6 +95,11 @@ export function assertReadOnlyNativeQuery(sql: string, dialectKey: SqlDialectKey
  * source connects under its own (ideally least-privilege, read-only) credential for that surface.
  */
 export function assertReadOnlyClause(clause: string, dialectKey: SqlDialectKey, kind: "where" | "orderby"): void {
+    // Reject any comment marker. NOTE: this also rejects the (rare) legitimate clause that contains
+    // `--`/`/*`/`*/` inside a string literal (e.g. `Note = 'a--b'`). That's an accepted false-positive:
+    // per the fail-closed / refuse-under-uncertainty posture, over-rejecting a filter is preferable to
+    // risking comment-based truncation of the generated query. Callers can pass such values as bound
+    // parameters instead of inlining them into the filter.
     if (/--|\/\*|\*\//.test(clause)) {
         throw new Error(`External ${kind} clause rejected: SQL comment markers are not allowed.`);
     }

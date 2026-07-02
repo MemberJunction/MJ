@@ -17,6 +17,9 @@ class TestableMySQLDriver extends MySQLExternalDataSourceDriver {
   public groupFks(rows: Parameters<TestableMySQLDriver['groupForeignKeys']>[0]) {
     return this.groupForeignKeys(rows);
   }
+  public screen(sql: string) {
+    return this.screenReadOnlyNativeQuery(sql);
+  }
 }
 
 // Stub credential resolution so getConnection runs fully offline (mysql2 createPool is lazy —
@@ -109,6 +112,25 @@ describe('MySQLExternalDataSourceDriver — SQL building', () => {
   });
 });
 
+describe('MySQLExternalDataSourceDriver — read-only screen (dialect normalization)', () => {
+  const d = new TestableMySQLDriver();
+
+  // Regression: MySQL is screened with the ANSI/PostgreSQL grammar, which can't parse `?` placeholders
+  // or backtick identifiers. Without normalization these legitimate reads were refused as unparseable
+  // (this is what broke the MySQL integration test in CI). Unit-testing it here so standard CI (no DB)
+  // catches a regression without needing the DB-gated integration suite.
+  it('allows a parameterized (?) read-only query', () => {
+    expect(() => d.screen('SELECT c.name, COUNT(o.id) FROM customers c JOIN orders o ON o.customer_id = c.id WHERE o.status = ? GROUP BY c.name')).not.toThrow();
+  });
+  it('allows a read-only query with backtick-quoted identifiers', () => {
+    expect(() => d.screen('SELECT `name`, `total` FROM `orders` WHERE `status` = ?')).not.toThrow();
+  });
+  it('still rejects a write even with placeholders/backticks (normalization must not mask writes)', () => {
+    expect(() => d.screen('DELETE FROM `orders` WHERE id = ?')).toThrow(/read-only|write/i);
+    expect(() => d.screen('UPDATE `orders` SET `status` = ? WHERE id = ?')).toThrow(/read-only|write/i);
+  });
+});
+
 describe('MySQLExternalDataSourceDriver — connection caching', () => {
   it('keeps one pool per data source, so a single driver holds many connections', async () => {
     const driver = new CachingTestDriver();
@@ -118,6 +140,20 @@ describe('MySQLExternalDataSourceDriver — connection caching', () => {
     expect(a1).not.toBe(b1); // distinct sources -> distinct pools
     expect(a1).toBe(a2);     // same source -> cached pool reused
     expect(driver.poolCount()).toBe(2);
+    await driver.endAll();
+  });
+
+  it('memoizes the in-flight creation — concurrent first-requests for one source share ONE pool', async () => {
+    // Cold-start race parity with the Postgres driver: two requests arriving before the first pool is
+    // cached must share one creation (the in-flight promise is memoized); without it each builds its
+    // own pool and all but the last leak.
+    const driver = new CachingTestDriver();
+    const [a1, a2] = await Promise.all([
+      driver.getConn(localSource('A')),
+      driver.getConn(localSource('A')),
+    ]);
+    expect(a1).toBe(a2);                // same pool — not two pools racing
+    expect(driver.poolCount()).toBe(1); // exactly one cached, none leaked
     await driver.endAll();
   });
 });

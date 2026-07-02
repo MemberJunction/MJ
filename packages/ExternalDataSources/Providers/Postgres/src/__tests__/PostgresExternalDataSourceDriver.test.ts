@@ -134,4 +134,14 @@ describe('PostgresExternalDataSourceDriver — connection caching', () => {
     expect(driver.poolCount()).toBe(1); // exactly one cached, none leaked
     await driver.endAll();
   });
+
+  it('RunNativeQuery screens for read-only BEFORE connecting — a write is rejected offline', async () => {
+    // Proves the M1 wiring: the driver invokes the read-only screen at the top of RunNativeQuery,
+    // before getConnection. A write is rejected and no pool is ever created (screen throws first).
+    const driver = new CachingTestDriver();
+    const res = await driver.RunNativeQuery(localSource('A'), 'DELETE FROM orders', undefined);
+    expect(res.success).toBe(false);
+    expect(res.errorMessage).toMatch(/read-only/i);
+    expect(driver.poolCount()).toBe(0); // screen threw before getConnection — nothing connected
+  });
 });

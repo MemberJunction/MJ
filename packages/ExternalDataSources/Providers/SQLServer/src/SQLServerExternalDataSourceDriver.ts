@@ -294,12 +294,12 @@ export class SQLServerExternalDataSourceDriver extends BaseSqlExternalDataSource
     }));
   }
 
-  /** Quote a SQL identifier with T-SQL brackets, escaping embedded `]`. */
   /** T-SQL native queries must be parsed with the SQL Server grammar for accurate read-only screening. */
   protected sqlDialectKey(): SqlDialectKey {
     return 'sqlserver';
   }
 
+  /** Quote a SQL identifier with T-SQL brackets, escaping embedded `]`. */
   protected quoteIdent(name: string): string {
     return `[${name.replace(/]/g, ']]')}]`;
   }

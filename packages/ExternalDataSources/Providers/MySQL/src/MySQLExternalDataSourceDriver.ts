@@ -279,4 +279,16 @@ export class MySQLExternalDataSourceDriver extends BaseSqlExternalDataSourceDriv
   protected quoteIdent(name: string): string {
     return `\`${name.replace(/`/g, '``')}\``;
   }
+
+  /**
+   * MySQL native queries are screened with the ANSI/PostgreSQL grammar (no MySQL grammar in
+   * @memberjunction/sql-dialect). Neutralize the two MySQL-isms that grammar rejects — positional `?`
+   * placeholders and backtick-quoted identifiers — for STRUCTURE analysis only; the original SQL +
+   * bound params still execute. In MySQL `?` is always a placeholder (JSON uses functions/`->`, not
+   * the PG `?` operator), and identifier/string content is irrelevant to read-only detection, so this
+   * never turns a write into a read.
+   */
+  protected normalizeForReadOnlyParse(sql: string): string {
+    return sql.replace(/`/g, '"').replace(/\?/g, '1');
+  }
 }
