@@ -24,7 +24,7 @@
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agent Run Steps&Name=Skills"
           },
           "sync": {
-            "lastModified": "2026-07-02T03:02:56.330Z",
+            "lastModified": "2026-07-02T13:23:37.461Z",
             "checksum": "c77dc81aa303c1603226b012467e1a97d96ed46988dee05e0cc3dcd922c026e2"
           }
         }

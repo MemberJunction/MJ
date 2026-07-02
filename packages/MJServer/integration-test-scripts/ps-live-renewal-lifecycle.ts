@@ -217,7 +217,12 @@ async function main(): Promise<void> {
     const member = md.EntityByName('Members');
     console.log(`  Memberships entity: ${membership?.Name} (${membership?.ID})`);
     console.log(`  Members entity:     ${member?.Name} (${member?.ID})`);
-    if (!membership) throw new Error('Memberships entity not found — is AssociationDemo loaded?');
+    if (!membership) {
+      // Honor the suite's skip contract (see run-all.ts): missing AssociationDemo is an
+      // environment condition, not a failure — mirror the sibling ps-live scripts.
+      console.log('  SKIP: Memberships entity not found — is AssociationDemo loaded? (exiting 0)');
+      process.exit(0);
+    }
     algorithm = await ensureDriverNamedAlgorithm(md, user);
     console.log(`  Algorithm row: ${algorithm.id} (Name='${DRIVER_KEY}', ${algorithm.created ? 'created' : 'reused'})`);
 

@@ -1,6 +1,6 @@
 # Skill Activation Governance & Observability
 
-**Status:** In progress (approved by Amith 2026-07-01)
+**Status:** ✅ COMPLETE — shipped in the 5.45 train (#3017 merged 2026-07-02); unified clean-DB verification passed; execution-resolution fix for skill-granted sub-agents landed in #3029
 **Branch:** `ai-skill-activation-mode` → PR #3017 (draft, targets **5.45** — do not merge during 5.44)
 **Related:** PR #3015 (core skill library phase 2 — carries the skill metadata seeds), #3013/#3014 (shipped)
 
@@ -103,11 +103,11 @@ Population rules:
 
 ## Execution checklist
 
-1. [ ] Rewrite migration `V202607020230__v5.45.x__AISkill_ActivationMode.sql`
+1. [x] Rewrite migration `V202607020230__v5.45.x__AISkill_ActivationMode.sql`
        (consolidated ALTERs, extended properties, all 5 columns across 4 tables)
-2. [ ] Apply to dev DB → `mj codegen` → append output to migration per repo convention
+2. [x] Apply to dev DB → `mj codegen` → append output to migration per repo convention
        → `mj sync push` (JSONType metadata on `AIAgentRunStep.Skills`) → `mj codegen`
-3. [ ] Runtime (packages/AI/BaseAIEngine, AI/Agents, AI/CorePlus):
+3. [x] Runtime (packages/AI/BaseAIEngine, AI/Agents, AI/CorePlus):
        - `AgentSkillInvocation` type (CorePlus), `skillActivations[].reason` in loop response
        - AIEngineBase: auto-activatable set (double gate) vs full availability set
        - base-agent: catalog uses auto set; `validateSkillNextStep` rejects
@@ -115,14 +115,14 @@ Population rules:
          `resolvePlanModeGate` honors `RequirePlanMode`; `AIAgentRun.PlanMode` stamped;
          `Skills` JSON populated on Skill/Prompt/Actions/Sub-Agent steps
        - All field types derived from generated entities (`Entity['Field']`), never hand-copied
-4. [ ] UX: run header chip, step-node badges, drill-in Skills section
-5. [ ] Seeds (both branches as noted above)
-6. [ ] Tests: new coverage for every gate/branch + review-and-deepen existing suites in
+4. [x] UX: run header chip, step-node badges, drill-in Skills section
+5. [x] Seeds (both branches as noted above)
+6. [x] Tests: new coverage for every gate/branch + review-and-deepen existing suites in
        affected packages (edge cases: Limited agents, permission-filtered users,
        re-requests, plan-phase boundaries, malformed Skills JSON)
-7. [ ] Docs: JSDoc on all new/changed public surface; package READMEs;
+7. [x] Docs: JSDoc on all new/changed public surface; package READMEs;
        `/guides/AGENT_SKILLS_AND_PLAN_MODE_GUIDE.md` updated to cover the double gate,
        provenance model, RequirePlanMode, and the run-step observability contract
-8. [ ] Changesets; builds green; push; update PR #3017 + #3015. **No merging** (5.45).
+8. [x] Changesets; builds green; push; update PR #3017 + #3015. **No merging** (5.45).
 
-When complete, move this doc to `/plans/complete/skill-activation-governance/`.
+Moved to `/plans/complete/` 2026-07-02. Post-ship addendum: live testing surfaced a skill-granted sub-agent EXECUTION resolution gap (Research Agent infinite loop) — fixed in #3029 (`resolveSubAgentByName` effective-set branch + bounded, self-correcting execution retries).
