@@ -1,0 +1,50 @@
+[
+  {
+    "fields": {
+      "Name": "SkillSmith Agent Prompt",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/agents/skillsmith.template.md",
+      "ResponseFormat": "JSON",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
+      "Status": "Active",
+      "Description": "System prompt for SkillSmith — the meta-agent that authors AI Skills for the skill catalog: interviews the user, discovers bundle members via Find Candidate Actions/Agents, drafts agent-agnostic instructions with guardrails, gates on user approval, and persists the skill (default Status=Pending) with its action/sub-agent junctions.",
+      "EffortLevel": 1
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 1
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 2
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
+            "Priority": 1
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 1
+          }
+        }
+      ]
+    }
+  }
+]

@@ -1,0 +1,406 @@
+[
+  {
+    "fields": {
+      "Name": "Document Builder",
+      "Description": "Compose professional PDF, DOCX, and XLSX documents section by section, preview, and finalize for delivery",
+      "Instructions": "@file:templates/document-builder.skill.md",
+      "Status": "Active",
+      "Category": "Documents",
+      "IconClass": "fa-solid fa-file-lines",
+      "Color": "#0F766E",
+      "CreatedByUserID": "@lookup:MJ: Users.Name=System"
+    },
+    "relatedEntities": {
+      "MJ: AI Skill Actions": [
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Create Document"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Add Document Content"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Modify Document Section"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Preview Document"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Finalize Document"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Communications",
+      "Description": "Send individual messages, bulk audience sends, and Slack/Teams channel posts \u2014 with confirm-before-send guardrails",
+      "Instructions": "@file:templates/communications.skill.md",
+      "Status": "Active",
+      "Category": "Communication",
+      "IconClass": "fa-solid fa-paper-plane",
+      "Color": "#DC2626",
+      "CreatedByUserID": "@lookup:MJ: Users.Name=System"
+    },
+    "relatedEntities": {
+      "MJ: AI Skill Actions": [
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Send Single Message"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Send To Audience"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Slack Webhook"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Teams Webhook"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Data Import & Transform",
+      "Description": "Parse CSV, Excel, JSON, XML, and PDF data, validate and map it between schemas, and aggregate results",
+      "Instructions": "@file:templates/data-import-transform.skill.md",
+      "Status": "Active",
+      "Category": "Data",
+      "IconClass": "fa-solid fa-shuffle",
+      "Color": "#4F46E5",
+      "CreatedByUserID": "@lookup:MJ: Users.Name=System"
+    },
+    "relatedEntities": {
+      "MJ: AI Skill Actions": [
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=CSV Parser"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Excel Reader"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=JSON Transform"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=XML Parser"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=PDF Extractor"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Data Mapper"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Aggregate Data"
+          }
+        }
+      ],
+      "MJ: AI Skill Sub Agents": [
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "SubAgentID": "@lookup:MJ: AI Agents.Name=Codesmith Agent"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "File Management",
+      "Description": "Discover, search, read, organize, and share files across configured storage providers (no delete operations)",
+      "Instructions": "@file:templates/file-management.skill.md",
+      "Status": "Active",
+      "Category": "Files",
+      "IconClass": "fa-solid fa-folder-open",
+      "Color": "#B45309",
+      "CreatedByUserID": "@lookup:MJ: Users.Name=System"
+    },
+    "relatedEntities": {
+      "MJ: AI Skill Actions": [
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=List Storage Providers"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Search Storage Files"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=File Storage: List Objects"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=File Storage: Get Object Metadata"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=File Storage: Get File Content"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=File Storage: Get Download URL"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=File Storage: Get Upload URL"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=File Storage: Check Object Exists"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=File Storage: Check Directory Exists"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=File Storage: Copy Object"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=File Storage: Move Object"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=File Storage: Create Directory"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Scheduling & Automation",
+      "Description": "Inspect, create, update, test-run, and remove scheduled jobs \u2014 with plain-language schedule confirmation",
+      "Instructions": "@file:templates/scheduling-automation.skill.md",
+      "Status": "Active",
+      "Category": "Automation",
+      "IconClass": "fa-solid fa-clock",
+      "Color": "#0891B2",
+      "CreatedByUserID": "@lookup:MJ: Users.Name=System"
+    },
+    "relatedEntities": {
+      "MJ: AI Skill Actions": [
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Query Scheduled Jobs"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Create Scheduled Job"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Update Scheduled Job"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Delete Scheduled Job"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Execute Scheduled Job Now"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Get Scheduled Job Statistics"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Lists & Audiences",
+      "Description": "Build record lists from views, compose and maintain segments, share lists, and resolve audiences",
+      "Instructions": "@file:templates/lists-audiences.skill.md",
+      "Status": "Active",
+      "Category": "Data",
+      "IconClass": "fa-solid fa-list-check",
+      "Color": "#65A30D",
+      "CreatedByUserID": "@lookup:MJ: Users.Name=System"
+    },
+    "relatedEntities": {
+      "MJ: AI Skill Actions": [
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Materialize List From View"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Add View Results To List"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Refresh List From Source"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Compose Lists"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Move List Members"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Bulk Update List Item Status"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Share List"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Unshare List"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Invite To List"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Revoke List Invitation"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Resolve Audience"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Code & Computation",
+      "Description": "Execute sandboxed JavaScript for precise calculations, statistics, and data transformations",
+      "Instructions": "@file:templates/code-computation.skill.md",
+      "Status": "Active",
+      "Category": "Automation",
+      "IconClass": "fa-solid fa-code",
+      "Color": "#334155",
+      "CreatedByUserID": "@lookup:MJ: Users.Name=System"
+    },
+    "relatedEntities": {
+      "MJ: AI Skill Actions": [
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Execute Code"
+          }
+        }
+      ],
+      "MJ: AI Skill Sub Agents": [
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "SubAgentID": "@lookup:MJ: AI Agents.Name=Codesmith Agent"
+          }
+        }
+      ]
+    }
+  }
+]
