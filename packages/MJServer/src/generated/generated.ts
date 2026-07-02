@@ -44974,6 +44974,10 @@ export class MJEntity_ {
     @MaxLength(255)
     ParentBaseView?: string;
         
+    @Field({nullable: true}) 
+    @MaxLength(50)
+    CanonicalSchemaName?: string;
+        
     @Field(() => [MJApplicationEntity_])
     MJApplicationEntities_EntityIDArray: MJApplicationEntity_[]; // Link to MJApplicationEntities
     
@@ -77355,6 +77359,10 @@ export class MJSchemaInfo_ {
     @MaxLength(25)
     EntityNameSuffix?: string;
         
+    @Field({nullable: true, description: `Case-stable canonical schema name, sourced from the app manifest (mj-app.json schema.name). Used in place of SchemaName when deriving the schema prefix for entity ClassName/CodeName and GraphQL type names, so that PostgreSQL installs — whose physical SchemaName is folded to lowercase — still produce PascalCase prefixes matching the published, hand-cased entity packages. NULL means "no override": the prefix falls back to SchemaName (every existing install, the core __mj schema, and SQL Server, where SchemaName is already canonical).`}) 
+    @MaxLength(50)
+    CanonicalSchemaName?: string;
+        
 }
 
 //****************************************************************************
@@ -77385,6 +77393,9 @@ export class CreateMJSchemaInfoInput {
 
     @Field({ nullable: true })
     EntityNameSuffix: string | null;
+
+    @Field({ nullable: true })
+    CanonicalSchemaName: string | null;
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
@@ -77419,6 +77430,9 @@ export class UpdateMJSchemaInfoInput {
 
     @Field({ nullable: true })
     EntityNameSuffix?: string | null;
+
+    @Field({ nullable: true })
+    CanonicalSchemaName?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

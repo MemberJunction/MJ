@@ -34,8 +34,10 @@ import { MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgent
          MJAISkillActionEntity,
          MJAISkillSubAgentEntity,
          MJAIAgentSkillEntity,
+         MJAISkillPermissionEntity,
          ArtifactMetadataEngine} from "@memberjunction/core-entities";
 import { AIAgentPermissionHelper, EffectiveAgentPermissions } from "./AIAgentPermissionHelper";
+import { AISkillPermissionHelper, EffectiveSkillPermissions } from "./AISkillPermissionHelper";
 import { TemplateEngineBase } from "@memberjunction/templates-base-types";
 import { MJAIPromptEntityExtended, MJAIPromptCategoryEntityExtended, MJAIModelEntityExtended, MJAIAgentEntityExtended } from "@memberjunction/ai-core-plus";
 import { IStartupSink, RegisterForStartup } from "@memberjunction/core";
@@ -124,6 +126,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     private _skillActions: MJAISkillActionEntity[] = [];
     private _skillSubAgents: MJAISkillSubAgentEntity[] = [];
     private _agentSkills: MJAIAgentSkillEntity[] = [];
+    private _skillPermissions: MJAISkillPermissionEntity[] = [];
 
     /**
      * Cache for configuration inheritance chains.
@@ -355,6 +358,11 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             {
                 PropertyName: '_agentSkills',
                 EntityName: 'MJ: AI Agent Skills',
+                CacheLocal: true
+            },
+            {
+                PropertyName: '_skillPermissions',
+                EntityName: 'MJ: AI Skill Permissions',
                 CacheLocal: true
             },
             // NOTE: the realtime registry datasets below are CONDITIONAL — appended by
@@ -644,6 +652,12 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         return this._agentSkills;
     }
 
+    /** Per-user / per-role skill permission grants ("MJ: AI Skill Permissions"), cached during Config().
+     *  Consumed by {@link AISkillPermissionHelper} (open-by-default runtime gate). */
+    public get SkillPermissions(): MJAISkillPermissionEntity[] {
+        return this._skillPermissions;
+    }
+
     /**
      * Resolves the set of skills a given agent may activate, honoring the three-layer
      * gate: {@link MJAIAgentEntityExtended.AcceptsSkills} on the agent, {@link MJAISkillEntity.Status}
@@ -654,27 +668,44 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * - `AcceptsSkills = 'All'` → every `Active` skill in the catalog.
      * - `AcceptsSkills = 'Limited'` → only `Active` skills with an `Active` `MJ: AI Agent Skills` grant for this agent.
      *
+     * When `user` is supplied, the agent-allowed set is additionally **intersected with the user's
+     * run-permission** (open-by-default via {@link AISkillPermissionHelper}) — i.e. only skills the
+     * user is permitted to request survive. This is the single call the `/skill` picker and the
+     * server-side RequestedSkills intersection guard use. Omit `user` for pure agent-gating (e.g.
+     * resolving the full activatable catalog independent of who is asking).
+     *
      * @param agent - The agent to resolve available skills for.
+     * @param user - Optional user; when present, filters to skills the user can Run.
      * @returns MJAISkillEntity[] - Active skills the agent may activate (empty if AcceptsSkills is 'None').
      */
-    public GetSkillsForAgent(agent: MJAIAgentEntityExtended): MJAISkillEntity[] {
+    public GetSkillsForAgent(agent: MJAIAgentEntityExtended, user?: UserInfo): MJAISkillEntity[] {
         if (!agent || agent.AcceptsSkills === 'None') {
             return [];
         }
 
         const activeSkills = this._skills.filter(s => s.Status === 'Active');
 
+        let agentSkills: MJAISkillEntity[];
         if (agent.AcceptsSkills === 'All') {
-            return activeSkills;
+            agentSkills = activeSkills;
+        } else {
+            // 'Limited' — only skills with an Active grant for this agent
+            const grantedSkillIDs = new Set(
+                this._agentSkills
+                    .filter(gs => UUIDsEqual(gs.AgentID, agent.ID) && gs.Status === 'Active')
+                    .map(gs => NormalizeUUID(gs.SkillID))
+            );
+            agentSkills = activeSkills.filter(s => grantedSkillIDs.has(NormalizeUUID(s.ID)));
         }
 
-        // 'Limited' — only skills with an Active grant for this agent
-        const grantedSkillIDs = new Set(
-            this._agentSkills
-                .filter(gs => UUIDsEqual(gs.AgentID, agent.ID) && gs.Status === 'Active')
-                .map(gs => NormalizeUUID(gs.SkillID))
+        if (!user) {
+            return agentSkills;
+        }
+
+        // Intersect with the user's run-permission (synchronous — cache already loaded).
+        return agentSkills.filter(s =>
+            AISkillPermissionHelper.ComputeEffectivePermissions(s, this._skillPermissions, user).canRun
         );
-        return activeSkills.filter(s => grantedSkillIDs.has(NormalizeUUID(s.ID)));
     }
 
     /**
@@ -1734,5 +1765,44 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      */
     public async RefreshAgentPermissionsCache(agentId: string, user: UserInfo): Promise<void> {
         await AIAgentPermissionHelper.RefreshCache(user);
+    }
+
+    // ==========================================
+    // AI Skill Permission Helper Methods
+    // ==========================================
+
+    /** Checks if a user can view a skill (open-by-default). */
+    public async CanUserViewSkill(skillId: string, user: UserInfo): Promise<boolean> {
+        return await AISkillPermissionHelper.HasPermission(skillId, user, 'view');
+    }
+
+    /** Checks if a user can run (request/activate) a skill (open-by-default). */
+    public async CanUserRunSkill(skillId: string, user: UserInfo): Promise<boolean> {
+        return await AISkillPermissionHelper.HasPermission(skillId, user, 'run');
+    }
+
+    /** Checks if a user can edit a skill (owner or explicit grant). */
+    public async CanUserEditSkill(skillId: string, user: UserInfo): Promise<boolean> {
+        return await AISkillPermissionHelper.HasPermission(skillId, user, 'edit');
+    }
+
+    /** Checks if a user can delete a skill (owner or explicit grant). */
+    public async CanUserDeleteSkill(skillId: string, user: UserInfo): Promise<boolean> {
+        return await AISkillPermissionHelper.HasPermission(skillId, user, 'delete');
+    }
+
+    /** Gets all effective permissions a user has for a specific skill. */
+    public async GetUserSkillPermissions(skillId: string, user: UserInfo): Promise<EffectiveSkillPermissions> {
+        return await AISkillPermissionHelper.GetEffectivePermissions(skillId, user);
+    }
+
+    /** Gets all skills a user can access with a specific permission level. */
+    public async GetAccessibleSkills(user: UserInfo, permission: 'view' | 'run' | 'edit' | 'delete'): Promise<MJAISkillEntity[]> {
+        return await AISkillPermissionHelper.GetAccessibleSkills(user, permission);
+    }
+
+    /** Refreshes the skill permissions cache. Call after modifying permissions. */
+    public async RefreshSkillPermissionsCache(user: UserInfo): Promise<void> {
+        await AISkillPermissionHelper.RefreshCache(user);
     }
 }

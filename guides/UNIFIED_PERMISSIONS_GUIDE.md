@@ -130,7 +130,7 @@ sequenceDiagram
 
 ### 2.4 The domains that exist today
 
-Nine providers ship in the catalog (`metadata/permission-domains/.permission-domains.json`):
+Ten providers ship in the catalog (`metadata/permission-domains/.permission-domains.json`):
 
 | Domain (`Name`) | `ProviderClassName` | Resource type(s) | Backing storage |
 |---|---|---|---|
@@ -141,6 +141,7 @@ Nine providers ship in the catalog (`metadata/permission-domains/.permission-dom
 | Artifact Permissions | `MJArtifactPermissionProvider` | Artifacts | `MJ: Conversation Artifact Permissions` |
 | Collection Permissions | `MJCollectionPermissionProvider` | Collections | `MJ: Collection Permissions` |
 | AI Agent Permissions | `MJAIAgentPermissionProvider` | AI Agents | `MJ: AI Agent Permissions` |
+| AI Skill Permissions | `MJAISkillPermissionProvider` | AI Skills | `MJ: AI Skill Permissions` |
 | Query Permissions | `MJQueryPermissionProvider` | Queries | (query permission storage) |
 | Access Control Rules | `MJAccessControlRuleProvider` | (entity records) | `MJ: Access Control Rules` |
 
@@ -150,7 +151,7 @@ Note the two storage *styles* that both flow into the same unified model: **dedi
 
 ## 3. The two access paths (don't confuse them)
 
-Some domains — notably **AI Agents** — have **two** ways to ask about access, with **different defaults and different purposes**. This trips people up, so it's called out explicitly:
+Some domains — notably **AI Agents** and **AI Skills** — have **two** ways to ask about access, with **different defaults and different purposes**. This trips people up, so it's called out explicitly (AI Skills mirror Agents exactly: `AISkillPermissionHelper` + `AISkillPermissionProvider` over `MJ: AI Skill Permissions`):
 
 | Path | Class | Default when no grant rows exist | Cached? | Use it for |
 |---|---|---|---|---|

@@ -1029,6 +1029,21 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
     planMode?: boolean;
 
     /**
+     * Skills the caller (typically an end user via a `/skill-name` mention in the composer)
+     * explicitly requests be active for this run, identified by `AISkill.ID`. The framework
+     * treats these as pre-activation hints: at run start each requested skill is activated
+     * (its Instructions appended + bundled Actions/sub-agents surfaced) **only if it survives
+     * the guard** — it must be in the set the agent accepts ({@link MJAIAgentEntityExtended.AcceptsSkills}
+     * gate) AND the requesting user must have Run permission on it (open-by-default via
+     * `AISkillPermissionHelper`). Requested skills that fail either check are silently dropped,
+     * never surfaced to the model — so a client can never smuggle in a skill the user or agent
+     * isn't entitled to. Root-agent only (skills don't cascade to sub-agents). Defaults to none.
+     *
+     * @since 5.44.0
+     */
+    requestedSkillIDs?: string[];
+
+    /**
      * Optional AI Configuration ID to use for this agent execution.
      * When provided, this configuration will be passed to all prompts executed
      * by this agent and its sub-agents, enabling environment-specific model

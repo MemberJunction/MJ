@@ -25,7 +25,7 @@ import { MJAIActionEntity, MJActionEntity,
          MJAICredentialBindingEntity, MJAIModalityEntity, MJAIAgentModalityEntity,
          MJAIModelModalityEntity, MJAIClientToolDefinitionEntity,
          MJAIAgentClientToolEntity, MJAIAgentCategoryEntity, IsInjectableNoteStatus,
-         MJAISkillEntity, MJAISkillActionEntity, MJAISkillSubAgentEntity, MJAIAgentSkillEntity } from "@memberjunction/core-entities";
+         MJAISkillEntity, MJAISkillActionEntity, MJAISkillSubAgentEntity, MJAIAgentSkillEntity, MJAISkillPermissionEntity } from "@memberjunction/core-entities";
 import { AIEngineBase } from "@memberjunction/ai-engine-base";
 import { SimpleVectorService } from "@memberjunction/ai-vectors-memory";
 import { AgentEmbeddingService } from "./services/AgentEmbeddingService";
@@ -257,7 +257,8 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
     public get SkillActions(): MJAISkillActionEntity[] { return this.Base.SkillActions; }
     public get SkillSubAgents(): MJAISkillSubAgentEntity[] { return this.Base.SkillSubAgents; }
     public get AgentSkills(): MJAIAgentSkillEntity[] { return this.Base.AgentSkills; }
-    public GetSkillsForAgent(agent: MJAIAgentEntityExtended): MJAISkillEntity[] { return this.Base.GetSkillsForAgent(agent); }
+    public get SkillPermissions(): MJAISkillPermissionEntity[] { return this.Base.SkillPermissions; }
+    public GetSkillsForAgent(agent: MJAIAgentEntityExtended, user?: UserInfo): MJAISkillEntity[] { return this.Base.GetSkillsForAgent(agent, user); }
     public GetSkillActionIDs(skillID: string): string[] { return this.Base.GetSkillActionIDs(skillID); }
     public GetSkillSubAgentIDs(skillID: string): string[] { return this.Base.GetSkillSubAgentIDs(skillID); }
     public get AgentConfigurations(): MJAIAgentConfigurationEntity[] { return this.Base.AgentConfigurations; }

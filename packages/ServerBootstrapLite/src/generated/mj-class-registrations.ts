@@ -67,7 +67,7 @@ import {
 
 // @memberjunction/ai-gemini (4 classes)
 import {
-    GeminiEmbedding2,
+    GeminiEmbedding,
     GeminiImageGenerator,
     GeminiLLM,
     GeminiRealtime,
@@ -182,9 +182,10 @@ import {
     ZhipuLLM,
 } from '@memberjunction/ai-zhipu';
 
-// @memberjunction/core-entities (399 classes)
+// @memberjunction/core-entities (400 classes)
 import {
     AIAgentPermissionProvider,
+    AISkillPermissionProvider,
     AccessControlRuleProvider,
     ApplicationRolePermissionProvider,
     ArtifactPermissionProvider,
@@ -907,7 +908,7 @@ import {
     FormBuilderDesignerAgent,
 } from '@memberjunction/ai-form-builder';
 
-// @memberjunction/core-entities-server (30 classes)
+// @memberjunction/core-entities-server (31 classes)
 import {
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -921,6 +922,7 @@ import {
     MJAIPromptEntityServer,
     MJAIPromptRunEntityServer,
     MJAIRemoteBrowserProviderEntityServer,
+    MJAISkillPermissionEntityServer,
     MJActionEntityServer,
     MJApplicationEntityServer,
     MJArtifactVersionEntityServer,
@@ -1151,7 +1153,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     ElevenLabsAudioGenerator,
     ElevenLabsRealtime,
     FireworksLLM,
-    GeminiEmbedding2,
+    GeminiEmbedding,
     GeminiImageGenerator,
     GeminiLLM,
     GeminiRealtime,
@@ -1185,6 +1187,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     xAIRealtime,
     ZhipuLLM,
     AIAgentPermissionProvider,
+    AISkillPermissionProvider,
     AccessControlRuleProvider,
     ApplicationRolePermissionProvider,
     ArtifactPermissionProvider,
@@ -1809,6 +1812,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAIPromptEntityServer,
     MJAIPromptRunEntityServer,
     MJAIRemoteBrowserProviderEntityServer,
+    MJAISkillPermissionEntityServer,
     MJActionEntityServer,
     MJApplicationEntityServer,
     MJArtifactVersionEntityServer,
@@ -2003,7 +2007,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 860;
+export const CLASS_REGISTRATIONS_COUNT = 862;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

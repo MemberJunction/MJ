@@ -19,6 +19,7 @@ import { MentionAutocompleteService, MentionSuggestion } from '../../services/me
 import { MentionParserService } from '../../services/mention-parser.service';
 import { ConversationAttachmentService } from '../../services/conversation-attachment.service';
 import { Mention, MentionParseResult } from '../../models/conversation-state.model';
+import { PlanModePreference } from '../../utils/plan-mode-preference';
 import { PendingAttachment } from '../mention/mention-editor.component';
 import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -63,14 +64,41 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   @Input() appContext: Record<string, unknown> | null = null; // Application context for AI agent awareness
 
   /**
-   * Plan Mode pill state — sticky per-composer toggle, OFF by default (no behavior change unless
-   * the user turns it on). When on, the user's next message(s) request Plan Mode: the routed root
-   * agent must present a plan for approval before executing Actions/Sub-Agents. The toggle is
-   * always shown and the server enforces the `AIAgent.SupportsPlanMode` capability — a plan-mode
-   * request to an agent that doesn't support it simply no-ops the gate (see resolvePlanModeGate),
-   * so we don't need to resolve "the current agent" client-side just to hide the pill.
+   * Plan Mode toggle state — sticky PER CONVERSATION, OFF by default (no behavior change unless
+   * the user turns it on). When on, the user's next message(s) in THIS conversation request Plan
+   * Mode: the routed root agent must present a plan for approval before executing Actions/
+   * Sub-Agents. The toggle is always shown and the server enforces the `AIAgent.SupportsPlanMode`
+   * capability — a plan-mode request to an agent that doesn't support it simply no-ops the gate
+   * (see resolvePlanModeGate), so we don't need to resolve "the current agent" client-side.
+   *
+   * IMPORTANT: this is a GETTER over {@link PlanModePreference} (UserInfoEngine-backed), NOT a
+   * local field. The composer is mounted in multiple places at once (empty-state, chat-area,
+   * thread panel) — a local boolean per instance goes stale the moment another instance toggles.
+   * On the new-conversation composer (no conversationId yet) the value lives in a pending bucket
+   * that transfers to the real conversation on its first message. Approving a plan turns the
+   * conversation's flag OFF automatically (see message-item's plan-decision handling).
    */
-  public PlanModeEnabled = false;
+  public get PlanModeEnabled(): boolean {
+    return PlanModePreference.IsEnabled(this.conversationId);
+  }
+
+  /**
+   * Skill IDs the user requested via `/skill-name` mentions in the message being routed. Collected
+   * once per send from the composer's mention chips and forwarded to every agent-invocation path so
+   * whichever agent handles the message receives them as `RequestedSkillIDs`. The server intersects
+   * them with the agent's accepted skills AND the user's Run permission before any activate, so a
+   * skill the user can't run (or the agent doesn't accept) is silently dropped. Reset each send.
+   */
+  private _pendingRequestedSkillIDs: string[] = [];
+
+  /**
+   * Collects the skill IDs from `/skill` mention chips currently in the composer. Called at the
+   * start of routing so the value is stable for the whole message dispatch.
+   */
+  private collectRequestedSkillIDs(): string[] {
+    const chipData = this.inputBox?.getMentionChipsData() || [];
+    return chipData.filter(chip => chip.type === 'skill').map(chip => chip.id);
+  }
 
   /**
    * Optional default agent ID for the conversation. When set, the FIRST
@@ -229,7 +257,6 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   @Output() initialMessageAutoSendFailed = new EventEmitter<{conversationId: string}>(); // Emitted when a latched pending first message fails before messageSent
   @Output() emptyStateSubmit = new EventEmitter<{text: string; attachments: PendingAttachment[]}>(); // Emitted when in emptyStateMode
   @Output() uploadStateChanged = new EventEmitter<{isUploading: boolean; message: string}>(); // Emits when attachment upload state changes
-  @Output() artifactPickerRequested = new EventEmitter<void>(); // Emits when user clicks "Attach Artifact"
 
   @ViewChild('inputBox') inputBox!: MessageInputBoxComponent;
 
@@ -286,6 +313,10 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     });
 
     this.converationManagerAgent = await this.agentService.getConversationManagerAgent();
+
+    // Warm UserInfoEngine so the PlanModeEnabled getter has the cached settings available
+    // (no-op when already loaded; failure just leaves the toggle at its default OFF).
+    PlanModePreference.Warm();
 
     // Initialize mention autocomplete (needed for parsing mentions in messages)
     await this.mentionAutocomplete.initialize(this.currentUser);
@@ -760,13 +791,6 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   }
 
   /**
-   * Handle artifact picker request — bubble up to parent
-   */
-  onArtifactPickerRequested(): void {
-    this.artifactPickerRequested.emit();
-  }
-
-  /**
    * Handle text submitted from the input box
    */
   async onTextSubmitted(text: string): Promise<void> {
@@ -855,9 +879,15 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     }
   }
 
-  /** Toggle the sticky Plan Mode pill. Applies to subsequent user-initiated sends. */
+  /**
+   * Toggle sticky Plan Mode for THIS conversation (or the pending-new bucket on the
+   * new-conversation composer). Writes through {@link PlanModePreference} — the
+   * {@link PlanModeEnabled} getter reads the same cached setting, so ALL live composer
+   * instances flip together, and the value survives component recreation and sessions
+   * until the user turns it off or approves a plan.
+   */
   public TogglePlanMode(): void {
-    this.PlanModeEnabled = !this.PlanModeEnabled;
+    PlanModePreference.Set(this.conversationId, !this.PlanModeEnabled);
   }
 
   async onSend(): Promise<void> {
@@ -1073,6 +1103,23 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     mentionResult: MentionParseResult,
     isFirstMessage: boolean
   ): Promise<void> {
+    // A Plan Mode choice made on the new-conversation composer (no conversation yet) lives in a
+    // pending bucket — the FIRST routed message claims it onto the real conversation so the
+    // toggle carries across the empty-state → chat-area transition without bleeding into other
+    // conversations.
+    if (isFirstMessage && messageDetail.ConversationID) {
+      PlanModePreference.ClaimPendingNew(messageDetail.ConversationID);
+    }
+
+    // Snapshot user-requested skills once, before any routing branch, so every invocation path
+    // forwards the same set for this message. Derived from the SAVED MESSAGE TEXT via the shared
+    // MentionParser (`@{"type":"skill",…}` JSON mentions — same encoding as @agent/#entity), so the
+    // source of truth is the message itself, not composer DOM state. Chip-DOM read is the fallback
+    // for any path where the parsed result isn't available.
+    this._pendingRequestedSkillIDs = mentionResult.skillMentions?.length
+      ? mentionResult.skillMentions.map(m => m.id)
+      : this.collectRequestedSkillIDs();
+
     // Priority 1: Direct @mention
     if (mentionResult.agentMention) {
       await this.handleDirectMention(messageDetail, mentionResult.agentMention, isFirstMessage);
@@ -1521,7 +1568,9 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         this.conversationHistory,
         conversationManagerMessage.ID,
         this.createProgressCallback(conversationManagerMessage, 'Sage'),
-        this.appContext
+        this.appContext,
+        this.PlanModeEnabled, // per-request Plan Mode toggle
+        this._pendingRequestedSkillIDs, // user-requested skills (/skill mentions)
       );
 
       // Emit afterAgentTurn on the happy path only — the error/failure branch
@@ -2007,6 +2056,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         undefined, // configurationPresetId not used in this path
         this.appContext, // Embedder-supplied app/form context
         this.PlanModeEnabled, // per-request Plan Mode toggle
+        this._pendingRequestedSkillIDs, // user-requested skills (/skill mentions)
       );
 
       // Task will be removed automatically in markMessageComplete() when status changes to Complete/Error
@@ -2110,6 +2160,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         configurationPresetId, // Pass configuration from previous @mention for continuity
         this.appContext, // Embedder-supplied app/form context
         this.PlanModeEnabled, // per-request Plan Mode toggle
+        this._pendingRequestedSkillIDs, // user-requested skills (/skill mentions)
       );
 
       // Task will be removed automatically in markMessageComplete() when status changes to Complete/Error
@@ -2155,6 +2206,8 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
           artifactInfo?.versionId,
           configurationPresetId, // Pass same config as first attempt
           this.appContext, // Embedder-supplied app/form context
+          this.PlanModeEnabled, // per-request Plan Mode toggle
+          this._pendingRequestedSkillIDs, // user-requested skills (/skill mentions)
         );
 
         if (retryResult && retryResult.success) {
@@ -2291,6 +2344,8 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         previousArtifactInfo?.versionId,
         undefined, // configurationPresetId not used in this path
         this.appContext, // Embedder-supplied app/form context
+        this.PlanModeEnabled, // per-request Plan Mode toggle
+        this._pendingRequestedSkillIDs, // user-requested skills (/skill mentions)
       );
 
       // Remove from active tasks
@@ -2411,6 +2466,8 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         artifactInfo?.versionId,
         agentMention.configurationId, // Pass configuration preset ID
         this.appContext, // Embedder-supplied app/form context
+        this.PlanModeEnabled, // per-request Plan Mode toggle
+        this._pendingRequestedSkillIDs, // user-requested skills (/skill mentions)
       );
 
       // Remove from active tasks
@@ -2483,7 +2540,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     const agent = AIEngineBase.Instance.Agents.find(a => UUIDsEqual(a.ID, agentId));
     if (!agent) {
       console.warn('⚠️ Could not load agent for continuation - falling back to Sage');
-      await this.processMessageThroughAgent(userMessage, { mentions: [], agentMention: null, userMentions: [], entityMentions: [] });
+      await this.processMessageThroughAgent(userMessage, { mentions: [], agentMention: null, userMentions: [], entityMentions: [], skillMentions: [] });
       return;
     }
 
@@ -2688,6 +2745,8 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         previousArtifactInfo?.versionId,
         configurationId, // Pass configuration for continuity
         this.appContext, // Embedder-supplied app/form context
+        this.PlanModeEnabled, // per-request Plan Mode toggle
+        this._pendingRequestedSkillIDs, // user-requested skills (/skill mentions)
       );
 
       // Remove from active tasks

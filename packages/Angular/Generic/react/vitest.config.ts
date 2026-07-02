@@ -1,11 +1,14 @@
 import { defineProject, mergeConfig } from 'vitest/config';
-import sharedConfig from '../../../../vitest.shared';
+import domSharedConfig from '../../../../vitest.dom.shared';
 
+// Single DOM preset: this package has no class-level spec that mocks
+// '@angular/core', so the existing node specs run fine under jsdom alongside
+// the new *.component.dom.test.ts specs. See guides/ANGULAR_TESTING_GUIDE.md.
 export default mergeConfig(
-  sharedConfig,
+  domSharedConfig,
   defineProject({
     test: {
-      environment: 'node',
+      name: '@memberjunction/ng-react',
     },
-  })
+  }),
 );

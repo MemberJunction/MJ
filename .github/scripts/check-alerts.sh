@@ -5,7 +5,7 @@
 # Measures migration of bespoke inline alerts/banners onto <mj-alert>, and (with
 # --max) fails when the bespoke count exceeds a baseline so a new hand-rolled
 # alert can't sneak back in. Markers come from a verified 4-agent classification
-# sweep (see plans/alert-migration-inventory.md) — genuine alert classes only,
+# sweep (see plans/complete/alert-migration-inventory.md) — genuine alert classes only,
 # with the documented false-positives EXCLUDED, plus an inline-style heuristic.
 # Scans .html AND .ts (some alerts live in inline templates).
 #

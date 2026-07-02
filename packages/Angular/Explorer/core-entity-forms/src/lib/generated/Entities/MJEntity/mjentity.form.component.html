@@ -278,6 +278,14 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="DetectExternalChanges"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
 
     </mj-collapsible-panel>
 
@@ -444,7 +452,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="RowsToPackSampleOrder"
-            Type="code"
+            Type="textarea"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -468,6 +476,14 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="TrustServerCacheCompletely"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="AllowCaching"
             Type="checkbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
@@ -609,22 +625,6 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="AllowCaching"
-            Type="checkbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="DetectExternalChanges"
-            Type="checkbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
             FieldName="ExternalDataSourceID"
             Type="textbox"
             [EditMode]="EditMode"
@@ -661,6 +661,14 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="__mj_UpdatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="CanonicalSchemaName"
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
