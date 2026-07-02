@@ -117,13 +117,25 @@ export function BuildDueRoutineFilter(nowIso: string): string {
 }
 
 /**
- * SHA-256 hex digest of the normalized result content. Normalization collapses all
- * whitespace runs to single spaces and trims, so cosmetic formatting differences (line
- * wrapping, trailing newlines) do not register as "changes" for OnChange detection.
+ * Matches ISO-8601 date-time tokens (with optional fractional seconds and timezone) —
+ * volatile "when did this run" markers that many targets embed in their results (e.g. the
+ * Calculate Expression action's `evaluatedAt`). They are execution metadata, not result
+ * content, so OnChange normalization strips them before hashing.
+ */
+const ISO_TIMESTAMP_PATTERN = /\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?/g;
+
+/**
+ * SHA-256 hex digest of the normalized result content. Normalization strips embedded
+ * ISO-8601 timestamps (volatile execution metadata that would otherwise register a
+ * "change" on every run), collapses whitespace runs to single spaces, and trims — so
+ * cosmetic formatting differences never trigger OnChange detection.
  * Null/undefined content hashes as the empty string — deterministic, never throws.
  */
 export function ComputeResultHash(content: string | null | undefined): string {
-    const normalized = (content ?? '').replace(/\s+/g, ' ').trim();
+    const normalized = (content ?? '')
+        .replace(ISO_TIMESTAMP_PATTERN, '')
+        .replace(/\s+/g, ' ')
+        .trim();
     return createHash('sha256').update(normalized, 'utf8').digest('hex');
 }
 

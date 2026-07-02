@@ -161,6 +161,15 @@ describe('ComputeResultHash', () => {
         expect(ComputeResultHash('alpha')).not.toBe(ComputeResultHash('beta'));
     });
 
+    it('strips embedded ISO timestamps so per-run execution metadata is not a "change"', () => {
+        const runA = '{"result":42,"evaluatedAt":"2026-01-15T12:00:00.123Z"}';
+        const runB = '{"result":42,"evaluatedAt":"2026-01-15T13:05:09.456Z"}';
+        expect(ComputeResultHash(runA)).toBe(ComputeResultHash(runB));
+        // ...but a genuine content change still registers.
+        const runC = '{"result":43,"evaluatedAt":"2026-01-15T13:05:09.456Z"}';
+        expect(ComputeResultHash(runC)).not.toBe(ComputeResultHash(runA));
+    });
+
     it('null and undefined hash identically to the empty string', () => {
         expect(ComputeResultHash(null)).toBe(ComputeResultHash(''));
         expect(ComputeResultHash(undefined)).toBe(ComputeResultHash(''));
