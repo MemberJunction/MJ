@@ -1,0 +1,32 @@
+[
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: User Routines",
+      "RoleID": "@lookup:MJ: Roles.Name=UI",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": true
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: User Routine Recipients",
+      "RoleID": "@lookup:MJ: Roles.Name=UI",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": true
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: User Routine Runs",
+      "RoleID": "@lookup:MJ: Roles.Name=UI",
+      "CanRead": true,
+      "CanCreate": false,
+      "CanUpdate": false,
+      "CanDelete": true
+    }
+  }
+]

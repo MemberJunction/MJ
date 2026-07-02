@@ -1,0 +1,21 @@
+{
+  "fields": {
+    "Name": "User Routine Notification - Default",
+    "Description": "Default notification template for User Routine run results. The UserRoutineDispatcherDriver resolves this template BY NAME when a routine has no NotificationTemplateID of its own, rendering it with { routine, run, resultSummary, status } context (routine name, run status, result summary, timestamps).",
+    "UserID": "@lookup:MJ: Users.Name=System",
+    "IsActive": true
+  },
+  "relatedEntities": {
+    "MJ: Template Contents": [
+      {
+        "fields": {
+          "TemplateID": "@parent:ID",
+          "TypeID": "@lookup:MJ: Template Content Types.Name=HTML",
+          "TemplateText": "@file:templates/user-routine-notification.html",
+          "Priority": 100,
+          "IsActive": true
+        }
+      }
+    ]
+  }
+}

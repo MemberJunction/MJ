@@ -38,6 +38,7 @@
     "@memberjunction/global": "5.44.0",
     "@memberjunction/integration-engine": "5.44.0",
     "@memberjunction/integration-pk-classifier": "5.44.0",
+    "@memberjunction/scheduling-engine": "5.44.0",
     "@memberjunction/skip-types": "5.44.0",
     "@memberjunction/sql-converter": "5.44.0",
     "@memberjunction/sql-dialect": "5.44.0",
