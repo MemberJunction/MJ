@@ -158,6 +158,20 @@ export abstract class VectorDBBase {
     }
 
     /**
+     * Whether this provider's `QueryIndex`/`HybridQuery` `params.id` is the **EntityDocumentID**
+     * (a GUID) rather than an external/logical index name. External services (Pinecone, Qdrant)
+     * and DB-colocated providers key by an index name and return `false` (the default). The
+     * in-process {@link SimpleVectorServiceProvider} reads vectors out of
+     * `MJ: Entity Record Documents` keyed by EntityDocumentID, so it overrides this to `true`.
+     *
+     * Callers that hold both identifiers (e.g. the duplicate-record detector) consult this to
+     * pass the correct `id` for the resolved provider instead of assuming index-name semantics.
+     */
+    public get QueryKeyIsEntityDocumentID(): boolean {
+        return false;
+    }
+
+    /**
      * Whether this provider requires an API key / credential to operate. Defaults to `true`
      * for external, cloud-hosted vector services (Pinecone, Qdrant, …). Override and return
      * `false` for in-process / local providers that authenticate via the host process or the

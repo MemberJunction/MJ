@@ -54,10 +54,10 @@
             }
           </div>
         } @else {
-          <div class="empty-state">
-            <i class="fa-solid fa-info-circle"></i>
-            <span>No component hierarchy available</span>
-          </div>
+          <mj-empty-state
+            Icon="fa-solid fa-circle-info"
+            Title="No component hierarchy available"
+            Size="compact" />
         }
       </div>
 
@@ -144,23 +144,17 @@
 
             <!-- Success/Error Messages -->
             @if (SubmitSuccess) {
-              <div class="message success-message">
-                <i class="fa-solid fa-check-circle"></i>
-                <span>Feedback submitted successfully!</span>
-              </div>
+              <mj-alert Variant="success">Feedback submitted successfully!</mj-alert>
             }
             @if (SubmitError) {
-              <div class="message error-message">
-                <i class="fa-solid fa-exclamation-circle"></i>
-                <span>{{ SubmitError }}</span>
-              </div>
+              <mj-alert Variant="error">{{ SubmitError }}</mj-alert>
             }
           </div>
         } @else {
-          <div class="no-selection-message">
-            <i class="fa-solid fa-hand-pointer"></i>
-            <p>Select a component from the tree to provide feedback</p>
-          </div>
+          <mj-empty-state
+            Icon="fa-solid fa-hand-pointer"
+            Title="Select a component from the tree to provide feedback"
+            Size="compact" />
         }
       </div>
     </div>

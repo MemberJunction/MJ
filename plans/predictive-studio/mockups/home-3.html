@@ -1,0 +1,154 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Predictive Studio — Home</title>
+<link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  .cc { display:grid; grid-template-columns:236px 1fr 300px; gap:16px; align-items:start; }
+  /* left KPI rail */
+  .krail .kr { padding:14px 14px; border-bottom:1px solid var(--mj-border-subtle); }
+  .krail .kr:last-child { border-bottom:none; }
+  .krail .kr .label { font-size:11.5px; color:var(--mj-text-muted); font-weight:600; }
+  .krail .kr .val { font-size:23px; font-weight:720; letter-spacing:-.02em; margin-top:1px; }
+  .krail .kr .ft { display:flex; align-items:center; justify-content:space-between; margin-top:3px; }
+  .spark { width:84px; height:24px; }
+  /* center leaderboard */
+  .chartph { height:172px; border-radius:var(--radius); border:1px solid var(--mj-border-default); background:
+     linear-gradient(var(--mj-border-subtle) 1px,transparent 1px) 0 0/100% 34px, var(--mj-bg-surface-card); position:relative; overflow:hidden; }
+  .chartph svg { position:absolute; inset:0; width:100%; height:100%; }
+  .chartph .lg { position:absolute; left:14px; top:12px; display:flex; gap:14px; font-size:11.5px; }
+  .chartph .lg .it { display:flex; align-items:center; gap:5px; color:var(--mj-text-secondary); }
+  /* right attention */
+  .att { display:flex; gap:11px; padding:12px 0; border-bottom:1px solid var(--mj-border-subtle); }
+  .att:last-child { border-bottom:none; }
+  .att .ic { width:30px; height:30px; border-radius:8px; display:grid; place-items:center; font-size:13px; flex:0 0 auto; }
+  .att.r .ic { background:var(--mj-error-bg); color:var(--mj-error-text); }
+  .att.a .ic { background:var(--mj-warning-bg); color:var(--mj-warning-text); }
+  .att.i .ic { background:var(--mj-info-bg); color:var(--mj-info-text); }
+</style></head>
+<body><div class="ps-app">
+<aside class="ps-sidebar">
+ <div class="ps-brand"><div class="logo"><i class="fa-solid fa-wand-magic-sparkles"></i></div><div><div class="name">Predictive Studio</div><div class="sub">MemberJunction</div></div></div>
+ <nav class="ps-nav">
+  <div class="group">Build</div>
+  <a class="active"><i class="fa-solid fa-gauge-high"></i> Home</a>
+  <a><i class="fa-solid fa-diagram-project"></i> Training Pipelines</a>
+  <a><i class="fa-solid fa-shapes"></i> Algorithm Catalog</a>
+  <div class="group">Run</div>
+  <a><i class="fa-solid fa-flask"></i> Experiments</a>
+  <a><i class="fa-solid fa-cubes"></i> Model Registry</a>
+  <a><i class="fa-solid fa-chart-column"></i> Compare Runs</a>
+  <div class="group">Assist</div>
+  <a><i class="fa-solid fa-robot"></i> Model Dev Agent</a>
+ </nav>
+ <div class="me"><div class="ps-avatar">AN</div><div class="small"><div style="color:#fff;font-weight:600">Amith N.</div><div style="color:#7e8ca5">Data Studio</div></div></div>
+</aside>
+<main class="ps-main"><div class="ps-topbar">
+  <div><h1>Command Center</h1><div class="crumb">Member Renewal Prediction · Live overview</div></div>
+  <div class="spacer"></div>
+  <span class="badge green"><span class="dot" style="background:var(--mj-success)"></span> 2 experiments live</span>
+  <button class="btn ghost sm"><i class="fa-solid fa-robot"></i> Ask the Agent</button>
+  <button class="btn primary sm"><i class="fa-solid fa-plus"></i> New Pipeline</button>
+</div><div class="ps-content">
+
+  <div class="cc">
+    <!-- LEFT: KPI rail with sparklines -->
+    <div class="card krail">
+      <div class="card-head" style="padding:12px 14px"><i class="fa-solid fa-gauge-high" style="color:var(--mj-brand-primary)"></i><h3 style="font-size:13.5px">Key Metrics</h3></div>
+      <div class="kr">
+        <div class="label">Published Models</div>
+        <div class="val">7</div>
+        <div class="ft"><span class="delta" style="color:var(--mj-success);font-size:12px;font-weight:650"><i class="fa-solid fa-arrow-up"></i> +2 mo</span>
+          <svg class="spark" viewBox="0 0 84 24" preserveAspectRatio="none"><polyline points="0,20 14,18 28,18 42,12 56,11 70,6 84,5" fill="none" stroke="var(--mj-brand-primary)" stroke-width="2"/></svg></div>
+      </div>
+      <div class="kr">
+        <div class="label">Active Experiments</div>
+        <div class="val">2</div>
+        <div class="ft"><span class="muted small">12 runs in flight</span>
+          <svg class="spark" viewBox="0 0 84 24" preserveAspectRatio="none"><polyline points="0,14 14,16 28,9 42,11 56,7 70,10 84,8" fill="none" stroke="#d98213" stroke-width="2"/></svg></div>
+      </div>
+      <div class="kr">
+        <div class="label">Best Holdout AUC</div>
+        <div class="val">0.864</div>
+        <div class="ft"><span class="delta" style="color:var(--mj-success);font-size:12px;font-weight:650"><i class="fa-solid fa-arrow-up"></i> +0.018</span>
+          <svg class="spark" viewBox="0 0 84 24" preserveAspectRatio="none"><polyline points="0,21 14,17 28,16 42,12 56,10 70,7 84,4" fill="none" stroke="var(--mj-success)" stroke-width="2"/></svg></div>
+      </div>
+      <div class="kr">
+        <div class="label">Records Scored / wk</div>
+        <div class="val">48,210</div>
+        <div class="ft"><span class="delta" style="color:var(--mj-success);font-size:12px;font-weight:650"><i class="fa-solid fa-arrow-up"></i> +6.4%</span>
+          <svg class="spark" viewBox="0 0 84 24" preserveAspectRatio="none"><polyline points="0,16 14,15 28,17 42,12 56,13 70,8 84,6" fill="none" stroke="var(--mj-brand-primary)" stroke-width="2"/></svg></div>
+      </div>
+      <div class="kr" style="padding-top:12px">
+        <button class="btn primary sm" style="width:100%;justify-content:center"><i class="fa-solid fa-robot"></i> Ask the Model Dev Agent</button>
+      </div>
+    </div>
+
+    <!-- CENTER: live leaderboard + chart -->
+    <div class="col">
+      <div class="card">
+        <div class="card-head"><i class="fa-solid fa-trophy" style="color:#d98213"></i><h3>Live Leaderboard — Renewal v5 Sweep</h3><div class="spacer"></div><span class="badge blue"><i class="fa-solid fa-circle-notch fa-spin" style="font-size:9px"></i> Running</span></div>
+        <table class="table">
+          <thead><tr><th style="width:40px">#</th><th>Algorithm</th><th class="num">Holdout AUC</th><th class="num">PR-AUC</th><th>Trial</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr><td><span class="rank gold">1</span></td><td><strong>LightGBM</strong></td><td class="num"><strong>0.861</strong></td><td class="num">0.742</td><td class="mono">t-118</td><td><span class="badge green">Best</span></td></tr>
+            <tr><td><span class="rank">2</span></td><td>XGBoost</td><td class="num">0.858</td><td class="num">0.738</td><td class="mono">t-114</td><td><span class="badge gray">Done</span></td></tr>
+            <tr><td><span class="rank">3</span></td><td>Multilayer Perceptron</td><td class="num">0.844</td><td class="num">0.711</td><td class="mono">t-121</td><td><span class="badge blue">Training</span></td></tr>
+            <tr><td><span class="rank">4</span></td><td>Random Forest</td><td class="num">0.839</td><td class="num">0.703</td><td class="mono">t-109</td><td><span class="badge gray">Done</span></td></tr>
+            <tr><td><span class="rank">5</span></td><td>Logistic Regression</td><td class="num">0.828</td><td class="num">0.681</td><td class="mono">t-105</td><td><span class="badge gray">Done</span></td></tr>
+            <tr><td><span class="rank">6</span></td><td>Ridge Regression</td><td class="num">0.804</td><td class="num">0.642</td><td class="mono">t-103</td><td><span class="badge gray">Done</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><i class="fa-solid fa-chart-line" style="color:var(--mj-brand-primary)"></i><h3>Score Over Time</h3><div class="spacer"></div>
+          <button class="btn ghost sm">AUC</button><button class="btn ghost sm">Log-loss</button><span class="muted small">last 24 runs</span></div>
+        <div class="card-body">
+          <div class="chartph">
+            <div class="lg"><span class="it"><span class="dot" style="background:#1f9d57"></span>LightGBM</span><span class="it"><span class="dot" style="background:#2050c8"></span>XGBoost</span><span class="it"><span class="dot" style="background:#7b3ff0"></span>MLP</span></div>
+            <svg viewBox="0 0 600 172" preserveAspectRatio="none">
+              <polyline points="0,118 75,108 150,100 225,92 300,80 375,72 450,60 525,52 600,46" fill="none" stroke="#1f9d57" stroke-width="2.5"/>
+              <polyline points="0,128 75,120 150,110 225,104 300,92 375,86 450,74 525,66 600,58" fill="none" stroke="#2050c8" stroke-width="2.5"/>
+              <polyline points="0,140 75,134 150,130 225,118 300,116 375,104 450,98 525,88 600,84" fill="none" stroke="#7b3ff0" stroke-width="2.5" stroke-dasharray="5 4"/>
+            </svg>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: needs attention -->
+    <div class="col">
+      <div class="card">
+        <div class="card-head"><i class="fa-solid fa-triangle-exclamation" style="color:var(--mj-warning)"></i><h3>Needs Attention</h3><div class="spacer"></div><span class="badge red">3</span></div>
+        <div class="card-body" style="padding-top:8px">
+          <div class="att r"><div class="ic"><i class="fa-solid fa-droplet"></i></div><div>
+            <div><strong>Target leakage detected</strong></div>
+            <div class="muted small"><span class="mono">RenewalDate_Prior</span> correlates 0.97 with target in Lapse Tier sweep.</div>
+            <button class="btn sm danger" style="margin-top:7px"><i class="fa-solid fa-eye-slash"></i> Drop feature</button></div></div>
+          <div class="att a"><div class="ic"><i class="fa-solid fa-hourglass-half"></i></div><div>
+            <div><strong>Stale model</strong></div>
+            <div class="muted small">Engagement Score v1 (Ridge) last retrained 94 days ago — drift up 0.06.</div>
+            <button class="btn sm" style="margin-top:7px"><i class="fa-solid fa-rotate"></i> Retrain</button></div></div>
+          <div class="att a"><div class="ic"><i class="fa-solid fa-gauge"></i></div><div>
+            <div><strong>Budget nearly spent</strong></div>
+            <div class="muted small">Lapse Tier sweep at 89% of compute budget — 1 trial remaining.</div>
+            <button class="btn sm ghost" style="margin-top:7px"><i class="fa-solid fa-plus"></i> Raise budget</button></div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><i class="fa-solid fa-gauge" style="color:var(--mj-brand-primary)"></i><h3>Budget Burn</h3></div>
+        <div class="card-body" style="display:flex;justify-content:center;padding:16px 0 18px">
+          <div style="text-align:center"><div class="gauge" style="--p:62"><span class="g-val">62%</span></div><div class="muted small" style="margin-top:8px">Renewal v5 Sweep · 4 of 6 algos</div></div>
+        </div>
+        <div class="divider"></div>
+        <div class="card-body" style="padding-top:10px"><button class="btn sm ghost" style="width:100%;justify-content:center"><i class="fa-solid fa-pause"></i> Pause experiment</button></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><i class="fa-solid fa-shapes" style="color:var(--mj-brand-primary)"></i><h3>Algorithms in Use</h3></div>
+        <div class="card-body" style="padding-top:10px"><div class="row wrap" style="gap:7px"><span class="tag">XGBoost · 3</span><span class="tag">LightGBM · 2</span><span class="tag">Random Forest · 1</span><span class="tag">Logistic Reg. · 1</span></div></div>
+      </div>
+    </div>
+  </div>
+
+</div></main>
+</div></body></html>

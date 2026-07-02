@@ -377,6 +377,21 @@
   overflow: hidden;
 }
 
+/* The review recording pane body: the evidence player fills its host (:host height:100%),
+   so its template-based pane needs a filling, constrained frame. */
+.review-recording-host {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.review-recording-host mj-realtime-evidence-playback {
+  flex: 1;
+  min-height: 0;
+}
+
 /* ---------- flex layout (main column | resize handle | surface panel) ---------- */
 /* Token-styled resize handle: invisible until hover, brand-tinted while interacting.
    7px hit target, col-resize cursor; removed (not rendered) while collapsed / focus. */

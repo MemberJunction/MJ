@@ -414,14 +414,3 @@
   background: color-mix(in srgb, var(--mj-text-muted) 15%, var(--mj-bg-surface));
   color: var(--mj-text-muted);
 }
-
-/* Empty state */
-.scratchpad-empty-state {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 16px;
-  color: var(--mj-text-muted);
-  font-size: 13px;
-  font-style: italic;
-}

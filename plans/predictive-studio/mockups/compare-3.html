@@ -1,0 +1,178 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Predictive Studio — Compare Runs</title>
+<link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  .vs-head { display:grid; grid-template-columns:1fr 64px 1fr; gap:0; align-items:stretch; }
+  .vs-card { padding:18px 20px; }
+  .vs-card.champ { border-top:4px solid #1f9d57; }
+  .vs-card.chall { border-top:4px solid #7b3ff0; border-left:1px solid var(--mj-border-subtle); }
+  .vs-mid { display:grid; place-items:center; background:var(--mj-bg-surface-sunken); border-left:1px solid var(--mj-border-subtle); border-right:1px solid var(--mj-border-subtle); }
+  .vs-mid .vstxt { font-weight:800; font-size:13px; color:var(--mj-text-muted); transform:rotate(0deg); }
+  .role { font-size:11px; font-weight:800; letter-spacing:.07em; text-transform:uppercase; }
+  .delta-row { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin:18px 0; }
+  .delta { background:var(--mj-bg-surface); border:1px solid var(--mj-border-default); border-radius:var(--radius); padding:14px 16px; box-shadow:var(--shadow-sm); }
+  .delta .lab { font-size:11.5px; color:var(--mj-text-muted); font-weight:600; }
+  .delta .big { font-size:24px; font-weight:760; letter-spacing:-.02em; margin-top:3px; display:flex; align-items:center; gap:7px; }
+  .delta.up .big { color:var(--mj-success-text); } .delta.down .big { color:var(--mj-error-text); } .delta.flat .big { color:var(--mj-text-secondary); }
+  .delta .ctx { font-size:11.5px; color:var(--mj-text-muted); margin-top:3px; }
+  .reco { display:flex; align-items:center; gap:16px; padding:16px 20px; border-radius:var(--radius); background:linear-gradient(90deg,var(--mj-warning-bg),#fff); border:1px solid #f0d09a; }
+  .reco .ic { width:48px; height:48px; border-radius:12px; background:var(--mj-warning); color:#fff; display:grid; place-items:center; font-size:22px; flex:0 0 auto; }
+  .diff2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; align-items:start; }
+  .mrow { display:grid; grid-template-columns:160px 1fr 1fr; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid var(--mj-border-subtle); font-variant-numeric:tabular-nums; }
+  .mrow .mk { font-size:12.5px; font-weight:600; color:var(--mj-text-secondary); }
+  .mrow .mv { font-size:15px; font-weight:700; text-align:right; }
+  .mrow .mv .d { font-size:11px; font-weight:600; display:block; }
+  .fidiff .fbar { grid-template-columns:128px 1fr 44px; }
+  .fidiff .fbar .ch { height:6px; border-radius:4px; background:var(--mj-bg-surface-sunken); margin-top:3px; overflow:hidden; }
+  .fidiff .fbar .ch > span { display:block; height:100%; background:linear-gradient(90deg,#7b3ff0,#a06ff5); }
+  .win { color:var(--mj-success-text); } .lose { color:var(--mj-error-text); }
+</style></head>
+<body><div class="ps-app">
+<aside class="ps-sidebar">
+ <div class="ps-brand"><div class="logo"><i class="fa-solid fa-wand-magic-sparkles"></i></div><div><div class="name">Predictive Studio</div><div class="sub">MemberJunction</div></div></div>
+ <nav class="ps-nav">
+  <div class="group">Build</div>
+  <a><i class="fa-solid fa-gauge-high"></i> Home</a>
+  <a><i class="fa-solid fa-diagram-project"></i> Training Pipelines</a>
+  <a><i class="fa-solid fa-shapes"></i> Algorithm Catalog</a>
+  <div class="group">Run</div>
+  <a><i class="fa-solid fa-flask"></i> Experiments</a>
+  <a><i class="fa-solid fa-cubes"></i> Model Registry</a>
+  <a class="active"><i class="fa-solid fa-chart-column"></i> Compare Runs</a>
+  <div class="group">Assist</div>
+  <a><i class="fa-solid fa-robot"></i> Model Dev Agent</a>
+ </nav>
+ <div class="me"><div class="ps-avatar">AN</div><div class="small"><div style="color:#fff;font-weight:600">Amith N.</div><div style="color:#7e8ca5">Data Studio</div></div></div>
+</aside>
+<main class="ps-main"><div class="ps-topbar">
+  <div><h1>Compare Runs</h1><div class="crumb">Renewal Propensity · Champion vs Challenger · promotion review</div></div>
+  <div class="spacer"></div>
+  <button class="btn ghost sm"><i class="fa-solid fa-code-compare"></i> Champion / Challenger</button>
+  <button class="btn ghost sm"><i class="fa-solid fa-arrow-up-right-from-square"></i> Export</button>
+  <button class="btn primary"><i class="fa-solid fa-trophy"></i> Promotion decision</button>
+</div><div class="ps-content">
+
+  <!-- RECOMMENDATION BANNER -->
+  <div class="reco" style="margin-bottom:18px">
+    <div class="ic"><i class="fa-solid fa-hand"></i></div>
+    <div style="flex:1">
+      <div style="font-weight:750;font-size:15px;color:var(--mj-warning-text)">Hold — gain is within noise; keep the champion</div>
+      <div class="small" style="color:var(--mj-warning-text)">Challenger B improves Holdout AUC by only <strong>+0.005</strong> (inside the ±0.006 bootstrap CI) while losing interpretability and pushing one feature past the 0.60 dominance line. Not worth a re-deploy.</div>
+    </div>
+    <div class="row" style="gap:8px"><button class="btn sm"><i class="fa-solid fa-clock-rotate-left"></i> Re-run later</button><button class="btn sm danger"><i class="fa-solid fa-xmark"></i> Reject promotion</button></div>
+  </div>
+
+  <!-- HEAD TO HEAD -->
+  <div class="card" style="margin-bottom:18px">
+    <div class="vs-head">
+      <div class="vs-card champ">
+        <div class="row" style="justify-content:space-between;align-items:flex-start">
+          <div>
+            <span class="role" style="color:var(--mj-success-text)"><i class="fa-solid fa-crown"></i> Champion · Published v4</span>
+            <div style="font-weight:750;font-size:16px;margin-top:5px">Run A — XGBoost</div>
+            <div class="muted small">engagement / recency features · serving production</div>
+          </div>
+          <span class="badge green"><span class="dot" style="background:var(--mj-success)"></span> Live</span>
+        </div>
+        <div class="row" style="margin-top:14px;gap:22px">
+          <div><div class="muted small">Holdout AUC</div><div style="font-size:26px;font-weight:760;letter-spacing:-.02em">0.864</div></div>
+          <div><div class="muted small">F1</div><div style="font-size:26px;font-weight:760;letter-spacing:-.02em">0.79</div></div>
+          <div><div class="muted small">Overfit gap</div><div style="font-size:26px;font-weight:760;letter-spacing:-.02em;color:var(--mj-warning-text)">0.046</div></div>
+        </div>
+      </div>
+
+      <div class="vs-mid"><div class="vstxt">VS</div></div>
+
+      <div class="vs-card chall">
+        <div class="row" style="justify-content:space-between;align-items:flex-start">
+          <div>
+            <span class="role" style="color:#7b3ff0"><i class="fa-solid fa-flask"></i> Challenger · Candidate v5-rc</span>
+            <div style="font-weight:750;font-size:16px;margin-top:5px">Run B — LightGBM</div>
+            <div class="muted small">full feature set · staging / shadow</div>
+          </div>
+          <span class="badge blue"><span class="dot" style="background:var(--mj-info)"></span> Staging</span>
+        </div>
+        <div class="row" style="margin-top:14px;gap:22px">
+          <div><div class="muted small">Holdout AUC</div><div style="font-size:26px;font-weight:760;letter-spacing:-.02em">0.859</div></div>
+          <div><div class="muted small">F1</div><div style="font-size:26px;font-weight:760;letter-spacing:-.02em">0.78</div></div>
+          <div><div class="muted small">Overfit gap</div><div style="font-size:26px;font-weight:760;letter-spacing:-.02em;color:var(--mj-error-text)">0.071</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DELTA CALLOUTS (challenger relative to champion) -->
+  <div class="section-title">Challenger Δ vs champion</div>
+  <div class="delta-row">
+    <div class="delta down">
+      <div class="lab">Holdout AUC</div>
+      <div class="big"><i class="fa-solid fa-arrow-down" style="font-size:15px"></i> −0.005</div>
+      <div class="ctx">0.859 vs 0.864 · within ±0.006 CI</div>
+    </div>
+    <div class="delta down">
+      <div class="lab">Overfit gap</div>
+      <div class="big"><i class="fa-solid fa-arrow-up" style="font-size:15px"></i> +0.025</div>
+      <div class="ctx">0.071 vs 0.046 · worse generalization</div>
+    </div>
+    <div class="delta up">
+      <div class="lab">Train time</div>
+      <div class="big"><i class="fa-solid fa-arrow-down" style="font-size:15px"></i> −14s</div>
+      <div class="ctx">28s vs 42s · faster to retrain</div>
+    </div>
+    <div class="delta down">
+      <div class="lab">Feature dominance</div>
+      <div class="big"><i class="fa-solid fa-triangle-exclamation" style="font-size:15px"></i> 0.63</div>
+      <div class="ctx">days_since_act &gt; 0.60 · risk added</div>
+    </div>
+  </div>
+
+  <div class="callout warn" style="margin-bottom:18px">
+    <i class="fa-solid fa-triangle-exclamation"></i>
+    <div><strong>New dominance risk introduced by the challenger.</strong> On the full feature set, <span class="mono">days_since_last_activity</span> jumps to <strong>0.63</strong> importance (champion: 0.27). A model leaning that hard on one signal is brittle to upstream pipeline drift — a regression the incumbent doesn't have.</div>
+  </div>
+
+  <div class="diff2">
+    <!-- METRIC DIFF -->
+    <div class="card">
+      <div class="card-head"><i class="fa-solid fa-list-check" style="color:var(--mj-brand-primary)"></i><h3>Metric diff</h3><div class="spacer"></div><span class="muted small">champion → challenger</span></div>
+      <div class="card-body" style="padding-top:6px">
+        <div class="mrow" style="border-bottom:2px solid var(--mj-border-default)"><div class="mk">Metric</div><div class="mv muted" style="font-weight:700">Champion A</div><div class="mv muted" style="font-weight:700">Challenger B</div></div>
+        <div class="mrow"><div class="mk">Holdout AUC</div><div class="mv">0.864</div><div class="mv">0.859 <span class="d lose">−0.005</span></div></div>
+        <div class="mrow"><div class="mk">Train AUC</div><div class="mv">0.910</div><div class="mv">0.930 <span class="d muted">in-sample</span></div></div>
+        <div class="mrow"><div class="mk">Overfit gap</div><div class="mv win">0.046</div><div class="mv lose">0.071 <span class="d lose">+0.025</span></div></div>
+        <div class="mrow"><div class="mk">F1 score</div><div class="mv">0.79</div><div class="mv">0.78 <span class="d lose">−0.01</span></div></div>
+        <div class="mrow"><div class="mk">Train time</div><div class="mv">42s</div><div class="mv win">28s <span class="d win">−14s</span></div></div>
+        <div class="mrow"><div class="mk">Max feature share</div><div class="mv win">0.31</div><div class="mv lose">0.63 <span class="d lose">⚠ dominance</span></div></div>
+        <div class="mrow" style="border-bottom:none"><div class="mk">Interpretability</div><div class="mv" style="font-size:13px">SHAP</div><div class="mv" style="font-size:13px">SHAP <span class="d muted">no gain</span></div></div>
+      </div>
+    </div>
+
+    <!-- FEATURE IMPORTANCE DIFF -->
+    <div class="card fidiff">
+      <div class="card-head"><i class="fa-solid fa-chart-simple" style="color:var(--mj-brand-primary)"></i><h3>Feature importance — A vs B</h3><div class="spacer"></div><span class="muted small"><span style="color:var(--mj-brand-primary)">▮</span> champ &nbsp; <span style="color:#7b3ff0">▮</span> chall</span></div>
+      <div class="card-body" style="padding-top:8px">
+        <div class="fbar"><div class="label">tenure</div>
+          <div><div class="track"><span style="width:62%"></span></div><div class="ch"><span style="width:34%"></span></div></div>
+          <div class="val" style="text-align:right;font-size:11px;font-weight:600">.31 / .17</div></div>
+        <div class="fbar"><div class="label">days_since_act</div>
+          <div><div class="track"><span style="width:54%"></span></div><div class="ch"><span style="width:100%;background:linear-gradient(90deg,#d6453d,#e87a73)"></span></div></div>
+          <div class="val" style="text-align:right;font-size:11px;font-weight:700;color:var(--mj-error-text)">.27 / .63</div></div>
+        <div class="fbar"><div class="label">engagement</div>
+          <div><div class="track"><span style="width:36%"></span></div><div class="ch"><span style="width:12%"></span></div></div>
+          <div class="val" style="text-align:right;font-size:11px;font-weight:600">.18 / .06</div></div>
+        <div class="fbar"><div class="label">events_signup</div>
+          <div><div class="track"><span style="width:24%"></span></div><div class="ch"><span style="width:6%"></span></div></div>
+          <div class="val" style="text-align:right;font-size:11px;font-weight:600">.12 / .03</div></div>
+        <div class="fbar"><div class="label">emb_aggregate</div>
+          <div><div class="track"><span style="width:16%"></span></div><div class="ch"><span style="width:18%"></span></div></div>
+          <div class="val" style="text-align:right;font-size:11px;font-weight:600">.08 / .09</div></div>
+        <div class="fbar"><div class="label">city</div>
+          <div><div class="track"><span style="width:8%"></span></div><div class="ch"><span style="width:4%"></span></div></div>
+          <div class="val" style="text-align:right;font-size:11px;font-weight:600">.04 / .02</div></div>
+        <div class="divider" style="margin:10px 0"></div>
+        <div class="muted small">The champion spreads importance across tenure + recency + engagement; the challenger collapses onto <span class="mono">days_since_act</span> — more accurate on paper, more fragile in production.</div>
+      </div>
+    </div>
+  </div>
+
+</div></main>
+</div></body></html>

@@ -1,0 +1,25 @@
+@memberjunction/context-crush
+Copyright (c) MemberJunction.com
+
+This package contains independent TypeScript re-implementations of several
+context-compression *concepts* originated by the Headroom project:
+
+    Headroom — https://github.com/chopratejas/headroom
+    Licensed under the Apache License, Version 2.0.
+
+Specifically, the following primitives are inspired by Headroom components:
+
+  - CrushJSON / DescribeCrush  — inspired by Headroom's "SmartCrusher"
+                                  (structural JSON compression).
+  - PartitionStablePrefix      — inspired by Headroom's "CacheAligner"
+                                  (prompt-prefix cache stabilization).
+  - CrushCode                  — inspired by Headroom's "CodeCompressor"
+                                  (AST-aware source reduction).
+
+These are clean-room re-implementations written from the published algorithm
+descriptions. No Headroom source code is copied, vendored, or depended upon.
+The "Headroom" name is the upstream project's brand and is used here only to
+credit the originating ideas; it is not part of this package's identity.
+
+See plans/agent-token-optimization.md (§0 Attribution) in the MemberJunction
+repository for the full attribution record.

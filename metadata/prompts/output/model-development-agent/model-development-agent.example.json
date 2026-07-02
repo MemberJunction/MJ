@@ -1,0 +1,14 @@
+{
+  "taskComplete": false,
+  "message": "I've put together a plan to predict which active members are at risk of not renewing in the next 90 days. We'll train and compare a few models and judge them by AUC (how well they rank who's most at risk). One heads-up: the Data Scout flagged 'last_payment_date' as a leakage risk, so we'll exclude it. Want me to go ahead and run the experiments, or adjust anything first?",
+  "reasoning": "Goal, data, and experiments are defined and leakage has been addressed. Presenting the plan for explicit approval before execution.",
+  "nextStep": {
+    "type": "chat",
+    "suggestedResponses": [
+      "Approve and run it",
+      "Change the goal",
+      "Change the data/features",
+      "Change the experiments or budget"
+    ]
+  }
+}

@@ -353,7 +353,8 @@
                 <div class="metric-card metric-card--wide">
                     <div class="metric-title">Bridges over time</div>
                     @if (DayBuckets.length === 0) {
-                        <div class="metric-empty">No bridge activity in this window</div>
+                        <mj-empty-state Size="compact" Variant="empty" Icon="fa-solid fa-chart-column"
+                            Title="No bridge activity in this window" />
                     } @else {
                         <div class="bar-chart">
                             @for (bucket of DayBuckets; track bucket.Label) {
@@ -372,7 +373,7 @@
                 <div class="metric-card">
                     <div class="metric-title">By provider</div>
                     @if (ByProvider.length === 0) {
-                        <div class="metric-empty">No data</div>
+                        <mj-empty-state Size="compact" Variant="empty" Icon="fa-solid fa-chart-simple" Title="No data" />
                     } @else {
                         @for (slice of ByProvider; track slice.Label) {
                             <div class="hbar-row">
@@ -390,7 +391,7 @@
                 <div class="metric-card">
                     <div class="metric-title">By status</div>
                     @if (ByStatus.length === 0) {
-                        <div class="metric-empty">No data</div>
+                        <mj-empty-state Size="compact" Variant="empty" Icon="fa-solid fa-chart-simple" Title="No data" />
                     } @else {
                         @for (slice of ByStatus; track slice.Label) {
                             <div class="hbar-row">
@@ -408,7 +409,7 @@
                 <div class="metric-card">
                     <div class="metric-title">By agent</div>
                     @if (ByAgent.length === 0) {
-                        <div class="metric-empty">No data</div>
+                        <mj-empty-state Size="compact" Variant="empty" Icon="fa-solid fa-chart-simple" Title="No data" />
                     } @else {
                         @for (slice of ByAgent; track slice.Label) {
                             <div class="hbar-row">

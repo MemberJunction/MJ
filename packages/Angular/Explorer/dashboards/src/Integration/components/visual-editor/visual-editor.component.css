@@ -303,6 +303,8 @@
   text-align: center;
   color: var(--mj-text-disabled);
   font-size: 12px;
+  grid-column: 1 / -1;
+  width: 100%;
 }
 
 .ve-preview-loading i { margin-right: 6px; color: var(--mj-color-indigo-500); }
@@ -409,48 +411,16 @@
   flex-direction: column;
   overflow: hidden;
   min-width: 0;
+  min-height: 0; /* let the [Fill] Field Mappings accordion claim leftover height */
 }
 
 /* Collapsible section */
-.ve-section {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  border-bottom: 1px solid var(--mj-border-default);
-}
-
-.ve-section:not(.collapsed) {
+/* Field Mappings (Fill) + Sync Info are now <mj-accordion-panel>; the bespoke
+   .ve-section / .ve-section-header / .ve-section-badge chrome was removed. The
+   .ve-section-title (in the accordion title slot) and .ve-section-body (body
+   wrapper) are still used. */
+.ve-accordion .ve-section-body {
   flex: 1;
-  min-height: 0;
-}
-
-.ve-section.collapsed {
-  flex-shrink: 0;
-}
-
-.ve-section-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
-  cursor: pointer;
-  user-select: none;
-  background: var(--mj-bg-page);
-  border-bottom: 1px solid var(--mj-border-subtle);
-  flex-shrink: 0;
-  transition: background 150ms ease;
-}
-
-.ve-section-header:hover {
-  background: var(--mj-bg-surface-hover);
-}
-
-.ve-section-header i {
-  font-size: 10px;
-  color: var(--mj-text-disabled);
-  width: 12px;
-  flex-shrink: 0;
-  transition: transform 200ms ease;
 }
 
 .ve-section-title {
@@ -459,16 +429,6 @@
   text-transform: uppercase;
   letter-spacing: 0.4px;
   color: var(--mj-text-muted);
-}
-
-.ve-section-badge {
-  font-size: 10px;
-  font-weight: 600;
-  background: var(--mj-color-indigo-50);
-  color: var(--mj-color-indigo-600);
-  padding: 1px 8px;
-  border-radius: 4px;
-  margin-left: auto;
 }
 
 .ve-section-body {
@@ -670,6 +630,8 @@
   text-align: center;
   color: var(--mj-text-disabled);
   font-size: 13px;
+  grid-column: 1 / -1;
+  width: 100%;
 }
 
 /* ---------------------------------------------------------------------------
@@ -699,7 +661,7 @@
 .ve-conn-line.conn-custom { stroke: var(--ve-color-custom, #a855f7); stroke-dasharray: 2 3; }
 
 .ve-conn-line:hover { stroke-width: 3.5; }
-.ve-conn-line.selected { stroke-width: 3.5; filter: drop-shadow(0 0 4px rgba(99, 102, 241, 0.4)); }
+.ve-conn-line.selected { stroke-width: 3.5; filter: drop-shadow(0 0 4px color-mix(in srgb, var(--mj-brand-primary) 40%, transparent)); }
 
 /* Connection badge at midpoint */
 .ve-badge-fo { overflow: visible; }
@@ -728,7 +690,7 @@
 .ve-conn-badge.badge-custom { background: color-mix(in srgb, var(--ve-color-custom, #a855f7) 10%, var(--mj-bg-surface)); color: var(--ve-color-custom, #a855f7); border: 2px solid var(--ve-color-custom, #a855f7); }
 
 .ve-conn-badge:hover { transform: scale(1.2); }
-.ve-conn-badge.selected { transform: scale(1.25); box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.3); }
+.ve-conn-badge.selected { transform: scale(1.25); box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 30%, transparent); }
 
 /* ---------------------------------------------------------------------------
    Transform Panel (right side)

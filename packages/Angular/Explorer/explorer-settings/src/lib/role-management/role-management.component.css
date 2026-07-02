@@ -288,17 +288,6 @@
   line-height: 1.6;
 }
 
-.modal-body .text-warning {
-  color: var(--mj-color-warning-500);
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.75rem 1rem;
-  background: var(--mj-color-warning-50);
-  border-radius: var(--mj-radius-md);
-  font-weight: 500;
-}
-
 /* Modal Backdrop Override - uses top/left/right/bottom instead of inset */
 .modal-backdrop {
   position: fixed;
@@ -476,14 +465,6 @@
 
   .permissions-preview {
     padding: 1rem;
-  }
-
-  .empty-state {
-    padding: 3rem 1.5rem;
-  }
-
-  .empty-state .empty-icon {
-    font-size: 3rem;
   }
 
   .loading-container {

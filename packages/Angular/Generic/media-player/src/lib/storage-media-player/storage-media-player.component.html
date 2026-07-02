@@ -1,0 +1,36 @@
+@if (IsLoading) {
+  <div class="mj-storage-media-state" role="status" aria-live="polite">
+    <i class="fa-solid fa-circle-notch fa-spin mj-storage-media-state__icon" aria-hidden="true"></i>
+    <span>Loading recording&hellip;</span>
+  </div>
+} @else if (AccessError) {
+  <div class="mj-storage-media-state mj-storage-media-state--error" role="alert">
+    <i class="fa-solid fa-lock mj-storage-media-state__icon" aria-hidden="true"></i>
+    <div class="mj-storage-media-state__body">
+      <span class="mj-storage-media-state__title">This recording isn't available — you may not have access.</span>
+      <span class="mj-storage-media-state__detail">{{ AccessError }}</span>
+    </div>
+  </div>
+} @else if (!HasFileIds || ResolvedTracks.length === 0) {
+  <div class="mj-storage-media-state" role="status">
+    <i class="fa-solid fa-film mj-storage-media-state__icon" aria-hidden="true"></i>
+    <span>No recording to play.</span>
+  </div>
+} @else {
+  <mj-media-player
+    [Tracks]="ResolvedTracks"
+    [Transcript]="Transcript"
+    [ShowTranscript]="ShowTranscript"
+    [ShowTranscriptToggle]="ShowTranscriptToggle"
+    [ShowSpeedControl]="ShowSpeedControl"
+    [ShowSkipControls]="ShowSkipControls"
+    [ShowVolume]="ShowVolume"
+    [ShowWaveform]="ShowWaveform"
+    [ShowFullscreen]="ShowFullscreen"
+    [SkipSeconds]="SkipSeconds"
+    [PlaybackRates]="PlaybackRates"
+    [Autoplay]="Autoplay"
+    [StartAtMs]="StartAtMs"
+    [TranscriptPosition]="TranscriptPosition"
+  ></mj-media-player>
+}

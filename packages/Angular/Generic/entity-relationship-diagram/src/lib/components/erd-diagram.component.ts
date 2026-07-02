@@ -159,6 +159,18 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
     /** Derived — number of entities currently visible. */
     public visibleCount = 0;
 
+    /** Icon for the empty state — honours `config.emptyStateIcon` when provided. */
+    public get emptyStateIcon(): string {
+        return this.config.emptyStateIcon || 'fa-solid fa-diagram-project';
+    }
+
+    /** Title for the empty state — distinguishes "nothing here" from "filtered to nothing". */
+    public get emptyStateTitle(): string {
+        return this.totalCount === 0
+            ? (this.config.emptyStateMessage || 'No entities to display')
+            : 'No entities match';
+    }
+
     /** Derived — total entities in the input, before any filtering. */
     public totalCount = 0;
 

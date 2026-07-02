@@ -147,7 +147,8 @@ const PAGE_SIZE = 25;
                 </div>
                 <div class="chart-area">
                     @if (ChartBuckets.length === 0) {
-                        <div class="chart-empty">No data for selected time range</div>
+                        <mj-empty-state Size="compact" Variant="empty" Icon="fa-solid fa-chart-column"
+                            Title="No data for selected time range" />
                     } @else {
                         <div class="chart-bars">
                             @for (bucket of ChartBuckets; track bucket.label) {
@@ -180,7 +181,7 @@ const PAGE_SIZE = 25;
                         </div>
                     }
                     @if (ModelBreakdown.length === 0) {
-                        <div class="breakdown-empty">No data</div>
+                        <mj-empty-state Size="compact" Variant="empty" Icon="fa-solid fa-cube" Title="No data" />
                     }
                 </div>
 
@@ -197,7 +198,7 @@ const PAGE_SIZE = 25;
                         </div>
                     }
                     @if (PromptBreakdown.length === 0) {
-                        <div class="breakdown-empty">No data</div>
+                        <mj-empty-state Size="compact" Variant="empty" Icon="fa-solid fa-message" Title="No data" />
                     }
                 </div>
 
@@ -212,7 +213,7 @@ const PAGE_SIZE = 25;
                         </div>
                     }
                     @if (StatusBreakdown.length === 0) {
-                        <div class="breakdown-empty">No data</div>
+                        <mj-empty-state Size="compact" Variant="empty" Icon="fa-solid fa-circle-dot" Title="No data" />
                     }
                 </div>
             </div>
@@ -397,14 +398,9 @@ const PAGE_SIZE = 25;
             align-items: flex-end;
         }
 
-        .chart-empty {
-            display: flex;
-            align-items: center;
-            justify-content: center;
+        .chart-area mj-empty-state {
             width: 100%;
             height: 100%;
-            color: var(--mj-text-muted);
-            font-size: 13px;
         }
 
         .chart-bars {
@@ -531,12 +527,6 @@ const PAGE_SIZE = 25;
             background: var(--mj-brand-primary);
             border-radius: 3px;
             transition: width 0.3s;
-        }
-
-        .breakdown-empty {
-            font-size: 13px;
-            color: var(--mj-text-muted);
-            padding: 8px 0;
         }
 
         .status-dot {

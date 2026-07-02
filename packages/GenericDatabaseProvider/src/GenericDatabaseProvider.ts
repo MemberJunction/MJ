@@ -65,6 +65,8 @@ import {
     SaveSQLResult,
     AfterKeyNotSupportedError,
     IsKeysetPaginationOrderableType,
+    resolveQueryResultEnricher,
+    QueryInfo,
 } from '@memberjunction/core';
 
 import { MJGlobal, SQLExpressionValidator, UUIDsEqual } from '@memberjunction/global';
@@ -1068,9 +1070,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             // framework-internal read for SQL parameter building, so it deliberately bypasses
             // entity.Get(), which would assert active status (deprecation warning / disabled throw)
             // for what is NOT user use of the field. (EntityField.Value itself never asserts.)
-            const theField = entity.Fields.find(
-                (field) => field.Name.trim().toLowerCase() === f.Name.trim().toLowerCase(),
-            );
+            const theField = entity.GetFieldByName(f.Name);
             const rawValue = theField?.Value;
 
             // PK-on-CREATE with no explicit value: omit so the SP default fires.
@@ -2882,6 +2882,16 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 void this.cacheQueryResults(query, params.Parameters || {}, fullResult);
             }
 
+            // Optional, additive post-query enrichment (e.g. append an ML prediction
+            // column). Awaited so the appended columns are present in the response.
+            // Fully decoupled + resilient: resolves the enricher via the ClassFactory
+            // (no-op when none is registered — i.e. the providing package isn't loaded),
+            // and on ANY failure logs and leaves the rows untouched so a scoring problem
+            // never breaks the query. Runs after paging so only the returned page is scored.
+            if (params.Enrichment?.EnricherKey) {
+                paginatedResult = await this.enrichQueryResults(paginatedResult, params, query, contextUser);
+            }
+
             // Handle audit logging (fire-and-forget)
             this.auditQueryExecution(query, params, finalSQL, paginatedResult.length, totalRowCount, executionTime, contextUser);
 
@@ -3187,6 +3197,63 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     /**
+     * Optional, additive post-query enrichment step. Resolves the {@link QueryResultEnricherBase}
+     * registered under `params.Enrichment.EnricherKey` via the MJGlobal ClassFactory and awaits
+     * it on the result rows, returning whatever (column-appended) rows it produces.
+     *
+     * Fully decoupled + resilient by design:
+     * - **Decoupled**: the enricher is resolved by string key through the ClassFactory, so this
+     *   provider takes no static dependency on any concrete enricher (e.g. Predictive Studio's
+     *   ML-scoring enricher). When no enricher is registered under the key — i.e. the providing
+     *   package isn't loaded — {@link resolveQueryResultEnricher} returns `null` and we no-op,
+     *   returning the original rows.
+     * - **Resilient**: the whole call is wrapped in try/catch. On ANY failure (resolution,
+     *   scorer error, bad config) we LogError and return the ORIGINAL un-enriched rows. A
+     *   scoring problem must NEVER break the underlying query.
+     *
+     * The loaded {@link QueryInfo} (when resolvable from the executed query's id) is passed
+     * through so an enricher can read the query's associated entity/fields.
+     *
+     * @param rows the assembled, paginated result rows to enrich
+     * @param params the run params carrying the {@link RunQueryEnrichment} directive
+     * @param query the executed query entity (used to resolve its {@link QueryInfo} metadata)
+     * @param contextUser the request user, threaded through for isolation/audit
+     * @returns the enriched rows on success, or the original rows on any failure / no-op
+     */
+    protected async enrichQueryResults(
+        rows: Record<string, unknown>[],
+        params: RunQueryParams,
+        query: MJQueryEntityExtended,
+        contextUser?: UserInfo,
+    ): Promise<Record<string, unknown>[]> {
+        const enrichment = params.Enrichment;
+        if (!enrichment?.EnricherKey) {
+            return rows;
+        }
+        try {
+            const enricher = resolveQueryResultEnricher(enrichment.EnricherKey);
+            if (!enricher) {
+                // No enricher registered under this key (providing package not loaded) — no-op.
+                return rows;
+            }
+            // Resolve the QueryInfo metadata for the executed query (best-effort; an enricher
+            // can use it to find the query's associated entity). Undefined is acceptable.
+            const queryInfo: QueryInfo | undefined = this.Queries.find(q => UUIDsEqual(q.ID, query.ID));
+            return await enricher.EnrichResults({
+                rows,
+                config: enrichment.Config ?? {},
+                query: queryInfo,
+                contextUser,
+                provider: this,
+            });
+        } catch (e) {
+            LogError(e);
+            // A scoring/enrichment failure must never break the query — return the original rows.
+            return rows;
+        }
+    }
+
+    /**
      * Creates an audit log record for query execution (fire-and-forget).
      * Only logs if the query has `AuditQueryRuns` enabled or `ForceAuditLog` is set.
      */
@@ -3345,7 +3412,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         }
 
         const pkWhere = entity.PrimaryKeys.map(pk => {
-            const fieldInfo = entityInfo.Fields.find(f => f.Name === pk.Name);
+            const fieldInfo = entityInfo.FieldByName(pk.Name);
             const quotes = fieldInfo?.NeedsQuotes ? "'" : '';
             return `${this.QuoteIdentifier(pk.Name)}=${quotes}${pk.Value}${quotes}`;
         }).join(' AND ');
@@ -3838,7 +3905,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             if (entity) {
                 const invalidColumns: string[] = [];
                 specifiedColumns.forEach(col => {
-                    if (!entity.Fields.find(f => f.Name.trim().toLowerCase() === col.trim().toLowerCase())) {
+                    if (!entity.FieldByName(col)) {
                         invalidColumns.push(col);
                     }
                 });
@@ -3850,7 +3917,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             // Ensure DateFieldToCheck is included
             const dateField = item['DateFieldToCheck'] ? String(item['DateFieldToCheck']).trim() : '';
             if (dateField.length > 0 && specifiedColumns.indexOf(dateField) === -1) {
-                if (!entity || entity.Fields.find(f => f.Name.trim().toLowerCase() === dateField.toLowerCase()))
+                if (!entity || entity.FieldByName(dateField))
                     specifiedColumns.push(dateField);
             }
         }

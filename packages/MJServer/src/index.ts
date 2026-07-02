@@ -40,6 +40,7 @@ import createMSSQLConfig from './orm.js';
 import { setupRESTEndpoints } from './rest/setupRESTEndpoints.js';
 import { createOAuthCallbackHandler } from './rest/OAuthCallbackHandler.js';
 import { createSignatureWebhookHandler } from './rest/SignatureWebhookHandler.js';
+import { createMediaStreamRouter } from './rest/MediaStreamHandler.js';
 import { createMagicLinkHandler, registerMagicLinkAuthProvider, MAGIC_LINK_MOUNT_PATH } from './auth/magicLink/index.js';
 
 import { resolve } from 'node:path';
@@ -162,6 +163,8 @@ export * from './resolvers/ISAEntityResolver.js';
 export * from './resolvers/ArtifactFileResolver.js';
 export * from './resolvers/FileCategoryResolver.js';
 export * from './resolvers/FileResolver.js';
+export * from './rest/MediaAccessKeys.js';
+export * from './rest/MediaStreamHandler.js';
 export * from './resolvers/InfoResolver.js';
 export * from './resolvers/PotentialDuplicateRecordResolver.js';
 export * from './resolvers/RunTestResolver.js';
@@ -990,6 +993,13 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   // The provider DRIVER verifies the payload signature/HMAC; MJ auth does not apply here.
   app.use('/esignature', cors<cors.CorsRequest>(), createSignatureWebhookHandler());
   startupLog.LogIf('verbose', '[eSignature] Webhook route registered at /esignature/webhook/:driverKey');
+
+  // ─── Authenticated media streaming (token-gated, registered BEFORE auth) ─────
+  // The `?token=` query param (minted by CreateMediaAccessToken after a per-user permission
+  // check) is the capability — the route verifies it itself, so it does NOT use the MJ bearer
+  // auth middleware (an <audio>/<video> element can't send Authorization headers).
+  app.use('/media', cors<cors.CorsRequest>(), createMediaStreamRouter());
+  startupLog.LogIf('verbose', '[Media] Streaming route registered at /media/:fileId');
 
   // ─── Magic-link routes (MJ-issued, app-scoped external access) ───────────
   // Public router (JWKS + redeem) mounts BEFORE the auth middleware; the

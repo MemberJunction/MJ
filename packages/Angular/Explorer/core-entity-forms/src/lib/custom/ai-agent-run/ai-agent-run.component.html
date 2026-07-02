@@ -174,16 +174,18 @@
         </div>
       }
 
-      <!-- Visualization Tab -->
+      <!-- Visualization Tab (animated flow views + static flowchart) -->
       @if (activeTab === 'visualization') {
         <div class="tab-content" style="height: 100%;">
           @if (visualizationLoaded) {
-            <mj-ai-agent-run-visualization
-              #visualizationComponent
+            <mj-ai-agent-run-flow
               [aiAgentRunId]="record.ID"
               [dataHelper]="dataHelper"
-              >
-            </mj-ai-agent-run-visualization>
+              [agentName]="agent?.Name || null"
+              [runStatus]="record.Status || ''"
+              [agentIconClass]="agent?.IconClass || null"
+              [agentLogoUrl]="agent?.LogoURL || null">
+            </mj-ai-agent-run-flow>
           }
         </div>
       }

@@ -1,6 +1,6 @@
 import { CompositeKey, DataSnapshot } from "@memberjunction/core";
 import { BaseEventArgs } from "./component-events";
-import { SimpleAITools, SimpleDataContext, SimpleGeoDataEngine, SimpleMetadata, SimpleRunQuery, SimpleRunView, SimpleSearch } from "./shared";
+import { SimpleAITools, SimpleDataContext, SimpleGeoDataEngine, SimpleMetadata, SimpleMLTools, SimpleRunQuery, SimpleRunView, SimpleSearch } from "./shared";
 
 /**
  * Callbacks a component can use.
@@ -287,5 +287,12 @@ export interface ComponentUtilities {
      * Used by map components to resolve lat/lng to country/state via point-in-polygon.
      * This will not always be available — ensure component code has fallbacks when undefined.
      */
-    geoDataEngine?: SimpleGeoDataEngine
+    geoDataEngine?: SimpleGeoDataEngine,
+    /**
+     * Access to the host's trained predictive models — list available models and score records
+     * with them so a component can fold predictions into its charts/tables. Scoring is marshalled
+     * to the server's Predictive Studio engine; no training machinery runs in the browser.
+     * This will not always be available — ensure component code has fallbacks when undefined.
+     */
+    ml?: SimpleMLTools
 }

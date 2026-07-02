@@ -469,7 +469,7 @@ export class CompositeKey extends FieldValueCollection {
                         throw new Error(`KeyValuePairs[${i}].Value cannot be null or undefined`);
 
                     if (entity) {
-                        const field = entity.Fields.find(f => f.Name.trim().toLowerCase() === pk.FieldName.trim().toLowerCase());
+                        const field = entity.FieldByName(pk.FieldName);
                         if (!field)
                             throw new Error(`KeyValuePairs[${i}].FieldName of ${pk.FieldName} does not exist on ${entity.Name}`);
                         if (primaryKey && !field.IsPrimaryKey)

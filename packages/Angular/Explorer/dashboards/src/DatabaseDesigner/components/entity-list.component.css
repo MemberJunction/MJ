@@ -22,19 +22,8 @@
 }
 
 /* ── Error banner ────────────────────────────────────────────────────────── */
-
-.entity-list-error {
-  margin: 12px 24px;
-  padding: 10px 14px;
-  background: var(--mj-status-error-bg);
-  color: var(--mj-status-error-text);
-  border: 1px solid var(--mj-status-error-border);
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 0.875rem;
-}
+/* positions the error mj-alert (mj-alert is otherwise margin-less but for its bottom) */
+.entity-list-error { margin: 12px 24px; }
 
 /* ── Skeleton loader ─────────────────────────────────────────────────────── */
 

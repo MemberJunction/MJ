@@ -211,70 +211,12 @@
    EMPTY STATES
    ============================================================ */
 
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
+/* The preview-area is a flex-fill container; the empty/run-state placeholder
+   must fill it so its content centers (restores the old .empty-state
+   width/height:100%). */
+mj-empty-state {
   width: 100%;
-  text-align: center;
-  padding: 40px 24px;
-  color: var(--mj-text-secondary);
-}
-
-.empty-state i {
-  margin-bottom: 16px;
-  color: var(--mj-border-default);
-}
-
-.empty-state h3 {
-  margin: 0 0 8px 0;
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--mj-text-secondary);
-}
-
-.empty-state p {
-  margin: 0;
-  font-size: 14px;
-  color: var(--mj-text-secondary);
-  max-width: 320px;
-  line-height: 1.5;
-}
-
-.run-state h3 {
-  color: var(--mj-text-primary);
-}
-
-.run-component-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 20px;
-  padding: 10px 24px;
-  border: none;
-  border-radius: 8px;
-  background: var(--mj-brand-primary);
-  color: var(--mj-text-inverse);
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.run-component-btn:hover {
-  background: var(--mj-brand-primary);
-  transform: translateY(-1px);
-  box-shadow: var(--mj-shadow-md);
-}
-
-.run-component-btn:active {
-  transform: translateY(0);
-}
-
-.run-component-btn i {
-  font-size: 13px;
+  height: 100%;
 }
 
 /* ============================================================

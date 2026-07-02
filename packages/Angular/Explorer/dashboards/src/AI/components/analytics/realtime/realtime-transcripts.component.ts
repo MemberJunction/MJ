@@ -31,7 +31,7 @@ import {
                         <button class="rt-refresh" title="Refresh" (click)="reload()"><i class="fa-solid fa-rotate"></i></button>
                     </div>
                     @if (Rooms.length === 0) {
-                        <div class="empty"><i class="fa-solid fa-comment-slash"></i><p>No meeting transcripts yet.</p></div>
+                        <mj-empty-state class="empty" Size="compact" Icon="fa-solid fa-comment-slash" Title="No meeting transcripts yet" />
                     } @else {
                         @for (room of Rooms; track room.ConversationID) {
                             <button class="room" [class.room--active]="room.ConversationID === SelectedRoom?.ConversationID" (click)="selectRoom(room)">
@@ -46,7 +46,7 @@ import {
                 <!-- Transcript pane -->
                 <div class="transcript-pane">
                     @if (!SelectedRoom) {
-                        <div class="empty empty--center"><i class="fa-solid fa-arrow-left"></i><p>Select a meeting to view its transcript.</p></div>
+                        <mj-empty-state class="empty empty--center" Icon="fa-solid fa-arrow-left" Title="Select a meeting" Message="Select a meeting to view its transcript." />
                     } @else if (IsLoadingTranscript) {
                         <div class="loading-container"><mj-loading text="Loading transcript..."></mj-loading></div>
                     } @else {
@@ -56,7 +56,7 @@ import {
                         </div>
                         <div class="lines">
                             @if (Lines.length === 0) {
-                                <div class="empty"><p>This meeting has no recorded utterances.</p></div>
+                                <mj-empty-state class="empty" Size="compact" Icon="" Title="This meeting has no recorded utterances." />
                             }
                             @for (line of Lines; track line.ID) {
                                 <div class="line line--{{ line.Kind }}">

@@ -22,7 +22,8 @@ export class MJCollectionFormComponent extends BaseFormComponent {
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJCollectionArtifacts', sectionName: 'Collection Artifacts', isExpanded: false },
             { sectionKey: 'mJCollectionPermissions', sectionName: 'Collection Permissions', isExpanded: false },
-            { sectionKey: 'mJCollections', sectionName: 'Collections', isExpanded: false }
+            { sectionKey: 'mJCollections', sectionName: 'Collections', isExpanded: false },
+            { sectionKey: 'mJAIAgents', sectionName: 'AI Agents', isExpanded: false }
         ]);
     }
 }

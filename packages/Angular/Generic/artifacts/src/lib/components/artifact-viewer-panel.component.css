@@ -319,18 +319,13 @@
   box-sizing: border-box;
 }
 
-.loading-state,
-.error-state {
+.loading-state {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 12px;
   padding: 40px 20px;
   color: var(--mj-text-muted);
-}
-
-.error-state {
-  color: var(--mj-status-error);
 }
 
 .loading-state i {
@@ -875,27 +870,6 @@
 .link-item.clickable:hover .link-actions i {
   color: var(--mj-brand-primary);
   transform: translateX(2px);
-}
-
-.links-container .empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 48px 24px;
-  color: var(--mj-text-disabled);
-  text-align: center;
-}
-
-.links-container .empty-state i {
-  font-size: 48px;
-  margin-bottom: 16px;
-  opacity: 0.3;
-}
-
-.links-container .empty-state p {
-  margin: 0;
-  font-size: 14px;
 }
 
 /* Dynamic Tab Content Styles */

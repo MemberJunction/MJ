@@ -52,23 +52,14 @@
 
   <!-- Empty State -->
   @if (!IsLoading && FilteredJobs.length === 0) {
-    <div class="empty-state">
-      <div class="empty-icon">
-        <i class="fa-solid fa-calendar-xmark"></i>
-      </div>
-      <h3>No jobs found</h3>
-      @if (SearchTerm || StatusFilter || TypeFilter) {
-        <p>Try adjusting your filters</p>
-      }
-      @if (!SearchTerm && !StatusFilter && !TypeFilter) {
-        <p>Create your first scheduled job to get started</p>
-      }
-      @if (!SearchTerm && !StatusFilter && !TypeFilter) {
-        <button class="primary-btn" (click)="OpenCreateSlideout()">
-          <i class="fa-solid fa-plus"></i> Create Job
-        </button>
-      }
-    </div>
+    <mj-empty-state
+      [Variant]="IsListNarrowed ? 'no-results' : 'empty'"
+      Icon="fa-solid fa-calendar-xmark"
+      Title="No jobs found"
+      [Message]="IsListNarrowed ? 'No jobs match your search and filters.' : 'Create your first scheduled job to get started.'"
+      [ActionText]="IsListNarrowed ? 'Reset filters' : 'Create Job'"
+      [ActionIcon]="IsListNarrowed ? 'fa-solid fa-rotate-left' : 'fa-solid fa-plus'"
+      (Action)="OnEmptyStateAction()" />
   }
 
   <!-- Job Cards Grid -->

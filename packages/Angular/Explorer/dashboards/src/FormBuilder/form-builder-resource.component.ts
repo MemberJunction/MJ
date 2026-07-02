@@ -35,6 +35,12 @@ import {
     type FormCanvasModel,
     type FormCanvasSection,
 } from '../ComponentStudio/services/form-canvas-model';
+import {
+    buildCanvasEditClientTools,
+    buildCanvasStateSummary,
+    collectFieldNames,
+    type CanvasEditHost,
+} from '../ComponentStudio/services/canvas-edit-transforms';
 import { EntityFormOverrideService } from '../ComponentStudio/services/entity-form-override.service';
 import { ConversationBridgeService } from '@memberjunction/ng-conversations';
 import { joinVersionsWithOverrides, pickActiveVersionID } from './form-builder-version-rail.helpers';
@@ -1413,6 +1419,23 @@ export class FormBuilderResourceComponent
     }
 
     /**
+     * Agent-facing preview entry point: switch the center pane to the live
+     * preview and, when a record id is supplied, bind that specific record.
+     * Maps the `PreviewForm(recordId?)` client tool onto the existing
+     * `SetCenterPaneMode('preview')` + record-load lifecycle. When no record
+     * id is given, the standard Top-1 lazy load in `SetCenterPaneMode` runs.
+     */
+    public previewForm(recordId?: string): void {
+        this.SetCenterPaneMode('preview');
+        const id = recordId?.trim();
+        if (id) {
+            // Reuse the by-id picker path; label is cosmetic and resolved
+            // from the loaded record's NameField, so we pass the raw id.
+            void this.OnPreviewRecordPicked({ ID: id, Label: id });
+        }
+    }
+
+    /**
      * Direct-edit handler used by `<mj-code-editor>` via ngModelChange.
      * Receives the new editor value as a string. Marks the form dirty so
      * the Save button activates; the Layout-tab canvas is *not* re-derived
@@ -2433,24 +2456,32 @@ export class FormBuilderResourceComponent
         this.Canvas = next;
         this.markDirty();
         this.regenerateCode();
+        // Re-emit on every canvas change so the agent's CanvasSummary /
+        // AvailableFieldNames / ValidationIssues stay live (mirrors how the
+        // cockpit publishes on load and on form switch).
+        this.registerAgentContext();
         this.cdr.markForCheck();
     }
 
     public OnElementSelected(payload: { sectionId: string; elementId: string }): void {
         this.SelectedSectionId = null;
         this.SelectedElementId = payload.elementId;
+        // Selection drives SelectedElementName / SelectedElement in context.
+        this.registerAgentContext();
         this.cdr.markForCheck();
     }
 
     public OnSectionSelected(sectionId: string): void {
         this.SelectedElementId = null;
         this.SelectedSectionId = sectionId;
+        this.registerAgentContext();
         this.cdr.markForCheck();
     }
 
     public OnDeselected(): void {
         this.SelectedElementId = null;
         this.SelectedSectionId = null;
+        this.registerAgentContext();
         this.cdr.markForCheck();
     }
 
@@ -3087,6 +3118,76 @@ export class FormBuilderResourceComponent
         return lines.join('\n');
     }
 
+    /**
+     * Build the {@link CanvasEditHost} adapter the shared granular tool
+     * factory needs. `ApplyCanvas` routes through `OnCanvasChanged` so every
+     * agent edit goes through the SAME path a human drag-drop edit does:
+     * marks dirty, regenerates code, triggers change detection, re-emits
+     * agent context. The pane actions map to the cockpit's center-pane modes.
+     */
+    private buildCanvasEditHost(): CanvasEditHost {
+        return {
+            GetCanvas: () => this.Canvas,
+            ApplyCanvas: (next: FormCanvasModel) => this.OnCanvasChanged(next),
+            NewElementId: () => generateCanvasId('field'),
+            NewSectionId: () => generateCanvasId('section'),
+            PreviewForm: (recordId?: string) => this.previewForm(recordId),
+            ViewFormCode: () => this.SetCenterPaneMode('code'),
+            ViewFormLayout: () => this.SetCenterPaneMode('layout'),
+        };
+    }
+
+    /** Display label of the currently-selected element (or null). */
+    private selectedElementLabel(): string | null {
+        if (!this.Canvas || !this.SelectedElementId) return null;
+        for (const section of this.Canvas.sections) {
+            const el = section.elements.find(e => e.id === this.SelectedElementId);
+            if (el) return el.label?.trim() || el.fieldName?.trim() || el.type;
+        }
+        return null;
+    }
+
+    /** Title of the currently-selected section (or null). */
+    private selectedSectionTitle(): string | null {
+        if (!this.Canvas || !this.SelectedSectionId) return null;
+        return this.Canvas.sections.find(s => s.id === this.SelectedSectionId)?.title ?? null;
+    }
+
+    /**
+     * Derive lightweight, non-persisting canvas validation issues for the
+     * agent: an empty form, sections with no fields, and the same entity field
+     * placed more than once. Read-only — surfaces problems the agent can offer
+     * to fix via the granular tools; never blocks or saves. Bounded to a
+     * handful of entries.
+     */
+    private deriveCanvasValidationIssues(): string[] {
+        const canvas = this.Canvas;
+        if (!canvas) return [];
+        const issues: string[] = [];
+        const totalFields = collectFieldNames(canvas).length;
+        if (totalFields === 0) {
+            issues.push('The form has no fields placed yet.');
+        }
+        for (const section of canvas.sections) {
+            const fieldCount = section.elements.filter(e => e.type === 'field' && e.fieldName).length;
+            if (fieldCount === 0) {
+                issues.push(`Section '${section.title}' has no fields.`);
+            }
+        }
+        const counts = new Map<string, number>();
+        for (const section of canvas.sections) {
+            for (const el of section.elements) {
+                if (el.type === 'field' && el.fieldName) {
+                    counts.set(el.fieldName, (counts.get(el.fieldName) ?? 0) + 1);
+                }
+            }
+        }
+        for (const [name, n] of counts) {
+            if (n > 1) issues.push(`Field '${name}' is placed ${n} times.`);
+        }
+        return issues.slice(0, 10);
+    }
+
     private registerAgentContext(): void {
         try {
             const ctx: Record<string, unknown> = {
@@ -3103,6 +3204,47 @@ export class FormBuilderResourceComponent
                         Description: this.SavedSpec?.description ?? null,
                         SectionCount: this.Canvas?.sections.length ?? 0,
                         IsDirty: this.DirtyFlag,
+                        // Granular canvas-edit context for the realtime
+                        // co-agent voice-editing the form. These let the
+                        // agent target the right element/section ("make THIS
+                        // field required") and know what's already placed
+                        // (AllFieldNames) without a tool round-trip.
+                        DirtyFlag: this.DirtyFlag,
+                        SelectedElementId: this.SelectedElementId,
+                        SelectedSectionId: this.SelectedSectionId,
+                        CenterPaneMode: this.CenterPaneMode,
+                        AllFieldNames: this.Canvas ? collectFieldNames(this.Canvas) : [],
+                        // Deep, bounded canvas-state summary: section list with
+                        // per-section field counts, every placed element
+                        // addressable by id AND label, the curated entity
+                        // field names NOT yet placed (the AddField candidate
+                        // set), and the resolved selected element/section by
+                        // NAME — so the realtime co-agent can act on "make the
+                        // email field required" or "add the Phone field" with
+                        // no tool round-trip to discover what's there. All
+                        // lists are capped (with *Truncated / *Count companions).
+                        CanvasSummary: buildCanvasStateSummary(
+                            this.Canvas,
+                            this.Schema?.fields.map(f => f.name) ?? [],
+                            this.SelectedElementId,
+                            this.SelectedSectionId,
+                        ),
+                        // Names of the currently-selected element/section (not
+                        // just their ids) so the agent's narration matches what
+                        // the user sees highlighted on the canvas.
+                        SelectedElementName: this.selectedElementLabel(),
+                        SelectedSectionName: this.selectedSectionTitle(),
+                        // Lightweight, derived canvas validation so the agent can
+                        // proactively flag problems ("section 'Audit' is empty")
+                        // without persisting anything. Bounded list of issues.
+                        ValidationIssues: this.deriveCanvasValidationIssues(),
+                        // Live preview error surfaced from the mounted form
+                        // runtime, if any — lets the agent see a broken preview.
+                        PreviewError: this.PreviewError,
+                        // Full canvas model (sections + element ids) so the
+                        // agent can reference element/section ids in the
+                        // granular AddField/RemoveField/Reorder/etc. tools.
+                        Canvas: this.Canvas,
                         // Identity of the currently-loaded Component +
                         // EntityFormOverride row, so the Form Builder
                         // agent can call `Modify Interactive Form` with
@@ -3160,10 +3302,15 @@ export class FormBuilderResourceComponent
             // the embedded chat-area sees the latest form state. Same flow
             // the floating overlay uses; both surfaces stay in sync.
             this.navigationService.SetAgentContext(this, ctx);
+            // 🔒 SAFETY BOUNDARY: the tool suite below exposes ONLY reversible
+            // canvas-DEFINITION edits + view-only pane switches. Save / Publish /
+            // override-activation / delete-the-whole-form are deliberately NOT
+            // exposed — those are irreversible and stay human-confirmed in the
+            // UI. Keep the wholesale UpdateForm tool; ADD the granular suite.
             this.navigationService.SetAgentClientTools(this, [
                 {
                     Name: 'UpdateForm',
-                    Description: 'Replace the active form canvas with a new canvas model. Pass the new FormCanvasModel JSON.',
+                    Description: 'Replace the active form canvas with a new canvas model. Pass the new FormCanvasModel JSON. Prefer the granular AddField/RemoveField/etc. tools for small edits.',
                     ParameterSchema: {
                         type: 'object',
                         properties: {
@@ -3183,6 +3330,7 @@ export class FormBuilderResourceComponent
                         return { Success: true };
                     },
                 },
+                ...buildCanvasEditClientTools(this.buildCanvasEditHost()),
             ]);
         } catch (err) {
             LogError(`FormBuilderResource.registerAgentContext: ${err instanceof Error ? err.message : String(err)}`);

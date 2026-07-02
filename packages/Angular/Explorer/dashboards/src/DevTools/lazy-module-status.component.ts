@@ -1,7 +1,9 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, AfterViewInit, ChangeDetectorRef } from '@angular/core';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { RegisterClass } from '@memberjunction/global';
 import { DevToolsPrefs } from './dev-tools-prefs';
+import { buildLazyModuleStatusAgentContext } from './dev-tools-agent-context';
+import { AgentToolResult, validateStringParam } from '../shared/agent-tool-validation';
 
 interface LazyChunk {
     /** A friendly label inferred from the underlying loader source. */
@@ -44,12 +46,14 @@ interface LazyRegistryShape {
     templateUrl: './lazy-module-status.component.html',
     styleUrls: ['./inspector-shared.css', './lazy-module-status.component.css']
 })
-export class LazyModuleStatusComponent extends BaseResourceComponent implements OnInit, OnDestroy {
+export class LazyModuleStatusComponent extends BaseResourceComponent implements OnInit, OnDestroy, AfterViewInit {
 
     public Stats = { totalKeys: 0, loadedKeys: 0, chunkCount: 0, loadedChunks: 0, percent: 0 };
     public Chunks: LazyChunk[] = [];
     public Available = false;
     public Filter: 'all' | 'loaded' | 'not-loaded' = 'all';
+    /** Free-text search narrowing chunks by label or registration key. */
+    public SearchQuery = '';
     public LastRefreshed = new Date();
 
     constructor(private cdr: ChangeDetectorRef) {
@@ -64,6 +68,13 @@ export class LazyModuleStatusComponent extends BaseResourceComponent implements 
             for (const c of this.Chunks) c.expanded = prefs.expanded.includes(c.chunkId);
         }
         this.NotifyLoadComplete();
+    }
+
+    public ngAfterViewInit(): void {
+        // Publish initial agent context + register the read-only client tools.
+        // Re-emit happens on refresh, filter change, and the search tool.
+        this.publishAgentContext();
+        this.registerAgentClientTools();
     }
 
     public override ngOnDestroy(): void {
@@ -113,19 +124,30 @@ export class LazyModuleStatusComponent extends BaseResourceComponent implements 
         };
         this.LastRefreshed = new Date();
         this.cdr.markForCheck();
+        this.publishAgentContext();
     }
 
     public OnFilterClick(filter: 'all' | 'loaded' | 'not-loaded'): void {
         this.Filter = filter;
         this.savePrefs();
+        this.publishAgentContext();
     }
 
     public get FilteredChunks(): LazyChunk[] {
+        let list: LazyChunk[];
         switch (this.Filter) {
-            case 'loaded':     return this.Chunks.filter(c => c.loaded);
-            case 'not-loaded': return this.Chunks.filter(c => !c.loaded);
-            default:           return this.Chunks;
+            case 'loaded':     list = this.Chunks.filter(c => c.loaded); break;
+            case 'not-loaded': list = this.Chunks.filter(c => !c.loaded); break;
+            default:           list = this.Chunks; break;
         }
+        const q = this.SearchQuery.trim().toLowerCase();
+        if (q) {
+            list = list.filter(c =>
+                c.label.toLowerCase().includes(q) ||
+                c.keys.some(k => k.toLowerCase().includes(q))
+            );
+        }
+        return list;
     }
 
     public async OnForceLoad(chunk: LazyChunk): Promise<void> {
@@ -185,5 +207,68 @@ export class LazyModuleStatusComponent extends BaseResourceComponent implements 
             return parts.length === 2 ? parts[1] : first;
         }
         return '(unknown chunk)';
+    }
+
+    // ========================================
+    // AI AGENT CONTEXT & CLIENT TOOLS
+    //
+    // 🔒 SAFETY BOUNDARY — CLASSIFICATION: SAFE developer diagnostic.
+    // The Lazy Module Status inspector is a read-only view of the Explorer's
+    // lazy-loading registry. Context reports module counts; tools only search the
+    // chunk list and refresh the snapshot. No application data is read or mutated.
+    // (Note: the existing in-UI "Force Load" button is intentionally NOT exposed
+    // as an agent tool — preloading chunks is a user-driven action.)
+    // ========================================
+
+    /** Publish the current lazy-module status to the AI agent. */
+    private publishAgentContext(): void {
+        const visible = this.FilteredChunks;
+        const context = buildLazyModuleStatusAgentContext({
+            Available: this.Available,
+            TotalModules: this.Stats.chunkCount,
+            LoadedModules: this.Stats.loadedChunks,
+            Filter: this.Filter,
+            SearchQuery: this.SearchQuery,
+            VisibleModuleCount: visible.length,
+            VisibleModuleNames: visible.map(c => c.label),
+        });
+        this.navigationService.SetAgentContext(this, context);
+    }
+
+    /**
+     * Register the read-only client tools the AI agent can invoke against the
+     * Lazy Module Status inspector: SearchLazyModules, RefreshModuleStatus.
+     */
+    private registerAgentClientTools(): void {
+        this.navigationService.SetAgentClientTools(this, [
+            {
+                Name: 'SearchLazyModules',
+                Description: 'Search lazy modules by label or registration key. Pass an empty string to clear the search.',
+                ParameterSchema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] },
+                Handler: async (params: Record<string, unknown>) => this.toolSearch(params),
+            },
+            {
+                Name: 'RefreshModuleStatus',
+                Description: 'Re-read the lazy-loading registry snapshot to reflect any modules loaded since the last refresh.',
+                ParameterSchema: { type: 'object', properties: {} },
+                Handler: async () => {
+                    this.refresh();
+                    return { Success: true };
+                },
+            },
+        ]);
+    }
+
+    /** Apply (or clear, on empty string) the lazy-module search query. */
+    private toolSearch(params: Record<string, unknown>): AgentToolResult {
+        const validated = validateStringParam(params['query'], 'query');
+        if (!validated.ok) {
+            return validated.result;
+        }
+        this.SearchQuery = validated.value;
+        this.savePrefs();
+        this.publishAgentContext();
+        this.cdr.markForCheck();
+        return { Success: true };
     }
 }

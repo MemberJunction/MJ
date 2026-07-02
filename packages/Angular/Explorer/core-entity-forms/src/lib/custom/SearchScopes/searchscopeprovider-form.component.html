@@ -33,10 +33,7 @@
         <div class="provider-picker">
             <label class="provider-picker-label">Search Provider</label>
             @if (LoadError) {
-                <p class="provider-picker-error">
-                    <i class="fa-solid fa-circle-exclamation"></i>
-                    Could not load provider catalog — {{ LoadError }}
-                </p>
+                <mj-alert Variant="error">Could not load provider catalog — {{ LoadError }}</mj-alert>
             }
             <select
                 class="mj-input provider-picker-select"
@@ -51,12 +48,11 @@
                 }
             </select>
             @if (SelectedProviderUnregisteredOnServer) {
-                <p class="provider-picker-warning">
-                    <i class="fa-solid fa-triangle-exclamation"></i>
+                <mj-alert Variant="warning">
                     The selected provider's <code>DriverClass</code> is not registered with this MJServer build.
                     Searches using this <code>SearchScopeProvider</code> will return no results until the
                     package that registers <code>{{ SelectedProvider?.DriverClass }}</code> is installed.
-                </p>
+                </mj-alert>
             }
             <p class="provider-picker-help">
                 Picks from rows in <code>MJ: Search Providers</code>. The "(not registered on this server)" suffix

@@ -2,10 +2,7 @@
   @if (IsLoading && Rows.length === 0) {
     <mj-loading text="Loading items..." size="small"></mj-loading>
   } @else if (Rows.length === 0) {
-    <div class="cig-empty">
-      <i class="fa-solid fa-inbox"></i>
-      <p>No content items found.</p>
-    </div>
+    <mj-empty-state class="cig-empty" Icon="fa-solid fa-inbox" Title="No content items found." />
   } @else {
     <ag-grid-angular
       class="cig-grid"

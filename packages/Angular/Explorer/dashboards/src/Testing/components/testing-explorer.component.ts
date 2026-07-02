@@ -362,11 +362,9 @@ interface TestRunStatRow {
 
             <!-- Empty State -->
             @if (FilteredSuites.length === 0 && FilteredTests.length === 0) {
-              <div class="empty-state">
-                <i class="fa-solid fa-inbox"></i>
-                <p>No tests or suites found</p>
-                <span class="empty-hint">Try adjusting your search or filters.</span>
-              </div>
+              <mj-empty-state Variant="no-results" Icon="fa-solid fa-inbox"
+                Title="No tests or suites found"
+                Message="Try adjusting your search or filters." />
             }
           </mj-page-body-interior>
         </mj-left-nav-content>
@@ -946,29 +944,6 @@ interface TestRunStatRow {
       padding: 12px 16px;
       border-top: 1px solid var(--mj-border-default);
       background: var(--mj-bg-surface-card);
-    }
-
-    /* Empty State */
-    .empty-state {
-      padding: 80px 40px;
-      text-align: center;
-    }
-
-    .empty-state i {
-      font-size: 48px;
-      color: var(--mj-text-disabled);
-      margin-bottom: 16px;
-    }
-
-    .empty-state p {
-      font-size: 16px;
-      color: var(--mj-text-muted);
-      margin: 0 0 8px 0;
-    }
-
-    .empty-hint {
-      font-size: 13px;
-      color: var(--mj-text-disabled);
     }
 
     /* ==========================================

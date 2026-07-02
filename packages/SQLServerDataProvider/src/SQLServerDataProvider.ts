@@ -41,6 +41,7 @@ import {
   RecordDependency,
   EntityDependency,
   LogStatus,
+  LogStatusEx,
   CompositeKey,
   BaseEntityResult,
   Metadata,
@@ -460,7 +461,10 @@ export class SQLServerDataProvider
         cols.push(r.ColumnName);
       }
       this._viewColumnOrderCache = cache;
-      LogStatus(`SQLServerDataProvider: cached column order for ${cache.size} view(s) (save-capture @ResultTable alignment)`);
+      LogStatusEx({
+        message: `SQLServerDataProvider: cached column order for ${cache.size} view(s) (save-capture @ResultTable alignment)`,
+        verboseOnly: true,
+      });
     } catch (e) {
       // best-effort: an empty cache makes getAllEntityColumnsSQL fall back to the metadata-derived order
       LogStatus(`SQLServerDataProvider: view column-order prefetch failed; save-capture will use metadata order. ${e}`);

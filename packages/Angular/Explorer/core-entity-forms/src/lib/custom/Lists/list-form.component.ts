@@ -1,5 +1,5 @@
 import { Component, OnInit, OnDestroy, ChangeDetectionStrategy, inject } from '@angular/core';
-import { Subject, debounceTime } from 'rxjs';
+import { Subject, debounceTime, takeUntil } from 'rxjs';
 import { RegisterClass, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { SharedService } from '@memberjunction/ng-shared';
@@ -135,7 +135,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
 
         // Set up search debounce
         this.searchSubject
-            .pipe(debounceTime(300))
+            .pipe(debounceTime(300), takeUntil(this.destroy$))
             .subscribe((searchText) => this.searchRecords(searchText));
 
         await this.loadExplorerData();

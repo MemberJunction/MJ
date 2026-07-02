@@ -97,34 +97,6 @@
 /* ============================================================================
    EMPTY STATE
    ============================================================================ */
-.empty-state {
-  text-align: center;
-  padding: 80px 20px;
-  color: var(--mj-text-muted);
-}
-
-.empty-state i {
-  font-size: 72px;
-  color: var(--mj-border-strong);
-  margin-bottom: 24px;
-  display: block;
-  opacity: 0.8;
-}
-
-.empty-state h3 {
-  color: var(--mj-text-secondary);
-  font-size: 22px;
-  font-weight: 600;
-  margin: 0 0 12px 0;
-}
-
-.empty-state p {
-  font-size: 15px;
-  line-height: 1.6;
-  max-width: 400px;
-  margin: 0 auto 28px;
-  color: var(--mj-text-muted);
-}
 
 /* ============================================================================
    CONFIGURATION GRID

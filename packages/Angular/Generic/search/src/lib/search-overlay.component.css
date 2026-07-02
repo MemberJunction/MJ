@@ -200,37 +200,6 @@
     color: var(--mj-status-error);
 }
 
-/* Empty State */
-.search-empty-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 2.5rem 1rem;
-    gap: 0.5rem;
-}
-
-.search-empty-state-compact {
-    padding: 1.5rem 1rem;
-}
-
-.search-empty-icon {
-    font-size: 2rem;
-    color: var(--mj-text-muted);
-    margin-bottom: 0.5rem;
-}
-
-.search-empty-title {
-    color: var(--mj-text-primary);
-    font-weight: 600;
-    font-size: 0.95rem;
-}
-
-.search-empty-text {
-    color: var(--mj-text-muted);
-    font-size: 0.85rem;
-}
-
 /* Recent Searches */
 .search-recent {
     padding: 0.5rem 0;

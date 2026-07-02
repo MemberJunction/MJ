@@ -23,9 +23,11 @@ import {
     RealtimeToolDefinition
 } from '@memberjunction/ai';
 import { ExecuteAgentParams, AgentConfiguration, MJAIAgentEntityExtended, MJAIPromptRunEntityExtended } from '@memberjunction/ai-core-plus';
+import { IMetadataProvider } from '@memberjunction/core';
 import { BaseAgentType } from '../agent-types/base-agent-type';
 import { BaseAgent } from '../base-agent';
 import { INVOKE_TARGET_AGENT_TOOL_NAME, DelegateToTargetRequest } from '../realtime/realtime-session-runner';
+import { RealtimeRecordingController } from '../realtime/realtime-recording-capture';
 
 // ════════════════════════════════════════════════════════════════════
 // Mocks
@@ -84,6 +86,44 @@ class TestableRealtimeAgent extends BaseAgent {
     public callResolveModel(params: ExecuteAgentParams) {
         return this.resolveRealtimeModel(params);
     }
+    /** Drives the private create-on-start/update-on-complete persistence lifecycle for focused testing. */
+    public callPersist(params: ExecuteAgentParams, t: RealtimeTranscript): Promise<string | null> {
+        return (this as unknown as {
+            persistRealtimeTranscript(p: ExecuteAgentParams, tr: RealtimeTranscript): Promise<string | null>;
+        }).persistRealtimeTranscript(params, t);
+    }
+    /** Injects (or clears) the active recording controller so the media-field stamping path can be exercised. */
+    public setRecording(controller: RealtimeRecordingController | null): void {
+        (this as unknown as { realtimeRecording: RealtimeRecordingController | null }).realtimeRecording = controller;
+    }
+}
+
+/** Minimal capturing stand-in for an `MJ: Conversation Details` row. */
+class MockConversationDetail {
+    public ID = '';
+    public ConversationID = '';
+    public Role: 'AI' | 'Error' | 'User' = 'User';
+    public Message = '';
+    public Status: 'Complete' | 'Error' | 'In-Progress' = 'In-Progress';
+    public UserID: string | null = null;
+    public AgentSessionID: string | null = null;
+    public TurnEndedAt: Date | null = null;
+    public UtteranceStartMs: number | null = null;
+    public UtteranceEndMs: number | null = null;
+    public MediaType: string | null = null;
+    public LatestResult = { CompleteMessage: '' };
+    public NewRecord(): void { this.ID = 'detail-1'; }
+    public async Save(): Promise<boolean> { return true; }
+    /** Same shared instance models "the existing row", so Load just confirms + keeps prior fields. */
+    public async Load(id: string): Promise<boolean> { this.ID = id; return true; }
+}
+
+/** A provider whose `GetEntityObject` always returns the SAME detail instance (models one row across interim→final). */
+function makeDetailProvider(detail: MockConversationDetail): IMetadataProvider {
+    return {
+        GetEntityObject: async () => detail,
+        EntityByName: () => undefined
+    } as unknown as IMetadataProvider;
 }
 
 function makeAgent(overrides: Partial<MJAIAgentEntityExtended> = {}): MJAIAgentEntityExtended {
@@ -178,6 +218,74 @@ describe('BaseAgent realtime (session-driven) integration', () => {
             const deps = await agent.callBuildDeps(makeParams(), config, null);
             const usage: RealtimeUsage = { InputTokens: 10, OutputTokens: 5 };
             await expect(deps.CheckpointUsage(usage)).resolves.toBeUndefined();
+        });
+    });
+
+    describe('persistRealtimeTranscript lifecycle', () => {
+        function setup() {
+            const agent = new TestableRealtimeAgent();
+            const detail = new MockConversationDetail();
+            const params = makeParams({
+                provider: makeDetailProvider(detail),
+                data: { conversationId: 'conv-1' },
+                agentSessionID: 'sess-1'
+            } as Partial<ExecuteAgentParams>);
+            return { agent, detail, params };
+        }
+
+        it('creates an In-Progress row on the first interim delta (user turn stamps UserID)', async () => {
+            const { agent, detail, params } = setup();
+            const created = await agent.callPersist(params, { Role: 'user', Text: 'hel', IsFinal: false });
+            expect(created).toBe('detail-1'); // a distinct new turn → returns the id
+            expect(detail.Status).toBe('In-Progress');
+            expect(detail.Role).toBe('User');
+            expect(detail.Message).toBe('hel');
+            expect(detail.UserID).toBe('user-1');
+            expect(detail.AgentSessionID).toBe('sess-1');
+            expect(detail.TurnEndedAt).toBeNull(); // not ended yet
+        });
+
+        it('updates the in-flight row to Complete with TurnEndedAt on final (no double count)', async () => {
+            const { agent, detail, params } = setup();
+            await agent.callPersist(params, { Role: 'user', Text: 'hel', IsFinal: false });
+            const onFinal = await agent.callPersist(params, { Role: 'user', Text: 'hello there', IsFinal: true });
+            expect(onFinal).toBeNull(); // updating an existing row is NOT a new turn
+            expect(detail.Status).toBe('Complete');
+            expect(detail.Message).toBe('hello there');
+            expect(detail.TurnEndedAt).toBeInstanceOf(Date);
+        });
+
+        it('creates and finalizes in one step when no interim was seen; assistant turns set no UserID', async () => {
+            const { agent, detail, params } = setup();
+            const created = await agent.callPersist(params, { Role: 'assistant', Text: 'hi, how can I help?', IsFinal: true });
+            expect(created).toBe('detail-1'); // first time this turn is seen → counts
+            expect(detail.Role).toBe('AI');
+            expect(detail.Status).toBe('Complete');
+            expect(detail.UserID).toBeNull(); // an AI turn has no human speaker
+        });
+
+        it('ignores empty text and turns with no conversation id', async () => {
+            const { agent, params } = setup();
+            expect(await agent.callPersist(params, { Role: 'user', Text: '   ', IsFinal: true })).toBeNull();
+            const noConvo = makeParams({ provider: makeDetailProvider(new MockConversationDetail()) } as Partial<ExecuteAgentParams>);
+            expect(await agent.callPersist(noConvo, { Role: 'user', Text: 'hi', IsFinal: true })).toBeNull();
+        });
+
+        it('stamps media-relative utterance offsets + MediaType when recording is active', async () => {
+            const { agent, detail, params } = setup();
+            let clock = 1000;
+            const controller = new RealtimeRecordingController({ Now: () => clock });
+            controller.Start(); // t0 at clock=1000
+            agent.setRecording(controller);
+
+            clock = 1300; // 300ms into the recording
+            await agent.callPersist(params, { Role: 'user', Text: 'q', IsFinal: false });
+            expect(detail.MediaType).toBe('Audio');
+            expect(detail.UtteranceStartMs).toBe(300);
+
+            clock = 2100; // 1100ms in
+            await agent.callPersist(params, { Role: 'user', Text: 'question', IsFinal: true });
+            expect(detail.UtteranceEndMs).toBe(1100);
         });
     });
 });

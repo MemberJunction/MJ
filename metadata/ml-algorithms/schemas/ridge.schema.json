@@ -1,0 +1,25 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Ridge Regression Hyperparameters",
+  "type": "object",
+  "properties": {
+    "alpha": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1000,
+      "default": 1.0,
+      "description": "Regularization strength; larger values shrink coefficients more aggressively."
+    },
+    "fit_intercept": {
+      "type": "boolean",
+      "default": true,
+      "description": "Whether to estimate an intercept term for the model."
+    },
+    "solver": {
+      "type": "string",
+      "enum": ["auto", "svd", "cholesky", "lsqr", "saga"],
+      "default": "auto",
+      "description": "Solver used in the computation; 'auto' chooses based on the data."
+    }
+  }
+}

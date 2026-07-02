@@ -96,6 +96,18 @@ These apply to every component objective (4–13). Don't re-read per objective �
 | Inline empty-state patterns migrated | 0 | 213 |
 | Displaced bespoke markup deleted | 0 | 1 |
 
+> ⚠️ **The "213" target UNDER-scoped the work (corrected 2026-06-24).** It was measured
+> with a narrow marker matching only `class="empty-state" / no-data / no-results`.
+> The real universe — counted with a widened marker (any `…empty…` placeholder class,
+> minus helpers/cell-markers/state-modifiers) — is **~619** (410 canonical + ~209
+> bespoke). The narrow-marker population is ~done (218→6), but **~209 bespoke-named
+> empties remain** (`drill-down-empty`, `rt-empty`, `dashboard-empty`, …). Honest
+> adoption is **~66%**, not the ~99% the narrow marker reports. `measure-ui-adoption.sh`
+> now uses the widened marker and tracks empty-state in the adoption-% table.
+> **The same blind spot applies to every other component** (detail-panel, status,
+> collapsible, badge, stat-tile, form-section, confirm-dialog) — widen each marker
+> before trusting its baseline. See the warning block in `measure-ui-adoption.sh`.
+
 **API (proposed)**: Inputs: `Icon`, `Title`, `Message`, `ActionText`, `Variant` (`'empty' | 'no-results' | 'error'`). Output: `Action`. Slot: `[actions]` for multi-CTA.
 
 **Deep-dive findings** (May 27):
@@ -106,7 +118,7 @@ These apply to every component objective (4–13). Don't re-read per objective �
 - Zero shared base today — every empty-state is inline `<div>` in parent templates
 - **Risk**: Icon class inconsistency (~15-20% use non-standard FA patterns). Budget 30 min for normalization.
 
-**Done when**: Measurement script confirms 0 inline empty-state patterns. Component has unit tests. Light/dark validated.
+**Done when**: Measurement script (widened marker) confirms 0 bespoke empty-state patterns — i.e. ~209 remaining → 0. Component has unit tests. Light/dark validated.
 
 ---
 

@@ -49,6 +49,10 @@
       "types": "./dist/component-studio-dashboards.module.d.ts",
       "default": "./dist/component-studio-dashboards.module.js"
     },
+    "./predictive-studio-dashboards.module": {
+      "types": "./dist/predictive-studio-dashboards.module.d.ts",
+      "default": "./dist/predictive-studio-dashboards.module.js"
+    },
     "./integration.module": {
       "types": "./dist/Integration/integration.module.d.ts",
       "default": "./dist/Integration/integration.module.js"
@@ -130,6 +134,7 @@
     "@memberjunction/ng-list-management": "5.43.0",
     "@memberjunction/ng-map-view": "5.43.0",
     "@memberjunction/ng-markdown": "5.43.0",
+    "@memberjunction/ng-media-player": "5.43.0",
     "@memberjunction/ng-notifications": "5.43.0",
     "@memberjunction/ng-query-viewer": "5.43.0",
     "@memberjunction/ng-react": "5.43.0",
@@ -144,6 +149,7 @@
     "@memberjunction/ng-ui-components": "5.43.0",
     "@memberjunction/ng-versions": "5.43.0",
     "@memberjunction/ng-word-cloud": "5.43.0",
+    "@memberjunction/predictive-studio-core": "5.43.0",
     "@memberjunction/skip-types": "5.43.0",
     "@memberjunction/tag-engine-base": "5.43.0",
     "@memberjunction/templates-base-types": "5.43.0",

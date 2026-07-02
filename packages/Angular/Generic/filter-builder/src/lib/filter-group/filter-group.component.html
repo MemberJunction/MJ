@@ -98,16 +98,12 @@
 
   <!-- Empty State -->
   @if (!filter.filters || filter.filters.length === 0) {
-    <div class="empty-state">
-      <p>No filter conditions defined.</p>
-      <button
-        type="button"
-        class="add-btn primary"
-        (click)="addRule()"
-        [disabled]="disabled">
-        <i class="fa-solid fa-plus"></i>
-        <span>Add your first condition</span>
-      </button>
-    </div>
+    <mj-empty-state
+      Icon="fa-solid fa-filter"
+      Title="No filter conditions defined"
+      Size="compact"
+      [ActionText]="disabled ? '' : 'Add your first condition'"
+      ActionIcon="fa-solid fa-plus"
+      (Action)="addRule()" />
   }
 </div>

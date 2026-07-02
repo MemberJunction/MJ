@@ -84,11 +84,10 @@
        ============================================================ -->
   <div class="fbt-canvas-host">
     @if (!state.FormTargetEntityName) {
-      <div class="fbt-empty">
-        <i class="fa-solid fa-table-list"></i>
-        <h3>Pick an entity to start the form</h3>
-        <p>Choose the target entity from the toolbar. Form Studio loads the curated schema and lets you drag fields onto the canvas.</p>
-      </div>
+      <mj-empty-state class="fbt-empty"
+        Icon="fa-solid fa-table-list"
+        Title="Pick an entity to start the form"
+        Message="Choose the target entity from the toolbar. Form Studio loads the curated schema and lets you drag fields onto the canvas." />
     } @else {
       @if (state.FormCodeOnlySectionsDetected) {
         <div class="fbt-lossy-banner" role="alert">

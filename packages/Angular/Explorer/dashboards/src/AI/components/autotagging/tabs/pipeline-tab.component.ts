@@ -117,6 +117,11 @@ export class ClassifyPipelineTabComponent extends BaseAngularComponent {
     // ════════════════════════════════════════════
 
     /** Feed items filtered by search query and sorted. */
+    /** Empty-state title for the feed (reflects the active search). */
+    public get FeedEmptyTitle(): string {
+        return this.FeedSearchQuery ? `No items match "${this.FeedSearchQuery}"` : 'No processed items yet.';
+    }
+
     public get FilteredFeedItems(): FeedItem[] {
         let items = this.FeedItems;
         if (this.FeedSearchQuery.trim()) {

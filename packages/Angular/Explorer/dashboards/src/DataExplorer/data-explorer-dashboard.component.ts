@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef, Input, Output, EventEmitter, OnChanges, SimpleChanges, HostListener, ElementRef, ViewChild, NgZone } from '@angular/core';
+import { Component, OnInit, OnDestroy, AfterViewInit, ChangeDetectorRef, Input, Output, EventEmitter, OnChanges, SimpleChanges, HostListener, ElementRef, ViewChild, NgZone } from '@angular/core';
 
 import { trigger, transition, style, animate } from '@angular/animations';
 import { Subject } from 'rxjs';
@@ -23,9 +23,18 @@ import {
 } from '@memberjunction/ng-entity-viewer';
 import { MJUserViewEntityExtended, UserViewEngine } from '@memberjunction/core-entities';
 import { ExplorerStateService } from './services/explorer-state.service';
-import { DataExplorerState, DataExplorerFilter, BreadcrumbItem, DataExplorerDeepLink, RecentRecordAccess, FavoriteRecord, AppEntityGroup } from './models/explorer-state.interface';
+import { DataExplorerState, DataExplorerFilter, BreadcrumbItem, DataExplorerDeepLink, RecentRecordAccess, FavoriteRecord, AppEntityGroup, DataExplorerViewMode } from './models/explorer-state.interface';
 import { OpenRecordEvent, SelectRecordEvent } from './components/navigation-panel/navigation-panel.component';
 import { DisplaySimpleNotificationRequestData, MJEventType, MJGlobal } from '@memberjunction/global';
+import { buildDataExplorerAgentContext, isValidViewMode, isValidEntityBrowserMode, AppGroupSummary, entityDisplayName, resolveEntityByName, resolveRecordSelection, RecordSelectionRequest } from './data-explorer-agent-context';
+import { validateStringParam, validateEnumParam, validateNonNegativeNumberParam, VALID_ENTITY_BROWSER_MODES_FOR_VALIDATION } from '../shared/agent-tool-validation';
+
+/**
+ * Default server-side page size used by the inner entity viewer when {@link viewerConfig}
+ * doesn't override `pageSize`. Mirrors the viewer's own default (EntityViewerComponent),
+ * and is used to derive the agent-reported total page count.
+ */
+const DATA_EXPLORER_DEFAULT_PAGE_SIZE = 100;
 
 /**
  * Data Explorer Dashboard - Power user interface for exploring data across entities
@@ -52,7 +61,7 @@ import { DisplaySimpleNotificationRequestData, MJEventType, MJGlobal } from '@me
   ]
 })
 @RegisterClass(BaseDashboard, 'DataExplorer')
-export class DataExplorerDashboardComponent extends BaseDashboard implements OnInit, OnDestroy, OnChanges {
+export class DataExplorerDashboardComponent extends BaseDashboard implements OnInit, OnDestroy, OnChanges, AfterViewInit {
   protected override destroy$ = new Subject<void>();
   private metadata = this.ProviderToUse;
 
@@ -234,6 +243,11 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       return this.flatFilteredEntities.length;
     }
     return this.filteredAppEntityGroups.reduce((sum, g) => sum + g.entities.length, 0);
+  }
+
+  /** No-results message for the entity list (echoes the filter text). */
+  get NoEntityResultsMessage(): string {
+    return `No entities match "${this.entityFilterText}".`;
   }
 
   /**
@@ -445,6 +459,14 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
         // Update URL query params to reflect current state (for deep linking)
         this.pushCurrentStateToUrl();
 
+        // Keep the AI agent's view of this surface in sync with every state change
+        // (entity selection, view mode, filter, record selection, detail panel, etc.).
+        this.publishAgentContext();
+
+        // Re-scope the agent's client tools to the current mode (entity-browser vs
+        // record-view). Cheap: the guard inside only re-registers on the home↔entity flip.
+        this.syncAgentToolsForMode();
+
         this.cdr.detectChanges();
       });
 
@@ -499,6 +521,884 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       // it would otherwise hang the screen forever on a direct-URL (deep-link) refresh.
       this.NotifyLoadComplete();
     }
+  }
+
+  /**
+   * After the view initializes, publish the initial agent context and register the
+   * mode-scoped client tools the AI agent can invoke against this surface (the initial
+   * mode is 'home' until an entity is selected). The ongoing context re-emit and tool
+   * re-scoping both happen in the state subscription set up in {@link ngOnInit}.
+   */
+  ngAfterViewInit(): void {
+    this.publishAgentContext();
+    this.syncAgentToolsForMode();
+  }
+
+  // ========================================
+  // AI AGENT CONTEXT & CLIENT TOOLS
+  // ========================================
+
+  /**
+   * Publish the current Data Explorer state to the AI agent via NavigationService.
+   *
+   * When an entity is selected this reports the record-browsing surface
+   * (SelectedEntityName, ViewMode, ActiveViewId, FilterText, Total/Filtered record
+   * counts, SelectedRecordName, DetailPanelOpen). At the home level it instead reports
+   * the entity-browsing surface (HomeViewMode, EntitySearchText, VisibleEntityCount).
+   * The shaping lives in the pure {@link buildDataExplorerAgentContext} helper so it
+   * stays unit-testable. Called on init and on every state change.
+   */
+  private publishAgentContext(): void {
+    const accessibleViews = this.getAccessibleViewsForSelectedEntity();
+    const gridState = this.viewWorkspaceRef?.GetGridState() ?? null;
+    const context = buildDataExplorerAgentContext({
+      SelectedEntityName: this.selectedEntity?.Name ?? null,
+      ViewMode: this.state.viewMode,
+      AvailableViewTypes: this.getAvailableViewTypesForSelectedEntity(),
+      ActiveViewId: this.state.selectedViewId,
+      ActiveViewName: this.resolveActiveViewName(accessibleViews),
+      AvailableViewNames: accessibleViews.map(v => v.Name),
+      VisibleColumnNames: this.getVisibleColumnNames(),
+      FilterText: this.debouncedFilterText,
+      TotalRecordCount: this.totalRecordCount,
+      FilteredRecordCount: this.filteredRecordCount,
+      PageSize: this.getEffectivePageSize(),
+      CurrentPage: gridState?.CurrentPage ?? null,
+      TotalPages: gridState?.TotalPages ?? null,
+      SortColumn: gridState?.Sort?.field ?? null,
+      SortDirection: this.normalizeSortDirection(gridState?.Sort?.direction ?? null),
+      RelatedEntityNames: this.getRelatedEntityNames(),
+      SelectedRecordName: this.state.selectedRecordName,
+      DetailPanelOpen: this.state.detailPanelOpen,
+      VisibleRecordNames: this.getVisibleRecordNames(),
+      LoadedRecordCount: this.loadedRecords.length,
+      HomeViewMode: this.state.homeViewMode,
+      EntitySearchText: this.entityFilterText,
+      VisibleEntityCount: this.filteredEntityCount,
+      FavoriteEntityCount: this.state.favoriteEntities.length,
+      // Publish the DISPLAY names the user sees on the entity cards (the "MJ: " prefix
+      // stripped / DisplayName), so the agent passes back what the user actually says.
+      AvailableEntityNames: this.entities.map(e => entityDisplayName(e.Name, e.DisplayName)),
+      AppGroups: this.getAgentAppGroupSummaries(),
+    });
+    this.navigationService.SetAgentContext(this, context);
+  }
+
+  /**
+   * Normalize the grid's SortDirection (`'asc' | 'desc' | null`) for the agent context.
+   * The viewer can carry a null direction as "unsorted"; we only report 'asc'/'desc'.
+   */
+  private normalizeSortDirection(dir: 'asc' | 'desc' | null): 'asc' | 'desc' | null {
+    return dir === 'asc' || dir === 'desc' ? dir : null;
+  }
+
+  /**
+   * Names of the entities related to the selected entity, read straight from in-memory
+   * {@link EntityInfo.RelatedEntities} metadata (no lookup). Bounded to a sane number so the
+   * streamed context stays small; the context helper bounds it again. Returns [] at the home level.
+   */
+  private getRelatedEntityNames(): string[] {
+    const entity = this.selectedEntity;
+    if (!entity) {
+      return [];
+    }
+    const seen = new Set<string>();
+    const names: string[] = [];
+    for (const r of entity.RelatedEntities) {
+      const name = r.RelatedEntity;
+      if (name && !seen.has(name)) {
+        seen.add(name);
+        names.push(name);
+      }
+    }
+    return names;
+  }
+
+  /**
+   * Display values of the records currently loaded in the grid (from {@link loadedRecords}),
+   * in grid order, using the same name-field logic the detail panel / state use
+   * ({@link getRecordDisplayName}). Drives the agent's VisibleRecordNames context and the
+   * SelectRecord tool. Returns [] when no entity is selected or nothing is loaded.
+   */
+  private getVisibleRecordNames(): string[] {
+    if (!this.selectedEntity || this.loadedRecords.length === 0) {
+      return [];
+    }
+    return this.loadedRecords.map(r => this.getRecordDisplayName(r));
+  }
+
+  /**
+   * Resolve an agent-supplied entity reference to one of the available entities, matching
+   * the way the user names things (display name with the "MJ: " prefix stripped, e.g.
+   * "ML Models" → "MJ: ML Models"). Delegates to the pure {@link resolveEntityByName} helper.
+   */
+  private resolveEntityByName(input: string): EntityInfo | null {
+    return resolveEntityByName(input, this.entities);
+  }
+
+  /**
+   * The record-view modes the CURRENT entity actually supports. Mirrors the gating in
+   * {@link reconcileViewModeForEntity}: 'grid' and 'cards' are always available; 'timeline'
+   * requires at least one Date field; 'map' requires geocoding support. Returns [] at the
+   * home level. Read straight from in-memory {@link EntityInfo} metadata (no lookup).
+   */
+  private getAvailableViewTypesForSelectedEntity(): DataExplorerViewMode[] {
+    const entity = this.selectedEntity;
+    if (!entity) {
+      return [];
+    }
+    const modes: DataExplorerViewMode[] = ['grid', 'cards'];
+    if (entity.Fields.some(f => f.TSType === EntityFieldTSType.Date)) {
+      modes.push('timeline');
+    }
+    if (entity.SupportsGeoCoding) {
+      modes.push('map');
+    }
+    return modes;
+  }
+
+  /**
+   * The grid's server-side page size. The dashboard forwards {@link viewerConfig} to the inner
+   * viewer; when it doesn't set `pageSize` the viewer's default (100) applies. We surface that
+   * effective value so the agent can derive total pages from the record counts.
+   */
+  private getEffectivePageSize(): number {
+    return this.viewerConfig.pageSize ?? DATA_EXPLORER_DEFAULT_PAGE_SIZE;
+  }
+
+  /**
+   * Summaries of the application groups currently shown on the home-screen entity browser
+   * (name, visible-entity count, expanded flag). Reuses the same filtered grouping the UI
+   * renders ({@link filteredAppEntityGroups}), so the agent sees exactly what the user sees.
+   * Returns [] when scoped to a single application (no grouping).
+   */
+  private getAgentAppGroupSummaries(): AppGroupSummary[] {
+    if (this.entityFilter?.applicationId) {
+      return [];
+    }
+    return this.filteredAppEntityGroups.map(g => ({
+      Name: g.applicationName,
+      EntityCount: g.entities.length,
+      Expanded: g.isExpanded,
+    }));
+  }
+
+  /**
+   * Saved views accessible to the current user for the selected entity, read from the
+   * already-loaded {@link UserViewEngine} cache (no new RunView). Returns [] at the home
+   * level. The engine's cache is populated lazily elsewhere (e.g. {@link restoreViewFromUrl}
+   * and the view workspace); if it hasn't loaded yet this returns [] and the next state
+   * change re-publishes once it has.
+   */
+  private getAccessibleViewsForSelectedEntity(): MJUserViewEntityExtended[] {
+    if (!this.selectedEntity) {
+      return [];
+    }
+    return UserViewEngine.Instance.GetAccessibleViewsForEntity(this.selectedEntity.ID);
+  }
+
+  /**
+   * Resolve the display name for the active view id. Prefers the live
+   * {@link selectedViewEntity}, then the accessible-views list, then the engine cache.
+   */
+  private resolveActiveViewName(accessibleViews: MJUserViewEntityExtended[]): string | null {
+    const activeId = this.state.selectedViewId;
+    if (!activeId) {
+      return null;
+    }
+    if (this.selectedViewEntity && UUIDsEqual(this.selectedViewEntity.ID, activeId)) {
+      return this.selectedViewEntity.Name;
+    }
+    const fromList = accessibleViews.find(v => UUIDsEqual(v.ID, activeId));
+    if (fromList) {
+      return fromList.Name;
+    }
+    return UserViewEngine.Instance.GetViewById(activeId)?.Name ?? null;
+  }
+
+  /**
+   * Column/field names visible in the grid for the selected entity — the entity's
+   * default-in-view fields, read straight from in-memory {@link EntityInfo} metadata
+   * (no lookup). Falls back to all fields when none are flagged for view display.
+   * Returns [] at the home level.
+   */
+  private getVisibleColumnNames(): string[] {
+    if (!this.selectedEntity) {
+      return [];
+    }
+    const inViewFields = this.selectedEntity.Fields.filter(f => f.DefaultInView);
+    const fields = inViewFields.length > 0 ? inViewFields : this.selectedEntity.Fields;
+    return fields.map(f => f.DisplayNameOrName);
+  }
+
+  /**
+   * Tracks which tool set was last registered with the NavigationService, so the
+   * mode-scoped re-registration ({@link syncAgentToolsForMode}) only fires on the
+   * home↔entity transition rather than on every state change.
+   */
+  private lastRegisteredToolMode: 'home' | 'entity' | null = null;
+
+  /**
+   * Re-scope the agent's client tools to the CURRENT mode. The Data Explorer has two
+   * surfaces with very different affordances:
+   * - 'home' (no entity selected): the entity browser — browse/search entities, favorites,
+   *   application groups.
+   * - 'entity' (an entity is selected): the record view — views, view types, filter, sort,
+   *   paginate, open record, export, view properties.
+   *
+   * We register the COMMON tools plus exactly one mode's tools, so a browser-only tool is
+   * never exposed in record-view mode and vice-versa. Because {@link publishAgentContext}
+   * fires on every state change but the tool set only changes on the mode flip, this guards
+   * on {@link lastRegisteredToolMode} and only calls into NavigationService when the mode
+   * actually changes.
+   */
+  private syncAgentToolsForMode(): void {
+    const mode: 'home' | 'entity' = this.selectedEntity ? 'entity' : 'home';
+    if (mode === this.lastRegisteredToolMode) {
+      return;
+    }
+    this.lastRegisteredToolMode = mode;
+    this.navigationService.SetAgentClientTools(this, [
+      ...this.buildCommonTools(),
+      ...(mode === 'home' ? this.buildEntityBrowserTools() : this.buildRecordViewTools()),
+    ]);
+  }
+
+  /** The tool-definition shape the NavigationService accepts. */
+  private buildAgentTool(
+    name: string,
+    description: string,
+    parameterSchema: Record<string, unknown>,
+    handler: (params: Record<string, unknown>) => Promise<unknown>,
+  ): { Name: string; Description: string; ParameterSchema: Record<string, unknown>; Handler: (params: Record<string, unknown>) => Promise<unknown> } {
+    return { Name: name, Description: description, ParameterSchema: parameterSchema, Handler: handler };
+  }
+
+  /**
+   * COMMON tools — available in BOTH modes. Currently just {@link BackToEntityBrowser},
+   * which deselects the current entity and returns to the entity browser (the home screen).
+   */
+  private buildCommonTools(): Array<ReturnType<DataExplorerDashboardComponent['buildAgentTool']>> {
+    return [
+      this.buildAgentTool(
+        'BackToEntityBrowser',
+        'Deselect the current entity and return to the entity browser (home screen) where the user can pick a different entity.',
+        { type: 'object', properties: {} },
+        async () => this.toolBackToEntityBrowser(),
+      ),
+    ];
+  }
+
+  /**
+   * ENTITY-BROWSER tools — only registered at the home level (no entity selected).
+   * Browse/search entities, manage favorites, expand/collapse application groups.
+   */
+  private buildEntityBrowserTools(): Array<ReturnType<DataExplorerDashboardComponent['buildAgentTool']>> {
+    return [
+      this.buildAgentTool(
+        'OpenEntityData',
+        'Open and load data for an entity by its name. Pass the display name the user says (e.g. "AI Models", "ML Models", "Users") exactly as it appears on the entity cards — the tool resolves it even though the full entity name may carry an "MJ: " prefix (e.g. "MJ: ML Models").',
+        { type: 'object', properties: { entityName: { type: 'string' } }, required: ['entityName'] },
+        async (params) => this.toolOpenEntityData(params),
+      ),
+      this.buildAgentTool(
+        'OpenEntity',
+        'Open and load data for an entity by its name (alias of OpenEntityData). Pass the display name the user says (e.g. "AI Models", "ML Models") — the tool resolves the "MJ: " prefix.',
+        { type: 'object', properties: { entityName: { type: 'string' } }, required: ['entityName'] },
+        async (params) => this.toolOpenEntityData(params),
+      ),
+      this.buildAgentTool(
+        'SearchEntities',
+        'Type into the home-screen entity-search box to filter the list of available entities by name/description.',
+        { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] },
+        async (params) => this.toolSearchEntities(params),
+      ),
+      this.buildAgentTool(
+        'SetEntityBrowserMode',
+        'Switch the home-screen entity browser between showing all entities and favorites only. Valid modes: all, favorites.',
+        { type: 'object', properties: { mode: { type: 'string' } }, required: ['mode'] },
+        async (params) => this.toolSetEntityBrowserMode(params),
+      ),
+      this.buildAgentTool(
+        'ToggleEntityFavorite',
+        "Add or remove an entity from the user's favorites by entity name (reversible toggle). Pass the display name the user says (e.g. \"AI Models\") — the tool resolves the \"MJ: \" prefix.",
+        { type: 'object', properties: { entityName: { type: 'string' } }, required: ['entityName'] },
+        async (params) => this.toolToggleEntityFavorite(params),
+      ),
+      this.buildAgentTool(
+        'ExpandAppGroup',
+        'Expand an application group in the home-screen entity browser by its application name (e.g. "AI", "Admin").',
+        { type: 'object', properties: { appName: { type: 'string' } }, required: ['appName'] },
+        async (params) => this.toolSetAppGroupExpanded(params, true),
+      ),
+      this.buildAgentTool(
+        'CollapseAppGroup',
+        'Collapse an application group in the home-screen entity browser by its application name (e.g. "AI", "Admin").',
+        { type: 'object', properties: { appName: { type: 'string' } }, required: ['appName'] },
+        async (params) => this.toolSetAppGroupExpanded(params, false),
+      ),
+    ];
+  }
+
+  /**
+   * RECORD-VIEW tools — only registered when an entity is selected. Views, view types,
+   * filter, sort, paginate, open/create record, navigate-to-related, export, view properties.
+   */
+  private buildRecordViewTools(): Array<ReturnType<DataExplorerDashboardComponent['buildAgentTool']>> {
+    return [
+      this.buildAgentTool(
+        'SelectView',
+        'Select a saved view for the current entity. Accepts either the view name (e.g. "Active Accounts", as listed in AvailableViews) or its view ID.',
+        {
+          type: 'object',
+          properties: {
+            view: { type: 'string', description: 'The view name or view ID to select.' },
+            viewId: { type: 'string', description: 'Deprecated alias for "view" — the view ID.' },
+          },
+        },
+        async (params) => this.toolSelectView(params),
+      ),
+      this.buildAgentTool(
+        'ChangeViewType',
+        'Change the record-view type for the selected entity. Valid types: grid, cards, timeline, map.',
+        { type: 'object', properties: { type: { type: 'string' } }, required: ['type'] },
+        async (params) => this.toolChangeViewType(params),
+      ),
+      this.buildAgentTool(
+        'SetViewMode',
+        'Set the record-view mode (alias of ChangeViewType). Valid modes: grid, cards, timeline, map.',
+        { type: 'object', properties: { mode: { type: 'string' } }, required: ['mode'] },
+        async (params) => this.toolSetViewMode(params),
+      ),
+      this.buildAgentTool(
+        'FilterRecords',
+        'Set the record filter for the current entity\'s view via smart-filter text (a natural-language or simple search string applied to the grid).',
+        { type: 'object', properties: { filterText: { type: 'string' } }, required: ['filterText'] },
+        async (params) => this.toolFilterRecords(params),
+      ),
+      this.buildAgentTool(
+        'ClearRecordFilter',
+        'Clear the current record filter for the selected entity.',
+        { type: 'object', properties: {} },
+        async () => {
+          this.clearRecordFilter();
+          return { Success: true };
+        },
+      ),
+      this.buildAgentTool(
+        'SelectRecord',
+        'Select a row in the current view (the equivalent of the user clicking a row): this highlights the row and opens its detail panel. Pick the row by position ("first", "last", or a 1-based index number) OR by name (matches a loaded record\'s display value — see VisibleRecordNames, case-insensitive/contains). Compose with OpenRecord to then open the full form.',
+        {
+          type: 'object',
+          properties: {
+            position: { type: 'string', description: '"first", "last", or a 1-based index (a number is also accepted).' },
+            name: { type: 'string', description: 'A loaded record display value to match (case-insensitive, contains).' },
+          },
+        },
+        async (params) => this.toolSelectRecord(params),
+      ),
+      this.buildAgentTool(
+        'OpenRecord',
+        'Open the currently-selected record in its full record form.',
+        { type: 'object', properties: {} },
+        async () => this.toolOpenSelectedRecord(),
+      ),
+      this.buildAgentTool(
+        'CreateNewRecord',
+        'Open a new-record form for the currently-selected entity.',
+        { type: 'object', properties: {} },
+        async () => this.toolCreateNewRecord(),
+      ),
+      this.buildAgentTool(
+        'NavigateToRelated',
+        'Navigate to a related entity by name (see the RelatedEntities context field), optionally applying a SQL filter to show related records. Pass the display name the user says — the tool resolves the "MJ: " prefix.',
+        {
+          type: 'object',
+          properties: { entityName: { type: 'string' }, filter: { type: 'string' } },
+          required: ['entityName'],
+        },
+        async (params) => this.toolNavigateToRelated(params),
+      ),
+      this.buildAgentTool(
+        'ExportView',
+        'Export the current entity/view\'s records to a file. Optional format: csv, excel, or json (defaults to excel).',
+        { type: 'object', properties: { format: { type: 'string', description: 'csv | excel | json' } } },
+        async (params) => this.toolExportView(params),
+      ),
+      this.buildAgentTool(
+        'OpenViewProperties',
+        'Open the view configuration / properties panel for the current entity\'s view (the same panel as Cmd+,).',
+        { type: 'object', properties: {} },
+        async () => this.toolOpenViewProperties(),
+      ),
+      this.buildAgentTool(
+        'NextPage',
+        'Advance the record grid to the next page of results.',
+        { type: 'object', properties: {} },
+        async () => this.toolNextPage(),
+      ),
+      this.buildAgentTool(
+        'PreviousPage',
+        'Move the record grid to the previous page of results.',
+        { type: 'object', properties: {} },
+        async () => this.toolPreviousPage(),
+      ),
+      this.buildAgentTool(
+        'GoToPage',
+        'Jump the record grid to a specific 1-based page number.',
+        { type: 'object', properties: { page: { type: 'number' } }, required: ['page'] },
+        async (params) => this.toolGoToPage(params),
+      ),
+      this.buildAgentTool(
+        'SetPageSize',
+        'Set how many records load per page in the record grid (reloads from page 1).',
+        { type: 'object', properties: { size: { type: 'number' } }, required: ['size'] },
+        async (params) => this.toolSetPageSize(params),
+      ),
+      this.buildAgentTool(
+        'SetSort',
+        'Sort the record grid by a column. Provide the column field name and an optional direction (asc | desc, defaults to asc).',
+        {
+          type: 'object',
+          properties: { column: { type: 'string' }, direction: { type: 'string', description: 'asc | desc' } },
+          required: ['column'],
+        },
+        async (params) => this.toolSetSort(params),
+      ),
+    ];
+  }
+
+  /**
+   * Build a tolerant "entity not found" error listing a few of the DISPLAY names the user
+   * actually sees, so the agent can correct itself.
+   */
+  private entityNotFoundError(input: string): string {
+    const sample = this.entities.slice(0, 6).map(e => entityDisplayName(e.Name, e.DisplayName)).join(', ');
+    return `Entity "${input}" is not available in this explorer. Available entities include: ${sample || '(none)'}.`;
+  }
+
+  /** Resolve an entity by name and open its data. */
+  private toolOpenEntityData(params: Record<string, unknown>): { Success: boolean; Data?: Record<string, unknown>; ErrorMessage?: string } {
+    const entityName = String(params['entityName'] ?? '');
+    const entity = this.resolveEntityByName(entityName);
+    if (!entity) {
+      return { Success: false, ErrorMessage: this.entityNotFoundError(entityName) };
+    }
+    this.onEntitySelected(entity);
+    return { Success: true, Data: { EntityName: entity.Name } };
+  }
+
+  /** Apply a record filter for the selected entity. */
+  private toolFilterRecords(params: Record<string, unknown>): { Success: boolean; ErrorMessage?: string } {
+    if (!this.selectedEntity) {
+      return { Success: false, ErrorMessage: 'No entity is selected to filter.' };
+    }
+    this.onFilterInputChanged(String(params['filterText'] ?? ''));
+    return { Success: true };
+  }
+
+  /** Switch the record-view mode after validating it. */
+  private toolSetViewMode(params: Record<string, unknown>): { Success: boolean; Data?: Record<string, unknown>; ErrorMessage?: string } {
+    const mode = params['mode'];
+    if (!isValidViewMode(mode)) {
+      return { Success: false, ErrorMessage: `Invalid view mode "${String(mode)}". Valid modes: grid, cards, timeline, map.` };
+    }
+    this.stateService.setViewMode(mode);
+    return { Success: true, Data: { ViewMode: mode } };
+  }
+
+  /**
+   * Select a saved view by name OR id. The agent now sees view names via the
+   * AvailableViews context field, so this resolves a supplied name (case-insensitive)
+   * to its id against the in-memory {@link UserViewEngine} cache for the current entity.
+   * A value that already matches a known view id is used directly.
+   */
+  private toolSelectView(params: Record<string, unknown>): { Success: boolean; Data?: Record<string, unknown>; ErrorMessage?: string } {
+    if (!this.selectedEntity) {
+      return { Success: false, ErrorMessage: 'No entity is selected, so there are no saved views to choose from.' };
+    }
+    // Accept either "view" (name or id) or the legacy "viewId" alias.
+    const raw = String(params['view'] ?? params['viewId'] ?? '').trim();
+    if (!raw) {
+      return { Success: false, ErrorMessage: 'A view name or view ID is required.' };
+    }
+
+    const accessibleViews = this.getAccessibleViewsForSelectedEntity();
+    // Prefer an exact id match, then fall back to a case-insensitive name match.
+    const lowered = raw.toLowerCase();
+    const match =
+      accessibleViews.find(v => UUIDsEqual(v.ID, raw)) ??
+      accessibleViews.find(v => v.Name.toLowerCase() === lowered);
+
+    if (!match) {
+      const available = accessibleViews.map(v => v.Name).join(', ') || '(none)';
+      return { Success: false, ErrorMessage: `No saved view named or identified by "${raw}" for "${this.selectedEntity.Name}". Available views: ${available}.` };
+    }
+
+    this.stateService.selectView(match.ID);
+    return { Success: true, Data: { ViewId: match.ID, ViewName: match.Name } };
+  }
+
+  /**
+   * Select a record/row in the current view by position or name, then drive the same
+   * selection path a user row-click takes (open the detail panel, track recent, highlight
+   * the grid row via the viewer's additive SelectRecord). Tolerant: clear errors when no
+   * records are loaded or the position/name doesn't match.
+   */
+  private toolSelectRecord(params: Record<string, unknown>): { Success: boolean; Data?: Record<string, unknown>; ErrorMessage?: string } {
+    if (!this.selectedEntity) {
+      return { Success: false, ErrorMessage: 'No entity is selected, so there are no records to select.' };
+    }
+    const request = this.parseRecordSelectionRequest(params);
+    const recordNames = this.getVisibleRecordNames();
+    const resolution = resolveRecordSelection(recordNames, request);
+    if (!resolution.ok) {
+      return { Success: false, ErrorMessage: resolution.error };
+    }
+    const record = this.loadedRecords[resolution.index];
+    if (!record) {
+      return { Success: false, ErrorMessage: 'The resolved record is no longer loaded in the view.' };
+    }
+    this.applyRecordSelection(record);
+    return { Success: true, Data: { SelectedRecordName: this.getRecordDisplayName(record), Index: resolution.index + 1 } };
+  }
+
+  /**
+   * Coerce the agent's loosely-typed SelectRecord params into a {@link RecordSelectionRequest}.
+   * `position` may arrive as a string ('first'/'last'/'2') or a number; `name` as a string.
+   */
+  private parseRecordSelectionRequest(params: Record<string, unknown>): RecordSelectionRequest {
+    const rawPosition = params['position'];
+    const request: RecordSelectionRequest = {};
+    if (typeof rawPosition === 'number') {
+      request.position = rawPosition;
+    } else if (typeof rawPosition === 'string') {
+      const trimmed = rawPosition.trim().toLowerCase();
+      if (trimmed === 'first' || trimmed === 'last') {
+        request.position = trimmed;
+      } else if (trimmed) {
+        const n = Number(trimmed);
+        if (Number.isFinite(n)) {
+          request.position = n;
+        } else {
+          // A non-numeric, non-first/last "position" is really a name — fall back to name matching.
+          request.name = rawPosition;
+        }
+      }
+    }
+    if (params['name'] != null) {
+      request.name = String(params['name']);
+    }
+    return request;
+  }
+
+  /**
+   * Drive the selection of a loaded record exactly like {@link onViewerRecordSelected}: set the
+   * selected record + detail-panel entity, open the detail panel via the state service, and ask
+   * the inner viewer to highlight the matching grid row (additive viewer.SelectRecord). Mirrors
+   * the user row-click path so the detail panel opens and the grid reflects the selection.
+   */
+  private applyRecordSelection(record: Record<string, unknown>): void {
+    const entity = this.selectedEntity;
+    if (!entity) {
+      return;
+    }
+    this.selectedRecord = record;
+    this.detailPanelEntity = entity;
+    const recordName = this.getRecordDisplayName(record);
+    const pkString = buildPkString(record, entity);
+    this.stateService.selectRecord(pkString, recordName);
+    this.stateService.addRecentItem({
+      entityName: entity.Name,
+      compositeKeyString: pkString,
+      displayName: recordName,
+    });
+    // Highlight the row in the grid (no-op when the grid view isn't mounted, e.g. cards/timeline).
+    this.viewWorkspaceRef?.SelectRecord(record);
+    this.cdr.detectChanges();
+  }
+
+  /** Open the currently-selected record in its full form. */
+  private toolOpenSelectedRecord(): { Success: boolean; ErrorMessage?: string } {
+    if (!this.selectedRecord) {
+      return { Success: false, ErrorMessage: 'No record is currently selected to open.' };
+    }
+    // onOpenRecord uses detailPanelEntity; fall back to the selected entity when
+    // the record came from the grid rather than the detail panel.
+    if (!this.detailPanelEntity) {
+      this.detailPanelEntity = this.selectedEntity;
+    }
+    if (!this.detailPanelEntity) {
+      return { Success: false, ErrorMessage: 'No entity context is available for the selected record.' };
+    }
+    this.onOpenRecord(this.selectedRecord);
+    return { Success: true };
+  }
+
+  /** Open a new-record form for the selected entity. */
+  private toolCreateNewRecord(): { Success: boolean; ErrorMessage?: string } {
+    if (!this.selectedEntity) {
+      return { Success: false, ErrorMessage: 'No entity is selected to create a record for.' };
+    }
+    this.onCreateNewRecord();
+    return { Success: true };
+  }
+
+  /** Navigate to a related entity, optionally applying a filter. */
+  private toolNavigateToRelated(params: Record<string, unknown>): { Success: boolean; ErrorMessage?: string } {
+    const entityName = String(params['entityName'] ?? '');
+    const entity = this.resolveEntityByName(entityName);
+    if (!entity) {
+      return { Success: false, ErrorMessage: this.entityNotFoundError(entityName) };
+    }
+    const filter = params['filter'] != null ? String(params['filter']) : '';
+    this.onNavigateToRelated({ entityName: entity.Name, filter });
+    return { Success: true };
+  }
+
+  /** Drive the home-screen entity-search box. */
+  private toolSearchEntities(params: Record<string, unknown>): { Success: boolean; Data?: Record<string, unknown>; ErrorMessage?: string } {
+    const validated = validateStringParam(params['query'], 'query');
+    if (!validated.ok) {
+      return validated.result;
+    }
+    this.entityFilterText = validated.value;
+    this.publishAgentContext();
+    this.cdr.detectChanges();
+    return { Success: true, Data: { Query: validated.value, VisibleEntityCount: this.filteredEntityCount } };
+  }
+
+  /** Switch the home-screen entity browser between 'all' and 'favorites'. */
+  private toolSetEntityBrowserMode(params: Record<string, unknown>): { Success: boolean; Data?: Record<string, unknown>; ErrorMessage?: string } {
+    const validated = validateEnumParam(params['mode'], VALID_ENTITY_BROWSER_MODES_FOR_VALIDATION, 'mode');
+    if (!validated.ok) {
+      return validated.result;
+    }
+    if (!isValidEntityBrowserMode(validated.value)) {
+      return { Success: false, ErrorMessage: `Invalid mode "${String(params['mode'])}". Valid modes: all, favorites.` };
+    }
+    this.setHomeViewMode(validated.value);
+    return { Success: true, Data: { EntityBrowserMode: validated.value } };
+  }
+
+  /** Add or remove an entity from favorites by name (reversible). */
+  private async toolToggleEntityFavorite(params: Record<string, unknown>): Promise<{ Success: boolean; Data?: Record<string, unknown>; ErrorMessage?: string }> {
+    const validated = validateStringParam(params['entityName'], 'entityName');
+    if (!validated.ok) {
+      return validated.result;
+    }
+    const entity = this.resolveEntityByName(validated.value);
+    if (!entity) {
+      return { Success: false, ErrorMessage: this.entityNotFoundError(validated.value) };
+    }
+    const wasFavorited = this.stateService.isEntityFavorited(entity.ID);
+    const ok = wasFavorited
+      ? await this.stateService.removeEntityFromFavorites(entity.ID)
+      : await this.stateService.addEntityToFavorites(entity.Name, entity.ID);
+    if (!ok) {
+      return { Success: false, ErrorMessage: `Failed to ${wasFavorited ? 'remove' : 'add'} "${entity.Name}" ${wasFavorited ? 'from' : 'to'} favorites.` };
+    }
+    this.ngZone.run(() => {
+      this.publishAgentContext();
+      this.cdr.detectChanges();
+    });
+    return { Success: true, Data: { EntityName: entity.Name, Favorited: !wasFavorited } };
+  }
+
+  /**
+   * Expand or collapse an application group by its application NAME (the agent sees names,
+   * not the internal application IDs). Resolves the name against the currently-shown groups.
+   */
+  private toolSetAppGroupExpanded(params: Record<string, unknown>, expand: boolean): { Success: boolean; Data?: Record<string, unknown>; ErrorMessage?: string } {
+    if (this.entityFilter?.applicationId) {
+      return { Success: false, ErrorMessage: 'The entity browser is scoped to a single application, so there are no groups to expand or collapse.' };
+    }
+    const validated = validateStringParam(params['appName'], 'appName');
+    if (!validated.ok) {
+      return validated.result;
+    }
+    const lowered = validated.value.trim().toLowerCase();
+    const group = this.appEntityGroups.find(g => g.applicationName.toLowerCase() === lowered);
+    if (!group) {
+      const available = this.appEntityGroups.map(g => g.applicationName).join(', ') || '(none)';
+      return { Success: false, ErrorMessage: `No application group named "${validated.value}". Available groups: ${available}.` };
+    }
+    // toggleAppGroup flips state; only call it when the current state differs from the target.
+    if (group.isExpanded !== expand) {
+      this.toggleAppGroup(group.applicationId);
+    }
+    this.publishAgentContext();
+    return { Success: true, Data: { AppName: group.applicationName, Expanded: expand } };
+  }
+
+  /** Change the record-view type (alias of SetViewMode). */
+  private toolChangeViewType(params: Record<string, unknown>): { Success: boolean; Data?: Record<string, unknown>; ErrorMessage?: string } {
+    return this.toolSetViewMode({ mode: params['type'] });
+  }
+
+  /** Deselect the current entity and return to the entity browser (home screen). */
+  private toolBackToEntityBrowser(): { Success: boolean; Data?: Record<string, unknown>; ErrorMessage?: string } {
+    if (!this.selectedEntity) {
+      return { Success: false, ErrorMessage: 'Already at the entity browser — no entity is selected.' };
+    }
+    this.goToEntityBrowser();
+    return { Success: true, Data: { AtHomeLevel: true } };
+  }
+
+  /**
+   * Export the current entity/view's records. Delegates to the inner grid's Export()
+   * (via the view workspace). Optional format: csv | excel | json (defaults to excel).
+   */
+  private async toolExportView(params: Record<string, unknown>): Promise<{ Success: boolean; Data?: Record<string, unknown>; ErrorMessage?: string }> {
+    if (!this.selectedEntity) {
+      return { Success: false, ErrorMessage: 'No entity is selected to export.' };
+    }
+    const format = this.normalizeExportFormat(params['format']);
+    if (format === 'invalid') {
+      return { Success: false, ErrorMessage: `Invalid format "${String(params['format'])}". Valid formats: csv, excel, json.` };
+    }
+    const workspace = this.viewWorkspaceRef;
+    if (!workspace || !workspace.ExportRecords) {
+      return { Success: false, ErrorMessage: 'The record grid is not ready to export yet.' };
+    }
+    try {
+      const ok = await workspace.ExportRecords(format ?? undefined);
+      if (!ok) {
+        return { Success: false, ErrorMessage: 'Export is not available for the current view.' };
+      }
+      return { Success: true, Data: { EntityName: this.selectedEntity.Name, Format: format ?? 'excel' } };
+    } catch (err) {
+      return { Success: false, ErrorMessage: `Export failed: ${err instanceof Error ? err.message : String(err)}` };
+    }
+  }
+
+  /** Narrow an untrusted export-format param to a supported value, or 'invalid'. */
+  private normalizeExportFormat(raw: unknown): 'csv' | 'excel' | 'json' | null | 'invalid' {
+    if (raw == null || raw === '') {
+      return null; // default (excel)
+    }
+    const value = String(raw).toLowerCase();
+    if (value === 'csv' || value === 'excel' || value === 'json') {
+      return value;
+    }
+    return 'invalid';
+  }
+
+  /** Open the view configuration / properties panel (same as Cmd+,). */
+  private toolOpenViewProperties(): { Success: boolean; ErrorMessage?: string } {
+    if (!this.selectedEntity) {
+      return { Success: false, ErrorMessage: 'No entity is selected, so there are no view properties to configure.' };
+    }
+    if (!this.viewWorkspaceRef) {
+      return { Success: false, ErrorMessage: 'The view workspace is not ready yet.' };
+    }
+    this.viewWorkspaceRef.onConfigureViewRequested();
+    return { Success: true };
+  }
+
+  /** Advance the record grid to the next page. */
+  private toolNextPage(): { Success: boolean; Data?: Record<string, unknown>; ErrorMessage?: string } {
+    return this.applyPageChange(() => this.viewWorkspaceRef?.NextPage() ?? null);
+  }
+
+  /** Move the record grid to the previous page. */
+  private toolPreviousPage(): { Success: boolean; Data?: Record<string, unknown>; ErrorMessage?: string } {
+    return this.applyPageChange(() => this.viewWorkspaceRef?.PreviousPage() ?? null);
+  }
+
+  /** Jump the record grid to a specific 1-based page number. */
+  private toolGoToPage(params: Record<string, unknown>): { Success: boolean; Data?: Record<string, unknown>; ErrorMessage?: string } {
+    const validated = validateNonNegativeNumberParam(params['page'], 'page');
+    if (!validated.ok) {
+      return validated.result;
+    }
+    if (validated.value < 1) {
+      return { Success: false, ErrorMessage: 'page must be 1 or greater.' };
+    }
+    return this.applyPageChange(() => this.viewWorkspaceRef?.GoToPage(validated.value) ?? null);
+  }
+
+  /**
+   * Shared executor for the three pagination tools: run the workspace passthrough,
+   * report the resulting page, and re-publish context. A null result means the grid
+   * isn't paging (e.g. not mounted, or externally-supplied records).
+   */
+  private applyPageChange(action: () => number | null): { Success: boolean; Data?: Record<string, unknown>; ErrorMessage?: string } {
+    if (!this.selectedEntity) {
+      return { Success: false, ErrorMessage: 'No entity is selected, so there is no record grid to page.' };
+    }
+    const page = action();
+    if (page == null) {
+      return { Success: false, ErrorMessage: 'The record grid is not ready to page yet.' };
+    }
+    this.publishAgentContext();
+    return { Success: true, Data: { CurrentPage: page } };
+  }
+
+  /** Set the record grid's server-side page size (reloads from page 1). */
+  private toolSetPageSize(params: Record<string, unknown>): { Success: boolean; Data?: Record<string, unknown>; ErrorMessage?: string } {
+    if (!this.selectedEntity) {
+      return { Success: false, ErrorMessage: 'No entity is selected, so there is no record grid to resize.' };
+    }
+    const validated = validateNonNegativeNumberParam(params['size'], 'size');
+    if (!validated.ok) {
+      return validated.result;
+    }
+    if (validated.value < 1) {
+      return { Success: false, ErrorMessage: 'size must be 1 or greater.' };
+    }
+    const applied = this.viewWorkspaceRef?.SetPageSize(validated.value) ?? null;
+    if (applied == null) {
+      return { Success: false, ErrorMessage: 'The record grid is not ready to set a page size yet.' };
+    }
+    this.publishAgentContext();
+    return { Success: true, Data: { PageSize: applied } };
+  }
+
+  /** Sort the record grid by a column + optional direction (asc | desc, default asc). */
+  private toolSetSort(params: Record<string, unknown>): { Success: boolean; Data?: Record<string, unknown>; ErrorMessage?: string } {
+    if (!this.selectedEntity) {
+      return { Success: false, ErrorMessage: 'No entity is selected, so there is no record grid to sort.' };
+    }
+    const column = validateStringParam(params['column'], 'column');
+    if (!column.ok) {
+      return column.result;
+    }
+    const columnName = column.value.trim();
+    if (!columnName) {
+      return { Success: false, ErrorMessage: 'A column name is required to sort.' };
+    }
+    // Resolve the column against the entity's fields (case-insensitive) so we sort by a real field.
+    const field = this.selectedEntity.Fields.find(
+      f => f.Name.toLowerCase() === columnName.toLowerCase() || f.DisplayNameOrName.toLowerCase() === columnName.toLowerCase(),
+    );
+    if (!field) {
+      return { Success: false, ErrorMessage: `No column named "${columnName}" on "${this.selectedEntity.Name}".` };
+    }
+    const rawDir = params['direction'] != null ? String(params['direction']).toLowerCase() : 'asc';
+    if (rawDir !== 'asc' && rawDir !== 'desc') {
+      return { Success: false, ErrorMessage: `Invalid direction "${String(params['direction'])}". Valid directions: asc, desc.` };
+    }
+    const applied = this.viewWorkspaceRef?.SetSort(field.Name, rawDir) ?? false;
+    if (!applied) {
+      return { Success: false, ErrorMessage: 'The record grid is not ready to sort yet.' };
+    }
+    this.publishAgentContext();
+    return { Success: true, Data: { SortColumn: field.Name, SortDirection: rawDir } };
+  }
+
+  /**
+   * Deselect the current entity and return to the entity browser. Mirrors the home path
+   * used by {@link onBreadcrumbClick} (application level) and {@link applyParams} (no params):
+   * clear the selected entity / record / detail panel and notify the state service.
+   */
+  private goToEntityBrowser(): void {
+    this.selectedEntity = null;
+    this.selectedRecord = null;
+    this.detailPanelEntity = null;
+    this.stateService.selectEntity(null);
+    this.stateService.closeDetailPanel();
+    this.cdr.detectChanges();
   }
 
   /**

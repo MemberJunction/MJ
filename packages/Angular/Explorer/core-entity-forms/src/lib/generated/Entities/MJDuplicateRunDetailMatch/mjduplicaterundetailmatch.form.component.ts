@@ -17,6 +17,7 @@ export class MJDuplicateRunDetailMatchFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'matchResults', sectionName: 'Match Results', isExpanded: true },
             { sectionKey: 'resolutionManagement', sectionName: 'Resolution Management', isExpanded: true },
+            { sectionKey: 'aIReasoning', sectionName: 'AI Reasoning', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

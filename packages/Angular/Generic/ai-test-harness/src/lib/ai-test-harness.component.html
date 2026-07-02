@@ -78,11 +78,10 @@
               <!-- Messages Container -->
               <div class="messages-container" #messagesContainer>
                 @if (conversationMessages.length === 0) {
-                  <div class="empty-state">
-                    <i class="fa-solid fa-comments"></i>
-                    <h4>Start a conversation</h4>
-                    <p>Send a message to begin testing the AI agent</p>
-                  </div>
+                  <mj-empty-state
+                    Icon="fa-solid fa-comments"
+                    Title="Start a conversation"
+                    Message="Send a message to begin testing the AI agent" />
                 }
                 @for (message of conversationMessages; track message.id) {
                   <div [ngClass]="getMessageClass(message)">
@@ -291,9 +290,11 @@
                     </div>
                     <div class="variables-list">
                       @if (agentVariables.length === 0) {
-                        <div class="empty-variables">
-                          <p>No variables defined. Click "Add Variable" to get started.</p>
-                        </div>
+                        <mj-empty-state
+                          Icon="fa-solid fa-code"
+                          Title="No variables defined"
+                          Message="Click &quot;Add Variable&quot; to get started."
+                          Size="compact" />
                       }
                       @for (variable of agentVariables; track $index) {
                         <div class="variable-item">
@@ -706,10 +707,10 @@
                     </div>
                     <div class="saved-list">
                       @if (savedConversations.length === 0) {
-                        <div class="empty-saved">
-                          <i class="fa-solid fa-folder-open"></i>
-                          <p>No saved conversations</p>
-                        </div>
+                        <mj-empty-state
+                          Icon="fa-solid fa-folder-open"
+                          Title="No saved conversations"
+                          Size="compact" />
                       }
                       @for (conv of savedConversations; track conv.id) {
                         <div class="saved-item"
@@ -741,11 +742,10 @@
           <!-- Messages Container -->
           <div class="messages-container" #messagesContainer>
             @if (conversationMessages.length === 0) {
-              <div class="empty-state">
-                <i class="fa-solid fa-comments"></i>
-                <h4>Start a conversation</h4>
-                <p>Send a message to begin testing the AI agent</p>
-              </div>
+              <mj-empty-state
+                Icon="fa-solid fa-comments"
+                Title="Start a conversation"
+                Message="Send a message to begin testing the AI agent" />
             }
             @for (message of conversationMessages; track message.id) {
               <div [ngClass]="getMessageClass(message)">

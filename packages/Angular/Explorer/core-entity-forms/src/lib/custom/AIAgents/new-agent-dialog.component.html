@@ -2,10 +2,9 @@
   <form [formGroup]="form" (ngSubmit)="onSubmit()">
     <!-- Parent Agent Info (if creating sub-agent) -->
     @if (config.parentAgentId) {
-      <div class="parent-info">
-        <i class="fa-solid fa-robot"></i>
-        <span>Creating sub-agent for: <strong>{{ config.parentAgentName || 'Parent Agent' }}</strong></span>
-      </div>
+      <mj-alert Variant="info" Icon="fa-solid fa-robot" class="new-agent-alert-pos">
+        Creating sub-agent for: <strong>{{ config.parentAgentName || 'Parent Agent' }}</strong>
+      </mj-alert>
     }
     
     <!-- Loading State -->
