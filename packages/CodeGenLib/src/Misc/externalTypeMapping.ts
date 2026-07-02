@@ -31,7 +31,8 @@ const BOOL_TYPES = new Set(['bool', 'boolean', 'bit']);
 const DATE_TYPES = new Set(['date']);
 const TIME_TYPES = new Set(['time', 'time without time zone', 'time with time zone', 'timetz']);
 const DATETIME_TYPES = new Set([
-  'timestamp', 'timestamptz', 'timestamp without time zone', 'timestamp with time zone', 'datetime', 'datetime2',
+  'timestamp', 'timestamptz', 'timestamp without time zone', 'timestamp with time zone',
+  'timestamp with local time zone', 'datetime', 'datetime2',
   'datetimeoffset', 'smalldatetime', 'timestamp_ntz', 'timestamp_tz', 'timestamp_ltz',
 ]);
 const BINARY_TYPES = new Set(['bytea', 'binary', 'varbinary', 'blob', 'image', 'bytes', 'raw', 'longblob']);
@@ -41,9 +42,12 @@ const UUID_TYPES = new Set(['uuid', 'uniqueidentifier']);
 export function mapExternalNativeTypeToMJ(nativeType: string): MappedFieldType {
   const raw = (nativeType ?? '').trim();
   // Separate the base type from any "(...)" arguments: "varchar(255)" -> base "varchar", args [255].
-  const match = raw.match(/^([A-Za-z0-9_ ]+?)\s*(?:\(([^)]*)\))?\s*$/);
-  const base = (match?.[1] ?? raw).trim().toLowerCase();
-  const args = (match?.[2] ?? '')
+  // Oracle puts the precision INLINE, before a suffix (e.g. "TIMESTAMP(6) WITH TIME ZONE"), so derive
+  // the base by stripping ALL parenthesized groups — preserving a trailing suffix like "WITH TIME ZONE"
+  // so it still matches DATETIME_TYPES — and take the arguments from the first group.
+  const argMatch = raw.match(/\(([^)]*)\)/);
+  const base = raw.replace(/\([^)]*\)/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+  const args = (argMatch?.[1] ?? '')
     .split(',')
     .map((s) => parseInt(s.trim(), 10))
     .filter((n) => !Number.isNaN(n));

@@ -22,6 +22,14 @@ describe('mapExternalNativeTypeToMJ', () => {
     expect(mapExternalNativeTypeToMJ('FLOAT')).toEqual({ Type: 'float', Length: null, Precision: null, Scale: null });
   });
 
+  it('maps Oracle types incl. INLINE-precision timestamps (regression: was mapped to nvarchar(MAX))', () => {
+    expect(mapExternalNativeTypeToMJ('NUMBER(18,0)')).toEqual({ Type: 'decimal', Length: null, Precision: 18, Scale: 0 });
+    // Oracle puts precision inline BEFORE the timezone suffix — must map to datetimeoffset, not text.
+    expect(mapExternalNativeTypeToMJ('TIMESTAMP(6)')).toEqual({ Type: 'datetimeoffset', Length: null, Precision: null, Scale: null });
+    expect(mapExternalNativeTypeToMJ('TIMESTAMP(6) WITH TIME ZONE')).toEqual({ Type: 'datetimeoffset', Length: null, Precision: null, Scale: null });
+    expect(mapExternalNativeTypeToMJ('TIMESTAMP(6) WITH LOCAL TIME ZONE')).toEqual({ Type: 'datetimeoffset', Length: null, Precision: null, Scale: null });
+  });
+
   it('maps common MongoDB types', () => {
     expect(mapExternalNativeTypeToMJ('ObjectId')).toEqual({ Type: 'nvarchar', Length: 24, Precision: null, Scale: null });
     expect(mapExternalNativeTypeToMJ('string')).toEqual({ Type: 'nvarchar', Length: -1, Precision: null, Scale: null });
