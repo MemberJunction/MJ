@@ -9,7 +9,7 @@
 **Mockups:** `index.html` (browse) → `mockups/` (one file per area, three options each)
 **Audience:** Future implementing agents. Every task is executable step-by-step.
 
-> **🚧 In progress — being built in pieces.** Two sub-phases have been **carved out of this
+> **🚧 In progress — being built in pieces.** Three sub-phases have been **carved out of this
 > plan and into their own branch/PR** because they are self-contained agent-framework features
 > that should not wait on the rest of the roadmap:
 >
@@ -57,6 +57,23 @@
 >     **consolidated "mega migration" in this PR remains superseded for these pieces** — their schema
 >     shipped in `V202606301200__v5.44.x__Agent_Skills_And_Plan_Mode.sql` and
 >     `V202607020811__v5.45.x__AISkill_ActivationMode.sql`.
+>
+> - **P1.5 User Routines** → 🚧 **CARVED OUT & IN BUILD** — schema shipped via
+>   PR [#3035](https://github.com/MemberJunction/MJ/pull/3035) (branch `user-routines`, 5.45):
+>   migration `V202607022102__v5.45.x__User_Routines.sql` creates `UserRoutine` /
+>   `UserRoutineRecipient` / `UserRoutineRun`, validated by a full virgin-DB replay of all
+>   migrations with the CodeGen emit captured from that clean state. The **consolidated
+>   "mega migration" in this PR is now also superseded for these three tables.** As-built
+>   refinements vs. this plan's §P1.5 spec: `StartAt`/`EndAt` activation window (auto
+>   start/sunset without touching Status); `UserRoutineRecipient.Sequence` for explicit
+>   recipient ordering; `NotificationTemplateID` FK → Template so notifications render
+>   through the MJ templating architecture (metadata-seeded default template when NULL —
+>   nothing hardcoded); run telemetry is **linkage-only** (`AgentRunID`/`PromptRunID`/
+>   `ActionExecutionLogID` — the planned TokensUsed/Cost columns were dropped as
+>   duplicative); and `RequestedSkillIDs` (JSON array) pre-arms Agent targets with AI
+>   Skills each run via `ExecuteAgentParams.requestedSkillIDs` (5.45 skills-framework
+>   synergy). Dispatcher, `ng-user-routines`, the Routines app, and the conversations
+>   entry point are in build on the same PR.
 >
 > This planning doc remains the umbrella source of truth for the **remaining** sub-phases.
 
