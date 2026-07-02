@@ -721,18 +721,25 @@ CI: EAS Build runs as a separate GitHub Actions workflow triggered on changes un
 
 ### Phase 2 — Voice, Push, Biometrics, Edit
 
-> **Updated 2026-07-02:** voice is now a *reuse* of core's realtime stack, not a bespoke Whisper pipeline. See the revised "Voice mode" subsection under Part 4.2 B for the full approach.
+> **Updated 2026-07-02 — what's new in core since this plan (a lot):** several
+> subsystems that Phase 2/3 should *reuse* rather than reinvent have landed in
+> core. At a glance:
+> - **Realtime / voice** — `@memberjunction/ai-realtime-client` (framework-agnostic `BaseRealtimeClient` + provider drivers) + the server's `StartRealtimeClientSession` transport. Replaces the original Whisper round-trip (see the revised "Voice mode" subsection under Part 4.2 B).
+> - **Communication / notifications** — `@memberjunction/communication-engine` + `@memberjunction/communication-types` with pluggable channel providers (`gmail`, `MSGraph`, `sendgrid` for email; `twilio` for SMS) and a `@memberjunction/notifications` package. There is **not yet** a native-push (APNs/FCM) provider — so mobile push is *"add a provider to the existing engine"*, not a bespoke endpoint.
+> - **Forms** — `@memberjunction/ng-base-forms` (`MjEntityFormHostComponent`) is the metadata-driven edit host for desktop; the *concept* (generated field metadata drives the editor) informs the RN editor even though the Angular host isn't reused.
+> - **Skills** — agents now advertise a skill library (recent `core-skill-library-phase2`); a future mobile agent-UX enhancement could surface these.
+> - **Bridge / telephony** — `@memberjunction/ai-bridge-*` (Zoom/Teams/Twilio/LiveKit) exist but are server/meeting-side; **not** consumed by the phone app.
 
 - Voice (input + output) — reuse `@memberjunction/ai-realtime-client` (`BaseRealtimeClient` + a WebSocket provider driver, e.g. ElevenLabs) fronting the server's `StartRealtimeClientSession` GraphQL transport (client-direct realtime session; prompt/tool authority stays server-side). Full-duplex STT+LLM+TTS is handled by the provider session — no separate Whisper or TTS round-trip. **RN work is a thin audio adapter**: implement the driver's `createMicCapture` / `createPlayback` seams with `expo-av`/`expo-audio` PCM16 (the shipped Web Audio implementation is browser-only). Mirror the Explorer host `RealtimeSessionService` (`@memberjunction/ng-conversations`) for policy. Fallback non-realtime TTS if ever needed: `@memberjunction/ai-elevenlabs` `ElevenLabsAudioGenerator` or `expo-speech`.
-- Push notifications (APNs/FCM via Expo Notifications; server-side push endpoint on MJAPI)
-- Biometric app unlock (`expo-local-authentication`)
-- Record editing for top entity types (start with single-field updates, expand carefully)
-- Offline read cache improvements (TTL tuning, manual refresh, last-sync indicators)
+- Push notifications — **reuse the core communication framework** (`@memberjunction/communication-engine` + `@memberjunction/notifications`) rather than a one-off MJAPI endpoint. The client registers its device token (`expo-notifications` → APNs/FCM) against the user; server-side, add a **push channel provider** alongside the existing email/SMS providers so agent-completion / approval notifications flow through the same engine + templates. The provider is the only genuinely new server piece; registration + delivery are existing patterns.
+- Biometric app unlock — **RN-local, no core dependency**: `expo-local-authentication` gates app resume; wire the existing Profile "Face ID app lock" toggle. (Permission string already declared in `app.json`.)
+- Record editing for top entity types — the RN-appropriate path is **`BaseEntity.Save()` on the generated entity classes**, with the editor driven by the **generated field metadata** (types, value lists, required/read-only) already flowing to mobile via `@memberjunction/core-entities`. This mirrors the metadata-driven concept behind desktop's `@memberjunction/ng-base-forms` (`MjEntityFormHostComponent`) without reusing the Angular host. Start with single-field updates on a couple of entities; expand carefully with validation via `BaseEntity.Validate()`.
+- Offline read cache improvements (TTL tuning, manual refresh, last-sync indicators) building on the existing `ILocalStorageProvider` (MMKV) + `graphql-dataprovider` client cache.
 
 ### Phase 3 — Field capture, offline mutations, polish
 
-- Photo / file capture for attachments
-- Offline mutation queue with sync-on-reconnect
+- Photo / file capture for attachments (`expo-image-picker` / `expo-document-picker`) — RN-local capture feeding existing upload/entity paths.
+- Offline mutation queue with sync-on-reconnect — build on the current client-cache story (`ILocalStorageProvider` / `graphql-dataprovider`), persisting queued `BaseEntity.Save()` operations (MMKV/SQLite) and replaying on reconnect rather than a bespoke sync layer.
 - Mobile-aware dashboard authoring (separate initiative — likely a new dashboard "mobile layout" concept in MJ core)
 - App Store / Play Store public listing decisions
 
