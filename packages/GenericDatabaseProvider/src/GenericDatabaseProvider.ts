@@ -2994,6 +2994,14 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             // ── External data source dispatch ──
             // Queries bound to an external data source execute their (now fully-rendered)
             // native SQL via the driver, not the MJ DB. No-op for MJ-DB queries.
+            //
+            // NOTE (RLS asymmetry — intentional): unlike the external RunView/Load paths, which REFUSE
+            // to run when an entity has a Row-Level-Security clause (assertExternalReadAllowedUnderRLS,
+            // since RLS can't be enforced on the remote system), the Query path does NOT apply that
+            // refusal. This matches MJ's general model that a saved Query is trusted, admin-authored
+            // raw SQL gated by query-level permissions — not by per-entity RLS. If a source backs an
+            // RLS-protected entity, the query author is responsible for scoping the SQL (and the source
+            // credential should be least-privilege). Do not assume EDS RLS covers the Query path.
             if (query.ExternalDataSourceID) {
                 const externalRouter = MJGlobal.Instance.ClassFactory.CreateInstance<ExternalDataSourceReadRouter>(ExternalDataSourceReadRouter);
                 if (!externalRouter) {
