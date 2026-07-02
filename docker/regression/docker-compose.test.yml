@@ -151,7 +151,12 @@ services:
       mjapi:
         condition: service_healthy
     ports:
-      - "4200:4200"
+      # Host-side port is parameterized so the stack can dodge a host port
+      # collision (e.g. the docker/workbench `claude-dev` container also
+      # publishes 4200). Default stays 4200; the container port is always 4200
+      # and the headless test-runner reaches it over the internal network
+      # (mjexplorer:4200 via socat), so this only affects human browser access.
+      - "${MJ_REGRESSION_EXPLORER_PORT:-4200}:4200"
 
   test-runner:
     # In "full" → Mode A (local MJ stack). In "remote-target" → Modes B/C/D
