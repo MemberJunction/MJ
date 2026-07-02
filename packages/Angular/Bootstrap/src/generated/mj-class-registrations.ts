@@ -26,9 +26,10 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (398 classes)
+// @memberjunction/core-entities (399 classes)
 import {
     AIAgentPermissionProvider,
+    AISkillPermissionProvider,
     AccessControlRuleProvider,
     ApplicationRolePermissionProvider,
     ArtifactPermissionProvider,
@@ -426,7 +427,6 @@ import {
     MJWorkspaceItemEntity,
     QueryPermissionProvider,
     ResourcePermissionProvider,
-    AISkillPermissionProvider,
 } from '@memberjunction/core-entities';
 
 // @memberjunction/actions-base (2 classes)
@@ -703,6 +703,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     SimpleVectorDatabase,
     SimpleVectorServiceProvider,
     AIAgentPermissionProvider,
+    AISkillPermissionProvider,
     AccessControlRuleProvider,
     ApplicationRolePermissionProvider,
     ArtifactPermissionProvider,
@@ -1288,7 +1289,6 @@ export const CLASS_REGISTRATIONS: any[] = [
     QueryResource,
     SearchResultsResource,
     UserViewResource,
-    AISkillPermissionProvider,
 ];
 
 /** Marker constant indicating the manifest has been loaded. */

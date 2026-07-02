@@ -25,6 +25,16 @@ export interface HostAssertionVerifyResult {
  * So this provider does NOT use the JWKS machinery: it exposes {@link VerifyHostAssertion} (static-PEM
  * RS256 verification) + {@link extractUserInfo}, and the widget mint resolves it via the ClassFactory.
  *
+ * SECURITY INVARIANT — key/assertion provenance MUST be independent. The party that presents a signed
+ * assertion must NOT also be able to provide or influence the public key used to verify it. If one party
+ * controlled both, the signature would prove nothing: an attacker could mint a fresh keypair, sign any
+ * claims with the private key, hand over the matching public key, and the check would trivially pass. The
+ * verifying key must therefore come from an independent trust path — here, out-of-band administrator
+ * configuration on `WidgetInstance.HostPublicKey` (the analog, for a static PEM, of pinning a trusted
+ * issuer's JWKS endpoint). That is why {@link VerifyHostAssertion} takes the PEM as a caller-supplied
+ * argument rather than reading any key material from the assertion itself: the caller (the widget mint)
+ * is responsible for sourcing the PEM from the registered widget record, never from the request payload.
+ *
  * It still subclasses {@link BaseAuthProvider} (and registers in the same factory) so host-identity is a
  * first-class, discoverable provider rather than ad-hoc mint code — the architecture the widget plan calls
  * for. The base constructor builds a JWKS client from `jwksUri`; host-identity has no JWKS, so callers pass
@@ -45,6 +55,11 @@ export class HostIdentityProvider extends BaseAuthProvider {
    * Verifies a host-signed RS256 assertion against the host's STATIC public key (PEM) and extracts the
    * asserted visitor identity. The assertion's `aud` must equal `expectedAudience` (the widget key, bound
    * at the host) and it must carry an `email`. Never throws — returns a structured result.
+   *
+   * SECURITY: `hostPublicKeyPem` MUST originate from an independent trust path (the registered
+   * `WidgetInstance.HostPublicKey`, set out-of-band by an administrator) — NEVER from the same request
+   * that carries `assertion`. Passing a key the assertion's presenter could influence defeats the
+   * signature check entirely (see the class-level SECURITY INVARIANT note).
    */
   VerifyHostAssertion(
     assertion: string | undefined,
