@@ -1,13 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { MongoFilterTranslator } from '../MongoFilterTranslator';
 
-const t = (sql: string) => MongoFilterTranslator.translate(sql);
+const t = (sql: string) => MongoFilterTranslator.Translate(sql);
 
 describe('MongoFilterTranslator', () => {
   it('returns {} for empty/whitespace/undefined', () => {
     expect(t('')).toEqual({});
     expect(t('   ')).toEqual({});
-    expect(MongoFilterTranslator.translate(undefined)).toEqual({});
+    expect(MongoFilterTranslator.Translate(undefined)).toEqual({});
   });
 
   it('translates equality and the comparison operators', () => {
@@ -49,10 +49,10 @@ describe('MongoFilterTranslator', () => {
   });
 
   it('LIKE is case-sensitive (no $options) when caseInsensitiveLike is false', () => {
-    expect(MongoFilterTranslator.translate("name LIKE 'Ac%'", { caseInsensitiveLike: false }))
+    expect(MongoFilterTranslator.Translate("name LIKE 'Ac%'", { caseInsensitiveLike: false }))
       .toEqual({ name: { $regex: '^Ac.*$' } });
     // explicit true matches the default
-    expect(MongoFilterTranslator.translate("name LIKE 'Ac%'", { caseInsensitiveLike: true }))
+    expect(MongoFilterTranslator.Translate("name LIKE 'Ac%'", { caseInsensitiveLike: true }))
       .toEqual({ name: { $regex: '^Ac.*$', $options: 'i' } });
   });
 

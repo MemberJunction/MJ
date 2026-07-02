@@ -143,7 +143,7 @@ class Parser {
     if (t?.kind === 'op') {
       this.next();
       const value = this.parseValue();
-      return MongoFilterTranslator.comparison(field, t.value, value);
+      return MongoFilterTranslator.Comparison(field, t.value, value);
     }
     if (this.isKw('IN')) { this.next(); return { [field]: { $in: this.parseValueList() } }; }
     if (this.isKw('NOT')) { this.next(); if (!this.isKw('IN')) throw new Error("Expected IN after NOT."); this.next(); return { [field]: { $nin: this.parseValueList() } }; }
@@ -158,7 +158,7 @@ class Parser {
     if (this.isKw('LIKE')) {
       this.next();
       const pat = this.expect('string').value as string;
-      const regex: MongoFilter = { $regex: MongoFilterTranslator.likeToRegex(pat) };
+      const regex: MongoFilter = { $regex: MongoFilterTranslator.LikeToRegex(pat) };
       if (this.caseInsensitiveLike) regex.$options = 'i';
       return { [field]: regex };
     }
@@ -188,12 +188,12 @@ class Parser {
 
 export class MongoFilterTranslator {
   /** Translate a SQL-WHERE-subset string into a Mongo filter document. Empty -> {}. */
-  public static translate(sql: string | undefined, options?: MongoFilterOptions): MongoFilter {
+  public static Translate(sql: string | undefined, options?: MongoFilterOptions): MongoFilter {
     if (!sql || !sql.trim()) return {};
     return new Parser(tokenize(sql), options?.caseInsensitiveLike ?? true).parse();
   }
 
-  static comparison(field: string, op: string, value: Primitive): MongoFilter {
+  public static Comparison(field: string, op: string, value: Primitive): MongoFilter {
     switch (op) {
       case '=': return { [field]: { $eq: value } };
       case '!=': return { [field]: { $ne: value } };
@@ -206,7 +206,7 @@ export class MongoFilterTranslator {
   }
 
   /** Convert a SQL LIKE pattern to an anchored, regex-escaped pattern (% -> .*, _ -> .). */
-  static likeToRegex(pattern: string): string {
+  public static LikeToRegex(pattern: string): string {
     let out = '^';
     for (const ch of pattern) {
       if (ch === '%') out += '.*';
