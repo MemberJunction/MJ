@@ -13,13 +13,50 @@
 > plan and into their own branch/PR** because they are self-contained agent-framework features
 > that should not wait on the rest of the roadmap:
 >
-> - **P1.3 Plan Mode** + **P1.4 Skills** → **PR [#2996](https://github.com/MemberJunction/MJ/pull/2996)**
->   (branch `agent-skills-plan-mode`). They were bundled together because they share two schema
->   objects (the consolidated `AIAgent` ALTER and the `AIAgentRunStep.StepType` CHECK). The
->   **consolidated "mega migration" in this PR is therefore superseded for those two pieces** —
->   their schema lives in #2996's own migration. Refinements made during carve-out: `AISkillAction`
->   Min/Max execution columns dropped (the model chooses); `AISkill.Status` defaults `Active`;
->   composition junctions stay status-less (lifecycle governed by `Action.Status`/`AIAgent.Status`).
+> - **P1.3 Plan Mode** + **P1.4 Skills** → ✅ **SHIPPED & 100% COMPLETE** — delivered via
+>   PR [#2996](https://github.com/MemberJunction/MJ/pull/2996)/[#3009](https://github.com/MemberJunction/MJ/pull/3009)
+>   (v5.44 core feature), then [#3013](https://github.com/MemberJunction/MJ/pull/3013)/[#3014](https://github.com/MemberJunction/MJ/pull/3014)/[#3015](https://github.com/MemberJunction/MJ/pull/3015)/[#3017](https://github.com/MemberJunction/MJ/pull/3017)
+>   (5.45 train: core skill library, activation governance, per-step observability). Clean-DB verified
+>   end to end (migrations → metadata sync → no-op codegen), covered by a 21-test headless integration
+>   suite + ~60 unit tests, live-verified on Research Agent / Query Builder, and documented in the
+>   **[Agent Skills & Plan Mode Guide](../../guides/AGENT_SKILLS_AND_PLAN_MODE_GUIDE.md)** — which
+>   supersedes §P1.3/§P1.4 of this plan as the authoritative reference.
+>
+>   **What shipped goes substantially beyond this plan's spec:**
+>   - **Skills** (per plan: Instructions + Action/sub-agent bundles, progressive-disclosure catalog,
+>     in-loop `Skill` step, three-layer AcceptsSkills gate) — **plus, beyond plan:** a dedicated
+>     **`MJ: AI Skill Permissions`** table with full agent-parity (User-xor-Role × View/Run/Edit/Delete;
+>     open-by-default runtime helper + closed-by-default unified PermissionEngine provider) — this
+>     **supersedes decision D10's Resource-Permissions/RLS design**; user-invoked **`/skill` composer
+>     mentions** with guarded pre-activation (`ExecuteAgentParams.requestedSkillIDs`), permission-filtered
+>     pickers, and refused-request notifications (server log + injected agent explanation + client toast);
+>     **SKILL.md** portable import/export as typed Remote Operations (name-based references, non-fatal
+>     unresolved-member warnings); a shipped **core library of 10 skills** (Web Research, Data Analysis &
+>     Queries, Data Visualization, Document Builder, Communications, Data Import & Transform, File
+>     Management, Scheduling & Automation, Lists & Audiences, Code & Computation — instructions
+>     externalized to `metadata/ai-skills/templates/*.skill.md`); and **SkillSmith**, a *Smith-family
+>     meta-agent that authors new skills conversationally and persists them Pending-gated.
+>   - **Activation governance (5.45; not in this plan)** — the **double activation gate**:
+>     `AISkill.ActivationMode` × `AIAgent.SkillActivationMode`, both `'Auto'`/`'RequestedOnly'` defaulting
+>     **`RequestedOnly`**, so agent *self*-activation (the "super agent" posture) always requires two
+>     deliberate opt-ins while explicit user `/skill` requests remain honored — the anti-skill-leakage
+>     control, motivated by observing autonomous skill expansion in live testing.
+>   - **Plan Mode** (per plan: per-request HITL gate on the existing `MJ: AI Agent Requests` pause/resume;
+>     reject-forces-replan; Realtime/Proxy skip per D14/D15) — **plus, beyond plan:**
+>     **`AIAgent.RequirePlanMode`** (mandatory plan mode per agent — callers cannot bypass),
+>     **`AIAgentRun.PlanMode`** run-level stamping, and the **plan×skills rule** (post-approval skill
+>     activations are rejected with re-plan guidance, so the human always reviews the full tool surface).
+>   - **Observability (not in this plan)** — **`AIAgentRunStep.Skills`** records typed
+>     `AgentSkillInvocation[]` provenance on every skill-touched step: activation type
+>     (requested vs auto), the exact gate values that admitted the skill, and the agent's stated reason
+>     (`skills:[{name, reason}]` in the loop response). The agent-run form renders a Plan-Mode header
+>     chip, Skill/Plan step icons, per-step skill badges (auto-activations get a warning accent), and a
+>     provenance drill-in tab.
+>   - Original carve-out refinements retained: `AISkillAction` Min/Max execution columns dropped (the
+>     model chooses); `AISkill.Status` defaults `Active`; composition junctions stay status-less. The
+>     **consolidated "mega migration" in this PR remains superseded for these pieces** — their schema
+>     shipped in `V202606301200__v5.44.x__Agent_Skills_And_Plan_Mode.sql` and
+>     `V202607020811__v5.45.x__AISkill_ActivationMode.sql`.
 >
 > This planning doc remains the umbrella source of truth for the **remaining** sub-phases.
 
@@ -93,7 +130,7 @@ permissions), grounded in direct study of those subsystems.
 | D7 | Incognito = `Conversation.IsTemporary`; persisted-but-hidden; skip memory read+write. | Locked |
 | D8 | Group chat: Phase 1 = metadata + mockups; Phase 2 = runtime code. | Locked |
 | D9 | Routines: **dedicated app** + reusable **`ng-user-routines`** widget, also embeddable in ng-conversations. | Locked |
-| D10 | **Skill authoring** = Entity CRUD on `MJ: AI Skills` + an RLS "own skills" filter (`CreatedByUserID = current user`) → open to self by default. **Skill sharing** = `MJ: Resource Permissions` (ResourceType `AI Skills`, View/Edit/Owner) via the existing `ResourcePermissionProvider`, with the **share action gated by a dedicated "Can Share Skills" privilege**. No bespoke permission tables. | Locked |
+| D10 | **Skill authoring** = Entity CRUD on `MJ: AI Skills` + an RLS "own skills" filter (`CreatedByUserID = current user`) → open to self by default. **Skill sharing** = `MJ: Resource Permissions` (ResourceType `AI Skills`, View/Edit/Owner) via the existing `ResourcePermissionProvider`, with the **share action gated by a dedicated "Can Share Skills" privilege**. No bespoke permission tables. | ~~Locked~~ **Superseded at ship time**: skills got a dedicated `MJ: AI Skill Permissions` table with full agent-parity (two access paths over one table); the `AI Skills` Resource-Type sharing was retired. `Can Share Skills` authorization retained as planned. See the Skills & Plan Mode guide. |
 | D11 | Public artifact sharing: the **link/session mechanism reuses Magic Links** (server mints a read-only, artifact-scoped RS256 link on publish), but **who may publish is gated by a dedicated lightweight privilege "Can Publish Artifacts Publicly"** — NOT the heavyweight magic-link *issuer* role (which creates external users + assigns roles, far higher risk). UI hides/disables publish when absent. | Locked (revised) |
 | D12 | **Concurrency (parallel agent turns) → Phase 2.** Phase 1 ships the **design only** (P1.0.3); chat stays serialized. | Locked (revised) |
 | D13 | Routines entity name = **`MJ: User Routines`** (generalizes beyond chat). | Locked |
