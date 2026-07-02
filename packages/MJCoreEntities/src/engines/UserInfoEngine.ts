@@ -958,8 +958,15 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
       if (existingApp.IsActive) {
         return existingApp;
       }
-      // If disabled, enable it
+      // If disabled, enable it — with a FRESH sequence. The row keeps its stale
+      // Sequence from when it was deactivated (the app-config dialog parks removed
+      // apps at 999), and re-activating with that value can collide with another
+      // row's Sequence. Duplicate Sequences make value-swap reordering a silent
+      // no-op downstream (issue #3027), so re-enabling always appends to the end.
       try {
+        // Compute BEFORE flipping IsActive — the sequence comes from the ACTIVE rows'
+        // max, and this row's own stale/parked value must not participate.
+        existingApp.Sequence = this.nextUserApplicationSequence();
         existingApp.IsActive = true;
         const saved = await existingApp.Save();
         if (saved) {
@@ -975,8 +982,9 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
       }
     }
 
-    // Get the next sequence number
-    const nextSequence = this.UserApplications.length;
+    // Get the next sequence number (max+1 — a row COUNT can collide with an
+    // existing Sequence when the set is sparse, e.g. rows at [0, 1, 3])
+    const nextSequence = this.nextUserApplicationSequence();
 
     try {
       const userApp = await md.GetEntityObject<MJUserApplicationEntity>('MJ: User Applications', contextUser);
@@ -1022,6 +1030,12 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
     }
 
     try {
+      // Fresh sequence on re-activation — the row's stale Sequence (e.g. the
+      // dialog's 999 park value) can collide with another row's and make
+      // value-swap reordering a silent no-op (issue #3027). Append to the end.
+      // Compute BEFORE flipping IsActive so this row's own stale value doesn't
+      // participate in the active-rows max.
+      userApp.Sequence = this.nextUserApplicationSequence();
       userApp.IsActive = true;
       const saved = await userApp.Save();
       if (saved) {
@@ -1035,6 +1049,19 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
       console.error('UserInfoEngine.EnableApplication: Error:', error instanceof Error ? error.message : String(error));
       return false;
     }
+  }
+
+  /**
+   * Next Sequence value for the current user's UserApplication rows: one past the
+   * highest Sequence among ACTIVE rows, so a newly created or re-activated row
+   * appends to the end of the visible list without colliding. Inactive rows are
+   * excluded — they carry parked values (the app-config dialog uses 999) that
+   * would otherwise inflate every subsequent assignment past the park value.
+   * Callers re-activating a row must call this BEFORE setting IsActive = true.
+   */
+  private nextUserApplicationSequence(): number {
+    const activeSequences = this.UserApplications.filter((ua) => ua.IsActive).map((ua) => ua.Sequence);
+    return activeSequences.length > 0 ? Math.max(...activeSequences) + 1 : 0;
   }
 
   /**
