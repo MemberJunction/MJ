@@ -14306,6 +14306,13 @@
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "0FDE768E-BDE8-48B0-9EAE-90E601F5960F"
+          },
+          "sync": {
+            "lastModified": "2026-07-01T23:25:34.437Z",
+            "checksum": "f0a6ae402cb28a089d27b65820f6776607d2b0ce4542d77a40776ba665ab54ce"
           }
         }
       ],
@@ -14349,6 +14356,13 @@
             "Comments": "Gemma 4 31B Instruct pricing on Cerebras Inference as of June 2026. Paid tier: 131K context, 40K max output, multimodal (image input), 1,800+ TPS. API model id: gemma-4-31b.",
             "CacheReadPricePerUnit": null,
             "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "F2889025-B9B7-46D3-8FD4-154511D15048"
+          },
+          "sync": {
+            "lastModified": "2026-07-01T23:25:34.470Z",
+            "checksum": "45c70b5308d07fc096b0afd51ae6d55ccd6d7f672a49fa22c768d3f7ea0b27dc"
           }
         }
       ]
@@ -16465,8 +16479,8 @@
             "ID": "55FFE4E4-2940-43A2-9ED4-5961D4EEB2C6"
           },
           "sync": {
-            "lastModified": "2026-06-16T01:17:10.547Z",
-            "checksum": "fc0f8c05dfba8dbb9bbd600d2bca3e9dd9a36685bd8dfa3548e526bf64fb4ed4"
+            "lastModified": "2026-07-01T23:25:34.525Z",
+            "checksum": "73b44335f98a1701bc745848002b316f38ef340b525b3bb25f73d0ac81eb57d3"
           }
         }
       ]
@@ -17903,6 +17917,13 @@
             "SupportsEffortLevel": false,
             "SupportsStreaming": false,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "F2595B68-1F25-4A5A-8790-68F3AD739D79"
+          },
+          "sync": {
+            "lastModified": "2026-07-01T23:25:34.898Z",
+            "checksum": "56fd5202288494b1a84a21b434eae9b56306635efe0a6718d7502e729588d2e3"
           }
         },
         {
@@ -17919,6 +17940,13 @@
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "425071F0-3BB7-4734-A108-43E3C3ED82AD"
+          },
+          "sync": {
+            "lastModified": "2026-07-01T23:25:34.917Z",
+            "checksum": "83229e9f00866531b382e59cca5e8083851842bd71b04b00cf277906bfce028c"
           }
         },
         {
@@ -17935,6 +17963,13 @@
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "8EAEA64D-6017-423D-A745-5D2907F8D031"
+          },
+          "sync": {
+            "lastModified": "2026-07-01T23:25:34.933Z",
+            "checksum": "3aa4ed27e892757457da1396000a60c07d523e21abbf69f95293c7e484255db5"
           }
         }
       ],
@@ -17952,6 +17987,13 @@
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "GLM 5.2 standalone pay-per-token API pricing on Z.AI direct, live since June 16, 2026. $1.40 / $4.40 per 1M tokens. 1M context, MIT-licensed open weights (744-753B MoE). Subscription tiers (GLM Coding Lite/Pro/Max) are separate from this pay-per-token rate. Sources: https://docs.z.ai/guides/overview/pricing ; https://openrouter.ai/z-ai/glm-5.2 ; https://venturebeat.com/technology/z-ais-open-weights-glm-5-2-beats-gpt-5-5-on-multiple-long-horizon-coding-benchmarks-for-1-6th-the-cost ; https://lushbinary.com/blog/glm-5-2-api-pricing-glm-coding-plan-guide/"
+          },
+          "primaryKey": {
+            "ID": "5D1D830E-D65E-4FA5-922E-CA991E207438"
+          },
+          "sync": {
+            "lastModified": "2026-07-01T23:25:34.949Z",
+            "checksum": "76f7e951c0508bf633101443cb2b1d783f133f2434f5e6a4282a6b3ba867c39d"
           }
         },
         {
@@ -17967,9 +18009,23 @@
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "GLM 5.2 on OpenRouter (passthrough pricing). Source: https://openrouter.ai/z-ai/glm-5.2"
+          },
+          "primaryKey": {
+            "ID": "7B16E6B3-D82E-410B-AACD-2FB3144223BB"
+          },
+          "sync": {
+            "lastModified": "2026-07-01T23:25:34.964Z",
+            "checksum": "79c81e2185acaefbb04e098668eddc3c26290d9b08e47362ecd92a1c4e6ab2e0"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "94D5CF16-63E6-43D0-B1C0-46888A0412F9"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T23:25:34.872Z",
+      "checksum": "ed8f9941e6fba2df2ccb9f318c78ce462ae5ca224156c464b6e08428743908b8"
     }
   },
   {
@@ -17995,6 +18051,13 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": false,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "B486B66B-43EA-4CF7-A186-F85CB6BD4FA7"
+          },
+          "sync": {
+            "lastModified": "2026-07-01T23:25:34.626Z",
+            "checksum": "3cda2eeae80a38b920d9b7c5742bee8e62bdf5e0302545b85b5904eb7a27f5fb"
           }
         },
         {
@@ -18011,6 +18074,13 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "05816F33-7F56-4BFE-A23E-58B6ED29013B"
+          },
+          "sync": {
+            "lastModified": "2026-07-01T23:25:34.555Z",
+            "checksum": "25b86ea5edbc8217cfe4c47e46d7271e3181505e14d7c2259dd211f883d1300d"
           }
         }
       ],
@@ -18028,9 +18098,23 @@
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "Nemotron 3 Ultra reference pricing as of June 4, 2026 launch at Computex. $0.50 / $2.50 per 1M tokens (NVIDIA-listed reference). OpenRouter weighted-average across providers is approximately $0.423 / $2.61. A separate :free OpenRouter route is also available. Open weights under the NVIDIA Open Model License (commercial use permitted). Sources: https://developer.nvidia.com/blog/nvidia-nemotron-3-ultra-powers-faster-more-efficient-reasoning-for-long-running-agents/ ; https://openrouter.ai/nvidia/nemotron-3-ultra-550b-a55b:free ; https://www.together.ai/models/nvidia-nemotron-3-ultra ; https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-BF16"
+          },
+          "primaryKey": {
+            "ID": "3923D3CE-FB64-4528-804C-6BA2EC8713D0"
+          },
+          "sync": {
+            "lastModified": "2026-07-01T23:25:34.575Z",
+            "checksum": "18455b06f76ceddbacc6cb905e21b3fda3fc4d956aebe3aef03e79abae6013cc"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "7A2EECA3-F304-44C0-A8D7-7E8E5D348400"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T23:25:34.244Z",
+      "checksum": "bb5678094fecae13ca418a2615b7ec5a199bacd1f489899d729d9eff8dd55022"
     }
   },
   {
@@ -18056,6 +18140,13 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": false,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "0053CC2A-94B8-410D-8CF2-FFE7FAEB7685"
+          },
+          "sync": {
+            "lastModified": "2026-07-01T23:25:34.591Z",
+            "checksum": "96e2e8d56c6156330d55bd96a6262f7d8bc4ff3d22a8988ada61a2537aea9a57"
           }
         },
         {
@@ -18072,6 +18163,13 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "00BBB344-8F0F-4A0C-9D37-D465D24ED975"
+          },
+          "sync": {
+            "lastModified": "2026-07-01T23:25:34.606Z",
+            "checksum": "7e532ac2fedc7d655d92ff61407f431b60e1aa503f77508129fc5b5bf709bcca"
           }
         },
         {
@@ -18088,6 +18186,13 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "37198111-B68D-4C86-9CF8-57D8B3E9E8B6"
+          },
+          "sync": {
+            "lastModified": "2026-07-01T23:25:34.654Z",
+            "checksum": "ac28bb59aa29c0f220d8d9beab6e72087147a8e6d48635281e2e6ae2d2f76ae2"
           }
         },
         {
@@ -18104,6 +18209,13 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "78763894-CA0D-4F26-B213-639B94734F84"
+          },
+          "sync": {
+            "lastModified": "2026-07-01T23:25:34.677Z",
+            "checksum": "712fc9db26da93961ce5290393bd75841ad2cdbec80d379f18ad34f6de5b1433"
           }
         }
       ],
@@ -18116,11 +18228,18 @@
             "Status": "Active",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
-            "InputPricePerUnit": 2.0,
-            "OutputPricePerUnit": 5.0,
+            "InputPricePerUnit": 2,
+            "OutputPricePerUnit": 5,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "Magistral Medium 1.2 (magistral-medium-2509) pricing on Mistral direct API. $2.00 / $5.00 per 1M tokens. Reasoning model — expect 2-5x more output tokens than a generalist for the same task. Sources: https://mistral.ai/pricing/ ; https://docs.mistral.ai/models/magistral-medium-1-2-25-09 ; https://artificialanalysis.ai/providers/mistral"
+          },
+          "primaryKey": {
+            "ID": "EBC21B92-084E-47D9-9289-4A07CECDAACB"
+          },
+          "sync": {
+            "lastModified": "2026-07-01T23:25:34.694Z",
+            "checksum": "bafcd20a1313edf87abda335ee326967752785c3679a1bc4226f319705623d07"
           }
         },
         {
@@ -18131,14 +18250,28 @@
             "Status": "Active",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
-            "InputPricePerUnit": 2.0,
-            "OutputPricePerUnit": 5.0,
+            "InputPricePerUnit": 2,
+            "OutputPricePerUnit": 5,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "Magistral Medium 1.2 on OpenRouter (passthrough pricing). Source: OpenRouter Mistral models listing."
+          },
+          "primaryKey": {
+            "ID": "8EFB2986-9A24-49DD-8CA3-935B2CB02450"
+          },
+          "sync": {
+            "lastModified": "2026-07-01T23:25:34.711Z",
+            "checksum": "294a3a77680f28ab3e7a6ff2a684cf033ef80ec858a1bad2adb7b380a71c60df"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "9C3203E3-304B-4F55-A77E-D535782794E3"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T23:25:34.261Z",
+      "checksum": "1b391dd4273812b923b85215035a31c2adfeeeee6525263e06a1df8910bb8ef2"
     }
   },
   {
@@ -18164,6 +18297,13 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": false,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "04DE4FFB-AAEB-4E9F-87AB-88BAFF24E494"
+          },
+          "sync": {
+            "lastModified": "2026-07-01T23:25:34.728Z",
+            "checksum": "96e2e8d56c6156330d55bd96a6262f7d8bc4ff3d22a8988ada61a2537aea9a57"
           }
         },
         {
@@ -18180,6 +18320,13 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "2FCEE235-EB0B-4A16-8F20-0CA71D26E2B3"
+          },
+          "sync": {
+            "lastModified": "2026-07-01T23:25:34.745Z",
+            "checksum": "cf4f54f0a08758dfc7b8708e3fbf85f695d96d10622db4303c4d78cb193a265e"
           }
         },
         {
@@ -18196,6 +18343,13 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "048B5E0C-B9FD-4644-A03A-BA5630C8A270"
+          },
+          "sync": {
+            "lastModified": "2026-07-01T23:25:34.761Z",
+            "checksum": "fdae8a502f55aa31f064ebf3cca9a12ce86ec8be8541141ff7c3ac2ad27afb37"
           }
         },
         {
@@ -18212,6 +18366,13 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "F91A6208-413F-431E-81DF-8680B248230D"
+          },
+          "sync": {
+            "lastModified": "2026-07-01T23:25:34.779Z",
+            "checksum": "d2a9f3c0585a3d686b1ede5659b7352111242fa0df2cf011c22987fcb0c47d5c"
           }
         }
       ],
@@ -18229,6 +18390,13 @@
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "Magistral Small 1.2 (magistral-small-2509) pricing on Mistral direct API. $0.50 / $1.50 per 1M tokens. Open weights under Apache 2.0. Reasoning model - expect 2-5x more output tokens than a generalist. Sources: https://mistral.ai/pricing/ ; https://huggingface.co/mistralai/Magistral-Small-2509 ; https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-mistral-ai-magistral-small-2509.html"
+          },
+          "primaryKey": {
+            "ID": "1A59B71B-E08C-47EB-9E6B-CCD66BA7B66F"
+          },
+          "sync": {
+            "lastModified": "2026-07-01T23:25:34.795Z",
+            "checksum": "fbe02fb0cbaccb714034a8e770fc02b4cad25450c5b72d46ef4129af690beb3c"
           }
         },
         {
@@ -18244,9 +18412,23 @@
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "Magistral Small 1.2 on OpenRouter (passthrough pricing)."
+          },
+          "primaryKey": {
+            "ID": "148C5D7D-6E0A-4831-BAFF-5B9EF838A8DC"
+          },
+          "sync": {
+            "lastModified": "2026-07-01T23:25:34.809Z",
+            "checksum": "869de9fce1c8dd607363e8b74287048f5d38edb49afc172f28b642b9e770662a"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "3C524E56-FC94-4A6E-AF73-DC35CEB44841"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T23:25:34.276Z",
+      "checksum": "79fcb88ab6150f2314bcfb0780da7da4412b6d5ea2ed7269cb10d6ff5e5c7cd1"
     }
   }
 ]
