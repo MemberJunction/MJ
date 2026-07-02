@@ -132,7 +132,7 @@ export class FireAndForgetHelper {
 
             // Subscribe to PubSub and wire up completion detection
             subscription = FireAndForgetHelper.subscribeToPubSub(
-                config, resolve, completionTimeoutId
+                config, resolve, reject, completionTimeoutId
             );
 
             // Execute the mutation (server returns immediately in fire-and-forget mode)
@@ -206,30 +206,44 @@ export class FireAndForgetHelper {
     private static subscribeToPubSub<TResult>(
         config: FireAndForgetConfig<TResult>,
         resolveCompletion: (value: TResult) => void,
+        rejectCompletion: (reason: Error) => void,
         completionTimeoutId: ReturnType<typeof setTimeout>
     ): Subscription {
         const sessionId = config.dataProvider.sessionId;
         const label = config.operationLabel ?? config.mutationFieldName;
 
         return config.dataProvider.PushStatusUpdates(sessionId)
-            .subscribe((message: string) => {
-                try {
-                    const parsed = JSON.parse(message) as Record<string, unknown>;
+            .subscribe({
+                next: (message: string) => {
+                    try {
+                        const parsed = JSON.parse(message) as Record<string, unknown>;
 
-                    // Forward all messages to the optional handler (for progress, etc.)
-                    if (config.onMessage) {
-                        config.onMessage(parsed);
-                    }
+                        // Forward all messages to the optional handler (for progress, etc.)
+                        if (config.onMessage) {
+                            config.onMessage(parsed);
+                        }
 
-                    // Check if this is the completion event we're waiting for
-                    if (config.isCompletionEvent(parsed)) {
-                        clearTimeout(completionTimeoutId);
-                        LogStatus(`[FireAndForget:${label}] Completion event received`);
-                        resolveCompletion(config.extractResult(parsed));
+                        // Check if this is the completion event we're waiting for
+                        if (config.isCompletionEvent(parsed)) {
+                            clearTimeout(completionTimeoutId);
+                            LogStatus(`[FireAndForget:${label}] Completion event received`);
+                            resolveCompletion(config.extractResult(parsed));
+                        }
+                    } catch (e) {
+                        console.error(`[FireAndForget:${label}] Failed to parse PubSub message:`, e);
                     }
-                } catch (e) {
-                    console.error(`[FireAndForget:${label}] Failed to parse PubSub message:`, e);
-                }
+                },
+                // The push-status WebSocket can error (e.g. transient connectivity, or
+                // a client environment without a working subscription transport). Handle
+                // it instead of letting RxJS surface an unhandled exception. The server
+                // still completes the work (fire-and-forget) and persists the result, so
+                // we reject the wait gracefully and let the caller reload to fetch it.
+                error: (err: unknown) => {
+                    clearTimeout(completionTimeoutId);
+                    const msg = err instanceof Error ? err.message : String(err);
+                    LogError(`[FireAndForget:${label}] PushStatusUpdates subscription error: ${msg}`);
+                    rejectCompletion(err instanceof Error ? err : new Error(msg));
+                },
             });
     }
 

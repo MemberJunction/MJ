@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     KeyboardAvoidingView,
@@ -15,8 +15,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AgentAvatarStack } from '@/components/AgentAvatarStack';
 import { Icons } from '@/components/Icon';
+import { MarkdownView } from '@/components/markdown/MarkdownView';
 import { adaptConversation, adaptConversationToSummary, type AdaptedAgentRef, type AdaptedMessage } from '@/data/adapt';
-import { sendMessage, type SendProgress } from '@/data/services/agents';
+import { sendMessage, getConversationDetailStatus, type SendProgress } from '@/data/services/agents';
 import { useConversation, useConversations } from '@/hooks/useConversations';
 import { Colors, Radius, Shadow, Type } from '@/theme/tokens';
 
@@ -25,7 +26,7 @@ import { Colors, Radius, Shadow, Type } from '@/theme/tokens';
  * Spec: plans/mobile-app-react-native/html/chat-thread.html
  */
 export default function ChatThreadScreen() {
-    const { id } = useLocalSearchParams<{ id: string }>();
+    const { id, autosend } = useLocalSearchParams<{ id: string; autosend?: string }>();
     const { data, loading, error, refresh } = useConversation(id);
     const { conversations: allConversations, refresh: refreshList } = useConversations();
 
@@ -33,6 +34,7 @@ export default function ChatThreadScreen() {
     const [progress, setProgress] = useState<SendProgress | null>(null);
     const [pendingUserText, setPendingUserText] = useState<string | null>(null);
     const [sendError, setSendError] = useState<string | null>(null);
+    const scrollRef = useRef<ScrollView>(null);
 
     const view = useMemo(() => (data ? adaptConversation(data) : null), [data]);
 
@@ -48,8 +50,27 @@ export default function ChatThreadScreen() {
                 text: text.trim(),
                 onProgress: (p) => setProgress(p),
             });
+            // The user message + in-progress AI bubble now exist server-side; show them.
+            setPendingUserText(null);
+            await refresh();
+            void refreshList();
             if (!result.success) {
                 setSendError(result.errorMessage ?? 'Send failed.');
+                return;
+            }
+            // The push WebSocket may not deliver completion on this client; poll the
+            // AI response detail until it finalizes, refreshing the thread as it does.
+            if (result.aiMessageId) {
+                for (let i = 0; i < 24; i++) {
+                    await new Promise((r) => setTimeout(r, 2500));
+                    const status = await getConversationDetailStatus(result.aiMessageId).catch(() => null);
+                    await refresh();
+                    if (status && status !== 'In-Progress') {
+                        if (status === 'Error') setSendError('The agent could not complete this request.');
+                        break;
+                    }
+                }
+                void refreshList();
             }
         } catch (e) {
             setSendError(e instanceof Error ? e.message : String(e));
@@ -57,11 +78,19 @@ export default function ChatThreadScreen() {
             setSending(false);
             setProgress(null);
             setPendingUserText(null);
-            // Reload the thread (server created the AI response) + the list (recency/snippet).
-            await refresh();
-            void refreshList();
         }
     }, [id, refresh, refreshList]);
+
+    // Optional deep-link auto-send: /chat/<id>?autosend=<text> sends once on open,
+    // running the full send flow (working indicator + agent run + refresh). Useful for
+    // deep links / QA without manual typing.
+    const autoSentRef = useRef(false);
+    useEffect(() => {
+        if (autosend && !autoSentRef.current && view && !sending) {
+            autoSentRef.current = true;
+            void handleSend(autosend);
+        }
+    }, [autosend, view, sending, handleSend]);
 
     // Recents strip = top 5 most recent conversations excluding the active one
     const recentChips = useMemo(() => {
@@ -107,9 +136,12 @@ export default function ChatThreadScreen() {
                 {recentChips.length > 0 ? <RecentsStrip activeId={view.id} chips={recentChips} /> : null}
 
                 <ScrollView
+                    ref={scrollRef}
                     style={styles.thread}
                     contentContainerStyle={styles.threadContent}
-                    showsVerticalScrollIndicator={false}
+                    showsVerticalScrollIndicator
+                    keyboardShouldPersistTaps="handled"
+                    onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
                     refreshControl={<RefreshControl refreshing={loading} onRefresh={() => void refresh()} tintColor={Colors.brand} />}
                 >
                     {view.messages.length === 0 && !pendingUserText ? (
@@ -245,7 +277,7 @@ function MessageRenderer({ message }: { message: AdaptedMessage }) {
                     · {message.completionMs ? `${(message.completionMs / 1000).toFixed(1)}s` : message.status}
                 </Text>
             </View>
-            <Text style={styles.msgBody}>{renderMarkdownInline(message.body)}</Text>
+            <MarkdownView value={message.body} style={styles.msgBodyWrap} />
             {message.status === 'In-Progress' ? (
                 <View style={styles.stepRow}>
                     <ActivityIndicator size="small" color={Colors.brand} />
@@ -263,16 +295,6 @@ function MessageRenderer({ message }: { message: AdaptedMessage }) {
             ) : null}
         </View>
     );
-}
-
-function renderMarkdownInline(text: string): React.ReactNode {
-    const parts = text.split(/(\*\*[^*]+\*\*)/g);
-    return parts.map((part, idx) => {
-        if (part.startsWith('**') && part.endsWith('**')) {
-            return <Text key={idx} style={styles.bold}>{part.slice(2, -2)}</Text>;
-        }
-        return part;
-    });
 }
 
 function parseUserMessage(text: string): React.ReactNode {
@@ -386,8 +408,7 @@ const styles = StyleSheet.create({
     stepRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4, marginTop: 4 },
     stepText: { fontSize: 12, fontWeight: Type.medium, color: Colors.ink3 },
 
-    msgBody: { fontSize: 16, lineHeight: 25, color: Colors.ink, marginTop: 8 },
-    bold: { fontWeight: Type.semibold },
+    msgBodyWrap: { marginTop: 8 },
 
     chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 12 },
     actionChip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, backgroundColor: Colors.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: Colors.line2 },

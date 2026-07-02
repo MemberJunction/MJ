@@ -7,6 +7,7 @@ import {
     getValidAuth0IdToken,
     isAuth0Expired,
     loadAuth0Tokens,
+    persistAuth0Tokens,
     type Auth0Tokens,
 } from '@/auth/auth0';
 import {
@@ -117,6 +118,22 @@ export function MJProviderRoot({ children }: { children: ReactNode }) {
         (async () => {
             try {
                 console.log('[MJProvider] boot start');
+
+                // 0. Dev-mode seeding (no-op in committed code): if env supplies an
+                //    Auth0 bundle (id + refresh + access + exp) and secure-store has
+                //    nothing yet, persist it once. From then on the normal Auth0 path
+                //    in step 1 (load + auto-refresh via refreshAsync) takes over —
+                //    same code that handles a real in-app OAuth login.
+                if (Env.devAuthToken && Env.devAuth0RefreshToken && !(await loadAuth0Tokens())) {
+                    console.log('[MJProvider] seeding Auth0 secure-store from env (dev)');
+                    await persistAuth0Tokens({
+                        idToken: Env.devAuthToken,
+                        accessToken: Env.devAuth0AccessToken,
+                        refreshToken: Env.devAuth0RefreshToken,
+                        expiresAt: Env.devAuth0ExpiresAtMs,
+                    });
+                }
+
                 // 1. Try Auth0 stored tokens
                 const auth0Tokens = await loadAuth0Tokens();
                 if (auth0Tokens && !isAuth0Expired(auth0Tokens)) {

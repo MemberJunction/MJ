@@ -7,7 +7,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Icons } from '@/components/Icon';
 import { useAgents } from '@/hooks/useAgents';
-import { createConversation, sendMessage } from '@/data/services/agents';
+import { createConversation } from '@/data/services/agents';
 import { Colors, Radius, Shadow, Spacing, Type } from '@/theme/tokens';
 
 type Suggestion = { title: string; prompt: string; color: string; icon: React.ReactNode };
@@ -40,11 +40,10 @@ export default function NewConversationScreen() {
                 setError('Could not create the conversation.');
                 return;
             }
-            // Fire the first message + agent run, then navigate into the thread.
-            // We don't await the agent completion here — the thread screen shows
-            // progress and refreshes when done.
-            void sendMessage({ conversationId: conv.id, text: body });
-            router.replace({ pathname: '/chat/[id]', params: { id: conv.id } });
+            // Navigate into the thread and let it run the send — the thread shows the
+            // "agent working" indicator and polls for the reply. Passing the message via
+            // ?autosend gives the first message the same progress UX as in-thread sends.
+            router.replace({ pathname: '/chat/[id]', params: { id: conv.id, autosend: body } });
         } catch (e) {
             setError(e instanceof Error ? e.message : String(e));
         } finally {

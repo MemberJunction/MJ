@@ -5,7 +5,9 @@ export default mergeConfig(
   sharedConfig,
   defineProject({
     test: {
-      environment: 'node',
+      // Web-only DOM utilities (copy buttons, collapsible toggles, svg sanitize)
+      // need a document; the pure parsing logic is tested in @memberjunction/markdown-core.
+      environment: 'jsdom',
     },
   })
 );

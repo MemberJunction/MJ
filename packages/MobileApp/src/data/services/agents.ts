@@ -80,6 +80,10 @@ export type SendResult = {
     errorMessage?: string;
     /** The user message we created (already saved). */
     userMessageId: string;
+    /** The in-progress AI response detail we created (server fills it). */
+    aiMessageId?: string;
+    /** True when the run was accepted but completion will arrive async (poll/reload). */
+    pendingViaPoll?: boolean;
 };
 
 /**
@@ -122,46 +126,103 @@ export async function sendMessage(args: {
         };
     }
 
-    // 2. Resolve target agent
+    // 2. Resolve the agent + the available-agent roster, mirroring
+    //    @memberjunction/ng-conversations (conversation-agent.service): the ambient
+    //    "Sage" orchestrator runs by default and routes to the other top-level agents,
+    //    which are passed to it via the Data payload's ALL_AVAILABLE_AGENTS list.
+    const agents = await loadAgents(currentUser);
+    const sage = agents.find((a) => a.name === 'Sage');
+    const availableAgents = agents.filter((a) => a.name !== 'Sage');
+
     let targetAgentId = agentId;
     if (!targetAgentId) {
-        const agent = await resolveTargetAgent(text, currentUser);
-        if (!agent) {
+        const resolved = sage ?? (await resolveTargetAgent(text, currentUser));
+        if (!resolved) {
             return { success: false, errorMessage: 'No active agents available to respond.', userMessageId: detail.ID };
         }
-        targetAgentId = agent.id;
+        targetAgentId = resolved.id;
     }
 
-    // 3. Trigger the agent run via the GraphQL AI helper. It subscribes to
-    //    push updates internally and resolves when the run completes.
+    // 3. Pre-create the in-progress AI response detail, mirroring
+    //    @memberjunction/ng-conversations (message-input.component.ts:989). The server
+    //    fills THIS detail as the agent response — without it the response is persisted
+    //    on the user row (Role='User') and renders as plain text instead of an agent
+    //    message. Role='AI' + Status='In-Progress' drives the "agent working" bubble.
+    const aiDetail = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', currentUser);
+    aiDetail.NewRecord();
+    aiDetail.ConversationID = conversationId;
+    aiDetail.Message = '';
+    aiDetail.Role = 'AI';
+    aiDetail.Status = 'In-Progress';
+    aiDetail.ParentID = detail.ID;
+    aiDetail.AgentID = targetAgentId;
+    aiDetail.HiddenToUser = false;
+    await aiDetail.Save();
+
+    // 4. Trigger the agent run via the GraphQL AI helper. The Data payload matches
+    //    ng-conversations so Sage can orchestrate/delegate. The push-status WebSocket
+    //    is unreliable on some RN clients; the run still completes server-side and fills
+    //    the AI detail, so a WS error here is NOT a hard failure — the UI polls/reloads
+    //    to pick up the finalized response.
     const provider = GraphQLDataProvider.Instance;
     if (!provider) {
-        return { success: false, errorMessage: 'GraphQL provider not initialized.', userMessageId: detail.ID };
+        return { success: false, errorMessage: 'GraphQL provider not initialized.', userMessageId: detail.ID, aiMessageId: aiDetail.ID };
     }
 
     try {
         const result = await provider.AI.RunAIAgentFromConversationDetail({
-            conversationDetailId: detail.ID,
+            // Pass the AI placeholder detail's ID (NOT the user message) — the server
+            // writes the agent response INTO this detail. Mirrors ng-conversations
+            // (message-input.component.ts:1020 passes conversationManagerMessage.ID).
+            // The agent reads the user's prompt via history + data.latestMessageId.
+            conversationDetailId: aiDetail.ID,
             agentId: targetAgentId,
             maxHistoryMessages: 20,
             createArtifacts: true,
             createNotification: false,
+            data: {
+                conversationId,
+                latestMessageId: detail.ID,
+                ALL_AVAILABLE_AGENTS: availableAgents.map((a) => ({
+                    ID: a.id,
+                    Name: a.name,
+                    Description: a.description,
+                })),
+            },
             onProgress: onProgress
                 ? (p) => onProgress({ currentStep: p.currentStep, percentage: p.percentage, message: p.message })
                 : undefined,
         });
-        return {
-            success: result.success,
-            errorMessage: result.success ? undefined : (result.agentRun?.ErrorMessage ?? 'Agent run failed.'),
-            userMessageId: detail.ID,
-        };
+        // result.success can be false purely because the push WebSocket is unavailable
+        // on this client — the run still executes server-side and fills the AI detail.
+        // Report "submitted" and let the caller poll the AI detail for the real outcome.
+        return { success: true, userMessageId: detail.ID, aiMessageId: aiDetail.ID, pendingViaPoll: !result.success };
     } catch (e) {
-        return {
-            success: false,
-            errorMessage: e instanceof Error ? e.message : String(e),
-            userMessageId: detail.ID,
-        };
+        // WS wait failed (push subscription unavailable). The run was accepted and
+        // completes server-side; report submitted and let the caller poll for the reply.
+        console.warn('[sendMessage] agent run WS wait did not complete (will poll):', e instanceof Error ? e.message : String(e));
+        return { success: true, userMessageId: detail.ID, aiMessageId: aiDetail.ID, pendingViaPoll: true };
     }
+}
+
+/**
+ * Lightweight status check for a conversation detail — used to poll for an
+ * agent reply finalizing when the push WebSocket isn't delivering completion.
+ */
+export async function getConversationDetailStatus(detailId: string, contextUser?: UserInfo): Promise<string | null> {
+    const rv = new RunView();
+    const result = await rv.RunView<{ ID: string; Status: string }>(
+        {
+            EntityName: 'MJ: Conversation Details',
+            ExtraFilter: `ID='${detailId}'`,
+            Fields: ['ID', 'Status'],
+            MaxRows: 1,
+            ResultType: 'simple',
+        },
+        contextUser,
+    );
+    if (!result.Success || !result.Results || result.Results.length === 0) return null;
+    return result.Results[0].Status ?? null;
 }
 
 /**

@@ -1,27 +1,36 @@
 /**
- * Configuration options for the markdown component
+ * Configuration options for markdown parsing/rendering.
+ *
+ * This is the framework-agnostic config shared by every consumer of
+ * `@memberjunction/markdown-core` — the Angular `ng-markdown` component, the
+ * React Native renderer, and any other UI layer. Flags that only affect one
+ * rendering target (e.g. `enableMermaid`, `prismTheme`) are still defined here
+ * so a single config object can drive all of them; each renderer reads the
+ * subset it understands.
  */
 export interface MarkdownConfig {
   /**
-   * Enable Prism.js syntax highlighting for code blocks
+   * Enable syntax highlighting for code blocks.
+   * The core does not highlight on its own — the consumer supplies a highlight
+   * function (e.g. Prism on web, react-native-syntax-highlighter on mobile).
    * @default true
    */
   enableHighlight?: boolean;
 
   /**
-   * Enable Mermaid diagram rendering
+   * Enable Mermaid diagram rendering (web only — requires a browser DOM).
    * @default true
    */
   enableMermaid?: boolean;
 
   /**
-   * Enable copy-to-clipboard button on code blocks
+   * Enable copy-to-clipboard button on code blocks.
    * @default true
    */
   enableCodeCopy?: boolean;
 
   /**
-   * Enable collapsible heading sections
+   * Enable collapsible heading sections.
    * @default false
    */
   enableCollapsibleHeadings?: boolean;
@@ -147,9 +156,14 @@ export interface MarkdownConfig {
 }
 
 /**
+ * Config with every field resolved except the optional `autoExpandLevels`.
+ */
+export type ResolvedMarkdownConfig = Required<Omit<MarkdownConfig, 'autoExpandLevels'>> & { autoExpandLevels?: number[] };
+
+/**
  * Default configuration values
  */
-export const DEFAULT_MARKDOWN_CONFIG: Required<Omit<MarkdownConfig, 'autoExpandLevels'>> & { autoExpandLevels?: number[] } = {
+export const DEFAULT_MARKDOWN_CONFIG: ResolvedMarkdownConfig = {
   enableHighlight: true,
   enableMermaid: true,
   enableCodeCopy: true,
@@ -239,3 +253,10 @@ export interface AlertVariant {
   icon: string;
   titleClassName?: string;
 }
+
+/**
+ * Signature for a syntax-highlight function injected into the engine.
+ * Receives the raw code and language id, returns highlighted markup
+ * (HTML string for the web path). The core never highlights on its own.
+ */
+export type HighlightFunction = (code: string, lang: string) => string;
