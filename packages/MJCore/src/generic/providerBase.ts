@@ -1,4 +1,4 @@
-import { BaseEntity } from "./baseEntity";
+import { BaseEntity, BaseEntityEvent } from "./baseEntity";
 import { EntityDependency, EntityDocumentTypeInfo, EntityFieldTSType, EntityInfo, EntityPermissionType, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo";
 import { IMetadataProvider, ProviderConfigDataBase, MetadataInfo, ILocalStorageProvider, IFileSystemProvider, DatasetResultType, DatasetStatusResultType, DatasetItemFilterType, EntityRecordNameInput, EntityRecordNameResult, ProviderType, PotentialDuplicateRequest, PotentialDuplicateResponse, EntityMergeOptions, AllMetadata, IRunViewProvider, RunViewResult, IRunQueryProvider, RunQueryResult, RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewCacheStatus, RunViewWithCacheCheckResult, FullTextSearchParams, FullTextSearchResult, FullTextSearchResultItem, SearchEntityParams, SearchEntitiesOptions, EntitySearchResult, IRemoteOperationProvider, RemoteOpInvokeOptions, RemoteOpResult } from "./interfaces";
 import { ComputeRRF, ScoredCandidate } from "./scoring/ReciprocalRankFusion";
@@ -7,7 +7,7 @@ import { LocalCacheManager, CachedRunViewResult } from "./localCacheManager";
 import { ApplicationInfo } from "../generic/applicationInfo";
 import { AuditLogTypeInfo, AuthorizationInfo, AuthorizationRoleInfo, RoleInfo, RowLevelSecurityFilterInfo, UserInfo } from "./securityInfo";
 import { TransactionGroupBase } from "./transactionGroup";
-import { MJGlobal, NormalizeUUID, SafeJSONParse, UUIDsEqual } from "@memberjunction/global";
+import { MJGlobal, MJEventType, NormalizeUUID, SafeJSONParse, UUIDsEqual } from "@memberjunction/global";
 import { TelemetryManager } from "./telemetryManager";
 import { LogError, LogStatus, LogStatusEx } from "./logging";
 import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo, QueryEntityInfo, QueryParameterInfo, QueryDependencyInfo, SQLDialectInfo, QuerySQLInfo } from "./queryInfo";
@@ -316,12 +316,81 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * the RunViewParams batch.  While a request is in-flight, concurrent
      * identical calls share the same promise.  After resolution the entry
      * lingers so that near-sequential identical calls return immediately.
+     *
+     * Entries record the (lowercased) entity names their params touch so that
+     * a BaseEntity save/delete/remote-invalidate can drop them — a lingered
+     * result is a cache, and without write-invalidation a caller re-running
+     * the identical view within the linger window after a save would receive
+     * PRE-save rows (observed live: an engine's debounced post-save refreshes
+     * for multiple sequential saves — only the first save's data ever arrived).
      */
     private _inflightViews = new Map<string, {
         promise: Promise<RunViewResult[]>;
         resolvedResults?: RunViewResult[];
         resolvedAt?: number;
+        entityNames?: Set<string>;
     }>();
+
+    private _lingerInvalidationWired = false;
+
+    /**
+     * Lazily subscribes (once per provider instance) to BaseEntity events so
+     * in-flight/lingered RunView entries touching a written entity are dropped.
+     * Deleting an IN-FLIGHT entry is deliberate: late joiners must not share a
+     * query that may have read pre-commit data; the original caller still gets
+     * its own result, and the orphaned promise's stash step no-ops safely.
+     */
+    private ensureInflightViewInvalidation(): void {
+        if (this._lingerInvalidationWired) {
+            return;
+        }
+        this._lingerInvalidationWired = true;
+        MJGlobal.Instance.GetEventListener(false).subscribe((event) => {
+            if (event.event !== MJEventType.ComponentEvent || event.eventCode !== BaseEntity.BaseEventCode) {
+                return;
+            }
+            const entityEvent = event.args as BaseEntityEvent;
+            if (!entityEvent) {
+                return;
+            }
+            if (entityEvent.type !== 'save' && entityEvent.type !== 'delete' && entityEvent.type !== 'remote-invalidate') {
+                return;
+            }
+            const entityName = (entityEvent.baseEntity?.EntityInfo?.Name ?? entityEvent.entityName)?.trim().toLowerCase();
+            if (entityName) {
+                this.invalidateInflightViewsForEntity(entityName);
+            }
+        });
+    }
+
+    /**
+     * Drops every in-flight/lingered RunView entry whose params touch the given
+     * entity (lowercased name). Called on BaseEntity save/delete/remote-invalidate.
+     */
+    protected invalidateInflightViewsForEntity(lowerEntityName: string): void {
+        for (const [key, entry] of this._inflightViews) {
+            if (entry.entityNames?.has(lowerEntityName)) {
+                this._inflightViews.delete(key);
+            }
+        }
+    }
+
+    /**
+     * Collects the lowercased entity names a RunViewParams batch touches, for
+     * write-invalidation of dedup/linger entries. Params addressed by ViewID /
+     * ViewName only (no EntityName) are not tracked — they keep today's
+     * linger behavior rather than pay a metadata resolution here.
+     */
+    private collectParamEntityNames(params: RunViewParams[]): Set<string> | undefined {
+        let names: Set<string> | undefined;
+        for (const p of params) {
+            const n = p.EntityName?.trim().toLowerCase();
+            if (n) {
+                (names ??= new Set<string>()).add(n);
+            }
+        }
+        return names;
+    }
 
     /******** ABSTRACT SECTION ****************************************************************** */
 
@@ -770,7 +839,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 throw err;
             });
 
-        this._inflightViews.set(key, { promise });
+        this.ensureInflightViewInvalidation();
+        this._inflightViews.set(key, { promise, entityNames: this.collectParamEntityNames(params) });
 
         const results = await promise;
         return results.map(r => this.ShallowCopyResult<T>(r));
@@ -1103,7 +1173,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 throw err;
             });
 
-        this._inflightViews.set(key, { promise });
+        this.ensureInflightViewInvalidation();
+        this._inflightViews.set(key, { promise, entityNames: this.collectParamEntityNames(params) });
         const results = await promise;
         return results.map(r => this.ShallowCopyResult<T>(r));
     }

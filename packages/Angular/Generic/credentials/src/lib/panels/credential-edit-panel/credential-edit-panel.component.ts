@@ -3,6 +3,7 @@ import { MJCredentialEntity, MJCredentialTypeEntity, MJCredentialCategoryEntity 
 import { RunView } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { MJConfirmService } from '@memberjunction/ng-ui-components';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 interface FieldSchemaProperty {
@@ -69,7 +70,7 @@ export class CredentialEditPanelComponent extends BaseAngularComponent implement
 
     private get _metadata() { return this.ProviderToUse; }
 
-    constructor(private cdr: ChangeDetectorRef) { super(); }
+    constructor(private cdr: ChangeDetectorRef, private confirmService: MJConfirmService) { super(); }
 
     ngOnInit(): void {
         this.loadCategories();
@@ -389,7 +390,7 @@ export class CredentialEditPanelComponent extends BaseAngularComponent implement
     public async deleteCredential(): Promise<void> {
         if (this.isNew || !this.credential) return;
 
-        const confirmed = confirm(`Are you sure you want to delete "${this.credential.Name}"? This action cannot be undone.`);
+        const confirmed = await this.confirmService.ConfirmDelete({ title: 'Delete Credential', message: `Delete "${this.credential.Name}"?`, detail: 'This action cannot be undone.' });
         if (!confirmed) return;
 
         this.isSaving = true;

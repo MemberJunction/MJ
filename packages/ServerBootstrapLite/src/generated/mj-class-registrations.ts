@@ -908,7 +908,7 @@ import {
     FormBuilderDesignerAgent,
 } from '@memberjunction/ai-form-builder';
 
-// @memberjunction/core-entities-server (31 classes)
+// @memberjunction/core-entities-server (32 classes)
 import {
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -922,6 +922,7 @@ import {
     MJAIPromptEntityServer,
     MJAIPromptRunEntityServer,
     MJAIRemoteBrowserProviderEntityServer,
+    MJAISkillEntityServer,
     MJAISkillPermissionEntityServer,
     MJActionEntityServer,
     MJApplicationEntityServer,
@@ -1812,6 +1813,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAIPromptEntityServer,
     MJAIPromptRunEntityServer,
     MJAIRemoteBrowserProviderEntityServer,
+    MJAISkillEntityServer,
     MJAISkillPermissionEntityServer,
     MJActionEntityServer,
     MJApplicationEntityServer,
@@ -2007,7 +2009,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 862;
+export const CLASS_REGISTRATIONS_COUNT = 863;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

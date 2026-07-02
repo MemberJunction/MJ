@@ -2,6 +2,7 @@ import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, S
 import { MJTemplateEntity, MJTemplateContentEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { MJConfirmService } from '@memberjunction/ng-ui-components';
 import { TemplateEngineBase } from '@memberjunction/templates-base-types';
 import { LanguageDescription } from '@codemirror/language';
 import { languages } from '@codemirror/language-data';
@@ -56,7 +57,7 @@ export class TemplateEditorComponent extends BaseAngularComponent implements OnI
     private get _metadata() { return this.ProviderToUse; }
     private activeTimeouts: number[] = [];
     
-    constructor(private notificationService: MJNotificationService) {
+    constructor(private notificationService: MJNotificationService, private confirmService: MJConfirmService) {
     super();}
 
     async ngOnInit() {
@@ -214,10 +215,10 @@ export class TemplateEditorComponent extends BaseAngularComponent implements OnI
         this.syncEditorValue();
     }
 
-    selectTemplateContent(index: number, confirmSwitch: boolean = true) {
+    async selectTemplateContent(index: number, confirmSwitch: boolean = true) {
         // If we're adding new content and user clicks on existing content, ask for confirmation
         if (this.isAddingNewContent && confirmSwitch) {
-            if (!confirm('You have unsaved changes to a new content version. Are you sure you want to switch? Your changes will be lost.')) {
+            if (!(await this.confirmService.Confirm({ title: 'Discard changes?', message: 'Switch content version and lose your unsaved changes?', detail: 'Your changes to the new content version will be lost.' }))) {
                 return;
             }
         }

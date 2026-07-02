@@ -1,0 +1,85 @@
+[
+  {
+    "fields": {
+      "Name": "SkillSmith Agent Prompt",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/agents/skillsmith.template.md",
+      "ResponseFormat": "JSON",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
+      "Status": "Active",
+      "Description": "System prompt for SkillSmith — the meta-agent that authors AI Skills for the skill catalog: interviews the user, discovers bundle members via Find Candidate Actions/Agents, drafts agent-agnostic instructions with guardrails, gates on user approval, and persists the skill (default Status=Pending) with its action/sub-agent junctions.",
+      "EffortLevel": 1
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 1
+          },
+          "primaryKey": {
+            "ID": "6EB3FC09-D562-40FD-B561-E85E3FD9E6F2"
+          },
+          "sync": {
+            "lastModified": "2026-07-02T13:23:27.037Z",
+            "checksum": "ff404cea945d0ebb4e4d5b42db801ffc464d7f9e116dfa01c890abc2b27643ee"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 2
+          },
+          "primaryKey": {
+            "ID": "B2EE62E3-D908-452B-806D-A7737AC502C9"
+          },
+          "sync": {
+            "lastModified": "2026-07-02T13:23:27.053Z",
+            "checksum": "d20bbb220ad966a04d123c0807f19e0eb3d0590519cc9ed37976866ebe626d3b"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
+            "Priority": 1
+          },
+          "primaryKey": {
+            "ID": "00484F16-BCE1-4537-93A5-BD0BC151AAA6"
+          },
+          "sync": {
+            "lastModified": "2026-07-02T13:23:27.068Z",
+            "checksum": "2510cca2e5bf39eb0543f3fc137eadbf630ab68bb7431de16723efaa5009f9f4"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 1
+          },
+          "primaryKey": {
+            "ID": "6CE2E6EE-D2A8-4B7D-B796-0D7F46208FD7"
+          },
+          "sync": {
+            "lastModified": "2026-07-02T13:23:27.082Z",
+            "checksum": "27c24599c2101f4c3e0d2813b7dfd3fbdcad2de8616dea292fd460535f9e5820"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "860CC80B-1730-45EC-B804-6DB8832709E1"
+    },
+    "sync": {
+      "lastModified": "2026-07-02T13:23:27.004Z",
+      "checksum": "d488cb21393ace8a0dda47caeb4451e29f86a0b502903c22e66658e66e365af1"
+    }
+  }
+]

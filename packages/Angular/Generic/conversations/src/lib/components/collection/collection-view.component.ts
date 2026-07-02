@@ -3,6 +3,7 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJCollectionEntity, MJArtifactEntity, MJArtifactVersionEntity, MJCollectionArtifactEntity } from '@memberjunction/core-entities';
 import { UserInfo, RunView, Metadata } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { MJConfirmService } from '@memberjunction/ng-ui-components';
 
 type ViewMode = 'grid' | 'list';
 type SortBy = 'name' | 'date' | 'type';
@@ -138,7 +139,7 @@ export class CollectionViewComponent extends BaseAngularComponent implements OnI
     { label: 'Type', value: 'type' }
   ];
 
-  constructor(private cdr: ChangeDetectorRef) {
+  constructor(private cdr: ChangeDetectorRef, private confirmService: MJConfirmService) {
   super();}
 
   ngOnInit() {
@@ -253,7 +254,7 @@ export class CollectionViewComponent extends BaseAngularComponent implements OnI
 
   async onRemoveArtifact(item: { version: MJArtifactVersionEntity; artifact: MJArtifactEntity }): Promise<void> {
     const versionLabel = `"${item.artifact.Name}" v${item.version.VersionNumber}`;
-    if (!confirm(`Remove ${versionLabel} from this collection?`)) return;
+    if (!(await this.confirmService.ConfirmDelete({ title: 'Remove from Collection', message: `Remove ${versionLabel} from this collection?`, confirmText: 'Remove' }))) return;
 
     try {
       // Delete THIS SPECIFIC VERSION from the collection
