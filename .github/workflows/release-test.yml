@@ -68,3 +68,31 @@ jobs:
       - name: Tear down
         if: always()
         run: docker compose -f docker/docker-compose.test.yml down -v
+
+  integration-suite:
+    name: MJServer Integration Suite (deterministic tier)
+    needs: unit-tests
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    # The deterministic tier (RunView/RunQuery cache, RecordSetProcessor, Row-Level Security) needs a
+    # real, seeded MJ database — so it runs against the regression Docker stack (SQL Server + migrations
+    # + CodeGen + metadata), NOT the mocked per-PR unit-test lane. The gated live-model tier is skipped
+    # here (no RUN_AGENT_TESTS) since it costs tokens + needs model credentials.
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch || 'next' }}
+
+      - name: Bring up SQL Server + seed the MJ database (migrations + CodeGen + metadata)
+        run: docker compose -f docker/regression/docker-compose.test.yml up -d --build --wait sqlserver db-setup
+        timeout-minutes: 30
+
+      - name: Run the deterministic integration tier
+        # test-runner has the repo source + npm install (tsx) + DB env (DB_HOST=sqlserver, ...);
+        # override its regression-suite entrypoint to run our aggregator instead.
+        run: docker compose -f docker/regression/docker-compose.test.yml run --rm --no-deps --entrypoint sh test-runner -c "npm run test:integration"
+
+      - name: Tear down
+        if: always()
+        run: docker compose -f docker/regression/docker-compose.test.yml down -v

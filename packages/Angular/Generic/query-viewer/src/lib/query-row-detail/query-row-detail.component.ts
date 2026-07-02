@@ -13,7 +13,7 @@ import {
 import { trigger, transition, style, animate } from '@angular/animations';
 import { Subject } from 'rxjs';
 import { takeUntil, debounceTime } from 'rxjs/operators';
-import { QueryInfo, QueryFieldInfo, EntityInfo } from '@memberjunction/core';
+import { MJQueryEntityExtended } from '@memberjunction/core-entities';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import { QueryGridColumnConfig } from '../query-data-grid/models/query-grid-types';
 
@@ -105,7 +105,7 @@ export class QueryRowDetailComponent implements OnInit, OnDestroy {
         return this._columns;
     }
 
-    @Input() QueryInfo: QueryInfo | null = null;
+    @Input() QueryInfo: MJQueryEntityExtended | null = null;
     @Input() Visible: boolean = false;
     @Input() RowIndex: number = 0;
     @Input() TotalRows: number = 0;

@@ -1,9 +1,12 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createMockFileSystem, createMockGitHubProvider } from './mocks/adapters.js';
 import { createMockEmitter, emittedEvents } from './mocks/emitter.js';
 import { sampleVersionInfo } from './mocks/fixtures.js';
 import type { ScaffoldContext } from '../phases/ScaffoldPhase.js';
 import { InstallerError } from '../errors/InstallerError.js';
 import type { VersionInfo } from '../models/VersionInfo.js';
+import type { SparseFetchResult } from '../adapters/RepoFetcher.js';
+import type { WriteOp } from '../distribution/DistributionAssembler.js';
 
 // ---------------------------------------------------------------------------
 // Adapter mocks — ScaffoldPhase creates adapters via `new` in its constructor
@@ -20,6 +23,25 @@ const mockGitHub = createMockGitHubProvider();
 vi.mock('../adapters/GitHubReleaseProvider.js', () => {
   return {
     GitHubReleaseProvider: function GitHubReleaseProvider() { return mockGitHub; },
+  };
+});
+
+const mockRepoFetcher = {
+  FetchPaths: vi.fn<(opts: { RepoUrl: string; Ref: string; Paths: readonly string[] }) => Promise<SparseFetchResult>>(),
+};
+vi.mock('../adapters/RepoFetcher.js', () => {
+  return {
+    RepoFetcher: function RepoFetcher() { return mockRepoFetcher; },
+  };
+});
+
+const mockAssembler = {
+  AssembleToDir: vi.fn<(opts: { SourceDir: string; IncludeMigrations?: boolean }, destDir: string) => Promise<WriteOp[]>>(),
+};
+vi.mock('../distribution/DistributionAssembler.js', () => {
+  return {
+    DistributionAssembler: function DistributionAssembler() { return mockAssembler; },
+    distributionSourcePaths: () => ['packages/MJAPI', 'SQL Scripts'],
   };
 });
 
@@ -70,6 +92,16 @@ describe('ScaffoldPhase', () => {
     mockFs.CreateTempDir.mockResolvedValue('/tmp/mj-install-test');
     mockFs.ExtractZip.mockResolvedValue([]);
     mockFs.RemoveFile.mockResolvedValue(undefined);
+
+    // Distribution-mode sparse fetch + assemble defaults (happy path)
+    mockRepoFetcher.FetchPaths.mockReset();
+    mockRepoFetcher.FetchPaths.mockResolvedValue({
+      Dir: '/tmp/mj-fetch-test',
+      UsedFallback: false,
+      Cleanup: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
+    });
+    mockAssembler.AssembleToDir.mockReset();
+    mockAssembler.AssembleToDir.mockResolvedValue([]);
   });
 
   // ─── resolveTag ────────────────────────────────────────────────────
@@ -237,23 +269,86 @@ describe('ScaffoldPhase', () => {
     });
   });
 
-  // ─── Download + Extract ────────────────────────────────────────────
+  // ─── Result shape ──────────────────────────────────────────────────
 
-  describe('download and extract', () => {
-    it('should return ScaffoldResult with correct Version and ExtractedDir', async () => {
-      const ctx = makeContext({ Tag: 'v5.2.0' });
-      const result = await phase.Run(ctx);
-      expect(result.Version.Tag).toBe('v5.2.0');
+  it('should return ScaffoldResult with correct Version and ExtractedDir', async () => {
+    const result = await phase.Run(makeContext({ Tag: 'v5.2.0' }));
+    expect(result.Version.Tag).toBe('v5.2.0');
+    expect(result.ExtractedDir).toBe('/test/install');
+  });
+
+  // ─── Distribution mode (sparse fetch + assemble) ───────────────────
+
+  describe('distribution fetch + assemble', () => {
+    it('fetches via RepoFetcher at the resolved tag and assembles into the dir', async () => {
+      const result = await phase.Run(makeContext({ Tag: 'v5.2.0' }));
+      expect(mockRepoFetcher.FetchPaths).toHaveBeenCalledWith(
+        expect.objectContaining({ Ref: 'v5.2.0' })
+      );
+      expect(mockAssembler.AssembleToDir).toHaveBeenCalledWith(
+        expect.objectContaining({ SourceDir: '/tmp/mj-fetch-test' }),
+        '/test/install'
+      );
       expect(result.ExtractedDir).toBe('/test/install');
     });
 
+    it('does not download or extract a zip in distribution mode', async () => {
+      await phase.Run(makeContext({ Tag: 'v5.2.0' }));
+      expect(mockGitHub.DownloadRelease).not.toHaveBeenCalled();
+      expect(mockFs.ExtractZip).not.toHaveBeenCalled();
+    });
+
+    it('cleans up the temp clone after a successful assembly', async () => {
+      const cleanup = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
+      mockRepoFetcher.FetchPaths.mockResolvedValueOnce({ Dir: '/tmp/x', UsedFallback: false, Cleanup: cleanup });
+      await phase.Run(makeContext({ Tag: 'v5.2.0' }));
+      expect(cleanup).toHaveBeenCalled();
+    });
+
+    it('cleans up the temp clone even when assembly fails', async () => {
+      const cleanup = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
+      mockRepoFetcher.FetchPaths.mockResolvedValueOnce({ Dir: '/tmp/x', UsedFallback: false, Cleanup: cleanup });
+      mockAssembler.AssembleToDir.mockRejectedValueOnce(new Error('boom'));
+      await expect(phase.Run(makeContext({ Tag: 'v5.2.0' }))).rejects.toThrow(InstallerError);
+      expect(cleanup).toHaveBeenCalled();
+    });
+
+    it('throws FETCH_FAILED pointing to mj bundle when the fetch fails', async () => {
+      mockRepoFetcher.FetchPaths.mockReset();
+      mockRepoFetcher.FetchPaths.mockRejectedValue(new Error('network down'));
+      try {
+        await phase.Run(makeContext({ Tag: 'v5.2.0' }));
+        throw new Error('expected Run to throw');
+      } catch (err) {
+        const ie = err as InstallerError;
+        expect(ie.Code).toBe('FETCH_FAILED');
+        expect(ie.message).toContain('network down');
+        expect(ie.SuggestedFix).toContain('mj bundle');
+      }
+    });
+
+    it('throws ASSEMBLE_FAILED when assembly fails', async () => {
+      mockAssembler.AssembleToDir.mockReset();
+      mockAssembler.AssembleToDir.mockRejectedValue(new Error('bad tree'));
+      try {
+        await phase.Run(makeContext({ Tag: 'v5.2.0' }));
+        throw new Error('expected Run to throw');
+      } catch (err) {
+        expect((err as InstallerError).Code).toBe('ASSEMBLE_FAILED');
+      }
+    });
+  });
+
+  // ─── Monorepo mode (download + extract zip) ────────────────────────
+
+  describe('monorepo download and extract', () => {
+    const monorepoCtx = () => makeContext({ Tag: 'v5.2.0', InstallMode: 'monorepo' });
+
     it('should throw DOWNLOAD_FAILED when download fails', async () => {
       mockGitHub.DownloadRelease.mockRejectedValue(new Error('Network timeout'));
-      const ctx = makeContext({ Tag: 'v5.2.0' });
-
-      await expect(phase.Run(ctx)).rejects.toThrow(InstallerError);
       try {
-        await phase.Run(ctx);
+        await phase.Run(monorepoCtx());
+        throw new Error('expected Run to throw');
       } catch (err) {
         expect((err as InstallerError).Code).toBe('DOWNLOAD_FAILED');
         expect((err as InstallerError).message).toContain('Network timeout');
@@ -262,34 +357,29 @@ describe('ScaffoldPhase', () => {
 
     it('should throw EXTRACT_FAILED when extraction fails', async () => {
       mockFs.ExtractZip.mockRejectedValue(new Error('Corrupt ZIP'));
-      const ctx = makeContext({ Tag: 'v5.2.0' });
-
-      await expect(phase.Run(ctx)).rejects.toThrow(InstallerError);
       try {
-        await phase.Run(ctx);
+        await phase.Run(monorepoCtx());
+        throw new Error('expected Run to throw');
       } catch (err) {
         expect((err as InstallerError).Code).toBe('EXTRACT_FAILED');
         expect((err as InstallerError).message).toContain('Corrupt ZIP');
       }
     });
-  });
 
-  // ─── Cleanup ───────────────────────────────────────────────────────
-
-  describe('temp file cleanup', () => {
-    it('should call RemoveFile for temp zip after successful extraction', async () => {
-      const ctx = makeContext({ Tag: 'v5.2.0' });
-      await phase.Run(ctx);
-      expect(mockFs.RemoveFile).toHaveBeenCalledWith(
-        expect.stringContaining('v5.2.0.zip')
-      );
+    it('should call RemoveFile for the temp zip after successful extraction', async () => {
+      await phase.Run(monorepoCtx());
+      expect(mockFs.RemoveFile).toHaveBeenCalledWith(expect.stringContaining('v5.2.0.zip'));
     });
 
     it('should not throw if RemoveFile fails (non-critical cleanup)', async () => {
       mockFs.RemoveFile.mockRejectedValue(new Error('Permission denied'));
-      const ctx = makeContext({ Tag: 'v5.2.0' });
-      // Should still succeed
-      await expect(phase.Run(ctx)).resolves.toBeDefined();
+      await expect(phase.Run(monorepoCtx())).resolves.toBeDefined();
+    });
+
+    it('does not sparse-fetch in monorepo mode', async () => {
+      await phase.Run(monorepoCtx());
+      expect(mockRepoFetcher.FetchPaths).not.toHaveBeenCalled();
+      expect(mockGitHub.DownloadRelease).toHaveBeenCalled();
     });
   });
 });

@@ -428,6 +428,50 @@ describe('FieldMappingEngine', () => {
         });
     });
 
+    describe('custom-overflow capture (gaps.md §2)', () => {
+        const fieldMaps = [createFieldMap('FirstName', 'FirstName'), createFieldMap('LastName', 'LastName')];
+
+        it('captures no extras when every source key is mapped', () => {
+            const records = [createExternalRecord({ FirstName: 'Alice', LastName: 'Smith' })];
+            const result = engine.Apply(records, fieldMaps, 'Contacts');
+            expect(result[0].UnmappedFields).toEqual({});
+        });
+
+        it('captures exactly the unmapped source keys (and their values)', () => {
+            const records = [createExternalRecord({
+                FirstName: 'Alice', LastName: 'Smith', WeirdCustom: 'x', Score: 42,
+            })];
+            const result = engine.Apply(records, fieldMaps, 'Contacts');
+            expect(result[0].UnmappedFields).toEqual({ WeirdCustom: 'x', Score: 42 });
+        });
+
+        it('GOLDEN A/B: capturing extras does NOT alter the mapped output', () => {
+            // The no-op-safety proof: a record with extra keys must produce byte-identical
+            // MappedFields to the same record without them. Capture is additive only.
+            const clean = engine.Apply(
+                [createExternalRecord({ FirstName: 'Alice', LastName: 'Smith' })],
+                fieldMaps, 'Contacts',
+            )[0];
+            const withExtras = engine.Apply(
+                [createExternalRecord({ FirstName: 'Alice', LastName: 'Smith', Custom1: 'x', Custom2: 7 })],
+                fieldMaps, 'Contacts',
+            )[0];
+            expect(withExtras.MappedFields).toEqual(clean.MappedFields);
+            expect(clean.UnmappedFields).toEqual({});
+            expect(withExtras.UnmappedFields).toEqual({ Custom1: 'x', Custom2: 7 });
+        });
+
+        it('still maps + transforms normally while capturing extras alongside', () => {
+            const pipeline: TransformStep[] = [
+                { Type: 'coerce', Config: { TargetType: 'number' } },
+            ];
+            const records = [createExternalRecord({ Age: '42', UnknownField: 'park-me' })];
+            const result = engine.Apply(records, [createFieldMap('Age', 'Age', pipeline)], 'Contacts');
+            expect(result[0].MappedFields['Age']).toBe(42);
+            expect(result[0].UnmappedFields).toEqual({ UnknownField: 'park-me' });
+        });
+    });
+
     describe('OnError mid-pipeline', () => {
         it('should skip field when error occurs mid-pipeline with Skip', () => {
             const records = [createExternalRecord({ Val: 'abc' })];

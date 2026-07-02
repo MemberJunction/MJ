@@ -1,27 +1,29 @@
+import { FieldTransformEngine } from '@memberjunction/global';
+import { computeUnmappedFields } from './CustomOverflow.js';
+import { flattenRecord, hasNestedObject } from './RecordFlatten.js';
 import type { ICompanyIntegrationFieldMap } from './entity-types.js';
 import type { ExternalRecord, MappedRecord } from './types.js';
-import type {
-    TransformStep,
-    TransformOnError,
-    RegexConfig,
-    SplitConfig,
-    CombineConfig,
-    LookupConfig,
-    FormatConfig,
-    CoerceConfig,
-    SubstringConfig,
-    CustomConfig,
-    DirectConfig,
-} from './transforms.js';
+import type { TransformStep } from './transforms.js';
 
 /**
- * Engine responsible for applying field-level mappings and transformations
- * from external records to MJ entity fields.
+ * Engine responsible for applying field-level mappings and transformations from external records to
+ * MJ entity fields.
+ *
+ * The per-value transform pipeline (direct / regex / split / combine / lookup / format / coerce /
+ * substring / custom) is owned by the shared {@link FieldTransformEngine} in `@memberjunction/global`
+ * and reused here, so integration sync and the rules-based bulk-update processor run the *exact same*
+ * transform implementation — one place to fix, one place to extend. This engine keeps only the
+ * integration-specific concerns: source flattening, field-map iteration, and unmapped-field overflow
+ * capture. See the Field Rules guide in `@memberjunction/global` for the shared engine, and
+ * `EntityFieldRules` in `@memberjunction/core` for the metadata-aware entity-update sibling.
  */
 export class FieldMappingEngine {
+    /** The shared transform pipeline. Holds its own LRU cache of compiled custom expressions. */
+    private readonly transformEngine = new FieldTransformEngine();
+
     /**
-     * Applies field mappings to a batch of external records, producing mapped records
-     * ready for match resolution and persistence.
+     * Applies field mappings to a batch of external records, producing mapped records ready for match
+     * resolution and persistence.
      *
      * @param records - External records to map
      * @param fieldMaps - Active field map entities defining source→destination mappings
@@ -45,41 +47,54 @@ export class FieldMappingEngine {
         fieldMaps: ICompanyIntegrationFieldMap[],
         entityName: string
     ): MappedRecord {
+        // Flatten nested source objects to scalar columns (e.g. checkin_question.id →
+        // checkin_question_id) BEFORE mapping. The match keys on the mapped PK VALUE
+        // (MatchEngine.FindByKeyFields), so an object-valued source field would produce a
+        // per-occurrence / per-version key → duplicate rows. Discovery flattens identically, so
+        // the field maps reference the flattened scalar names. A record with no nested objects
+        // passes through unchanged — every flat-record connector is a no-op here.
+        const ext: ExternalRecord = hasNestedObject(record.Fields)
+            ? { ...record, Fields: flattenRecord(record.Fields) }
+            : record;
+
         const mappedFields: Record<string, unknown> = {};
+        const mappedSourceNames = new Set<string>();
 
         for (const fieldMap of fieldMaps) {
-            const value = this.ApplyFieldMapping(record, fieldMap);
+            mappedSourceNames.add(fieldMap.SourceFieldName);
+            const value = this.ApplyFieldMapping(ext, fieldMap);
             if (value !== undefined) {
                 mappedFields[fieldMap.DestinationFieldName] = value;
             }
         }
 
+        // Capture the source keys with no field map (gaps.md §2). Cheap O(columns) diff;
+        // the result is empty (and discarded by the writer) in the common all-mapped case,
+        // so this adds no measurable cost to a customs-free sync. The engine parks any extras
+        // in the __mj_integration_CustomOverflow system column — see {@link CustomOverflow}.
+        const unmappedFields = computeUnmappedFields(ext.Fields, mappedSourceNames);
+
         return {
-            ExternalRecord: record,
+            ExternalRecord: ext,
             MJEntityName: entityName,
             MappedFields: mappedFields,
-            ChangeType: record.IsDeleted ? 'Delete' : 'Create',
+            ChangeType: ext.IsDeleted ? 'Delete' : 'Create',
+            UnmappedFields: unmappedFields,
         };
     }
 
     /**
-     * Applies a single field mapping, including the full transform pipeline.
-     * Returns undefined if the field should be skipped (OnError: Skip).
+     * Applies a single field mapping, including the full transform pipeline (delegated to the shared
+     * {@link FieldTransformEngine}). Returns undefined if the field should be skipped (OnError: Skip).
      */
     private ApplyFieldMapping(
         record: ExternalRecord,
         fieldMap: ICompanyIntegrationFieldMap
     ): unknown {
-        let value: unknown = record.Fields[fieldMap.SourceFieldName];
+        const value: unknown = record.Fields[fieldMap.SourceFieldName];
         const pipeline = this.ParseTransformPipeline(fieldMap.TransformPipeline);
-
-        for (const step of pipeline) {
-            const result = this.ExecuteTransformStep(step, value, record.Fields);
-            if (result.Skipped) return undefined;
-            value = result.Value;
-        }
-
-        return value;
+        const result = this.transformEngine.ExecutePipeline(value, record.Fields, pipeline);
+        return result.Skipped ? undefined : result.Value;
     }
 
     /**
@@ -96,217 +111,4 @@ export class FieldMappingEngine {
             return [];
         }
     }
-
-    /**
-     * Executes a single transform step, applying the configured transformation
-     * and handling errors according to the step's OnError strategy.
-     */
-    private ExecuteTransformStep(
-        step: TransformStep,
-        value: unknown,
-        allFields: Record<string, unknown>
-    ): TransformStepResult {
-        const onError: TransformOnError = step.OnError ?? 'Fail';
-
-        try {
-            const transformed = this.DispatchTransform(step, value, allFields);
-            return { Value: transformed, Skipped: false };
-        } catch (err) {
-            return this.HandleTransformError(onError, err);
-        }
-    }
-
-    /**
-     * Dispatches to the appropriate transform handler based on step type.
-     */
-    private DispatchTransform(
-        step: TransformStep,
-        value: unknown,
-        allFields: Record<string, unknown>
-    ): unknown {
-        switch (step.Type) {
-            case 'direct':
-                return this.ApplyDirect(value, step.Config as DirectConfig);
-            case 'regex':
-                return this.ApplyRegex(value, step.Config as RegexConfig);
-            case 'split':
-                return this.ApplySplit(value, step.Config as SplitConfig);
-            case 'combine':
-                return this.ApplyCombine(allFields, step.Config as CombineConfig);
-            case 'lookup':
-                return this.ApplyLookup(value, step.Config as LookupConfig);
-            case 'format':
-                return this.ApplyFormat(value, step.Config as FormatConfig);
-            case 'coerce':
-                return this.ApplyCoerce(value, step.Config as CoerceConfig);
-            case 'substring':
-                return this.ApplySubstring(value, step.Config as SubstringConfig);
-            case 'custom':
-                return this.ApplyCustom(value, allFields, step.Config as CustomConfig);
-            default:
-                throw new Error(`Unknown transform type: ${step.Type}`);
-        }
-    }
-
-    /**
-     * Handles a transform error according to the OnError strategy.
-     */
-    private HandleTransformError(onError: TransformOnError, err: unknown): TransformStepResult {
-        switch (onError) {
-            case 'Skip':
-                return { Value: undefined, Skipped: true };
-            case 'Null':
-                return { Value: null, Skipped: false };
-            case 'Fail':
-                throw err;
-        }
-    }
-
-    /**
-     * Direct pass-through, applying default value if source is null/undefined.
-     */
-    private ApplyDirect(value: unknown, config: DirectConfig): unknown {
-        if (value == null && config.DefaultValue !== undefined) {
-            return config.DefaultValue;
-        }
-        return value;
-    }
-
-    /**
-     * Applies a regex replacement to a string value.
-     */
-    private ApplyRegex(value: unknown, config: RegexConfig): unknown {
-        const strValue = String(value ?? '');
-        const regex = new RegExp(config.Pattern, config.Flags ?? '');
-        return strValue.replace(regex, config.Replacement);
-    }
-
-    /**
-     * Splits a string value and extracts a part by index.
-     */
-    private ApplySplit(value: unknown, config: SplitConfig): unknown {
-        const strValue = String(value ?? '');
-        const parts = strValue.split(config.Delimiter);
-        return parts[config.Index] ?? null;
-    }
-
-    /**
-     * Combines multiple source fields with a separator.
-     */
-    private ApplyCombine(allFields: Record<string, unknown>, config: CombineConfig): unknown {
-        const values = config.SourceFields.map(f => String(allFields[f] ?? ''));
-        return values.join(config.Separator);
-    }
-
-    /**
-     * Performs a case-insensitive value lookup/mapping.
-     */
-    private ApplyLookup(value: unknown, config: LookupConfig): unknown {
-        const strValue = String(value ?? '');
-        const lowerKey = strValue.toLowerCase();
-        const entry = Object.entries(config.Map).find(
-            ([key]) => key.toLowerCase() === lowerKey
-        );
-        return entry ? entry[1] : (config.Default ?? null);
-    }
-
-    /**
-     * Applies date/number/string formatting.
-     */
-    private ApplyFormat(value: unknown, config: FormatConfig): unknown {
-        if (config.FormatType === 'date') {
-            const dateVal = value instanceof Date ? value : new Date(String(value));
-            return this.FormatDate(dateVal, config.FormatString);
-        }
-        if (config.FormatType === 'number') {
-            const numVal = Number(value);
-            return numVal.toFixed(Number(config.FormatString) || 0);
-        }
-        return String(value ?? '');
-    }
-
-    /**
-     * Basic date formatting supporting ISO and common format tokens.
-     */
-    private FormatDate(date: Date, formatString: string): string {
-        if (formatString.toLowerCase() === 'iso' || formatString === 'ISO8601') {
-            return date.toISOString();
-        }
-        return date.toLocaleDateString('en-US');
-    }
-
-    /**
-     * Coerces a value to the specified target type.
-     */
-    private ApplyCoerce(value: unknown, config: CoerceConfig): unknown {
-        switch (config.TargetType) {
-            case 'string':
-                return String(value ?? '');
-            case 'number':
-                return this.CoerceToNumber(value);
-            case 'boolean':
-                return this.CoerceToBoolean(value);
-            case 'date':
-                return new Date(String(value));
-            default:
-                throw new Error(`Unknown coerce target type: ${config.TargetType}`);
-        }
-    }
-
-    /**
-     * Coerces a value to a number, throwing on NaN.
-     */
-    private CoerceToNumber(value: unknown): number {
-        const num = Number(value);
-        if (isNaN(num)) {
-            throw new Error(`Cannot coerce "${String(value)}" to number`);
-        }
-        return num;
-    }
-
-    /**
-     * Coerces a value to boolean, supporting common truthy/falsy strings.
-     */
-    private CoerceToBoolean(value: unknown): boolean {
-        if (typeof value === 'boolean') return value;
-        if (typeof value === 'number') return value !== 0;
-        const strVal = String(value).toLowerCase().trim();
-        return strVal === 'true' || strVal === '1' || strVal === 'yes';
-    }
-
-    /**
-     * Extracts a substring from a string value.
-     */
-    private ApplySubstring(value: unknown, config: SubstringConfig): unknown {
-        const strValue = String(value ?? '');
-        if (config.Length !== undefined) {
-            return strValue.substring(config.Start, config.Start + config.Length);
-        }
-        return strValue.substring(config.Start);
-    }
-
-    /**
-     * Evaluates a custom JavaScript expression.
-     * The expression has access to `value` (current field value) and `fields` (all record fields).
-     */
-    private ApplyCustom(
-        value: unknown,
-        allFields: Record<string, unknown>,
-        config: CustomConfig
-    ): unknown {
-        try {
-            // eslint-disable-next-line @typescript-eslint/no-implied-eval
-            const fn = new Function('value', 'fields', `return (${config.Expression});`);
-            return fn(value, allFields) as unknown;
-        } catch (err) {
-            const message = err instanceof Error ? err.message : String(err);
-            throw new Error(`Custom transform expression failed: ${message}`);
-        }
-    }
-}
-
-/** Internal result of executing a single transform step */
-interface TransformStepResult {
-    Value: unknown;
-    Skipped: boolean;
 }

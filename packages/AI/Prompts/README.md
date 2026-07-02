@@ -125,6 +125,8 @@ Model selection precedence (highest to lowest):
 2. `AIPromptParams.modelSelectionPrompt` -- Alternate prompt for model config
 3. Prompt's own model configuration (strategy + associations)
 
+**Credential-evaluation short-circuit (performance):** Candidates are ordered by priority, so once the runner finds the highest-priority candidate that has working credentials it **stops probing the remaining candidates** and records them as `"not-evaluated"` in the `ModelSelection` telemetry. This avoids running a credential/env-var check for every configured model on every prompt run. The full ordered candidate list is still used for failover, so this only trims per-candidate availability *telemetry* for the tail. To force a complete availability report for every candidate (e.g. an admin diagnostic), set `AIPromptParams.forceFullModelEvaluation = true`.
+
 ### Parallel Execution with Judging
 
 Execute prompts across multiple models simultaneously and select the best result:
@@ -143,6 +145,18 @@ Automatic validation of AI outputs with configurable retry:
 - Configurable retry count with the original or repaired prompts
 - Validation syntax cleaning (removes `?`, `*`, `:type` markers from JSON keys)
 - Detailed validation attempt tracking
+
+**Output type coercion** (`AIPrompt.OutputType`): the raw model text is coerced before validation —
+`string` (verbatim), `number` (`parseFloat`, errors on `NaN`), `boolean` (`true/yes/1` ↔ `false/no/0`,
+case-insensitive + trimmed), `date` (`new Date`, errors on invalid), and `object` (JSON). For `object`,
+the text is first run through `CleanJSON` (strips markdown fences etc.); if that fails and
+`attemptJSONRepair` is set, it retries via JSON5 and then LLM-based repair. When an `OutputExample` is
+defined, validation-syntax markers are stripped from result keys automatically. With `skipValidation`,
+coercion failures return the raw output instead of throwing.
+
+**Validation behavior** (`AIPrompt.ValidationBehavior`): `Strict` retries up to `MaxRetries` on
+validation failure; `Warn` logs and returns the (invalid) output; `None` accepts as-is. The parsed
+`OutputExample` is cached by content so it isn't re-parsed on every run/retry.
 
 ### Streaming Support
 
@@ -168,6 +182,8 @@ Every prompt execution creates an `AIPromptRun` record with:
 - Execution time
 - Parent/child relationships for hierarchical prompts
 - Agent run linkage via `agentRunId`
+
+**Persistence is fire-and-forget.** The initial `Running` INSERT and the final `Completed`/`Failed` UPDATE are queued, not awaited, so the model call is never blocked on a DB round-trip. Saves for the same run are chained (the INSERT always completes before the UPDATE, so a slow INSERT can't clobber the finalized row), and the record's ID is available immediately because `NewRecord()` client-generates the UUID. Save failures are logged but never fail the prompt (the record is observability, not part of the success contract). Callers that need the rows durably written before continuing can `await runner.WaitForPendingPromptRunSaves()`.
 
 ### Credential Resolution
 

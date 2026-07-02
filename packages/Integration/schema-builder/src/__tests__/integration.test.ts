@@ -79,6 +79,25 @@ function MakeInput(overrides: Partial<SchemaBuilderInput> = {}): SchemaBuilderIn
     };
 }
 
+/** A pathologically wide table (one PK + `numCols` NVARCHAR(255) columns) — models a 600+ field CRM object. */
+function MakeWideConfig(numCols: number): TargetTableConfig {
+    const cols = [
+        { SourceFieldName: 'id', TargetColumnName: 'WideID', TargetSqlType: 'NVARCHAR(50)', IsNullable: false, MaxLength: 50, Precision: null, Scale: null, DefaultValue: null },
+    ];
+    for (let i = 0; i < numCols; i++) {
+        cols.push({ SourceFieldName: `f${i}`, TargetColumnName: `Field_${i}`, TargetSqlType: 'NVARCHAR(255)', IsNullable: true, MaxLength: 255, Precision: null, Scale: null, DefaultValue: null });
+    }
+    return {
+        SourceObjectName: 'wide',
+        SchemaName: 'netforum',
+        TableName: 'WideObject',
+        EntityName: 'NetForum Wide',
+        PrimaryKeyFields: ['WideID'],
+        Columns: cols,
+        SoftForeignKeys: [],
+    };
+}
+
 describe('SchemaBuilder (integration)', () => {
     const builder = new SchemaBuilder();
 
@@ -222,6 +241,20 @@ describe('SchemaBuilder (integration)', () => {
                     Columns: [
                         { Name: 'ContactID', SqlType: 'NVARCHAR(50)', IsNullable: false, MaxLength: 50, Precision: null, Scale: null },
                         { Name: 'Email', SqlType: 'NVARCHAR(255)', IsNullable: true, MaxLength: 255, Precision: null, Scale: null },
+                        // Standard sync columns a real mirror table already carries (so EnsureStandardColumns is a no-op).
+                        { Name: '__mj_integration_SyncStatus', SqlType: 'NVARCHAR(50)', IsNullable: false, MaxLength: 50, Precision: null, Scale: null },
+                        { Name: '__mj_integration_LastSyncedAt', SqlType: 'DATETIMEOFFSET', IsNullable: true, MaxLength: null, Precision: null, Scale: null },
+                        { Name: '__mj_integration_LastSyncedSnapshot', SqlType: 'NVARCHAR(MAX)', IsNullable: true, MaxLength: null, Precision: null, Scale: null },
+                        { Name: '__mj_integration_SyncMessage', SqlType: 'NVARCHAR(MAX)', IsNullable: true, MaxLength: null, Precision: null, Scale: null },
+                        { Name: '__mj_integration_ContentHash', SqlType: 'NVARCHAR(64)', IsNullable: true, MaxLength: 64, Precision: null, Scale: null },
+                        { Name: '__mj_integration_CustomOverflow', SqlType: 'NVARCHAR(MAX)', IsNullable: true, MaxLength: null, Precision: null, Scale: null },
+                        // Per-record sync ledger (plan §2.5)
+                        { Name: '__mj_integration_ExternalVersion', SqlType: 'NVARCHAR(255)', IsNullable: true, MaxLength: 255, Precision: null, Scale: null },
+                        { Name: '__mj_integration_LastSeenModifiedValue', SqlType: 'NVARCHAR(255)', IsNullable: true, MaxLength: 255, Precision: null, Scale: null },
+                        { Name: '__mj_integration_LastReconciledAt', SqlType: 'DATETIMEOFFSET', IsNullable: true, MaxLength: null, Precision: null, Scale: null },
+                        { Name: '__mj_integration_LastWriterDirection', SqlType: 'NVARCHAR(10)', IsNullable: true, MaxLength: 10, Precision: null, Scale: null },
+                        { Name: '__mj_integration_IsTombstoned', SqlType: 'BIT', IsNullable: false, MaxLength: null, Precision: null, Scale: null },
+                        { Name: '__mj_integration_DeletedDetectedAt', SqlType: 'DATETIMEOFFSET', IsNullable: true, MaxLength: null, Precision: null, Scale: null },
                     ],
                 }],
                 TargetConfigs: [{
@@ -257,6 +290,44 @@ describe('SchemaBuilder (integration)', () => {
             expect(migration.Content).toContain('CREATE SCHEMA IF NOT EXISTS "hubspot"');
             expect(migration.Content).toContain('"hubspot"."Contact"');
             expect(migration.Content).toContain('"__mj_integration_SyncStatus" VARCHAR(50) NOT NULL');
+        });
+    });
+
+    describe('SQL Server row-size guard (8060)', () => {
+        const capFired = (w: string) => w.includes('deferred') && w.includes('8060-byte');
+
+        it('caps a very wide table to a fitting core subset on SQL Server, retaining the PK + emitting a warning', () => {
+            const output = builder.BuildSchema(MakeInput({ SourceSchema: { Objects: [] }, TargetConfigs: [MakeWideConfig(400)] }));
+            expect(output.Errors).toHaveLength(0);
+
+            // The guard fired: a structured warning naming the deferral + the 8060 reason.
+            const capWarn = output.Warnings.find(capFired);
+            expect(capWarn).toBeDefined();
+
+            const migration = output.MigrationFiles[0];
+            expect(migration).toBeDefined();
+            // Primary key is non-negotiable identity — always retained.
+            expect(migration.Content).toContain('WideID');
+            // Far fewer than the 400 declared field columns survive (a fitting core subset).
+            const keptFields = (migration.Content.match(/\bField_\d+\b/g) ?? []).length;
+            expect(keptFields).toBeGreaterThan(0);
+            expect(keptFields).toBeLessThan(400);
+        });
+
+        it('does NOT cap on PostgreSQL — TOAST absorbs oversized rows (all columns retained, no deferral warning)', () => {
+            const output = builder.BuildSchema(MakeInput({ Platform: 'postgresql', SourceSchema: { Objects: [] }, TargetConfigs: [MakeWideConfig(400)] }));
+            expect(output.Errors).toHaveLength(0);
+            expect(output.Warnings.some(capFired)).toBe(false);
+
+            const migration = output.MigrationFiles[0];
+            // All 400 declared fields present — no subset taken.
+            expect(migration.Content).toContain('Field_399');
+            expect(migration.Content).toContain('Field_0');
+        });
+
+        it('leaves a normal-width table untouched (no cap, no deferral warning)', () => {
+            const output = builder.BuildSchema(MakeInput()); // the 3-column contacts/deals fixture
+            expect(output.Warnings.some(capFired)).toBe(false);
         });
     });
 

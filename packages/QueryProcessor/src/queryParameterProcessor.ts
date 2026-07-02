@@ -1,4 +1,5 @@
-import { QueryParameterInfo, RunQuerySQLFilterManager, DatabasePlatform } from '@memberjunction/core';
+import { RunQuerySQLFilterManager, DatabasePlatform } from '@memberjunction/core';
+import { MJQueryParameterEntity } from '@memberjunction/core-entities';
 import nunjucks from 'nunjucks';
 
 /**
@@ -12,7 +13,7 @@ export interface QueryTemplateInput {
     /** Whether this query uses Nunjucks template syntax */
     UsesTemplate: boolean;
     /** Parameter definitions for validation and type conversion */
-    Parameters: QueryParameterInfo[];
+    Parameters: MJQueryParameterEntity[];
 }
 
 /**
@@ -98,6 +99,18 @@ export class QueryParameterProcessor {
     }
 
     /**
+     * Parses the JSON validation filters string into an array of filter objects.
+     * Mirrors the logic from the former `QueryParameterInfo.ParsedFilters` getter.
+     */
+    private static parseFilters(validationFilters: string): Record<string, unknown>[] {
+        try {
+            return validationFilters ? JSON.parse(validationFilters) : [];
+        } catch {
+            return [];
+        }
+    }
+
+    /**
      * Validates parameters against their definitions.
      * Boolean handling is platform-aware:
      * - SQL Server: converts to 1/0 (BIT fields)
@@ -105,7 +118,7 @@ export class QueryParameterProcessor {
      */
     public static validateParameters(
         parameters: Record<string, unknown> | undefined,
-        parameterDefinitions: QueryParameterInfo[],
+        parameterDefinitions: MJQueryParameterEntity[],
         skipUnknownParameterCheck?: boolean
     ): ParameterValidationResult {
         const errors: string[] = [];
@@ -191,7 +204,7 @@ export class QueryParameterProcessor {
 
                     // Apply validation filters if any
                     if (paramDef.ValidationFilters) {
-                        const filters = paramDef.ParsedFilters;
+                        const filters = QueryParameterProcessor.parseFilters(paramDef.ValidationFilters);
                         for (const _filter of filters) {
                             // Validation filter application placeholder
                         }

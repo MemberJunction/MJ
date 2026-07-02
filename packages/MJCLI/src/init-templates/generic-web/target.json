@@ -1,0 +1,25 @@
+{
+  "schemaVersion": "1.0",
+  "name": "generic-web-mdn",
+  "kind": "generic-web",
+  "description": "Mode C reference target: drives the MJ regression runner against MDN Web Docs (a stable public site) with 3 example tests and one custom IOracle. Used to verify the generic-web flow end-to-end.",
+
+  "baseUrl": "https://developer.mozilla.org",
+  "allowedDomains": ["developer.mozilla.org", "*.mozilla.org"],
+
+  "auth": {
+    "bindings": []
+  },
+
+  "suite": "Generic Web Example Suite",
+  "extraMetadataDirs": [
+    "/app/docker/regression/examples/generic-web/metadata"
+  ],
+
+  "oraclesModule": "/app/docker/regression/examples/generic-web/oracles/mdn-oracles.cjs",
+
+  "archive": {
+    "tag": "generic-web-mdn",
+    "source": "mode-c-mdn"
+  }
+}

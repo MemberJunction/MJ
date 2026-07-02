@@ -12,6 +12,7 @@ export * from './types/mj-params.js';
 
 // ─── Engine Exports ────────────────────────────────────────
 export * from './engine/MJComputerUseEngine.js';
+export * from './engine/agent-run-step-tracker.js';
 
 // ─── Judge Exports ─────────────────────────────────────────
 export * from './judge/MJLLMJudge.js';

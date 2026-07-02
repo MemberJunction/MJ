@@ -589,5 +589,5 @@ WHERE TotalOrders = 0;
 
 - [IS-A Relationships Guide](../../packages/MJCore/docs/isa-relationships.md) - Deep-dive on MJ's IS-A implementation
 - [Virtual Entities Guide](../../packages/MJCore/docs/virtual-entities.md) - Deep-dive on virtual entity patterns
-- [MJCore README](../../packages/MJCore/README.md) - Core framework overview
+- [MJCore README](../../packages/MJCore/readme.md) - Core framework overview
 - [CodeGenLib README](../../packages/CodeGenLib/README.md) - Code generation system

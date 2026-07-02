@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin · Realtime Voice Analytics · Real-Time Agents</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="mockups.css">
+<style>
+  .charts-2 { display:grid; grid-template-columns: 1.4fr 1fr; gap:18px; margin-bottom:18px; }
+  .charts-3 { display:grid; grid-template-columns: 1fr 1fr; gap:18px; margin-bottom:18px; }
+  @media(max-width:1000px){ .charts-2,.charts-3{ grid-template-columns:1fr } }
+</style>
+</head>
+<body>
+<div class="page-ambient"></div>
+<div class="app-shell">
+  <div class="app-topbar">
+    <a class="backlink" href="index.html"><i class="fa-solid fa-arrow-left"></i> Index</a>
+    <div class="brand-lockup" style="margin-left:6px"><span class="brand-mark"><i class="fa-solid fa-bolt"></i></span><span>MemberJunction</span><span class="brand-sub">· AI Administration</span></div>
+    <div class="topbar-spacer"></div>
+    <a href="admin-sessions.html" class="btn btn--sm"><i class="fa-solid fa-table-list"></i> Sessions</a>
+    <a href="admin-channels.html" class="btn btn--sm"><i class="fa-solid fa-plug"></i> Channels</a>
+    <div class="topbar-user">AM</div>
+  </div>
+
+  <div class="page-body">
+    <!-- left-nav shell idiom: the AI dashboard's section rail -->
+    <div class="page-header">
+      <div class="page-eyebrow">AI Administration · Analytics</div>
+      <div class="row between center wrap">
+        <h1 class="page-title" style="margin:0"><i class="fa-solid fa-waveform-lines" style="color:var(--mj-brand-primary);margin-right:8px"></i>Realtime Voice</h1>
+        <div class="row gap-sm">
+          <select class="select"><option>Date: Last 7 days</option><option>Today</option><option>Last 30 days</option></select>
+          <button class="btn btn--sm"><i class="fa-solid fa-rotate"></i> Refresh</button>
+          <button class="btn btn--sm"><i class="fa-solid fa-download"></i> Export CSV</button>
+        </div>
+      </div>
+      <p class="page-subtitle">Operational analytics for voice-agent sessions — built from <span class="mono">AIAgentSession</span>, its <span class="mono">AIAgentSessionChannel</span> rows, and the delegated <span class="mono">AIAgentRun</span> / <span class="mono">AIPromptRun</span> usage.</p>
+    </div>
+
+    <!-- KPI row (dashboards KPICardComponent idiom) -->
+    <div class="kpi-row" style="margin-bottom:18px">
+      <div class="kpi kpi--success">
+        <div class="kpi__head"><div class="kpi__icon"><i class="fa-solid fa-tower-broadcast"></i></div><div class="kpi__title">Active sessions</div></div>
+        <div class="kpi__value">2</div>
+        <div class="kpi__sub">live right now</div>
+      </div>
+      <div class="kpi kpi--primary">
+        <div class="kpi__head"><div class="kpi__icon"><i class="fa-solid fa-calendar-day"></i></div><div class="kpi__title">Sessions (7d)</div></div>
+        <div class="kpi__value">128</div>
+        <div class="kpi__trend up"><i class="fa-solid fa-arrow-up"></i> 18% <span style="color:var(--mj-text-disabled);font-weight:500">vs prior 7d</span></div>
+      </div>
+      <div class="kpi kpi--info">
+        <div class="kpi__head"><div class="kpi__icon"><i class="fa-solid fa-stopwatch"></i></div><div class="kpi__title">Avg duration</div></div>
+        <div class="kpi__value">4:51</div>
+        <div class="kpi__sub">min:sec per session</div>
+      </div>
+      <div class="kpi kpi--sage">
+        <div class="kpi__head"><div class="kpi__icon"><i class="fa-solid fa-diagram-project"></i></div><div class="kpi__title">Delegated runs</div></div>
+        <div class="kpi__value">312</div>
+        <div class="kpi__sub">2.4 per session avg</div>
+      </div>
+      <div class="kpi kpi--warning">
+        <div class="kpi__head"><div class="kpi__icon"><i class="fa-solid fa-broom"></i></div><div class="kpi__title">Janitor closes</div></div>
+        <div class="kpi__value">3</div>
+        <div class="kpi__sub">orphans reconciled (7d)</div>
+      </div>
+      <div class="kpi kpi--danger">
+        <div class="kpi__head"><div class="kpi__icon"><i class="fa-solid fa-coins"></i></div><div class="kpi__title">Cost (7d)</div></div>
+        <div class="kpi__value"><small>$</small>24.18</div>
+        <div class="kpi__sub">co-agent + delegated</div>
+      </div>
+    </div>
+
+    <!-- charts row 1: sessions over time + channel usage donut -->
+    <div class="charts-2">
+      <div class="card chart-card">
+        <h3 class="chart-title">Sessions over time</h3>
+        <p class="chart-cap">Daily session count · last 7 days · sage = delegated-heavy sessions</p>
+        <div class="bars">
+          <div class="bcol"><div class="bar" style="height:42%"></div><div class="blabel">Mon</div></div>
+          <div class="bcol"><div class="bar" style="height:58%"></div><div class="blabel">Tue</div></div>
+          <div class="bcol"><div class="bar bar--sage" style="height:73%"></div><div class="blabel">Wed</div></div>
+          <div class="bcol"><div class="bar" style="height:50%"></div><div class="blabel">Thu</div></div>
+          <div class="bcol"><div class="bar bar--sage" style="height:88%"></div><div class="blabel">Fri</div></div>
+          <div class="bcol"><div class="bar" style="height:34%"></div><div class="blabel">Sat</div></div>
+          <div class="bcol"><div class="bar" style="height:64%"></div><div class="blabel">Today</div></div>
+        </div>
+      </div>
+      <div class="card chart-card">
+        <h3 class="chart-title">Channel usage</h3>
+        <p class="chart-cap">Share of attached AIAgentSessionChannel rows</p>
+        <div class="row center" style="gap:22px">
+          <div class="donut"></div>
+          <div class="legend">
+            <div class="legend-item"><span class="legend-dot" style="background:var(--mj-brand-primary)"></span> VoiceAudio <span class="muted" style="margin-left:auto">46%</span></div>
+            <div class="legend-item"><span class="legend-dot" style="background:var(--sage)"></span> ClientControl <span class="muted" style="margin-left:auto">26%</span></div>
+            <div class="legend-item"><span class="legend-dot" style="background:var(--mj-color-tertiary-400)"></span> TextChat <span class="muted" style="margin-left:auto">18%</span></div>
+            <div class="legend-item"><span class="legend-dot" style="background:var(--mj-text-disabled)"></span> Whiteboard <span class="muted" style="margin-left:auto">10%</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- charts row 2: top target agents + cost split -->
+    <div class="charts-3">
+      <div class="card chart-card">
+        <h3 class="chart-title">Top delegated target agents</h3>
+        <p class="chart-cap">Child AIAgentRuns by target agent · last 7 days</p>
+        <div style="margin-top:6px">
+          <div class="hbar-row"><span class="hbar-name">Sage</span><span class="hbar-track"><span class="hbar-fill" style="width:92%"></span></span><span class="hbar-val">187</span></div>
+          <div class="hbar-row"><span class="hbar-name">Skip Analyst</span><span class="hbar-track"><span class="hbar-fill" style="width:54%"></span></span><span class="hbar-val">74</span></div>
+          <div class="hbar-row"><span class="hbar-name">Query Builder</span><span class="hbar-track"><span class="hbar-fill" style="width:31%"></span></span><span class="hbar-val">38</span></div>
+          <div class="hbar-row" style="margin-bottom:0"><span class="hbar-name">Form Filler</span><span class="hbar-track"><span class="hbar-fill" style="width:11%"></span></span><span class="hbar-val">13</span></div>
+        </div>
+      </div>
+      <div class="card chart-card">
+        <h3 class="chart-title">Avg session anatomy</h3>
+        <p class="chart-cap">Where time &amp; tokens go in a typical session</p>
+        <div style="margin-top:6px">
+          <div class="hbar-row"><span class="hbar-name">Model leg (voice)</span><span class="hbar-track"><span class="hbar-fill" style="width:70%;background:linear-gradient(90deg,var(--mj-color-brand-500),var(--mj-color-accent-400))"></span></span><span class="hbar-val">70%</span></div>
+          <div class="hbar-row"><span class="hbar-name">Delegated runs</span><span class="hbar-track"><span class="hbar-fill" style="width:22%;background:linear-gradient(90deg,var(--mj-color-violet-500),var(--mj-color-violet-400))"></span></span><span class="hbar-val">22%</span></div>
+          <div class="hbar-row" style="margin-bottom:0"><span class="hbar-name">Idle hold</span><span class="hbar-track"><span class="hbar-fill" style="width:8%;background:var(--mj-text-disabled)"></span></span><span class="hbar-val">8%</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- recent sessions list -->
+    <div class="card card-pad">
+      <div class="row between center" style="margin-bottom:12px">
+        <span class="section-label" style="margin:0">Recent sessions</span>
+        <a href="admin-sessions.html" class="btn btn--sm btn--ghost">View all <i class="fa-solid fa-arrow-right"></i></a>
+      </div>
+      <div class="grid-wrap" style="box-shadow:none">
+        <table class="grid">
+          <thead><tr><th>Target</th><th>User</th><th>Status</th><th>Channels</th><th>Runs</th><th>Cost</th><th>Duration</th><th></th></tr></thead>
+          <tbody>
+            <tr>
+              <td><div class="cell-strong">Sage</div><div class="muted" style="font-size:11px">via Voice Co-Agent</div></td>
+              <td>amith@bluecypress.io</td>
+              <td><span class="pill pill--active"><span class="dot dot--live"></span> Active</span></td>
+              <td><span class="chan-icons"><i class="fa-solid fa-microphone-lines"></i><i class="fa-solid fa-comment"></i></span></td>
+              <td>1</td><td class="mono">$0.04</td><td>2:04</td>
+              <td><a href="admin-session-detail.html" class="btn btn--sm"><i class="fa-solid fa-arrow-up-right-from-square"></i></a></td>
+            </tr>
+            <tr>
+              <td><div class="cell-strong">Sage</div><div class="muted" style="font-size:11px">via Voice Co-Agent</div></td>
+              <td>matt@memberjunction.com</td>
+              <td><span class="pill pill--active"><span class="dot dot--live"></span> Active</span></td>
+              <td><span class="chan-icons"><i class="fa-solid fa-microphone-lines"></i><i class="fa-solid fa-chalkboard"></i></span></td>
+              <td>3</td><td class="mono">$0.31</td><td>11:18</td>
+              <td><a href="admin-session-detail.html" class="btn btn--sm"><i class="fa-solid fa-arrow-up-right-from-square"></i></a></td>
+            </tr>
+            <tr>
+              <td><div class="cell-strong">Query Builder</div><div class="muted" style="font-size:11px">via Voice Co-Agent</div></td>
+              <td>amith@bluecypress.io</td>
+              <td><span class="pill pill--idle"><i class="fa-solid fa-pause"></i> Idle</span></td>
+              <td><span class="chan-icons"><i class="fa-solid fa-microphone-lines"></i></span></td>
+              <td>2</td><td class="mono">$0.12</td><td>6:02</td>
+              <td><a href="admin-session-detail.html" class="btn btn--sm"><i class="fa-solid fa-arrow-up-right-from-square"></i></a></td>
+            </tr>
+            <tr>
+              <td><div class="cell-strong">Sage</div><div class="muted" style="font-size:11px">via Voice Co-Agent</div></td>
+              <td>amith@bluecypress.io</td>
+              <td><span class="pill pill--closed"><i class="fa-solid fa-broom"></i> janitor</span></td>
+              <td><span class="chan-icons"><i class="fa-solid fa-microphone-lines"></i></span></td>
+              <td>0</td><td class="mono">$0.01</td><td>0:51</td>
+              <td><a href="admin-session-detail.html" class="btn btn--sm"><i class="fa-solid fa-arrow-up-right-from-square"></i></a></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

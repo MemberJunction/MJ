@@ -707,7 +707,7 @@ const result = await meeting.Save();
 - **Transparent**: The transaction management is automatic - no manual transaction handling required
 - **Shared State**: All entities in the chain use the same `sql.Transaction` instance via `BaseEntity.ProviderTransaction`
 
-For more details on IS-A relationships and how they work across MemberJunction, see [MJCore IS-A Relationships Documentation](../../MJCore/docs/isa-relationships.md).
+For more details on IS-A relationships and how they work across MemberJunction, see [MJCore IS-A Relationships Documentation](../MJCore/docs/isa-relationships.md).
 
 ## Virtual Entity Support
 
@@ -751,7 +751,7 @@ Write operations (Save, Delete) are **automatically blocked** for virtual entiti
 - **Security Views**: Row-level filtering applied at the database view level
 - **Reporting**: Pre-joined data optimized for reporting queries
 
-For comprehensive documentation on virtual entities, their configuration, and advanced usage patterns, see [MJCore Virtual Entities Documentation](../../MJCore/docs/virtual-entities.md).
+For comprehensive documentation on virtual entities, their configuration, and advanced usage patterns, see [MJCore Virtual Entities Documentation](../MJCore/docs/virtual-entities.md).
 
 ## License
 

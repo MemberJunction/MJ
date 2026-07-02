@@ -154,10 +154,10 @@ ALTER TABLE [${flyway:defaultSchema}].[Action]
 The configuration shape is declared via MJ's JSONType metadata system, which means **the interface lives in exactly one place** and every consumer imports it from `@memberjunction/core-entities`. No duplication, no drift.
 
 **Authored source** (single file):
-[metadata/entities/JSONType-interfaces/IRuntimeActionConfiguration.ts](metadata/entities/JSONType-interfaces/IRuntimeActionConfiguration.ts) — defines `IRuntimeActionConfiguration` plus supporting types (`IRuntimeActionPermissions`, `IRuntimeActionLimits`, `IRuntimeActionSandboxOptions`, `IRuntimeActionReference`, `IRuntimeLibraryReference`).
+[metadata/entities/JSONType-interfaces/IRuntimeActionConfiguration.ts](../metadata/entities/JSONType-interfaces/IRuntimeActionConfiguration.ts) — defines `IRuntimeActionConfiguration` plus supporting types (`IRuntimeActionPermissions`, `IRuntimeActionLimits`, `IRuntimeActionSandboxOptions`, `IRuntimeActionReference`, `IRuntimeLibraryReference`).
 
 **Wiring** (tells CodeGen which EntityField holds the blob):
-[metadata/entities/.entity-field-jsontype-runtime-actions.json](metadata/entities/.entity-field-jsontype-runtime-actions.json) — sets `JSONType`, `JSONTypeIsArray`, `JSONTypeDefinition` on `Action.RuntimeActionConfiguration` via `@lookup:`.
+[metadata/entities/.entity-field-jsontype-runtime-actions.json](../metadata/entities/.entity-field-jsontype-runtime-actions.json) — sets `JSONType`, `JSONTypeIsArray`, `JSONTypeDefinition` on `Action.RuntimeActionConfiguration` via `@lookup:`.
 
 **Generation pipeline** — after `mj sync push --dir=metadata --include="entities"` and `mj codegen`:
 
@@ -490,7 +490,7 @@ Single phase, shipped as sub-deliverables 1a–1j. Each is individually mergeabl
 Three things ship together in 1a because they feed the same CodeGen run:
 
 1. **Migration** — [migrations/v5/V202604201400__v5.29.x__Runtime_Actions_Schema.sql](migrations/v5/V202604201400__v5.29.x__Runtime_Actions_Schema.sql). Adds `RuntimeActionConfiguration`, `MaxExecutionTimeMS`, `CreatedByAgentID`; widens `CHK_Action_Type` to include `'Runtime'`.
-2. **JSONType interface + wiring** — [metadata/entities/JSONType-interfaces/IRuntimeActionConfiguration.ts](metadata/entities/JSONType-interfaces/IRuntimeActionConfiguration.ts) and [metadata/entities/.entity-field-jsontype-runtime-actions.json](metadata/entities/.entity-field-jsontype-runtime-actions.json). Run `mj sync push --dir=metadata --include="entities"` to propagate to the DB.
+2. **JSONType interface + wiring** — [metadata/entities/JSONType-interfaces/IRuntimeActionConfiguration.ts](../metadata/entities/JSONType-interfaces/IRuntimeActionConfiguration.ts) and [metadata/entities/.entity-field-jsontype-runtime-actions.json](../metadata/entities/.entity-field-jsontype-runtime-actions.json). Run `mj sync push --dir=metadata --include="entities"` to propagate to the DB.
 3. **CodeGen** — regens `entity_subclasses.ts` (inlines interface + emits `RuntimeActionConfigurationObject` accessor), views, sprocs. Check in regenerated code.
 
 Sub-task **1a.1 — Zod validator** (lives in `@memberjunction/actions-base`): hand-authored Zod schema + compile-time type-equivalence assertion against `MJActionEntity_IRuntimeActionConfiguration`. Exported as `RuntimeActionConfigurationSchema` for use by ActionSmith at authoring time and `ActionEngine` before sandbox dispatch.

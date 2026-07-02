@@ -1,0 +1,79 @@
+.cls-seed {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.cls-seed-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+.cls-seed-meta {
+    font-size: 0.78rem;
+    color: var(--mj-text-muted);
+}
+.cls-seed-loading {
+    display: flex;
+    justify-content: center;
+    padding: 24px;
+}
+.cls-seed-empty {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 16px;
+    background: var(--mj-bg-surface-card);
+    border: 1px solid var(--mj-border-default);
+    border-radius: 8px;
+    color: var(--mj-text-secondary);
+    font-size: 0.85rem;
+}
+.cls-seed-empty i { color: var(--mj-status-info); }
+.cls-seed-tree {
+    border: 1px solid var(--mj-border-default);
+    border-radius: 8px;
+    background: var(--mj-bg-surface);
+    max-height: 360px;
+    overflow-y: auto;
+    padding: 6px 0;
+}
+.cls-seed-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-top: 5px;
+    padding-bottom: 5px;
+    padding-right: 12px;
+}
+.cls-seed-row:hover { background: var(--mj-bg-surface-hover); }
+.cls-seed-name {
+    flex: 1;
+    font-size: 0.85rem;
+    color: var(--mj-text-primary);
+    cursor: text;
+}
+.cls-seed-rename {
+    flex: 1;
+    font-size: 0.85rem;
+}
+.cls-seed-count {
+    font-size: 0.72rem;
+    color: var(--mj-text-muted);
+    background: var(--mj-bg-surface-sunken);
+    border-radius: 999px;
+    padding: 1px 8px;
+}
+.cls-seed-rename-btn {
+    background: none;
+    border: none;
+    color: var(--mj-text-muted);
+    cursor: pointer;
+    padding: 2px 6px;
+    font-size: 0.75rem;
+}
+.cls-seed-rename-btn:hover { color: var(--mj-brand-primary); }
+.cls-seed-actions {
+    display: flex;
+    gap: 8px;
+}

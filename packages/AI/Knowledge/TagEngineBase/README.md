@@ -138,4 +138,4 @@ const taggedItem = await TagEngineBase.Instance.CreateTaggedItem(
 
 ## Integration with Content Autotagging
 
-`TagEngineBase` provides the foundational tag operations used by the autotagging pipeline. The taxonomy tree is serialized to JSON and injected into the LLM prompt so the model can prefer existing tags. See the [Content Autotagging Guide](/guides/CONTENT_AUTOTAGGING_GUIDE.md) for the full pipeline documentation.
+`TagEngineBase` provides the foundational tag operations used by the autotagging pipeline. The taxonomy tree is serialized to JSON and injected into the LLM prompt so the model can prefer existing tags. See the [Content Autotagging Guide](../../../../guides/CONTENT_AUTOTAGGING_GUIDE.md) for the full pipeline documentation.

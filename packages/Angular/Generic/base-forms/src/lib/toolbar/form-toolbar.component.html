@@ -126,6 +126,60 @@
     <!-- Spacer pushes section controls to the right -->
     <div class="mj-forms-toolbar-spacer"></div>
 
+    <!-- Form-variant picker: right-side toolbar button. Opens a dropdown
+         with the Default (CodeGen Angular) form + every variant the host
+         supplied. Persists the user's pick via the host's resolver (which
+         goes through UserInfoEngine settings, not localStorage). Hidden
+         entirely when the host disables ShowFormVariantPicker or supplied
+         fewer than 2 variants. -->
+    @if (ShowVariantPickerButton) {
+      <div class="mj-form-variant-picker-host"
+           [class.open]="VariantMenuOpen">
+        <button class="mj-forms-btn mj-form-variant-picker-trigger"
+                type="button"
+                (click)="ToggleVariantMenu()"
+                (blur)="CloseVariantMenu()"
+                [title]="'Form variant: ' + CurrentVariantLabel + ' — click to change'">
+          <i class="fa-solid fa-pen-ruler"></i>
+          <span class="mj-form-variant-picker-current-label">{{ CurrentVariantLabel }}</span>
+          <i class="fa-solid fa-chevron-down chev"></i>
+        </button>
+        @if (VariantMenuOpen) {
+          <div class="mj-form-variant-picker-menu"
+               (mousedown)="$event.preventDefault()"
+               (click)="$event.stopPropagation()">
+            <div class="mj-form-variant-picker-row mj-form-variant-picker-default"
+                 [class.current]="!CurrentVariantID"
+                 (click)="OnVariantClick(null)">
+              <div class="mj-form-variant-picker-row-main">
+                <span class="mj-form-variant-picker-row-title">
+                  Default form <span class="mj-form-variant-picker-default-tag">(default)</span>
+                </span>
+                <span class="mj-form-variant-picker-row-sub">CodeGen-generated Angular fallback</span>
+              </div>
+              @if (!CurrentVariantID) {
+                <i class="fa-solid fa-check mj-form-variant-picker-check"></i>
+              }
+            </div>
+            @for (v of Variants; track v.ID) {
+              <div class="mj-form-variant-picker-row"
+                   [class.current]="v.ID === CurrentVariantID"
+                   [class.inactive]="v.Status !== 'Active'"
+                   (click)="OnVariantClick(v.ID)">
+                <div class="mj-form-variant-picker-row-main">
+                  <span class="mj-form-variant-picker-row-title">{{ v.Label }}</span>
+                  <span class="mj-form-variant-picker-row-sub">{{ VariantSubtitle(v) }}</span>
+                </div>
+                @if (v.ID === CurrentVariantID) {
+                  <i class="fa-solid fa-check mj-form-variant-picker-check"></i>
+                }
+              </div>
+            }
+          </div>
+        }
+      </div>
+    }
+
     <!-- Section Controls -->
     @if (Config.ShowSectionControls) {
       <div class="mj-forms-toolbar-group mj-section-controls">

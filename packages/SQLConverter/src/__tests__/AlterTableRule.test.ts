@@ -215,6 +215,30 @@ describe('AlterTableRule', () => {
       expect(result).toContain('DEFAULT TRUE');
       expect(result).toContain('DEFAULT FALSE');
     });
+
+    it('should convert inline named CONSTRAINT DEFAULT spanning newlines', () => {
+      // CodeGen / hand-written form: the named default constraint sits on its own
+      // line after `BIT NOT NULL`, so BOOLEAN and DEFAULT 1 end up on separate lines.
+      const sql = `ALTER TABLE [__mj].[AIAgent] ADD
+    AllowMemoryWrite BIT NOT NULL
+    CONSTRAINT DF_AIAgent_AllowMemoryWrite DEFAULT 1;`;
+      const result = convert(sql);
+      expect(result).toContain('BOOLEAN');
+      expect(result).toContain('DEFAULT TRUE');
+      expect(result).toContain('DF_AIAgent_AllowMemoryWrite'); // constraint name preserved
+      expect(result).not.toMatch(/DEFAULT\s+1\b/);
+    });
+
+    it('should NOT convert an integer column DEFAULT 1 that follows a defaultless BOOLEAN column', () => {
+      // Safety: the boolean-default rewrite must not span the comma into the
+      // integer column's DEFAULT.
+      const sql = `ALTER TABLE [__mj].[Foo]
+        ADD [IsActive] [BIT] NOT NULL,
+            [RetryCount] [INT] NOT NULL DEFAULT 1`;
+      const result = convert(sql);
+      expect(result).toMatch(/DEFAULT\s+1\b/); // integer default left intact
+      expect(result).not.toContain('DEFAULT TRUE');
+    });
   });
 
   describe('DEFAULT FOR column', () => {

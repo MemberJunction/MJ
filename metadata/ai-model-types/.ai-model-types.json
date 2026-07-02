@@ -1,0 +1,19 @@
+[
+  {
+    "fields": {
+      "Name": "Realtime",
+      "Description": "Streaming, full-duplex, tool-calling models that own the listen-reason-speak loop themselves (e.g. Gemini Live, GPT Realtime). Used by the Realtime agent type for low-latency, bidirectional voice (and later video) conversations. Resolved through the ClassFactory by AIModelType + DriverClass, the same as LLM/Embeddings/Image models, but exposed via the BaseRealtimeModel primitive rather than request/response BaseLLM.",
+      "DefaultInputModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "DefaultOutputModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "SupportsPrefill": false
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "4699B503-7760-4166-872C-F1D7E3211323"
+    },
+    "sync": {
+      "lastModified": "2026-06-16T01:17:09.178Z",
+      "checksum": "9ef137dfc1e15cd100332ec16a73ba16d5fd673d628db0b19047aec8f2db5de6"
+    }
+  }
+]

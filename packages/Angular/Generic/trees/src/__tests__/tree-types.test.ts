@@ -87,7 +87,7 @@ describe('createDefaultLeafConfig', () => {
       EntityName: 'MJ: Queries',
       ParentField: 'CategoryID'
     });
-    expect(config.EntityName).toBe('Queries');
+    expect(config.EntityName).toBe('MJ: Queries');
     expect(config.ParentField).toBe('CategoryID');
   });
 });

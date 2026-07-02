@@ -6,6 +6,14 @@ Your task is to accurately extract key information from a provided piece of text
 The text should be a {{ contentType }}. If the provided text does not actually appear to be of the type {{ contentType }}, please disregard everything in the instructions after this and return this exact JSON response: { "isValidContent": false }.
 {% endif %}
 
+{% if classificationContext %}
+## Classification Context
+
+The following context describes how this content should be interpreted and classified. Use it to guide your title, summary, and especially your choice of tags so they align with the intended taxonomy and domain. Prefer terminology and emphasis that is consistent with this guidance.
+
+{{ classificationContext }}
+{% endif %}
+
 Please extract the title of the provided text, a short summary of the provided documents, as well as between {{ minTags }} and {{ maxTags }} topical key words that are most relevant to the text.
 
 For each keyword, also assign a relevance weight between 0.0 and 1.0:
@@ -36,22 +44,27 @@ Return ONLY valid JSON without any formatting or code blocks, strictly following
 ### Tag Guidelines
 
 {% if existingTaxonomy %}
-**CRITICAL: You MUST reuse existing tags whenever possible.** The taxonomy below shows all existing tags organized as a hierarchy. Before creating any new tag, carefully check if an existing tag already covers the concept — even if the wording is slightly different.
+The taxonomy below shows all existing tags as a hierarchy (`#` = top-level category, more `#` = deeper). Follow these rules **in order**:
 
-- **ALWAYS use the exact tag name** from the existing taxonomy when a match exists.
-- Do NOT create variations like "AI Agent" when "AI Agents" already exists, or "Machine-Learning" when "Machine Learning" exists.
-- If an existing tag is a close match (synonym, plural/singular variant, abbreviation), use the existing tag — do NOT create a new one.
-- Only create a genuinely new tag when NO existing tag covers the concept.
+1. **Reuse before creating.** Before inventing a tag, check whether an existing tag already covers the concept — even if worded differently (synonym, plural/singular, abbreviation). If so, return that tag's **exact** name. Do NOT create variants like "AI Agent" when "AI Agents" exists, or "Machine-Learning" when "Machine Learning" exists.
+2. **Always nest — you decide the hierarchy.** Every tag you return MUST have a `parentTag` that places it in the tree:
+   - Prefer an **existing top-level category** from the taxonomy below as the parent of a specific tag.
+   - Introduce a **new** top-level category only when none of the existing ones fit, and keep the overall set of top-level categories **small (~6–12 total)**. A broad category itself may use `parentTag: null`.
+   - Put specific/narrow tags **under** a broad category — never leave a specific concept as its own top-level node.
+   - Add **at most one** new top-level category per item; nest everything else under existing categories.
 
-When returning a tag that exists in the taxonomy, use the tag's exact name as shown. For tags nested under a parent, set `parentTag` to the parent's exact name.
+Use each tag's exact name as shown in the taxonomy, and set `parentTag` to the parent's exact name.
 
 ## Existing Tag Taxonomy
 
 {{ existingTaxonomy }}
 
 {% else %}
-- The `tag` field should be a concise, descriptive keyword or short phrase.
-- The `parentTag` field is optional. If you believe a tag should be nested under another tag, set `parentTag` to that parent tag's name. Set to `null` if the tag stands on its own.
+**You are seeding the taxonomy — build a small, balanced hierarchy; you decide the structure.** There are no tags yet. For each item:
+
+- Return a few specific tags, and **nest each one under a broad parent category** via `parentTag` (a capability area, a type, a domain, etc.).
+- A broad **category** tag uses `parentTag: null`; a **specific** tag sets `parentTag` to its category's name.
+- Keep categories broad and reusable so later items reuse them — aim for a **small set of top-level categories** overall, not one category per tag. Avoid near-duplicate categories.
 {% endif %}
 
 {% if additionalAttributePrompts %}

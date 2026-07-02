@@ -5,6 +5,8 @@
     (HistoryRequested)="OnHistoryRequested()"
     (ListManagementRequested)="OnListManagementRequested()">
 
+    <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="before-fields" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
+
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
@@ -45,9 +47,25 @@
         [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
-            [ShowLabel]="false"
+            [ShowLabel]="true"
             FieldName="Sequence"
             Type="number"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ContextDescription"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Preload"
+            Type="checkbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -79,5 +97,9 @@
         ></mj-form-field>
 
     </mj-collapsible-panel>
+
+    <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-fields" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
+
+    <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-related" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
 </mj-record-form-container>
         

@@ -24,6 +24,30 @@ export interface IDisplayState {
     cards?: IDisplayCardState;
     /** Grid-specific configuration */
     grid?: IGridDisplayState;
+    /**
+     * Per-view-type configuration, one entry per view type the user has configured.
+     * Keyed by the `MJ: View Types` row ID so each type (Grid, Cards, Timeline, Map,
+     * Cluster, …) keeps its own settings in parallel — switching from one type to another
+     * and back preserves each type's config. The *active* view type is stored on
+     * `UserView.ViewTypeID` (the source of truth), not here; this array holds only the
+     * per-type configuration payloads.
+     */
+    viewTypeConfigs?: IViewTypeConfigEntry[];
+}
+
+/**
+ * A single per-view-type configuration entry within {@link IDisplayState}.viewTypeConfigs.
+ *
+ * `config` is intentionally an open map: each view-type plug-in owns the shape of its own
+ * configuration (e.g. the Cluster plug-in stores algorithm/K/dimensions; a Map plug-in stores
+ * lat/long field names). The host persists/loads it opaquely and hands it to the plug-in's
+ * renderer + prop-sheet, which interpret it with their own typed config interface.
+ */
+export interface IViewTypeConfigEntry {
+    /** The `MJ: View Types` row ID this configuration applies to. */
+    viewTypeId: string;
+    /** The view-type-specific configuration payload (shape owned by the plug-in). */
+    config: Record<string, unknown>;
 }
 
 /**

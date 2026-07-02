@@ -85,6 +85,33 @@ export interface DriverExecutionContext {
    * May be undefined if no variables are defined for this test type.
    */
   resolvedVariables?: ResolvedTestVariables;
+
+  /**
+   * Worker index for parallel suite execution. When set, indicates this test
+   * is running in a parallel worker and drivers can use it to construct
+   * session-sharing keys (e.g. "suite:<id>:worker-<index>").
+   * Undefined in sequential execution.
+   */
+  workerIndex?: number;
+
+  /**
+   * Suite-level signals propagated from `TestSuite.Configuration` to every
+   * test in the suite. `applicationContext` is the primary use case — a
+   * markdown blob describing the app under test that drivers feed to the
+   * controller LLM so it doesn't rediscover app structure on every test.
+   *
+   * Undefined when the test is not running inside a suite, or when the
+   * suite's `Configuration` field is empty / malformed (a malformed JSON
+   * produces a warning and undefined here — the run still proceeds).
+   *
+   * Drivers may also read other keys from this bag if the suite author
+   * stores arbitrary signals (e.g., feature flags, environment tags) under
+   * `TestSuite.Configuration`. The shape is intentionally open-ended.
+   */
+  suiteContext?: {
+    applicationContext?: string;
+    [key: string]: unknown;
+  };
 }
 
 /**

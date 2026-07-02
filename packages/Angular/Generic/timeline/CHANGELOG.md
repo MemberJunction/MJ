@@ -1,5 +1,109 @@
 # Change Log - @memberjunction/ng-timeline
 
+## 5.44.0
+
+### Patch Changes
+
+- 0476455: Migrate inline empty-state placeholders to the canonical `<mj-empty-state>` component across Explorer and Generic Angular packages (UI-consistency objective O4), wiring the component into the packages that needed it (and adding `@memberjunction/ng-ui-components` as a dependency where missing). Also fixes reset-filter CTA correctness in three picker dialogs (sub-agent selector, add-action, action gallery) where the handler cleared only a subset of the active filter dimensions, and refines the UI adoption measurement script with a transparent three-tier empty-state count (raw widened → non-placeholder false-positives → wrappers-around-migrated → genuine).
+- Updated dependencies [5396d90]
+- Updated dependencies [f8be8a0]
+- Updated dependencies [7279819]
+- Updated dependencies [d44e430]
+- Updated dependencies [6f74b17]
+- Updated dependencies [1e5e449]
+- Updated dependencies [0476455]
+- Updated dependencies [2f9b863]
+  - @memberjunction/core@5.44.0
+  - @memberjunction/ng-ui-components@5.44.0
+
+## 5.43.0
+
+### Patch Changes
+
+- Updated dependencies [40eb4e0]
+- Updated dependencies [9f6aa87]
+- Updated dependencies [ad8d8f1]
+- Updated dependencies [a4cdfb0]
+  - @memberjunction/core@5.43.0
+
+## 5.42.0
+
+### Patch Changes
+
+- Updated dependencies [9b9b484]
+- Updated dependencies [2f225e4]
+- Updated dependencies [0fa3cbc]
+  - @memberjunction/core@5.42.0
+
+## 5.41.0
+
+### Patch Changes
+
+- Updated dependencies [8fd6f59]
+- Updated dependencies [cd6c5f0]
+- Updated dependencies [8c8b658]
+- Updated dependencies [659ee5b]
+- Updated dependencies [cc604aa]
+- Updated dependencies [15b743b]
+- Updated dependencies [a5f5472]
+- Updated dependencies [ddaa30e]
+  - @memberjunction/core@5.41.0
+
+## 5.40.2
+
+### Patch Changes
+
+- @memberjunction/core@5.40.2
+
+## 5.40.1
+
+### Patch Changes
+
+- Updated dependencies [e50381b]
+  - @memberjunction/core@5.40.1
+
+## 5.40.0
+
+### Patch Changes
+
+- Updated dependencies [804f9f6]
+- Updated dependencies [73bb233]
+- Updated dependencies [43e6c0f]
+  - @memberjunction/core@5.40.0
+
+## 5.39.0
+
+### Patch Changes
+
+- Updated dependencies [361eb4c]
+- Updated dependencies [f4bf584]
+- Updated dependencies [3c53858]
+- Updated dependencies [ae74fd5]
+- Updated dependencies [9bc2916]
+- Updated dependencies [a101a34]
+  - @memberjunction/core@5.39.0
+
+## 5.38.0
+
+### Patch Changes
+
+- Updated dependencies [4ee0b06]
+- Updated dependencies [748b2e7]
+- Updated dependencies [ce7d2f5]
+- Updated dependencies [275afda]
+- Updated dependencies [6a3ac36]
+- Updated dependencies [c0b40c0]
+- Updated dependencies [d5a51b3]
+- Updated dependencies [ebb0e3d]
+  - @memberjunction/core@5.38.0
+
+## 5.37.0
+
+### Patch Changes
+
+- Updated dependencies [4f15f31]
+  - @memberjunction/core@5.37.0
+
 ## 5.36.0
 
 ### Patch Changes

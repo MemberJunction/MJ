@@ -344,6 +344,20 @@ export class CredentialsTypesResourceComponent extends BaseResourceComponent imp
         this.applyFilters();
     }
 
+    /** True when search and/or the category filter narrow the list. */
+    public get IsListNarrowed(): boolean {
+        return !!(this.searchText || this.selectedCategoryFilter);
+    }
+
+    /** Empty-state CTA: reset filters when narrowed, otherwise create. */
+    public onEmptyStateAction(): void {
+        if (this.IsListNarrowed) {
+            this.clearFilters();
+        } else {
+            this.createNewType();
+        }
+    }
+
     private applyFilters(): void {
         let filtered = [...this.types];
 

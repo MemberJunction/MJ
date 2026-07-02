@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "1.0",
+  "name": "generic-web",
+  "kind": "generic-web",
+  "description": "Mode C: any web app (no MJ assumptions). Tests + suite are authored per-app and pushed via extraMetadataDirs.",
+
+  "baseUrl": "https://app.example.com",
+  "allowedDomains": ["app.example.com"],
+
+  "suite": "My App Regression Suite",
+  "extraMetadataDirs": [
+    "/app/byo-metadata"
+  ]
+}

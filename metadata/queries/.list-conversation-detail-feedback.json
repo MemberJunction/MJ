@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "ListConversationDetailFeedback",
+      "CategoryID": "@lookup:MJ: Query Categories.Name=Conversations",
+      "UserQuestion": "What user ratings and feedback have been left on AI messages?",
+      "Description": "Lists 1-10 user ratings and free-form feedback on conversation messages, joined with the rater (User), conversation, and agent name. Supports time-range, rating-band, and agent filters.",
+      "SQL": "@file:SQL/list-conversation-detail-feedback.sql",
+      "TechnicalDescription": "Queries __mj.ConversationDetail WHERE UserRating IS NOT NULL. Rater is resolved as the parent conversation's owner (Conversation.UserID → User) because there is no per-rating UserID column and server-side write rules restrict rating writes to the conversation owner. Also LEFT JOINs __mj.AIAgent for the agent name. Nunjucks conditionals scope by StartDate/EndDate/MinRating/MaxRating/AgentID. Orders most-recent first by __mj_UpdatedAt.",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 2,
+      "UsesTemplate": true
+    },
+    "primaryKey": {
+      "ID": "FACEF5AC-C979-4944-B41F-2BD2A20BEAE7"
+    },
+    "sync": {
+      "lastModified": "2026-05-24T13:07:43.573Z",
+      "checksum": "5812631e1ed91706b838debacbf811937dde19802591a4d4e694cb8afc611ebc"
+    }
+  }
+]

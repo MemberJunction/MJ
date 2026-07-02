@@ -1,0 +1,149 @@
+<mj-page-header-interior
+    Title="Tag Library"
+    [Subtitle]="Subtitle">
+  <div actions>
+    <button mjButton variant="secondary" size="sm" (click)="Refresh()" [disabled]="IsLoading">
+      @if (IsLoading) {
+        <i class="fa-solid fa-spinner fa-spin"></i> <span class="mj-action-label">Refreshing…</span>
+      } @else {
+        <i class="fa-solid fa-arrows-rotate"></i> <span class="mj-action-label">Refresh</span>
+      }
+    </button>
+  </div>
+  <div toolbar>
+    <input type="text" class="at-search-input" placeholder="Search tags..."
+           [(ngModel)]="TagSearchQuery" (input)="FilterTags()">
+  </div>
+</mj-page-header-interior>
+
+<mj-page-body-interior [Padding]="false" [Flex]="true">
+  <div class="at-main-area">
+    @if (IsLoading) {
+      <div class="at-loading-overlay">
+        <mj-loading text="Refreshing tags…"></mj-loading>
+      </div>
+    }
+    <div class="at-page-body">
+        <div class="at-tag-lib-layout">
+            <div class="at-tag-lib-main">
+                <div class="at-card">
+                    <div class="at-card-body" style="max-height: 500px; overflow-y: auto;">
+                        <table class="at-tag-table">
+                            <thead>
+                                <tr>
+                                    <th>Tag</th>
+                                    <th>Count</th>
+                                    <th>Avg Weight</th>
+                                    <th>Distribution</th>
+                                    <th>Top Source</th>
+                                    <th>First Seen</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @for (row of FilteredTagRows; track row.Tag) {
+                                    <tr class="at-tag-row-clickable" (click)="DrillDownTag(row.Tag)"
+                                        [class.at-tag-row-selected]="SelectedDrillDownTag === row.Tag">
+                                        <td class="at-tag-name-cell">{{ row.Tag }}</td>
+                                        <td>{{ row.UsageCount }}</td>
+                                        <td>
+                                            <div class="at-weight-indicator">
+                                                <div class="at-weight-bar">
+                                                    <div class="at-weight-bar-fill" [style.width.%]="row.AvgWeight * 100"
+                                                         [class.at-weight-high]="row.AvgWeight >= 0.7"
+                                                         [class.at-weight-medium]="row.AvgWeight >= 0.4 && row.AvgWeight < 0.7"
+                                                         [class.at-weight-low]="row.AvgWeight < 0.4"></div>
+                                                </div>
+                                                <span class="at-weight-value">{{ row.AvgWeight.toFixed(2) }}</span>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <div class="at-tag-bar">
+                                                <div class="at-tag-bar-fill" [style.width.%]="row.BarWidthPct"></div>
+                                            </div>
+                                        </td>
+                                        <td>{{ row.TopSource }}</td>
+                                        <td>{{ row.FirstSeen }}</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Tag drill-down: content items matching selected tag -->
+                @if (SelectedDrillDownTag) {
+                    <div class="at-card" style="margin-top: 12px;">
+                        <div class="at-card-header">
+                            <span class="at-card-title">
+                                <i class="fa-solid fa-tag"></i>
+                                Content items tagged "{{ SelectedDrillDownTag }}"
+                                ({{ TagDrillDownItems.length }})
+                            </span>
+                            <button class="at-slide-close" (click)="CloseDrillDownTag()" style="background:none;border:none;cursor:pointer;color:var(--mj-text-muted)" aria-label="Close">
+                                <i class="fa-solid fa-times"></i>
+                            </button>
+                        </div>
+                        <div class="at-card-body" style="max-height: 300px; overflow-y: auto;">
+                            @if (TagDrillDownItems.length === 0) {
+                                <mj-empty-state Size="compact" Icon="fa-solid fa-inbox"
+                                    Title="No content items found for this tag." />
+                            } @else {
+                                <table class="at-tag-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Name</th>
+                                            <th>Source</th>
+                                            <th>Weight</th>
+                                            <th>Updated</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @for (di of TagDrillDownItems; track di.ID) {
+                                            <tr class="at-tag-row-clickable" (click)="onOpenItemDetail(di.ID)">
+                                                <td>{{ di.Name }}</td>
+                                                <td>{{ di.SourceName }}</td>
+                                                <td>{{ FormatWeight(di.Weight) }}</td>
+                                                <td>{{ di.UpdatedAt }}</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+            <div class="at-tag-lib-sidebar">
+                <div class="at-card at-tag-cloud-card">
+                    <div class="at-card-title" style="margin-bottom: 12px;"><i class="fa-solid fa-cloud"></i> Tag Cloud</div>
+                    @if (TagCloudWordItems.length > 0) {
+                        <mj-word-cloud
+                            [Items]="TagCloudWordItems"
+                            [MaxFontSize]="40"
+                            [MinFontSize]="12"
+                            [MaxItems]="20"
+                            Layout="spiral"
+                            ColorMode="weight-gradient"
+                            [Interactive]="true"
+                            [Animate]="true">
+                        </mj-word-cloud>
+                    } @else {
+                        <mj-empty-state Size="compact" Icon="fa-solid fa-tag" Title="No tags yet" />
+                    }
+                </div>
+                <div class="at-card" style="padding: 16px; margin-top: 12px;">
+                    <div class="at-card-title" style="margin-bottom: 10px;"><i class="fa-solid fa-chart-pie"></i> By Source</div>
+                    <div class="at-tags-by-source">
+                        @for (s of TagsBySource; track s.SourceName) {
+                            <div class="at-tag-source-row">
+                                <span>{{ s.SourceName }}</span>
+                                <strong>{{ s.Count }}</strong>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+  </div>
+</mj-page-body-interior>

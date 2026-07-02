@@ -14,6 +14,36 @@ export interface ScheduledJobExecutionContext {
     Schedule: MJScheduledJobEntity;
     Run: MJScheduledJobRunEntity;
     ContextUser: UserInfo;
+
+    /**
+     * Heartbeat the running job's lease (GH #2749). Calling this signals that
+     * the plugin is still making forward progress, pushing the lock's
+     * `ExpectedCompletionAt` further into the future so the scheduling engine's
+     * sweep does not reclaim this job's concurrency slot.
+     *
+     * Contract:
+     * - **OPT-IN.** A plugin that never calls `heartbeat` falls back to today's
+     *   fixed acquire-time lease behavior — nothing breaks.
+     * - **SELF-THROTTLING.** Safe to call on every loop iteration / progress
+     *   tick; an effective DB write happens at most once per ~5 minutes
+     *   regardless of call frequency. Cheap no-op the rest of the time.
+     * - **NEVER THROWS.** Swallows and logs its own errors. A best-effort lease
+     *   renewal must never fault the actual job, so callers can fire-and-forget
+     *   it (`void context.heartbeat?.()`).
+     * - **NO-OP in Concurrent mode.** When the job runs under
+     *   `ConcurrencyMode='Concurrent'` there is no lock to extend, so this does
+     *   nothing.
+     *
+     * The engine ALWAYS supplies this when it runs a job, so inside `Execute`
+     * plugins may call `context.heartbeat!()` directly. The `?` only covers
+     * `ScheduledJobExecutionContext` literals built by hand (e.g. unit tests).
+     *
+     * IMPORTANT: renewal MUST be driven by the plugin's own forward progress —
+     * the engine deliberately does NOT auto-heartbeat at `await` boundaries,
+     * because an auto-beat would keep renewing the lease while a plugin is
+     * wedged in `await something()`, masking exactly the hang we want to detect.
+     */
+    heartbeat?: () => Promise<void>;
 }
 
 /**

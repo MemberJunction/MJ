@@ -9,6 +9,13 @@
  * persist for the lifetime of the budget instance.
  */
 export interface RunBudgetLimits {
+    /**
+     * Maximum number of content items the run may PROCESS before pausing.
+     * "Process" means handed to the LLM tagging pipeline — does not include
+     * items skipped by change-detection. Most intuitive "do at most N this
+     * run, do the rest next time" knob. NULL/unset = unlimited.
+     */
+    MaxItemsPerRun?: number | null;
     MaxNewTagsPerRun?: number | null;
     MaxNewTagsPerItem?: number | null;
     MaxTokensPerRun?: number | null;
@@ -16,6 +23,7 @@ export interface RunBudgetLimits {
 }
 
 export type RunBudgetReason =
+    | 'MaxItemsPerRunExceeded'
     | 'MaxNewTagsPerRunExceeded'
     | 'MaxTokensPerRunExceeded'
     | 'MaxCostPerRunExceeded';
@@ -27,6 +35,7 @@ export interface RunBudgetCheckResult {
 }
 
 export class RunBudget {
+    private itemsProcessedThisRun = 0;
     private tagsCreatedThisRun = 0;
     private tagsCreatedThisItem = 0;
     private tokensUsedThisRun = 0;
@@ -37,6 +46,16 @@ export class RunBudget {
     /** Reset per-item counter; called at the top of each ContentItem. */
     public startItem(): void {
         this.tagsCreatedThisItem = 0;
+    }
+
+    /**
+     * Record N content items as processed this run. Called once per batch
+     * from the engine's OnAfterBatch hook with the batch's contribution to
+     * THIS budget (i.e., the subset of the batch belonging to the source
+     * this budget tracks).
+     */
+    public recordItemsProcessed(n: number): void {
+        if (Number.isFinite(n) && n > 0) this.itemsProcessedThisRun += n;
     }
 
     /** Record one auto-created tag. Increments both run and item counters. */
@@ -61,9 +80,19 @@ export class RunBudget {
 
     /**
      * Check all run-level budgets. Returns the first one exceeded, in a
-     * stable order (tags → tokens → cost).
+     * stable order (items → tags → tokens → cost). Items is checked first
+     * because it's the most intuitive user-facing cap and "I asked for at
+     * most 100 today" should win over the cost calculations that depend on
+     * a specific model's pricing.
      */
     public checkBudgets(): RunBudgetCheckResult {
+        if (this.limits.MaxItemsPerRun != null && this.itemsProcessedThisRun >= this.limits.MaxItemsPerRun) {
+            return {
+                ok: false,
+                reason: 'MaxItemsPerRunExceeded',
+                details: `Processed ${this.itemsProcessedThisRun}/${this.limits.MaxItemsPerRun} items this run.`,
+            };
+        }
         if (this.limits.MaxNewTagsPerRun != null && this.tagsCreatedThisRun >= this.limits.MaxNewTagsPerRun) {
             return {
                 ok: false,
@@ -88,8 +117,9 @@ export class RunBudget {
         return { ok: true };
     }
 
-    public snapshot(): { tagsRun: number; tagsItem: number; tokens: number; cost: number } {
+    public snapshot(): { items: number; tagsRun: number; tagsItem: number; tokens: number; cost: number } {
         return {
+            items: this.itemsProcessedThisRun,
             tagsRun: this.tagsCreatedThisRun,
             tagsItem: this.tagsCreatedThisItem,
             tokens: this.tokensUsedThisRun,

@@ -26,6 +26,10 @@ import { Subject, takeUntil } from 'rxjs';
   template: `
     @if (isReady) {
       <div class="chat-conversations-container">
+        <!-- Mobile backdrop: tap to close the slide-over sidebar -->
+        @if (isMobileView && !isSidebarCollapsed && isSidebarSettingsLoaded) {
+          <div class="mobile-sidebar-backdrop" (click)="collapseSidebar()"></div>
+        }
         <!-- Left sidebar: Conversation list -->
         @if (isSidebarSettingsLoaded) {
           <div class="conversation-sidebar"
@@ -70,6 +74,7 @@ import { Subject, takeUntil } from 'rxjs';
               [pendingMessage]="pendingMessageToSend"
               [pendingAttachments]="pendingAttachmentsToSend"
               [pendingArtifactId]="pendingArtifactId"
+              [pendingArtifactConversationId]="pendingArtifactConversationId"
               [pendingArtifactVersionNumber]="pendingArtifactVersionNumber"
               [showSidebarToggle]="isSidebarCollapsed && isSidebarSettingsLoaded"
               (sidebarToggleClicked)="expandSidebar()"
@@ -176,6 +181,57 @@ import { Subject, takeUntil } from 'rxjs';
       height: 100%;
       flex: 1;
     }
+
+    /* Mobile: sidebar slides over the chat instead of squishing it.
+       The chat area always fills the full width; the sidebar overlays on
+       top and is dismissed by tapping the backdrop. */
+    @media (max-width: 767px) {
+      .conversation-sidebar {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        height: 100%;
+        width: min(85%, 320px) !important;
+        z-index: 1000;
+        transform: translateX(-100%);
+        transition: transform 0.3s ease;
+        box-shadow: 2px 0 12px color-mix(in srgb, var(--mj-text-primary) 25%, transparent);
+      }
+
+      /* Keep a fixed width in both states so only the transform animates
+         (avoids text reflow during the slide). */
+      .conversation-sidebar.collapsed {
+        width: min(85%, 320px) !important;
+        border-right: 1px solid var(--mj-border-default);
+        overflow-y: auto;
+      }
+
+      .conversation-sidebar:not(.collapsed) {
+        transform: translateX(0);
+      }
+
+      /* No drag-resize on mobile */
+      .sidebar-resize-handle {
+        display: none;
+      }
+
+      .mobile-sidebar-backdrop {
+        position: absolute;
+        inset: 0;
+        background: var(--mj-bg-overlay);
+        z-index: 999;
+        border: none;
+        padding: 0;
+        cursor: pointer;
+        animation: chatBackdropFade 0.2s ease;
+      }
+
+      @keyframes chatBackdropFade {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+    }
   `],
   encapsulation: ViewEncapsulation.None
 })
@@ -211,6 +267,16 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
 
   // Pending navigation state
   public pendingArtifactId: string | null = null;
+  public pendingArtifactConversationId: string | null = null;
+  /**
+   * A pending request to open the REALTIME SESSION REVIEW overlay (deep link /
+   * cross-resource nav with `realtimeSessionId`, e.g. the AI Agent Session form's
+   * "open session" pill). Applied once after the chat area renders — this is also the
+   * reference example for invoking an EXISTING realtime session programmatically:
+   * `await chatArea.OpenRealtimeSessionReview(agentSessionId)` (a NEW session starts
+   * through the composer's phone button / `RealtimeSessionService.StartRealtimeSession`).
+   */
+  public pendingRealtimeSessionId: string | null = null;
   public pendingArtifactVersionNumber: number | null = null;
   public pendingMessageToSend: string | null = null;
   public pendingAttachmentsToSend: PendingAttachment[] | null = null;
@@ -272,7 +338,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     // open:url commands are handled directly by the service; open:resource needs NavigationService.
     this.uiCommandHandler.actionableCommandRequested
       .pipe(takeUntil(this.destroy$))
-      .subscribe(command => this.handleActionableCommand(command));
+      .subscribe(request => this.handleActionableCommand(request.command));
 
     // Subscribe to bridge switch events so the overlay can hand off a conversation to this workspace
     this.bridge.SwitchEvent$
@@ -377,6 +443,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     // Set pending artifact if provided
     if (artifactId) {
       this.pendingArtifactId = artifactId;
+      this.pendingArtifactConversationId = conversationId || null;
       this.pendingArtifactVersionNumber = versionNumber;
     }
 
@@ -388,6 +455,30 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
       // Load entity asynchronously
       this.loadConversationEntity(conversationId);
     }
+
+    const realtimeSessionId = qp?.['realtimeSessionId'] || (config['realtimeSessionId'] as string);
+    if (realtimeSessionId) {
+      this.pendingRealtimeSessionId = realtimeSessionId;
+      this.applyPendingRealtimeSessionReview();
+    }
+  }
+
+  /** Opens the pending realtime session review once the chat area exists (retries next tick while it renders). */
+  private applyPendingRealtimeSessionReview(): void {
+    const sessionId = this.pendingRealtimeSessionId;
+    if (!sessionId) {
+      return;
+    }
+    if (!this.chatArea) {
+      setTimeout(() => this.applyPendingRealtimeSessionReview(), 50);
+      return;
+    }
+    this.pendingRealtimeSessionId = null;
+    void this.chatArea.OpenRealtimeSessionReview(sessionId).then((opened) => {
+      if (!opened) {
+        console.warn(`Chat: could not open realtime session review for '${sessionId}'`);
+      }
+    });
   }
 
   /**
@@ -398,12 +489,18 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
    * was already open instead of the pinned one.
    */
   protected override OnQueryParamsChanged(params: Record<string, string>, _source: 'popstate' | 'deeplink'): void {
+    const realtimeSessionId = params['realtimeSessionId'] || null;
+    if (realtimeSessionId) {
+      this.pendingRealtimeSessionId = realtimeSessionId;
+      this.applyPendingRealtimeSessionReview();
+    }
     const conversationId = params['conversationId'] || null;
     const artifactId = params['artifactId'] || null;
     const versionNumber = params['versionNumber'] ? parseInt(params['versionNumber'], 10) : null;
 
     // Reflect any artifact intent so the chat area can open it.
     this.pendingArtifactId = artifactId;
+    this.pendingArtifactConversationId = artifactId ? conversationId : null;
     this.pendingArtifactVersionNumber = versionNumber;
 
     if (conversationId && conversationId !== this.selectedConversationId) {
@@ -473,8 +570,15 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
       queryParams['versionNumber'] = null;
     }
 
-    // Use NavigationService to update query params properly
-    this.navigationService.UpdateActiveTabQueryParams(queryParams);
+    // realtimeSessionId is a one-shot deep-link trigger (e.g. from the AI Agent Session
+    // form). Always clear it from the tab params here — leaving it lingering re-delivers
+    // it on every tab re-focus / popstate, which reopened the review overlay forever
+    // (the live-tested "stuck overlay" bug).
+    queryParams['realtimeSessionId'] = null;
+
+    // Use the resource-scoped helper so a cached conversation component cannot
+    // write conversation params onto a tab that has since been reused for a record.
+    this.UpdateQueryParams(queryParams);
   }
 
   /**
@@ -854,6 +958,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
    */
   onPendingArtifactConsumed(): void {
     this.pendingArtifactId = null;
+    this.pendingArtifactConversationId = null;
     this.pendingArtifactVersionNumber = null;
     // Update URL to remove artifact params
     this.updateUrl();

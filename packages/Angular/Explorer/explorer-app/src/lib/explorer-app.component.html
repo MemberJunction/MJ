@@ -11,33 +11,36 @@
 
 <!-- Normal authenticated view (not OAuth callback) -->
 @if ((authBase.isAuthenticated() | async) && !isOAuthCallback) {
-  <div class="app-main">
-    <mj-server-connectivity-banner></mj-server-connectivity-banner>
-    <mj-system-validation-banner></mj-system-validation-banner>
-    @if (!HasError) {
-      <mj-shell class="app-body"></mj-shell>
+  @if (!preShellBlocked) {
+    <div class="app-main">
+      <mj-server-connectivity-banner></mj-server-connectivity-banner>
+      <mj-system-validation-banner></mj-system-validation-banner>
+      @if (!HasError) {
+        <mj-shell class="app-body"></mj-shell>
+      }
+      @if (HasError && !showValidationOnly) {
+        <div><h1>System Error</h1><hr/>{{this.ErrorMessage}}</div>
+      }
+    </div>
+    <!-- Floating chat overlay — persistent across navigation, hidden during load and in Conversations -->
+    @if (IsChatOverlayReady) {
+      <mj-chat-agents-overlay
+        [IsVisible]="!isChatRoute"
+        [AppContext]="$any(AppContextSnapshot)"
+        [EmptyStateGreeting]="'Ask me anything — I can navigate apps, search data, run queries, or help with tasks.'"
+        [TopBoundaryPx]="ChatOverlayTopBoundaryPx"
+        (ToolExecuted)="OnOverlayToolExecuted($event)"
+        (OpenEntityRecord)="OnOverlayOpenRecord($event)"
+        (OpenFullChatWorkspace)="OnOverlayOpenFullChatWorkspace($event)"
+      ></mj-chat-agents-overlay>
     }
-    @if (HasError && !showValidationOnly) {
-      <div><h1>System Error</h1><hr/>{{this.ErrorMessage}}</div>
-    }
-  </div>
-  <!-- Floating chat overlay — persistent across navigation, hidden during load and in Conversations -->
-  @if (IsChatOverlayReady) {
-    <mj-chat-agents-overlay
-      [IsVisible]="!isChatRoute"
-      [AppContext]="$any(AppContextSnapshot)"
-      [EmptyStateGreeting]="'Ask me anything — I can navigate apps, search data, run queries, or help with tasks.'"
-      (ToolExecuted)="OnOverlayToolExecuted($event)"
-      (OpenEntityRecord)="OnOverlayOpenRecord($event)"
-      (OpenFullChatWorkspace)="OnOverlayOpenFullChatWorkspace($event)"
-    ></mj-chat-agents-overlay>
+    <!-- Hidden router-outlet required for Angular's router to activate routes and update the browser URL.
+         The shell manages all visible content rendering through its tab system, not through routing.
+         Without this outlet, router.navigateByUrl() fails silently and the URL stays at '/'. -->
+    <div style="display:none;position:absolute;width:0;height:0;overflow:hidden">
+      <router-outlet></router-outlet>
+    </div>
   }
-  <!-- Hidden router-outlet required for Angular's router to activate routes and update the browser URL.
-       The shell manages all visible content rendering through its tab system, not through routing.
-       Without this outlet, router.navigateByUrl() fails silently and the URL stays at '/'. -->
-  <div style="display:none;position:absolute;width:0;height:0;overflow:hidden">
-    <router-outlet></router-outlet>
-  </div>
 }
 <!-- Login - shows when NOT authenticated AND not on OAuth callback -->
 @if (!(authBase.isAuthenticated() | async) && !isOAuthCallback) {

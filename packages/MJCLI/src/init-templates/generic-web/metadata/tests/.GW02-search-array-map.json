@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": " GW02 - Search Array.prototype.map",
+    "Description": "Uses the search box to find documentation for Array.prototype.map and verifies a relevant result page loads. Exercises text input + click + page navigation against a public site.",
+    "InputDefinition": {
+      "goal": "Open the search box (top-right magnifying-glass icon or 'Search MDN' input). Type 'Array.prototype.map' and submit. Follow the most relevant result. Verify a page about Array.prototype.map (the JavaScript method) loads",
+      "startUrl": "{{baseUrl}}",
+      "allowedDomains": "{{allowedDomains}}",
+      "auth": {
+        "bindings": []
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "finalUrlPattern": "(?i)/array(/prototype)?/map",
+      "minConfidence": 0.7,
+      "maxSteps": 20,
+      "judgeValidationCriteria": [
+        "Final page is about Array.prototype.map",
+        "Page contains a code example",
+        "Page is a reference doc (not an unrelated search result)"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 20,
+      "maxExecutionTime": 240000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.4,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "url-match",
+          "weight": 0.3,
+          "config": {
+            "pattern": "(?i)/array(/prototype)?/map"
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.1,
+          "config": {
+            "maxSteps": 20
+          }
+        },
+        {
+          "type": "final-url-host",
+          "weight": 0.2,
+          "config": {
+            "host": "developer.mozilla.org"
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.4,
+        "url-match": 0.3,
+        "step-count": 0.1,
+        "final-url-host": 0.2
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,generic-web,search"
+  },
+  "primaryKey": {
+    "ID": "2E8DE64D-B817-4E3D-B471-FF1142FABFDC"
+  },
+  "sync": {
+    "lastModified": "2026-05-17T23:05:53.319Z",
+    "checksum": "eeec8bd96e8ff50437a3a20c2a821dc991fcece9277c23510b635e5b6501b88b"
+  }
+}

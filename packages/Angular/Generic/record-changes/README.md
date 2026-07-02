@@ -198,7 +198,8 @@ import {
 | `@memberjunction/core` | Core framework (BaseEntity, Metadata, RunView) |
 | `@memberjunction/core-entities` | `MJRecordChangeEntity` definition |
 | `@memberjunction/ng-shared-generic` | Shared generic components (mj-loading) |
-| `@memberjunction/ng-versions` | Provides `mj-slide-panel` and version label create wizard |
+| `@memberjunction/ng-ui-components` | Provides `mj-slide-panel` |
+| `@memberjunction/ng-versions` | Version label create wizard |
 | `@memberjunction/ng-notifications` | Toast notifications |
 | `diff` | Word/character text diff for the timeline |
 

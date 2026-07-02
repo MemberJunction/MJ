@@ -1,0 +1,1414 @@
+[
+  {
+    "fields": {
+      "Name": "Get Entity Schema For Form",
+      "Description": "Read-only action consumed by the Form Builder agent. Returns the curated form-relevant schema for an entity: field list with normalised types (string | number | boolean | datetime | enum | foreign-key), FK references resolved to {entity, displayField}, value-list fields annotated with allowedValues, and audit / virtual / computed fields stripped. The shape matches the CuratedFormSchema type in @memberjunction/interactive-component-types/forms.",
+      "DriverClass": "__GetEntitySchemaForForm",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-table-columns",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Utilities"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EntityName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Fully-qualified entity name as registered in MJ metadata, e.g. 'MJ: Applications', 'Users', 'Accounts'. Case-insensitive but must match a real entity.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "79C46701-030F-4FE6-813D-EB48D3A1E1ED"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:52.644Z",
+            "checksum": "aac0d227b8f102429b097cea47002d844215e273e59aa5051599356181a0d215"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Schema",
+            "Type": "Output",
+            "ValueType": "Other",
+            "IsArray": false,
+            "Description": "The CuratedFormSchema object: { entityName, displayName, description?, nameField?, fields[] }. Each field has { name, displayName?, description?, type, required, isPrimaryKey, maxLength?, allowedValues?, references?, sequence }.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "1B99B154-B448-4EC4-9233-51E133869F27"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:52.683Z",
+            "checksum": "ac215844b06cca54c798e409d92d2d1a7008768dbd8e0e1900e8cf7ec8b2a686"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "Description": "Schema returned for the requested entity."
+          },
+          "primaryKey": {
+            "ID": "F8F084B7-0ABB-4270-9360-F54092A5ED0C"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:52.725Z",
+            "checksum": "d0dc6b3cb8b9e3bc1182cf957f54deef37a997fde785ca39bcc2e59d6739b517"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PARAMETER",
+            "Description": "Required EntityName parameter was not supplied."
+          },
+          "primaryKey": {
+            "ID": "1287B9CD-C35A-4A8A-962E-BDFBC591697A"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:52.751Z",
+            "checksum": "43d5c6b330b54efc467da0a9bc30a68d3123c44d031aa75d9d63f2244672d5c3"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ENTITY_NOT_FOUND",
+            "Description": "The supplied entity name is not registered with the active metadata provider."
+          },
+          "primaryKey": {
+            "ID": "9AF9405D-6906-49D2-871B-BFB565CE4806"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:52.774Z",
+            "checksum": "e9fa2bde2509ca5d55a2733dc779861c62dc9660430e6881dc2172df3cc39639"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NO_PROVIDER",
+            "Description": "No metadata provider is configured on the action run params or globally."
+          },
+          "primaryKey": {
+            "ID": "30F6AB78-BD73-4B34-AF78-7C0BCCCF6F50"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:52.796Z",
+            "checksum": "0bdd079647e1dbc278f76192e7a5dc101eb904383dcb0fb6357b87df6e316c80"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "8A783A32-9A9F-4EBC-A7B9-CCA32F440827"
+    },
+    "sync": {
+      "lastModified": "2026-05-29T19:48:52.417Z",
+      "checksum": "7d82aa05a8cc5955aaaab7c9bdbb80c84a7d98431ca7ef7ce6f5edeff16ce8d7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Get Default Form Scaffold For Entity",
+      "Description": "Read-only action that produces a working form-role ComponentSpec scaffolded from an entity's CodeGen metadata (Category, GeneratedFormSectionType, Sequence, FK relationships, value lists, EntitySetting icons). Mirrors the default Angular form layout. Agents call this first when authoring a net-new form, then modify the scaffold per user requirements — far fewer lint failures than writing JSX from scratch.",
+      "DriverClass": "__GetDefaultFormScaffoldForEntity",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-layer-group",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Utilities"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EntityName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Fully-qualified entity name, e.g. 'MJ: Applications'.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "528F7286-EA38-46ED-B731-592FB8D3B5AD"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:52.819Z",
+            "checksum": "4d4a130305094149ded9362b28da225d239d6ce01fbe89d65a77521cdc639382"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Spec",
+            "Type": "Output",
+            "ValueType": "Other",
+            "IsArray": false,
+            "Description": "Working ComponentSpec with componentRole='form', location='embedded', and JSX code mirroring the default Angular form layout.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "953C68BA-2665-41C8-85A6-10C181D4CEBE"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:52.859Z",
+            "checksum": "777adcfebf3e38be7ff7fe6d0e9c3aaec4979f36fa268edc7ee828182a9ae7a1"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "Description": "Scaffold spec returned."
+          },
+          "primaryKey": {
+            "ID": "08CC898C-7016-428E-9ADC-F5817705005D"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:52.894Z",
+            "checksum": "b61657139e5ae0905b09218828570dab23a13515e59bd1328fc473acd1992c4e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PARAMETER",
+            "Description": "EntityName was not supplied."
+          },
+          "primaryKey": {
+            "ID": "845BA337-5CA3-48F7-8B7A-324F3DF28400"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:52.914Z",
+            "checksum": "6e0c4734ceb6471bf94d0ad4a17e2a6bcf65bbf66532fa1efacc7cf9501b25c8"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ENTITY_NOT_FOUND",
+            "Description": "The supplied entity name is not registered."
+          },
+          "primaryKey": {
+            "ID": "B1995B6A-53FF-40C4-A8D8-B86D8060ED7B"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:52.975Z",
+            "checksum": "2bb65fc43e49244d142000a897bd4fd69739594c4aa8f5c5c1fbc920b1713984"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NO_PROVIDER",
+            "Description": "No metadata provider configured."
+          },
+          "primaryKey": {
+            "ID": "9D4E5579-6A2B-4FCD-988D-2EFFCEA5C197"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:52.997Z",
+            "checksum": "2c124706e73e64c50d2f816c17104ddfb18a65ffaa318ef514a9b25d4455ec48"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "3D01B77D-E8A5-4826-8DAA-CB71466C2003"
+    },
+    "sync": {
+      "lastModified": "2026-05-29T19:48:52.446Z",
+      "checksum": "546577dae6879936e099d884ee29825bb330b07980736c81f1f25e632a8419df"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Get Active Form For Entity",
+      "Description": "Read-only action returning the currently-resolved interactive-form override (if any) for the (entity, requesting user) pair plus the full list of applicable variants. Returns null Active + empty Variants when no override exists. Used by the Form Builder agent to decide between Create (no override exists) and Modify (an override already exists).",
+      "DriverClass": "__GetActiveFormForEntity",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-magnifying-glass",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Utilities"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EntityName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Fully-qualified entity name, e.g. 'MJ: Applications'.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "B0356EB4-6A15-498F-A68A-3D856C77ED21"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:53.021Z",
+            "checksum": "4d4a130305094149ded9362b28da225d239d6ce01fbe89d65a77521cdc639382"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Result",
+            "Type": "Output",
+            "ValueType": "Other",
+            "IsArray": false,
+            "Description": "{ EntityName, Active: { OverrideID, ComponentID, Scope, Priority, Status, Spec, ComponentName, ComponentVersion, VersionSequence } | null, Variants: [ ...same shape... ] }. Active is null when no Active override exists; Variants lists all applicable rows (any Status).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "9FED852B-9A95-45F1-B07F-1D97BFE0A77E"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:53.057Z",
+            "checksum": "a2144dc2ad48287f801a7820d40a9e9cbf27e51e3e8749a9076d6d8d2ba93c06"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "Description": "Result returned (Active may be null if no override exists)."
+          },
+          "primaryKey": {
+            "ID": "D4877CD2-7300-4384-AD52-AEE65BC8FCB4"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:53.090Z",
+            "checksum": "464f6daddff6ccf0ae756632fa1b856e8e48c593da556b42aa792b20b0bae44d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PARAMETER",
+            "Description": "EntityName was not supplied."
+          },
+          "primaryKey": {
+            "ID": "ED32A0C6-8DD2-4F15-9FAE-2F8B16A30257"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:53.111Z",
+            "checksum": "6e0c4734ceb6471bf94d0ad4a17e2a6bcf65bbf66532fa1efacc7cf9501b25c8"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ENTITY_NOT_FOUND",
+            "Description": "The supplied entity name is not registered."
+          },
+          "primaryKey": {
+            "ID": "B7DA7ADB-AD7F-4EEF-858A-3BBA18FAFC55"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:53.134Z",
+            "checksum": "2bb65fc43e49244d142000a897bd4fd69739594c4aa8f5c5c1fbc920b1713984"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NO_PROVIDER",
+            "Description": "No metadata provider configured."
+          },
+          "primaryKey": {
+            "ID": "0655791B-C6E7-4DAB-8513-87F9CC8E4C0C"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:53.156Z",
+            "checksum": "2c124706e73e64c50d2f816c17104ddfb18a65ffaa318ef514a9b25d4455ec48"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NO_USER",
+            "Description": "Action requires a ContextUser for scope resolution."
+          },
+          "primaryKey": {
+            "ID": "F4438DAF-4BAD-4731-ADD7-636ED58C96B3"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:53.177Z",
+            "checksum": "f6d038cb8431425967cc866e7ec4383135df7ca2393aa4bd111d754bebe4be99"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "QUERY_FAILED",
+            "Description": "Override or component lookup failed."
+          },
+          "primaryKey": {
+            "ID": "FBA983F5-0541-4263-B459-56A678E11ECA"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:53.199Z",
+            "checksum": "67a41fea3c8d256fb16c643df5c6136f6688a77d09d803535a2642e6e92d781c"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "BED1E6E0-D1B6-4D7D-B84A-851B8440EAAA"
+    },
+    "sync": {
+      "lastModified": "2026-05-29T19:48:52.471Z",
+      "checksum": "f414e04e9473cc1455142bc2f3defb1e87308b1b5be893e8690b5ed081a08919"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Create Interactive Form",
+      "Description": "Persists a net-new AI-authored or human-authored runtime form. Lints the supplied ComponentSpec (must declare componentRole='form'), inserts a Component row v1.0.0 with the spec, and creates an EntityFormOverride row that activates the form for the calling user. Returns ALREADY_EXISTS if the user already has an Active override for this entity — agents should call 'Modify Interactive Form' in that case. Scope is always clamped to 'User' regardless of any args — the action never writes Global or Role overrides.",
+      "DriverClass": "__CreateInteractiveForm",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-wand-magic-sparkles",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Utilities"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EntityName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Fully-qualified entity name the form is for, e.g. 'MJ: Applications'.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "4595FB24-4B35-41BF-A0C7-580D64AA7E4E"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:53.283Z",
+            "checksum": "58b60e083da4ec401a55dc2c2ecb3f28a3df713511c57c8e23da9eb1b8553965"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Spec",
+            "Type": "Input",
+            "ValueType": "Other",
+            "IsArray": false,
+            "Description": "The ComponentSpec object. Must include componentRole='form', code (JSX as a string), name, location='embedded'. The spec is linted before persistence — invalid specs return a failure with the linter messages so the agent can retry.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "4A18A6F0-8610-4659-8768-E87FE3B48D34"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:53.319Z",
+            "checksum": "7b0c632f56115feb1e503ef77b1883670b53027da68c423c6a49c018c44a3946"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Name",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Human-readable label for the override row, e.g. 'Compact Application Form' or 'CSR Customer Form'. Shown in Component Studio.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "48F5C076-E3AD-4A27-84CF-B2E66CA1F220"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:53.357Z",
+            "checksum": "85e53c757fe7fa77bb4ae4b07a2c4ce29ba214839af92e6f8f858d7cafc82197"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Description",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional longer description of what this form variant does and when it applies.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "DC70309C-485F-47EB-8DD8-D0101D52255C"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:53.393Z",
+            "checksum": "7de7682e0f9dbb2d8229874c7fe5e17b8439713eaf4ca880a212f210262f7de9"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Notes",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional free-form notes recorded on the EntityFormOverride.Notes column — e.g. 'authored by Skip 2026-05-22 for tax season variant'. Does not affect resolution.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "C7396268-ED45-4A81-9C00-51D31C049202"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:53.428Z",
+            "checksum": "8ec367ad1279f3fd66faa4e4330115ee0022654a6ca02df934b95f57e5ae535f"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ComponentID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "UUID of the persisted Component row.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "8F899B49-0FB3-46EA-89FA-6C50F3215C2E"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:53.465Z",
+            "checksum": "eaea6b5b7804b03b535d2b93dc0c0ef5a4e287c05ffc0cc3e61a107c1ef7728b"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "OverrideID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "UUID of the persisted EntityFormOverride row.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "BE6F7937-A8D8-4CCA-AA1F-3648A924FA28"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:53.508Z",
+            "checksum": "42cd1e402fa995cdfb5eda121ba0e6a113b7d0323c7908bae2c170912ebee551"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Version",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Version string of the persisted Component (always '1.0.0' for net-new creates).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "C5C79BF8-75ED-40FB-B4DC-6FF41A0CEDEC"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:53.543Z",
+            "checksum": "511545f91c3b4bd7f92dce58f4fbea3685b34c8f0b80f7536712fe463c9402de"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "Description": "Component + override both persisted. ComponentID + OverrideID returned."
+          },
+          "primaryKey": {
+            "ID": "DA0C529D-D7E4-4ACB-9A69-07869D182CBB"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:53.576Z",
+            "checksum": "48fb2a1bb14a49680f329e176e98ce1ad12fdfe04571fcd4bb950d986b657b9e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PARAMETER",
+            "Description": "EntityName, Spec, or Name was not supplied."
+          },
+          "primaryKey": {
+            "ID": "BA07D065-74C3-46D3-9576-F72B58535761"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:53.598Z",
+            "checksum": "ecc9c2f73efcff64be9acc0bb0f52357706e82b0bb1b84239da2a092006f6e0e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ENTITY_NOT_FOUND",
+            "Description": "The supplied entity name is not registered with the active metadata provider."
+          },
+          "primaryKey": {
+            "ID": "5794DAE6-FEEF-4AF7-B4CE-CD10012D8506"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:53.671Z",
+            "checksum": "e9fa2bde2509ca5d55a2733dc779861c62dc9660430e6881dc2172df3cc39639"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ALREADY_EXISTS",
+            "Description": "An Active User-scope override already exists for this entity. Use 'Modify Interactive Form' to refine it, or 'Revert Interactive Form' to switch versions."
+          },
+          "primaryKey": {
+            "ID": "DBB74483-F18F-4EB1-9963-E899894B80B7"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:53.695Z",
+            "checksum": "c42d80e83d7b881786640a0b31e29257c071f08faa224fd686180ea00a94ce51"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "LINT_FAILED",
+            "Description": "The ComponentSpec failed schema or code-level validation. Message contains the linter output. Agent should fix and retry."
+          },
+          "primaryKey": {
+            "ID": "44499458-AE24-4579-9672-15A84FAE6996"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:53.717Z",
+            "checksum": "5dc2d7da296ed85092562abb7f3227c18f3d4ced82f30f7121bdc7a970354b9d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PERSIST_FAILED",
+            "Description": "Linter passed but the database write failed. Message contains the BaseEntity LatestResult.CompleteMessage."
+          },
+          "primaryKey": {
+            "ID": "CC25D819-6846-4986-AFA9-25C931416A35"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:53.740Z",
+            "checksum": "daaf24a055a322e58261c8cf4c1ae48911d94ecea478a13a72641e89523f4a48"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "308F2435-BF8A-4180-8CB7-BCCD814AEBB7"
+    },
+    "sync": {
+      "lastModified": "2026-05-29T19:48:52.496Z",
+      "checksum": "c794c335ec47bdbd7088e831b3079e091f489969f8c9e579a0a06077fb4a379f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Modify Interactive Form",
+      "Description": "Modify an existing interactive-form override. Routes off the source Override's status (not the underlying Component). Behavior is driven by the optional VersionBumpKind input: 'in-place' (default for Pending sources) overwrites the Pending Component row with no new version; 'patch'/'minor'/'major' snapshot a new Pending Component + sibling Override using the bumped version. Pending sources with a bump demote the prior Pending to Inactive (preserves rollback history). Active sources reject 'in-place' (would corrupt the live row) and default to 'minor'. Inactive sources reject 'in-place' (use Revert to re-activate first) but accept patch/minor/major as a branch-from-historical operation — default 'patch'; the Inactive source row is left untouched. Scope is preserved from the existing override.",
+      "DriverClass": "__ModifyInteractiveForm",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-pen-to-square",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Utilities"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "OverrideID",
+            "Type": "Both",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "UUID of the EntityFormOverride to modify. Usually the Active override for the (entity, user); could also be a Pending one for continued refinement. Output: Override row pointing at the modified component (existing in in-place mode, new Pending in new-version mode).",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "FA2B1E74-0D55-4BBC-8B1F-ED34E7831E30"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:53.766Z",
+            "checksum": "2373b1ed4c44403987447ceb17ed061c345523f31953ff9ca8611b1e43ca9d8a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Spec",
+            "Type": "Input",
+            "ValueType": "Other",
+            "IsArray": false,
+            "Description": "The new ComponentSpec. Linted before persistence (componentRole='form', code present, etc.).",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "447DFCAE-EA67-46BD-B32B-2220EED849D9"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:53.806Z",
+            "checksum": "5964817c160083eb42a9b852341e6bf302e8525e7df75950f43eec29383e2873"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Notes",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional notes appended to the override's Notes column. New line per Modify call.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "DE799D71-EF26-4BF0-BB7A-8F5813EF59C0"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:53.846Z",
+            "checksum": "6aa04b57cc5f26d9571846399fc430f3d8bdcac2b8254469037fbff00c3a92b6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "VersionBumpKind",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional. One of 'in-place' | 'patch' | 'minor' | 'major'. Drives versioning intent. 'in-place' (default for Pending sources) overwrites the Pending row; 'patch' bumps the patch component (1.0.0 → 1.0.1) — use for small/defect edits that deserve a rollback checkpoint; 'minor' (default for Active sources) bumps minor (1.0.0 → 1.1.0) — use for feature additions; 'major' bumps major (1.7.3 → 2.0.0) — use for radical redesigns or when the user explicitly asks. Any non-in-place value against a Pending source demotes the existing Pending to Inactive and creates a new Pending with the bumped version. 'in-place' is rejected against Active sources.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "3F87CFE7-1095-4D98-BAE3-43BA824B2E0F"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:53.882Z",
+            "checksum": "f620c48721fbd6f4a5b3aac85b7c245916246cefa5b3c47cf4a3975bc7d2851b"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ComponentID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Component row that now holds the spec (existing row for in-place, new row for new-version).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "74656CEC-77B6-4FBF-AB06-19E2D2B82338"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:53.919Z",
+            "checksum": "c388fb54a758cd69690a2a7e5a26b2c609153e948514871bd5c9e21bdc8c489e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Mode",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "'in-place' (Pending modified in place) or 'new-version' (new Pending Component + Override created — for both Active sources and explicit Pending → snapshot via VersionBumpKind).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "05DE9EDD-2759-4419-934F-AFE53BBE3742"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:53.953Z",
+            "checksum": "e61d80b46d18ecce0327a7f00c15a8436b302fa1eb04b36fb627ca7223b518b1"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Version",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Version string of the Component the override now points at.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "AFBD4ABC-1F7E-4FE7-9468-61F250D9C358"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:54.027Z",
+            "checksum": "49348f5d9f40f87baabb2aad64b0885a07eceb333f3a919d8aff6fff05c97c22"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "Description": "Modification persisted."
+          },
+          "primaryKey": {
+            "ID": "C8F5A8B8-A452-4AF4-BC75-0EBC4E5510D1"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:54.061Z",
+            "checksum": "61cfd45d1effa9e89e21033cf8c8635e8eef9b275fad067a0cadfff163cdcc8f"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PARAMETER",
+            "Description": "OverrideID or Spec missing."
+          },
+          "primaryKey": {
+            "ID": "1A4FACE2-C826-48BF-AEBF-7F167F086379"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:54.084Z",
+            "checksum": "dba598a7ebde0233f53cc07c99b3ed2a1a4cad9ebcc4ba8f188c4a2dbc63c5fe"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "OVERRIDE_NOT_FOUND",
+            "Description": "The supplied OverrideID does not exist."
+          },
+          "primaryKey": {
+            "ID": "A8630F95-AAD3-44E5-B89F-A7856AC3C0CD"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:54.107Z",
+            "checksum": "b5c1d693b838c146344a4b720bab8a1e7bc3d1318b6511bfc62224106b1cf69c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "COMPONENT_NOT_FOUND",
+            "Description": "Override pointed at a Component that no longer exists (orphan)."
+          },
+          "primaryKey": {
+            "ID": "7BACA22D-F805-411A-BD32-355F5E875AA5"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:54.130Z",
+            "checksum": "e7101b7b029b8a967c48923b2b02fd82ce6b13c804b9b3e155ea87f4a052b22b"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_BUMP_KIND",
+            "Description": "VersionBumpKind value not one of: 'in-place' | 'patch' | 'minor' | 'major'."
+          },
+          "primaryKey": {
+            "ID": "FED5CD00-4033-44A8-9D33-32F1E184B714"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:54.151Z",
+            "checksum": "f956b76b3f25a64fcaf67e6a35833cb14993dc095eeecf078979ee104d888ece"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_BUMP_FOR_STATUS",
+            "Description": "VersionBumpKind='in-place' is only valid when the source Override is Pending. Use 'patch', 'minor', or 'major' against Active or Inactive sources (Inactive sources branch-from-historical; the source row is left alone)."
+          },
+          "primaryKey": {
+            "ID": "E9B9ABB6-D130-48F2-9B3C-BA1287FE710C"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:54.173Z",
+            "checksum": "1c6d60dfef554bf3f3b96726a96823a5515a85aaf82352826e245d3c1197c275"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "LINEAGE_NAME_MISMATCH",
+            "Description": "spec.name differs from the existing Component.Name. Modify operates on a Component lineage — its identity is the Name and cannot change between versions. Retry with spec.name (and the function declaration in spec.code) set to the existing Component.Name."
+          },
+          "primaryKey": {
+            "ID": "614B57CA-8D12-4D5A-AD2A-7F06D54BA38B"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:54.196Z",
+            "checksum": "b704adeba05afab0b9cae388b19506f14a770cd0e3933607c27a438aff1468c7"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "LINT_FAILED",
+            "Description": "Spec failed schema or code-level validation."
+          },
+          "primaryKey": {
+            "ID": "0A2CD7EC-116C-4177-A36A-419D32BED8E7"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:54.217Z",
+            "checksum": "d4d8002c97d6f188f02ba105c0fdaccb97a4c2832336fdc218fb5de20aa1cdef"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PERSIST_FAILED",
+            "Description": "Database write failed; see message."
+          },
+          "primaryKey": {
+            "ID": "DDA9D9B5-6CDB-43A3-9098-E35326EA9F49"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:54.237Z",
+            "checksum": "726783c9012fc711fe69036852b546394d8eb1ad07d4798d664d671f798cca83"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NO_PROVIDER",
+            "Description": "No metadata provider configured."
+          },
+          "primaryKey": {
+            "ID": "3535D323-8FF3-498D-9583-8C574F2D6E0D"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:54.301Z",
+            "checksum": "2c124706e73e64c50d2f816c17104ddfb18a65ffaa318ef514a9b25d4455ec48"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NO_USER",
+            "Description": "Action requires a ContextUser."
+          },
+          "primaryKey": {
+            "ID": "B6A7AAB6-831A-4C1D-8D01-C0A36E2FEAAD"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:54.324Z",
+            "checksum": "7a5aded980c8b4d9858c40d84ba904a947409d38a4e45f52c56b8d30b02c2ecc"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "1AEAC96B-5578-4099-BC40-E9D02E590DB4"
+    },
+    "sync": {
+      "lastModified": "2026-05-29T19:48:52.522Z",
+      "checksum": "b84ff866d9ad9b48ce582ecf1a994b5e5d77b9509844bc2a0e611b34b5055c25"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Activate Interactive Form Version",
+      "Description": "Promote a Pending EntityFormOverride to Active. Atomically demotes any sibling Active override at the same scope target to Inactive (and its Component). The Pending Override is the one the agent just produced via Modify; activating it makes it the live form. Old Component rows persist forever as immutable history — revertible via 'Revert Interactive Form'.",
+      "DriverClass": "__ActivateInteractiveFormVersion",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-circle-check",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Utilities"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "OverrideID",
+            "Type": "Both",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "UUID of the Pending EntityFormOverride to activate. Idempotent if the override is already Active. Output: Override row now Active (echoed).",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "57A1E4B0-70A2-4754-B5A4-3FEFBF964118"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:54.346Z",
+            "checksum": "d88737404fc824d9abe9d69526514186f2725022fd67eb1312e69bad8948573a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ComponentID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Component row now Active.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "CC299CA2-686A-4EA4-89D9-724CCF17D80A"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:54.382Z",
+            "checksum": "a5eb79c088ffcc86c121aee6143be0c0584ee9303b926a8062e182c9edfb7cf6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PreviousActiveOverrideID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "UUID of the prior Active override that was demoted to Inactive, or null if there was none.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "5846FD80-266E-42E7-8E55-F45393B08204"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:54.419Z",
+            "checksum": "ee0dd52219f45906f2bca2730a129043bbf1ed72a5557e06f16d3040064366fb"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "Description": "Override activated; any prior Active override and its Component were flipped to Inactive."
+          },
+          "primaryKey": {
+            "ID": "70E326A5-3FB3-428C-8826-75F9D1AB6679"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:54.454Z",
+            "checksum": "80c25f2ce47e3e798b08f10a1cbfb074d037a46c8bfdf3aeaf91c56f935eab38"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PARAMETER",
+            "Description": "OverrideID missing."
+          },
+          "primaryKey": {
+            "ID": "2BE0958B-6A82-47AC-8C05-19A112E6629C"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:54.477Z",
+            "checksum": "75f5fe1816562eb25eb3bc58e96e8749ff16865b83ffbca8e7990d7d255cc853"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "OVERRIDE_NOT_FOUND",
+            "Description": "The supplied OverrideID does not exist."
+          },
+          "primaryKey": {
+            "ID": "8A4BBD2B-7312-415D-A661-25E801B6F9FD"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:54.498Z",
+            "checksum": "b5c1d693b838c146344a4b720bab8a1e7bc3d1318b6511bfc62224106b1cf69c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NOT_PENDING",
+            "Description": "The target Override is Inactive. Use 'Revert Interactive Form' to restore an older version instead of 'Activate'."
+          },
+          "primaryKey": {
+            "ID": "9F7BA8AA-A2EF-4120-9946-CB785186F1C2"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:54.519Z",
+            "checksum": "a447cb4c8ce9700b6f22252eb2c161e9706f12f4556f8594dd687d72c5d1550b"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "COMPONENT_NOT_FOUND",
+            "Description": "Override pointed at a Component that no longer exists."
+          },
+          "primaryKey": {
+            "ID": "F492CA21-99EC-433A-8E53-58007679EAA8"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:54.541Z",
+            "checksum": "de35c1ef485ec6d28f5460291aeb50aa2e0b904d4ed3496a7b24a806b531a971"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "QUERY_FAILED",
+            "Description": "Sibling-override lookup failed; see message."
+          },
+          "primaryKey": {
+            "ID": "565969B5-6F5C-4C38-844D-E996AA97FAA3"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:54.613Z",
+            "checksum": "55558801ffb7a0f9313628826868fd20a64a2bda89d41d6b79f9d212ab97b107"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PERSIST_FAILED",
+            "Description": "Database write failed; see message."
+          },
+          "primaryKey": {
+            "ID": "F1738A57-A641-4111-AD8D-CFE7269583B4"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:54.637Z",
+            "checksum": "726783c9012fc711fe69036852b546394d8eb1ad07d4798d664d671f798cca83"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NO_PROVIDER",
+            "Description": "No metadata provider configured."
+          },
+          "primaryKey": {
+            "ID": "48CF1A8C-4432-41A3-9FB4-660DE9BC23DB"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:54.660Z",
+            "checksum": "2c124706e73e64c50d2f816c17104ddfb18a65ffaa318ef514a9b25d4455ec48"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NO_USER",
+            "Description": "Action requires a ContextUser."
+          },
+          "primaryKey": {
+            "ID": "69C1249B-ADB7-4962-999E-040A5C95B3C3"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:54.682Z",
+            "checksum": "7a5aded980c8b4d9858c40d84ba904a947409d38a4e45f52c56b8d30b02c2ecc"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "68B9E24D-3ECF-4D5D-81FF-95CDFC27BE70"
+    },
+    "sync": {
+      "lastModified": "2026-05-29T19:48:52.547Z",
+      "checksum": "d5f349f2a56a111acf8cc2194ac8f8e923927b04ab083451770ebddeca792049"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Revert Interactive Form",
+      "Description": "Re-point an Active EntityFormOverride at an older Component version in the same Name lineage. Pure UPDATE on the override row; no new Components or Overrides are created. Use to roll back to a prior working form when a recent change misbehaves. Old Component rows are never deleted, so revert is fully reversible by reverting again to the original version.",
+      "DriverClass": "__RevertInteractiveForm",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-rotate-left",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Utilities"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ActiveOverrideID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "UUID of the Active EntityFormOverride to re-point.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "A4C644DF-2467-4422-B792-350F612E235A"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:54.707Z",
+            "checksum": "24a0b6aac1a3b3c4635f77126cd5cee3116ec9fbb3b4ee53c078070696b31209"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TargetComponentID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "UUID of the Component to revert to. Must be in the same Name lineage as the currently-Active Component. Either this or TargetVersionSequence is required.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "F1566646-E0D0-46DD-A90D-7F7629F5179C"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:54.742Z",
+            "checksum": "11b55fd7b14a5ce64176b4dad7e0604e67ec33b0c15e97285c52acd959b39dd8"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TargetVersionSequence",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Numeric VersionSequence to revert to (within the same Name lineage). Either this or TargetComponentID is required.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "1C97F08E-FBED-433A-A50C-EC3EBFF6A4F0"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:54.776Z",
+            "checksum": "03d85e1e068db43f94fc2915000e96c6d40415686c062cbba857004879b6378f"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "OverrideID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Override row re-pointed (echoed).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "132A0FF1-564E-4F27-B7E5-DA761F57A821"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:54.814Z",
+            "checksum": "9e23bd9c09b113ceff029e15e811e08c6dd3e35e08449c439a5013c10c542da0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ComponentID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The newly-Active Component.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "4C7F7832-A88E-4A2E-9298-20C38069D42F"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:54.848Z",
+            "checksum": "3dbf70e0a56666e70da73bfd3373eeaf9757e0dfdec36295434f45862aeb659e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PreviousComponentID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The Component we demoted (null if revert was a no-op).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B5183E6C-F736-4608-815A-D7D9423CDC48"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:54.881Z",
+            "checksum": "a944a5457b8105cc4fa03f122ed491bd8e9a1338c86606a1ff947f5d8a7ee957"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Version",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Version string of the now-Active component.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "1C78AA23-95E3-4215-B42E-C2B643A8782F"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:54.953Z",
+            "checksum": "1320c409456b29b44842429a746577315f5fd558634fe9b1085653a79e2810a1"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "Description": "Override re-pointed; Component statuses flipped."
+          },
+          "primaryKey": {
+            "ID": "C06DE363-784C-4ED9-B664-AEF23DF7C50F"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:54.987Z",
+            "checksum": "9b4d355b457eef5a8138061667a6a7b65b8da9385b8d97a62a2564e601fd196b"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PARAMETER",
+            "Description": "ActiveOverrideID is required; one of TargetComponentID or TargetVersionSequence is required."
+          },
+          "primaryKey": {
+            "ID": "AC8A525D-DE75-486E-9315-4B9274C63FAA"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:55.008Z",
+            "checksum": "a7f96e3a57f717bb949a4cdc60e15fff6b7cfefefaa7034679ae475634473d45"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "OVERRIDE_NOT_FOUND",
+            "Description": "The supplied OverrideID does not exist."
+          },
+          "primaryKey": {
+            "ID": "B3DAC7D1-D8DE-44A0-892A-7410CFDE3CEE"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:55.030Z",
+            "checksum": "b5c1d693b838c146344a4b720bab8a1e7bc3d1318b6511bfc62224106b1cf69c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NOT_ACTIVE",
+            "Description": "Override is not currently Active. Revert only operates on the Active row."
+          },
+          "primaryKey": {
+            "ID": "ED2094C3-08F3-4245-A52D-94C621B77C1C"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:55.052Z",
+            "checksum": "108f587596d73e3ea2daedde83e0f5a593115707475e751258fd3d100de08dce"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "COMPONENT_NOT_FOUND",
+            "Description": "Target Component was not found."
+          },
+          "primaryKey": {
+            "ID": "438E3EA3-1F53-45D9-9FB6-F7F056F97339"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:55.075Z",
+            "checksum": "4d9d4063a625111ef489549317411f894812db211f54ef377c596e822ce27f2c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "LINEAGE_MISMATCH",
+            "Description": "Target Component is in a different Name lineage than the currently-Active Component."
+          },
+          "primaryKey": {
+            "ID": "BA959868-C054-4439-A903-EA830008BF8F"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:55.098Z",
+            "checksum": "8929f87093b487bb3e15fcae4dde6f11332b7f6909e0813deef4be362c920b25"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PERSIST_FAILED",
+            "Description": "Database write failed; see message."
+          },
+          "primaryKey": {
+            "ID": "75709CAF-2D97-4158-8E50-9FB0570E21A3"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:55.120Z",
+            "checksum": "726783c9012fc711fe69036852b546394d8eb1ad07d4798d664d671f798cca83"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NO_PROVIDER",
+            "Description": "No metadata provider configured."
+          },
+          "primaryKey": {
+            "ID": "A181A53C-60FB-4857-BD43-458DC036954B"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:55.143Z",
+            "checksum": "2c124706e73e64c50d2f816c17104ddfb18a65ffaa318ef514a9b25d4455ec48"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NO_USER",
+            "Description": "Action requires a ContextUser."
+          },
+          "primaryKey": {
+            "ID": "5D881290-2547-499D-A86D-C7AFD2BEF582"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:55.164Z",
+            "checksum": "7a5aded980c8b4d9858c40d84ba904a947409d38a4e45f52c56b8d30b02c2ecc"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "DDACA877-B97A-40FA-B434-E002193DCC2C"
+    },
+    "sync": {
+      "lastModified": "2026-05-29T19:48:52.567Z",
+      "checksum": "8722babb5f883bd755adb91e7685f25856e1f398ca983e5d029a80c73bf7900e"
+    }
+  }
+]

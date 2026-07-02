@@ -1,0 +1,21 @@
+[
+  {
+    "fields": {
+      "Name": "ML Experiment Results",
+      "Description": "Results of a Predictive Studio experiment session authored by the Model Development Agent: the modeling goal, the leaderboard of experiment iterations, per-run metrics, feature importance, and drill-through links to each trained ML Model. Rendered by the MLExperimentResultsViewerPlugin (Angular viewer is a follow-up; falls back to the parent JSON viewer + displayMarkdown until then).",
+      "ParentID": "@lookup:MJ: Artifact Types.Name=JSON",
+      "ContentType": "application/vnd.mj.ml-experiment-results",
+      "ExtractRules": "@file:extract-rules/ml-experiment-results.json",
+      "DriverClass": "MLExperimentResultsViewerPlugin",
+      "IsEnabled": true,
+      "Icon": "fa-solid fa-flask-vial"
+    },
+    "primaryKey": {
+      "ID": "D41AB707-58F1-4413-8725-9DF31C95F4C5"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T17:33:31.804Z",
+      "checksum": "4fe5d9982d144d8209a7edc6c26ec4b9d7b0f269d9f592cc7836011deacd743c"
+    }
+  }
+]

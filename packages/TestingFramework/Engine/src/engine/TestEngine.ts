@@ -258,9 +258,10 @@ export class TestEngine extends BaseSingleton<TestEngine> {
             // Get tags from options
             const tags = options.tags;
 
-            // Check RepeatCount and branch to repeated execution if needed
-            if (test.RepeatCount && test.RepeatCount > 1) {
-                return await this.runRepeatedTest(test, test.RepeatCount, options, contextUser, suiteRunId, suiteTestSequence, startTime, tags);
+            // Check RepeatCount (or runtime override from --flaky-check) and branch to repeated execution if needed
+            const effectiveRepeatCount = options.repeatCountOverride ?? test.RepeatCount ?? 1;
+            if (effectiveRepeatCount > 1) {
+                return await this.runRepeatedTest(test, effectiveRepeatCount, options, contextUser, suiteRunId, suiteTestSequence, startTime, tags);
             }
 
             // Single execution - delegate to helper method
@@ -327,26 +328,17 @@ export class TestEngine extends BaseSingleton<TestEngine> {
             // Get suite variables for passing to tests
             const suiteVariablesJson = suite.Variables;
 
-            // Execute tests
-            const testResults: TestRunResult[] = [];
-            let testSequence = 1; // Track suite execution order (1-based)
-            for (const test of tests) {
-                try {
-                    const result = await this.runTestWithSuiteVariables(test.ID, options, contextUser, suiteRun.ID, testSequence, suiteVariablesJson);
+            // Extract suite-level applicationContext from suite.Configuration once
+            // here so every test in the suite sees the same parsed value. Malformed
+            // JSON degrades gracefully — log a warning and proceed without context.
+            const suiteContext = this.extractSuiteContext(suite);
 
-                    // Handle both single result and array of results (if RepeatCount > 1)
-                    if (Array.isArray(result)) {
-                        testResults.push(...result);
-                    } else {
-                        testResults.push(result);
-                    }
-                } catch (error) {
-                    this.logError(`Test failed in suite: ${test.Name}`, error as Error);
-                    // Continue with remaining tests
-                } finally {
-                    // Always increment sequence, even if test throws exception
-                    testSequence++;
-                }
+            // Execute tests — parallel or sequential
+            let testResults: TestRunResult[];
+            if (options.parallel && tests.length > 1) {
+                testResults = await this.runTestsParallel(tests, options, contextUser, suiteRun, suiteVariablesJson, suiteContext);
+            } else {
+                testResults = await this.runTestsSequential(tests, options, contextUser, suiteRun.ID, suiteVariablesJson, suiteContext);
             }
 
             // Update TestSuiteRun entity with results
@@ -387,6 +379,159 @@ export class TestEngine extends BaseSingleton<TestEngine> {
     }
 
     /**
+     * Run tests sequentially (original behavior).
+     * @private
+     */
+    private async runTestsSequential(
+        tests: MJTestEntity[],
+        options: SuiteRunOptions,
+        contextUser: UserInfo,
+        suiteRunId: string,
+        suiteVariablesJson: string | null,
+        suiteContext?: Record<string, unknown>
+    ): Promise<TestRunResult[]> {
+        const testResults: TestRunResult[] = [];
+        let testSequence = 1;
+
+        for (const test of tests) {
+            if (testSequence > 1 && options.delayBetweenTests && options.delayBetweenTests > 0) {
+                this.log(`Waiting ${options.delayBetweenTests}ms before next test...`, options.verbose);
+                await new Promise(resolve => setTimeout(resolve, options.delayBetweenTests));
+            }
+
+            try {
+                const result = await this.runTestWithSuiteVariables(test.ID, options, contextUser, suiteRunId, testSequence, suiteVariablesJson, undefined, suiteContext);
+                if (Array.isArray(result)) {
+                    testResults.push(...result);
+                } else {
+                    testResults.push(result);
+                }
+            } catch (error) {
+                this.logError(`Test failed in suite: ${test.Name}`, error as Error);
+            } finally {
+                testSequence++;
+            }
+        }
+
+        return testResults;
+    }
+
+    /**
+     * Extract the bag of suite-level signals from `TestSuite.Configuration`.
+     * Returns `undefined` when Configuration is empty or unparseable so callers
+     * can keep their context optional and degrade gracefully.
+     */
+    private extractSuiteContext(suite: MJTestSuiteEntity): Record<string, unknown> | undefined {
+        const raw = suite.Configuration;
+        if (!raw || !raw.trim()) {
+            return undefined;
+        }
+        try {
+            const parsed = JSON.parse(raw);
+            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                return parsed as Record<string, unknown>;
+            }
+            this.log(`Suite Configuration parsed but is not an object (got ${typeof parsed}); ignoring`);
+            return undefined;
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            this.log(`Warning: suite.Configuration JSON is malformed — running without suite context. Error: ${msg}`);
+            return undefined;
+        }
+    }
+
+    /**
+     * Run tests in parallel across multiple workers. Each worker runs its
+     * share of tests sequentially. The test driver (not the engine) manages
+     * browser resource sharing via HeadlessBrowserEngine singleton — the
+     * TestEngine only passes workerIndex so the driver can construct a key.
+     * @private
+     */
+    private async runTestsParallel(
+        tests: MJTestEntity[],
+        options: SuiteRunOptions,
+        contextUser: UserInfo,
+        suiteRun: MJTestSuiteRunEntity,
+        suiteVariablesJson: string | null,
+        suiteContext?: Record<string, unknown>
+    ): Promise<TestRunResult[]> {
+        const maxWorkers = Math.min(options.maxParallel ?? 4, tests.length);
+        this.log(`Starting parallel execution: ${tests.length} tests across ${maxWorkers} workers`);
+
+        // Partition tests into worker groups (round-robin)
+        const workerGroups: Array<{ test: MJTestEntity; sequence: number }[]> = Array.from({ length: maxWorkers }, () => []);
+        tests.forEach((test, i) => {
+            workerGroups[i % maxWorkers].push({ test, sequence: i + 1 });
+        });
+
+        // Execute workers concurrently with staggered starts
+        const workerPromises = workerGroups.map((group, workerIndex) => {
+            // Stagger worker starts to avoid simultaneous Auth0 logins
+            const staggerMs = workerIndex * 2500;
+            return new Promise<TestRunResult[]>((resolve, reject) => {
+                setTimeout(() => {
+                    this.log(`Worker ${workerIndex + 1}/${maxWorkers} starting (${group.length} tests)`);
+                    this.executeParallelWorker(
+                        group, workerIndex, options, contextUser, suiteRun.ID, suiteVariablesJson, suiteContext
+                    ).then(resolve, reject);
+                }, staggerMs);
+            });
+        });
+
+        const settled = await Promise.allSettled(workerPromises);
+
+        // Merge results from all workers
+        const allResults: TestRunResult[] = [];
+        for (let i = 0; i < settled.length; i++) {
+            const result = settled[i];
+            if (result.status === 'fulfilled') {
+                allResults.push(...result.value);
+            } else {
+                this.logError(`Worker ${i + 1} failed`, result.reason as Error);
+            }
+        }
+
+        // Sort by original sequence to maintain consistent reporting
+        allResults.sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0));
+
+        return allResults;
+    }
+
+    /**
+     * Execute a batch of tests sequentially within a single worker.
+     * @private
+     */
+    private async executeParallelWorker(
+        group: Array<{ test: MJTestEntity; sequence: number }>,
+        workerIndex: number,
+        options: SuiteRunOptions,
+        contextUser: UserInfo,
+        suiteRunId: string,
+        suiteVariablesJson: string | null,
+        suiteContext?: Record<string, unknown>
+    ): Promise<TestRunResult[]> {
+        const results: TestRunResult[] = [];
+
+        for (const { test, sequence } of group) {
+            try {
+                this.log(`[Worker ${workerIndex + 1}] Running: ${test.Name}`, options.verbose);
+                const result = await this.runTestWithSuiteVariables(
+                    test.ID, options, contextUser, suiteRunId, sequence, suiteVariablesJson, workerIndex, suiteContext
+                );
+                if (Array.isArray(result)) {
+                    results.push(...result);
+                } else {
+                    results.push(result);
+                }
+            } catch (error) {
+                this.logError(`[Worker ${workerIndex + 1}] Test failed: ${test.Name}`, error as Error);
+            }
+        }
+
+        return results;
+    }
+
+    /**
      * Run a test with suite variables context (used by RunSuite).
      * @private
      */
@@ -396,7 +541,9 @@ export class TestEngine extends BaseSingleton<TestEngine> {
         contextUser: UserInfo,
         suiteRunId: string,
         suiteTestSequence: number,
-        suiteVariablesJson: string | null
+        suiteVariablesJson: string | null,
+        workerIndex?: number,
+        suiteContext?: Record<string, unknown>
     ): Promise<TestRunResult | TestRunResult[]> {
         const startTime = Date.now();
 
@@ -411,11 +558,11 @@ export class TestEngine extends BaseSingleton<TestEngine> {
 
         // Check RepeatCount and branch to repeated execution if needed
         if (test.RepeatCount && test.RepeatCount > 1) {
-            return await this.runRepeatedTest(test, test.RepeatCount, options, contextUser, suiteRunId, suiteTestSequence, startTime, tags, suiteVariablesJson);
+            return await this.runRepeatedTest(test, test.RepeatCount, options, contextUser, suiteRunId, suiteTestSequence, startTime, tags, suiteVariablesJson, workerIndex, suiteContext);
         }
 
         // Single execution
-        return await this.runSingleTestIteration(test, suiteRunId, suiteTestSequence, options, contextUser, startTime, tags, suiteVariablesJson);
+        return await this.runSingleTestIteration(test, suiteRunId, suiteTestSequence, options, contextUser, startTime, tags, suiteVariablesJson, workerIndex, suiteContext);
     }
 
     /**
@@ -850,7 +997,9 @@ export class TestEngine extends BaseSingleton<TestEngine> {
         suiteTestSequence: number | null | undefined,
         startTime: number,
         tags?: string,
-        suiteVariablesJson?: string | null
+        suiteVariablesJson?: string | null,
+        workerIndex?: number,
+        suiteContext?: Record<string, unknown>
     ): Promise<TestRunResult[]> {
         const results: TestRunResult[] = [];
 
@@ -867,7 +1016,9 @@ export class TestEngine extends BaseSingleton<TestEngine> {
                 contextUser,
                 Date.now(), // Each iteration gets its own start time
                 tags,
-                suiteVariablesJson
+                suiteVariablesJson,
+                workerIndex,
+                suiteContext
             );
 
             results.push(result);
@@ -894,7 +1045,9 @@ export class TestEngine extends BaseSingleton<TestEngine> {
         contextUser: UserInfo,
         startTime: number,
         tags?: string,
-        suiteVariablesJson?: string | null
+        suiteVariablesJson?: string | null,
+        workerIndex?: number,
+        suiteContext?: Record<string, unknown>
     ): Promise<TestRunResult> {
         // Get test type
         const testType = this.GetTestTypeByID(test.TypeID);
@@ -988,7 +1141,9 @@ export class TestEngine extends BaseSingleton<TestEngine> {
             contextUser,
             options: enhancedOptions,
             oracleRegistry: this._oracleRegistry,
-            resolvedVariables
+            resolvedVariables,
+            workerIndex,
+            suiteContext
         });
 
         // If timeout occurred and driver doesn't support cancellation, add warning to error message

@@ -131,6 +131,17 @@
   opacity: 0.5;
 }
 
+/* Plan Mode toggle — inherits .attach-button-icon; when active it fills with the brand color
+   so the on/off state reads clearly at a glance (parallels the voice button's active state). */
+.plan-mode-button-icon--active:not(:disabled) {
+  background: var(--mj-brand-primary);
+  color: var(--mj-text-inverse);
+}
+.plan-mode-button-icon--active:not(:disabled):hover {
+  background: var(--mj-brand-primary-hover, var(--mj-brand-primary));
+  color: var(--mj-text-inverse);
+}
+
 /* Mobile adjustments: 481px - 768px */
 @media (max-width: 768px) {
   .message-input-box-container {
@@ -200,4 +211,42 @@
   .attach-button-icon i {
     font-size: 0.875rem;
   }
+}
+
+/* Voice call button — a phone icon in the attach-buttons cluster, left of send.
+   Inherits .attach-button-icon base. Subtle brand glow on hover; active state (call
+   live) renders a brand-color tint. The orb visual now lives ONLY inside the call
+   overlay's banner. */
+.voice-button-icon i {
+  color: var(--mj-brand-primary);
+}
+.voice-button-icon:hover:not(:disabled) i {
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--mj-brand-primary) 55%, transparent));
+}
+.voice-button-icon:disabled i {
+  color: var(--mj-text-disabled);
+}
+.voice-button-icon--active {
+  background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
+}
+.voice-button-icon--active:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--mj-brand-primary) 18%, transparent);
+}
+
+/* Voice OPTIONS caret — a slim chevron hugging the phone button. Opens the agent/model
+   picker; intentionally quieter (smaller icon, narrower hit area) than the phone so the
+   common instant-start click stays the visual primary. */
+.voice-options-button-icon {
+  width: 20px;
+  margin-left: -4px;
+}
+.voice-options-button-icon i {
+  font-size: 0.7rem;
+  color: var(--mj-text-muted);
+}
+.voice-options-button-icon:hover:not(:disabled) i {
+  color: var(--mj-brand-primary);
+}
+.voice-options-button-icon:disabled i {
+  color: var(--mj-text-disabled);
 }

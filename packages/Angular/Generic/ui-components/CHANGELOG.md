@@ -1,5 +1,123 @@
 # @memberjunction/ng-ui-components
 
+## 5.44.0
+
+### Minor Changes
+
+- f8be8a0: Consolidate collapsible/disclosure UI onto the canonical `<mj-accordion-panel>` across MJ Explorer, and level up the accordion component itself.
+
+  **`@memberjunction/ng-ui-components` (the component):**
+  - New **`MJAccordionModule`** — bundles the panel + all three slot directives (`mjAccordionTitle`, `mjAccordionActions`, `mjAccordionBody`) so consumers import one symbol instead of four (works in both NgModule and standalone `imports`). An NgModule is used because AOT can't expand a value-array across a compiled-package boundary (NG1010) and an `as const` tuple is rejected by the `imports` type (TS2322).
+  - New lazy **`[mjAccordionBody]`** slot — heavy bodies (code editors, grids, charts) instantiate on first expand and stay alive for animated re-toggle, so consumers don't have to reason about content weight or hand-write `@if (expanded)`.
+  - Hardening: `--sm`/`--disabled`/`--muted-icon` modifiers scoped to child combinators (no nested-panel style bleed); `hasBeenExpanded` made non-public per naming conventions; added a DOM test proving the module exposes every declarable.
+
+  **~50 disclosure surfaces migrated** from bespoke `<div (click)>`-header + `@if` markup to `<mj-accordion-panel>` across 20 Angular packages — dashboard-viewer config panels, DevTools Class Registry, Version History diff/snapshot groups, the test-run dialog, Explorer section toggles (about-dialog, sql-logging, SystemDiagnostics, App Roles, Home add-pin, Integration activity, Actions/Permissions/Credentials/Testing/ComponentStudio), and Generic components (agents, clustering, conversations, search, entity-viewer, filter-builder, record-tags, resource-permissions, core-entity-forms). Each replaces a non-focusable `<div (click)>` header with a real `<button [attr.aria-expanded]>` — a genuine accessibility improvement, not cosmetic — and deletes the per-consumer collapse chrome CSS. Card-based collapsibles, trees, and fill-panes are intentionally out of scope (they route to their own primitives).
+
+  No public API changes in the consumer packages (internal refactor). Verified: all affected package test suites pass, CI UI gates green (design tokens + button overrides), and a full audit confirmed side-effects preserved with two visual regressions caught and fixed (SystemDiagnostics severity tint restored with semantic tokens; cluster-scatter members list scroll-confined via `[Fill]`).
+  </content>
+
+- 1e5e449: Add `<mj-alert>` — the canonical inline alert/banner component — and migrate the bespoke inline alerts across MJ Explorer onto it.
+
+  **New component** (`@memberjunction/ng-ui-components`): `MJAlertComponent` is the standardized, persistent in-flow message box (info / success / warning / error) — distinct from the transient corner toast (`NotificationService`). Standalone, design-token-driven, dark-mode-safe.
+  - Inputs: `Variant` (info/success/warning/error), `Size` (sm/md), `Title`, `Message`, `Icon` (per-variant default, overridable), `Dismissible` (+ `Dismissed` output), `Role` (auto ARIA `alert`/`status`).
+  - An `[actions]` content slot for buttons, default `<ng-content>` for rich bodies, dynamic `[Variant]` for state-driven banners.
+  - Backgrounds use an **opaque** status tint (`color-mix` into the surface) so an alert renders identically regardless of the backdrop behind it, plus a default bottom margin so it drops into flow content cleanly.
+
+  **Migration**: replaced the hand-rolled alert `<div>`s (`.alert`, `*-banner`, `error-message`/`info-box`/etc.) across the entire dashboards package and explorer-settings, explorer-core, core-entity-forms, and the Generic packages (artifacts, list-management, entity-viewer, agents, conversations, testing, actions, base-forms, resource-permissions). Dead per-component box CSS removed; original top/horizontal margins preserved via positioning-only classes. A `check:alerts` CI gate measures adoption and prevents new hand-rolled alerts from regressing.
+
+### Patch Changes
+
+- 0476455: Migrate inline empty-state placeholders to the canonical `<mj-empty-state>` component across Explorer and Generic Angular packages (UI-consistency objective O4), wiring the component into the packages that needed it (and adding `@memberjunction/ng-ui-components` as a dependency where missing). Also fixes reset-filter CTA correctness in three picker dialogs (sub-agent selector, add-action, action gallery) where the handler cleared only a subset of the active filter dimensions, and refines the UI adoption measurement script with a transparent three-tier empty-state count (raw widened → non-placeholder false-positives → wrappers-around-migrated → genuine).
+
+## 5.43.0
+
+### Patch Changes
+
+- 54183aa: Add the Angular DOM unit-testing foundation: a new `@memberjunction/ng-test-utils` package providing `renderComponentFixture` (standalone/leaf components) and `renderTemplate` (compound / module-declared components) helpers, the Vitest + jsdom DOM-testing harness, coverage reporting in the DOM preset, a `scaffold-tests.mjs --dom` flag (with a spaces-in-path fix), and DOM specs across `ng-ui-components`, `ng-pagination`, `ng-tabstrip`, and `ng-livekit-room`.
+
+  `ng-livekit-room` is the headline pilot (now that PR #2860 is on `next`): DOM specs for the media-free leaf components (`control-bar`, `agent-state`, `connection-overlay`, `chat-panel`, `device-menu`) plus `participant-tile` as the §7 media-split worked example — the media-free surface is tested while `track.attach()` and the audio-meter `requestAnimationFrame` loop are left to live tests — on a dual node+dom preset that preserves the package's existing logic specs. The `LiveKitRoomComponent` injectable-controller refactor (the one production-code change) is deferred to the Phase 2 component rollout; the injected-fake-container pattern it would prove is already demonstrated via the `providers` seam.
+
+  Also hardens the harness wiring flagged in review: correct `@memberjunction/ng-test-utils` devDependency declarations (`ng-tabstrip`, `ng-livekit-room`) and Turbo cache inputs covering `tsconfig.spec.json` + the root shared-harness files. Code-only, no schema changes.
+
+## 5.42.0
+
+### Patch Changes
+
+- 313c1c5: Make Explorer's primary navigation perceivable to assistive tech and DOM/accessibility-tree agents (computer-use) — a dual accessibility + agent-usability win.
+  - **New `mjClickable` directive** (`@memberjunction/ng-ui-components`): retrofits an existing clickable `<div>`/`<span>` into an accessible, keyboard-operable control without changing its tag or styling — adds `role` (button/link), `tabindex`, an `aria-label` accessible name, Enter/Space activation (dispatches a native click, so existing `(click)` handlers run for both mouse and keyboard), and an optional `data-testid` hook. Prefer a real `<button mjButton>`/`<a>` for new markup; use `mjClickable` to fix existing widgets cheaply.
+  - **`mjButton` gains `[ariaLabel]`** (applied without clobbering a directly-authored `aria-label`) and a dev-mode warning when an icon-only button ends up with no accessible name.
+  - **Adopted on the nav surfaces that were invisible to a DOM agent**: the Home dashboard app tiles (the reported "agent can't find the app to click" case), sidebar items (notifications/favorites/recents), and the header `app-nav` items + `app-switcher` (trigger gets `aria-expanded`/`aria-haspopup`, items/active get `aria-current`). Icon-only buttons on the Home dashboard get accessible names. Seeds a `data-testid` convention on these surfaces.
+
+  Tests added for both directives (host bindings, keyboard activation, label clobber-safety, dev warnings).
+
+## 5.41.0
+
+## 5.40.2
+
+## 5.40.1
+
+## 5.40.0
+
+## 5.39.0
+
+### Minor Changes
+
+- bd95e83: feat(explorer): concise-chrome filter model + mobile chrome overhaul
+
+  Reworked MJ Explorer's shared page chrome for mobile and rolled out the
+  "concise filter model" across every filter-bearing dashboard.
+
+  **Concise filter model** — one Filter button holds all filters (popover on
+  desktop, bottom sheet on mobile); search is persistent. Inline quick-filter
+  chips and the applied-filter chip row are gone. The control bar reads
+  `search · Filter · view` and lives in the header `[toolbar]` slot, right-aligned
+  on desktop and left-aligned on mobile (where search grows to fill). Sections
+  converted: Identity & Access, Lists, Testing, AI, Actions (Action Explorer
+  folds Sort into the popover), Scheduling, Integration, Credentials, Version
+  History, MCP, and Communication — with categorical/time-range chips folded
+  into the single Filter popover.
+
+  **Mobile chrome** — shared primitives now carry the mobile behaviors so pages
+  get them for free: `mj-left-nav` off-canvas drawer, `mj-filter-popover` bottom
+  sheet, icon-only action buttons and refresh, `mj-page-body` row→column reflow,
+  and `mj-page-header`/`-interior` compaction. `mj-filter-panel` gains
+  multi-select fields.
+
+  **Shell fixes** — keep the header right-edge cluster (chat/nav-bar app icons +
+  avatar) on one row at mobile widths instead of stacking, and anchor the mobile
+  nav drawer's notification badge to the Notifications button instead of the
+  drawer corner.
+
+- 3b29882: feat: render any entity form as a tab, dialog, or slide-in (Generic, no regeneration)
+
+  Adds a presentation-agnostic form stack to `@memberjunction/ng-base-forms`:
+  - **`MjEntityFormHostComponent`** — headless host that resolves the form
+    (generated / custom / interactive override + variants), loads the record,
+    dynamically creates + binds the form, re-emits its events, and tears down.
+    Extracted from Explorer's `SingleRecordComponent`, which is now a thin wrapper.
+  - **`MjFormDialogComponent` / `MjFormSlideInComponent`** + **`MJFormPresenterService`**
+    — declarative and imperative ways to open any entity form as a modal dialog or
+    slide-in panel.
+  - **`EntityFormConfig`** + presets — per-instance control over toolbar visibility,
+    related-entity sections, section collapsibility, width, and in-form navigation.
+    Applied via the form reference so existing generated forms honor it **without
+    regeneration**.
+  - **`FormResolverService`** moved from `ng-explorer-core` into `ng-base-forms`
+    (it had no Explorer/Router coupling), making the interactive-form + variant
+    pathway first-class on every surface.
+  - **`MjSlidePanelComponent`** relocated from `ng-versions` into `ng-ui-components`
+    as a first-class shared primitive; `ng-versions` and the other consumers
+    (record-changes, record-tags, entity-viewer, dashboards, core-entity-forms) now
+    import it from there.
+
+  Phase-1 consumer migrations: the Query Categories create flow now uses
+  `<mj-form-dialog>`, and editing the selected category uses `MJFormPresenterService`
+  slide-in — replacing the bespoke `query-category-dialog`.
+
+## 5.38.0
+
+## 5.37.0
+
 ## 5.36.0
 
 ### Patch Changes

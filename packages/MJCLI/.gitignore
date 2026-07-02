@@ -11,3 +11,6 @@
 node_modules
 oclif.lock
 oclif.manifest.json
+
+# Generated at build by scripts/copy-regression-assets.mjs (source: docker/regression/)
+regression-compose/

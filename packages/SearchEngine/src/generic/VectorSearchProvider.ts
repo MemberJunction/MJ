@@ -240,7 +240,7 @@ export class VectorSearchProvider extends BaseSearchProvider {
                     r => r.VectorIndexID && UUIDsEqual(r.VectorIndexID, vectorIndex.ID)
                 );
                 const mergedFilter = this.mergeMetadataFilters(filter, perIndexRow?.MetadataFilter);
-                return this.queryOneIndex(vectorIndex, queryVector!, topK, mergedFilter, contextUser)
+                return this.queryOneIndex(vectorIndex, queryVector!, query, topK, mergedFilter, contextUser)
                     .catch(error => {
                         LogError(`VectorSearchProvider: Error querying index "${vectorIndex.Name}": ${error}`);
                         return [] as SearchResultItem[];
@@ -257,10 +257,17 @@ export class VectorSearchProvider extends BaseSearchProvider {
 
     /**
      * Query a single vector index.
+     *
+     * When the index's vector database is **colocated** (vectors stored in the application's
+     * own relational DB — e.g. `PgVectorColocated`), this routes through `ColocatedQuery`,
+     * wiring in the active data-provider connection and passing the original query text so the
+     * provider can fuse a keyword (full-text) component with the vector search in one statement.
+     * Otherwise it falls back to the standard external `QueryIndex` path.
      */
     private async queryOneIndex(
         vectorIndex: MJVectorIndexEntity,
         queryVector: number[],
+        queryText: string,
         topK: number,
         filter: object | undefined,
         contextUser: UserInfo
@@ -286,6 +293,23 @@ export class VectorSearchProvider extends BaseSearchProvider {
         if (!vectorDBInstance) {
             LogError(`VectorSearchProvider: Failed to create VectorDB instance for "${vectorDB.ClassKey}"`);
             return [];
+        }
+
+        // Colocated path: wire in the active data-provider connection and run a hybrid
+        // (vector + keyword) query in the same database as the entity rows. TryWireColocatedHost
+        // is a no-op for non-colocated providers, so this is safe to attempt unconditionally.
+        vectorDBInstance.TryWireColocatedHost(this.Provider);
+        if (vectorDBInstance.SupportsColocatedQuery) {
+            const colocated = await vectorDBInstance.ColocatedQuery({
+                indexName: vectorIndex.Name,
+                vector: queryVector,
+                keyword: queryText,
+                topK,
+                filter,
+                fusion: 'rrf',
+                includeMetadata: true,
+            }, contextUser);
+            return this.convertMatches(colocated.matches, vectorIndex.Name);
         }
 
         // contextUser is passed as the 2nd arg per VectorDBBase.QueryIndex's

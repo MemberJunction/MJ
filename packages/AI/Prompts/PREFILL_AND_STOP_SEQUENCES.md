@@ -59,9 +59,11 @@ params.stopSequences = undefined; // Let the model finish naturally
 
 ```typescript
 params.assistantPrefill = '```json\n';
-params.stopSequences = ['```'];
+params.stopSequences = ['\n```'];  // newline-anchored: matches the CLOSING fence only
 // Response is clean JSON between the fences
 ```
+
+> Only do this on a provider with **native prefill support** (see the table below). On a non-prefill provider the model may emit a preamble before the fence, and the stop sequence will truncate the response — set the prefill/stop via the **prompt entity** instead, where `AIPromptRunner` gates the stop sequence automatically.
 
 ### Force a Specific Response Prefix
 
@@ -112,6 +114,15 @@ For these providers, MemberJunction's prompt runner can automatically inject a s
 
 `stopSequences` is supported by **all** LLM providers in the framework. It is defined on `BaseParams` and mapped to each provider's native stop parameter.
 
+> ⚠️ **Critical pitfall: a fence stop sequence is only safe *with* prefill.**
+> The `` ``` `` (or `"\n```"`) stop sequence used to fence JSON output assumes the response **begins at the opening fence** — which only happens when native prefill is applied. Without prefill, a model is free to emit a preamble *before* the fence (e.g. Gemini: `Here is the JSON requested:\n```json\n{…}`). That preamble line manufactures a `"\n```"` (or `` ``` ``) at the **opening** fence, so the stop fires immediately and the response is truncated to just the preamble — an empty/invalid result.
+>
+> The prompt runner now guards against this automatically — see [Stop-Sequence Safety on Non-Prefill Providers](#stop-sequence-safety-on-non-prefill-providers). The pitfall still applies if you set `stopSequences` **manually** on `ChatParams` for a non-prefill provider.
+
+#### Anchor the closing fence with a leading newline
+
+Prefer `"\n```"` over a bare `` ``` `` as the stop token. The leading newline anchors it to a *closing* fence (which sits on its own line: `…}\n```​`) and avoids matching an opening `` ```json `` when prefill places the fence at the very start of the response. Note that `AIPromptRunner` trims only spaces/tabs from each comma-split stop token (not newlines), specifically so a configured `"\n```"` keeps its leading newline.
+
 ## Benefits
 
 ### Token Savings
@@ -134,8 +145,8 @@ The `MJ: AI Prompts` entity has built-in fields for prefill:
 
 | Field | Type | Description |
 |---|---|---|
-| `AssistantPrefill` | `nvarchar(MAX)` | The prefill text for this prompt |
-| `StopSequences` | `nvarchar(MAX)` | Comma-delimited stop sequences |
+| `AssistantPrefill` | `nvarchar(MAX)` | The prefill text for this prompt (e.g. `` ```json ``) |
+| `StopSequences` | `nvarchar(MAX)` | Comma-delimited stop sequences. When paired with `AssistantPrefill`, these are auto-suppressed on models that don't support native prefill — see [Stop-Sequence Safety](#stop-sequence-safety-on-non-prefill-providers). |
 | `PrefillFallbackMode` | `nvarchar(20)` | `Ignore`, `SystemInstruction`, or `None` |
 
 When `AIPromptRunner` executes a prompt, it reads these fields and automatically applies prefill with provider-aware logic.
@@ -162,6 +173,22 @@ Use `{{prefill}}` as a placeholder in the text. If no level provides fallback te
 
 The same cascade determines `SupportsPrefill` (whether native prefill is available):
 **AI Model Type** → **AI Model** → **AI Model Vendor**
+
+(Code-level note: the resolved value starts from the driver default `BaseLLM.SupportsPrefill` — `false` by default, overridden to `true` by prefill-capable drivers such as Anthropic — and is then overridden by a non-null `AIModel.SupportsPrefill`, then a non-null `AIModelVendor.SupportsPrefill`. `AIModelType.SupportsPrefill` is intentionally not used in this resolution because it is `NOT NULL DEFAULT 0` and can't express "inherit.")
+
+### Stop-Sequence Safety on Non-Prefill Providers
+
+A prompt's `StopSequences` are frequently **paired** with `AssistantPrefill` to fence JSON output: prefill `` ```json `` and stop on the closing `"\n```"`. As described in the [pitfall above](#stop-sequences--universal-support), that pairing is only safe when native prefill is actually applied — otherwise the stop fires on the *opening* fence and truncates the response.
+
+To make this safe by default, `AIPromptRunner` **couples stop sequences to prefill support**:
+
+- If a prompt has **`AssistantPrefill` set** and the resolved model/vendor **does not support native prefill** (`SupportsPrefill` resolves to `false`), the prompt's `StopSequences` are **not sent** to the model. The full response comes through and the runner's normal JSON extraction strips the fence/preamble.
+- If the model **does** support native prefill (e.g. Anthropic), prefill *and* the stop sequence are applied together as intended — the token-saving optimization is preserved.
+- If a prompt declares `StopSequences` **without** `AssistantPrefill`, those are treated as independent stop tokens and are **always** applied (not affected by prefill support).
+
+This means you can configure one prompt with `AssistantPrefill = "```json"` + `StopSequences = "\n```"` and run it across *both* prefill-capable and non-prefill models: capable models get the fenced-output optimization, and non-prefill models automatically fall back to returning the full (extractable) response instead of a truncated one. This gating happens regardless of `PrefillFallbackMode` — even `Ignore` (no fallback instruction) is safe, because the dangerous stop is simply withheld.
+
+> The decision is centralized in `AIPromptRunner.shouldApplyStopSequences(prompt, model, vendorId, llm)`, which returns `true` for independent stop sequences and, for prefill-paired ones, defers to `resolveSupportsPrefill(...)`.
 
 ### Programmatic Usage
 

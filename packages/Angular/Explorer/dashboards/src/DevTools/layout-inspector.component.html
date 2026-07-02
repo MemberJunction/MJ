@@ -12,7 +12,7 @@
                     (click)="OnCopy()"
                     [title]="CopyConfirmed ? 'Copied' : 'Copy JSON'">
                 <i class="fa-solid" [class.fa-clipboard]="!CopyConfirmed" [class.fa-check]="CopyConfirmed" aria-hidden="true"></i>
-                {{ CopyConfirmed ? 'Copied' : 'Copy' }}
+                <span class="mj-action-label">{{ CopyConfirmed ? 'Copied' : 'Copy' }}</span>
             </button>
             <button mjButton variant="secondary" size="sm" (click)="OnDownload()" title="Download as JSON" aria-label="Download as JSON">
                 <i class="fa-solid fa-download" aria-hidden="true"></i>

@@ -1,4 +1,4 @@
-import { ComponentLinter } from './component-linter';
+import { ComponentLinter } from '@memberjunction/react-linter';
 import * as fs from 'fs';
 import * as path from 'path';
 import { glob } from 'glob';

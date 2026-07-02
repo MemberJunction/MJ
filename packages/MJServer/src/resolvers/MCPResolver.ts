@@ -7,7 +7,7 @@
 
 import { Resolver, Mutation, Query, Subscription, Arg, Ctx, Root, Field, Int, ObjectType, InputType, PubSub, registerEnumType } from 'type-graphql';
 import { PubSubEngine } from 'type-graphql';
-import { LogError, LogStatus, UserInfo, Metadata, RunView } from '@memberjunction/core';
+import { LogError, LogStatus, LogStatusEx, UserInfo, Metadata, RunView } from '@memberjunction/core';
 import {
     MCPClientManager,
     MCPSyncToolsResult,
@@ -705,25 +705,25 @@ export class MCPResolver extends ResolverBase {
 
         try {
             // Check API key scope authorization
-            LogStatus(`MCPResolver: [${ToolName}] Step 1 - Checking API key authorization...`);
+            LogStatusEx({ message: `MCPResolver: [${ToolName}] Step 1 - Checking API key authorization...`, verboseOnly: true });
             await this.CheckAPIKeyScopeAuthorization('mcp:execute', ConnectionID, ctx.userPayload);
-            LogStatus(`MCPResolver: [${ToolName}] Step 1 complete - Authorization passed (${Date.now() - startTime}ms)`);
+            LogStatusEx({ message: `MCPResolver: [${ToolName}] Step 1 complete - Authorization passed (${Date.now() - startTime}ms)`, verboseOnly: true });
 
             // Get the MCP client manager instance and ensure it's initialized
-            LogStatus(`MCPResolver: [${ToolName}] Step 2 - Initializing MCP client manager...`);
+            LogStatusEx({ message: `MCPResolver: [${ToolName}] Step 2 - Initializing MCP client manager...`, verboseOnly: true });
             const manager = MCPClientManager.Instance;
             const publicUrl = this.getPublicUrl();
             await manager.initialize(user, { publicUrl });
-            LogStatus(`MCPResolver: [${ToolName}] Step 2 complete - Manager initialized (${Date.now() - startTime}ms)`);
+            LogStatusEx({ message: `MCPResolver: [${ToolName}] Step 2 complete - Manager initialized (${Date.now() - startTime}ms)`, verboseOnly: true });
 
             // Connect if not already connected
             const isConnected = manager.isConnected(ConnectionID);
-            LogStatus(`MCPResolver: [${ToolName}] Step 3 - Connection status: ${isConnected ? 'already connected' : 'needs connection'}`);
+            LogStatusEx({ message: `MCPResolver: [${ToolName}] Step 3 - Connection status: ${isConnected ? 'already connected' : 'needs connection'}`, verboseOnly: true });
             if (!isConnected) {
                 LogStatus(`MCPResolver: [${ToolName}] Connecting to MCP server for connection ${ConnectionID}...`);
                 try {
                     await manager.connect(ConnectionID, { contextUser: user });
-                    LogStatus(`MCPResolver: [${ToolName}] Step 3 complete - Connected (${Date.now() - startTime}ms)`);
+                    LogStatusEx({ message: `MCPResolver: [${ToolName}] Step 3 complete - Connected (${Date.now() - startTime}ms)`, verboseOnly: true });
                 } catch (connectError) {
                     // Check for OAuth authorization required
                     if (connectError instanceof OAuthAuthorizationRequiredError) {
@@ -763,12 +763,16 @@ export class MCPResolver extends ResolverBase {
             }
 
             // Parse input arguments
-            LogStatus(`MCPResolver: [${ToolName}] Step 4 - Parsing input arguments...`);
+            LogStatusEx({ message: `MCPResolver: [${ToolName}] Step 4 - Parsing input arguments...`, verboseOnly: true });
             let parsedArgs: Record<string, unknown> = {};
             if (InputArgs) {
                 try {
                     parsedArgs = JSON.parse(InputArgs);
-                    LogStatus(`MCPResolver: [${ToolName}] Parsed args: ${JSON.stringify(parsedArgs).substring(0, 200)}...`);
+                    if (configInfo.loggingSettings.graphql.logVariables) {
+                        LogStatus(`MCPResolver: [${ToolName}] Parsed args: ${JSON.stringify(parsedArgs)}`);
+                    } else {
+                        LogStatus(`MCPResolver: [${ToolName}] tool invoked`);
+                    }
                 } catch (parseError) {
                     LogError(`MCPResolver: [${ToolName}] Failed to parse InputArgs: ${parseError}`);
                     return {
@@ -777,18 +781,18 @@ export class MCPResolver extends ResolverBase {
                     };
                 }
             }
-            LogStatus(`MCPResolver: [${ToolName}] Step 4 complete - Args parsed (${Date.now() - startTime}ms)`);
+            LogStatusEx({ message: `MCPResolver: [${ToolName}] Step 4 complete - Args parsed (${Date.now() - startTime}ms)`, verboseOnly: true });
 
             // Call the tool
-            LogStatus(`MCPResolver: [${ToolName}] Step 5 - Calling tool on connection ${ConnectionID}...`);
-            LogStatus(`MCPResolver: [${ToolName}] Tool ID: ${ToolID}`);
+            LogStatusEx({ message: `MCPResolver: [${ToolName}] Step 5 - Calling tool on connection ${ConnectionID}...`, verboseOnly: true });
+            LogStatusEx({ message: `MCPResolver: [${ToolName}] Tool ID: ${ToolID}`, verboseOnly: true });
             const result: MCPToolCallResult = await manager.callTool(
                 ConnectionID,
                 ToolName,
                 { arguments: parsedArgs },
                 { contextUser: user }
             );
-            LogStatus(`MCPResolver: [${ToolName}] Step 5 complete - Tool call returned (${Date.now() - startTime}ms)`);
+            LogStatusEx({ message: `MCPResolver: [${ToolName}] Step 5 complete - Tool call returned (${Date.now() - startTime}ms)`, verboseOnly: true });
 
             // Format the result for the response - wrap in object for GraphQLJSONObject
             let formattedResult: Record<string, unknown> | null = null;
@@ -827,7 +831,7 @@ export class MCPResolver extends ResolverBase {
                 formattedResult = result.structuredContent as Record<string, unknown>;
             }
 
-            LogStatus(`MCPResolver: [${ToolName}] Step 6 complete - Result formatted (${Date.now() - startTime}ms)`);
+            LogStatusEx({ message: `MCPResolver: [${ToolName}] Step 6 complete - Result formatted (${Date.now() - startTime}ms)`, verboseOnly: true });
             LogStatus(`MCPResolver: [${ToolName}] Tool execution complete - Success: ${result.success}, Duration: ${result.durationMs}ms, Total time: ${Date.now() - startTime}ms`);
 
             return {

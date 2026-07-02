@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T07 - Entity Form View Record Details",
+    "Description": "Opens the Events entity in Data Explorer, selects an event record, and verifies the detail form displays correctly with event name, date, and status fields.",
+    "InputDefinition": {
+      "goal": "Navigate to Data Explorer and find the Events entity. Open the Events entity to see the records grid. Click on an event record to open its Full Record using the `Open Full Record` button. Verify that the form displays correctly with at least three populated business fields visible (e.g. event name, date, location) and is not in an error state. You do not need to expand every section or hunt for specific fields — observing the loaded form with several populated values is sufficient.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "Event form is displayed with field labels and values",
+        "Event name, date, and status are all visible",
+        "Form is not in an error state"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P0,regression"
+  },
+  "primaryKey": {
+    "ID": "BBC02CFF-554C-4587-915B-FE55FF351AC5"
+  },
+  "sync": {
+    "lastModified": "2026-06-05T02:16:27.804Z",
+    "checksum": "0d6df266b50f0d84724040f564d357710f96d9dab5d9c25a6273ea609a829202"
+  }
+}

@@ -84,6 +84,34 @@ You are a metadata specialist for MemberJunction. Your task is to add a new AI m
    - Ensure consistency with existing patterns
    - Verify vendor name matches exactly with `.ai-vendors.json`
 
+## Cache Pricing Rules (CacheReadPricePerUnit / CacheWritePricePerUnit)
+
+Prompt-cache pricing is stored as **absolute per-1M-token prices** on the cost row (same grain and UnitType as `InputPricePerUnit`), NOT as a multiplier. `NULL` means "no distinct cache rate" — the cost calculator then falls back to the input rate for that bucket, which is the correct, safe default (no phantom savings).
+
+When you research a model, set these two fields using the rules below. Two structural families:
+
+- **Family A — constant multiple of input.** Derive the absolute price: `CacheReadPricePerUnit = InputPricePerUnit × readMultiplier`.
+- **Family B — per-model absolute.** The cached price does NOT track input by a stable ratio — look up the provider's *published cached-input price for that specific model* and use it verbatim.
+
+| Vendor | Family | Cache READ | Cache WRITE | Notes |
+|---|---|---|---|---|
+| **Anthropic** | A | input × 0.1 | input × 1.25 | Write = 5-min TTL tier (the default). 1-hr TTL is 2× but isn't representable — use 1.25× and note it. |
+| **Mistral** | A | input × 0.1 | `null` | No write charge. |
+| **Groq** | A | input × 0.5 | `null` | 0.5× is the observed convention; confirm on groq.com/pricing per model. |
+| **Gemini (implicit)** | A | input × 0.1 | `null` | Implicit/automatic caching only. Explicit context-cache storage ($/MTok/hr) is NOT representable — ignore it; model implicit pricing. |
+| **Cerebras** | — | `null` | `null` | **No cache discount** — cached tokens billed at full input rate. Leave NULL so the calculator uses the input rate (correct). |
+| **OpenAI** | B | published cached-input price | `null` | ~0.1× for GPT-5/o-series, ~0.5× for GPT-4o/4.1 — varies by generation, use the published number. No write charge. |
+| **xAI (Grok)** | B | published cached price (flat, ~$0.20) | `null` | Do NOT encode as a multiplier — use the published absolute. |
+| **DeepSeek** | B | published "cache hit" price | `null` | Hit ≈ 0.1× miss but dynamic — use the published hit price. |
+| **Fireworks** | B | published cached price (serverless ~0.5× default) | `null` | "Varies by model"; dedicated deployments cache free. |
+| **Amazon Bedrock** | B | per-hosted-model (Anthropic-hosted ⇒ 0.1×) | per-hosted-model (Anthropic-hosted ⇒ 1.25×) | Re-hosts many vendors; mirror the underlying model's rates. |
+
+Rules of thumb:
+- **Unknown / unlisted vendor, or no published cache pricing:** leave BOTH `null` (falls back to input rate — never invents savings).
+- **No write charge** (everyone except Anthropic & Anthropic-on-Bedrock): `CacheWritePricePerUnit: null`.
+- Always state the cache basis in `Comments` (e.g. `"cache read 0.1x input; write 1.25x input (5-min TTL)"`) so the row is auditable.
+- Known schema limitations to note in Comments when relevant: the single write column can't express Anthropic's 1-hour TTL (2×); Gemini explicit-cache per-hour storage isn't modeled.
+
 ## Metadata JSON Template
 
 **IMPORTANT**: For new records, DO NOT include `primaryKey` or `sync` sections. These are generated automatically by mj-sync.
@@ -142,9 +170,11 @@ You are a metadata specialist for MemberJunction. Your task is to add a new AI m
           "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
           "InputPricePerUnit": {InputPrice},
           "OutputPricePerUnit": {OutputPrice},
+          "CacheReadPricePerUnit": {CacheReadPrice or null},
+          "CacheWritePricePerUnit": {CacheWritePrice or null},
           "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
           "ProcessingType": "Realtime",
-          "Comments": "{Model Name} pricing on {Vendor} as of {Month Year}. {Additional pricing notes if applicable}"
+          "Comments": "{Model Name} pricing on {Vendor} as of {Month Year}. {Additional pricing notes incl. cache basis, e.g. 'cache read 0.1x input, write 1.25x (5-min)'}"
         }
       }
     ]
@@ -405,9 +435,11 @@ Here's an example of a complete model entry for a **new** record (without `prima
           "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
           "InputPricePerUnit": 3,
           "OutputPricePerUnit": 15,
+          "CacheReadPricePerUnit": 0.75,
+          "CacheWritePricePerUnit": null,
           "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
           "ProcessingType": "Realtime",
-          "Comments": "Grok 4 pricing on x.ai as of January 2025"
+          "Comments": "Grok 4 pricing on x.ai as of June 2026. Cache read is a published per-model absolute (Family B); x.ai does not charge for cache writes."
         }
       }
     ]

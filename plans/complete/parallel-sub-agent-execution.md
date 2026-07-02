@@ -24,7 +24,7 @@ By enforcing sequential execution for child agents and enabling parallel executi
 
 Currently, ALL sub-agents execute sequentially regardless of relationship type:
 
-**Code:** [packages/AI/Agents/src/base-agent.ts:2832-3158](packages/AI/Agents/src/base-agent.ts#L2832-L3158)
+**Code:** [packages/AI/Agents/src/base-agent.ts:2832-3158](../../packages/AI/Agents/src/base-agent.ts#L2832-L3158)
 
 ```typescript
 private async executeSubAgentStep<SC = any, SR = any>(
@@ -53,7 +53,7 @@ Total: 100s
 
 Actions already execute in parallel successfully:
 
-**Code:** [packages/AI/Agents/src/base-agent.ts:3172-3427](packages/AI/Agents/src/base-agent.ts#L3172-L3427)
+**Code:** [packages/AI/Agents/src/base-agent.ts:3172-3427](../../packages/AI/Agents/src/base-agent.ts#L3172-L3427)
 
 ```typescript
 private async executeActionsStep(...): Promise<BaseAgentNextStep> {
@@ -353,7 +353,7 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
 
 ### Execution Logic
 
-**File:** [packages/AI/Agents/src/base-agent.ts](packages/AI/Agents/src/base-agent.ts)
+**File:** [packages/AI/Agents/src/base-agent.ts](../../packages/AI/Agents/src/base-agent.ts)
 
 #### Keep Existing Sequential Method for Child Agents
 
@@ -512,7 +512,7 @@ protected async executeNextStep<P = any>(
 
 ### Payload Mapping Helpers
 
-**File:** [packages/AI/Agents/src/base-agent.ts](packages/AI/Agents/src/base-agent.ts)
+**File:** [packages/AI/Agents/src/base-agent.ts](../../packages/AI/Agents/src/base-agent.ts)
 
 #### Map Parent Payload to Sub-Agent Input
 
@@ -627,7 +627,7 @@ private setValueAtPath(obj: any, path: string, value: any): void {
 
 ### LLM Integration
 
-**File:** [Metadata/Prompts/templates/system/loop-agent-type-system-prompt.template.md](Metadata/Prompts/templates/system/loop-agent-type-system-prompt.template.md)
+**File:** [Metadata/Prompts/templates/system/loop-agent-type-system-prompt.template.md](../../metadata/prompts/templates/system/loop-agent-type-system-prompt.template.md)
 
 #### Update System Prompt with Clear Guidance
 
@@ -737,7 +737,7 @@ Related agents have independent payload structures. Can execute MULTIPLE in para
 
 #### Update Agent Type Response Types
 
-**File:** [packages/AI/Agents/src/agent-types/loop-agent-response-type.ts](packages/AI/Agents/src/agent-types/loop-agent-response-type.ts)
+**File:** [packages/AI/Agents/src/agent-types/loop-agent-response-type.ts](../../packages/AI/Agents/src/agent-types/loop-agent-response-type.ts)
 
 ```typescript
 export type LoopAgentSubAgentRequest = {

@@ -1,4 +1,4 @@
-import { Component, Input, OnInit, ViewChild, ChangeDetectorRef, HostListener, ElementRef } from '@angular/core';
+import { Component, Input, OnInit, OnDestroy, ViewChild, ChangeDetectorRef, HostListener, ElementRef } from '@angular/core';
 import { BaseEntity, CompositeKey, LogError, LogErrorEx, LogStatus, Metadata, RunView, RunViewResult } from '@memberjunction/core';
 import { MJListDetailEntity, MJListDetailEntityExtended, MJListEntity, MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import { SharedService } from '@memberjunction/ng-shared';
@@ -8,7 +8,7 @@ import { GraphQLDataProvider, GraphQLListsClient } from '@memberjunction/graphql
 import { CapabilitiesForLevel, type ListCapabilities, type ListDelta, type ListRefreshMode, type SharePermissionLevel } from '@memberjunction/lists-base';
 import { ListSharingService } from '@memberjunction/ng-list-management';
 import { ExportService } from '@memberjunction/ng-export-service';
-import { Subject, debounceTime } from 'rxjs';
+import { Subject, debounceTime, takeUntil } from 'rxjs';
 import { NewItemOption } from '../../generic/Item.types';
 import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 
@@ -29,7 +29,7 @@ interface AddableRecord {
   templateUrl: './single-list-detail.component.html',
   styleUrls: ['./single-list-detail.component.css', '../../shared/first-tab-styles.css']
 })
-export class SingleListDetailComponent extends BaseAngularComponent implements OnInit {
+export class SingleListDetailComponent extends BaseAngularComponent implements OnInit, OnDestroy {
 
   @Input() public ListID: string = "";
 
@@ -128,16 +128,29 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
   public addDialogSaving: boolean = false;
   public addableRecords: AddableRecord[] = [];
   public addRecordsSearchFilter: string = "";
+
+  /** Empty-state title shown when an add-records search returns no matches. */
+  public get AddRecordsNoMatchTitle(): string {
+    return `No records found matching "${this.addRecordsSearchFilter}"`;
+  }
+
   public existingListDetailIds: Set<string> = new Set();
   public addProgress: number = 0;
   public addTotal: number = 0;
   private searchSubject: Subject<string> = new Subject();
+  private destroy$ = new Subject<void>();
 
   // Add from view dialog (existing)
   public showAddFromViewDialog: boolean = false;
   public showAddFromViewLoader: boolean = false;
   public userViews: MJUserViewEntityExtended[] | null = null;
   public userViewsToAdd: MJUserViewEntityExtended[] = [];
+  /**
+   * Normalized-UUID set of the IDs in {@link userViewsToAdd}, kept in sync with that
+   * array. Lets {@link isViewSelected} (bound per-row in the dialog's @for, ~2x/row)
+   * do an O(1) lookup instead of scanning the array with UUIDsEqual on every check.
+   */
+  private userViewsToAddIds: Set<string> = new Set<string>();
   public addFromViewProgress: number = 0;
   public addFromViewTotal: number = 0;
   /**
@@ -190,8 +203,13 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
     super();
     // Debounce search input
     this.searchSubject
-      .pipe(debounceTime(300))
+      .pipe(debounceTime(300), takeUntil(this.destroy$))
       .subscribe((searchText) => this.searchRecords(searchText));
+  }
+
+  public ngOnDestroy(): void {
+    this.destroy$.next();
+    this.destroy$.complete();
   }
 
   public ngOnInit(): void {
@@ -1285,6 +1303,7 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
   async openAddFromViewDialog(): Promise<void> {
     this.showAddFromViewDialog = true;
     this.userViewsToAdd = [];
+    this.userViewsToAddIds.clear();
 
     if (!this.userViews) {
       await this.loadEntityViews();
@@ -1294,6 +1313,7 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
   closeAddFromViewDialog(): void {
     this.showAddFromViewDialog = false;
     this.userViewsToAdd = [];
+    this.userViewsToAddIds.clear();
     this.showAddFromViewLoader = false;
     this.addFromViewTotal = 0;
     this.setAddFromViewProgress(0);
@@ -1327,13 +1347,15 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
     const index = this.userViewsToAdd.findIndex(v => UUIDsEqual(v.ID, view.ID));
     if (index >= 0) {
       this.userViewsToAdd.splice(index, 1);
+      this.userViewsToAddIds.delete(NormalizeUUID(view.ID));
     } else {
       this.userViewsToAdd.push(view);
+      this.userViewsToAddIds.add(NormalizeUUID(view.ID));
     }
   }
 
   isViewSelected(view: MJUserViewEntityExtended): boolean {
-    return this.userViewsToAdd.some(v => UUIDsEqual(v.ID, view.ID));
+    return this.userViewsToAddIds.has(NormalizeUUID(view.ID));
   }
 
   async confirmAddFromView(): Promise<void> {

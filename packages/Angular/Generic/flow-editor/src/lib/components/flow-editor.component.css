@@ -141,24 +141,6 @@
   z-index: 5;
 }
 
-.mj-flow-editor-empty-content {
-  text-align: center;
-  padding: 40px;
-}
-
-.mj-flow-editor-empty-icon {
-  font-size: 48px;
-  color: var(--mj-border-strong);
-  margin-bottom: 16px;
-}
-
-.mj-flow-editor-empty-title {
-  font-size: var(--mj-text-base);
-  font-weight: 500;
-  color: var(--mj-text-muted);
-  margin: 0 0 8px;
-}
-
 .mj-flow-editor-empty-subtitle {
   font-size: var(--mj-text-sm);
   color: var(--mj-text-disabled);

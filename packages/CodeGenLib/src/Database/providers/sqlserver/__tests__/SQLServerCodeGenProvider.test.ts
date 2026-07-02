@@ -420,6 +420,145 @@ describe('SQLServerCodeGenProvider — tolerant SP signatures', () => {
         });
     });
 
+    describe('PK-only entities (no non-PK data columns) — issue #2448', () => {
+        // Entities like junction tables where ALL non-__mj columns are PKs.
+        // These produced invalid SQL: leading/trailing commas in INSERT and
+        // empty SET clauses in UPDATE.
+
+        function createPkOnlyJunctionEntity(): EntityInfo {
+            return createMockEntity(
+                { Name: 'RoundJudges', BaseTable: 'RoundJudge', BaseTableCodeName: 'RoundJudge' },
+                [
+                    { ID: 'pk1', Name: 'RoundID', Type: 'uniqueidentifier', Length: 16, IsPrimaryKey: true, AllowsNull: false, AllowUpdateAPI: false, IsVirtual: false, AutoIncrement: false, DefaultValue: '' },
+                    { ID: 'pk2', Name: 'JudgeUserID', Type: 'uniqueidentifier', Length: 16, IsPrimaryKey: true, AllowsNull: false, AllowUpdateAPI: false, IsVirtual: false, AutoIncrement: false, DefaultValue: '' },
+                ],
+            );
+        }
+
+        describe('generateCRUDCreate — composite PK with no data columns', () => {
+            it('produces valid INSERT with only PK columns, no leading/trailing commas', () => {
+                const entity = createPkOnlyJunctionEntity();
+                const sql = provider.generateCRUDCreate(entity);
+
+                // Must not have a leading or trailing comma in the column list
+                const columnMatch = sql.match(/INSERT INTO[^(]*\(([^)]*)\)/);
+                expect(columnMatch, 'Expected INSERT INTO ... (...) block').toBeTruthy();
+                const columnList = columnMatch![1].trim();
+                expect(columnList).not.toMatch(/^,/); // no leading comma
+                expect(columnList).not.toMatch(/,\s*$/); // no trailing comma
+
+                // Both PK columns must appear
+                expect(columnList).toContain('[RoundID]');
+                expect(columnList).toContain('[JudgeUserID]');
+            });
+
+            it('VALUES clause has matching PK parameters, no leading/trailing commas', () => {
+                const entity = createPkOnlyJunctionEntity();
+                const sql = provider.generateCRUDCreate(entity);
+
+                const valuesMatch = sql.match(/VALUES\s*\(([^)]*)\)/);
+                expect(valuesMatch, 'Expected VALUES (...) block').toBeTruthy();
+                const valueList = valuesMatch![1].trim();
+                expect(valueList).not.toMatch(/^,/);
+                expect(valueList).not.toMatch(/,\s*$/);
+                expect(valueList).toContain('@RoundID');
+                expect(valueList).toContain('@JudgeUserID');
+            });
+        });
+
+        describe('generateCRUDUpdate — composite PK with no data columns', () => {
+            it('produces valid SP with no UPDATE/SET (no-op), just returns existing row', () => {
+                const entity = createPkOnlyJunctionEntity();
+                const sql = provider.generateCRUDUpdate(entity);
+
+                // Must not contain an UPDATE ... SET with empty body
+                expect(sql).not.toMatch(/SET\s*\n\s*WHERE/);
+
+                // Should contain a comment about no updatable fields
+                expect(sql).toContain('No updatable fields');
+
+                // Must still return a SELECT from the base view
+                expect(sql).toContain('SELECT');
+                expect(sql).toContain(entity.BaseView);
+            });
+        });
+
+        describe('generateCRUDCreate — single UUID PK without default, no data columns', () => {
+            it('produces valid INSERT with PK only, no stray commas', () => {
+                // Matches the lineup.Person / lineup.Position / lineup.Seat / lineup.Team shape:
+                // single UUID PK, no DefaultValue, no non-PK writable columns.
+                const entity = createMockEntity(
+                    { Name: 'Person', BaseTable: 'Person', BaseTableCodeName: 'Person' },
+                    [
+                        { ID: 'pk1', Name: 'ID', Type: 'uniqueidentifier', Length: 16, IsPrimaryKey: true, AllowsNull: false, AllowUpdateAPI: false, IsVirtual: false, AutoIncrement: false, DefaultValue: '' },
+                    ],
+                );
+                const sql = provider.generateCRUDCreate(entity);
+
+                // Should use the @ActualID coalesce path
+                expect(sql).toContain('DECLARE @ActualID UNIQUEIDENTIFIER');
+
+                // Every INSERT INTO ... (...) block must be comma-clean
+                const allInserts = [...sql.matchAll(/INSERT INTO[^(]*\(([^)]*)\)/gi)];
+                for (const m of allInserts) {
+                    const cols = m[1].trim();
+                    expect(cols).not.toMatch(/^,/);
+                    expect(cols).not.toMatch(/,\s*$/);
+                    expect(cols.length).toBeGreaterThan(0);
+                }
+            });
+        });
+
+        describe('generateCRUDCreate — single UUID PK with default, no data columns', () => {
+            it('produces valid INSERT with PK only, no trailing comma after PK', () => {
+                const entity = createMockEntity(
+                    { Name: 'Widget', BaseTable: 'Widget', BaseTableCodeName: 'Widget' },
+                    [
+                        { ID: 'pk1', Name: 'ID', Type: 'uniqueidentifier', Length: 16, IsPrimaryKey: true, AllowsNull: false, AllowUpdateAPI: false, IsVirtual: false, AutoIncrement: false, DefaultValue: 'newsequentialid()' },
+                    ],
+                );
+                const sql = provider.generateCRUDCreate(entity);
+
+                // Should use the @InsertedRow two-branch path
+                expect(sql).toContain('DECLARE @InsertedRow TABLE');
+
+                // Every INSERT INTO ... (...) block must be comma-clean
+                const allInserts = [...sql.matchAll(/INSERT INTO[^(]*\(([^)]*)\)/gi)];
+                expect(allInserts.length).toBeGreaterThan(0);
+                for (const m of allInserts) {
+                    const cols = m[1].trim();
+                    expect(cols).not.toMatch(/^,/);
+                    expect(cols).not.toMatch(/,\s*$/);
+                    expect(cols.length).toBeGreaterThan(0);
+                }
+
+                // Every VALUES (...) block must be comma-clean
+                const allValues = [...sql.matchAll(/VALUES\s*\(([^)]*)\)/gi)];
+                for (const m of allValues) {
+                    const vals = m[1].trim();
+                    expect(vals).not.toMatch(/^,/);
+                    expect(vals).not.toMatch(/,\s*$/);
+                    expect(vals.length).toBeGreaterThan(0);
+                }
+            });
+        });
+
+        describe('generateInsertFieldString — PK-only entity returns empty when excludePrimaryKey=true', () => {
+            it('returns empty string for PK-only entity with excludePrimaryKey=true', () => {
+                const entity = createPkOnlyJunctionEntity();
+                const result = provider.generateInsertFieldString(entity, entity.Fields, '', true);
+                expect(result.trim()).toBe('');
+            });
+
+            it('returns PK columns for PK-only entity with excludePrimaryKey=false', () => {
+                const entity = createPkOnlyJunctionEntity();
+                const result = provider.generateInsertFieldString(entity, entity.Fields, '', false);
+                expect(result).toContain('[RoundID]');
+                expect(result).toContain('[JudgeUserID]');
+            });
+        });
+    });
+
     describe('generateSingleCascadeOperation — _Clear flag for nullable FK', () => {
         it('cascade update emits _Clear = 1 for the nullable FK field being NULLed', () => {
             // Parent entity (Conversation) being deleted

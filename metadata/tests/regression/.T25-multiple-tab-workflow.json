@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T25 - Multiple Tab Workflow",
+    "Description": "Opens three different entity types in separate tabs, verifies each tab has correct content, closes the middle tab, and verifies remaining tabs work.",
+    "InputDefinition": {
+      "goal": "Navigate to Data Explorer. Open three different records, each in its own tab, by following these steps for each one: (1) select an entity type (try Members first, then Events, then a third entity such as Board Members), (2) click any row in the records grid so the detail panel slides out on the right, (3) Shift+Click the 'Open Full Record' button at the bottom of that detail panel — Shift+Click opens the record in a new tab instead of replacing the current one. After opening all three records this way, three tabs will appear underneath the top navigation. Switch between the tabs to confirm each shows its own record. Then close the middle tab (click the small × on it) and confirm the remaining two tabs are still functional with their original record content. Note: clicking entity cards in the entity list does NOT open new tabs — only Shift+Click on the 'Open Full Record' button does.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 60,
+      "judgeValidationCriteria": [
+        "Three tabs were opened with different entity content",
+        "Middle tab was closed",
+        "Remaining two tabs are still functional with correct content"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 60,
+      "maxExecutionTime": 600000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 60
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P3,regression"
+  },
+  "primaryKey": {
+    "ID": "98B5BFE9-41F3-465E-9C68-25CBD4B7E48A"
+  },
+  "sync": {
+    "lastModified": "2026-06-05T02:16:28.246Z",
+    "checksum": "431272655e614522cdc76957f6382a4437d4dbbcaf392bd369b4383614ae2485"
+  }
+}

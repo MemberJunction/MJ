@@ -116,10 +116,10 @@
     color: var(--mj-text-primary);
 }
 
-.filter-category-chevron {
-    font-size: 0.65rem;
-    color: var(--mj-text-muted);
-}
+/* .filter-category-chevron removed — the bespoke disclosure chevron is gone;
+   <mj-accordion-panel> now provides the expand/collapse chevron for filter
+   categories. (The .filter-category* layout rules above are retained: they're
+   still used by the static "Min Relevance" section below.) */
 
 /* Options */
 .filter-options {

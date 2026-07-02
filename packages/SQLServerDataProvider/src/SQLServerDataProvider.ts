@@ -41,13 +41,13 @@ import {
   RecordDependency,
   EntityDependency,
   LogStatus,
+  LogStatusEx,
   CompositeKey,
   BaseEntityResult,
   Metadata,
   FieldChange,
   SaveSQLResult,
   DeleteSQLResult,
-  QueryInfo,
   RunViewWithCacheCheckParams,
   RunViewsWithCacheCheckResponse,
   RunViewWithCacheCheckResult,
@@ -61,6 +61,7 @@ import { NodeFileSystemProvider } from './NodeFileSystemProvider';
 import { EntityAIActionParams } from '@memberjunction/aiengine';
 import { QueueManager } from '@memberjunction/queue';
 import { GenericDatabaseProvider, ExecuteSQLBatchOptions, SaveCoercedValue, SaveCallBinding, SaveSQLFragment } from '@memberjunction/generic-database-provider';
+import { MJQueryEntityExtended } from '@memberjunction/core-entities';
 
 import sql from 'mssql';
 import { BehaviorSubject, Observable, Subject, concatMap, from, tap, catchError, of } from 'rxjs';
@@ -73,6 +74,8 @@ import {
 } from './types.js';
 
 import { DuplicateRecordDetector } from '@memberjunction/ai-vector-dupe';
+import type { IColocatedVectorHost } from '@memberjunction/ai-vectordb';
+import type { DatabasePlatform } from '@memberjunction/sql-dialect';
 
 import { v4 as uuidv4 } from 'uuid';
 import { UUIDsEqual } from '@memberjunction/global';
@@ -229,8 +232,11 @@ async function executeSQLCore(
     Query: ${query}
     Parameters: ${parameters ? JSON.stringify(parameters) : 'None'}`;
 
-    // Throw error with detailed message - caller decides whether to log
-    throw new Error(errorMessage);
+    // Preserve the original error type (ConnectionError vs RequestError) so callers
+    // can structurally distinguish infrastructure failures from query-level errors.
+    // Attach the detailed message while keeping the error's class identity and code.
+    error.message = errorMessage;
+    throw error;
   }
 }
 
@@ -256,7 +262,7 @@ async function executeSQLCore(
  */
 export class SQLServerDataProvider
   extends GenericDatabaseProvider
-  implements IEntityDataProvider, IMetadataProvider, IRunReportProvider
+  implements IEntityDataProvider, IMetadataProvider, IRunReportProvider, IColocatedVectorHost
 {
   /**************************************************************************/
   // SQL Dialect Implementations (override abstract methods from DatabaseProviderBase)
@@ -307,6 +313,16 @@ export class SQLServerDataProvider
   private _recordDupeDetector: DuplicateRecordDetector;
   private _needsDatetimeOffsetAdjustment: boolean = false;
   private _datetimeOffsetTestComplete: boolean = false;
+  /**
+   * Per-entity base-view column order — the view's column NAMES in physical (`column_id`) order,
+   * keyed by `'<schema>.<baseview>'` lowercased. Populated once in {@link Config} (after metadata
+   * load) by a single `sys.columns` query over all views. {@link getAllEntityColumnsSQL} declares the
+   * save-capture `@ResultTable` in this order so it matches the view that the positional
+   * `INSERT INTO @ResultTable EXEC ...` is filled from — authoritative for ANY view layout
+   * (CodeGen-generated, computed-column-in-the-middle, or hand-maintained). A missing key (or a view
+   * column with no matching field) falls back to the metadata-derived non-virtual-then-virtual order.
+   */
+  private _viewColumnOrderCache: Map<string, string[]> = new Map();
 
   // Instance SQL execution queue for serializing transaction queries
   // Non-transactional queries bypass this queue for maximum parallelism
@@ -401,13 +417,60 @@ export class SQLServerDataProvider
       // Initialize the instance queue processor
       this.initializeQueueProcessor();
 
-      return super.Config(configData, providerToUse); // now parent class can do it's config
+      const configured = await super.Config(configData, providerToUse); // now parent class can do it's config
+      // After metadata is loaded, capture each base view's REAL column order so the save-capture
+      // @ResultTable is declared to match it (see _viewColumnOrderCache + getAllEntityColumnsSQL).
+      if (configured) {
+        await this.loadViewColumnOrderCache();
+      }
+      return configured;
     } catch (e) {
       LogError(e);
       throw e;
     }
   }
-  
+
+  /**
+   * Loads every view's column order (name, in `column_id` order) from `sys.columns` in a single query
+   * and caches it by `'<schema>.<view>'`. Used by {@link getAllEntityColumnsSQL} to declare the
+   * save-capture `@ResultTable` in the view's actual physical order — the order SQL Server uses when it
+   * fills the table via the positional `INSERT INTO @ResultTable EXEC <sp>` (the sp ends in
+   * `SELECT * FROM <BaseView>`). Best-effort: any failure leaves the cache empty, and
+   * getAllEntityColumnsSQL falls back to the metadata-derived order. Runs once at {@link Config}.
+   */
+  private async loadViewColumnOrderCache(): Promise<void> {
+    try {
+      const viewOrderSQL = `SELECT s.name AS SchemaName, o.name AS ViewName, c.name AS ColumnName
+                   FROM sys.columns c
+                     INNER JOIN sys.objects o ON c.object_id = o.object_id
+                     INNER JOIN sys.schemas s ON o.schema_id = s.schema_id
+                   WHERE o.type = 'V'
+                   ORDER BY s.name, o.name, c.column_id`;
+      const rows: Array<{ SchemaName: string; ViewName: string; ColumnName: string }> = await this.ExecuteSQL(viewOrderSQL, null, {
+        ignoreLogging: true,
+        description: 'load view column order for save-capture @ResultTable alignment',
+      });
+      const cache = new Map<string, string[]>();
+      for (const r of rows ?? []) {
+        const key = `${r.SchemaName}.${r.ViewName}`.toLowerCase();
+        let cols = cache.get(key);
+        if (!cols) {
+          cols = [];
+          cache.set(key, cols);
+        }
+        cols.push(r.ColumnName);
+      }
+      this._viewColumnOrderCache = cache;
+      LogStatusEx({
+        message: `SQLServerDataProvider: cached column order for ${cache.size} view(s) (save-capture @ResultTable alignment)`,
+        verboseOnly: true,
+      });
+    } catch (e) {
+      // best-effort: an empty cache makes getAllEntityColumnsSQL fall back to the metadata-derived order
+      LogStatus(`SQLServerDataProvider: view column-order prefetch failed; save-capture will use metadata order. ${e}`);
+    }
+  }
+
   /**
    * Initialize the SQL queue processor for this instance
    * This ensures all queries within a transaction execute sequentially
@@ -513,7 +576,7 @@ export class SQLServerDataProvider
    * Executes a batched cache status check for multiple queries using their CacheValidationSQL.
    */
   protected async getBatchedQueryCacheStatus(
-    items: Array<{ index: number; item: RunQueryWithCacheCheckParams; queryInfo: QueryInfo }>,
+    items: Array<{ index: number; item: RunQueryWithCacheCheckParams; query: MJQueryEntityExtended }>,
     contextUser?: UserInfo
   ): Promise<Map<number, { success: boolean; maxUpdatedAt?: string; rowCount?: number; errorMessage?: string }>> {
     const results = new Map<number, { success: boolean; maxUpdatedAt?: string; rowCount?: number; errorMessage?: string }>();
@@ -524,9 +587,9 @@ export class SQLServerDataProvider
 
     // Build array of SQL statements for batch execution
     const sqlStatements: string[] = [];
-    for (const { queryInfo } of items) {
+    for (const { query } of items) {
       // CacheValidationSQL should return MaxUpdatedAt and RowCount
-      sqlStatements.push(queryInfo.CacheValidationSQL!);
+      sqlStatements.push(query.CacheValidationSQL!);
     }
 
     try {
@@ -576,7 +639,7 @@ export class SQLServerDataProvider
     return `OFFSET ${startRow} ROWS FETCH NEXT ${maxRows} ROWS ONLY`;
   }
 
-  protected override BuildParameterPlaceholder(index: number): string {
+  public override BuildParameterPlaceholder(index: number): string {
     return `@p${index}`;
   }
 
@@ -680,7 +743,7 @@ export class SQLServerDataProvider
       // we do this in SQL by combining the pirmary key name and value for each row using the default separator defined by the CompositeKey class
       // the output of this should be like the following 'Field1|Value1||Field2|Value2||Field3|Value3' where the || is the CompositeKey.DefaultFieldDelimiter and the | is the CompositeKey.DefaultValueDelimiter
       const quotes = entity.FirstPrimaryKey.NeedsQuotes ? "'" : '';
-      const primaryKeySelectString = `CONCAT(${entity.PrimaryKeys.map((pk) => `'${pk.Name}|', CAST(${pk.Name} AS NVARCHAR(MAX))`).join(`,'${CompositeKey.DefaultFieldDelimiter}',`)})`;
+      const primaryKeySelectString = `CONCAT(${entity.PrimaryKeys.map((pk) => `'${pk.Name}|', CAST([${pk.Name}] AS NVARCHAR(MAX))`).join(`,'${CompositeKey.DefaultFieldDelimiter}',`)})`;
 
       // for this entity, check to see if it has any fields that are soft links, and for each of those, generate the SQL
       entity.Fields.filter((f) => f.EntityIDFieldName && f.EntityIDFieldName.length > 0).forEach((f) => {
@@ -711,7 +774,7 @@ export class SQLServerDataProvider
       const entityInfo = this.Entities.find((e) => e.Name.trim().toLowerCase() === entityDependency.EntityName?.trim().toLowerCase());
       const quotes = entityInfo.FirstPrimaryKey.NeedsQuotes ? "'" : '';
       const relatedEntityInfo = this.Entities.find((e) => e.Name.trim().toLowerCase() === entityDependency.RelatedEntityName?.trim().toLowerCase());
-      const primaryKeySelectString = `CONCAT(${entityInfo.PrimaryKeys.map((pk) => `'${pk.Name}|', CAST(${pk.Name} AS NVARCHAR(MAX))`).join(`,'${CompositeKey.DefaultFieldDelimiter}',`)})`;
+      const primaryKeySelectString = `CONCAT(${entityInfo.PrimaryKeys.map((pk) => `'${pk.Name}|', CAST([${pk.Name}] AS NVARCHAR(MAX))`).join(`,'${CompositeKey.DefaultFieldDelimiter}',`)})`;
 
       if (sSQL.length > 0) sSQL += ' UNION ALL ';
       sSQL += `SELECT
@@ -786,15 +849,133 @@ export class SQLServerDataProvider
 
 
   private getAllEntityColumnsSQL(entityInfo: EntityInfo): string {
+    // This builds the column list for the @ResultTable/@ResultChangesTable that captures
+    // `SELECT * FROM <BaseView>` via a POSITIONAL `INSERT INTO @table EXEC ...`. SQL Server maps the
+    // sproc's result set into the table strictly by ORDINAL position (column names are ignored), so the
+    // table MUST be declared in the VIEW's actual column order — otherwise values mis-route into
+    // wrong-typed slots, producing truncation / type-conversion errors that fail the save.
+    //
+    // The authoritative source is the view itself. `_viewColumnOrderCache` holds each base view's real
+    // column order (read from sys.columns at Config). We emit columns in THAT order, typing each from
+    // its matching EntityField by name — correct for ANY view layout BY CONSTRUCTION: CodeGen-generated
+    // (`[base].*, joins`), a computed column in the middle, AND hand-maintained views that place a base
+    // column after the joins (which a metadata-only heuristic cannot get right). For a canonical view
+    // (base columns physically first, then joins) the view order equals the non-virtual-then-virtual
+    // partition and the types are identical, so the generated SQL is byte-for-byte the same as the
+    // metadata-ordered output — a no-op for the overwhelming majority.
+    //
+    // Fallback: if the view isn't cached (cache load failed, or a custom/overridden sproc whose view we
+    // didn't capture) OR any view column has no matching field (a column not tracked in metadata), fall
+    // back to the metadata-derived non-virtual-then-virtual partition — never worse than prior behavior.
+    // That partition is only PROVABLY correct when the view lays base columns out before the joins (the
+    // canonical CodeGen shape). When the fallback is taken for an entity that has virtual (joined) fields
+    // — the only case where a base-column-after-a-join could mis-route by position — we WARN loudly
+    // (warnOnViewOrderFallback), because the metadata order can no longer be checked against the view and
+    // a silent fallback there would let the very bug this fix prevents persist undetected.
+    let orderedFields: typeof entityInfo.Fields | undefined;
+    let fallbackReason: string | undefined;
+    const viewKey = `${entityInfo.SchemaName}.${entityInfo.BaseView}`.toLowerCase();
+    const viewOrder = this._viewColumnOrderCache.get(viewKey);
+    if (!viewOrder) {
+      fallbackReason = `base view not captured in the column-order cache (cache load failed at Config, or a custom/overridden sproc whose view was not read)`;
+    } else if (viewOrder.length !== entityInfo.Fields.length) {
+      fallbackReason = `base view exposes ${viewOrder.length} column(s) but the entity declares ${entityInfo.Fields.length} field(s) — cannot align 1:1 by position`;
+    } else {
+      const fieldByName = new Map(entityInfo.Fields.map((f) => [f.Name.toLowerCase(), f]));
+      const mapped = viewOrder.map((colName) => fieldByName.get(colName.toLowerCase()));
+      if (mapped.every((f) => f !== undefined)) {
+        orderedFields = mapped as typeof entityInfo.Fields; // every view column resolved 1:1 to a field
+      } else {
+        const unmatched = viewOrder.filter((colName) => !fieldByName.has(colName.toLowerCase()));
+        fallbackReason = `view column(s) without a matching EntityField: ${unmatched.join(', ')}`;
+      }
+    }
+    if (!orderedFields) {
+      this.warnIfBaseFieldSequencedAfterVirtual(entityInfo);
+      this.warnOnViewOrderFallback(entityInfo, fallbackReason);
+      orderedFields = [...entityInfo.Fields.filter((f) => !f.IsVirtual), ...entityInfo.Fields.filter((f) => f.IsVirtual)];
+    }
     let sRet: string = '',
       outputCount: number = 0;
-    for (let i = 0; i < entityInfo.Fields.length; i++) {
-      const f = entityInfo.Fields[i];
+    for (const f of orderedFields) {
       if (outputCount !== 0) sRet += ',\n';
       sRet += '[' + f.Name + '] ' + f.SQLFullType + ' ' + (f.AllowsNull || f.IsVirtual ? 'NULL' : 'NOT NULL');
       outputCount++;
     }
     return sRet;
+  }
+
+  /** Entities already warned about base-after-virtual field-order skew — so we warn once, not every save. */
+  private static _fieldOrderWarnedEntities: Set<string> = new Set<string>();
+
+  /**
+   * INTEGRITY GUARD: in a well-formed entity every base (non-virtual) field sequences BEFORE the
+   * virtual/related fields, so EntityField order matches the base view's `SELECT [base].*, <joins>`
+   * column order that the positional save-capture relies on. CodeGen can leave a base column sequenced
+   * AFTER a virtual field (newly-discovered columns get a temporary maxSequence+100000 offset that is
+   * supposed to be renumbered). `getAllEntityColumnsSQL` re-orders defensively so saves stay correct,
+   * but the underlying metadata is inconsistent and should be fixed at the source — so surface it
+   * loudly here (once per entity), and CodeGen flags it too (ManageMetadataBase integrity check).
+   */
+  private warnIfBaseFieldSequencedAfterVirtual(entityInfo: EntityInfo): void {
+    if (SQLServerDataProvider._fieldOrderWarnedEntities.has(entityInfo.Name)) return;
+    let sawVirtual = false;
+    const misSequenced: string[] = [];
+    for (const f of entityInfo.Fields) {
+      if (f.IsVirtual) sawVirtual = true;
+      else if (sawVirtual) misSequenced.push(f.Name);
+    }
+    if (misSequenced.length === 0) return;
+    SQLServerDataProvider._fieldOrderWarnedEntities.add(entityInfo.Name);
+    const bar = '='.repeat(100);
+    console.warn(
+      `\n${bar}\n` +
+      `⚠️  ENTITY FIELD-ORDER INCONSISTENCY — ${entityInfo.Name}\n` +
+      `${bar}\n` +
+      `   Base column(s) sequenced AFTER a virtual/related field: ${misSequenced.join(', ')}\n` +
+      `   EntityField Sequence order does not match the base view ([base].* then related joins). The\n` +
+      `   save-capture (@ResultTable) re-orders base-before-virtual so saves remain CORRECT — but this\n` +
+      `   is a metadata/CodeGen sequencing defect. Re-run CodeGen; if it persists, the field's Sequence\n` +
+      `   must be renumbered below the virtual fields. (SQLServerDataProvider.getAllEntityColumnsSQL)\n` +
+      `${bar}\n`
+    );
+  }
+
+  /** Entities already warned about a view-order fallback — so we warn once, not every save. */
+  private static _viewOrderFallbackWarnedEntities: Set<string> = new Set<string>();
+
+  /**
+   * RISK GUARD: `getAllEntityColumnsSQL` could not declare @ResultTable in the base view's ACTUAL column
+   * order (the view wasn't captured in `_viewColumnOrderCache`, its column count diverged from the
+   * entity's field count, or a view column had no matching EntityField) and fell back to the
+   * metadata-derived non-virtual-then-virtual partition. That partition is only provably correct when the
+   * view lays base columns out BEFORE the related joins (the canonical CodeGen shape). When the entity has
+   * VIRTUAL (joined) fields, a hand-maintained view that places a base column AFTER a join mis-routes
+   * values by position — the exact `nvarchar→bit` / `nvarchar→uniqueidentifier` save failure this fix
+   * exists to prevent — and the fallback cannot detect it from metadata alone. So surface the fallback
+   * loudly (once per entity) whenever virtuals are present, with the reason, so a deviating manually
+   * managed view can be confirmed/captured rather than silently shipping the bug. A base-only entity has
+   * no join to reorder around, so its fallback is safe and stays quiet.
+   */
+  private warnOnViewOrderFallback(entityInfo: EntityInfo, reason: string | undefined): void {
+    if (!entityInfo.Fields.some((f) => f.IsVirtual)) return; // no joins → metadata partition is safe; nothing to warn
+    if (SQLServerDataProvider._viewOrderFallbackWarnedEntities.has(entityInfo.Name)) return;
+    SQLServerDataProvider._viewOrderFallbackWarnedEntities.add(entityInfo.Name);
+    const bar = '='.repeat(100);
+    console.warn(
+      `\n${bar}\n` +
+      `⚠️  SAVE-CAPTURE VIEW-ORDER FALLBACK — ${entityInfo.Name}\n` +
+      `${bar}\n` +
+      `   Could not declare @ResultTable in the base view's actual column order; fell back to the\n` +
+      `   metadata-derived (non-virtual then virtual) order.\n` +
+      `   Reason: ${reason ?? 'unknown'}.\n` +
+      `   This entity has virtual/related (joined) field(s), so if the base view '${entityInfo.SchemaName}.${entityInfo.BaseView}'\n` +
+      `   places a base column AFTER a join, the positional save-capture will mis-route values into\n` +
+      `   wrong-typed slots (nvarchar→bit / nvarchar→uniqueidentifier conversion errors that fail the\n` +
+      `   save). Confirm that view is captured at Config and its column order matches the EntityField\n` +
+      `   metadata. (SQLServerDataProvider.getAllEntityColumnsSQL)\n` +
+      `${bar}\n`
+    );
   }
 
   /**
@@ -941,7 +1122,7 @@ export class SQLServerDataProvider
     const recordChangesEntityInfo = this.Entities.find((e) => e.Name === 'MJ: Record Changes');
     const spName = this.GetCreateUpdateSPName(entity, payload.type === 'Create');
     const concatPKIDString = `CONCAT(${entity.EntityInfo.PrimaryKeys
-      .map((pk) => `'${pk.CodeName}','${CompositeKey.DefaultValueDelimiter}',${pk.Name}`)
+      .map((pk) => `'${pk.CodeName}','${CompositeKey.DefaultValueDelimiter}',[${pk.Name}]`)
       .join(`,'${CompositeKey.DefaultFieldDelimiter}',`)})`;
 
     // Build the inline `EXEC spCreateRecordChange_Internal` from the payload,
@@ -1369,41 +1550,45 @@ export class SQLServerDataProvider
   ): Promise<Record<string, unknown>[]> {
     const needsAdjustment = await this.NeedsDatetimeOffsetAdjustment();
 
-    return rows.map((row) => {
-      const processedRow = { ...row };
+    // Precompute each field's name + lowercased SQL type ONCE rather than calling
+    // field.Type.toLowerCase() up to 3x per field per row. The rows are freshly produced
+    // by the driver query and owned by this pipeline, so we adjust them in place instead
+    // of allocating a `{ ...row }` shallow copy for every row.
+    const specs = datetimeFields.map((f) => ({ name: f.Name, kind: f.Type.toLowerCase() }));
 
-      for (const field of datetimeFields) {
-        const fieldValue = processedRow[field.Name];
+    for (const row of rows) {
+      for (const spec of specs) {
+        const fieldValue = row[spec.name];
         if (fieldValue === null || fieldValue === undefined) continue;
 
-        if (field.Type.toLowerCase() === 'datetime2') {
+        if (spec.kind === 'datetime2') {
           if (typeof fieldValue === 'string') {
             if (!fieldValue.includes('Z') && !fieldValue.includes('+') && !fieldValue.includes('-')) {
-              processedRow[field.Name] = new Date(fieldValue.replace(' ', 'T') + 'Z');
+              row[spec.name] = new Date(fieldValue.replace(' ', 'T') + 'Z');
             } else {
-              processedRow[field.Name] = new Date(fieldValue);
+              row[spec.name] = new Date(fieldValue);
             }
           } else if (fieldValue instanceof Date) {
             const timezoneOffsetMs = fieldValue.getTimezoneOffset() * 60 * 1000;
-            processedRow[field.Name] = new Date(fieldValue.getTime() + timezoneOffsetMs);
+            row[spec.name] = new Date(fieldValue.getTime() + timezoneOffsetMs);
           }
-        } else if (field.Type.toLowerCase() === 'datetimeoffset') {
+        } else if (spec.kind === 'datetimeoffset') {
           if (typeof fieldValue === 'string') {
-            processedRow[field.Name] = new Date(fieldValue);
+            row[spec.name] = new Date(fieldValue);
           } else if (fieldValue instanceof Date && needsAdjustment) {
             const timezoneOffsetMs = fieldValue.getTimezoneOffset() * 60 * 1000;
-            processedRow[field.Name] = new Date(fieldValue.getTime() + timezoneOffsetMs);
+            row[spec.name] = new Date(fieldValue.getTime() + timezoneOffsetMs);
           }
-        } else if (field.Type.toLowerCase() === 'datetime') {
+        } else if (spec.kind === 'datetime') {
           if (fieldValue instanceof Date) {
             const timezoneOffsetMs = fieldValue.getTimezoneOffset() * 60 * 1000;
-            processedRow[field.Name] = new Date(fieldValue.getTime() + timezoneOffsetMs);
+            row[spec.name] = new Date(fieldValue.getTime() + timezoneOffsetMs);
           }
         }
       }
+    }
 
-      return processedRow;
-    });
+    return rows;
   }
 
 
@@ -1569,6 +1754,29 @@ export class SQLServerDataProvider
       // Error already logged by _internalExecuteSQL
       throw e; // force caller to handle
     }
+  }
+
+  // ─── Colocated vector host (IColocatedVectorHost) ────────────────
+  // Lets a colocated vector provider (e.g. SQLServerVectorDatabase, SQL Server 2025 native
+  // vectors) store and query vectors in THIS database, reusing this connection — instead of
+  // opening a separate pool to a remote vector store.
+
+  public get ColocatedDialect(): DatabasePlatform {
+    return 'sqlserver';
+  }
+
+  public get ColocatedSchema(): string {
+    return this.MJCoreSchemaName;
+  }
+
+  /**
+   * Execute a parameterized statement for a colocated vector provider against this connection.
+   * Positional params bind to `@p0..@pN` (handled by {@link ExecuteSQL}'s array path), so the
+   * colocated provider emits `@p0`-style placeholders. Returns the recordset rows.
+   */
+  public async RunColocatedSQL<T = Record<string, unknown>>(sqlText: string, params?: ReadonlyArray<unknown>): Promise<T[]> {
+    const rows = await this.ExecuteSQL(sqlText, params ? [...params] : null);
+    return (Array.isArray(rows) ? rows : []) as T[];
   }
 
   /**

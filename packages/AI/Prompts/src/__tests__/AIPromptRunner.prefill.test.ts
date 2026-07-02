@@ -567,4 +567,53 @@ describe('AIPromptRunner Assistant Prefill', () => {
       );
     });
   });
+
+  // --------------------------------------------------------------------------
+  // 5. shouldApplyStopSequences — stop sequences coupled to prefill support
+  //    Mirrors AIPromptRunner.shouldApplyStopSequences.
+  //    Prevents the "\n```" closing-fence stop from firing on the OPENING fence
+  //    when a non-prefill model (e.g. Gemini) adds a preamble before its JSON.
+  // --------------------------------------------------------------------------
+  describe('shouldApplyStopSequences', () => {
+    function shouldApplyStopSequences(
+      prompt: MockPrompt,
+      model: MockModel,
+      modelVendor: MockModelVendor | undefined,
+      llmSupportsPrefill: boolean
+    ): boolean {
+      if (!prompt.AssistantPrefill) {
+        return true; // independent stop sequences — always honor
+      }
+      return resolveSupportsPrefill(undefined, model, modelVendor, llmSupportsPrefill);
+    }
+
+    const fencePrompt: MockPrompt = { AssistantPrefill: '```json', PrefillFallbackMode: 'Ignore' };
+    const noPrefillPrompt: MockPrompt = { AssistantPrefill: null, PrefillFallbackMode: 'None' };
+    const inheritModel: MockModel = { ID: 'm1', AIModelTypeID: 't1', SupportsPrefill: null, PrefillFallbackText: null };
+
+    it('applies stop sequences when the prompt has no AssistantPrefill (independent stops)', () => {
+      // llm default false, but no prefill coupling → still applied
+      expect(shouldApplyStopSequences(noPrefillPrompt, inheritModel, undefined, false)).toBe(true);
+    });
+
+    it('SKIPS prefill-paired stop sequences when the model does NOT support prefill (the Gemini bug)', () => {
+      // Gemini: llm default false, model/vendor null → resolves false → stop suppressed
+      expect(shouldApplyStopSequences(fencePrompt, inheritModel, undefined, false)).toBe(false);
+    });
+
+    it('applies prefill-paired stop sequences when the model supports native prefill (e.g. Anthropic)', () => {
+      // llm default true (Anthropic overrides) → resolves true → stop applied
+      expect(shouldApplyStopSequences(fencePrompt, inheritModel, undefined, true)).toBe(true);
+    });
+
+    it('applies prefill-paired stop sequences when a vendor explicitly enables prefill', () => {
+      const vendor: MockModelVendor = { ModelID: 'm1', VendorID: 'v1', Status: 'Active', SupportsPrefill: true, PrefillFallbackText: null };
+      expect(shouldApplyStopSequences(fencePrompt, inheritModel, vendor, false)).toBe(true);
+    });
+
+    it('SKIPS prefill-paired stop sequences when a vendor explicitly disables prefill', () => {
+      const vendor: MockModelVendor = { ModelID: 'm1', VendorID: 'v1', Status: 'Active', SupportsPrefill: false, PrefillFallbackText: null };
+      expect(shouldApplyStopSequences(fencePrompt, inheritModel, vendor, true)).toBe(false);
+    });
+  });
 });

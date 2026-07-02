@@ -24,6 +24,8 @@ import { DBAutoDocConfig } from '../types/config.js';
 import { DatabaseDocumentation, AnalysisRun } from '../types/state.js';
 import { DiscoveryTriggerAnalyzer } from '../discovery/DiscoveryTriggerAnalyzer.js';
 import { DiscoveryEngine } from '../discovery/DiscoveryEngine.js';
+import { OrganicKeyDetector } from '../discovery/OrganicKeyDetector.js';
+import { DetectedOrganicKeysOutput } from '../discovery/OrganicKeyTranslator.js';
 
 export interface AnalysisOptions {
   config: DBAutoDocConfig;
@@ -395,6 +397,35 @@ export class AnalysisOrchestrator {
         await stateManager.save(state);
       }
 
+      // ── Organic Key Detection Phase (OPTIONAL) ─────────────────────────────
+      // Runs AFTER descriptions + PK/FK discovery, only when explicitly enabled.
+      // Clusters columns across tables/schemas by shared business identity (email,
+      // phone, customer id, …) using normalized descriptions → embeddings →
+      // clustering → per-concept split. Output is persisted into state.json AND
+      // fed to the additionalSchemaInfo generator so CodeGen writes the
+      // EntityOrganicKey / EntityOrganicKeyRelatedEntity metadata.
+      let organicKeyOutput: DetectedOrganicKeysOutput | undefined;
+      if (this.config.analysis.organicKeyDetection?.enabled) {
+        this.onProgress('Running organic-key detection');
+        try {
+          const detector = new OrganicKeyDetector(this.config.analysis.organicKeyDetection, this.config.ai);
+          const okResult = await detector.detect(state, {
+            onProgress: (msg) => this.onProgress(msg),
+          });
+          state.organicKeyClusters = okResult.clusters;
+          state.phases.organicKeyDetection = okResult.phase;
+          organicKeyOutput = okResult.output;
+          this.onProgress('Organic-key detection complete', {
+            clustersFound: okResult.summary.clustersFound,
+            clustersEmitted: okResult.summary.clustersEmitted,
+            outputKeys: okResult.summary.outputKeys,
+          });
+        } catch (err) {
+          // Non-fatal — organic-key detection is optional enrichment. Log and continue.
+          this.onProgress(`Organic-key detection failed (continuing): ${(err as Error).message}`);
+        }
+      }
+
       // Final state update
       stateManager.updateSummary(state);
       await stateManager.save(state);
@@ -411,9 +442,9 @@ export class AnalysisOrchestrator {
       const mdPath = path.join(runFolder, 'summary.md');
       await fs.writeFile(mdPath, markdown, 'utf-8');
 
-      // Generate additionalSchemaInfo.json for CodeGen soft FK/PK support
+      // Generate additionalSchemaInfo.json for CodeGen soft FK/PK + organic key support
       const schemaInfoGen = new AdditionalSchemaInfoGenerator();
-      const schemaInfo = schemaInfoGen.generate(state, {});
+      const schemaInfo = schemaInfoGen.generate(state, { organicKeys: organicKeyOutput });
       const schemaInfoPath = path.join(runFolder, 'additionalSchemaInfo.json');
       await fs.writeFile(schemaInfoPath, schemaInfo, 'utf-8');
 

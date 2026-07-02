@@ -1,4 +1,5 @@
-import type { IMetadataProvider, IRunViewProvider, QueryInfo, UserInfo } from "@memberjunction/core";
+import type { IMetadataProvider, IRunViewProvider, UserInfo } from "@memberjunction/core";
+import type { MJQueryEntityExtended } from "@memberjunction/core-entities";
 import type { MJParameterInfo, MJParseResult, SQLSelectColumn, SQLTableReference } from "@memberjunction/sql-parser";
 
 // ═══════════════════════════════════════════════════
@@ -64,7 +65,7 @@ export interface PassthroughParamContext {
  * then consumed by both dependency sync and passthrough parameter extraction.
  */
 export interface ResolvedCompositionReference {
-    depQuery: QueryInfo;
+    depQuery: MJQueryEntityExtended;
     referencePath: string;
     alias: string | null;
     parameterMapping: Record<string, string> | null;

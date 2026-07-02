@@ -1,5 +1,7 @@
 # Full-Text Search Guide
 
+> **Looking for ranked, per-entity, hybrid lexical + semantic search?** That's a separate API: see **[ENTITY_SEARCH_GUIDE.md](../../../guides/ENTITY_SEARCH_GUIDE.md)** (`SearchEntity` / `SearchEntities`). FTS as described below is lexical-only and operates across many entities at once. For the broader picture of which search API to use when, see **[SEARCH_OVERVIEW_GUIDE.md](../../../guides/SEARCH_OVERVIEW_GUIDE.md)**.
+
 ## Overview
 
 MemberJunction provides a built-in full-text search (FTS) capability that searches across all entities configured for FTS in the database. The implementation is database-agnostic — it works with SQL Server (using `FREETEXT` and full-text catalogs/indexes) and PostgreSQL (using `tsvector`/`GIN` indexes) through the provider architecture.

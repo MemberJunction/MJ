@@ -1,0 +1,24 @@
+<div class="sees-pop" (click)="$event.stopPropagation()">
+  <div class="sees-pop__head">
+    <i class="fa-solid fa-feather"></i> Live perception feed → {{ AgentName }}'s context
+    <span class="pill pill--sage">coalesced delta</span>
+  </div>
+  <div class="sees-pop__body">
+    <p class="sees-pop__cap">
+      {{ AgentName }} doesn't see pixels — every change you make is serialized into a compact,
+      debounced scene delta and fed into the live agent context. This is the most recent one:
+    </p>
+    @if (TintedHtml) {
+      <pre class="codeblock"><span [innerHTML]="TintedHtml"></span>
+<span class="cc">// replace-current-state semantics — not an append-only log</span></pre>
+    } @else {
+      <pre class="codeblock"><span class="cc">// no deltas yet — start sketching</span></pre>
+    }
+  </div>
+  <div class="sees-pop__foot">
+    <span>debounce <b>{{ DebounceMs }} ms</b></span>
+    <span>elements <b>{{ ElementCount }}</b></span>
+    <span>last delta <b>{{ LastDeltaLabel }}</b></span>
+    <span>state of record <b>session artifact</b></span>
+  </div>
+</div>

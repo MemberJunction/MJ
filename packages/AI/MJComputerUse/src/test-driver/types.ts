@@ -107,6 +107,57 @@ export interface ComputerUseTestConfig {
 
     /** MJ Actions to expose as tools to the controller LLM (resolved by MJComputerUseEngine) */
     actions?: Array<{ actionName?: string; actionId?: string }>;
+
+    /** Additional Chromium launch arguments (e.g., ["--unsafely-treat-insecure-origin-as-secure=http://example:4200"]) */
+    browserArgs?: string[];
+
+    /**
+     * Attach to an already-running browser instead of launching one.
+     * Auto-detects the connect method from the URL scheme:
+     *   - `http(s)://…`  → Chrome DevTools Protocol (`chromium.connectOverCDP`)
+     *   - `ws(s)://…`    → Playwright browser server (`chromium.connect`)
+     *
+     * When set, the test driver does NOT close the browser at shutdown — the
+     * caller owns its lifecycle. `headless` is ignored (the external browser
+     * already decided).
+     *
+     * In parallel-worker test runs, `HeadlessBrowserEngine` is a process-global
+     * singleton — the first worker to initialize wins. All workers in a suite
+     * must agree on this endpoint or behavior is undefined.
+     */
+    connect?: string;
+
+    /**
+     * Force the connect method. A raw CDP websocket also uses `ws://`, which
+     * auto-detect would treat as a Playwright server; set `'cdp'` to override.
+     * Defaults to `'auto'` (scheme-based detection). Ignored when `connect` is unset.
+     */
+    connectType?: 'cdp' | 'server' | 'auto';
+
+    /**
+     * When attached, reuse the running browser's first existing context so its
+     * cookies / auth / session are shared, instead of creating a fresh isolated
+     * context. Defaults to false. Breaks per-test isolation. Ignored when
+     * `connect` is unset.
+     *
+     * Only honored on the engine.Run() path (sequential / `"new-clean"` strategy).
+     * The parallel path (`HeadlessBrowserEngine.GetIsolated`/`GetRecycled`)
+     * always creates its own contexts under the attached browser.
+     */
+    reuseExistingContext?: boolean;
+
+    /**
+     * Browser session strategy. Controls how the browser context is managed.
+     *
+     * - `"new"` — Fresh context every test (default for sequential execution)
+     * - `"shared:suite"` — Shared context per suite run + worker (default for parallel execution)
+     * - `"shared:global"` — Shared context globally per worker
+     * - Any other string — Used as a literal key for HeadlessBrowserEngine.GetRecycled()
+     *
+     * When running in parallel (workerIndex is set on context), defaults to "shared:suite"
+     * so that auth state persists between tests in the same worker.
+     */
+    browserSession?: string;
 }
 
 // ─── Input Definition (TestEntity.InputDefinition JSON) ───────────

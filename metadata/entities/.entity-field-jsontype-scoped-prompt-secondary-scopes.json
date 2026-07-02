@@ -1,0 +1,38 @@
+[
+  {
+    "_comments": [
+      "Sets JSONType metadata on SecondaryScopes (MJ: Scoped Prompt Parts entity) so CodeGen",
+      "emits a typed SecondaryScopesObject accessor returning ISecondaryScopes. Mirrors the",
+      "agent runtime's SecondaryScopes shape (ExecuteAgentParams / AIAgentNote / AIAgentRun).",
+      "The EntityField row must exist (created by a CodeGen pass over the column) before this",
+      "@lookup resolves on push. Run mj sync push then mj codegen to pick up the typed accessor."
+    ],
+    "fields": {
+      "Name": "MJ: Scoped Prompt Parts"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "IAISecondaryScopes",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IAISecondaryScopes.ts"
+          },
+          "_comments": [
+            "SecondaryScopes field — open map of secondary scope dimensions"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Scoped Prompt Parts&Name=SecondaryScopes"
+          },
+          "sync": {
+            "lastModified": "2026-07-01T17:33:48.797Z",
+            "checksum": "cac33d736602eb28b24f302eca53c39ad57251db97ba452defa4d6f3ea1beb51"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Scoped Prompt Parts"
+    }
+  }
+]

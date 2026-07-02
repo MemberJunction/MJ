@@ -6,6 +6,7 @@ import {
   MJPageHeaderComponent,
   MJPageLayoutComponent,
   MJPageBodyComponent,
+  MJPageBodyInteriorComponent,
   MJTabNavComponent,
   MJFilterChipComponent,
   MJFilterPopoverComponent,
@@ -15,11 +16,14 @@ import {
   MJStatBadgeComponent,
   MJRefreshButtonComponent,
   MJLeftNavComponent,
-  MJLeftNavContentComponent
+  MJLeftNavContentComponent,
+  MjSlidePanelComponent,
+  MJEmptyStateComponent,
+  MJAlertComponent,
+  MJAccordionModule
 } from '@memberjunction/ng-ui-components';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { TestingModule } from '@memberjunction/ng-testing';
-import { VersionsModule } from '@memberjunction/ng-versions';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { SharedDashboardWidgetsModule } from './shared/shared-dashboard-widgets.module';
 import { SharedPipesModule } from './shared/shared-pipes.module';
@@ -71,6 +75,7 @@ import { TestingInstrumentationService } from './Testing/services/testing-instru
     MJPageHeaderComponent,
     MJPageLayoutComponent,
     MJPageBodyComponent,
+    MJPageBodyInteriorComponent,
     MJTabNavComponent,
     MJFilterChipComponent,
     MJFilterPopoverComponent,
@@ -83,7 +88,10 @@ import { TestingInstrumentationService } from './Testing/services/testing-instru
     MJLeftNavContentComponent,
     ContainerDirectivesModule,
     TestingModule,
-    VersionsModule,
+    MjSlidePanelComponent,
+    MJEmptyStateComponent,
+    MJAlertComponent,
+    MJAccordionModule,
     SharedGenericModule,
     SharedDashboardWidgetsModule,
     SharedPipesModule

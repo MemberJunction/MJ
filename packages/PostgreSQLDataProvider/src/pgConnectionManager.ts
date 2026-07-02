@@ -26,6 +26,15 @@ export interface PGConnectionConfig {
     ConnectionTimeoutMillis?: number;
     /** MemberJunction schema name (default: __mj) */
     MJCoreSchemaName?: string;
+    /**
+     * libpq-style connection options applied at startup, passed verbatim as
+     * pg.PoolConfig.options. Common use: server-side GUCs that should take
+     * effect from the first query, e.g. `-c statement_timeout=30000`. Unlike
+     * a runtime `SET` on the pool's `connect` event, this is included in the
+     * PostgreSQL startup packet and is honored by every backend including the
+     * one created during the Initialize() verify-SELECT-1 step.
+     */
+    Options?: string;
 }
 
 /**
@@ -82,11 +91,18 @@ export class PGConnectionManager {
             database: config.Database,
             user: config.User,
             password: config.Password,
-            ssl: config.SSL ?? false,
+            // SSL default: explicit config wins; otherwise ON in production so managed Postgres (e.g. AWS
+            // Aurora with rds.force_ssl=1, the AWS default) is not rejected or silently downgraded to an
+            // unencrypted channel. Dev/local stays OFF unless explicitly enabled. For Aurora, pass an SSL
+            // object (e.g. { rejectUnauthorized: true, ca: <Aurora CA bundle> }) via config.SSL.
+            ssl: config.SSL ?? (process.env.NODE_ENV === 'production'),
             max: config.MaxConnections ?? 20,
             min: config.MinConnections ?? 2,
             idleTimeoutMillis: config.IdleTimeoutMillis ?? 30000,
             connectionTimeoutMillis: config.ConnectionTimeoutMillis ?? 30000,
+            // Optional libpq startup options (e.g. `-c statement_timeout=30000`) — applied
+            // by every backend from connection #1, including the verify-SELECT-1 below.
+            ...(config.Options ? { options: config.Options } : {}),
         });
 
         // Verify connectivity

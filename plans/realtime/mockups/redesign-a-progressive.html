@@ -1,0 +1,907 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark" data-state="0">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Redesign A · Progressive Disclosure — Realtime Co-Agent UI</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="mockups.css">
+<style>
+/* ====================================================================
+   REDESIGN A+ — "PROGRESSIVE CONSOLE"
+   The selected Console design shown at FIVE disclosure moments,
+   starting from PURE AUDIO (state 0: a breathing orb, no text at all).
+   A state scrubber in the topbar drives html[data-state]; every
+   element that "arrives" at a later state slides/fades in via CSS
+   transitions so the GROWTH of the UI is visible, not just the result.
+
+   Disclosure classes:
+     .s1 .s2 .s3 .s4 — element exists from that state ONWARD (ratchet)
+     .x0 .x1 .x2 .x3 — element exists ONLY at that exact state (ephemeral)
+     .x01            — exists at states 0 AND 1 only (the call strip)
+   Flavors:  .fb block-collapse · .fi inline-collapse · .ff fade-only
+   Peek:     html[data-peek="1"] (state 0 only) — the Details button
+             slides the surface panel in on demand, before any content.
+   ==================================================================== */
+
+.frame { position: relative; width: 100%; max-width: 1640px; margin: 0 auto; padding: 16px 20px 48px; }
+.ov {
+  position: relative; height: 846px; display: flex; flex-direction: column;
+  border: 1px solid var(--mj-border-default); border-radius: var(--mj-radius-xl);
+  overflow: hidden; background: var(--mj-bg-page); box-shadow: var(--mj-shadow-2xl);
+}
+
+/* ---------- state scrubber (topbar) ---------- */
+.mode-switch { display: inline-flex; border: 1px solid var(--mj-border-default); border-radius: var(--mj-radius-full); background: var(--mj-bg-surface); padding: 3px; gap: 3px; }
+.mode-switch button {
+  border: 0; background: transparent; color: var(--mj-text-muted); font-family: inherit; font-size: 12px;
+  font-weight: 700; padding: 5px 13px; border-radius: var(--mj-radius-full); cursor: pointer; display: inline-flex; align-items: center; gap: 7px;
+  transition: all 160ms ease; white-space: nowrap;
+}
+.mode-switch button .n {
+  width: 16px; height: 16px; border-radius: 50%; display: grid; place-items: center; font-size: 10px;
+  background: var(--mj-bg-surface-elevated); color: var(--mj-text-secondary);
+}
+.mode-switch button.on { background: var(--mj-brand-primary); color: #fff; box-shadow: var(--mj-shadow-brand); }
+.mode-switch button.on .n { background: rgba(255,255,255,0.22); color: #fff; }
+
+/* ---------- per-state caption strip above the frame ---------- */
+.state-caps { display: grid; height: 24px; margin: 0 4px 12px; }
+.state-caps > span {
+  grid-area: 1 / 1; text-align: center; font-size: 12.5px; color: var(--mj-text-muted);
+}
+.state-caps b { color: var(--mj-text-secondary); }
+.state-caps .ax { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; padding: 1px 8px; border-radius: var(--mj-radius-full); margin-right: 8px; vertical-align: 1px; }
+.state-caps .ax--content { background: var(--sage-bg); border: 1px solid var(--sage-border); color: var(--mj-color-violet-300); }
+.state-caps .ax--cap { background: rgba(38,153,204,0.14); border: 1px solid var(--mj-brand-primary); color: var(--mj-brand-accent); }
+
+/* ---------- design-note tags ---------- */
+.dn {
+  position: absolute; z-index: 45; display: inline-flex; align-items: center; gap: 6px;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.03em; line-height: 1.4;
+  padding: 3px 9px; border-radius: var(--mj-radius-full); pointer-events: none; white-space: nowrap;
+  background: color-mix(in srgb, var(--mj-color-tertiary-500) 16%, var(--mj-bg-surface-sunken));
+  border: 1px dashed var(--mj-color-tertiary-400); color: var(--mj-color-tertiary-300);
+  box-shadow: var(--mj-shadow-md);
+}
+.dn i { font-size: 9px; }
+
+/* ---------- THE UNIFIED APP-BAR HEADER (grows with the user) ---------- */
+.bar {
+  position: relative; display: flex; align-items: center; gap: 14px; flex-shrink: 0;
+  height: 62px; padding: 0 16px 0 18px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--mj-brand-primary) 9%, var(--mj-bg-surface)), var(--mj-bg-surface));
+  border-bottom: 1px solid var(--mj-border-default);
+  transition: height 500ms cubic-bezier(.3,.7,.3,1);
+}
+:is(html[data-state="0"], html[data-state="1"]) .bar { height: 78px; }
+.bar .agent-orb { width: 36px; height: 36px; transition: width 500ms cubic-bezier(.3,.7,.3,1), height 500ms cubic-bezier(.3,.7,.3,1), opacity 400ms ease, margin 500ms cubic-bezier(.3,.7,.3,1); }
+.bar .agent-orb::after { inset: -4px; }
+html[data-state="1"] .bar .agent-orb { width: 48px; height: 48px; }
+/* state 0: the HERO orb owns the stage — the bar orb cedes it */
+html[data-state="0"] .bar .agent-orb { width: 0; height: 0; opacity: 0; margin-right: -14px; }
+
+.bar-id { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.bar-name { font-weight: 700; font-size: 14.5px; letter-spacing: -0.01em; display: flex; align-items: center; gap: 9px; white-space: nowrap; }
+.bar-sub { font-size: 11.5px; color: var(--mj-text-muted); white-space: nowrap; display: grid; }
+.bar-sub > span { grid-area: 1 / 1; display: flex; align-items: center; gap: 7px; }
+.bar-sub b { color: var(--mj-text-secondary); font-weight: 600; }
+.bar-sub .sep { color: var(--mj-text-disabled); }
+
+/* picker caret — power-user only */
+.id-caret {
+  width: 22px; height: 22px; border-radius: var(--mj-radius-sm); display: grid; place-items: center;
+  border: 1px solid var(--mj-border-default); background: var(--mj-bg-surface-card);
+  color: var(--mj-text-muted); cursor: pointer; font-size: 9px;
+}
+.id-caret:hover { color: var(--mj-text-primary); border-color: var(--mj-border-strong); }
+
+.state-chip {
+  display: inline-flex; align-items: center; gap: 9px; padding: 6px 14px; margin-left: 6px;
+  border-radius: var(--mj-radius-full); border: 1px solid var(--mj-color-success-600);
+  background: var(--mj-status-success-bg); color: var(--mj-status-success-text);
+  font-size: 12px; font-weight: 700;
+}
+.state-chip .waveform { height: 14px; } .state-chip .waveform span { width: 2px; background: var(--mj-status-success); }
+
+.bar-spacer { flex: 1; }
+.bar-right { display: flex; align-items: center; gap: 8px; }
+.bar-sep { width: 1px; height: 26px; background: var(--mj-border-default); }
+
+.iconb {
+  width: 34px; height: 34px; border-radius: var(--mj-radius-md); display: grid; place-items: center;
+  border: 1px solid var(--mj-border-default); background: var(--mj-bg-surface-card);
+  color: var(--mj-text-secondary); cursor: pointer; font-size: 13px;
+}
+.iconb:hover { color: var(--mj-text-primary); border-color: var(--mj-border-strong); }
+.iconb.on { background: rgba(38,153,204,0.16); border-color: var(--mj-brand-primary); color: var(--mj-brand-accent); }
+.devlink {
+  display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px; font-size: 12px; font-weight: 600;
+  border: 1px solid var(--mj-border-default); border-radius: var(--mj-radius-full); cursor: pointer;
+  background: transparent; color: var(--mj-text-muted); font-family: inherit;
+}
+.devlink:hover { color: var(--mj-text-secondary); border-color: var(--mj-border-strong); }
+.devlink i { font-size: 10px; }
+
+.end-pill {
+  display: inline-flex; align-items: center; gap: 9px; padding: 8px 18px; font-size: 13px; font-weight: 700;
+  border-radius: var(--mj-radius-full); border: 1px solid var(--mj-status-error); cursor: pointer; font-family: inherit;
+  background: var(--mj-status-error); color: #fff; box-shadow: 0 4px 16px rgba(239,68,68,0.35); white-space: nowrap;
+}
+.end-pill:hover { background: #dc2626; }
+.close-x {
+  width: 34px; height: 34px; border-radius: var(--mj-radius-md); display: grid; place-items: center;
+  border: 1px solid var(--mj-border-default); background: var(--mj-bg-surface-card);
+  color: var(--mj-text-secondary); cursor: pointer; font-size: 14px;
+}
+.close-x:hover { color: var(--mj-text-primary); border-color: var(--mj-border-strong); background: var(--mj-bg-surface-hover); }
+
+/* ---------- gear dropdown — the manual escape hatch (state 4) ---------- */
+.gear-pop {
+  position: absolute; top: 58px; right: 212px; z-index: 70; width: 264px;
+  border: 1px solid var(--mj-border-strong); border-radius: var(--mj-radius-lg);
+  background: var(--mj-bg-surface-elevated); box-shadow: var(--mj-shadow-xl); padding: 12px 14px 10px;
+}
+.gear-pop::before {
+  content: ""; position: absolute; top: -6px; right: 26px; width: 10px; height: 10px; transform: rotate(45deg);
+  background: var(--mj-bg-surface-elevated); border-left: 1px solid var(--mj-border-strong); border-top: 1px solid var(--mj-border-strong);
+}
+.gp-h { font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; color: var(--mj-text-muted); margin-bottom: 9px; }
+.gp-row { display: flex; align-items: center; gap: 10px; }
+.gp-l { font-size: 12px; font-weight: 600; color: var(--mj-text-secondary); }
+.gp-seg { display: inline-flex; flex: 1; border: 1px solid var(--mj-border-default); border-radius: var(--mj-radius-md); background: var(--mj-bg-surface); padding: 2px; gap: 2px; }
+.gp-seg button { flex: 1; border: 0; background: transparent; color: var(--mj-text-muted); font-family: inherit; font-size: 11px; font-weight: 700; padding: 4px 0; border-radius: 6px; cursor: pointer; }
+.gp-seg button.on { background: var(--mj-brand-primary); color: #fff; }
+.gp-note { font-size: 10.5px; color: var(--mj-text-muted); line-height: 1.45; margin-top: 8px; }
+.gp-div { height: 1px; background: var(--mj-border-default); margin: 10px -14px; }
+.gp-link { display: flex; width: 100%; align-items: center; gap: 9px; padding: 6px 2px; border: 0; background: transparent; color: var(--mj-text-secondary); font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer; text-align: left; }
+.gp-link:hover { color: var(--mj-text-primary); }
+.gp-link i { width: 14px; text-align: center; font-size: 11px; color: var(--mj-text-muted); }
+
+/* ---------- BODY ---------- */
+.ov-body { flex: 1; min-height: 0; display: flex; }
+.main { position: relative; flex: 1; min-width: 0; display: flex; flex-direction: column; background: color-mix(in srgb, var(--mj-bg-page) 70%, var(--mj-bg-surface-sunken)); }
+.side { display: flex; min-width: 0; transition: margin-right 600ms cubic-bezier(.25,.8,.3,1), opacity 420ms ease; }
+:is(html[data-state="0"], html[data-state="1"]) .side { margin-right: -625px; opacity: 0; pointer-events: none; }
+.rsz { width: 5px; cursor: col-resize; flex-shrink: 0; background: transparent; border-left: 1px solid var(--mj-border-default); }
+.rsz:hover { background: color-mix(in srgb, var(--mj-brand-primary) 35%, transparent); }
+.panel { position: relative; width: 620px; flex-shrink: 0; display: flex; flex-direction: column; background: var(--mj-bg-surface); }
+
+/* ---------- THREAD ---------- */
+.thread-scroll { position: relative; flex: 1; min-height: 0; overflow-y: auto; padding: 22px 26px 16px; scrollbar-width: thin; scrollbar-color: var(--mj-border-strong) transparent; transition: padding 550ms cubic-bezier(.3,.7,.3,1); }
+html[data-state="1"] .thread-scroll { padding-top: 150px; }
+.thread2 { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; }
+.thread2 .ti { margin-bottom: 18px; }
+.thread-scroll .bubble { max-width: 560px; }
+.bubble p { margin: 0; } .bubble p + p { margin-top: 7px; }
+
+.delegation-block { display: flex; flex-direction: column; gap: 8px; margin-left: 42px; }
+.live-note {
+  display: flex; align-items: flex-start; gap: 9px; max-width: 600px; padding: 7px 12px;
+  font-size: 12.5px; font-style: italic; color: var(--mj-text-secondary); line-height: 1.5;
+  border-left: 2px solid var(--sage-border); background: color-mix(in srgb, var(--sage) 5%, transparent); border-radius: 0 var(--mj-radius-md) var(--mj-radius-md) 0;
+}
+.live-note i { color: var(--mj-color-violet-300); font-size: 11px; margin-top: 3px; }
+.work-card .pill--running { background: var(--sage-bg); color: var(--mj-color-violet-300); border-color: var(--sage-border); margin-left: auto; }
+.work-card .pill--running i { animation: spin 1.1s linear infinite; }
+.work-progress { height: 4px; border-radius: var(--mj-radius-full); margin-top: 12px; background: color-mix(in srgb, var(--sage) 18%, transparent); overflow: hidden; }
+.work-progress__fill { height: 100%; width: 58%; border-radius: inherit; background: linear-gradient(90deg, var(--mj-color-violet-500), var(--mj-color-violet-300)); }
+
+.done-chip {
+  display: inline-flex; align-items: center; gap: 9px; max-width: 640px; padding: 8px 14px; cursor: pointer; font-family: inherit; text-align: left;
+  border: 1px solid var(--sage-border); background: var(--sage-bg); border-radius: var(--mj-radius-full); font-size: 12.5px; color: var(--mj-text-primary);
+}
+.done-chip .mark { width: 17px; height: 17px; border-radius: 50%; background: var(--mj-status-success); color: #fff; display: grid; place-items: center; font-size: 9px; flex-shrink: 0; }
+.done-chip b { font-weight: 700; }
+.done-chip .prev { color: var(--mj-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.done-chip .via { font-size: 10px; font-weight: 800; color: var(--mj-color-violet-300); text-transform: uppercase; letter-spacing: 0.05em; display: inline-flex; gap: 5px; align-items: center; flex-shrink: 0; }
+.alink {
+  display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px; font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit;
+  border: 1px solid var(--mj-brand-primary); border-radius: var(--mj-radius-full); background: rgba(38,153,204,0.14); color: var(--mj-brand-accent);
+}
+.alink i { font-size: 10px; }
+.done-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* ---------- STATE-0 PURE-AUDIO HERO — the orb IS the interface ---------- */
+.hero {
+  position: absolute; inset: 0 0 104px; z-index: 6;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px;
+}
+.hero-stage { position: relative; width: 232px; height: 232px; display: grid; place-items: center; margin-bottom: 6px; }
+.hero-stage .agent-orb { width: 128px; height: 128px; }
+.hero-ring {
+  position: absolute; width: 128px; height: 128px; border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--mj-brand-primary) 60%, transparent);
+  opacity: 0; animation: hero-wave 2.7s cubic-bezier(.2,.6,.4,1) infinite;
+}
+.hero-ring.r2 { animation-delay: 0.9s; }
+.hero-ring.r3 { animation-delay: 1.8s; }
+@keyframes hero-wave {
+  0% { transform: scale(1); opacity: 0.5; }
+  70% { opacity: 0.1; }
+  100% { transform: scale(1.8); opacity: 0; }
+}
+.hero-eq { display: flex; align-items: center; gap: 4px; height: 30px; margin: 0 0 6px; }
+.hero-eq span { width: 4px; height: 8px; border-radius: var(--mj-radius-full); background: var(--mj-brand-accent); animation: hero-eq 1.05s ease-in-out infinite; }
+.hero-eq span:nth-child(1) { animation-delay: 0s; }
+.hero-eq span:nth-child(2) { animation-delay: .14s; }
+.hero-eq span:nth-child(3) { animation-delay: .28s; }
+.hero-eq span:nth-child(4) { animation-delay: .07s; }
+.hero-eq span:nth-child(5) { animation-delay: .21s; }
+.hero-eq span:nth-child(6) { animation-delay: .35s; }
+.hero-eq span:nth-child(7) { animation-delay: .1s; }
+.hero-eq span:nth-child(8) { animation-delay: .24s; }
+.hero-eq span:nth-child(9) { animation-delay: .03s; }
+@keyframes hero-eq {
+  0%, 100% { height: 7px; opacity: 0.6; }
+  50% { height: 28px; opacity: 1; }
+}
+.hero-name { font-size: 19px; font-weight: 800; letter-spacing: -0.01em; }
+.hero-sub { font-size: 12.5px; color: var(--mj-text-muted); }
+
+/* state-0 empty states inside the peeked panel */
+.act-empty {
+  border: 1px dashed var(--mj-border-strong); border-radius: var(--mj-radius-lg);
+  padding: 18px 16px; font-size: 12.5px; color: var(--mj-text-muted); text-align: center; line-height: 1.55;
+}
+.act-empty i { display: block; font-size: 16px; margin-bottom: 8px; color: var(--mj-text-disabled); }
+.board-empty { position: absolute; inset: 0; display: grid; place-items: center; }
+.board-empty > div { max-width: 250px; text-align: center; font-size: 12.5px; color: var(--mj-text-muted); line-height: 1.6; }
+.board-empty i { display: block; font-size: 18px; margin-bottom: 9px; color: var(--mj-text-disabled); }
+
+/* ---------- STATE-0/1 CALL STRIP (phone-call controls) ---------- */
+.call-strip {
+  position: relative; flex-shrink: 0; display: flex; align-items: flex-start; justify-content: center; gap: 26px;
+  padding: 16px 18px 18px; border-top: 1px solid var(--mj-border-default); background: var(--mj-bg-surface);
+}
+.thint {
+  position: absolute; right: 22px; bottom: 22px; display: inline-flex; align-items: center; gap: 7px;
+  font-size: 11px; color: var(--mj-text-disabled); font-weight: 600;
+}
+.thint i { font-size: 12px; }
+kbd {
+  font-family: var(--mj-font-mono); font-size: 10px; font-weight: 700; color: var(--mj-text-muted);
+  border: 1px solid var(--mj-border-strong); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; background: var(--mj-bg-surface-sunken);
+}
+
+/* ---------- BOTTOM DOCK (state 2+) ---------- */
+.dock {
+  position: relative; flex-shrink: 0; display: flex; align-items: center; gap: 12px;
+  padding: 10px 18px; border-top: 1px solid var(--mj-border-default); background: var(--mj-bg-surface);
+}
+.dock .minis { display: flex; gap: 7px; }
+.mini {
+  width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; cursor: pointer; font-size: 13.5px;
+  border: 1px solid var(--mj-border-strong); background: var(--mj-bg-surface-card); color: var(--mj-text-primary);
+}
+.mini:hover { background: var(--mj-bg-surface-hover); }
+.mini.on { background: rgba(38,153,204,0.16); border-color: var(--mj-brand-primary); color: var(--mj-brand-accent); }
+.dock-compose {
+  flex: 1; display: flex; align-items: center; gap: 9px; padding: 5px 6px 5px 14px;
+  border: 1px solid var(--mj-border-strong); border-radius: var(--mj-radius-full); background: var(--mj-bg-surface-card);
+}
+.dock-compose:focus-within { border-color: var(--mj-brand-primary); box-shadow: 0 0 0 3px rgba(38,153,204,0.12); }
+.dock-compose input { flex: 1; min-width: 0; background: transparent; border: 0; outline: none; color: var(--mj-text-primary); font-family: inherit; font-size: 13.5px; }
+.dock-compose input::placeholder { color: var(--mj-text-muted); }
+.dock-compose .hint { font-size: 10.5px; color: var(--mj-text-disabled); font-weight: 600; white-space: nowrap; }
+.dock-send { width: 32px; height: 32px; border-radius: 50%; border: 0; background: var(--mj-brand-primary); color: #fff; display: grid; place-items: center; cursor: pointer; font-size: 12px; }
+
+/* keyboard-shortcuts hint chip (state 4, dismissable) */
+.kbd-chip {
+  position: absolute; left: 50%; bottom: 72px; transform: translateX(-50%); z-index: 30;
+  display: inline-flex; align-items: center; gap: 9px; padding: 6px 8px 6px 13px; white-space: nowrap;
+  border: 1px solid var(--mj-border-strong); border-radius: var(--mj-radius-full);
+  background: var(--mj-bg-surface-elevated); box-shadow: var(--mj-shadow-lg);
+  font-size: 11px; color: var(--mj-text-secondary); font-weight: 600;
+}
+.kbd-chip > i { color: var(--mj-text-muted); }
+.kbd-chip .kbd-x {
+  width: 20px; height: 20px; border-radius: 50%; border: 0; display: grid; place-items: center; cursor: pointer;
+  background: var(--mj-bg-surface-card); color: var(--mj-text-muted); font-size: 9px;
+}
+.kbd-chip .kbd-x:hover { color: var(--mj-text-primary); }
+.kbd-chip.gone { opacity: 0 !important; pointer-events: none; }
+
+/* ---------- SURFACE PANEL ---------- */
+.s-tabs { display: flex; align-items: stretch; flex-shrink: 0; background: var(--mj-bg-surface-sunken); border-bottom: 1px solid var(--mj-border-default); }
+.s-tab {
+  padding: 11px 16px; --px: 16px; border: 0; background: transparent; cursor: pointer; font-family: inherit;
+  font-size: 12.5px; font-weight: 600; color: var(--mj-text-muted); display: inline-flex; align-items: center; gap: 8px;
+  border-bottom: 3px solid transparent; white-space: nowrap;
+}
+.s-tab:hover { color: var(--mj-text-secondary); }
+.s-tab.active { color: var(--mj-brand-accent); border-bottom-color: var(--mj-brand-primary); background: var(--mj-bg-surface); }
+.s-tab .live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--mj-status-success); box-shadow: 0 0 0 0 rgba(34,197,94,0.5); animation: pulse-ring 1.6s infinite; }
+.s-tabs .tabs-end { margin-left: auto; display: flex; align-items: center; padding: 0 8px; gap: 6px; }
+.s-pane { display: none; flex: 1; min-height: 0; flex-direction: column; position: relative; }
+.s-pane.active { display: flex; }
+
+/* violet birth flash on the whiteboard tab — state 3 only */
+html[data-state="3"] .tab-board { animation: tab-flash 1.5s ease 2; }
+@keyframes tab-flash {
+  0%, 100% { background: transparent; box-shadow: none; }
+  38% { background: var(--sage-bg); box-shadow: inset 0 -3px 0 var(--sage); color: var(--mj-color-violet-300); }
+}
+.tab-board .sage-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--sage); box-shadow: 0 0 6px var(--sage); }
+
+/* activity pane */
+.act-list { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; }
+.act-list > * { margin-bottom: 10px; }
+.act-card { border: 1px solid var(--sage-border); background: var(--sage-bg); border-radius: var(--mj-radius-lg); padding: 12px 14px; }
+.act-card--done { border-color: var(--mj-border-default); background: var(--mj-bg-surface-card); }
+.act-top { display: flex; align-items: center; gap: 9px; }
+.act-name { font-weight: 700; font-size: 13px; }
+.act-status { margin-left: auto; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; }
+.act-status--running { color: var(--mj-color-violet-300); } .act-status--running i { animation: spin 1.1s linear infinite; }
+.act-status--done { color: var(--mj-status-success); }
+.act-step { font-size: 12px; color: var(--mj-text-secondary); margin-top: 6px; }
+.act-meta { font-size: 11px; color: var(--mj-text-muted); margin-top: 7px; display: flex; gap: 12px; }
+.act-stats {
+  flex-shrink: 0; display: flex; gap: 18px; padding: 12px 16px; border-top: 1px solid var(--mj-border-subtle);
+  background: var(--mj-bg-surface-sunken); font-size: 11px; color: var(--mj-text-muted); font-weight: 600;
+}
+.act-stats b { color: var(--mj-text-secondary); font-weight: 700; }
+
+/* artifact pane */
+.art-doc { flex: 1; overflow-y: auto; padding: 18px 20px; }
+.art-doc h3 { margin: 0 0 4px; font-size: 16px; letter-spacing: -0.01em; }
+.art-doc .cap { font-size: 11.5px; color: var(--mj-text-muted); margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+.art-sec { border: 1px solid var(--mj-border-default); border-radius: var(--mj-radius-md); background: var(--mj-bg-surface-card); padding: 12px 14px; margin-bottom: 10px; }
+.art-sec .h { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: var(--mj-text-muted); margin-bottom: 8px; }
+.art-row { display: flex; align-items: baseline; justify-content: space-between; font-size: 13px; padding: 4px 0; }
+.art-row b { font-weight: 700; } .art-row .up { color: var(--mj-status-success); font-weight: 700; font-size: 12px; }
+.art-row .muted2 { color: var(--mj-text-muted); font-size: 12px; }
+
+/* whiteboard pane */
+.board-head2 { display: flex; align-items: center; gap: 10px; padding: 9px 14px; border-bottom: 1px solid var(--mj-border-default); background: var(--mj-bg-surface); flex-shrink: 0; }
+.board-head2 .bt { font-weight: 700; font-size: 13px; display: flex; align-items: center; gap: 8px; }
+.board-head2 .bt i { color: var(--mj-brand-accent); }
+.board-save { font-size: 10.5px; color: var(--mj-text-muted); display: inline-flex; align-items: center; gap: 5px; }
+.board-save i { color: var(--mj-status-success); font-size: 9px; }
+.bleg { display: inline-flex; align-items: center; gap: 10px; margin-left: auto; font-size: 10.5px; color: var(--mj-text-muted); }
+.bleg .sw { width: 9px; height: 9px; border-radius: 3px; display: inline-block; margin-right: 4px; vertical-align: -1px; }
+.bleg .sw--you { background: var(--mj-bg-surface-elevated); border: 1px solid var(--mj-border-strong); }
+.bleg .sw--sage { background: var(--sage-bg); border: 1px solid var(--sage); }
+
+/* whiteboard toolbar — reduced (s3) ⇄ full (s4) */
+.btools { position: relative; display: flex; align-items: center; gap: 6px; padding: 7px 12px; border-bottom: 1px solid var(--mj-border-default); background: var(--mj-bg-surface); flex-shrink: 0; }
+.tool {
+  width: 30px; height: 30px; --px: 0px; border-radius: var(--mj-radius-md); display: grid; place-items: center;
+  border: 1px solid var(--mj-border-default); background: var(--mj-bg-surface-card);
+  color: var(--mj-text-secondary); cursor: pointer; font-size: 12px;
+}
+.tool:hover { color: var(--mj-text-primary); border-color: var(--mj-border-strong); }
+.tool.on { background: rgba(38,153,204,0.16); border-color: var(--mj-brand-primary); color: var(--mj-brand-accent); }
+.tool-more {
+  display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 11px; --px: 11px;
+  border: 1px dashed var(--mj-border-strong); border-radius: var(--mj-radius-md); background: transparent;
+  color: var(--mj-text-muted); cursor: pointer; font-family: inherit; font-size: 11px; font-weight: 700; white-space: nowrap;
+}
+.tool-more:hover { color: var(--mj-text-secondary); border-color: var(--mj-border-strong); background: var(--mj-bg-surface-card); }
+.tool-sep { width: 1px; height: 20px; background: var(--mj-border-default); margin: 0 3px; }
+
+.board-canvas2 {
+  position: relative; flex: 1; min-height: 0; overflow: hidden;
+  background-color: var(--mj-bg-surface-sunken);
+  background-image: radial-gradient(rgba(148,163,184,0.14) 1px, transparent 1px); background-size: 22px 22px;
+}
+.bi { position: absolute; box-shadow: var(--mj-shadow-lg); border-radius: 10px; }
+.author-chip { position: absolute; top: -9px; left: 8px; z-index: 3; display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px; font-size: 8.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; border-radius: var(--mj-radius-full); white-space: nowrap; }
+.author-chip--you { background: var(--mj-color-neutral-700); border: 1px solid var(--mj-border-strong); color: var(--mj-color-neutral-300); }
+.author-chip--sage { background: #2a2150; border: 1px solid var(--sage); color: var(--mj-color-violet-300); }
+.sticky-amber { width: 158px; padding: 13px 12px 11px; border-radius: 4px 4px 14px 4px; font-size: 12px; line-height: 1.45; font-weight: 600; background: linear-gradient(180deg, #fcd34d, #f5b831); color: #3f2d04; transform: rotate(-1.2deg); }
+.scard { width: 192px; background: linear-gradient(180deg, #322a5e, #272050); border: 1px solid var(--sage); color: var(--mj-text-primary); box-shadow: 0 0 0 3px rgba(167,139,250,0.18), var(--mj-shadow-lg); padding: 10px 12px 9px; }
+.scard .h { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: var(--mj-color-violet-300); margin-bottom: 7px; display: flex; align-items: center; gap: 6px; }
+.scard .r { display: flex; align-items: baseline; justify-content: space-between; font-size: 12px; padding: 2.5px 0; }
+.scard .r b { font-weight: 700; } .scard .r .v { font-family: var(--mj-font-mono); font-size: 11.5px; }
+.scard .up { color: var(--mj-color-success-400); font-weight: 700; font-size: 10.5px; }
+.scard .wrow { display: flex; align-items: center; gap: 8px; font-size: 12px; padding: 3px 0; }
+.scard .wrow i { width: 16px; text-align: center; color: var(--mj-color-warning-400); }
+.scard .wrow .t { margin-left: auto; font-family: var(--mj-font-mono); font-size: 11.5px; }
+.scard .hl { font-size: 11px; line-height: 1.4; padding: 4px 0; border-bottom: 1px dashed color-mix(in srgb, var(--sage) 30%, transparent); color: var(--mj-text-secondary); }
+.scard .hl:last-child { border-bottom: 0; }
+.scard .hl b { color: var(--mj-text-primary); font-weight: 600; display: block; }
+.conn { position: absolute; pointer-events: none; overflow: visible; }
+.conn path { stroke: var(--sage); stroke-width: 2; fill: none; filter: drop-shadow(0 0 4px rgba(167,139,250,0.3)); }
+.board-toast { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; padding: 7px 14px; border-radius: var(--mj-radius-full); background: var(--sage-bg); border: 1px solid var(--sage-border); color: var(--mj-color-violet-300); font-size: 11.5px; font-weight: 600; box-shadow: var(--mj-shadow-lg); white-space: nowrap; }
+
+/* ---------- LEGEND — the two disclosure axes ---------- */
+.axes {
+  max-width: 980px; margin: 18px auto 0; border: 1px dashed var(--mj-color-tertiary-400); border-radius: var(--mj-radius-lg);
+  background: color-mix(in srgb, var(--mj-color-tertiary-500) 7%, var(--mj-bg-surface-sunken)); padding: 14px 18px;
+}
+.axes .ah { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; color: var(--mj-color-tertiary-300); margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+.axes .arow { display: flex; gap: 12px; align-items: flex-start; padding: 6px 0; font-size: 12.5px; color: var(--mj-text-secondary); line-height: 1.55; }
+.axes .arow + .arow { border-top: 1px dashed color-mix(in srgb, var(--mj-color-tertiary-400) 30%, transparent); }
+.axes .ai { width: 30px; height: 30px; border-radius: var(--mj-radius-md); display: grid; place-items: center; flex-shrink: 0; font-size: 12px; margin-top: 2px; }
+.axes .ai--content { background: var(--sage-bg); border: 1px solid var(--sage-border); color: var(--mj-color-violet-300); }
+.axes .ai--cap { background: rgba(38,153,204,0.14); border: 1px solid var(--mj-brand-primary); color: var(--mj-brand-accent); }
+.axes b { color: var(--mj-text-primary); }
+.axes code { font-family: var(--mj-font-mono); font-size: 11px; color: var(--mj-color-tertiary-300); background: rgba(2,6,23,0.5); padding: 1px 6px; border-radius: 4px; }
+
+/* ====================================================================
+   DISCLOSURE ENGINE — hidden treatments, keyed off html[data-state]
+   Placed last so the state selectors outrank component rules.
+   ==================================================================== */
+.fb { max-height: 640px; transition: max-height 550ms cubic-bezier(.3,.7,.3,1), opacity 400ms ease 100ms, transform 450ms cubic-bezier(.2,.8,.3,1) 80ms, margin 550ms cubic-bezier(.3,.7,.3,1), padding 550ms cubic-bezier(.3,.7,.3,1); }
+.fi { max-width: 360px; transition: max-width 450ms cubic-bezier(.3,.7,.3,1), opacity 350ms ease 60ms, padding 450ms cubic-bezier(.3,.7,.3,1), margin 450ms cubic-bezier(.3,.7,.3,1); }
+.ff { transition: opacity 450ms ease 80ms, transform 500ms cubic-bezier(.2,.8,.3,1) 50ms; }
+
+/* block-collapse */
+html[data-state="0"] .s1.fb,
+:is(html[data-state="0"], html[data-state="1"]) .s2.fb,
+:is(html[data-state="0"], html[data-state="1"], html[data-state="2"]) .s3.fb,
+html:not([data-state="4"]) .s4.fb,
+html:not([data-state="0"]) .x0.fb,
+html:not([data-state="1"]) .x1.fb,
+html:not([data-state="2"]) .x2.fb,
+html:not([data-state="3"]) .x3.fb,
+html:not([data-state="0"]):not([data-state="1"]) .x01.fb {
+  max-height: 0 !important; opacity: 0; transform: translateY(18px);
+  margin: 0 !important; padding-top: 0 !important; padding-bottom: 0 !important;
+  border-top-width: 0 !important; border-bottom-width: 0 !important;
+  overflow: hidden; pointer-events: none;
+}
+
+/* inline-collapse */
+html[data-state="0"] .s1.fi,
+:is(html[data-state="0"], html[data-state="1"]) .s2.fi,
+:is(html[data-state="0"], html[data-state="1"], html[data-state="2"]) .s3.fi,
+html:not([data-state="4"]) .s4.fi,
+html:not([data-state="0"]) .x0.fi,
+html:not([data-state="1"]) .x1.fi,
+html:not([data-state="2"]) .x2.fi,
+html:not([data-state="3"]) .x3.fi,
+html:not([data-state="0"]):not([data-state="1"]) .x01.fi {
+  max-width: 0 !important; padding-left: 0 !important; padding-right: 0 !important;
+  margin-left: 0 !important; margin-right: 0 !important;
+  opacity: 0; overflow: hidden; pointer-events: none;
+}
+/* cancel flex-gap ghosts left by collapsed inline items */
+html:not([data-state="4"]) .bar-right > .s4.fi,
+:is(html[data-state="0"], html[data-state="1"]) .bar-right > .s2.fi { margin-left: -8px !important; }
+html:not([data-state="4"]) .minis > .s4.fi { margin-left: -7px !important; }
+html:not([data-state="4"]) .btools > .s4.fi,
+html:not([data-state="3"]) .btools > .x3.fi { margin-left: -6px !important; }
+html:not([data-state="4"]) .bar-name > .s4.fi { margin-left: -9px !important; }
+html[data-state="0"] .call-strip > .s1.fi { margin-left: -26px !important; }
+html:not([data-state="0"]) .call-strip > .x0.fi { margin-left: -26px !important; }
+
+/* fade-only */
+html[data-state="0"] .s1.ff,
+:is(html[data-state="0"], html[data-state="1"]) .s2.ff,
+:is(html[data-state="0"], html[data-state="1"], html[data-state="2"]) .s3.ff,
+html:not([data-state="4"]) .s4.ff,
+html:not([data-state="0"]) .x0.ff,
+html:not([data-state="1"]) .x1.ff,
+html:not([data-state="2"]) .x2.ff,
+html:not([data-state="3"]) .x3.ff,
+html:not([data-state="0"]):not([data-state="1"]) .x01.ff {
+  opacity: 0 !important; transform: translateY(10px); pointer-events: none;
+}
+/* exact-state captions stack & cross-fade in place */
+html[data-state="4"] .h4.ff { opacity: 0 !important; pointer-events: none; }
+
+/* ---------- DETAILS PEEK — state-0 panels on demand, before any content ---------- */
+html[data-state="0"][data-peek="1"] .side { margin-right: 0; opacity: 1; pointer-events: auto; }
+html[data-state="0"][data-peek="1"] .tab-board {
+  max-width: 360px !important; padding-left: 16px !important; padding-right: 16px !important;
+  margin-left: 0 !important; margin-right: 0 !important;
+  opacity: 1; overflow: visible; pointer-events: auto;
+}
+</style>
+</head>
+<body>
+<div class="page-ambient"></div>
+<div class="app-shell">
+  <div class="app-topbar">
+    <a class="backlink" href="index.html"><i class="fa-solid fa-arrow-left"></i> Index</a>
+    <div class="brand-lockup" style="margin-left:6px"><span class="brand-mark"><i class="fa-solid fa-bolt"></i></span><span class="brand-sub" style="margin-left:2px">Redesign A · <b style="color:var(--mj-text-secondary)">Progressive Disclosure</b> — the console that grows with you</span></div>
+    <div class="topbar-spacer"></div>
+    <div class="mode-switch" role="tablist" aria-label="Disclosure state">
+      <button type="button" class="on" data-s="0" onclick="setState(0)"><span class="n">0</span> Pure audio</button>
+      <button type="button" data-s="1" onclick="setState(1)"><span class="n">1</span> Text appears</button>
+      <button type="button" data-s="2" onclick="setState(2)"><span class="n">2</span> First delegation</button>
+      <button type="button" data-s="3" onclick="setState(3)"><span class="n">3</span> Board in play</button>
+      <button type="button" data-s="4" onclick="setState(4)"><span class="n">4</span> Power user</button>
+    </div>
+    <div class="topbar-user">AM</div>
+  </div>
+
+  <div class="frame">
+    <!-- per-state caption -->
+    <div class="state-caps" aria-live="polite">
+      <span class="ff x0"><span class="ax ax--content">day one</span><b>Pure audio</b> — a breathing orb and three controls. Nothing to read. <b>Details</b> peeks at the panels on demand.</span>
+      <span class="ff x1"><span class="ax ax--cap">first reveal</span><b>Text appears</b> — the back-and-forth becomes captions on screen, and typing unlocks with it.</span>
+      <span class="ff x2"><span class="ax ax--content">content-driven</span><b>First delegation, same call</b> — the surface panel slides in <i>with</i> the work; the composer dock appears.</span>
+      <span class="ff x3"><span class="ax ax--content">content-driven</span><b>Board in play</b> — Sage's first board write births the Whiteboard tab (violet flash) and the quotes artifact.</span>
+      <span class="ff s4"><span class="ax ax--cap">capability ratchet</span><b>Returning power user</b> — pickers, gear, shortcuts, stats, full toolbar: the complete Console.</span>
+    </div>
+
+    <div class="ov">
+
+      <!-- ============ UNIFIED APP-BAR HEADER ============ -->
+      <div class="bar">
+        <span class="dn ff x0" style="top:-11px; left:230px"><i class="fa-solid fa-seedling"></i> day-one header: identity · one state chip · Close — nothing to configure</span>
+        <span class="dn ff s4" style="top:-11px; left:230px"><i class="fa-solid fa-unlock"></i> caret = agent / model / co-agent pickers — unlocks for returning users, ratcheted across sessions</span>
+
+        <div class="agent-orb" data-state="speaking" aria-hidden="true"></div>
+        <div class="bar-id">
+          <span class="bar-name">Voice for Sage
+            <button type="button" class="id-caret fi s4" title="Switch agent · model · voice"><i class="fa-solid fa-chevron-down"></i></button>
+            <span class="pill pill--sage"><i class="fa-solid fa-feather"></i> Co-Agent</span>
+          </span>
+          <span class="bar-sub">
+            <span class="ff h4">speaking as <b>Sage</b></span>
+            <span class="ff s4">speaking as <b>Sage</b> <span class="sep">·</span> gpt-realtime <span class="sep">·</span> alloy voice</span>
+          </span>
+        </div>
+        <span class="state-chip">
+          <span class="waveform"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span>
+          Speaking
+        </span>
+
+        <div class="bar-spacer"></div>
+
+        <div class="bar-right">
+          <button type="button" class="devlink fi s4" title="Open the agent session record"><i class="fa-solid fa-arrow-up-right-from-square"></i> Session</button>
+          <button type="button" class="iconb on fi s4" title="Captions on"><i class="fa-solid fa-closed-captioning"></i></button>
+          <button type="button" class="iconb on fi s4" title="Developer links &amp; interface density"><i class="fa-solid fa-gear"></i></button>
+          <button type="button" class="iconb fi s4" title="Minimize to floating pill"><i class="fa-solid fa-down-left-and-up-right-to-center"></i></button>
+          <span class="bar-sep fi s2"></span>
+          <button type="button" class="end-pill fi s2"><i class="fa-solid fa-phone-slash"></i> End call</button>
+          <button type="button" class="close-x" title="Close" aria-label="Close session view"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+
+        <!-- gear dropdown: the manual escape hatch, rendered open in state 4 -->
+        <div class="gear-pop ff s4">
+          <div class="gp-h">Interface</div>
+          <div class="gp-row">
+            <span class="gp-l">Density</span>
+            <div class="gp-seg" role="radiogroup" aria-label="Interface density">
+              <button type="button">Simple</button>
+              <button type="button">Standard</button>
+              <button type="button" class="on">Pro</button>
+            </div>
+          </div>
+          <div class="gp-note">Simple returns to the day-one surface. Pro keeps everything visible.</div>
+          <div class="gp-div"></div>
+          <button type="button" class="gp-link"><i class="fa-solid fa-arrow-up-right-from-square"></i> Open agent session record</button>
+          <button type="button" class="gp-link"><i class="fa-regular fa-copy"></i> Copy session ID</button>
+        </div>
+        <span class="dn ff s4" style="top:172px; right:230px"><i class="fa-solid fa-hand"></i> manual override — Simple / Standard / Pro writes the same uxMilestones setting</span>
+      </div>
+
+      <!-- ============ BODY ============ -->
+      <div class="ov-body">
+        <div class="main">
+
+          <!-- ===== STATE-0 PURE-AUDIO HERO — no text, just the voice ===== -->
+          <div class="hero ff x0" role="status">
+            <div class="hero-stage">
+              <span class="hero-ring"></span><span class="hero-ring r2"></span><span class="hero-ring r3"></span>
+              <div class="agent-orb" data-state="speaking" aria-hidden="true"></div>
+            </div>
+            <div class="hero-eq" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+            <div class="hero-name">Sage</div>
+            <div class="hero-sub">speaking…</div>
+            <span class="dn ff x0" style="bottom:-38px; left:calc(50% - 215px)"><i class="fa-solid fa-volume-high"></i> voice is the whole UI — no transcript, no composer; the orb breathes with the audio</span>
+          </div>
+
+          <!-- ===== THREAD (grows in place) ===== -->
+          <div class="thread-scroll">
+            <div class="thread2">
+
+              <!-- state 1+: the back-and-forth becomes text -->
+              <div class="ti fb s1 turn turn--user">
+                <div class="turn-avatar">A</div>
+                <div><div class="turn-meta"><span class="typed-tag">spoken</span> You</div>
+                <div class="bubble">Morning, Sage — anything I should know before my nine-thirty?</div></div>
+              </div>
+              <div class="ti fb s1 turn turn--agent">
+                <div class="turn-avatar">S</div>
+                <div><div class="turn-meta">Sage <span class="muted">· voice</span></div>
+                <div class="bubble">Morning! You're clear until the nine-thirty standup. Markets open in twelve minutes — say the word if you want me to pull anything.</div></div>
+              </div>
+
+              <!-- state 2+: the delegation request -->
+              <div class="ti fb s2 turn turn--user">
+                <div class="turn-avatar">A</div>
+                <div><div class="turn-meta"><span class="typed-tag">spoken</span> You</div>
+                <div class="bubble">Yes — grab live quotes for Apple, Microsoft and Nvidia.</div></div>
+              </div>
+              <div class="ti fb s2 turn turn--agent">
+                <div class="turn-avatar">S</div>
+                <div><div class="turn-meta">Sage <span class="muted">· voice</span></div>
+                <div class="bubble">On it — handing that to Sage. The quotes will land on your screen in a few seconds.</div></div>
+              </div>
+
+              <!-- state 2 only: delegation in flight + anchored ephemeral narration -->
+              <div class="ti fb x2 delegation-block">
+                <div class="work-card" role="status">
+                  <div class="work-card__head">
+                    <div class="avatar avatar--sage">S</div>
+                    <div class="work-card__title">Sage is working…</div>
+                    <span class="pill pill--running"><i class="fa-solid fa-spinner"></i> Running</span>
+                  </div>
+                  <div class="work-steps">
+                    <div class="work-step work-step--done"><span class="si"><i class="fa-solid fa-check"></i></span> Resolve tickers — AAPL · MSFT · NVDA</div>
+                    <div class="work-step work-step--done"><span class="si"><i class="fa-solid fa-check"></i></span> AAPL — $228.14 (+1.2%)</div>
+                    <div class="work-step work-step--active"><span class="si"><i class="fa-solid fa-rotate"></i></span> Fetching MSFT &amp; NVDA quotes</div>
+                    <div class="work-step work-step--pending"><span class="si"></span> Pin results to the session surface</div>
+                  </div>
+                  <div class="work-progress"><div class="work-progress__fill"></div></div>
+                </div>
+                <div class="live-note" role="status">
+                  <i class="fa-solid fa-comment-dots"></i>
+                  Apple's in at $228.14 — Microsoft and Nvidia are seconds out…
+                </div>
+              </div>
+
+              <!-- state 3+: delegation done — collapsed provenance chip -->
+              <div class="ti fb s3 delegation-block">
+                <div class="done-row">
+                  <button type="button" class="done-chip" title="Expand result">
+                    <span class="mark"><i class="fa-solid fa-check"></i></span>
+                    <b>Sage</b><span class="prev">AAPL · MSFT · NVDA quotes pinned to the board</span>
+                    <span class="via"><i class="fa-solid fa-shield-halved"></i> via Sage</span>
+                    <i class="fa-solid fa-chevron-down" style="font-size:9px; color:var(--mj-text-muted)"></i>
+                  </button>
+                  <button type="button" class="alink"><i class="fa-solid fa-file-lines"></i> Stock quotes</button>
+                </div>
+              </div>
+              <div class="ti fb s3 turn turn--agent">
+                <div class="turn-avatar">S</div>
+                <div><div class="turn-meta">Sage <span class="muted">· voice</span></div>
+                <div class="bubble">All three are in and pinned to the board — Nvidia's leading at plus two point one percent. Want me to refresh them on an interval?<span class="caption-cursor"></span></div></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- state 4: dismissable shortcuts hint, shown once -->
+          <div class="kbd-chip ff s4" id="kbdChip">
+            <i class="fa-regular fa-keyboard"></i>
+            <kbd>T</kbd> type · <kbd>M</kbd> mute · <kbd>C</kbd> captions · <kbd>⇧W</kbd> board
+            <button type="button" class="kbd-x" title="Don't show again" onclick="this.parentElement.classList.add('gone')"><i class="fa-solid fa-xmark"></i></button>
+          </div>
+
+          <!-- ===== STATE-0/1 CALL STRIP — phone-call controls ===== -->
+          <div class="call-strip fb x01">
+            <span class="dn ff x0" style="top:-12px; left:18px"><i class="fa-solid fa-phone"></i> minimal control set — mute · end · Details; Close stays in the header</span>
+            <span class="dn ff x1" style="top:-12px; left:18px"><i class="fa-solid fa-closed-captioning"></i> captions control arrives with the text it controls</span>
+            <div class="ctrl-group">
+              <button type="button" class="ctrl" title="Mute microphone"><i class="fa-solid fa-microphone"></i></button>
+              <div class="ctrl-label">Mute</div>
+            </div>
+            <div class="ctrl-group fi s1">
+              <button type="button" class="ctrl ctrl--on" title="Captions on"><i class="fa-solid fa-closed-captioning"></i></button>
+              <div class="ctrl-label">Captions</div>
+            </div>
+            <div class="ctrl-group fi x0">
+              <button type="button" id="peekBtn" class="ctrl" title="Peek at the session panels" onclick="togglePeek()"><i class="fa-solid fa-table-columns"></i></button>
+              <div class="ctrl-label">Details</div>
+            </div>
+            <div class="ctrl-group">
+              <button type="button" class="ctrl ctrl--end" title="End call"><i class="fa-solid fa-phone-slash"></i></button>
+              <div class="ctrl-label">End call</div>
+            </div>
+            <span class="thint ff x1"><i class="fa-regular fa-keyboard"></i> press <kbd>T</kbd> to type</span>
+            <span class="dn ff x0" style="bottom:54px; right:20px"><i class="fa-solid fa-hand-pointer"></i> Details = panels on demand — Activity &amp; Whiteboard exist even in pure audio</span>
+            <span class="dn ff x1" style="bottom:54px; right:20px"><i class="fa-solid fa-volume-off"></i> typing unlocks with the text — but it whispers; no visible composer yet</span>
+          </div>
+
+          <!-- ===== BOTTOM DOCK (state 2+) ===== -->
+          <div class="dock fb s2">
+            <span class="dn ff x2" style="top:-12px; left:18px"><i class="fa-solid fa-unlock"></i> composer appears on first engagement — ratchet: persisted via UserInfoEngine <b>mj.realtimeVoice.uxMilestones.v1</b>, never hides again</span>
+            <div class="minis">
+              <button type="button" class="mini" title="Mute microphone"><i class="fa-solid fa-microphone"></i></button>
+              <button type="button" class="mini on" title="Captions on"><i class="fa-solid fa-closed-captioning"></i></button>
+              <button type="button" class="mini fi s4" title="Developer links"><i class="fa-solid fa-gear"></i></button>
+            </div>
+            <div class="dock-compose">
+              <input type="text" placeholder="Type into the live session — joins this same voice call…">
+              <span class="hint">↵ send</span>
+              <button type="button" class="dock-send" title="Send"><i class="fa-solid fa-paper-plane"></i></button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== SURFACE PANEL — slides in at state 2 ===== -->
+        <div class="side">
+          <div class="rsz" title="Drag to resize" role="separator" aria-orientation="vertical"></div>
+          <div class="panel">
+            <span class="dn ff x0" style="top:46px; left:14px; z-index:50"><i class="fa-solid fa-eye"></i> peeked on demand — the panels exist before the content does; close it and audio stays pure</span>
+            <span class="dn ff x2" style="top:46px; left:14px; z-index:50"><i class="fa-solid fa-truck-ramp-box"></i> panel arrives WITH the work — content-driven, zero config; the slide-in IS the progress cue</span>
+            <span class="dn ff x3" style="top:-13px; left:96px; z-index:50"><i class="fa-solid fa-wand-magic-sparkles"></i> tabs birth when Sage first writes — violet flash = delegated authorship</span>
+
+            <div class="s-tabs" role="tablist">
+              <button type="button" class="s-tab" data-tab="act" role="tab"><i class="fa-solid fa-list-check"></i> Activity</button>
+              <button type="button" class="s-tab fi s3" data-tab="art" role="tab"><i class="fa-solid fa-file-lines"></i> Stock quotes</button>
+              <button type="button" class="s-tab fi s3 tab-board" data-tab="board" role="tab">
+                <i class="fa-solid fa-chalkboard"></i> Whiteboard <span class="sage-dot"></span>
+              </button>
+              <div class="tabs-end">
+                <button type="button" class="iconb" title="Hide session panel"><i class="fa-solid fa-chevron-right"></i></button>
+              </div>
+            </div>
+
+            <!-- Activity pane -->
+            <div class="s-pane active" data-pane="act">
+              <div class="act-list">
+                <div class="act-empty fb x0"><i class="fa-solid fa-list-check"></i>Nothing delegated yet — when Sage hands work to other agents, it shows up here live.</div>
+                <div class="act-card fb x2">
+                  <div class="act-top"><span class="act-name">Sage</span>
+                    <span class="act-status act-status--running"><i class="fa-solid fa-spinner"></i> Running</span></div>
+                  <div class="act-step">Get stock quotes — AAPL · MSFT · NVDA</div>
+                </div>
+                <div class="act-card act-card--done fb s3">
+                  <div class="act-top"><span class="act-name">Sage</span>
+                    <span class="act-status act-status--done"><i class="fa-solid fa-check"></i> Done</span></div>
+                  <div class="act-step">AAPL · MSFT · NVDA quotes pinned to the board</div>
+                  <div class="act-meta"><span><i class="fa-regular fa-clock"></i> 9s</span><span><i class="fa-solid fa-file-lines"></i> Stock quotes</span></div>
+                </div>
+              </div>
+              <div class="act-stats fb s4">
+                <span><b>1</b> delegated run</span><span><b>1</b> artifact</span><span><b>1</b> board</span><span style="margin-left:auto"><b>$0.01</b> est. cost</span>
+              </div>
+            </div>
+
+            <!-- Artifact pane (state 3+) -->
+            <div class="s-pane" data-pane="art">
+              <div class="art-doc">
+                <h3>Stock quotes</h3>
+                <div class="cap"><i class="fa-solid fa-shield-halved" style="color:var(--mj-color-violet-300)"></i> produced via Sage · v1 · just now</div>
+                <div class="art-sec">
+                  <div class="h">Quotes · 9:32 AM ET</div>
+                  <div class="art-row"><b>AAPL</b><span class="muted2">Apple</span><span>$228.14 <span class="up">+1.2%</span></span></div>
+                  <div class="art-row"><b>MSFT</b><span class="muted2">Microsoft</span><span>$474.96 <span class="up">+0.6%</span></span></div>
+                  <div class="art-row"><b>NVDA</b><span class="muted2">Nvidia</span><span>$186.50 <span class="up">+2.1%</span></span></div>
+                </div>
+                <div class="art-sec">
+                  <div class="h">Notes</div>
+                  <div class="art-row" style="display:block"><span class="muted2" style="display:block">Nvidia leads the trio at the open. Refresh on an interval is available on request.</span></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Whiteboard pane (state 3+) -->
+            <div class="s-pane" data-pane="board">
+              <div class="board-head2">
+                <span class="bt"><i class="fa-solid fa-chalkboard"></i> Whiteboard</span>
+                <span class="board-save"><i class="fa-solid fa-circle-check"></i> saved · just now</span>
+                <span class="bleg"><span><span class="sw sw--you"></span>You</span><span><span class="sw sw--sage"></span>Sage</span></span>
+                <button type="button" class="iconb fi s4" title="Focus the board (hide the call column)"><i class="fa-solid fa-expand"></i></button>
+              </div>
+
+              <!-- toolbar: starter set (s3) ⇄ full set (s4) -->
+              <div class="btools">
+                <button type="button" class="tool on fi" title="Select"><i class="fa-solid fa-arrow-pointer"></i></button>
+                <button type="button" class="tool fi" title="Pen"><i class="fa-solid fa-pen"></i></button>
+                <button type="button" class="tool fi" title="Sticky note"><i class="fa-solid fa-note-sticky"></i></button>
+                <button type="button" class="tool-more fi x3" title="Show all tools"><i class="fa-solid fa-ellipsis"></i> more</button>
+                <span class="tool-sep fi s4"></span>
+                <button type="button" class="tool fi s4" title="Highlighter"><i class="fa-solid fa-highlighter"></i></button>
+                <button type="button" class="tool fi s4" title="Shapes"><i class="fa-solid fa-shapes"></i></button>
+                <button type="button" class="tool fi s4" title="Text"><i class="fa-solid fa-font"></i></button>
+                <button type="button" class="tool fi s4" title="Connector"><i class="fa-solid fa-arrow-right-long"></i></button>
+                <button type="button" class="tool fi s4" title="Eraser"><i class="fa-solid fa-eraser"></i></button>
+                <button type="button" class="tool fi s4" title="Insert image"><i class="fa-regular fa-image"></i></button>
+                <span class="dn ff x3" style="top:-12px; right:12px"><i class="fa-solid fa-sliders"></i> starter toolbar: select · pen · sticky — ⋯ hints at the full set, on demand</span>
+              </div>
+
+              <div class="board-canvas2">
+                <!-- state 0 (peek): the board exists, empty -->
+                <div class="board-empty ff x0"><div><i class="fa-solid fa-chalkboard"></i>A shared board, ready when you are — anything Sage sketches or pins lands here.</div></div>
+
+                <!-- state 3: Sage's first board write -->
+                <div class="bi scard ff s3" style="left:248px; top:28px">
+                  <span class="author-chip author-chip--sage"><i class="fa-solid fa-feather" style="font-size:7px"></i> Sage</span>
+                  <div class="h"><i class="fa-solid fa-arrow-trend-up"></i> Quotes · 9:32 AM</div>
+                  <div class="r"><b>AAPL</b><span class="v">$228.14</span><span class="up">+1.2%</span></div>
+                  <div class="r"><b>MSFT</b><span class="v">$474.96</span><span class="up">+0.6%</span></div>
+                  <div class="r"><b>NVDA</b><span class="v">$186.50</span><span class="up">+2.1%</span></div>
+                </div>
+                <div class="board-toast ff x3"><i class="fa-solid fa-feather"></i> Sage pinned Quotes · just now</div>
+
+                <!-- state 4: a returning user's richer board -->
+                <div class="bi sticky-amber ff s4" style="left:26px; top:36px">
+                  <span class="author-chip author-chip--you"><i class="fa-solid fa-user" style="font-size:7px"></i> You</span>
+                  Wed AM briefing<br><span style="font-weight:500">watch: AAPL · MSFT · NVDA</span>
+                </div>
+                <div class="bi scard ff s4" style="left:248px; top:208px; width:192px">
+                  <span class="author-chip author-chip--sage"><i class="fa-solid fa-feather" style="font-size:7px"></i> Sage</span>
+                  <div class="h"><i class="fa-solid fa-cloud-sun"></i> Weather · today</div>
+                  <div class="wrow"><i class="fa-solid fa-sun"></i> Boston <span class="t">72°F</span></div>
+                  <div class="wrow"><i class="fa-solid fa-cloud-rain"></i> Chicago <span class="t">64°F</span></div>
+                </div>
+                <div class="bi scard ff s4" style="left:26px; top:248px; width:188px">
+                  <span class="author-chip author-chip--sage"><i class="fa-solid fa-feather" style="font-size:7px"></i> Sage</span>
+                  <div class="h"><i class="fa-solid fa-magnifying-glass"></i> AI headlines</div>
+                  <div class="hl"><b>Frontier labs agree on eval-sharing pact</b>Reuters · 7:40a</div>
+                  <div class="hl"><b>Open-weights model tops coding bench</b>Verge · 6:55a</div>
+                  <div class="hl"><b>EU realtime-agent guidance lands</b>FT · 6:10a</div>
+                </div>
+                <svg class="conn ff s4" style="left:184px; top:62px; width:70px; height:30px"><path d="M0,10 C30,10 40,18 64,18"></path></svg>
+                <svg class="conn ff s4" style="left:184px; top:90px; width:70px; height:150px"><path d="M0,0 C36,30 40,110 60,138"></path></svg>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== LEGEND — the two disclosure axes ===== -->
+    <div class="axes">
+      <div class="ah"><i class="fa-solid fa-compass-drafting"></i> How the console grows — two disclosure axes</div>
+      <div class="arow">
+        <span class="ai ai--content"><i class="fa-solid fa-bolt"></i></span>
+        <span><b>Content-driven (within a session).</b> Surfaces appear the instant the session produces their content — the first delegation slides the panel in with the Activity card, Sage's first board write births the Whiteboard tab, a finished delegation lands its artifact tab. Nothing is configuration-gated, and each arrival doubles as the progress indicator.</span>
+      </div>
+      <div class="arow">
+        <span class="ai ai--cap"><i class="fa-solid fa-stairs"></i></span>
+        <span><b>Capability-driven (across sessions, ratcheted).</b> The composer, pickers, dev gear, full board toolbar and shortcut hints unlock as the user demonstrates depth. Milestones persist via UserInfoEngine <code>mj.realtimeVoice.uxMilestones.v1</code> — once a control appears it never auto-hides. The gear's <b>Simple / Standard / Pro</b> density control is the manual escape hatch, writing the same setting.</span>
+      </div>
+    </div>
+
+    <p class="muted" style="font-size:12.5px; max-width:980px; margin:16px auto 0; text-align:center">
+      The selected <b style="color:var(--mj-text-secondary)">Console</b> design, shown as it discloses itself: state 0 is
+      <b style="color:var(--mj-text-secondary)">pure audio</b> — a breathing orb, three controls, no text, with a working
+      <b style="color:var(--mj-text-secondary)">Details</b> peek at the (empty) Activity &amp; Whiteboard panels; state 1 reveals the
+      back-and-forth as text and unlocks typing; state 2 slides the surface panel in <i>with</i> the first delegation and docks the
+      composer; state 3 births the Whiteboard + artifact tabs off Sage's first board write; and state 4 is the full Console from
+      <a href="redesign-a.html">Redesign A</a> — pickers, gear, shortcuts, stats. Scrub the
+      <b style="color:var(--mj-text-secondary)">0 → 4</b> control above (or use ←/→ and 0–4) to watch it grow.
+    </p>
+  </div>
+</div>
+
+<script>
+var DEFAULT_PANE = { 0: 'act', 1: 'act', 2: 'act', 3: 'board', 4: 'board' };
+
+function activatePane(name) {
+  document.querySelectorAll('.s-tab[data-tab]').forEach(function (t) {
+    t.classList.toggle('active', t.dataset.tab === name);
+  });
+  document.querySelectorAll('.s-pane').forEach(function (p) {
+    p.classList.toggle('active', p.dataset.pane === name);
+  });
+}
+
+function clearPeek() {
+  document.documentElement.removeAttribute('data-peek');
+  var b = document.getElementById('peekBtn');
+  if (b) b.classList.remove('ctrl--on');
+}
+
+function togglePeek() {
+  var html = document.documentElement;
+  if (html.getAttribute('data-peek') === '1') { clearPeek(); return; }
+  html.setAttribute('data-peek', '1');
+  var b = document.getElementById('peekBtn');
+  if (b) b.classList.add('ctrl--on');
+  activatePane('act');
+}
+
+function setState(n) {
+  n = Math.min(4, Math.max(0, n));
+  if (n !== 0) clearPeek();
+  document.documentElement.dataset.state = String(n);
+  document.querySelectorAll('.mode-switch button[data-s]').forEach(function (b) {
+    b.classList.toggle('on', b.dataset.s === String(n));
+  });
+  activatePane(DEFAULT_PANE[n]);
+}
+
+document.querySelectorAll('.s-tab[data-tab]').forEach(function (t) {
+  t.addEventListener('click', function () { activatePane(t.dataset.tab); });
+});
+
+document.addEventListener('keydown', function (e) {
+  var cur = parseInt(document.documentElement.dataset.state, 10);
+  if (e.key === 'ArrowRight') setState(cur + 1);
+  else if (e.key === 'ArrowLeft') setState(cur - 1);
+  else if (e.key >= '0' && e.key <= '4' && document.activeElement.tagName !== 'INPUT') setState(parseInt(e.key, 10));
+});
+</script>
+</body>
+</html>

@@ -637,7 +637,7 @@ console.log(prompt.PromptRole); // From AIPrompt
 ### Related Documentation
 
 For comprehensive information about IS-A relationships in MemberJunction:
-- [IS-A Relationships Architecture](../../MJCore/docs/isa-relationships.md) - Server-side implementation details, entity structure, and transaction management
+- [IS-A Relationships Architecture](../MJCore/docs/isa-relationships.md) - Server-side implementation details, entity structure, and transaction management
 
 ## Key Classes and Types
 
@@ -722,7 +722,7 @@ For the warm-load smart-cache-check flow this matters a lot — the client reads
 
 `setupGraphQLClient` orchestrates a deterministic warm-load path: after `provider.Config(...)` loads the cached `AllMetadata` blob from IndexedDB (gzip-compressed, three keys read in a single batched call), it calls `provider.preValidateAndRefresh()` to confirm the cache is current via a single batched timestamp round-trip. If current, engines trust their local caches and route per-view requests through `RunViewsWithCacheCheck` — a fingerprint-only GraphQL call that returns either a "current" marker (use local cache) or fresh data for stale entries.
 
-For the full architecture — differential updates, Redis cross-server sync, session-based deduplication, and deployment topologies — see the [**Caching & Pub/Sub Guide**](/guides/CACHING_AND_PUBSUB_GUIDE.md).
+For the full architecture — differential updates, Redis cross-server sync, session-based deduplication, and deployment topologies — see the [**Caching & Pub/Sub Guide**](../../guides/CACHING_AND_PUBSUB_GUIDE.md).
 
 ## Dependencies
 

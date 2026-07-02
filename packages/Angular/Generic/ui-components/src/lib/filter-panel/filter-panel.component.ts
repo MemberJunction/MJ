@@ -26,7 +26,17 @@ export interface FilterFieldConfig {
   filterable?: boolean;
   /** Chip-group options (when type === 'chips'). */
   chipOptions?: { text: string; value: string | number | boolean | null; icon?: string }[];
+  /**
+   * For `type === 'chips'` only. When `true`, the chip group is multi-select:
+   * the field's value is an **array** of selected option values and clicking a
+   * chip toggles it in/out. When absent/false (default), the group is
+   * single-select (value is the chosen option value, click replaces).
+   */
+  multi?: boolean;
 }
+
+/** Option value type shared by dropdown + chip options. */
+type FilterOptionValue = string | number | boolean | null;
 
 /**
  * mj-filter-panel — Single centralized filter panel for all dashboards.
@@ -90,8 +100,8 @@ export interface FilterFieldConfig {
                     <mj-filter-chip
                       [Label]="opt.text"
                       [Icon]="opt.icon ?? null"
-                      [Active]="getValue(field.key) === opt.value"
-                      (Clicked)="setValue(field.key, opt.value)">
+                      [Active]="isChipActive(field, opt.value)"
+                      (Clicked)="onChipClick(field, opt.value)">
                     </mj-filter-chip>
                   }
                 </div>
@@ -208,5 +218,31 @@ export class MJFilterPanelComponent {
   public setValue(key: string, value: unknown): void {
     this.Values = { ...this.Values, [key]: value };
     this.ValuesChange.emit(this.Values);
+  }
+
+  /** Whether a chip option is currently active (handles single + multi). */
+  public isChipActive(field: FilterFieldConfig, optValue: FilterOptionValue): boolean {
+    if (field.multi) {
+      const current = this.getValue(field.key);
+      return Array.isArray(current) && current.includes(optValue);
+    }
+    return this.getValue(field.key) === optValue;
+  }
+
+  /** Chip click: replace (single-select) or toggle in/out of the array (multi). */
+  public onChipClick(field: FilterFieldConfig, optValue: FilterOptionValue): void {
+    if (!field.multi) {
+      this.setValue(field.key, optValue);
+      return;
+    }
+    const current = this.getValue(field.key);
+    const next: FilterOptionValue[] = Array.isArray(current) ? [...current] : [];
+    const idx = next.indexOf(optValue);
+    if (idx >= 0) {
+      next.splice(idx, 1);
+    } else {
+      next.push(optValue);
+    }
+    this.setValue(field.key, next);
   }
 }

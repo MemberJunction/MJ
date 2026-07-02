@@ -21,7 +21,8 @@
             @if (FilterText) {
               <button
                 class="search-clear"
-                (click)="FilterText = ''">
+                (click)="FilterText = ''"
+                aria-label="Clear search">
                 <i class="fa-solid fa-times"></i>
               </button>
             }
@@ -322,19 +323,23 @@
 
     <!-- Error State -->
     @if (errorMessage && !loading) {
-      <div class="mj-grid-error">
-        <i class="fa-solid fa-exclamation-triangle"></i>
-        <span>{{ errorMessage }}</span>
-        <button class="error-retry" (click)="Refresh()">Retry</button>
-      </div>
+      <mj-empty-state
+        class="mj-grid-state-fill"
+        Variant="error"
+        Icon="fa-solid fa-triangle-exclamation"
+        Title="Could not load data"
+        [Message]="errorMessage"
+        ActionText="Retry"
+        ActionIcon="fa-solid fa-arrows-rotate"
+        (Action)="Refresh()" />
     }
 
     <!-- Empty State -->
     @if (!loading && !errorMessage && rowData.length === 0) {
-      <div class="mj-grid-empty">
-        <i class="fa-solid fa-inbox"></i>
-        <span>No data to display</span>
-      </div>
+      <mj-empty-state
+        class="mj-grid-state-fill"
+        Icon="fa-solid fa-inbox"
+        Title="No data to display" />
     }
 
     <!-- AG Grid (Client-side mode) -->
@@ -431,3 +436,14 @@
   [config]="exportDialogConfig"
   (closed)="onExportDialogClosed($event)">
 </mj-export-dialog>
+
+<!-- Runtime-UX driver for an entity action that names a RuntimeUXDriverClass (e.g. the Record Process
+     bulk-update runner). Mounted in-place over the grid — no parent wiring required. -->
+@if (ActiveRuntimeDriver) {
+  <mj-entity-action-ux-host
+    [DriverClass]="ActiveRuntimeDriver.DriverClass"
+    [Context]="ActiveRuntimeDriver.Context"
+    (Completed)="OnRuntimeDriverCompleted($event)"
+    (Cancelled)="OnRuntimeDriverCancelled()">
+  </mj-entity-action-ux-host>
+}

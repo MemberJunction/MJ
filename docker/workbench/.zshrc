@@ -36,6 +36,11 @@ alias mjcg='cd /workspace/MJ && mj codegen'
 alias mjmig='cd /workspace/MJ && flyway migrate -url="jdbc:sqlserver://${DB_HOST:-sql-claude}:1433;databaseName=${DB_DATABASE:-MJ_Workbench};trustServerCertificate=true" -user="${CODEGEN_DB_USERNAME:-sa}" -password="${CODEGEN_DB_PASSWORD:-Claude2Sql99}" -schemas=__mj -createSchemas=true -baselineVersion=202602061600 -baselineOnMigrate=true -locations="filesystem:/workspace/MJ/migrations"'
 alias mjcd='cd /workspace/MJ'
 
+# ─── Baseline migration shortcuts ────────────────────────────────────────────
+alias mjbaseline='baseline-roundtrip'
+alias mjbaseline-mssql='baseline-roundtrip --dialect mssql'
+alias mjbaseline-pg='baseline-roundtrip --dialect postgres'
+
 # ─── Build shortcuts ─────────────────────────────────────────────────────────
 alias tb='turbo build'
 alias tbf='turbo build --filter'          # tbf @memberjunction/core
@@ -88,6 +93,12 @@ echo "  mjapi       → start MJAPI (default host :4000)"
 echo "  mjui        → start Explorer (default host :4200)"
 echo "  mjcd        → cd to /workspace/MJ"
 echo "  tb / tbf    → turbo build / turbo build --filter"
+echo "  ─────────── Baseline migrations ─────────"
+echo "  baseline-roundtrip  → end-to-end build+test of new baseline"
+echo "  mjbaseline-mssql    → roundtrip on SQL Server"
+echo "  mjbaseline-pg       → roundtrip on Postgres"
+echo "  mj baseline build   → emit baseline from live DB"
+echo "  mj baseline compare → diff two DBs object+row"
 echo "  ─────────── Browser Automation ─────────"
 echo "  pwopen      → open headless browser → Explorer"
 echo "  pwsnap      → accessibility snapshot"

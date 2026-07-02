@@ -1,0 +1,179 @@
+<div class="right-panel">
+  @if (SelectedElement) {
+    <!-- ============== INSPECTOR MODE ============== -->
+    <header class="panel-header">
+      <div class="header-title">
+        <i class="fa-solid fa-sliders"></i>
+        <span>Element Properties</span>
+      </div>
+      <button class="icon-btn" title="Delete element" (click)="OnDeleteElement()">
+        <i class="fa-solid fa-trash"></i>
+      </button>
+    </header>
+
+    @if (SelectedElement.type === 'field' && SelectedField) {
+      <section class="inspector-body">
+        <div class="field-summary">
+          <div class="field-summary-name">{{ SelectedField.displayName || SelectedField.name }}</div>
+          <div class="field-summary-meta">
+            <span class="badge badge-type">{{ SelectedField.type }}</span>
+            @if (SelectedField.references?.entity) {
+              <span class="badge badge-fk">→ {{ SelectedField.references!.entity }}</span>
+            }
+          </div>
+        </div>
+
+        <div class="form-field">
+          <label>Label override</label>
+          <input type="text" [value]="SelectedElement.label ?? ''"
+                 (input)="OnElementLabelInput($event)"
+                 [placeholder]="SelectedField.displayName ?? SelectedField.name" />
+        </div>
+
+        <div class="form-field">
+          <label>Helper text</label>
+          <input type="text" [value]="SelectedElement.helper ?? ''"
+                 (input)="OnElementHelperInput($event)"
+                 placeholder="Optional — shown beneath the input" />
+        </div>
+
+        <div class="form-row">
+          <label class="checkbox">
+            <input type="checkbox" [checked]="SelectedElement.required ?? SelectedField.required"
+                   (change)="OnElementRequiredChange($event)" />
+            <span>Required</span>
+          </label>
+
+          <div class="form-field form-field-inline">
+            <label>Span</label>
+            <select [value]="(SelectedElement.span ?? 1).toString()" (change)="OnElementSpanChange($event)">
+              <option value="1">Half</option>
+              <option value="2">Full width</option>
+            </select>
+          </div>
+        </div>
+      </section>
+    } @else if (SelectedElement.type === 'static-text') {
+      <section class="inspector-body">
+        <div class="form-field">
+          <label>Static text</label>
+          <input type="text" [value]="SelectedElement.text ?? ''"
+                 (input)="OnElementTextInput($event)" placeholder="Section description, instructions..." />
+        </div>
+        <div class="form-field form-field-inline">
+          <label>Span</label>
+          <select [value]="(SelectedElement.span ?? 1).toString()" (change)="OnElementSpanChange($event)">
+            <option value="1">Half</option>
+            <option value="2">Full width</option>
+          </select>
+        </div>
+      </section>
+    } @else if (SelectedElement.type === 'computed') {
+      <section class="inspector-body">
+        <div class="form-field">
+          <label>Label</label>
+          <input type="text" [value]="SelectedElement.label ?? ''" (input)="OnElementLabelInput($event)" />
+        </div>
+        <div class="form-field">
+          <label>Expression</label>
+          <input type="text" [value]="SelectedElement.expression ?? ''"
+                 (input)="OnElementExpressionInput($event)"
+                 placeholder='record.Quantity * record.UnitPrice' />
+          <small>Evaluated at runtime against <code>record</code>.</small>
+        </div>
+      </section>
+    } @else if (SelectedElement.type === 'spacer') {
+      <section class="inspector-body">
+        <p class="muted">Spacer element. No properties.</p>
+      </section>
+    }
+
+  } @else if (SelectedSection) {
+    <!-- ============== SECTION INSPECTOR ============== -->
+    <header class="panel-header">
+      <div class="header-title">
+        <i class="fa-solid fa-layer-group"></i>
+        <span>Section Properties</span>
+      </div>
+      <button class="icon-btn" title="Delete section" (click)="OnDeleteSection()">
+        <i class="fa-solid fa-trash"></i>
+      </button>
+    </header>
+
+    <section class="inspector-body">
+      <div class="form-field">
+        <label>Title</label>
+        <input type="text" [value]="SelectedSection.title" (input)="OnSectionTitleInput($event)" />
+      </div>
+      <div class="form-field form-field-inline">
+        <label>Columns</label>
+        <select [value]="SelectedSection.columns.toString()" (change)="OnSectionColumnsChange($event)">
+          <option value="1">1 column</option>
+          <option value="2">2 columns</option>
+        </select>
+      </div>
+      <label class="checkbox">
+        <input type="checkbox" [checked]="SelectedSection.collapsible" (change)="OnSectionCollapsibleChange($event)" />
+        <span>Collapsible</span>
+      </label>
+    </section>
+
+  } @else if (Schema) {
+    <!-- ============== PALETTE MODE ============== -->
+    <header class="panel-header">
+      <div class="header-title">
+        <i class="fa-solid fa-list-check"></i>
+        <span>Field Palette</span>
+      </div>
+    </header>
+
+    <section class="palette-search">
+      <input type="text" placeholder="Filter fields…" [value]="Search" (input)="OnSearchInput($event)" />
+    </section>
+
+    <ul class="palette-list">
+      @for (f of filteredFields; track f.name) {
+        <li class="palette-row"
+            [class.bound]="isBound(f.name)"
+            (click)="OnPaletteClick(f)"
+            [attr.data-field-name]="f.name"
+            draggable="true"
+            (dragstart)="$any($event).dataTransfer?.setData('text/x-mj-form-field', f.name)">
+          <span class="palette-glyph">
+            @if (isBound(f.name)) {
+              <i class="fa-solid fa-circle-check"></i>
+            } @else {
+              <i class="fa-regular fa-circle"></i>
+            }
+          </span>
+          <div class="palette-body">
+            <div class="palette-name">
+              {{ f.displayName || f.name }}
+              @if (f.required) {
+                <span class="palette-required" title="Required">*</span>
+              }
+            </div>
+            <div class="palette-meta">
+              <span class="badge badge-type">{{ f.type }}</span>
+              @if (f.references?.entity) {
+                <span class="badge badge-fk">→ {{ f.references!.entity }}</span>
+              }
+              @if (f.allowedValues && f.allowedValues.length > 0) {
+                <span class="badge badge-enum">{{ f.allowedValues!.length }} values</span>
+              }
+            </div>
+          </div>
+        </li>
+      }
+    </ul>
+
+    <footer class="palette-footer">
+      <small>Drag a field onto a section, or click to add to the focused section.</small>
+    </footer>
+
+  } @else {
+    <!-- ============== EMPTY ============== -->
+    <mj-empty-state Size="compact" Icon="fa-solid fa-circle-info"
+      Title="Pick an entity from the canvas toolbar to load its field palette." />
+  }
+</div>

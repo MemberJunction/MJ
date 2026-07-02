@@ -23,6 +23,8 @@ export { MJTestSuiteFormComponentExtended } from './lib/custom/Tests/test-suite-
 export { MJTestRunFeedbackFormComponentExtended } from './lib/custom/Tests/test-run-feedback-form.component';
 export { MJTestRubricFormComponentExtended } from './lib/custom/Tests/test-rubric-form.component';
 export { MJListFormComponentExtended } from './lib/custom/Lists/list-form.component';
+export { MJAIAgentSessionFormComponentExtended } from './lib/custom/AIAgentSessions/ai-agent-session-form.component';
+export { MJAIAgentChannelFormComponentExtended } from './lib/custom/AIAgentChannels/ai-agent-channel-form.component';
 
 // Custom form supporting components
 export { TemplateEditorComponent } from './lib/shared/components/template-editor.component';

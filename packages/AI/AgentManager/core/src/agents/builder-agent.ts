@@ -75,7 +75,7 @@ export class AgentBuilderAgent extends BaseAgent {
             const md = (params.provider ?? new Metadata()) as unknown as IMetadataProvider;
             await md.Refresh();
 
-            const templateEngine = new TemplateEngineServer();
+            const templateEngine = TemplateEngineServer.Instance;
             await templateEngine.Config(true, params.contextUser);
             console.log('✅ Builder Agent: Metadata and template caches refreshed');
 

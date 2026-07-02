@@ -24,6 +24,30 @@ export type {
     VectorizeEntityParams,
     VectorizeEntityResult
 } from './graphQLAIClient';
+export { GraphQLClusterClient } from './graphQLClusterClient';
+export type {
+    RunClusterAnalysisInput,
+    RunClusterAnalysisResult,
+    ClusterAnalysisPoint,
+    ClusterAnalysisInfo,
+    ClusterAnalysisMetrics
+} from './graphQLClusterClient';
+export { GraphQLLiveKitClient } from './graphQLLiveKitClient';
+export type {
+    MintLiveKitClientTokenInput,
+    LiveKitClientTokenResult,
+    StartLiveKitAgentRoomSessionInput,
+    LiveKitAgentRoomSessionResult,
+    LiveKitRecordingResult,
+    RealtimeModelVoices,
+    RealtimeVoiceOption
+} from './graphQLLiveKitClient';
+export { GraphQLClassifyClient } from './graphQLClassifyClient';
+export type {
+    GenerateSeedTaxonomyInput,
+    SeedTaxonomyResult,
+    SeedTaxonomyNode
+} from './graphQLClassifyClient';
 export { GraphQLTestingClient } from './graphQLTestingClient';
 export type {
     RunTestParams,

@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Multi-Channel Session · Whiteboard · Real-Time Agents</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="mockups.css">
+<style>
+  .session-shell { position: fixed; inset: 56px 0 0 0; z-index: 30; display: grid; grid-template-columns: 380px 1fr; gap: 0; background: var(--mj-bg-page); }
+  /* left: the call rail */
+  .call-rail { display: flex; flex-direction: column; border-right: 1px solid var(--mj-border-default); background: var(--mj-bg-surface-card); }
+  .rail-header { display: flex; align-items: center; gap: 12px; padding: 16px 18px; border-bottom: 1px solid var(--mj-border-default); }
+  .rail-name { font-weight: 700; font-size: 14px; }
+  .rail-state { font-size: 12px; color: var(--mj-status-success); display:flex;align-items:center;gap:6px;margin-top:2px;font-weight:600 }
+  .rail-thread { flex: 1; overflow-y: auto; padding: 16px; }
+  .rail-channels { padding: 12px 16px; border-top: 1px solid var(--mj-border-default); }
+  .rail-controls { display: flex; align-items: center; justify-content: center; gap: 16px; padding: 14px; border-top: 1px solid var(--mj-border-default); }
+
+  /* right: whiteboard surface */
+  .board-dock { display: flex; flex-direction: column; }
+  .board-head { display: flex; align-items: center; gap: 12px; padding: 14px 20px; border-bottom: 1px solid var(--mj-border-default); background: var(--mj-bg-surface); }
+  .board-title { font-weight: 700; font-size: 14px; display:flex;align-items:center;gap:8px }
+  .board-canvas {
+    flex: 1; position: relative; overflow: hidden;
+    background-color: var(--mj-bg-surface-sunken);
+    background-image: radial-gradient(rgba(148,163,184,0.16) 1px, transparent 1px);
+    background-size: 22px 22px;
+  }
+  .note {
+    position: absolute; min-width: 130px; max-width: 180px; padding: 10px 12px; border-radius: 10px;
+    font-size: 12.5px; box-shadow: var(--mj-shadow-lg); border: 1px solid;
+  }
+  .note-label { font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px; display:flex;align-items:center;gap:5px }
+  /* user-drawn note */
+  .note--user { background: var(--mj-bg-surface-elevated); border-color: var(--mj-border-strong); color: var(--mj-text-primary); }
+  .note--user .note-label { color: var(--mj-text-muted); }
+  /* agent-drawn note — distinct highlight */
+  .note--agent { background: var(--sage-bg); border-color: var(--sage); color: var(--mj-text-primary); box-shadow: 0 0 0 3px rgba(167,139,250,0.18), var(--mj-shadow-lg); animation: agent-flash 1.6s ease-out; }
+  .note--agent .note-label { color: var(--mj-color-violet-300); }
+  @keyframes agent-flash { 0%{box-shadow:0 0 0 8px rgba(167,139,250,0.45), var(--mj-shadow-lg)} 100%{box-shadow:0 0 0 3px rgba(167,139,250,0.18), var(--mj-shadow-lg)} }
+  .connector { position: absolute; height: 2px; background: var(--sage); transform-origin: left center; }
+  .connector::after { content:""; position:absolute; right:-1px; top:-3px; border-left:7px solid var(--sage); border-top:4px solid transparent; border-bottom:4px solid transparent; }
+  .board-toast { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); display:flex; align-items:center; gap:9px; padding: 9px 16px; border-radius: var(--mj-radius-full); background: var(--sage-bg); border: 1px solid var(--sage-border); color: var(--mj-color-violet-300); font-size: 12.5px; font-weight: 600; box-shadow: var(--mj-shadow-lg); }
+</style>
+</head>
+<body>
+<div class="app-shell">
+  <div class="app-topbar">
+    <a class="backlink" href="index.html"><i class="fa-solid fa-arrow-left"></i> Index</a>
+    <div class="brand-lockup" style="margin-left:6px"><span class="brand-mark"><i class="fa-solid fa-bolt"></i></span><span class="brand-sub" style="margin-left:2px">Multi-channel session</span></div>
+    <div class="topbar-spacer"></div>
+    <span class="topbar-pill"><span class="dot dot--live"></span> Voice + Whiteboard</span>
+    <div class="topbar-user">AM</div>
+  </div>
+
+  <div class="session-shell">
+    <!-- LEFT: call rail -->
+    <div class="call-rail">
+      <div class="rail-header">
+        <div class="agent-orb" data-state="speaking" style="--orb-size:42px"></div>
+        <div>
+          <div class="rail-name">Voice for Sage</div>
+          <div class="rail-state"><span class="dot dot--live"></span> Sage is speaking</div>
+        </div>
+      </div>
+
+      <div class="rail-thread">
+        <div class="thread">
+          <div class="turn turn--user">
+            <div class="turn-avatar">AM</div>
+            <div><div class="turn-meta"><span class="typed-tag">spoken</span> You</div>
+            <div class="bubble">Can you sketch out how the session and channels relate?</div></div>
+          </div>
+          <div class="turn turn--agent">
+            <div class="turn-avatar">S</div>
+            <div><div class="turn-meta">Sage <span class="muted">· voice</span></div>
+            <div class="bubble">Sure — I'll put it on the whiteboard. A Session owns the transport, and each Channel is a logical surface…</div></div>
+          </div>
+          <div class="turn turn--agent">
+            <div class="turn-avatar">S</div>
+            <div><div class="turn-meta">Sage <span class="muted">· voice</span></div>
+            <div class="bubble">I just added a "Whiteboard" node connected to the Session, next to your "Voice" box.<span class="caption-cursor"></span></div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="rail-channels">
+        <div class="chan-strip">
+          <span class="chan-chip chan-chip--live"><i class="fa-solid fa-microphone-lines"></i> Voice <span class="live-dot"></span></span>
+          <span class="chan-chip chan-chip--live"><i class="fa-solid fa-chalkboard"></i> Whiteboard <span class="live-dot"></span></span>
+          <span class="chan-chip chan-chip--off"><i class="fa-solid fa-comment"></i> Text</span>
+        </div>
+      </div>
+
+      <div class="rail-controls">
+        <div class="ctrl-group"><button class="ctrl"><i class="fa-solid fa-microphone"></i></button><span class="ctrl-label">Mute</span></div>
+        <div class="ctrl-group"><button class="ctrl ctrl--on"><i class="fa-solid fa-chalkboard"></i></button><span class="ctrl-label">Board</span></div>
+        <div class="ctrl-group"><button class="ctrl ctrl--end"><i class="fa-solid fa-phone-slash"></i></button><span class="ctrl-label" style="color:var(--mj-status-error)">End</span></div>
+      </div>
+    </div>
+
+    <!-- RIGHT: whiteboard dock -->
+    <div class="board-dock">
+      <div class="board-head">
+        <div class="board-title"><i class="fa-solid fa-chalkboard" style="color:var(--mj-brand-accent)"></i> Whiteboard</div>
+        <span class="pill pill--brand" style="margin-left:4px"><span class="dot dot--live"></span> Channel connected · WebSocket</span>
+        <span class="muted" style="font-size:12px;margin-left:auto;display:flex;align-items:center;gap:7px">
+          <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:3px;background:var(--mj-bg-surface-elevated);border:1px solid var(--mj-border-strong)"></span> You</span>
+          <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:3px;background:var(--sage-bg);border:1px solid var(--sage)"></span> Sage</span>
+        </span>
+        <button class="btn btn--sm" style="margin-left:6px"><i class="fa-solid fa-xmark"></i> Close channel</button>
+      </div>
+
+      <div class="board-canvas">
+        <!-- user-drawn -->
+        <div class="note note--user" style="left:80px; top:80px">
+          <div class="note-label"><i class="fa-solid fa-user"></i> You</div>
+          Session
+        </div>
+        <div class="note note--user" style="left:90px; top:230px">
+          <div class="note-label"><i class="fa-solid fa-user"></i> You</div>
+          Voice channel
+        </div>
+
+        <!-- agent-drawn (highlighted) -->
+        <div class="note note--agent" style="left:360px; top:90px">
+          <div class="note-label"><i class="fa-solid fa-feather"></i> Sage added</div>
+          Whiteboard channel
+        </div>
+        <div class="note note--agent" style="left:360px; top:240px">
+          <div class="note-label"><i class="fa-solid fa-feather"></i> Sage added</div>
+          TextChat channel
+        </div>
+
+        <!-- connectors from Session -->
+        <div class="connector" style="left:210px; top:100px; width:150px"></div>
+        <div class="connector" style="left:170px; top:118px; width:0; height:130px; transform:rotate(90deg); transform-origin: top left"></div>
+        <div class="connector" style="left:200px; top:255px; width:160px"></div>
+
+        <div class="board-toast"><i class="fa-solid fa-feather"></i> Sage drew 2 nodes &amp; a connector · just now</div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

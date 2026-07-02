@@ -1,4 +1,4 @@
-import { CompositeKey, LogError, KeyValuePair, IsVerboseLoggingEnabled, PlatformSQL, IsPlatformSQL } from '@memberjunction/core';
+import { CompositeKey, LogError, KeyValuePair, IsVerboseLoggingEnabled, PlatformSQL, IsPlatformSQL, RunQueryEnrichment } from '@memberjunction/core';
 import { SafeJSONParse } from '@memberjunction/global';
 import { gql, GraphQLClient } from 'graphql-request'
 import { ActionItemInput, RolesAndUsersInput, SyncDataResult, SyncRolesAndUsersResult } from './rolesAndUsersType';
@@ -498,8 +498,8 @@ export class GraphQLSystemUserClient {
                 throw new Error('Parameters must be a JSON object, not an array. Use {} for empty parameters instead of [].');
             }
 
-            const query = `query GetQueryDataSystemUser($QueryID: String!, $CategoryID: String, $CategoryPath: String, $Parameters: JSONObject, $MaxRows: Int, $StartRow: Int) {
-                GetQueryDataSystemUser(QueryID: $QueryID, CategoryID: $CategoryID, CategoryPath: $CategoryPath, Parameters: $Parameters, MaxRows: $MaxRows, StartRow: $StartRow) {
+            const query = `query GetQueryDataSystemUser($QueryID: String!, $CategoryID: String, $CategoryPath: String, $Parameters: JSONObject, $MaxRows: Int, $StartRow: Int, $Enrichment: JSONObject) {
+                GetQueryDataSystemUser(QueryID: $QueryID, CategoryID: $CategoryID, CategoryPath: $CategoryPath, Parameters: $Parameters, MaxRows: $MaxRows, StartRow: $StartRow, Enrichment: $Enrichment) {
                     QueryID
                     QueryName
                     Success
@@ -518,6 +518,7 @@ export class GraphQLSystemUserClient {
             if (input.Parameters !== undefined) variables.Parameters = input.Parameters;
             if (input.MaxRows !== undefined) variables.MaxRows = input.MaxRows;
             if (input.StartRow !== undefined) variables.StartRow = input.StartRow;
+            if (input.Enrichment !== undefined) variables.Enrichment = input.Enrichment;
 
             const result = await this.Client.request(query, variables) as { GetQueryDataSystemUser: RunQuerySystemUserResult };
             
@@ -567,8 +568,8 @@ export class GraphQLSystemUserClient {
                 throw new Error('Parameters must be a JSON object, not an array. Use {} for empty parameters instead of [].');
             }
 
-            const query = `query GetQueryDataByNameSystemUser($QueryName: String!, $CategoryID: String, $CategoryPath: String, $Parameters: JSONObject, $MaxRows: Int, $StartRow: Int) {
-                GetQueryDataByNameSystemUser(QueryName: $QueryName, CategoryID: $CategoryID, CategoryPath: $CategoryPath, Parameters: $Parameters, MaxRows: $MaxRows, StartRow: $StartRow) {
+            const query = `query GetQueryDataByNameSystemUser($QueryName: String!, $CategoryID: String, $CategoryPath: String, $Parameters: JSONObject, $MaxRows: Int, $StartRow: Int, $Enrichment: JSONObject) {
+                GetQueryDataByNameSystemUser(QueryName: $QueryName, CategoryID: $CategoryID, CategoryPath: $CategoryPath, Parameters: $Parameters, MaxRows: $MaxRows, StartRow: $StartRow, Enrichment: $Enrichment) {
                     QueryID
                     QueryName
                     Success
@@ -587,6 +588,7 @@ export class GraphQLSystemUserClient {
             if (input.Parameters !== undefined) variables.Parameters = input.Parameters;
             if (input.MaxRows !== undefined) variables.MaxRows = input.MaxRows;
             if (input.StartRow !== undefined) variables.StartRow = input.StartRow;
+            if (input.Enrichment !== undefined) variables.Enrichment = input.Enrichment;
 
             const result = await this.Client.request(query, variables) as { GetQueryDataByNameSystemUser: RunQuerySystemUserResult };
             
@@ -1653,6 +1655,65 @@ export class GraphQLSystemUserClient {
         };
     }
 
+    /**
+     * Checks whether a given user has read permission on a list of entities.
+     * Used by Skip Brain's permission gate to verify entity-level access before
+     * building components that reference those entities.
+     */
+    public async CheckEntityPermissionsSystemUser(
+        entityNames: string[],
+        userEmail: string
+    ): Promise<CheckEntityPermissionsResult> {
+        try {
+            const query = gql`
+                query CheckEntityPermissionsSystemUser($EntityNames: [String!]!, $UserEmail: String!) {
+                    CheckEntityPermissionsSystemUser(EntityNames: $EntityNames, UserEmail: $UserEmail) {
+                        Success
+                        Results {
+                            EntityName
+                            CanRead
+                        }
+                        ErrorMessage
+                    }
+                }
+            `;
+
+            const variables: Record<string, unknown> = {
+                EntityNames: entityNames,
+                UserEmail: userEmail
+            };
+
+            const result = await this.Client.request(query, variables) as {
+                CheckEntityPermissionsSystemUser: CheckEntityPermissionsGQLResponse;
+            };
+
+            if (result?.CheckEntityPermissionsSystemUser) {
+                const data = result.CheckEntityPermissionsSystemUser;
+                return {
+                    Success: data.Success,
+                    Results: (data.Results || []).map((r): EntityPermissionResultItem => ({
+                        EntityName: r.EntityName,
+                        CanRead: r.CanRead
+                    })),
+                    ErrorMessage: data.ErrorMessage
+                };
+            }
+
+            return {
+                Success: false,
+                Results: [],
+                ErrorMessage: 'Invalid response from server'
+            };
+        } catch (e) {
+            LogError(`GraphQLSystemUserClient::CheckEntityPermissionsSystemUser - Error checking entity permissions - ${e}`);
+            return {
+                Success: false,
+                Results: [],
+                ErrorMessage: e instanceof Error ? e.message : String(e)
+            };
+        }
+    }
+
 }
 
 /**
@@ -2154,6 +2215,10 @@ export interface GetQueryDataSystemUserInput {
      * Optional starting row number for pagination
      */
     StartRow?: number;
+    /**
+     * Optional runtime-only directive to post-process result rows through a registered query result enricher
+     */
+    Enrichment?: RunQueryEnrichment;
 }
 
 /**
@@ -2184,6 +2249,10 @@ export interface GetQueryDataByNameSystemUserInput {
      * Optional starting row number for pagination
      */
     StartRow?: number;
+    /**
+     * Optional runtime-only directive to post-process result rows through a registered query result enricher
+     */
+    Enrichment?: RunQueryEnrichment;
 }
 
 /**
@@ -2688,5 +2757,32 @@ interface SearchKnowledgeGQLResponse {
     ElapsedMs: number;
     SourceCounts: SearchSourceCountsGQLResponse;
     Providers: SearchProviderInfoGQLResponse[];
+    ErrorMessage?: string;
+}
+
+/**
+ * A single entity permission check result.
+ */
+export interface EntityPermissionResultItem {
+    EntityName: string;
+    CanRead: boolean;
+}
+
+/**
+ * Result of checking entity permissions for a user.
+ */
+export interface CheckEntityPermissionsResult {
+    Success: boolean;
+    Results: EntityPermissionResultItem[];
+    ErrorMessage?: string;
+}
+
+/**
+ * Internal GraphQL response shape for entity permission results.
+ * @internal
+ */
+interface CheckEntityPermissionsGQLResponse {
+    Success: boolean;
+    Results: { EntityName: string; CanRead: boolean }[];
     ErrorMessage?: string;
 }

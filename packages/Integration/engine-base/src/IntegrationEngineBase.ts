@@ -93,6 +93,38 @@ export class IntegrationEngineBase extends BaseEngine<IntegrationEngineBase> {
         // would populate them here.
     }
 
+    // ── Offline-replay seeding (v2 test harness) ─────────────────────
+
+    /**
+     * OFFLINE-REPLAY SEEDING (v2 — ARCHITECTURE_REFACTOR.md; test harnesses ONLY).
+     *
+     * Populates the engine cache from in-memory rows WITHOUT a database/provider, so the
+     * credential-free replay tiers (T2/T3/T5/T6/T12) can exercise METADATA-DRIVEN connectors —
+     * those whose `DiscoverObjects`/`FetchChanges`/capability getters resolve IOs from this
+     * cache — exactly as they run in production. Without this, every metadata-driven connector
+     * silently no-ops in the mock tiers (discovers 0 objects / throws on GetCachedObject), which
+     * is one of the reasons the GrowthZone build's mock tiers proved so little (the v1
+     * harness-reality gap; see the GZ PROBLEMS_LOG + the ORCID "T3-blind-to-Declared" class).
+     *
+     * Rows are plain objects shaped like the entity (property reads only — the replay tiers
+     * never `.Save()` cache rows). NEVER call from production code paths.
+     */
+    public SeedForTesting(seed: {
+        Integrations?: Array<Partial<MJIntegrationEntity>>;
+        IntegrationObjects?: Array<Partial<MJIntegrationObjectEntity>>;
+        IntegrationObjectFields?: Array<Partial<MJIntegrationObjectFieldEntity>>;
+        CompanyIntegrations?: Array<Partial<MJCompanyIntegrationEntity>>;
+        EntityMaps?: Array<Partial<MJCompanyIntegrationEntityMapEntity>>;
+        FieldMaps?: Array<Partial<MJCompanyIntegrationFieldMapEntity>>;
+    }): void {
+        if (seed.Integrations) this._integrations = seed.Integrations as MJIntegrationEntity[];
+        if (seed.IntegrationObjects) this._integrationObjects = seed.IntegrationObjects as MJIntegrationObjectEntity[];
+        if (seed.IntegrationObjectFields) this._integrationObjectFields = seed.IntegrationObjectFields as MJIntegrationObjectFieldEntity[];
+        if (seed.CompanyIntegrations) this._companyIntegrations = seed.CompanyIntegrations as MJCompanyIntegrationEntity[];
+        if (seed.EntityMaps) this._entityMaps = seed.EntityMaps as MJCompanyIntegrationEntityMapEntity[];
+        if (seed.FieldMaps) this._fieldMaps = seed.FieldMaps as MJCompanyIntegrationFieldMapEntity[];
+    }
+
     // ── Public Accessors ──────────────────────────────────────────────
 
     /** All Integration definitions (e.g. YourMembership, HubSpot). */

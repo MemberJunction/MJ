@@ -1,0 +1,5 @@
+# Target profiles often hold environment-specific credentials (via env: refs)
+# or URLs that shouldn't be committed. Only commit the example profiles.
+*.target.json
+!*.example.target.json
+!byo-app.target.json

@@ -7,6 +7,7 @@ import {
   MJButtonDirective,
   MJDialogComponent,
   MJDialogActionsComponent,
+  MJEmptyStateComponent,
   MJPageHeaderComponent,
   MJPageLayoutComponent
 } from '@memberjunction/ng-ui-components';
@@ -43,6 +44,7 @@ import { FileGridComponent } from './file-browser/file-grid.component';
     MJButtonDirective,
     MJDialogComponent,
     MJDialogActionsComponent,
+    MJEmptyStateComponent,
     MJPageHeaderComponent,
     MJPageLayoutComponent,
   ],

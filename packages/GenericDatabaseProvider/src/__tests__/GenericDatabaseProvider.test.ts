@@ -186,7 +186,7 @@ describe('GenericDatabaseProvider', () => {
 
     describe('PostProcessRows', () => {
         it('returns empty array for empty input', async () => {
-            const entityInfo = { Fields: [] } as unknown as EntityInfo;
+            const entityInfo = { Fields: [], DatetimeFields: [] } as unknown as EntityInfo;
             const result = await provider.testPostProcessRows([], entityInfo, mockUser);
             expect(result).toEqual([]);
         });
@@ -197,6 +197,7 @@ describe('GenericDatabaseProvider', () => {
                     { Name: 'ID', Encrypt: false, EncryptionKeyID: null },
                     { Name: 'Name', Encrypt: false, EncryptionKeyID: null },
                 ],
+                DatetimeFields: [],
             } as unknown as EntityInfo;
             const rows = [{ ID: '1', Name: 'Test' }];
             const result = await provider.testPostProcessRows(rows, entityInfo, mockUser);
@@ -204,7 +205,7 @@ describe('GenericDatabaseProvider', () => {
         });
 
         it('returns null input unchanged', async () => {
-            const entityInfo = { Fields: [] } as unknown as EntityInfo;
+            const entityInfo = { Fields: [], DatetimeFields: [] } as unknown as EntityInfo;
             const result = await provider.testPostProcessRows(null as unknown as Record<string, unknown>[], entityInfo, mockUser);
             expect(result).toBeNull();
         });
@@ -231,12 +232,12 @@ describe('GenericDatabaseProvider', () => {
         });
 
         it('TransformExternalSQLClause returns clause unchanged by default', () => {
-            const entityInfo = { Fields: [] } as unknown as EntityInfo;
+            const entityInfo = { Fields: [], DatetimeFields: [] } as unknown as EntityInfo;
             expect(provider.testTransformExternalSQLClause('Status = 1', entityInfo)).toBe('Status = 1');
         });
 
         it('TransformExternalSQLClause passes empty string through', () => {
-            const entityInfo = { Fields: [] } as unknown as EntityInfo;
+            const entityInfo = { Fields: [], DatetimeFields: [] } as unknown as EntityInfo;
             expect(provider.testTransformExternalSQLClause('', entityInfo)).toBe('');
         });
     });
@@ -428,6 +429,7 @@ describe('GenericDatabaseProvider', () => {
                     { Name: 'ID', CodeName: 'ID', NeedsQuotes: true },
                 ],
                 Fields: [],
+                DatetimeFields: [],
                 RelatedEntities: [],
                 UserExemptFromRowLevelSecurity: () => true,
                 GetUserRowLevelSecurityWhereClause: () => '',
@@ -464,6 +466,7 @@ describe('GenericDatabaseProvider', () => {
                     { Name: 'ID', CodeName: 'ID', NeedsQuotes: true },
                 ],
                 Fields: [],
+                DatetimeFields: [],
                 RelatedEntities: [],
                 UserExemptFromRowLevelSecurity: () => true,
                 GetUserRowLevelSecurityWhereClause: () => '',
@@ -496,6 +499,7 @@ describe('GenericDatabaseProvider', () => {
                     { Name: 'Code', TSType: EntityFieldTSType.String, Type: 'char' },
                     { Name: 'Name', TSType: EntityFieldTSType.String, Type: 'varchar' },
                 ],
+                DatetimeFields: [],
                 RelatedEntities: [],
                 UserExemptFromRowLevelSecurity: () => true,
                 GetUserRowLevelSecurityWhereClause: () => '',
@@ -517,6 +521,125 @@ describe('GenericDatabaseProvider', () => {
             const result = await provider.Load(entity, compositeKey, null, mockUser) as Record<string, unknown>;
             expect(result.Code).toBe('ABC'); // trimmed
             expect(result.Name).toBe('Test   '); // varchar not trimmed
+        });
+    });
+
+    describe('Load — RLS exemption', () => {
+        function makeEntityInfoWithRLS(opts: {
+            exempt: boolean;
+            rlsClause: string;
+        }): EntityInfo {
+            return {
+                Name: 'TestEntity',
+                SchemaName: 'dbo',
+                BaseView: 'vwTestEntities',
+                PrimaryKeys: [
+                    { Name: 'ID', CodeName: 'ID', NeedsQuotes: true },
+                ],
+                Fields: [],
+                DatetimeFields: [],
+                RelatedEntities: [],
+                UserExemptFromRowLevelSecurity: () => opts.exempt,
+                GetUserRowLevelSecurityWhereClause: () => opts.exempt ? '' : opts.rlsClause,
+            } as unknown as EntityInfo;
+        }
+
+        it('does NOT append RLS filter when user is exempt', async () => {
+            const entityInfo = makeEntityInfoWithRLS({ exempt: true, rlsClause: 'OwnerID = 42' });
+            const entity = {
+                EntityInfo: entityInfo,
+                FirstPrimaryKey: entityInfo.PrimaryKeys[0],
+            } as unknown as BaseEntity;
+            const compositeKey = {
+                KeyValuePairs: [{ FieldName: 'ID', Value: 'abc-123' }],
+            } as CompositeKey;
+
+            provider.executeSQLResults = [
+                [{ ID: 'abc-123', Name: 'Test' }],
+            ];
+
+            await provider.Load(entity, compositeKey, null, mockUser);
+
+            const sql = provider.executeSQLCalls[0].sql;
+            expect(sql).not.toContain('OwnerID');
+            expect(sql).toContain('"ID"=');
+        });
+
+        it('appends RLS filter when user is NOT exempt', async () => {
+            const entityInfo = makeEntityInfoWithRLS({ exempt: false, rlsClause: "OwnerID = '42'" });
+            const entity = {
+                EntityInfo: entityInfo,
+                FirstPrimaryKey: entityInfo.PrimaryKeys[0],
+            } as unknown as BaseEntity;
+            const compositeKey = {
+                KeyValuePairs: [{ FieldName: 'ID', Value: 'abc-123' }],
+            } as CompositeKey;
+
+            provider.executeSQLResults = [
+                [{ ID: 'abc-123', Name: 'Test' }],
+            ];
+
+            await provider.Load(entity, compositeKey, null, mockUser);
+
+            const sql = provider.executeSQLCalls[0].sql;
+            expect(sql).toContain("OwnerID = '42'");
+            expect(sql).toContain('"ID"=');
+        });
+
+        it('returns null when RLS filter excludes the record', async () => {
+            const entityInfo = makeEntityInfoWithRLS({ exempt: false, rlsClause: "OwnerID = '42'" });
+            const entity = {
+                EntityInfo: entityInfo,
+                FirstPrimaryKey: entityInfo.PrimaryKeys[0],
+            } as unknown as BaseEntity;
+            const compositeKey = {
+                KeyValuePairs: [{ FieldName: 'ID', Value: 'abc-123' }],
+            } as CompositeKey;
+
+            provider.executeSQLResults = [[]]; // Empty — RLS filtered it out
+
+            const result = await provider.Load(entity, compositeKey, null, mockUser);
+
+            expect(result).toBeNull();
+        });
+
+        it('skips RLS entirely when user is null', async () => {
+            const entityInfo = makeEntityInfoWithRLS({ exempt: false, rlsClause: "OwnerID = '42'" });
+            const entity = {
+                EntityInfo: entityInfo,
+                FirstPrimaryKey: entityInfo.PrimaryKeys[0],
+            } as unknown as BaseEntity;
+            const compositeKey = {
+                KeyValuePairs: [{ FieldName: 'ID', Value: 'abc-123' }],
+            } as CompositeKey;
+
+            provider.executeSQLResults = [
+                [{ ID: 'abc-123', Name: 'Test' }],
+            ];
+
+            await provider.Load(entity, compositeKey, null, null as unknown as UserInfo);
+
+            const sql = provider.executeSQLCalls[0].sql;
+            expect(sql).not.toContain('OwnerID');
+        });
+    });
+
+    describe('CheckRecordRLS — exemption via centralized clause', () => {
+        it('returns true when GetUserRowLevelSecurityWhereClause returns empty (exempt user)', async () => {
+            const entityInfo = {
+                UserExemptFromRowLevelSecurity: () => true,
+                GetUserRowLevelSecurityWhereClause: () => '',
+            } as unknown as EntityInfo;
+            const entity = { EntityInfo: entityInfo } as unknown as BaseEntity;
+
+            // CheckRecordRLS is protected, so we test through the public Save path indirectly.
+            // For unit isolation, we directly test that empty clause means the method returns true.
+            // The GenericDatabaseProvider.CheckRecordRLS now relies on the centralized clause.
+            // We verify the contract: empty clause → no SQL executed → returns true.
+            const result = await (provider as unknown as {
+                CheckRecordRLS: (e: BaseEntity, u: UserInfo, t: string) => Promise<boolean>;
+            }).CheckRecordRLS(entity, mockUser, 'Read');
+            expect(result).toBe(true);
         });
     });
 

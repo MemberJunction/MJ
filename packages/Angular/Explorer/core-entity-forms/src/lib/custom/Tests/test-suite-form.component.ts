@@ -1930,6 +1930,16 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
   }
 
   /**
+   * Applies the expanded/collapsed state emitted by the filters mj-accordion-panel.
+   * The panel's Expanded is the inverse of filtersCollapsed; set (not flip) so it
+   * stays in sync, and mark for check (OnPush change detection).
+   */
+  onFiltersExpandedChange(expanded: boolean): void {
+    this.filtersCollapsed = !expanded;
+    this.cdr.markForCheck();
+  }
+
+  /**
    * Toggle keyboard shortcuts visibility and save preference
    */
   async toggleShortcuts(): Promise<void> {
@@ -2086,6 +2096,11 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
   // ==========================================
   // Suite Membership: Add / Remove / Reorder Tests
   // ==========================================
+
+  /** Empty-state message shown when the add-tests search matches nothing. */
+  public get AddTestsNoMatchMessage(): string {
+    return `No tests match "${this.addTestsSearch}".`;
+  }
 
   /** Open the picker dialog and load tests not yet in this suite. */
   async openAddTestsDialog(): Promise<void> {

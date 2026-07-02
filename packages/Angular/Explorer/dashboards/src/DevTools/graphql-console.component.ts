@@ -81,6 +81,13 @@ query GetCurrentUser {
  * connected MJ API. Re-uses the active GraphQLDataProvider client (auth +
  * session intact). Local history with copy / favorite / replay; copy-as-curl;
  * keyboard shortcut (Cmd/Ctrl+Enter) to run.
+ *
+ * 🔒 SAFETY BOUNDARY — CLASSIFICATION: INTENTIONALLY UNWIRED for the AI agent.
+ * This surface executes arbitrary, user-authored GraphQL against the live API
+ * with the session's full auth — an agent-controllable injection vector. It
+ * therefore registers NO agent context and NO client tools (no SetAgentContext /
+ * SetAgentClientTools calls anywhere in this component). The agent must never be
+ * able to compose or run queries here; the human operator drives this console.
  */
 @RegisterClass(BaseResourceComponent, 'GraphQLConsoleInspector')
 @Component({

@@ -89,7 +89,8 @@ describe('app command modules load cleanly', () => {
             expect(mod.default).toBeDefined();
             expect(typeof mod.default).toBe('function'); // command class
         }
-    });
+    }, 120_000); // these imports pull the whole open-app transitive graph; cold CI transform can
+                 // exceed the 30s default (passes in ~2.5s locally with built dists)
 });
 
 describe('hidden --dangerously-ignore-dbl-underscore-schema-rule flag', () => {

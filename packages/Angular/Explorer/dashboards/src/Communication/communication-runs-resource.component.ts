@@ -15,7 +15,7 @@ import { RunView } from '@memberjunction/core';
         Subtitle="Bulk communication run history">
         <div actions>
           <button mjButton variant="secondary" size="sm" (click)="loadData()" [disabled]="isLoading" title="Refresh">
-            <i class="fa-solid fa-rotate" [class.spinning]="isLoading"></i> Refresh
+            <i class="fa-solid fa-rotate" [class.spinning]="isLoading"></i> <span class="action-btn-label">Refresh</span>
           </button>
         </div>
       </mj-page-header>
@@ -67,10 +67,8 @@ import { RunView } from '@memberjunction/core';
             }
     
             @if (runs.length === 0 && !isLoading) {
-              <div class="empty-state">
-                <i class="fa-solid fa-play-circle"></i>
-                <p>No communication runs found</p>
-              </div>
+              <mj-empty-state Icon="fa-solid fa-play-circle"
+                Title="No communication runs found" />
             }
           </div>
         </div>
@@ -211,13 +209,6 @@ import { RunView } from '@memberjunction/core';
     }
 
     /* EMPTY STATE */
-    .empty-state {
-        display: flex; flex-direction: column;
-        align-items: center; justify-content: center;
-        padding: 48px 0; color: var(--mj-text-muted);
-    }
-    .empty-state i { font-size: 2rem; margin-bottom: 12px; opacity: 0.5; }
-    .empty-state p { margin: 0; font-size: 13px; }
   `]
 })
 export class CommunicationRunsResourceComponent extends BaseResourceComponent implements OnInit, OnDestroy {

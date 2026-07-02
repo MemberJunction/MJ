@@ -37,6 +37,15 @@ export class DeclareDmlBlockRule implements IConversionRule {
     const simplified = this.simplifyDefaultConstraintBlock(result);
     if (simplified) return simplified + '\n';
 
+    // Rewrite the T-SQL "look up a system-named CHECK constraint by table (+ column),
+    // then DROP it" catalog query. sys.check_constraints / sys.columns / OBJECT_ID /
+    // COL_NAME have no PG equivalent; map the lookup onto pg_constraint + pg_attribute.
+    // Runs on the raw T-SQL (before identifier quoting) so it can parse the bracketed
+    // OBJECT_ID('[schema].[Table]') argument directly. The surrounding
+    // `IF @x IS NOT NULL ... EXEC('... DROP CONSTRAINT ' + @x)` block is handled by the
+    // generic transforms below (convertSelectInto / convertVariableRefs / convertDynamicExec).
+    result = this.convertCheckConstraintLookup(result);
+
     // Strip SET NOCOUNT ON (may still be present if it wasn't the first line)
     result = result.replace(/^\s*SET\s+NOCOUNT\s+ON\s*;?\s*\n?/gim, '');
 
@@ -417,5 +426,93 @@ export class DeclareDmlBlockRule implements IConversionRule {
     }
 
     return lines.join('\n');
+  }
+
+  /**
+   * Rewrite the T-SQL dynamic CHECK-constraint lookup query to PostgreSQL.
+   *
+   * SQL Server discovers a system-generated CHECK constraint's name via
+   * sys.check_constraints (+ optionally sys.columns) keyed on OBJECT_ID / column,
+   * so it can DROP it before re-adding a widened constraint. Two source shapes appear:
+   *
+   *   Form A (COL_NAME):
+   *     SELECT @c = name FROM sys.check_constraints
+   *     WHERE parent_object_id = OBJECT_ID('[schema].[Tbl]')
+   *       AND COL_NAME(parent_object_id, parent_column_id) = 'Col';
+   *
+   *   Form B (aliased JOIN sys.columns):
+   *     SELECT @c = cc.name FROM sys.check_constraints cc
+   *     JOIN sys.columns c ON cc.parent_object_id = c.object_id AND cc.parent_column_id = c.column_id
+   *     WHERE c.name = 'Col' AND cc.parent_object_id = OBJECT_ID('schema.Tbl');
+   *
+   * Both map to pg_constraint (contype='c') joined to pg_attribute on conkey:
+   *
+   *     SELECT @c = con.conname FROM pg_constraint con
+   *     JOIN pg_attribute a ON a.attrelid = con.conrelid AND a.attnum = ANY(con.conkey)
+   *     WHERE con.conrelid = 'schema."Tbl"'::regclass AND a.attname = 'Col' AND con.contype = 'c';
+   *
+   * The `@var =` assignment is preserved so the generic convertSelectInto /
+   * convertVariableRefs passes rename it to `SELECT ... INTO v_var`. If no column
+   * filter is present the pg_attribute join is omitted (any CHECK on the table).
+   * Returns the SQL unchanged when the pattern isn't present or can't be parsed.
+   */
+  private convertCheckConstraintLookup(sql: string): string {
+    if (!/sys\.check_constraints/i.test(sql)) return sql;
+
+    // Capture the whole `SELECT @var = [alias.]name ... FROM sys.check_constraints ... ;` statement.
+    const stmtRe = /SELECT\s+(?:TOP\s+\d+\s+)?(@\w+)\s*=\s*[\w.]*\bname\b[\s\S]*?FROM\s+sys\.check_constraints\b[\s\S]*?;/i;
+    const m = sql.match(stmtRe);
+    if (!m) return sql;
+    const stmt = m[0];
+    const varName = m[1];
+
+    // Target table from OBJECT_ID('<tableref>').
+    const objIdM = stmt.match(/OBJECT_ID\s*\(\s*'([^']+)'\s*\)/i);
+    if (!objIdM) return sql;
+    const regclass = this.tableRefToRegclassLiteral(objIdM[1]);
+
+    // Target column: Form A uses COL_NAME(...) = '<col>'; Form B compares the
+    // sys.columns alias's `name` to '<col>'.
+    let col: string | null = null;
+    const colNameM = stmt.match(/COL_NAME\s*\([^)]*\)\s*=\s*'([^']+)'/i);
+    if (colNameM) {
+      col = colNameM[1];
+    } else {
+      const joinAliasM = stmt.match(/JOIN\s+sys\.columns\s+(\w+)\b/i);
+      if (joinAliasM) {
+        const alias = joinAliasM[1];
+        const cM =
+          stmt.match(new RegExp(`\\b${alias}\\.name\\s*=\\s*'([^']+)'`, 'i')) ||
+          stmt.match(new RegExp(`'([^']+)'\\s*=\\s*\\b${alias}\\.name`, 'i'));
+        if (cM) col = cM[1];
+      }
+    }
+
+    const lines = [`SELECT ${varName} = con.conname`, `FROM pg_constraint con`];
+    if (col) {
+      // lowercase `any` so the later PascalCase-identifier quoting pass doesn't turn
+      // `= ANY(...)` into a `"ANY"(...)` function call (which has no such function in PG).
+      lines.push(`JOIN pg_attribute a ON a.attrelid = con.conrelid AND a.attnum = any(con.conkey)`);
+      lines.push(`WHERE con.conrelid = ${regclass}::regclass`);
+      lines.push(`  AND a.attname = '${col}'`);
+      lines.push(`  AND con.contype = 'c';`);
+    } else {
+      lines.push(`WHERE con.conrelid = ${regclass}::regclass`);
+      lines.push(`  AND con.contype = 'c';`);
+    }
+    return sql.replace(stmt, lines.join('\n'));
+  }
+
+  /**
+   * Convert an OBJECT_ID table argument (`[schema].[Table]`, `schema.Table`, or bare
+   * `Table`) to a PG regclass string literal: `'schema."Table"'`. The table is double-
+   * quoted to preserve PascalCase; the schema is left as-is (already lowercase `__mj`).
+   */
+  private tableRefToRegclassLiteral(ref: string): string {
+    const cleaned = ref.replace(/[[\]]/g, '').trim();
+    const parts = cleaned.split('.').map(p => p.trim()).filter(Boolean);
+    const schema = parts.length >= 2 ? parts[0] : '__mj';
+    const table = parts.length >= 2 ? parts[1] : parts[0];
+    return `'${schema}."${table}"'`;
   }
 }

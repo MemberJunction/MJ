@@ -280,6 +280,50 @@ export interface StandardAuthError {
 }
 
 /**
+ * Describes constraints an auth provider places on the session.
+ *
+ * Most providers (MSAL/Auth0/Okta) impose no constraints and return `null` from
+ * `GetSessionScope()`. Constrained providers (e.g. magic-link) can lock the
+ * session to a single application so the host UI hides app-switching chrome and
+ * keeps the user within their scoped app. This is a UI-confinement signal —
+ * data access is still enforced server-side by the user's role/permissions.
+ */
+export interface SessionScope {
+  /** When set, the session is locked to this single Application (by ID). */
+  restrictedToApplicationId?: string;
+  /** True when this is a passwordless magic-link session. */
+  magicLink?: boolean;
+}
+
+/**
+ * Decoded claims of an MJ-issued magic-link session JWT.
+ *
+ * Mirrors the claim set minted server-side (`MagicLinkJWTClaims` in MJServer's
+ * magic-link module). Declared independently here — NOT re-exported from the
+ * server package — so the client has a typed view without a cross-package
+ * dependency. All fields optional because the token is decoded without
+ * verification (the server validates via JWKS); never trust these for security
+ * decisions, only for UI display + app confinement.
+ */
+export interface MagicLinkSessionClaims {
+  iss?: string;
+  aud?: string;
+  sub?: string;
+  iat?: number;
+  exp?: number;
+  email?: string;
+  given_name?: string;
+  family_name?: string;
+  name?: string;
+  /** The single Application this session is scoped to. */
+  mj_app_id?: string;
+  /** The restricted role name assigned to this user (informational). */
+  mj_role?: string;
+  /** Marks the session as magic-link so the host UI can confine it. */
+  mj_magic_link?: boolean;
+}
+
+/**
  * Token refresh result
  *
  * Returned by refreshToken() to indicate success or failure.

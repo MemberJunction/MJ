@@ -125,6 +125,13 @@ export class ArtifactTypePluginViewerComponent extends BaseAngularComponent impl
   @Output() navigationRequest = new EventEmitter<NavigationRequest>();
   @Output() pluginLoaded = new EventEmitter<void>();
   @Output() tabsChanged = new EventEmitter<void>();
+  /**
+   * Bubbled up from the component-artifact-viewer's form-aware branch when
+   * the user clicks "Apply to my form". Carries the spec + entity so the
+   * consumer (chat message card, conversation host) can invoke the
+   * Create-or-Modify Interactive Form action behind a confirmation dialog.
+   */
+  @Output() applyFormRequested = new EventEmitter<{ spec: unknown; entityName: string }>();
 
   @ViewChild('viewerContainer', { read: ViewContainerRef, static: true })
   viewerContainer!: ViewContainerRef;
@@ -291,6 +298,17 @@ export class ArtifactTypePluginViewerComponent extends BaseAngularComponent impl
         componentInstance.tabsChanged.subscribe(() => {
           this.tabsChanged.emit();
         });
+      }
+
+      // Subscribe to the form-aware "Apply to my form" event when the
+      // underlying plugin is a component-artifact-viewer rendering a
+      // form-role spec. Other plugin types don't have this output.
+      if (componentInstance.applyFormRequested) {
+        componentInstance.applyFormRequested.subscribe(
+          (event: { spec: unknown; entityName: string }) => {
+            this.applyFormRequested.emit(event);
+          }
+        );
       }
 
       // Trigger change detection

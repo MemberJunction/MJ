@@ -58,10 +58,10 @@ describe('DataSnapshotToolLibrary', () => {
     describe('GetToolList', () => {
         // DataSnapshot used to register its own get_full; it now inherits
         // the base library's default get_full (raw JSON passthrough).
-        // Subclass tools (5) plus inherited get_full (1) = 6 total.
-        it('should return 5 subclass tools plus inherited get_full (6 total)', () => {
+        // Subclass tools (8) plus inherited get_full (1) = 9 total.
+        it('should return 8 subclass tools plus inherited get_full (9 total)', () => {
             const tools = lib.GetToolList();
-            expect(tools).toHaveLength(6);
+            expect(tools).toHaveLength(9);
             expect(tools[0].name).toBe('get_full');
         });
 
@@ -74,6 +74,9 @@ describe('DataSnapshotToolLibrary', () => {
                     'get_rows',
                     'search_rows',
                     'aggregate',
+                    'group_aggregate',
+                    'compute',
+                    'filter',
                     'get_full',
                 ])
             );

@@ -39,6 +39,18 @@ export interface FormToolbarConfig {
   /** Show the Tags button for viewing/managing tags on this record. Default: true */
   ShowTagsButton: boolean;
 
+  /**
+   * Show the **form-variant picker** button — a right-side toolbar button
+   * (form icon) that opens a dropdown of available `EntityFormOverride`
+   * variants (Default form + any active overrides) so the user can switch
+   * which form renders this entity record. Only actually renders when the
+   * host has supplied a `Variants` list with more than one item. Default: true.
+   *
+   * Set to false when the host doesn't want the user-facing form-switching
+   * UX (e.g. embedded record views with a single canonical form).
+   */
+  ShowFormVariantPicker: boolean;
+
   /** Show the IS-A entity hierarchy breadcrumb. Default: true */
   ShowEntityHierarchy: boolean;
 
@@ -112,6 +124,7 @@ export const DEFAULT_TOOLBAR_CONFIG: FormToolbarConfig = {
   ShowHistoryButton: true,
   ShowListButton: true,
   ShowTagsButton: true,
+  ShowFormVariantPicker: true,
   ShowEntityHierarchy: true,
   ShowSectionControls: true,
   ShowEditBanner: true,
@@ -138,6 +151,7 @@ export const EXPLORER_TOOLBAR_CONFIG: FormToolbarConfig = {
   ShowHistoryButton: true,
   ShowListButton: true,
   ShowTagsButton: true,
+  ShowFormVariantPicker: true,
   ShowEntityHierarchy: true,
   ShowSectionControls: true,
   ShowEditBanner: true,
@@ -168,6 +182,7 @@ export const CUSTOM_LAYOUT_TOOLBAR_CONFIG: FormToolbarConfig = {
   ShowHistoryButton: true,
   ShowListButton: true,
   ShowTagsButton: true,
+  ShowFormVariantPicker: true,
   ShowEntityHierarchy: true,
   ShowSectionControls: false,            // ← hides the whole right group
   ShowEditBanner: true,

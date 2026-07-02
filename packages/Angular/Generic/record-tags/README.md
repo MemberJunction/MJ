@@ -117,5 +117,5 @@ All colors use MJ semantic design tokens. No hardcoded hex values appear in the 
 `RecordTagsModule` imports:
 
 - `CommonModule` (Angular)
-- `VersionsModule` (`@memberjunction/ng-versions`)
-- `SharedGenericModule` (`@memberjunction/ng-shared-generic`) -- provides `mj-slide-panel` and `mj-loading`
+- `MjSlidePanelComponent` (`@memberjunction/ng-ui-components`) -- provides `mj-slide-panel`
+- `SharedGenericModule` (`@memberjunction/ng-shared-generic`) -- provides `mj-loading`

@@ -22,33 +22,6 @@
           title="New Record">
           <i class="fa-solid fa-plus"></i>
         </button>
-
-        <!-- View Mode Toggle -->
-        <div class="view-mode-toggle">
-          <button
-            class="toggle-btn"
-            [class.active]="CurrentViewMode === 'grid'"
-            (click)="SetViewMode('grid')"
-            title="Grid View">
-            <i class="fa-solid fa-list"></i>
-          </button>
-          <button
-            class="toggle-btn"
-            [class.active]="CurrentViewMode === 'cards'"
-            (click)="SetViewMode('cards')"
-            title="Cards View">
-            <i class="fa-solid fa-grip"></i>
-          </button>
-          @if (HasDateFields) {
-            <button
-              class="toggle-btn"
-              [class.active]="CurrentViewMode === 'timeline'"
-              (click)="SetViewMode('timeline')"
-              title="Timeline View">
-              <i class="fa-solid fa-timeline"></i>
-            </button>
-          }
-        </div>
       </div>
     }
   </div>
@@ -62,35 +35,33 @@
 
   <!-- No results -->
   @if (SearchState === 'no-results') {
-    <div class="empty-state">
-      <i class="fa-solid fa-magnifying-glass empty-icon"></i>
-      <p>No results found for "<strong>{{ searchInput }}</strong>" in {{ entity }}</p>
+    <mj-empty-state
+      Variant="no-results"
+      Icon="fa-solid fa-magnifying-glass">
+      <p class="search-result-empty-message">No results found for "<strong>{{ searchInput }}</strong>" in {{ entity }}</p>
       <p class="empty-hint">Try a different search term or entity</p>
-    </div>
+    </mj-empty-state>
   }
 
   <!-- Single result — auto-navigating to entity form -->
   @if (SearchState === 'single-result') {
-    <div class="single-result-state">
-      <i class="fa-solid fa-arrow-right redirect-icon"></i>
-      <p>Found 1 result &mdash; opening record...</p>
-    </div>
+    <mj-empty-state
+      Icon="fa-solid fa-arrow-right"
+      Title="Found 1 result — opening record..." />
   }
 
   <!-- Entity Viewer (2+ results) -->
   @if (SearchState === 'viewer' && EntityInfo) {
     <div class="viewer-container">
       <mj-entity-viewer
-        [entity]="EntityInfo"
-        [viewMode]="CurrentViewMode"
-        [filterText]="searchInput"
-        [config]="ViewerConfig"
-        [showGridToolbar]="true"
-        [gridToolbarConfig]="GridToolbarConfig"
-        (viewModeChange)="OnViewModeChanged($event)"
-        (dataLoaded)="OnDataLoaded($event)"
-        (recordOpened)="OnRecordOpened($event)"
-        (addRequested)="OnCreateNewRecord()">
+        [Entity]="EntityInfo"
+        [Provider]="Provider"
+        [FilterText]="searchInput"
+        [Config]="ViewerConfig"
+        (DataLoaded)="OnDataLoaded($event)"
+        (RecordOpened)="OnRecordOpened($event)"
+        (OpenRelatedRecordRequested)="OnOpenRelatedRecord($event)"
+        (CreateRecordRequested)="OnCreateNewRecord()">
       </mj-entity-viewer>
     </div>
   }

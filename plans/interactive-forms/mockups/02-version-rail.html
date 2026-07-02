@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>02 — Version rail</title>
+<link rel="stylesheet" href="styles.css" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+</head>
+<body>
+<div class="mockup-bar">
+    <a href="index.html"><i class="fa-solid fa-arrow-left"></i></a>
+    <span class="title">02 — Version rail</span>
+    <span class="spacer"></span>
+    <span class="mj-badge warning"><i class="fa-solid fa-circle-half-stroke"></i> OPTIONS — left rail vs. bottom drawer</span>
+</div>
+<div class="mockup-note">
+    <strong>Decision needed:</strong> The version list can live as a persistent left pane (Option A) or as a collapsible bottom drawer (Option B). Heavy users see versions often; light users rarely care.
+</div>
+
+<!-- ====================================================================== -->
+<!-- OPTION A: Left rail (matches cockpit Pane 1)                            -->
+<!-- ====================================================================== -->
+<div class="options-gallery" style="margin-bottom:0; border-bottom: none; border-bottom-left-radius:0; border-bottom-right-radius:0;">
+    <div class="ttl">Option A — Persistent left pane (240px)</div>
+    <div class="lead">Always visible. Easy to scan at-a-glance. Costs ~240px of horizontal real estate forever.</div>
+</div>
+<div class="shell" style="min-height: 620px;">
+    <div class="sidebar" style="opacity: 0.55;">
+        <div class="logo"><i class="fa-solid fa-cubes"></i> MemberJunction</div>
+        <div class="nav-item">…</div>
+    </div>
+    <div class="main">
+        <div class="app-header">
+            <h1><i class="fa-solid fa-pen-ruler"></i> Form Builder — <span class="muted" style="font-weight:400;">MJ: Applications</span></h1>
+            <span class="spacer"></span>
+        </div>
+        <div class="cockpit-grid" style="grid-template-columns: 260px 1fr;">
+            <div class="cockpit-pane">
+                <div class="pane-head"><i class="fa-solid fa-clock-rotate-left"></i> Versions <span class="spacer"></span><span class="mj-badge brand">4</span></div>
+                <div class="pane-body">
+                    <input class="mj-input" placeholder="Filter versions…" style="font-size:12px; padding:5px 8px; margin-bottom: 10px;" />
+                    <ul class="version-list">
+                        <li class="version-row pending selected">
+                            <div class="v-label">v1.2.0 <span class="mj-badge pending">Pending</span></div>
+                            <div class="v-meta">May 23, 10:14 · adds payment chart</div>
+                            <div style="margin-top:8px; display:flex; gap:4px;">
+                                <button class="mj-btn xs primary"><i class="fa-solid fa-circle-check"></i> Activate</button>
+                                <button class="mj-btn xs"><i class="fa-solid fa-code-compare"></i> Diff</button>
+                            </div>
+                        </li>
+                        <li class="version-row active">
+                            <div class="v-label">v1.1.0 <span class="mj-badge success">Active</span></div>
+                            <div class="v-meta">May 23, 09:02 · split system fields</div>
+                        </li>
+                        <li class="version-row">
+                            <div class="v-label">v1.0.0 <span class="mj-badge">Inactive</span></div>
+                            <div class="v-meta">May 22, 11:14 · initial scaffold</div>
+                        </li>
+                        <li class="version-row">
+                            <div class="v-label">v0.9.0 <span class="mj-badge">Inactive</span></div>
+                            <div class="v-meta">May 22, 10:05 · draft from Skip</div>
+                        </li>
+                    </ul>
+                    <hr class="mj-sep" />
+                    <div class="muted" style="font-size:11px;">Components are versioned forever. Inactive rows can be restored anytime.</div>
+                </div>
+            </div>
+            <div class="cockpit-pane">
+                <div class="pane-head"><i class="fa-solid fa-eye"></i> Preview of selected version <span class="spacer"></span><span class="mj-badge pending">v1.2.0 Pending</span></div>
+                <div class="preview-frame">
+                    <div class="form-card">
+                        <div class="form-toolbar">
+                            <div class="breadcrumbs">Applications › <strong>CoreApp</strong></div>
+                            <span class="spacer"></span>
+                            <span class="mj-badge pending"><i class="fa-solid fa-flask"></i> Preview only</span>
+                        </div>
+                        <div class="form-content">
+                            <div class="form-section">
+                                <div class="sect-head"><i class="fa-solid fa-fingerprint"></i> Identity</div>
+                                <div class="form-grid one">
+                                    <div class="mj-field"><label class="mj-label">Name</label><input class="mj-input" value="CoreApp" /></div>
+                                    <div class="mj-field"><label class="mj-label">Description</label><textarea class="mj-textarea">Default MemberJunction application bundle.</textarea></div>
+                                </div>
+                            </div>
+                            <div class="form-section">
+                                <div class="sect-head"><i class="fa-solid fa-chart-column"></i> Payment activity (new)</div>
+                                <div style="height: 120px; background: linear-gradient(180deg, color-mix(in srgb, var(--mj-brand-primary) 8%, white), white); border:1px dashed var(--mj-border-default); border-radius: var(--mj-radius-md); display:flex; align-items:flex-end; gap:12px; padding: 16px;">
+                                    <div style="width:18%; height: 40%; background: var(--mj-brand-primary); border-radius:4px;"></div>
+                                    <div style="width:18%; height: 70%; background: var(--mj-brand-primary); border-radius:4px;"></div>
+                                    <div style="width:18%; height: 55%; background: var(--mj-brand-primary); border-radius:4px;"></div>
+                                    <div style="width:18%; height: 88%; background: var(--mj-brand-primary); border-radius:4px;"></div>
+                                    <div style="width:18%; height: 32%; background: var(--mj-brand-primary); border-radius:4px;"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ====================================================================== -->
+<!-- OPTION B: Bottom drawer (collapsible, hidden by default)                -->
+<!-- ====================================================================== -->
+<div class="options-gallery" style="margin-top: 32px; margin-bottom:0; border-bottom: none; border-bottom-left-radius:0; border-bottom-right-radius:0;">
+    <div class="ttl">Option B — Collapsible bottom drawer</div>
+    <div class="lead">Code + preview get the full width. Version drawer slides up on demand. Saves horizontal space; one extra click to see versions.</div>
+</div>
+<div class="shell" style="min-height: 680px; position: relative;">
+    <div class="sidebar" style="opacity: 0.55;">
+        <div class="logo"><i class="fa-solid fa-cubes"></i> MemberJunction</div>
+        <div class="nav-item">…</div>
+    </div>
+    <div class="main">
+        <div class="app-header">
+            <h1><i class="fa-solid fa-pen-ruler"></i> Form Builder — <span class="muted" style="font-weight:400;">MJ: Applications</span></h1>
+            <span class="spacer"></span>
+            <button class="mj-btn"><i class="fa-solid fa-clock-rotate-left"></i> Versions <span class="mj-badge brand">4</span></button>
+        </div>
+        <div class="cockpit-grid" style="grid-template-columns: 1fr 1fr;">
+            <div class="cockpit-pane">
+                <div class="pane-head"><i class="fa-solid fa-code"></i> Code (JSX)</div>
+                <div class="code-pane" style="height: 400px;"><span class="ln">  1</span><span class="com">// v1.2.0 Pending — adds payment chart</span>
+<span class="ln">  2</span><span class="kw">function</span> <span class="fn">ApplicationsForm</span>(props) {
+<span class="ln">  3</span>    <span class="kw">return</span> (
+<span class="ln">  4</span>        &lt;<span class="tag">FormCard</span>&gt;
+<span class="ln">  5</span>            &lt;<span class="tag">Section</span> <span class="attr">title</span>=<span class="str">"Identity"</span>&gt;…&lt;/<span class="tag">Section</span>&gt;
+<span class="ln">  6</span>            &lt;<span class="tag">Section</span> <span class="attr">title</span>=<span class="str">"Payment activity"</span>&gt;
+<span class="ln">  7</span>                &lt;<span class="tag">BarChart</span> <span class="attr">query</span>=<span class="str">"…"</span> /&gt;
+<span class="ln">  8</span>            &lt;/<span class="tag">Section</span>&gt;
+<span class="ln">  9</span>        &lt;/<span class="tag">FormCard</span>&gt;
+<span class="ln"> 10</span>    );
+<span class="ln"> 11</span>}</div>
+            </div>
+            <div class="cockpit-pane">
+                <div class="pane-head"><i class="fa-solid fa-eye"></i> Preview</div>
+                <div class="preview-frame" style="height: 400px;">
+                    <div class="form-card">
+                        <div class="form-content">
+                            <div class="form-section">
+                                <div class="sect-head"><i class="fa-solid fa-fingerprint"></i> Identity</div>
+                                <div class="form-grid one">
+                                    <div class="mj-field"><label class="mj-label">Name</label><input class="mj-input" value="CoreApp" /></div>
+                                </div>
+                            </div>
+                            <div class="form-section">
+                                <div class="sect-head"><i class="fa-solid fa-chart-column"></i> Payment activity</div>
+                                <div style="height: 90px; background: linear-gradient(180deg, color-mix(in srgb, var(--mj-brand-primary) 8%, white), white); border:1px dashed var(--mj-border-default); border-radius: var(--mj-radius-md);"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom drawer expanded -->
+        <div style="background: var(--mj-bg-surface); border-top: 1px solid var(--mj-border-default); padding: 12px 18px;">
+            <div style="display:flex; align-items:center; gap: 10px; margin-bottom: 10px;">
+                <strong style="font-size: 13px;"><i class="fa-solid fa-clock-rotate-left"></i> Versions</strong>
+                <span class="mj-badge brand">4</span>
+                <span class="spacer"></span>
+                <button class="mj-btn xs ghost"><i class="fa-solid fa-chevron-down"></i> Collapse</button>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;">
+                <div class="version-row pending selected">
+                    <div class="v-label">v1.2.0 <span class="mj-badge pending">Pending</span></div>
+                    <div class="v-meta">May 23, 10:14</div>
+                </div>
+                <div class="version-row active">
+                    <div class="v-label">v1.1.0 <span class="mj-badge success">Active</span></div>
+                    <div class="v-meta">May 23, 09:02</div>
+                </div>
+                <div class="version-row">
+                    <div class="v-label">v1.0.0 <span class="mj-badge">Inactive</span></div>
+                    <div class="v-meta">May 22, 11:14</div>
+                </div>
+                <div class="version-row">
+                    <div class="v-label">v0.9.0 <span class="mj-badge">Inactive</span></div>
+                    <div class="v-meta">May 22, 10:05</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="mockup-note" style="margin-top: 24px;">
+    <strong>Recommendation (Claude's take):</strong> Option A — persistent left rail. Versioning is the new mental model we're trying to make second nature; having the list always visible reinforces "your form is just one of N versions, all live forever." Option B optimizes for screen space at the cost of teaching the new model.
+</div>
+</body>
+</html>

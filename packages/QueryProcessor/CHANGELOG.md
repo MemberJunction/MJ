@@ -1,5 +1,141 @@
 # @memberjunction/query-processor
 
+## 5.44.0
+
+### Patch Changes
+
+- Updated dependencies [3633fbb]
+- Updated dependencies [1367fbb]
+- Updated dependencies [5396d90]
+- Updated dependencies [7279819]
+- Updated dependencies [d44e430]
+- Updated dependencies [6f74b17]
+- Updated dependencies [be5ab50]
+- Updated dependencies [aa9102d]
+- Updated dependencies [2f926df]
+- Updated dependencies [863a10d]
+- Updated dependencies [2f9b863]
+  - @memberjunction/core-entities@5.44.0
+  - @memberjunction/core@5.44.0
+  - @memberjunction/global@5.44.0
+
+## 5.43.0
+
+### Patch Changes
+
+- Updated dependencies [40eb4e0]
+- Updated dependencies [9f6aa87]
+- Updated dependencies [9200b13]
+- Updated dependencies [ad8d8f1]
+- Updated dependencies [a4cdfb0]
+  - @memberjunction/core@5.43.0
+  - @memberjunction/global@5.43.0
+  - @memberjunction/core-entities@5.43.0
+
+## 5.42.0
+
+### Patch Changes
+
+- Updated dependencies [9b9b484]
+- Updated dependencies [2f225e4]
+- Updated dependencies [6d970cd]
+- Updated dependencies [0fa3cbc]
+- Updated dependencies [da5a3dd]
+  - @memberjunction/core@5.42.0
+  - @memberjunction/core-entities@5.42.0
+  - @memberjunction/global@5.42.0
+
+## 5.41.0
+
+### Patch Changes
+
+- Updated dependencies [8fd6f59]
+- Updated dependencies [2e48d1a]
+- Updated dependencies [cd6c5f0]
+- Updated dependencies [8c8b658]
+- Updated dependencies [659ee5b]
+- Updated dependencies [cc604aa]
+- Updated dependencies [15b743b]
+- Updated dependencies [a5f5472]
+- Updated dependencies [ddaa30e]
+  - @memberjunction/core@5.41.0
+  - @memberjunction/core-entities@5.41.0
+  - @memberjunction/global@5.41.0
+
+## 5.40.2
+
+### Patch Changes
+
+- @memberjunction/core@5.40.2
+- @memberjunction/core-entities@5.40.2
+- @memberjunction/global@5.40.2
+
+## 5.40.1
+
+### Patch Changes
+
+- Updated dependencies [e50381b]
+  - @memberjunction/core@5.40.1
+  - @memberjunction/core-entities@5.40.1
+  - @memberjunction/global@5.40.1
+
+## 5.40.0
+
+### Patch Changes
+
+- Updated dependencies [804f9f6]
+- Updated dependencies [73bb233]
+- Updated dependencies [43e6c0f]
+- Updated dependencies [253a188]
+  - @memberjunction/core@5.40.0
+  - @memberjunction/core-entities@5.40.0
+  - @memberjunction/global@5.40.0
+
+## 5.39.0
+
+### Patch Changes
+
+- Updated dependencies [361eb4c]
+- Updated dependencies [f4bf584]
+- Updated dependencies [3c53858]
+- Updated dependencies [db4addf]
+- Updated dependencies [0f9acba]
+- Updated dependencies [ae74fd5]
+- Updated dependencies [1b0f355]
+- Updated dependencies [9bc2916]
+- Updated dependencies [34fe6d1]
+- Updated dependencies [a101a34]
+  - @memberjunction/core@5.39.0
+  - @memberjunction/core-entities@5.39.0
+  - @memberjunction/global@5.39.0
+
+## 5.38.0
+
+### Patch Changes
+
+- ebb0e3d: Eliminate provider.Refresh() from query save/delete paths, introduce MJQueryEntityExtended with child-relationship getters and business logic, migrate all QueryInfo consumers outside MJCore to use QueryEngine and entity types, remove dead QueryCacheManager, and replace 12 redundant RunView calls with QueryEngine cache reads. Fixes major performance bottleneck on large-entity deployments where every query save reloaded the entire metadata graph.
+- Updated dependencies [4ee0b06]
+- Updated dependencies [30f598d]
+- Updated dependencies [748b2e7]
+- Updated dependencies [ce7d2f5]
+- Updated dependencies [275afda]
+- Updated dependencies [6a3ac36]
+- Updated dependencies [c0b40c0]
+- Updated dependencies [d5a51b3]
+- Updated dependencies [3d739a3]
+- Updated dependencies [ebb0e3d]
+  - @memberjunction/core@5.38.0
+  - @memberjunction/core-entities@5.38.0
+  - @memberjunction/global@5.38.0
+
+## 5.37.0
+
+### Patch Changes
+
+- Updated dependencies [4f15f31]
+  - @memberjunction/core@5.37.0
+  - @memberjunction/global@5.37.0
+
 ## 5.36.0
 
 ### Patch Changes

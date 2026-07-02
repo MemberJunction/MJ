@@ -1,3 +1,3 @@
-## 2024-05-02 - [O(n^2) Find in Filter Array Operations]
-**Learning:** In code generation and metadata handling, multiple iterations over large entity lists are common. Nested `Array.find()` inside `Array.filter()` operations with string lowercasing can create significant hidden O(n*m) performance bottlenecks that compound when run against large entity sets during code generation.
-**Action:** When repeatedly filtering collections against an exclusion/inclusion list, always precompute a `Set` of the normalized (e.g. lowercased) strings to change the lookup from O(m) to O(1) and eliminate repeated string allocations, improving overall complexity from O(n*m) to O(n+m).
+## 2024-05-14 - Replace O(N) array scans with O(1) hash map lookups
+**Learning:** Found an anti-pattern in core providers (`GenericDatabaseProvider`, etc.) where `entity.Fields.find(...)` and `entityInfo.Fields.find(...)` were used to look up fields by name, which is an O(N) operation. This is especially slow inside loops like query string building or field diffing.
+**Action:** Always prefer the `GetFieldByName(name)` (for `BaseEntity` instances) and `FieldByName(name)` (for `EntityInfo` instances) methods. These methods utilize internally cached `Map`s for O(1) lookups, providing a significant performance boost in hot paths.

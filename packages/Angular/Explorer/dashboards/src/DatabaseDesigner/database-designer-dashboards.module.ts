@@ -23,10 +23,12 @@ import {
     MJPageBodyInteriorComponent,
     MJPageSearchComponent,
     MJRefreshButtonComponent,
-    MJStatBadgeComponent
+    MJStatBadgeComponent,
+    MjSlidePanelComponent,
+    MJEmptyStateComponent,
+    MJAlertComponent
 } from '@memberjunction/ng-ui-components';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
-import { VersionsModule } from '@memberjunction/ng-versions';
 import { MarkdownModule } from '@memberjunction/ng-markdown';
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
 import { EntityRelationshipDiagramModule } from '@memberjunction/ng-entity-relationship-diagram';
@@ -80,8 +82,10 @@ import { DatabaseDesignerService } from './services/database-designer.service';
         MJPageSearchComponent,
         MJRefreshButtonComponent,
         MJStatBadgeComponent,
+        MjSlidePanelComponent,
+        MJEmptyStateComponent,
+        MJAlertComponent,
         SharedGenericModule,
-        VersionsModule,
         MarkdownModule,
         CodeEditorModule,
         EntityRelationshipDiagramModule,

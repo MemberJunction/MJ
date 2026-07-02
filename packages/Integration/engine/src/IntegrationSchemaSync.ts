@@ -1,4 +1,4 @@
-/**
+  /**
  * @fileoverview Persists dynamically discovered integration objects and fields
  * to the IntegrationObject / IntegrationObjectField tables.
  *
@@ -13,388 +13,903 @@
  * dynamic wins for type/size columns (Type, Length, Precision, Scale).
  */
 
-import { IMetadataProvider, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { CompositeKey, IMetadataProvider, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
 import type {
-    MJIntegrationObjectEntity,
-    MJIntegrationObjectFieldEntity,
-    MJActionEntity,
-    MJActionParamEntity,
-    MJActionResultCodeEntity,
-    MJActionCategoryEntity,
+  MJIntegrationObjectEntity,
+  MJIntegrationObjectFieldEntity,
+  MJActionEntity,
+  MJActionParamEntity,
+  MJActionResultCodeEntity,
+  MJActionCategoryEntity,
 } from '@memberjunction/core-entities';
 import type { SourceSchemaInfo, SourceObjectInfo, SourceFieldInfo } from './types';
 import { ActionMetadataGenerator, type IntegrationObjectInfo } from './ActionMetadataGenerator';
 
 export interface PersistSchemaOptions {
-    IntegrationID: string;
-    SourceSchema: SourceSchemaInfo;
-    ContextUser: UserInfo;
-    Provider?: IMetadataProvider;
+  IntegrationID: string;
+  SourceSchema: SourceSchemaInfo;
+  ContextUser: UserInfo;
+  Provider?: IMetadataProvider;
+  /**
+   * When true, persistence runs through a TransactionGroup batch — substantially
+   * faster on large schemas (Salesforce ~1,800 sobjects). Set false for diagnostic
+   * runs where per-record error visibility matters.
+   * Default: true.
+   */
+  UseTransactionGroup?: boolean;
+  /**
+   * When true, declared IntegrationObjects that are ABSENT from this discovery are deactivated
+   * (Status='Disabled') so ApplyAll never materializes a table for them — avoiding thousands of
+   * phantom empty tables and the per-entity CodeGen/advancedGen cost they incur. Set ONLY by a
+   * COMPREHENSIVE refresh that probed every object (endpoint 404/empty = confidently absent); a
+   * requested-subset ApplyAll must leave it false, or it would deactivate objects it never checked.
+   * Object-level only — field-level absence (a field null across the data sample is NOT proof of
+   * absence) is deliberately not deactivated here. Deactivate, never delete: the IO + its column
+   * are preserved, and the CustomColumnPromoter reactivates them if the object reappears.
+   */
+  DeactivateAbsent?: boolean;
+}
+
+/** Per-field provenance recording which source decided each attribute during the merge. */
+export interface FieldMergeLog {
+  ObjectName: string;
+  FieldName: string;
+  /** What overall record was decided to be the row's MetadataSource. */
+  EffectiveSource: 'Declared' | 'Discovered' | 'Custom';
+  /**
+   * Per-attribute precedence map: 'Declared' = curated value won (no overwrite from
+   * discovery), 'Discovered' = describe output won (overwrote curated for DDL-affecting
+   * attribute), 'Initial' = field is newly created (no prior value).
+   */
+  AttributeWinners: {
+    Type?: 'Declared' | 'Discovered' | 'Initial';
+    Length?: 'Declared' | 'Discovered' | 'Initial';
+    AllowsNull?: 'Declared' | 'Discovered' | 'Initial';
+    IsRequired?: 'Declared' | 'Discovered' | 'Initial';
+    IsPrimaryKey?: 'Declared' | 'Discovered' | 'Initial';
+    IsUniqueKey?: 'Declared' | 'Discovered' | 'Initial';
+    IsReadOnly?: 'Declared' | 'Discovered' | 'Initial';
+    Description?: 'Declared' | 'Discovered' | 'Initial';
+    ForeignKey?: 'Declared' | 'Discovered' | 'Initial';
+  };
+}
+
+/**
+ * Pure-function overlay rule for a single boolean attribute.
+ *
+ * The rule that the rest of the codebase must obey when merging a Declared
+ * (curated/static-catalog) row with a Discovered (live-from-connector) value:
+ *
+ *   - If `discovered` is `undefined`, the source has **no opinion** —
+ *     the Declared value sticks. Winner = 'Declared'. Never overwrite.
+ *   - If `discovered` is defined and equal to `declared`, nothing changes.
+ *     Winner = 'Declared'.
+ *   - If `discovered` is defined and DIFFERENT, the Discovered value wins
+ *     (it reflects the live system's current truth, e.g. a column flipped
+ *     from nullable to non-nullable). Winner = 'Discovered'.
+ *
+ * The bug this exists to prevent: pre-Phase-0 v5.39.x the overlay treated
+ * `undefined` as if the source had said `false`, silently wiping declared
+ * PK flags across every IO the moment live discovery ran on connectors
+ * (HubSpot, Salesforce) whose property-list APIs don't return an
+ * `IsPrimaryKey` field at all. See `IntegrationSchemaSync.test.ts`.
+ */
+export function decideBooleanOverlay(
+  declared: boolean | undefined,
+  discovered: boolean | undefined,
+): { value: boolean | undefined; winner: 'Declared' | 'Discovered' } {
+  if (discovered === undefined) {
+    return { value: declared, winner: 'Declared' };
+  }
+  if (declared === discovered) {
+    return { value: declared, winner: 'Declared' };
+  }
+  return { value: discovered, winner: 'Discovered' };
+}
+
+/** §7 — input for {@link decideAbsentDeactivations}. */
+export interface AbsentDeactivationInput {
+  /** Caller requested a deactivating (comprehensive) refresh. */
+  DeactivateAbsent: boolean;
+  /** Discovery is AUTHORITATIVE — it enumerated the FULL gamut the credentials expose. */
+  IsAuthoritative: boolean;
+  /** ExternalName of every object this discovery returned. */
+  DiscoveredObjectNames: string[];
+  /** Per discovered object (by ExternalName): the field names it returned. An EMPTY list means the
+   *  object's fields are NOT authoritative (DiscoverFields found none) → its columns are never disabled. */
+  DiscoveredFieldNamesByObject: Record<string, string[]>;
+  /** Current ACTIVE objects in the integration. */
+  ActiveObjects: Array<{ ID: string; Name: string }>;
+  /** persisted IO ID → its current ACTIVE fields. */
+  ActiveFieldsByObjectID: Record<string, Array<{ ID: string; Name: string }>>;
+  /** discovered ExternalName (any case) → persisted IO ID. */
+  ObjectIDByName: Record<string, string>;
+}
+
+/**
+ * §7 — PURE decision of which active objects/fields a comprehensive AUTHORITATIVE discovery should
+ * DEACTIVATE (they are ABSENT from the discovery, so the source dropped them). Returns empty unless
+ * BOTH `DeactivateAbsent` AND `IsAuthoritative` — a stubbed/empty/cache-driven/scoped discovery
+ * (`IsAuthoritative=false`) deactivates NOTHING, because absence proves nothing and disabling would
+ * wrongly wipe the Declared metadata that is the only source. Field-level applies only to objects
+ * discovered WITH ≥1 field (zero discovered fields ⇒ not authoritative for that object's columns).
+ * The inverse — reactivate-on-rediscover (Disabled → Active when it reappears) — is handled in the
+ * upserts, not here. Pure ⇒ unit-testable without mocking the engine or provider.
+ */
+export function decideAbsentDeactivations(input: AbsentDeactivationInput): {
+  ObjectIDsToDeactivate: string[];
+  FieldIDsToDeactivate: string[];
+} {
+  if (!input.DeactivateAbsent || !input.IsAuthoritative) {
+    return { ObjectIDsToDeactivate: [], FieldIDsToDeactivate: [] };
+  }
+  const discovered = new Set(input.DiscoveredObjectNames.map((n) => n.toLowerCase()));
+  const ObjectIDsToDeactivate = input.ActiveObjects.filter((o) => !discovered.has(o.Name.toLowerCase())).map((o) => o.ID);
+
+  const FieldIDsToDeactivate: string[] = [];
+  for (const [objName, fieldNames] of Object.entries(input.DiscoveredFieldNamesByObject)) {
+    if (fieldNames.length === 0) continue; // not authoritative for this object's columns — never disable them
+    const objID = input.ObjectIDByName[objName.toLowerCase()];
+    if (!objID) continue;
+    const discoveredFields = new Set(fieldNames.map((f) => f.toLowerCase()));
+    for (const f of input.ActiveFieldsByObjectID[objID] ?? []) {
+      if (!discoveredFields.has(f.Name.toLowerCase())) FieldIDsToDeactivate.push(f.ID);
+    }
+  }
+  return { ObjectIDsToDeactivate, FieldIDsToDeactivate };
+}
+
+/** §B — input for {@link decideSchemaLimitViolations}: the selected table/column counts + the operator caps. */
+export interface SchemaLimitInput {
+  /** Number of tables the user selected to materialize. */
+  TableCount: number;
+  /** Per selected table: its name + the column count it would materialize. */
+  ColumnCountByTable: Array<{ Name: string; ColumnCount: number }>;
+  /** Operator cap on table count (from MJ_INTEGRATION_MAX_TABLES). null = unbounded. */
+  MaxTables: number | null;
+  /** Operator cap on columns per table (from MJ_INTEGRATION_MAX_COLUMNS_PER_TABLE). null = unbounded. */
+  MaxColumnsPerTable: number | null;
+}
+
+/**
+ * §B — PURE decision for the create-tables/RSU table+column caps. Returns a list of human-readable
+ * violation messages (empty = within limits). These caps are OPERATOR/env guardrails (a user must not be
+ * able to raise their own cap via the same API they apply with). Over-limit is REJECTED, never truncated.
+ * `null` caps mean unbounded (the default), so the common case returns []. Pure ⇒ unit-testable without the
+ * resolver/DB; the resolver builds the input from the selection and throws if this returns any violation.
+ */
+export function decideSchemaLimitViolations(input: SchemaLimitInput): string[] {
+  const violations: string[] = [];
+  if (input.MaxTables !== null && input.TableCount > input.MaxTables) {
+    violations.push(
+      `Selected ${input.TableCount} tables, which exceeds the deployment's MJ_INTEGRATION_MAX_TABLES limit (${input.MaxTables}). ` +
+      `The apply was REJECTED — no tables were created. Narrow the selection (the cap is an operator/env setting).`,
+    );
+  }
+  if (input.MaxColumnsPerTable !== null) {
+    const max = input.MaxColumnsPerTable;
+    const offenders = input.ColumnCountByTable.filter((t) => t.ColumnCount > max);
+    if (offenders.length > 0) {
+      violations.push(
+        `These selected table(s) exceed the deployment's MJ_INTEGRATION_MAX_COLUMNS_PER_TABLE limit (${max}): ` +
+        `${offenders.map((o) => `${o.Name} (${o.ColumnCount} columns)`).join(', ')}. ` +
+        `The apply was REJECTED — no tables were created. Narrow the columns (the cap is an operator/env setting).`,
+      );
+    }
+  }
+  return violations;
+}
+
+/** Per-object provenance summary. */
+export interface ObjectMergeLog {
+  ObjectName: string;
+  EffectiveSource: 'Declared' | 'Discovered' | 'Custom';
+  /** Whether the row was just created (no prior). */
+  Created: boolean;
+  /** Whether any attribute changed from prior value. */
+  Updated: boolean;
 }
 
 export interface PersistSchemaResult {
-    ObjectsCreated: number;
-    ObjectsUpdated: number;
-    FieldsCreated: number;
-    FieldsUpdated: number;
+  ObjectsCreated: number;
+  ObjectsUpdated: number;
+  FieldsCreated: number;
+  FieldsUpdated: number;
+  /**
+   * Per-object and per-field merge provenance.
+   * Lets the caller (e.g. progress-artifacts emitter, UI dashboard) surface
+   * EXACTLY which source decided each attribute — declared static metadata,
+   * runtime describe overlay, or initial creation. Structural transparency
+   * per the framework's overlay-precedence rule.
+   */
+  ObjectMergeLog: ObjectMergeLog[];
+  FieldMergeLog: FieldMergeLog[];
 }
 
 /**
  * Maps generic source types (from connectors) to MJ EntityField-compatible type strings.
  */
 function MapSourceType(sourceType: string): string {
-    const t = (sourceType ?? '').toLowerCase();
-    if (t === 'string' || t === 'text' || t === 'richtext') return 'nvarchar';
-    if (t === 'integer' || t === 'int' || t === 'number') return 'nvarchar'; // stored as nvarchar in integration schemas
-    if (t === 'decimal' || t === 'float' || t === 'currency') return 'nvarchar';
-    if (t === 'boolean' || t === 'bool') return 'bit';
-    if (t === 'datetime' || t === 'date' || t === 'timestamp') return 'datetimeoffset';
-    if (t === 'enum' || t === 'enumeration' || t === 'picklist') return 'nvarchar';
-    return 'nvarchar';
+  const t = (sourceType ?? '').toLowerCase();
+  // LARGE-text modalities → NVARCHAR(MAX). A serialized json/array/object value (and free-form
+  // text) routinely exceeds the unsized-string floor (255); mapping these to a bounded `nvarchar`
+  // makes the schema builder size them at 255, and the skip-on-overflow policy then DROPS every
+  // record whose value is wider than 255 (the OpenWater `Program.rounds` / Path LMS `details`
+  // class of bug — a nested array's JSON is ~287 chars). 'nvarchar(MAX)' is a valid IOF.Type and is
+  // self-describing (no separate Length needed). Bounded scalar `string` keeps the 255 floor.
+  if (t === 'text' || t === 'richtext' || t === 'json' || t === 'object' || t === 'array') return 'nvarchar(MAX)';
+  if (t === 'nvarchar(max)' || t === 'ntext') return 'nvarchar(MAX)'; // already-MAX → preserve on re-discovery
+  if (t === 'string') return 'nvarchar';
+  if (t === 'integer' || t === 'int' || t === 'number') return 'nvarchar'; // stored as nvarchar in integration schemas
+  if (t === 'decimal' || t === 'float' || t === 'currency') return 'nvarchar';
+  if (t === 'boolean' || t === 'bool') return 'bit';
+  if (t === 'datetime' || t === 'date' || t === 'timestamp') return 'datetimeoffset';
+  if (t === 'enum' || t === 'enumeration' || t === 'picklist') return 'nvarchar';
+  return 'nvarchar';
 }
 
 export class IntegrationSchemaSync {
+  /**
+   * Upserts IntegrationObject and IntegrationObjectField records from
+   * dynamically discovered schema.
+   *
+   * - Objects matched by (IntegrationID, Name)
+   * - Fields matched by (IntegrationObjectID, Name)
+   * - Records are never deleted here — stale ones stick around
+   *
+   * **Merge strategy — describe wins for technical fields.** When a discovered
+   * field matches an existing record, we refresh Type, AllowsNull, IsRequired,
+   * and IsPrimaryKey from the live describe output. These are the attributes
+   * that drive DDL generation and sync-time coercion; curated values can
+   * (and do) drift from what the external system actually exposes and cause
+   * overflow / null-violation errors.
+   *
+   * Curated metadata still wins for **semantic** fields — DisplayName,
+   * Description (only filled when empty), Sequence, Category — because those
+   * are human-authored and the describe output usually doesn't improve them.
+   */
+  public static async PersistDiscoveredSchema(opts: PersistSchemaOptions): Promise<PersistSchemaResult> {
+    const { IntegrationID, SourceSchema, ContextUser } = opts;
+    const md: IMetadataProvider = opts.Provider ?? Metadata.Provider;
+    const engine = IntegrationEngineBase.Instance;
+    const useBatch = opts.UseTransactionGroup ?? true;
+    const result: PersistSchemaResult = {
+      ObjectsCreated: 0,
+      ObjectsUpdated: 0,
+      FieldsCreated: 0,
+      FieldsUpdated: 0,
+      ObjectMergeLog: [],
+      FieldMergeLog: [],
+    };
 
-    /**
-     * Upserts IntegrationObject and IntegrationObjectField records from
-     * dynamically discovered schema.
-     *
-     * - Objects matched by (IntegrationID, Name)
-     * - Fields matched by (IntegrationObjectID, Name)
-     * - Records are never deleted here — stale ones stick around
-     *
-     * **Merge strategy — describe wins for technical fields.** When a discovered
-     * field matches an existing record, we refresh Type, AllowsNull, IsRequired,
-     * and IsPrimaryKey from the live describe output. These are the attributes
-     * that drive DDL generation and sync-time coercion; curated values can
-     * (and do) drift from what the external system actually exposes and cause
-     * overflow / null-violation errors.
-     *
-     * Curated metadata still wins for **semantic** fields — DisplayName,
-     * Description (only filled when empty), Sequence, Category — because those
-     * are human-authored and the describe output usually doesn't improve them.
-     */
-    public static async PersistDiscoveredSchema(opts: PersistSchemaOptions): Promise<PersistSchemaResult> {
-        const { IntegrationID, SourceSchema, ContextUser } = opts;
-        const md: IMetadataProvider = opts.Provider ?? Metadata.Provider;
-        const engine = IntegrationEngineBase.Instance;
-        const result: PersistSchemaResult = { ObjectsCreated: 0, ObjectsUpdated: 0, FieldsCreated: 0, FieldsUpdated: 0 };
+    // §D — NO runtime FK-from-stream inference. Foreign keys come ONLY from (a) declared metadata
+    // (the curated .<vendor>.integration.json) or (b) the connector's own DiscoverFields/DiscoverObjects
+    // (which read a real describe/schema endpoint and set IsForeignKey + ForeignKeyTarget). Discovery is a
+    // lightweight PK-only guess; a naming-heuristic FK guess over the sampled stream produced false edges that
+    // skewed the sync DAG, so it was removed. Whatever FK info SourceSchema.Objects already carries flows
+    // through the Declared/Discovered merge as-is. (EnrichSchemaConstraints remains exported for offline use.)
 
-        // Load existing objects for this integration from cache
-        const existingObjects = engine.GetIntegrationObjectsByIntegrationID(IntegrationID);
+    // Load existing objects for this integration from cache
+    const existingObjects = engine.GetIntegrationObjectsByIntegrationID(IntegrationID);
 
-        for (const srcObj of SourceSchema.Objects) {
-            const objResult = await IntegrationSchemaSync.UpsertObject(
-                md, IntegrationID, srcObj, existingObjects, ContextUser
-            );
-            result.ObjectsCreated += objResult.Created ? 1 : 0;
-            result.ObjectsUpdated += objResult.Updated ? 1 : 0;
+    // Phase 1: upsert objects. Object upserts must complete before field upserts
+    // (fields need ObjectID). Within this phase, upserts are independent so we
+    // batch-execute via Promise.all (concurrency cap to avoid hammering the DB).
+    const objectUpserts = SourceSchema.Objects.map((srcObj) => async () => {
+      const objResult = await IntegrationSchemaSync.UpsertObject(md, IntegrationID, srcObj, existingObjects, ContextUser);
+      return { srcObj, ...objResult };
+    });
+    const objectResults = useBatch ? await IntegrationSchemaSync.batchExec(objectUpserts, 8) : await IntegrationSchemaSync.serialExec(objectUpserts);
 
-            // Now upsert fields for this object
-            const objectID = objResult.ObjectID;
-            if (!objectID) continue;
-
-            const existingFields = engine.GetIntegrationObjectFields(objectID);
-            for (const srcField of srcObj.Fields) {
-                const fieldResult = await IntegrationSchemaSync.UpsertField(
-                    md, objectID, srcField, existingFields, ContextUser
-                );
-                result.FieldsCreated += fieldResult.Created ? 1 : 0;
-                result.FieldsUpdated += fieldResult.Updated ? 1 : 0;
-            }
-        }
-
-        console.log(`[IntegrationSchemaSync] Persisted schema for ${IntegrationID}: ${result.ObjectsCreated} objects created, ${result.ObjectsUpdated} updated, ${result.FieldsCreated} fields created, ${result.FieldsUpdated} updated`);
-        return result;
+    for (const r of objectResults) {
+      result.ObjectsCreated += r.Created ? 1 : 0;
+      result.ObjectsUpdated += r.Updated ? 1 : 0;
+      result.ObjectMergeLog.push({
+        ObjectName: r.srcObj.ExternalName,
+        EffectiveSource: r.EffectiveSource,
+        Created: r.Created,
+        Updated: r.Updated,
+      });
     }
 
-    // ── Object upsert ────────────────────────────────────────────────
+    // Build sibling name→ID map for FK resolution during field upserts.
+    // Combines the freshly-upserted set with whatever was already in the engine
+    // cache, so discovered FK targets like "Contacts" resolve to a UUID regardless
+    // of whether the target object was just created this run or pre-existed.
+    const siblingNameToID = new Map<string, string>();
+    for (const eo of existingObjects) {
+      if (eo.ID) siblingNameToID.set(eo.Name.toLowerCase(), eo.ID);
+    }
+    for (const r of objectResults) {
+      if (r.ObjectID) siblingNameToID.set(r.srcObj.ExternalName.toLowerCase(), r.ObjectID);
+    }
 
-    private static async UpsertObject(
-        md: IMetadataProvider,
-        integrationID: string,
-        srcObj: SourceObjectInfo,
-        existingObjects: MJIntegrationObjectEntity[],
-        contextUser: UserInfo
-    ): Promise<{ ObjectID: string | null; Created: boolean; Updated: boolean }> {
-        const existing = existingObjects.find(
-            o => o.Name.toLowerCase() === srcObj.ExternalName.toLowerCase()
+    // Phase 2: upsert fields per object. Across objects is parallelizable; within
+    // an object the field set is sequential against the cached field list.
+    const fieldUpsertJobs = objectResults
+      .filter((r) => r.ObjectID)
+      .map((r) => async () => {
+        const existingFields = engine.GetIntegrationObjectFields(r.ObjectID!);
+        const perObjectLogs: FieldMergeLog[] = [];
+        const perObjectStats = { created: 0, updated: 0 };
+        for (const srcField of r.srcObj.Fields) {
+          const fr = await IntegrationSchemaSync.UpsertField(md, r.ObjectID!, srcField, existingFields, ContextUser, siblingNameToID);
+          if (fr.Created) perObjectStats.created++;
+          if (fr.Updated) perObjectStats.updated++;
+          perObjectLogs.push({
+            ObjectName: r.srcObj.ExternalName,
+            FieldName: srcField.Name,
+            EffectiveSource: fr.EffectiveSource,
+            AttributeWinners: fr.AttributeWinners,
+          });
+        }
+        console.log(
+          JSON.stringify({
+            ts: new Date().toISOString(),
+            event: 'persist.object.fields-done',
+            objectName: r.srcObj.ExternalName,
+            integrationObjectID: r.ObjectID,
+            fieldsInSource: r.srcObj.Fields.length,
+            fieldsCreated: perObjectStats.created,
+            fieldsUpdated: perObjectStats.updated,
+            fieldsUnchanged: r.srcObj.Fields.length - perObjectStats.created - perObjectStats.updated,
+          }),
         );
+        return { stats: perObjectStats, logs: perObjectLogs };
+      });
 
-        if (existing) {
-            // Static object exists — don't overwrite, but update type/capability fields if empty
-            let dirty = false;
-            if (!existing.Description && srcObj.Description) {
-                existing.Description = srcObj.Description;
-                dirty = true;
-            }
-            if (dirty) {
-                try { await existing.Save(); } catch { /* ignore save failures on static records */ }
-                return { ObjectID: existing.ID, Created: false, Updated: true };
-            }
-            return { ObjectID: existing.ID, Created: false, Updated: false };
-        }
+    const fieldResults = useBatch ? await IntegrationSchemaSync.batchExec(fieldUpsertJobs, 8) : await IntegrationSchemaSync.serialExec(fieldUpsertJobs);
 
-        // New custom object — create it
-        try {
-            const obj = await md.GetEntityObject<MJIntegrationObjectEntity>('MJ: Integration Objects', contextUser);
-            obj.NewRecord();
-            obj.IntegrationID = integrationID;
-            obj.Name = srcObj.ExternalName;
-            obj.DisplayName = srcObj.ExternalLabel || srcObj.ExternalName;
-            if (srcObj.Description) obj.Description = srcObj.Description;
-            obj.Status = 'Active';
-            obj.Set('IsCustom', true);
-            obj.Sequence = 999; // custom objects at the end
-            const saved = await obj.Save();
-            if (saved) {
-                return { ObjectID: obj.ID, Created: true, Updated: false };
-            }
-        } catch (err) {
-            console.warn(`[IntegrationSchemaSync] Failed to create IntegrationObject '${srcObj.ExternalName}': ${err instanceof Error ? err.message : err}`);
-        }
-        return { ObjectID: null, Created: false, Updated: false };
+    for (const fr of fieldResults) {
+      result.FieldsCreated += fr.stats.created;
+      result.FieldsUpdated += fr.stats.updated;
+      result.FieldMergeLog.push(...fr.logs);
     }
 
-    // ── Field upsert ─────────────────────────────────────────────────
-
-    private static async UpsertField(
-        md: IMetadataProvider,
-        objectID: string,
-        srcField: SourceFieldInfo,
-        existingFields: MJIntegrationObjectFieldEntity[],
-        contextUser: UserInfo
-    ): Promise<{ Created: boolean; Updated: boolean }> {
-        const existing = existingFields.find(
-            f => f.Name.toLowerCase() === srcField.Name.toLowerCase()
+    // Phase 3 (gated): deactivate phantom objects/fields — declared IOs/IOFs ABSENT from this discovery,
+    // so ApplyAll never materializes them (the phantom-table / advancedGen-cost problem). Runs ONLY when
+    // BOTH (a) the caller requested it (DeactivateAbsent) AND (b) the discovery is AUTHORITATIVE — it
+    // enumerated the FULL gamut the credentials expose (SourceSchema.IsAuthoritative). A stubbed/empty or
+    // cache-driven discovery has IsAuthoritative=false, so absence proves NOTHING and nothing is disabled
+    // (else it would wrongly wipe the Declared metadata that is the only source). Deactivate, never delete.
+    if (opts.DeactivateAbsent && SourceSchema.IsAuthoritative) {
+      // Gather the active set + per-discovered-object fields, then let the PURE decision
+      // (decideAbsentDeactivations — unit-tested) choose what to Disable. The EFFECT (load + Save) is
+      // applied here; the CHOICE lives in the pure function so it is testable without mocking the engine.
+      const discoveredFieldNamesByObject: Record<string, string[]> = {};
+      const objectIDByName: Record<string, string> = {};
+      const activeFieldsByObjectID: Record<string, Array<{ ID: string; Name: string }>> = {};
+      for (const r of objectResults) {
+        if (!r.ObjectID) continue;
+        discoveredFieldNamesByObject[r.srcObj.ExternalName] = r.srcObj.Fields.map((f) => f.Name);
+        objectIDByName[r.srcObj.ExternalName.toLowerCase()] = r.ObjectID;
+        activeFieldsByObjectID[r.ObjectID] = engine
+          .GetIntegrationObjectFields(r.ObjectID)
+          .filter((iof) => iof.Status === 'Active')
+          .map((iof) => ({ ID: iof.ID, Name: iof.Name }));
+      }
+      const decision = decideAbsentDeactivations({
+        DeactivateAbsent: true,
+        IsAuthoritative: true,
+        DiscoveredObjectNames: SourceSchema.Objects.map((o) => o.ExternalName),
+        DiscoveredFieldNamesByObject: discoveredFieldNamesByObject,
+        ActiveObjects: engine.GetActiveIntegrationObjects(IntegrationID).map((io) => ({ ID: io.ID, Name: io.Name })),
+        ActiveFieldsByObjectID: activeFieldsByObjectID,
+        ObjectIDByName: objectIDByName,
+      });
+      let deactivated = 0;
+      for (const id of decision.ObjectIDsToDeactivate) {
+        const obj = await md.GetEntityObject<MJIntegrationObjectEntity>('MJ: Integration Objects', ContextUser);
+        if (await obj.InnerLoad(CompositeKey.FromID(id))) {
+          obj.Status = 'Disabled'; // deactivate (Active|Deprecated|Disabled enum); never delete
+          if (await obj.Save()) deactivated++;
+          else LogError(`[IntegrationSchemaSync] Failed to deactivate phantom object ${id}: ${obj.LatestResult?.CompleteMessage ?? 'unknown'}`);
+        }
+      }
+      let fieldsDeactivated = 0;
+      for (const id of decision.FieldIDsToDeactivate) {
+        const f = await md.GetEntityObject<MJIntegrationObjectFieldEntity>('MJ: Integration Object Fields', ContextUser);
+        if (await f.InnerLoad(CompositeKey.FromID(id))) {
+          f.Status = 'Disabled'; // deactivate, never delete
+          if (await f.Save()) fieldsDeactivated++;
+          else LogError(`[IntegrationSchemaSync] Failed to deactivate phantom field ${id}: ${f.LatestResult?.CompleteMessage ?? 'unknown'}`);
+        }
+      }
+      if (deactivated > 0 || fieldsDeactivated > 0)
+        console.log(
+          `[IntegrationSchemaSync] Deactivated ${deactivated} object(s) + ${fieldsDeactivated} field(s) absent from authoritative discovery for ${IntegrationID} (not materialized, not deleted).`,
         );
+    }
 
-        if (existing) {
-            // Refresh technical attributes from describe — the live source is
-            // the truth here. Curated DisplayName, Sequence, Category, etc. are
-            // left alone; only fields that affect DDL and sync coercion get
-            // rewritten from the describe payload.
-            let dirty = false;
-            const mappedType = MapSourceType(srcField.SourceType);
-            const describedAllowsNull = !srcField.IsRequired;
+    console.log(
+      `[IntegrationSchemaSync] Persisted schema for ${IntegrationID}: ${result.ObjectsCreated} objects created, ${result.ObjectsUpdated} updated, ${result.FieldsCreated} fields created, ${result.FieldsUpdated} updated`,
+    );
+    return result;
+  }
 
-            if (existing.Type !== mappedType) {
-                existing.Type = mappedType;
-                dirty = true;
-            }
-            if (existing.AllowsNull !== describedAllowsNull) {
-                existing.AllowsNull = describedAllowsNull;
-                dirty = true;
-            }
-            if (existing.IsRequired !== srcField.IsRequired) {
-                existing.IsRequired = srcField.IsRequired;
-                dirty = true;
-            }
-            if (existing.IsPrimaryKey !== srcField.IsPrimaryKey) {
-                existing.IsPrimaryKey = srcField.IsPrimaryKey;
-                dirty = true;
-            }
-            // Description: only fill if missing — curated descriptions outrank
-            // generic describe output.
-            if (!existing.Description && srcField.Description) {
-                existing.Description = srcField.Description;
-                dirty = true;
-            }
-            if (dirty) {
-                const saved = await existing.Save();
-                if (!saved) {
-                    console.warn(
-                        `[IntegrationSchemaSync] UpsertField save failed for '${srcField.Name}': ${existing.LatestResult?.CompleteMessage ?? 'unknown error'}`
-                    );
-                }
-                return { Created: false, Updated: true };
-            }
-            return { Created: false, Updated: false };
-        }
+  /**
+   * Batch executor with bounded concurrency. Independent async jobs run in parallel
+   * up to `concurrency`; failures within a job propagate as-is. This is the lightest-
+   * weight batching primitive we can rely on without depending on a TransactionGroup
+   * abstraction that doesn't exist in MJCore. Order-of-completion irrelevant for
+   * upserts; order-of-emission preserved in the returned array.
+   */
+  private static async batchExec<T>(jobs: Array<() => Promise<T>>, concurrency: number): Promise<T[]> {
+    const results: T[] = new Array(jobs.length);
+    let next = 0;
+    const workers = Array.from({ length: Math.min(concurrency, jobs.length) }, async () => {
+      while (true) {
+        const i = next++;
+        if (i >= jobs.length) return;
+        results[i] = await jobs[i]();
+      }
+    });
+    await Promise.all(workers);
+    return results;
+  }
 
-        // New custom field — create it
+  /** Serial executor — slower, used for diagnostic runs where per-record errors matter. */
+  private static async serialExec<T>(jobs: Array<() => Promise<T>>): Promise<T[]> {
+    const out: T[] = [];
+    for (const j of jobs) out.push(await j());
+    return out;
+  }
+
+  // ── Object upsert ────────────────────────────────────────────────
+
+  private static async UpsertObject(
+    md: IMetadataProvider,
+    integrationID: string,
+    srcObj: SourceObjectInfo,
+    existingObjects: MJIntegrationObjectEntity[],
+    contextUser: UserInfo,
+  ): Promise<{ ObjectID: string | null; Created: boolean; Updated: boolean; EffectiveSource: 'Declared' | 'Discovered' | 'Custom' }> {
+    const existing = existingObjects.find((o) => o.Name.toLowerCase() === srcObj.ExternalName.toLowerCase());
+
+    if (existing) {
+      // Declared row exists. Discovery may enrich (e.g. Description if empty,
+      // IncrementalWatermarkField if newly observed). Curated values win for
+      // everything human-authored; describe wins only for technical/empty slots.
+      let dirty = false;
+      const changes: string[] = [];
+      if (!existing.Description && srcObj.Description) {
+        existing.Description = srcObj.Description;
+        dirty = true;
+        changes.push('Description');
+      }
+      // §3 metadata refresh: capture the source's watermark field when the stored row has none.
+      // We deliberately do NOT overwrite an already-set value on a later refresh — a watermark
+      // field may have been deliberately chosen/curated, and the "curated values win" invariant
+      // (above) applies. A genuine source-side rename is rare and handled by re-curation, not by
+      // silently clobbering the stored cursor field on every refresh.
+      if (srcObj.IncrementalWatermarkField && !existing.IncrementalWatermarkField) {
+        existing.IncrementalWatermarkField = srcObj.IncrementalWatermarkField;
+        dirty = true;
+        changes.push('IncrementalWatermarkField');
+      }
+      // §7 REACTIVATE-on-rediscover: an object the source dropped (and we Disabled) that REAPPEARS in a
+      // later discovery flips back to Active — deactivation is reversible, the active set always tracks
+      // the live source. Matched against ALL rows (GetIntegrationObjectsByIntegrationID), so a Disabled
+      // row is found and reactivated rather than duplicated (UQ_IntegrationObject_Name).
+      if (existing.Status !== 'Active') {
+        existing.Status = 'Active';
+        dirty = true;
+        changes.push('Status:reactivated');
+      }
+      if (dirty) {
         try {
-            const field = await md.GetEntityObject<MJIntegrationObjectFieldEntity>('MJ: Integration Object Fields', contextUser);
-            field.NewRecord();
-            field.IntegrationObjectID = objectID;
-            field.Name = srcField.Name;
-            field.DisplayName = srcField.Label || srcField.Name;
-            if (srcField.Description) field.Description = srcField.Description;
-            field.Type = MapSourceType(srcField.SourceType);
-            field.AllowsNull = !srcField.IsRequired;
-            field.IsPrimaryKey = srcField.IsPrimaryKey;
-            field.IsRequired = srcField.IsRequired;
-            field.IsReadOnly = false;
-            field.IsUniqueKey = false;
-            field.Status = 'Active';
-            field.Set('IsCustom', true);
-            field.Sequence = 999;
-            const saved = await field.Save();
-            return { Created: saved, Updated: false };
-        } catch (err) {
-            console.warn(`[IntegrationSchemaSync] Failed to create IntegrationObjectField '${srcField.Name}': ${err instanceof Error ? err.message : err}`);
-        }
-        return { Created: false, Updated: false };
-    }
-
-    // ── Action generation for discovered custom objects ──────────────
-
-    /**
-     * Generates Action entities for newly discovered custom objects by
-     * feeding them through the same `ActionMetadataGenerator` used for
-     * standard objects, then persisting the result via BaseEntity.Save().
-     *
-     * This ensures custom object actions are structurally identical to
-     * standard ones — same verbs, same param shapes, same result codes.
-     */
-    public static async GenerateActionsForCustomObjects(opts: {
-        IntegrationName: string;
-        CustomObjects: IntegrationObjectInfo[];
-        SupportsSearch: boolean;
-        SupportsListing: boolean;
-        ContextUser: UserInfo;
-        IconClass?: string;
-        Provider?: IMetadataProvider;
-    }): Promise<{ ActionsCreated: number }> {
-        const { IntegrationName, CustomObjects, ContextUser } = opts;
-        if (CustomObjects.length === 0) return { ActionsCreated: 0 };
-
-        // Use the same generator as the offline CLI
-        const generator = new ActionMetadataGenerator();
-        const result = generator.Generate({
-            IntegrationName,
-            CategoryName: IntegrationName,
-            IconClass: opts.IconClass ?? 'fa-solid fa-plug',
-            Objects: CustomObjects,
-            IncludeSearch: opts.SupportsSearch,
-            IncludeList: opts.SupportsListing,
-            CreateCategory: true,
-        });
-
-        // Persist action records via BaseEntity — same structure, just saved to DB
-        // instead of writing to mj-sync JSON
-        const md: IMetadataProvider = opts.Provider ?? Metadata.Provider;
-        let created = 0;
-
-        // Ensure category exists
-        const categoryID = await IntegrationSchemaSync.ResolveOrCreateCategory(
-            md, IntegrationName, result.CategoryRecords, ContextUser
-        );
-
-        for (const actionRecord of result.ActionRecords) {
-            const actionName = actionRecord.fields['Name'] as string;
-
-            // Skip if action already exists
-            const rv = new RunView();
-            const existing = await rv.RunView({
-                EntityName: 'MJ: Actions',
-                ExtraFilter: `Name='${actionName.replace(/'/g, "''")}'`,
-                MaxRows: 1,
-                ResultType: 'simple',
-                Fields: ['ID'],
-            }, ContextUser);
-            if (existing.Success && existing.Results.length > 0) continue;
-
-            try {
-                const actionID = await IntegrationSchemaSync.PersistActionRecord(
-                    md, actionRecord, categoryID, ContextUser
-                );
-                if (actionID) created++;
-            } catch (err) {
-                const msg = err instanceof Error ? err.message : String(err);
-                console.warn(`[IntegrationSchemaSync] Failed to create action '${actionName}': ${msg}`);
-            }
-        }
-
-        if (created > 0) {
-            console.log(`[IntegrationSchemaSync] Created ${created} actions for ${CustomObjects.length} custom objects in ${IntegrationName}`);
-        }
-        return { ActionsCreated: created };
-    }
-
-    private static async PersistActionRecord(
-        md: IMetadataProvider,
-        record: { fields: Record<string, unknown>; relatedEntities: Record<string, Array<{ fields: Record<string, unknown> }>> },
-        categoryID: string | null,
-        contextUser: UserInfo
-    ): Promise<string | null> {
-        const action = await md.GetEntityObject<MJActionEntity>('MJ: Actions', contextUser);
-        action.NewRecord();
-        action.Name = record.fields['Name'] as string;
-        action.Description = (record.fields['Description'] as string) ?? '';
-        action.Type = 'Custom';
-        action.Status = 'Active';
-        action.DriverClass = record.fields['DriverClass'] as string;
-        // Config is a JSON object from the generator — stringify it
-        const configObj = record.fields['Config'];
-        action.Set('Config_', typeof configObj === 'string' ? configObj : JSON.stringify(configObj));
-        if (categoryID) action.CategoryID = categoryID;
-        if (record.fields['IconClass']) action.Set('IconClass', record.fields['IconClass'] as string);
-
-        const saved = await action.Save();
-        if (!saved) return null;
-
-        // Persist params
-        const params = record.relatedEntities['MJ: Action Params'] ?? [];
-        for (const p of params) {
-            const param = await md.GetEntityObject<MJActionParamEntity>('MJ: Action Params', contextUser);
-            param.NewRecord();
-            param.ActionID = action.ID;
-            param.Name = p.fields['Name'] as string;
-            param.Type = p.fields['Type'] as 'Input' | 'Output' | 'Both';
-            param.ValueType = (p.fields['ValueType'] ?? 'Scalar') as 'Scalar' | 'Simple Object' | 'BaseEntity Sub-Class' | 'Other' | 'MediaOutput';
-            param.IsArray = (p.fields['IsArray'] as boolean) ?? false;
-            param.IsRequired = (p.fields['IsRequired'] as boolean) ?? false;
-            if (p.fields['Description']) param.Description = p.fields['Description'] as string;
-            await param.Save();
-        }
-
-        // Persist result codes
-        const codes = record.relatedEntities['MJ: Action Result Codes'] ?? [];
-        for (const c of codes) {
-            const code = await md.GetEntityObject<MJActionResultCodeEntity>('MJ: Action Result Codes', contextUser);
-            code.NewRecord();
-            code.ActionID = action.ID;
-            code.ResultCode = c.fields['ResultCode'] as string;
-            if (c.fields['Description']) code.Description = c.fields['Description'] as string;
-            code.IsSuccess = (c.fields['IsSuccess'] as boolean) ?? false;
-            await code.Save();
-        }
-
-        return action.ID;
-    }
-
-    private static async ResolveOrCreateCategory(
-        md: IMetadataProvider,
-        integrationName: string,
-        categoryRecords: Array<{ fields: Record<string, unknown> }>,
-        contextUser: UserInfo
-    ): Promise<string | null> {
-        const rv = new RunView();
-        const existing = await rv.RunView<MJActionCategoryEntity>({
-            EntityName: 'MJ: Action Categories',
-            ExtraFilter: `Name='${integrationName.replace(/'/g, "''")}'`,
-            MaxRows: 1,
-            ResultType: 'entity_object',
-        }, contextUser);
-
-        if (existing.Success && existing.Results.length > 0) {
-            return existing.Results[0].ID;
-        }
-
-        // Create from generator's category record if available
-        const catRecord = categoryRecords[0];
-        try {
-            const cat = await md.GetEntityObject<MJActionCategoryEntity>('MJ: Action Categories', contextUser);
-            cat.NewRecord();
-            cat.Name = integrationName;
-            cat.Description = catRecord?.fields['Description'] as string ?? `Actions for ${integrationName} integration`;
-            cat.Status = 'Active';
-            const saved = await cat.Save();
-            return saved ? cat.ID : null;
+          await existing.Save();
         } catch {
-            return null;
+          /* ignore save failures on declared records */
         }
+        console.log(
+          JSON.stringify({
+            ts: new Date().toISOString(),
+            event: 'persist.object.updated',
+            objectName: srcObj.ExternalName,
+            integrationObjectID: existing.ID,
+            effectiveSource: 'Declared',
+            fieldsTouched: changes,
+          }),
+        );
+        return { ObjectID: existing.ID, Created: false, Updated: true, EffectiveSource: 'Declared' };
+      }
+      console.log(
+        JSON.stringify({
+          ts: new Date().toISOString(),
+          event: 'persist.object.unchanged',
+          objectName: srcObj.ExternalName,
+          integrationObjectID: existing.ID,
+          effectiveSource: 'Declared',
+          reason: 'no-overlay-deltas',
+        }),
+      );
+      return { ObjectID: existing.ID, Created: false, Updated: false, EffectiveSource: 'Declared' };
     }
+
+    // New row — mark as 'Discovered' by default. Vendor-signaled custom objects
+    // (e.g. HubSpot namespace, Salesforce __c suffix) should be promoted to
+    // 'Custom' by the concrete connector's DiscoverObjects override before
+    // PersistDiscoveredSchema is called; absent a signal, 'Discovered' is the
+    // safer label.
+    try {
+      const obj = await md.GetEntityObject<MJIntegrationObjectEntity>('MJ: Integration Objects', contextUser);
+      obj.NewRecord();
+      obj.IntegrationID = integrationID;
+      obj.Name = srcObj.ExternalName;
+      // APIPath is NOT NULL with no DB default. Declared objects get it from the metadata file;
+      // a runtime-DISCOVERED object has no source APIPath (ExternalObjectSchema carries none),
+      // so default it to the object name. Path-driven connectors read APIPath; runtime-discovery
+      // connectors (e.g. a file feed) key off the object name and ignore it. Without this,
+      // Save() fails the NOT-NULL check and the discovered object is silently lost.
+      obj.APIPath = srcObj.ExternalName;
+      obj.DisplayName = srcObj.ExternalLabel || srcObj.ExternalName;
+      if (srcObj.Description) obj.Description = srcObj.Description;
+      if (srcObj.IncrementalWatermarkField) obj.IncrementalWatermarkField = srcObj.IncrementalWatermarkField;
+      obj.Status = 'Active';
+      obj.IsCustom = true;
+      obj.MetadataSource = 'Discovered';
+      obj.Sequence = 999;
+      const saved = await obj.Save();
+      if (saved) {
+        console.log(
+          JSON.stringify({
+            ts: new Date().toISOString(),
+            event: 'persist.object.created',
+            objectName: srcObj.ExternalName,
+            integrationObjectID: obj.ID,
+            effectiveSource: 'Discovered',
+            metadataSource: 'Discovered',
+          }),
+        );
+        return { ObjectID: obj.ID, Created: true, Updated: false, EffectiveSource: 'Discovered' };
+      }
+      // Save() returned false (validation/constraint failure) WITHOUT throwing — SURFACE it.
+      // A silent false here is exactly how discovered objects vanished with zero signal.
+      console.warn(
+        `[IntegrationSchemaSync] Save() returned false creating IntegrationObject '${srcObj.ExternalName}': ${obj.LatestResult?.CompleteMessage ?? 'unknown validation failure'}`,
+      );
+    } catch (err) {
+      console.warn(`[IntegrationSchemaSync] Failed to create IntegrationObject '${srcObj.ExternalName}': ${err instanceof Error ? err.message : err}`);
+    }
+    return { ObjectID: null, Created: false, Updated: false, EffectiveSource: 'Discovered' };
+  }
+
+  // ── Field upsert ─────────────────────────────────────────────────
+
+  private static async UpsertField(
+    md: IMetadataProvider,
+    objectID: string,
+    srcField: SourceFieldInfo,
+    existingFields: MJIntegrationObjectFieldEntity[],
+    contextUser: UserInfo,
+    siblingNameToID?: Map<string, string>,
+  ): Promise<{
+    Created: boolean;
+    Updated: boolean;
+    EffectiveSource: 'Declared' | 'Discovered' | 'Custom';
+    AttributeWinners: FieldMergeLog['AttributeWinners'];
+  }> {
+    const resolveFK = (target?: string | null): string | undefined => {
+      if (!target || !siblingNameToID) return undefined;
+      return siblingNameToID.get(target.toLowerCase());
+    };
+    const existing = existingFields.find((f) => f.Name.toLowerCase() === srcField.Name.toLowerCase());
+    const winners: FieldMergeLog['AttributeWinners'] = {};
+
+    if (existing) {
+      // Declared row exists. Overlay rule:
+      //  - Describe wins for DDL-affecting attributes (Type, AllowsNull, IsRequired, IsPrimaryKey, IsUniqueKey, IsReadOnly).
+      //    Curated values for these can drift from what the live system enforces and cause sync errors.
+      //  - Curated wins for semantic attributes (Description if non-empty, DisplayName, Sequence, Category).
+      //
+      // Returned attribute winners surface EXACTLY which source decided each
+      // attribute so the caller (progress emitter, UI) can show structural
+      // transparency on the merge.
+      let dirty = false;
+      // §7 REACTIVATE-on-rediscover: a field the source dropped (and we Disabled) that REAPPEARS flips
+      // back to Active. existingFields includes Disabled rows, so it is reactivated, not duplicated.
+      if (existing.Status !== 'Active') {
+        existing.Status = 'Active';
+        dirty = true;
+      }
+      const mappedType = MapSourceType(srcField.SourceType);
+      const describedAllowsNull = srcField.AllowsNull ?? !srcField.IsRequired;
+
+      if (existing.Type !== mappedType) {
+        existing.Type = mappedType;
+        dirty = true;
+        winners.Type = 'Discovered';
+      } else {
+        winners.Type = 'Declared';
+      }
+      // Length is DDL-affecting (describe wins): seed it so the column is sized
+      // nvarchar(N) instead of defaulting to NVARCHAR(MAX) downstream. (Large-text types carry
+      // their MAX in the Type itself — 'nvarchar(MAX)' — via MapSourceType, so no length here.)
+      if (srcField.MaxLength != null && existing.Length !== srcField.MaxLength) {
+        existing.Length = srcField.MaxLength;
+        dirty = true;
+      }
+      if (existing.AllowsNull !== describedAllowsNull) {
+        existing.AllowsNull = describedAllowsNull;
+        dirty = true;
+        winners.AllowsNull = 'Discovered';
+      } else {
+        winners.AllowsNull = 'Declared';
+      }
+      // No-fabrication overlay rule for boolean attributes — see
+      // `decideBooleanOverlay`.  Discovered values only override when
+      // the source actually has an opinion (defined boolean).  Undefined
+      // means "no opinion" — the Declared value sticks.  Pre-Phase 0
+      // v5.39.x this branch treated undefined as `false` and silently
+      // wiped every declared PK on HubSpot/SF the moment live discovery
+      // ran.  See IntegrationSchemaSync.test.ts for the regression pin.
+      const reqOverlay = decideBooleanOverlay(existing.IsRequired, srcField.IsRequired);
+      if (reqOverlay.winner === 'Discovered' && reqOverlay.value !== undefined) {
+        existing.IsRequired = reqOverlay.value;
+        dirty = true;
+      }
+      winners.IsRequired = reqOverlay.winner;
+
+      const pkOverlay = decideBooleanOverlay(existing.IsPrimaryKey, srcField.IsPrimaryKey);
+      if (pkOverlay.winner === 'Discovered' && pkOverlay.value !== undefined) {
+        existing.IsPrimaryKey = pkOverlay.value;
+        dirty = true;
+      }
+      winners.IsPrimaryKey = pkOverlay.winner;
+
+      const uqOverlay = decideBooleanOverlay(existing.IsUniqueKey, srcField.IsUniqueKey);
+      if (uqOverlay.winner === 'Discovered' && uqOverlay.value !== undefined) {
+        existing.IsUniqueKey = uqOverlay.value;
+        dirty = true;
+      }
+      winners.IsUniqueKey = uqOverlay.winner;
+
+      const roOverlay = decideBooleanOverlay(existing.IsReadOnly, srcField.IsReadOnly);
+      if (roOverlay.winner === 'Discovered' && roOverlay.value !== undefined) {
+        existing.IsReadOnly = roOverlay.value;
+        dirty = true;
+      }
+      winners.IsReadOnly = roOverlay.winner;
+      // Description: only fill if missing — curated descriptions outrank
+      // generic describe output. So 'Declared' wins unless the row had
+      // no description at all and discovery has one.
+      if (!existing.Description && srcField.Description) {
+        existing.Description = srcField.Description;
+        dirty = true;
+        winners.Description = 'Discovered';
+      } else if (existing.Description) {
+        winners.Description = 'Declared';
+      }
+      // FK metadata overlay: declared wins if already set. Otherwise resolve the
+      // discovered ForeignKeyTarget name against sibling objects in this integration
+      // and persist the UUID. Unresolvable targets leave the field FK-less rather than
+      // fabricating an ID — explorer agents/users get to set the link later.
+      if (srcField.IsForeignKey && srcField.ForeignKeyTarget && !existing.RelatedIntegrationObjectID) {
+        const resolvedID = resolveFK(srcField.ForeignKeyTarget);
+        if (resolvedID) {
+          existing.RelatedIntegrationObjectID = resolvedID;
+          dirty = true;
+          winners.ForeignKey = 'Discovered';
+        }
+      } else if (existing.RelatedIntegrationObjectID) {
+        winners.ForeignKey = 'Declared';
+      }
+      if (dirty) {
+        const saved = await existing.Save();
+        if (!saved) {
+          console.warn(`[IntegrationSchemaSync] UpsertField save failed for '${srcField.Name}': ${existing.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        }
+        return { Created: false, Updated: true, EffectiveSource: 'Declared', AttributeWinners: winners };
+      }
+      return { Created: false, Updated: false, EffectiveSource: 'Declared', AttributeWinners: winners };
+    }
+
+    // New field — discovered for the first time
+    try {
+      const field = await md.GetEntityObject<MJIntegrationObjectFieldEntity>('MJ: Integration Object Fields', contextUser);
+      field.NewRecord();
+      field.IntegrationObjectID = objectID;
+      field.Name = srcField.Name;
+      field.DisplayName = srcField.Label || srcField.Name;
+      if (srcField.Description) field.Description = srcField.Description;
+      field.Type = MapSourceType(srcField.SourceType);
+      // Persist the discovered length onto IOF.Length so the schema builder sizes the column
+      // (nvarchar(N)). Large-text types carry their MAX in the Type ('nvarchar(MAX)') via
+      // MapSourceType, so no length is set for them here.
+      if (srcField.MaxLength != null) field.Length = srcField.MaxLength;
+      field.AllowsNull = srcField.AllowsNull ?? !srcField.IsRequired;
+      field.IsPrimaryKey = srcField.IsPrimaryKey;
+      field.IsRequired = srcField.IsRequired;
+      field.IsReadOnly = srcField.IsReadOnly ?? false;
+      field.IsUniqueKey = srcField.IsUniqueKey ?? false;
+      field.Status = 'Active';
+      field.IsCustom = true;
+      field.MetadataSource = 'Discovered';
+      field.Sequence = 999;
+      if (srcField.IsForeignKey && srcField.ForeignKeyTarget) {
+        const resolvedID = resolveFK(srcField.ForeignKeyTarget);
+        if (resolvedID) field.RelatedIntegrationObjectID = resolvedID;
+      }
+      const saved = await field.Save();
+      const initialWinners: FieldMergeLog['AttributeWinners'] = {
+        Type: 'Initial',
+        Length: 'Initial',
+        AllowsNull: 'Initial',
+        IsRequired: 'Initial',
+        IsPrimaryKey: 'Initial',
+        IsUniqueKey: 'Initial',
+        IsReadOnly: 'Initial',
+        Description: 'Initial',
+        ForeignKey: 'Initial',
+      };
+      return { Created: saved, Updated: false, EffectiveSource: 'Discovered', AttributeWinners: initialWinners };
+    } catch (err) {
+      console.warn(`[IntegrationSchemaSync] Failed to create IntegrationObjectField '${srcField.Name}': ${err instanceof Error ? err.message : err}`);
+    }
+    return { Created: false, Updated: false, EffectiveSource: 'Discovered', AttributeWinners: {} };
+  }
+
+  // ── Action generation for discovered custom objects ──────────────
+
+  /**
+   * Generates Action entities for newly discovered custom objects by
+   * feeding them through the same `ActionMetadataGenerator` used for
+   * standard objects, then persisting the result via BaseEntity.Save().
+   *
+   * This ensures custom object actions are structurally identical to
+   * standard ones — same verbs, same param shapes, same result codes.
+   */
+  public static async GenerateActionsForCustomObjects(opts: {
+    IntegrationName: string;
+    CustomObjects: IntegrationObjectInfo[];
+    SupportsSearch: boolean;
+    SupportsListing: boolean;
+    ContextUser: UserInfo;
+    IconClass?: string;
+    Provider?: IMetadataProvider;
+  }): Promise<{ ActionsCreated: number }> {
+    const { IntegrationName, CustomObjects, ContextUser } = opts;
+    if (CustomObjects.length === 0) return { ActionsCreated: 0 };
+
+    // Use the same generator as the offline CLI
+    const generator = new ActionMetadataGenerator();
+    const result = generator.Generate({
+      IntegrationName,
+      CategoryName: IntegrationName,
+      IconClass: opts.IconClass ?? 'fa-solid fa-plug',
+      Objects: CustomObjects,
+      IncludeSearch: opts.SupportsSearch,
+      IncludeList: opts.SupportsListing,
+      CreateCategory: true,
+    });
+
+    // Persist action records via BaseEntity — same structure, just saved to DB
+    // instead of writing to mj-sync JSON
+    const md: IMetadataProvider = opts.Provider ?? Metadata.Provider;
+    let created = 0;
+
+    // Ensure category exists
+    const categoryID = await IntegrationSchemaSync.ResolveOrCreateCategory(md, IntegrationName, result.CategoryRecords, ContextUser);
+
+    for (const actionRecord of result.ActionRecords) {
+      const actionName = actionRecord.fields['Name'] as string;
+
+      // Skip if action already exists
+      const rv = new RunView();
+      const existing = await rv.RunView(
+        {
+          EntityName: 'MJ: Actions',
+          ExtraFilter: `Name='${actionName.replace(/'/g, "''")}'`,
+          MaxRows: 1,
+          ResultType: 'simple',
+          Fields: ['ID'],
+        },
+        ContextUser,
+      );
+      if (existing.Success && existing.Results.length > 0) continue;
+
+      try {
+        const actionID = await IntegrationSchemaSync.PersistActionRecord(md, actionRecord, categoryID, ContextUser);
+        if (actionID) created++;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.warn(`[IntegrationSchemaSync] Failed to create action '${actionName}': ${msg}`);
+      }
+    }
+
+    if (created > 0) {
+      console.log(`[IntegrationSchemaSync] Created ${created} actions for ${CustomObjects.length} custom objects in ${IntegrationName}`);
+    }
+    return { ActionsCreated: created };
+  }
+
+  private static async PersistActionRecord(
+    md: IMetadataProvider,
+    record: { fields: Record<string, unknown>; relatedEntities: Record<string, Array<{ fields: Record<string, unknown> }>> },
+    categoryID: string | null,
+    contextUser: UserInfo,
+  ): Promise<string | null> {
+    const action = await md.GetEntityObject<MJActionEntity>('MJ: Actions', contextUser);
+    action.NewRecord();
+    action.Name = record.fields['Name'] as string;
+    action.Description = (record.fields['Description'] as string) ?? '';
+    action.Type = 'Custom';
+    action.Status = 'Active';
+    action.DriverClass = record.fields['DriverClass'] as string;
+    // Config is a JSON object from the generator — stringify it
+    const configObj = record.fields['Config'];
+    action.Set('Config_', typeof configObj === 'string' ? configObj : JSON.stringify(configObj));
+    if (categoryID) action.CategoryID = categoryID;
+    if (record.fields['IconClass']) action.Set('IconClass', record.fields['IconClass'] as string);
+
+    const saved = await action.Save();
+    if (!saved) return null;
+
+    // Persist params
+    const params = record.relatedEntities['MJ: Action Params'] ?? [];
+    for (const p of params) {
+      const param = await md.GetEntityObject<MJActionParamEntity>('MJ: Action Params', contextUser);
+      param.NewRecord();
+      param.ActionID = action.ID;
+      param.Name = p.fields['Name'] as string;
+      param.Type = p.fields['Type'] as 'Input' | 'Output' | 'Both';
+      param.ValueType = (p.fields['ValueType'] ?? 'Scalar') as 'Scalar' | 'Simple Object' | 'BaseEntity Sub-Class' | 'Other' | 'MediaOutput';
+      param.IsArray = (p.fields['IsArray'] as boolean) ?? false;
+      param.IsRequired = (p.fields['IsRequired'] as boolean) ?? false;
+      if (p.fields['Description']) param.Description = p.fields['Description'] as string;
+      await param.Save();
+    }
+
+    // Persist result codes
+    const codes = record.relatedEntities['MJ: Action Result Codes'] ?? [];
+    for (const c of codes) {
+      const code = await md.GetEntityObject<MJActionResultCodeEntity>('MJ: Action Result Codes', contextUser);
+      code.NewRecord();
+      code.ActionID = action.ID;
+      code.ResultCode = c.fields['ResultCode'] as string;
+      if (c.fields['Description']) code.Description = c.fields['Description'] as string;
+      code.IsSuccess = (c.fields['IsSuccess'] as boolean) ?? false;
+      await code.Save();
+    }
+
+    return action.ID;
+  }
+
+  private static async ResolveOrCreateCategory(
+    md: IMetadataProvider,
+    integrationName: string,
+    categoryRecords: Array<{ fields: Record<string, unknown> }>,
+    contextUser: UserInfo,
+  ): Promise<string | null> {
+    const rv = new RunView();
+    const existing = await rv.RunView<MJActionCategoryEntity>(
+      {
+        EntityName: 'MJ: Action Categories',
+        ExtraFilter: `Name='${integrationName.replace(/'/g, "''")}'`,
+        MaxRows: 1,
+        ResultType: 'entity_object',
+      },
+      contextUser,
+    );
+
+    if (existing.Success && existing.Results.length > 0) {
+      return existing.Results[0].ID;
+    }
+
+    // Create from generator's category record if available
+    const catRecord = categoryRecords[0];
+    try {
+      const cat = await md.GetEntityObject<MJActionCategoryEntity>('MJ: Action Categories', contextUser);
+      cat.NewRecord();
+      cat.Name = integrationName;
+      cat.Description = (catRecord?.fields['Description'] as string) ?? `Actions for ${integrationName} integration`;
+      cat.Status = 'Active';
+      const saved = await cat.Save();
+      return saved ? cat.ID : null;
+    } catch {
+      return null;
+    }
+  }
 }

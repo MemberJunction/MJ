@@ -2,6 +2,7 @@ import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { AngularSplitModule } from 'angular-split';
+import { AgGridModule } from 'ag-grid-angular';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
@@ -11,7 +12,7 @@ import { NgTreesModule } from '@memberjunction/ng-trees';
 import { SharedDashboardWidgetsModule } from './shared/shared-dashboard-widgets.module';
 import { SharedPipesModule } from './shared/shared-pipes.module';
 import { SearchModule } from '@memberjunction/ng-search';
-import { MJButtonDirective, MJComboboxComponent, MJDropdownComponent, MJPageHeaderComponent, MJPageLayoutComponent, MJPageBodyComponent, MJPageHeaderInteriorComponent, MJPageBodyInteriorComponent, MJFilterPopoverComponent, MJPageSearchComponent, MJFilterPanelComponent, MJFilterFieldComponent, MJFilterChipComponent, MJTabNavComponent, MJViewToggleComponent, MJStatBadgeComponent, MJRefreshButtonComponent, MJLeftNavComponent, MJLeftNavContentComponent } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJComboboxComponent, MJDropdownComponent, MJSwitchComponent, MJPageHeaderComponent, MJPageLayoutComponent, MJPageBodyComponent, MJPageHeaderInteriorComponent, MJPageBodyInteriorComponent, MJFilterPopoverComponent, MJPageSearchComponent, MJFilterPanelComponent, MJFilterFieldComponent, MJFilterChipComponent, MJTabNavComponent, MJViewToggleComponent, MJStatBadgeComponent, MJRefreshButtonComponent, MJLeftNavComponent, MJLeftNavContentComponent, MJDialogComponent, MJDialogActionsComponent, MJEmptyStateComponent, MJAlertComponent, MJAccordionModule } from '@memberjunction/ng-ui-components';
 
 // AI Components
 import { ModelManagementComponent } from './AI/components/models/model-management.component';
@@ -27,6 +28,24 @@ import { LiveExecutionWidgetComponent } from './AI/components/widgets/live-execu
 import { PerformanceHeatmapComponent } from './AI/components/charts/performance-heatmap.component';
 import { AgentRequestsResourceComponent } from './AI/components/requests/agent-requests-resource.component';
 import { AutotaggingPipelineResourceComponent } from './AI/components/autotagging/autotagging-pipeline-resource.component';
+import { ClassifyHistoryTabComponent } from './AI/components/autotagging/tabs/history-tab.component';
+import { ClassifyTypesTabComponent } from './AI/components/autotagging/tabs/types-tab.component';
+import { ClassifyTagsTabComponent } from './AI/components/autotagging/tabs/tags-tab.component';
+import { ClassifySourcesTabComponent } from './AI/components/autotagging/tabs/sources-tab.component';
+import { ClassifyPipelineTabComponent } from './AI/components/autotagging/tabs/pipeline-tab.component';
+import { ClassifyTaxonomyTabComponent } from './AI/components/autotagging/tabs/taxonomy-tab.component';
+import { ClassifyInboxTabComponent } from './AI/components/autotagging/tabs/inbox-tab.component';
+import { ClassifyHealthTabComponent } from './AI/components/autotagging/tabs/health-tab.component';
+import { ClassifyItemDetailDialogComponent } from './AI/components/autotagging/dialogs/item-detail.dialog.component';
+import { ClassifyItemGridComponent } from './AI/components/autotagging/components/classify-item-grid.component';
+import { ClassifyItemDrilldownComponent } from './AI/components/autotagging/components/classify-item-drilldown.component';
+import { ClassifyOverviewAnalyticsComponent } from './AI/components/autotagging/components/classify-overview-analytics.component';
+import { ClassifyNoContentTypeWarningComponent } from './AI/components/autotagging/dialogs/no-content-type-warning.dialog.component';
+import { ClassifySourceTypeFormDialogComponent } from './AI/components/autotagging/dialogs/source-type-form.dialog.component';
+import { ClassifyDryRunPreviewDialogComponent } from './AI/components/autotagging/dialogs/dry-run-preview.dialog.component';
+import { ClassifyOrgContextEditorComponent } from './AI/components/autotagging/components/classify-org-context-editor.component';
+import { ClassifySeedTaxonomyComponent } from './AI/components/autotagging/components/classify-seed-taxonomy.component';
+import { ClassifySetupWizardComponent } from './AI/components/autotagging/dialogs/classify-setup-wizard.component';
 import { TagsResourceComponent, LoadTagsResource } from './AI/components/tags/tags-resource.component';
 import { DuplicateDetectionResourceComponent } from './AI/components/duplicates/duplicate-detection-resource.component';
 import { VectorManagementResourceComponent } from './AI/components/vectors/vector-management-resource.component';
@@ -40,6 +59,10 @@ import { AnalyticsModelPerformanceComponent, LoadAnalyticsModelPerformance } fro
 import { AnalyticsCostBudgetComponent, LoadAnalyticsCostBudget } from './AI/components/analytics/cost-budget/cost-budget.component';
 import { AnalyticsErrorAnalysisComponent, LoadAnalyticsErrorAnalysis } from './AI/components/analytics/error-analysis/error-analysis.component';
 import { AnalyticsUsagePatternsComponent, LoadAnalyticsUsagePatterns } from './AI/components/analytics/usage-patterns/usage-patterns.component';
+import { AnalyticsRealtimeOverviewComponent, LoadAnalyticsRealtimeOverview } from './AI/components/analytics/realtime/realtime-overview.component';
+import { AnalyticsRealtimeSessionsComponent, LoadAnalyticsRealtimeSessions } from './AI/components/analytics/realtime/realtime-sessions.component';
+import { RealtimeManagementComponent, LoadRealtimeManagement } from './AI/components/analytics/realtime/realtime-management.component';
+import { AnalyticsRealtimeTranscriptsComponent, LoadAnalyticsRealtimeTranscripts } from './AI/components/analytics/realtime/realtime-transcripts.component';
 
 // AI Overview Hub
 import { AIOverviewHubComponent, LoadAIOverviewHub } from './AI/components/overview/ai-overview-hub.component';
@@ -55,6 +78,12 @@ import {
   LoadClusterVisualizationResource
 } from './KnowledgeHub/components/clusters/cluster-visualization-resource.component';
 import {
+  VisualizeResourceComponent,
+  LoadVisualizeResource
+} from './KnowledgeHub/components/visualize/visualize-resource.component';
+import { TagCloudComponent } from './KnowledgeHub/components/visualize/tag-cloud/tag-cloud.component';
+import { RecordDrilldownComponent } from './KnowledgeHub/components/visualize/record-drilldown/record-drilldown.component';
+import {
   SchedulingResourceComponent,
   LoadSchedulingResource
 } from './KnowledgeHub/components/scheduling/scheduling-resource.component';
@@ -62,8 +91,13 @@ import {
   AnalyticsResourceComponent,
   LoadAnalyticsResource
 } from './KnowledgeHub/components/analytics/analytics-resource.component';
+import {
+  FeaturePipelinesResourceComponent,
+  LoadFeaturePipelinesResource
+} from './KnowledgeHub/components/feature-pipelines/feature-pipelines-resource.component';
 import { ClusteringModule } from '@memberjunction/ng-clustering';
 import { SchedulingModule } from '@memberjunction/ng-scheduling';
+import { RecordProcessEditorComponent } from '@memberjunction/ng-record-process-studio';
 import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
 
 /**
@@ -84,14 +118,36 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     PerformanceHeatmapComponent,
     AgentRequestsResourceComponent,
     AutotaggingPipelineResourceComponent,
+    ClassifyHistoryTabComponent,
+    ClassifyTypesTabComponent,
+    ClassifyTagsTabComponent,
+    ClassifySourcesTabComponent,
+    ClassifyPipelineTabComponent,
+    ClassifyTaxonomyTabComponent,
+    ClassifyInboxTabComponent,
+    ClassifyHealthTabComponent,
+    ClassifyItemDetailDialogComponent,
+    ClassifyItemGridComponent,
+    ClassifyItemDrilldownComponent,
+    ClassifyOverviewAnalyticsComponent,
+    ClassifyNoContentTypeWarningComponent,
+    ClassifySourceTypeFormDialogComponent,
+    ClassifyDryRunPreviewDialogComponent,
+    ClassifyOrgContextEditorComponent,
+    ClassifySeedTaxonomyComponent,
+    ClassifySetupWizardComponent,
     TagsResourceComponent,
     DuplicateDetectionResourceComponent,
     VectorManagementResourceComponent,
     KnowledgeConfigResourceComponent,
     SearchResultDetailComponent,
     ClusterVisualizationResourceComponent,
+    VisualizeResourceComponent,
+    TagCloudComponent,
+    RecordDrilldownComponent,
     SchedulingResourceComponent,
     AnalyticsResourceComponent,
+    FeaturePipelinesResourceComponent,
     AIAnalyticsResourceComponent,
     AnalyticsFilterBarComponent,
     AnalyticsExecutiveSummaryComponent,
@@ -101,6 +157,10 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     AnalyticsCostBudgetComponent,
     AnalyticsErrorAnalysisComponent,
     AnalyticsUsagePatternsComponent,
+    AnalyticsRealtimeOverviewComponent,
+    AnalyticsRealtimeSessionsComponent,
+    RealtimeManagementComponent,
+    AnalyticsRealtimeTranscriptsComponent,
     AIOverviewHubComponent
   ],
   imports: [
@@ -108,6 +168,7 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     FormsModule,
     ReactiveFormsModule,
     AngularSplitModule,
+    AgGridModule,
     ContainerDirectivesModule,
     CodeEditorModule,
     SharedGenericModule,
@@ -120,6 +181,7 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     MJButtonDirective,
     MJComboboxComponent,
     MJDropdownComponent,
+    MJSwitchComponent,
     MJPageHeaderComponent,
     MJPageLayoutComponent,
     MJPageBodyComponent,
@@ -136,9 +198,15 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     MJViewToggleComponent,
     MJStatBadgeComponent,
     MJRefreshButtonComponent,
+    MJDialogComponent,
+    MJDialogActionsComponent,
+    MJEmptyStateComponent,
+    MJAlertComponent,
+    MJAccordionModule,
     ClusteringModule,
     SchedulingModule,
-    MJWordCloudComponent
+    MJWordCloudComponent,
+    RecordProcessEditorComponent
   ],
   providers: [
     AIInstrumentationService
@@ -159,8 +227,10 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     KnowledgeConfigResourceComponent,
     SearchResultDetailComponent,
     ClusterVisualizationResourceComponent,
+    VisualizeResourceComponent,
     SchedulingResourceComponent,
     AnalyticsResourceComponent,
+    FeaturePipelinesResourceComponent,
     AIAnalyticsResourceComponent,
     AnalyticsFilterBarComponent,
     AnalyticsExecutiveSummaryComponent,
@@ -170,6 +240,10 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     AnalyticsCostBudgetComponent,
     AnalyticsErrorAnalysisComponent,
     AnalyticsUsagePatternsComponent,
+    AnalyticsRealtimeOverviewComponent,
+    AnalyticsRealtimeSessionsComponent,
+    RealtimeManagementComponent,
+    AnalyticsRealtimeTranscriptsComponent,
     AIOverviewHubComponent,
     SharedDashboardWidgetsModule
   ]
@@ -179,8 +253,10 @@ export class AIDashboardsModule {
         // Ensure tree-shaking prevention loaders are called
         LoadTagsResource();
         LoadClusterVisualizationResource();
+        LoadVisualizeResource();
         LoadSchedulingResource();
         LoadAnalyticsResource();
+        LoadFeaturePipelinesResource();
         LoadAIAnalyticsResource();
         LoadAnalyticsExecutiveSummary();
         LoadAnalyticsPromptRuns();
@@ -189,6 +265,10 @@ export class AIDashboardsModule {
         LoadAnalyticsCostBudget();
         LoadAnalyticsErrorAnalysis();
         LoadAnalyticsUsagePatterns();
+        LoadAnalyticsRealtimeOverview();
+        LoadAnalyticsRealtimeSessions();
+        LoadRealtimeManagement();
+        LoadAnalyticsRealtimeTranscripts();
         LoadAIOverviewHub();
     }
 }

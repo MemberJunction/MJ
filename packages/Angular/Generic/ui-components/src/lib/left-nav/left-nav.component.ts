@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { Component, EventEmitter, HostBinding, HostListener, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
 /**
@@ -56,9 +56,10 @@ export interface MJLeftNavSection {
  *  - Items with a count badge (APIKeys pattern)
  *  - Sections with uppercase headers (Communication / Credentials pattern)
  *  - Optional `[header]` and `[footer]` content slots (KH Config logo header, etc.)
- *  - Responsive collapse-to-row at narrow viewports (consumer controls parent's
- *    flex-direction switch; the rail's own styles handle item wrapping + the
- *    description-hide behavior)
+ *  - Responsive mobile drawer (≤700px): the rail hides off-canvas and a compact
+ *    section switcher takes its place; tapping it slides the full rail in over a
+ *    scrim. The rail keeps its full content (trees, slots, descriptions, badges)
+ *    inside the drawer — no flattening. Set `[MobileTitle]` for the drawer label.
  *
  * ## Example
  *
@@ -82,17 +83,54 @@ export interface MJLeftNavSection {
  * </mj-left-nav>
  * ```
  *
- * Responsive collapse — the rail's own CSS handles narrow-viewport item
- * wrapping. The consumer is responsible for switching the parent's
- * flex-direction from row → column at the same breakpoint, e.g. via
- * `<mj-page-body>` Direction="row" with a `@media` override in the shell's CSS.
+ * Responsive — at ≤700px the rail becomes an off-canvas drawer (see the feature
+ * list above). The consumer should still switch the parent's flex-direction from
+ * row → column at the same breakpoint (e.g. `<mj-page-body>` Direction="row" with
+ * a `@media` override) so the in-flow section switcher stacks above the content
+ * pane rather than competing with it for horizontal space.
  */
 @Component({
   selector: 'mj-left-nav',
   standalone: true,
   imports: [CommonModule],
   template: `
-    <aside class="mj-left-nav" [style.width.px]="Width" role="navigation">
+    <!-- Mobile-only section switcher (hidden ≥701px via CSS). Shows the active
+         section and opens the full rail as an off-canvas drawer on tap. The rail
+         itself is too rich (trees, header/footer slots, descriptions, badges) to
+         flatten into a dropdown or tab strip, so we surface it as-is in a drawer. -->
+    <button
+      type="button"
+      class="mj-left-nav__switcher"
+      [attr.aria-expanded]="MobileNavOpen"
+      aria-haspopup="dialog"
+      (click)="OpenMobileNav()">
+      @if (ActiveTriggerItem?.icon) {
+        <i class="mj-left-nav__switcher-icon" [class]="ActiveTriggerItem!.icon" aria-hidden="true"></i>
+      }
+      <span class="mj-left-nav__switcher-label">{{ ActiveTriggerItem?.label || MobileTitle }}</span>
+      <i class="fa-solid fa-bars-staggered mj-left-nav__switcher-hint" aria-hidden="true"></i>
+    </button>
+
+    <!-- Scrim behind the mobile drawer (hidden ≥701px / when closed via CSS). -->
+    <div class="mj-left-nav__scrim" (click)="CloseMobileNav()" aria-hidden="true"></div>
+
+    <aside
+      class="mj-left-nav"
+      [style.width.px]="Width"
+      role="navigation"
+      [attr.aria-modal]="MobileNavOpen ? true : null">
+      <!-- Drawer header — only visible on mobile when the rail is a drawer. -->
+      <div class="mj-left-nav__drawer-header">
+        <span class="mj-left-nav__drawer-title">{{ MobileTitle }}</span>
+        <button
+          type="button"
+          class="mj-left-nav__drawer-close"
+          aria-label="Close menu"
+          (click)="CloseMobileNav()">
+          <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+        </button>
+      </div>
+
       <ng-content select="[header]"></ng-content>
 
       @for (section of Sections; track $index) {
@@ -343,39 +381,156 @@ export interface MJLeftNavSection {
       display: inline-block;
     }
 
-    /* Responsive collapse: at narrow viewports the rail becomes a top bar of
-       wrapping items. The consumer is still responsible for switching the
-       parent's flex-direction from row → column (see <mj-page-body> Direction
-       + the shell's @media override). */
+    /* ── Mobile drawer pattern (≤700px) ──────────────────────────────────────
+       Desktop shows the rail inline. On mobile the rail would otherwise eat the
+       top of the screen, so we hide it off-canvas and surface a compact section
+       switcher in its place. Tapping the switcher slides the full rail in from
+       the left over a scrim — preserving trees, header/footer slots and badges
+       (item descriptions hide in the drawer for a tighter list).
+
+       The switcher / scrim / drawer-header are display:none above the
+       breakpoint; the rail keeps its desktop layout there. */
+    .mj-left-nav__switcher,
+    .mj-left-nav__scrim,
+    .mj-left-nav__drawer-header {
+      display: none;
+    }
+
     @media (max-width: 700px) {
+      /* Host collapses to the switcher's footprint; the rail goes out of flow. */
       :host {
         width: 100% !important;
       }
-      .mj-left-nav {
-        width: 100%;
-        height: auto;
-        max-height: 220px;
-        border-right: none;
-        border-bottom: 1px solid var(--mj-border-default);
-        display: flex;
-        flex-wrap: wrap;
-        gap: 4px;
-      }
-      .mj-left-nav__item {
-        flex: 1 1 calc(50% - 8px);
-        margin-bottom: 0;
-      }
+
+      /* Hide item descriptions in the drawer — the label + icon are enough on a
+         narrow sheet; the secondary line just adds clutter. */
       .mj-left-nav__description {
         display: none;
       }
-      .mj-left-nav__section-label {
-        flex-basis: 100%;
+
+      /* Section switcher — reads as a picker for the current section. */
+      .mj-left-nav__switcher {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        width: 100%;
+        padding: 11px 14px;
+        border: none;
+        border-bottom: 1px solid var(--mj-border-default);
+        background: var(--mj-bg-surface);
+        color: var(--mj-text-primary);
+        font-family: inherit;
+        font-size: 14px;
+        font-weight: 600;
+        text-align: left;
+        cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
       }
-      /* Tree rows take a full line even in the wrap layout — chevron + item
-         should stay paired rather than flow as separate flex children. */
-      .mj-left-nav__row {
-        flex-basis: 100%;
-        padding-left: 0 !important;
+      .mj-left-nav__switcher:active {
+        background: var(--mj-bg-surface-active);
+      }
+      .mj-left-nav__switcher-icon {
+        width: 18px;
+        text-align: center;
+        font-size: 14px;
+        flex-shrink: 0;
+        color: var(--mj-brand-primary);
+      }
+      .mj-left-nav__switcher-label {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .mj-left-nav__switcher-hint {
+        flex-shrink: 0;
+        font-size: 15px;
+        color: var(--mj-text-muted);
+      }
+
+      /* Scrim — fades in with the drawer. */
+      .mj-left-nav__scrim {
+        display: block;
+        position: fixed;
+        inset: 0;
+        background: var(--mj-bg-overlay);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.24s ease;
+        z-index: 9998;
+      }
+      :host(.mj-left-nav-host--open) .mj-left-nav__scrim {
+        opacity: 1;
+        pointer-events: auto;
+      }
+
+      /* Rail becomes a left off-canvas drawer. */
+      .mj-left-nav {
+        position: fixed;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        width: min(320px, 84vw) !important;
+        height: 100%;
+        max-height: none;
+        border-right: 1px solid var(--mj-border-default);
+        box-shadow: var(--mj-shadow-lg);
+        transform: translateX(-100%);
+        transition: transform 0.24s ease;
+        z-index: 9999;
+        padding-top: 0;
+      }
+      :host(.mj-left-nav-host--open) .mj-left-nav {
+        transform: translateX(0);
+      }
+
+      /* Drawer header — sticky title + close button. */
+      .mj-left-nav__drawer-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        padding: 14px 12px 10px;
+        margin: 0 -8px 4px;
+        padding-left: 16px;
+        background: var(--mj-bg-surface);
+        border-bottom: 1px solid var(--mj-border-subtle);
+      }
+      .mj-left-nav__drawer-title {
+        font-size: 13px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--mj-text-muted);
+      }
+      .mj-left-nav__drawer-close {
+        flex-shrink: 0;
+        width: 32px;
+        height: 32px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: none;
+        background: transparent;
+        border-radius: 8px;
+        cursor: pointer;
+        color: var(--mj-text-secondary);
+        font-size: 16px;
+        font-family: inherit;
+      }
+      .mj-left-nav__drawer-close:active {
+        background: var(--mj-bg-surface-active);
+      }
+    }
+
+    @media (max-width: 700px) and (prefers-reduced-motion: reduce) {
+      .mj-left-nav,
+      .mj-left-nav__scrim {
+        transition: none;
       }
     }
   `]
@@ -395,9 +550,17 @@ export class MJLeftNavComponent {
 
   /**
    * Width of the rail in pixels. Defaults to 240. Set to a smaller value
-   * (e.g., 200) for denser shells.
+   * (e.g., 200) for denser shells. Only applies to the desktop rail — on mobile
+   * the rail becomes a fixed-width off-canvas drawer.
    */
   @Input() Width: number = 240;
+
+  /**
+   * Label shown on the mobile drawer header and used as the switcher fallback
+   * label when no item is active. Defaults to `'Menu'`. Set to something
+   * domain-specific (e.g. `'Sections'`, `'Test Suites'`) for clearer context.
+   */
+  @Input() MobileTitle: string = 'Menu';
 
   /**
    * Ids of currently-expanded tree items. Items whose id appears here render
@@ -420,14 +583,66 @@ export class MJLeftNavComponent {
    */
   @Output() ItemToggled = new EventEmitter<MJLeftNavItem>();
 
+  /**
+   * Whether the mobile off-canvas drawer is open. Component-owned, transient UI
+   * state — no effect above the 700px breakpoint where the rail is always inline.
+   */
+  public MobileNavOpen = false;
+
+  /** Reflects {@link MobileNavOpen} onto the host so CSS can drive the drawer. */
+  @HostBinding('class.mj-left-nav-host--open')
+  get isMobileNavOpen(): boolean {
+    return this.MobileNavOpen;
+  }
+
+  OpenMobileNav(): void {
+    this.MobileNavOpen = true;
+  }
+
+  CloseMobileNav(): void {
+    this.MobileNavOpen = false;
+  }
+
+  /** Escape closes the mobile drawer. No-op when it's already closed. */
+  @HostListener('document:keydown.escape')
+  onEscape(): void {
+    if (this.MobileNavOpen) {
+      this.MobileNavOpen = false;
+    }
+  }
+
   OnItemClick(item: MJLeftNavItem): void {
     if (item.disabled) return;
+    // Selecting a leaf dismisses the mobile drawer; harmless on desktop.
+    this.MobileNavOpen = false;
     this.ItemClicked.emit(item);
   }
 
   OnItemToggle(event: Event, item: MJLeftNavItem): void {
     event.stopPropagation();
+    // Expanding/collapsing a tree branch keeps the drawer open.
     this.ItemToggled.emit(item);
+  }
+
+  /**
+   * The item matching {@link ActiveId} (searched recursively through trees),
+   * used to label the mobile section switcher with the current section's icon
+   * and label. Returns `undefined` when nothing is active.
+   */
+  get ActiveTriggerItem(): MJLeftNavItem | undefined {
+    if (!this.ActiveId) return undefined;
+    return this.findItemById(this.Sections.flatMap((s) => s.items), this.ActiveId);
+  }
+
+  private findItemById(items: MJLeftNavItem[], id: string): MJLeftNavItem | undefined {
+    for (const item of items) {
+      if (item.id === id) return item;
+      if (item.children?.length) {
+        const found = this.findItemById(item.children, id);
+        if (found) return found;
+      }
+    }
+    return undefined;
   }
 
   IsExpanded(id: string): boolean {

@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { ComponentLinter } from '../../lib/component-linter';
+import { ComponentLinter } from '@memberjunction/react-linter';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 
 const RULE_NAME = 'overflow-hidden-on-layout-container';

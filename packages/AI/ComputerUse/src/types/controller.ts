@@ -55,6 +55,18 @@ export class ControllerPromptRequest {
 
     /** Previous actions and their results for context */
     public PreviousStepSummary?: string;
+
+    /**
+     * Free-form application context — typically markdown — that gives the
+     * controller LLM a head-start on the app being tested (navigation landmarks,
+     * common gotchas, route conventions). Sourced from `TestSuite.Configuration.
+     * applicationContext` at the suite level; tests can append per-test notes.
+     *
+     * The engine renders this into the controller prompt's system message under
+     * an "## Application Context" heading so the LLM doesn't waste steps
+     * rediscovering app structure on every test.
+     */
+    public ApplicationContext?: string;
 }
 
 // ─── Form Login Credentials ────────────────────────────────

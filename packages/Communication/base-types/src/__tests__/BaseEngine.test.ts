@@ -8,6 +8,9 @@ const { mockSave, mockGetEntityObject } = vi.hoisted(() => ({
 vi.mock('@memberjunction/core', () => {
     class MockBaseEngine {
         protected ContextUser = { ID: 'user-1' };
+        protected get ProviderToUse() {
+            return { GetEntityObject: mockGetEntityObject };
+        }
         protected async Load() {}
         static _instances = new Map();
         static getInstance() {

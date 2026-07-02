@@ -1,0 +1,26 @@
+[
+  {
+    "fields": {
+      "Name": "vip",
+      "DisplayName": "VIP",
+      "Description": "Records flagged as high-priority for follow-up.",
+      "Status": "Active"
+    }
+  },
+  {
+    "fields": {
+      "Name": "follow-up",
+      "DisplayName": "Follow Up",
+      "Description": "Items needing additional review or contact.",
+      "Status": "Active"
+    }
+  },
+  {
+    "fields": {
+      "Name": "regression-test",
+      "DisplayName": "Regression Test",
+      "Description": "Records used by the regression test suite.",
+      "Status": "Active"
+    }
+  }
+]

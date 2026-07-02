@@ -136,6 +136,32 @@ describe('GrantRule', () => {
     });
   });
 
+  describe('GRANT CONNECT (login connect grant)', () => {
+    it('should emit an INTENTIONAL skip for GRANT CONNECT TO login', () => {
+      const sql = 'GRANT CONNECT TO [MJ_CodeGen_Dev];';
+      const result = convert(sql);
+      expect(result).toContain('-- SKIPPED (INTENTIONAL)');
+      expect(result).toContain('GRANT CONNECT TO "MJ_CodeGen_Dev"');
+      expect(result).toContain('no PostgreSQL equivalent');
+    });
+
+    it('should not pass GRANT CONNECT through as raw (invalid) PG SQL', () => {
+      const sql = 'GRANT CONNECT TO [MJ_Connect];';
+      const result = convert(sql);
+      // Must not emit an executable GRANT CONNECT statement (only the comment).
+      expect(result).not.toMatch(/^\s*GRANT\s+CONNECT/im);
+    });
+
+    it('should mark the skip with (INTENTIONAL) so the quality gate allows it', () => {
+      const sql = 'GRANT CONNECT TO [MJ_Connect_Dev]';
+      const result = convert(sql);
+      // The /pg-migrate gate blocks "-- SKIPPED" lines unless tagged (INTENTIONAL).
+      const skipLines = result.split('\n').filter((l) => l.includes('-- SKIPPED'));
+      expect(skipLines.length).toBeGreaterThan(0);
+      expect(skipLines.every((l) => l.includes('(INTENTIONAL)'))).toBe(true);
+    });
+  });
+
   describe('GRANT on SCHEMA', () => {
     it('should convert GRANT SELECT ON SCHEMA:: to ALL TABLES IN SCHEMA', () => {
       const sql = 'GRANT SELECT ON SCHEMA::sample_inv TO InventoryReader';

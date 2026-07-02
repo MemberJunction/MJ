@@ -19,9 +19,9 @@
 ### Key Files to Understand
 | File | Purpose |
 |------|---------|
-| [conversation-chat-area.component.ts](packages/Angular/Generic/conversations/src/lib/components/conversation/conversation-chat-area.component.ts) | Main chat component - has the timer code to remove |
-| [conversation-streaming.service.ts](packages/Angular/Generic/conversations/src/lib/services/conversation-streaming.service.ts) | PubSub handler - needs completion tracking added |
-| [active-tasks.service.ts](packages/Angular/Generic/conversations/src/lib/services/active-tasks.service.ts) | Task restoration - already optimized |
+| [conversation-chat-area.component.ts](../../packages/Angular/Generic/conversations/src/lib/components/conversation/conversation-chat-area.component.ts) | Main chat component - has the timer code to remove |
+| [conversation-streaming.service.ts](../../packages/Angular/Generic/conversations/src/lib/services/conversation-streaming.service.ts) | PubSub handler - needs completion tracking added |
+| [active-tasks.service.ts](../../packages/Angular/Generic/conversations/src/lib/services/active-tasks.service.ts) | Task restoration - already optimized |
 
 ---
 
@@ -118,7 +118,7 @@ The backend sends `type: 'complete'` messages when agents finish. This infrastru
 
 ### 2. Session ID Persists Across Browser Refresh
 
-`GraphQLDataProvider` stores the session UUID in localStorage ([graphQLDataProvider.ts:187-227](packages/GraphQLDataProvider/src/graphQLDataProvider.ts#L187-L227)):
+`GraphQLDataProvider` stores the session UUID in localStorage ([graphQLDataProvider.ts:187-227](../../packages/GraphQLDataProvider/src/graphQLDataProvider.ts#L187-L227)):
 
 ```typescript
 public async GetStoredSessionID(): Promise<string> {
@@ -427,9 +427,9 @@ After AIEngineBase loads, these additional operations run:
 
 | Issue | Location | Trigger | Impact | Fix Priority |
 |-------|----------|---------|--------|--------------|
-| AIEngineBase loads 30+ entities | [BaseAIEngine.ts:115-289](packages/AI/BaseAIEngine/src/BaseAIEngine.ts#L115-L289) | First load only | HIGH on first load | LOW (working as designed) |
-| `isReady` blocks rendering | [chat-conversations-resource.component.ts:186](packages/Angular/Explorer/explorer-core/src/lib/resource-wrappers/chat-conversations-resource.component.ts#L186) | Every navigation | MEDIUM | HIGH |
-| `restoreFromDatabase()` always queries | [active-tasks.service.ts:212-271](packages/Angular/Generic/conversations/src/lib/services/active-tasks.service.ts#L212-L271) | Every navigation | MEDIUM | HIGH |
+| AIEngineBase loads 30+ entities | [BaseAIEngine.ts:115-289](../../packages/AI/BaseAIEngine/src/BaseAIEngine.ts#L115-L289) | First load only | HIGH on first load | LOW (working as designed) |
+| `isReady` blocks rendering | [chat-conversations-resource.component.ts:186](../../packages/Angular/Explorer/explorer-core/src/lib/resource-wrappers/chat-conversations-resource.component.ts#L186) | Every navigation | MEDIUM | HIGH |
+| `restoreFromDatabase()` always queries | [active-tasks.service.ts:212-271](../../packages/Angular/Generic/conversations/src/lib/services/active-tasks.service.ts#L212-L271) | Every navigation | MEDIUM | HIGH |
 | Duplicate AIEngineBase.Config calls | mentionAutocompleteService + initializeEngines | Every navigation | LOW (cached) | LOW |
 
 ### Proposed Improvements (Future Phases)
@@ -477,13 +477,13 @@ async restoreFromDatabase(currentUser: UserInfo): Promise<void> {
 
 | File | Role |
 |------|------|
-| [chat-conversations-resource.component.ts](packages/Angular/Explorer/explorer-core/src/lib/resource-wrappers/chat-conversations-resource.component.ts) | Parent component, owns `isReady` flag |
-| [BaseAIEngine.ts](packages/AI/BaseAIEngine/src/BaseAIEngine.ts) | Loads 30+ AI-related entities |
+| [chat-conversations-resource.component.ts](../../packages/Angular/Explorer/explorer-core/src/lib/resource-wrappers/chat-conversations-resource.component.ts) | Parent component, owns `isReady` flag |
+| [BaseAIEngine.ts](../../packages/AI/BaseAIEngine/src/BaseAIEngine.ts) | Loads 30+ AI-related entities |
 | [baseEngine.ts](packages/MJCore/src/generic/baseEngine.ts) | Base class with `Load()` method |
-| [active-tasks.service.ts](packages/Angular/Generic/conversations/src/lib/services/active-tasks.service.ts) | Restores running tasks from DB |
+| [active-tasks.service.ts](../../packages/Angular/Generic/conversations/src/lib/services/active-tasks.service.ts) | Restores running tasks from DB |
 | [conversation-data.service.ts](packages/Angular/Generic/conversations/src/lib/services/conversation-data.service.ts) | Loads conversation list |
-| [mention-autocomplete.service.ts](packages/Angular/Generic/conversations/src/lib/services/mention-autocomplete.service.ts) | Initializes @mention data |
-| [conversation-streaming.service.ts](packages/Angular/Generic/conversations/src/lib/services/conversation-streaming.service.ts) | Sets up WebSocket |
+| [mention-autocomplete.service.ts](../../packages/Angular/Generic/conversations/src/lib/services/mention-autocomplete.service.ts) | Initializes @mention data |
+| [conversation-streaming.service.ts](../../packages/Angular/Generic/conversations/src/lib/services/conversation-streaming.service.ts) | Sets up WebSocket |
 
 ---
 

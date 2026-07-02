@@ -1,0 +1,45 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "SS02 - Static Server Navigate About",
+    "Description": "Click the 'About' link in the static-server nav and verify the about page loads. Demonstrates a navigation flow against an overlay-supplied service.",
+    "InputDefinition": {
+      "goal": "Click the link labelled 'About' in the navigation. Verify the about page loads — it should display the heading 'About' and a link back to Home.",
+      "startUrl": "{{baseUrl}}",
+      "allowedDomains": "{{allowedDomains}}",
+      "auth": { "bindings": [] }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "finalUrlPattern": "/about\\.html$",
+      "minConfidence": 0.7,
+      "maxSteps": 6,
+      "judgeValidationCriteria": [
+        "Final URL ends with /about.html",
+        "Page heading reads 'About'",
+        "A link back to Home is visible"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 6,
+      "maxExecutionTime": 90000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1024,
+      "viewportHeight": 600,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:2",
+      "oracles": [
+        { "type": "goal-completion", "weight": 0.6, "config": { "minConfidence": 0.7 } },
+        { "type": "url-match", "weight": 0.4, "config": { "pattern": "/about\\.html$" } }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "url-match": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,mode-d,static-server,navigation"
+  }
+}

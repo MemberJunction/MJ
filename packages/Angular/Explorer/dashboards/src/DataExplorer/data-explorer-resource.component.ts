@@ -171,6 +171,17 @@ export class DataExplorerResourceComponent extends BaseResourceComponent impleme
                 };
                 this.dataExplorer.Config = dashboardConfig;
                 this.dataExplorer.Refresh();
+
+                // RACE GUARD: BaseDashboard.ngOnInit() calls NotifyLoadComplete() almost immediately
+                // (after the no-op loadData), firing the inner dashboard's LoadCompleteEvent. But this
+                // wiring runs in a setTimeout(0) MACROtask, while the dashboard's NotifyLoadComplete runs
+                // in a MICROtask — so the dashboard finishes loading BEFORE we attach the handler above,
+                // and the completion signal is lost. The shell then waits forever ("Gathering your
+                // tools…" hangs) — reproduced on direct-URL refresh. If the dashboard already completed,
+                // forward completion to the shell now.
+                if (this.dataExplorer.LoadComplete) {
+                    this.NotifyLoadComplete();
+                }
             } else {
                 this.NotifyLoadComplete();
             }

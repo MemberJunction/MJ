@@ -18,11 +18,13 @@ export default class AppInstall extends Command {
     '<%= config.bin %> app install https://github.com/acme/mj-crm',
     '<%= config.bin %> app install https://github.com/acme/mj-crm --version 1.2.0',
     '<%= config.bin %> app install https://github.com/acme/mj-crm --verbose',
+    '<%= config.bin %> app install https://github.com/MemberJunction/Integrations/CRM/HubSpot',
   ];
 
   static args = {
     source: Args.string({
-      description: 'GitHub repository URL of the Open App',
+      description:
+        'GitHub repository URL of the Open App. For a multi-app repo, append the in-repo path to the app (e.g. https://github.com/MemberJunction/Integrations/CRM/HubSpot).',
       required: true,
     }),
   };

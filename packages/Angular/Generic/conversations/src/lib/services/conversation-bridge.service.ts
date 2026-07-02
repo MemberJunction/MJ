@@ -1,125 +1,87 @@
 /**
- * @fileoverview Conversation Bridge Service
+ * @fileoverview Angular DI shim over the framework-agnostic `ConversationBridge`
+ * from `@memberjunction/conversations-runtime`.
  *
- * Provides shared state between the floating chat overlay and the
- * full Conversations workspace. Ensures conversation continuity
- * when switching between the two views.
+ * The bridge's state (active conversation ID, overlay vs workspace activeness,
+ * switch + deep-link event subjects) now lives in the runtime so it's shared
+ * across all consumers — Angular widget, future React widget, server jobs.
  *
- * Key responsibilities:
- * - Tracks the active ConversationID across overlay and workspace
- * - Maintains message history reference (no duplication)
- * - Supports deep link navigation to specific conversations
- * - Emits events when the active conversation changes
+ * This service is now a thin pass-through. Existing
+ * `inject(ConversationBridgeService)` call sites continue to work without
+ * changes; observables (`ActiveConversationID$`, `SwitchEvent$`, etc.) are now
+ * getters that return the runtime's BehaviorSubjects/Subjects, so subscribers
+ * see exactly the same events as any non-Angular consumer.
+ *
+ * **For new code:** prefer `ConversationsRuntime.Instance.Bridge` directly.
  */
 
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Subject } from 'rxjs';
+import {
+    ConversationsRuntime,
+    type ConversationSwitchEvent,
+    type ConversationDeepLink,
+} from '@memberjunction/conversations-runtime';
 
-/** Event emitted when switching between overlay and workspace */
-export interface ConversationSwitchEvent {
-    /** The conversation ID being transferred */
-    ConversationID: string | null;
-    /** Source of the switch */
-    Source: 'overlay' | 'workspace' | 'deep-link';
-    /** Target destination */
-    Target: 'overlay' | 'workspace';
-}
+import { ConversationsRuntimeBootstrap } from './conversations-runtime-bootstrap.service';
 
-/** Deep link parameters for navigating to a conversation */
-export interface ConversationDeepLink {
-    ConversationID: string;
-    /** Optional: scroll to a specific message */
-    MessageID?: string;
-    /** Optional: auto-open the overlay or workspace */
-    OpenIn?: 'overlay' | 'workspace';
-}
+// Re-export the runtime's types so existing imports from this file continue to compile.
+export type { ConversationSwitchEvent, ConversationDeepLink };
 
 @Injectable({ providedIn: 'root' })
 export class ConversationBridgeService {
-    /** The currently active conversation ID shared between overlay and workspace */
-    public ActiveConversationID$ = new BehaviorSubject<string | null>(null);
+    constructor(_bootstrap: ConversationsRuntimeBootstrap) {
+        // Injecting the bootstrap forces adapter registration on first construction.
+    }
 
-    /** Whether the overlay is currently active (expanded) */
-    public OverlayActive$ = new BehaviorSubject<boolean>(false);
+    private get bridge() {
+        return ConversationsRuntime.Instance.Bridge;
+    }
 
-    /** Whether the full workspace is currently active (visible) */
-    public WorkspaceActive$ = new BehaviorSubject<boolean>(false);
+    public get ActiveConversationID$(): BehaviorSubject<string | null> {
+        return this.bridge.ActiveConversationID$;
+    }
+    public get OverlayActive$(): BehaviorSubject<boolean> {
+        return this.bridge.OverlayActive$;
+    }
+    public get WorkspaceActive$(): BehaviorSubject<boolean> {
+        return this.bridge.WorkspaceActive$;
+    }
+    public get SwitchEvent$(): Subject<ConversationSwitchEvent> {
+        return this.bridge.SwitchEvent$;
+    }
+    public get DeepLinkRequest$(): Subject<ConversationDeepLink> {
+        return this.bridge.DeepLinkRequest$;
+    }
+    public get ExpandOverlayRequested$(): Subject<void> {
+        return this.bridge.ExpandOverlayRequested$;
+    }
 
-    /** Events emitted when switching between overlay and workspace */
-    public SwitchEvent$ = new Subject<ConversationSwitchEvent>();
-
-    /** Deep link requests */
-    public DeepLinkRequest$ = new Subject<ConversationDeepLink>();
-
-    /**
-     * Set the active conversation from the overlay.
-     * The workspace will pick up the change automatically.
-     */
+    public RequestExpandOverlay(): void {
+        this.bridge.RequestExpandOverlay();
+    }
     public SetActiveFromOverlay(conversationId: string | null): void {
-        this.ActiveConversationID$.next(conversationId);
+        this.bridge.SetActiveFromOverlay(conversationId);
     }
-
-    /**
-     * Set the active conversation from the workspace.
-     * The overlay will pick up the change automatically.
-     */
     public SetActiveFromWorkspace(conversationId: string | null): void {
-        this.ActiveConversationID$.next(conversationId);
+        this.bridge.SetActiveFromWorkspace(conversationId);
     }
-
-    /**
-     * Request switching from overlay to full workspace.
-     * The overlay should minimize, and the workspace should open
-     * with the same conversation.
-     */
     public SwitchToWorkspace(conversationId: string | null): void {
-        this.SwitchEvent$.next({
-            ConversationID: conversationId,
-            Source: 'overlay',
-            Target: 'workspace'
-        });
+        this.bridge.SwitchToWorkspace(conversationId);
     }
-
-    /**
-     * Request switching from workspace to overlay.
-     * The workspace can stay open, but the overlay resumes
-     * the conversation.
-     */
     public SwitchToOverlay(conversationId: string | null): void {
-        this.SwitchEvent$.next({
-            ConversationID: conversationId,
-            Source: 'workspace',
-            Target: 'overlay'
-        });
+        this.bridge.SwitchToOverlay(conversationId);
     }
-
-    /**
-     * Navigate to a specific conversation via deep link.
-     */
     public NavigateToConversation(deepLink: ConversationDeepLink): void {
-        this.ActiveConversationID$.next(deepLink.ConversationID);
-        this.DeepLinkRequest$.next(deepLink);
+        this.bridge.NavigateToConversation(deepLink);
     }
-
-    /**
-     * Notify that the overlay is now active.
-     */
     public NotifyOverlayActive(active: boolean): void {
-        this.OverlayActive$.next(active);
+        this.bridge.NotifyOverlayActive(active);
     }
-
-    /**
-     * Notify that the workspace is now active.
-     */
     public NotifyWorkspaceActive(active: boolean): void {
-        this.WorkspaceActive$.next(active);
+        this.bridge.NotifyWorkspaceActive(active);
     }
-
-    /**
-     * Check if the conversation should be resumed in the overlay
-     * (i.e., workspace is not active but there's an active conversation).
-     */
     public ShouldResumeInOverlay(): boolean {
-        return !this.WorkspaceActive$.value && this.ActiveConversationID$.value !== null;
+        return this.bridge.ShouldResumeInOverlay();
     }
 }

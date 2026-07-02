@@ -3,7 +3,7 @@
 > **Status**: Draft v2
 > **Date**: March 11, 2026
 > **Author**: Amith + Craig (conversation), documented by Claude
-> **Depends On**: [Integration DDL & Schema Management](integration-ddl-schema-management.md), [Schema Management Automation](schema-management-automation.md), [User Defined Tables Architecture](user-defined-tables-architecture.md)
+> **Depends On**: [Integration DDL & Schema Management](../integration-ddl-schema-management.md), [Schema Management Automation](../schema-management-automation.md), [User Defined Tables Architecture](user-defined-tables-architecture.md)
 > **Development Environment**: Docker Workbench (`docker/workbench/`)
 > **Branch**: `feature/runtime-schema-update`
 

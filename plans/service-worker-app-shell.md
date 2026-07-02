@@ -396,7 +396,7 @@ This is a single phase with five sub-phases. Each sub-phase is independently tes
   - Open in Chrome, DevTools → Application → Service Workers → confirm registration
   - Reload → confirm assets served from "ServiceWorker" in the Network tab (not "disk cache")
   - Disable network → confirm shell still loads
-- [ ] **T1.1.7** — Document the dev workflow in a new section of [packages/MJExplorer/README.md](packages/MJExplorer/README.md) — specifically the "Update on reload" toggle in DevTools, and how to fully unregister + clear caches when needed.
+- [ ] **T1.1.7** — Document the dev workflow in a new section of [packages/MJExplorer/README.md](../packages/MJExplorer/README.md) — specifically the "Update on reload" toggle in DevTools, and how to fully unregister + clear caches when needed.
 
 #### Risks
 - Angular's PWA scaffolder may conflict with existing build configuration. Review the diff carefully before committing.

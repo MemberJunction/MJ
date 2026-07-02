@@ -1,9 +1,9 @@
 import { Component, OnInit, OnDestroy, ViewChild, ChangeDetectorRef, AfterViewInit, inject } from '@angular/core';
-import { MJQueryEntity, MJQueryParameterEntity, MJQueryCategoryEntity, MJQueryFieldEntity, MJQueryEntityEntity, MJQueryPermissionEntity } from '@memberjunction/core-entities';
+import { MJQueryEntityExtended, MJQueryParameterEntity, MJQueryCategoryEntity, MJQueryFieldEntity, MJQueryEntityEntity, MJQueryPermissionEntity, MJQueryDependencyEntity, QueryEngine } from '@memberjunction/core-entities';
 import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
-import { BaseFormComponent, FormToolbarConfig, CUSTOM_LAYOUT_TOOLBAR_CONFIG } from '@memberjunction/ng-base-forms';
+import { BaseFormComponent, FormToolbarConfig, CUSTOM_LAYOUT_TOOLBAR_CONFIG, MJFormPresenterService } from '@memberjunction/ng-base-forms';
 import { MJQueryFormComponent } from '../../generated/Entities/MJQuery/mjquery.form.component';
-import { Metadata, RunView, RUN_QUERY_SQL_FILTERS, CompositeKey, QueryInfo, QueryDependencyInfo } from '@memberjunction/core';
+import { RUN_QUERY_SQL_FILTERS, CompositeKey, BaseEntity } from '@memberjunction/core';
 import { TreeBranchConfig } from '@memberjunction/ng-trees';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { CodeEditorComponent, CompositionTokenClickEvent } from '@memberjunction/ng-code-editor';
@@ -24,7 +24,7 @@ interface CategoryTreeNode {
     styleUrls: ['../../../shared/form-styles.css', './query-form.component.css']
 })
 export class MJQueryFormComponentExtended extends MJQueryFormComponent implements OnInit, OnDestroy, AfterViewInit {
-    public record!: MJQueryEntity;
+    public record!: MJQueryEntityExtended;
     public queryParameters: MJQueryParameterEntity[] = [];
     public queryFields: MJQueryFieldEntity[] = [];
     public queryEntities: MJQueryEntityEntity[] = [];
@@ -36,7 +36,6 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
     public hasUnsavedChanges = false;
     public showFiltersHelp = false;
     public showRunDialog = false;
-    public showCategoryDialog = false;
     public categoryPathDisplay = '';
     public IsSaving = false;
 
@@ -106,21 +105,14 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
     public sqlFilters = RUN_QUERY_SQL_FILTERS;
     
     private navigationService = inject(NavigationService);
+    private formPresenter = inject(MJFormPresenterService);
     private destroy$ = new Subject<void>();
-
-    /**
-     * Gets the QueryInfo metadata object for the current record, used to access Dependents.
-     */
-    public get CurrentQueryInfo(): QueryInfo | undefined {
-        if (!this.record?.ID) return undefined;
-        return this.ProviderToUse.Queries.find(q => UUIDsEqual(q.ID, this.record.ID));
-    }
 
     /**
      * Gets queries that depend on (reference) this query via composition.
      */
-    public get DependentQueries(): QueryDependencyInfo[] {
-        return this.CurrentQueryInfo?.Dependents ?? [];
+    public get DependentQueries(): MJQueryDependencyEntity[] {
+        return this.record?.QueryDependents ?? [];
     }
     private isUpdatingEditorValue = false;
     private isInitialLoad = true;
@@ -132,16 +124,12 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
         // We do one unified detectChanges after everything completes.
         this.isInitialLoad = true;
 
-        // Load categories first to ensure they're available for the dropdown
-        await this.loadCategories();
-
-        // Then load other data in parallel
-        await Promise.all([
-            this.loadQueryParameters(),
-            this.loadQueryFields(),
-            this.loadQueryEntities(),
-            this.loadQueryPermissions()
-        ]);
+        // Load all data synchronously from QueryEngine cache
+        this.loadCategories();
+        this.loadQueryParameters();
+        this.loadQueryFields();
+        this.loadQueryEntities();
+        this.loadQueryPermissions();
 
         this.isInitialLoad = false;
         this.cdr.detectChanges();
@@ -207,138 +195,54 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
         return !this.EditMode;
     }
 
-    async loadQueryParameters() {
+    loadQueryParameters() {
         if (this.record && this.record.ID) {
-            this.isLoadingParameters = true;
-            try {
-                const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-                const results = await rv.RunView<MJQueryParameterEntity>({
-                    EntityName: 'MJ: Query Parameters',
-                    ExtraFilter: `QueryID='${this.record.ID}'`,
-                    OrderBy: 'Name ASC',
-                    ResultType: 'entity_object'
-                });
-                
-                if (results.Success) {
-                    this.queryParameters = results.Results || [];
-                }
-            } catch (error) {
-                console.error('Error loading query parameters:', error);
-            } finally {
-                this.isLoadingParameters = false;
-                if (!this.isInitialLoad) this.cdr.detectChanges();
-            }
+            this.queryParameters = this.record.QueryParameters;
+            if (!this.isInitialLoad) this.cdr.detectChanges();
         }
     }
 
-    async loadQueryFields() {
+    loadQueryFields() {
         if (this.record && this.record.ID) {
-            this.isLoadingFields = true;
-            try {
-                const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-                const results = await rv.RunView<MJQueryFieldEntity>({
-                    EntityName: 'MJ: Query Fields',
-                    ExtraFilter: `QueryID='${this.record.ID}'`,
-                    OrderBy: 'Sequence ASC, Name ASC',
-                    ResultType: 'entity_object'
-                });
-                
-                if (results.Success) {
-                    this.queryFields = results.Results || [];
-                }
-            } catch (error) {
-                console.error('Error loading query fields:', error);
-            } finally {
-                this.isLoadingFields = false;
-                if (!this.isInitialLoad) this.cdr.detectChanges();
-            }
+            this.queryFields = this.record.QueryFields;
+            if (!this.isInitialLoad) this.cdr.detectChanges();
         }
     }
 
-    async loadQueryEntities() {
+    loadQueryEntities() {
         if (this.record && this.record.ID) {
-            this.isLoadingEntities = true;
-            try {
-                const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-                const results = await rv.RunView<MJQueryEntityEntity>({
-                    EntityName: 'MJ: Query Entities',
-                    ExtraFilter: `QueryID='${this.record.ID}'`,
-                    OrderBy: 'Entity ASC',
-                    ResultType: 'entity_object'
-                });
-                
-                if (results.Success) {
-                    this.queryEntities = results.Results || [];
-                    console.log('Loaded query entities:', this.queryEntities);
-                }
-            } catch (error) {
-                console.error('Error loading query entities:', error);
-            } finally {
-                this.isLoadingEntities = false;
-                if (!this.isInitialLoad) this.cdr.detectChanges();
-            }
+            this.queryEntities = this.record.QueryEntities;
+            if (!this.isInitialLoad) this.cdr.detectChanges();
         }
     }
 
-    async loadQueryPermissions() {
+    loadQueryPermissions() {
         if (this.record && this.record.ID) {
-            this.isLoadingPermissions = true;
-            try {
-                const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-                const results = await rv.RunView<MJQueryPermissionEntity>({
-                    EntityName: 'MJ: Query Permissions',
-                    ExtraFilter: `QueryID='${this.record.ID}'`,
-                    OrderBy: 'Role ASC',
-                    ResultType: 'entity_object'
-                });
-                
-                if (results.Success) {
-                    this.queryPermissions = results.Results || [];
-                }
-            } catch (error) {
-                console.error('Error loading query permissions:', error);
-            } finally {
-                this.isLoadingPermissions = false;
-                if (!this.isInitialLoad) this.cdr.detectChanges();
-            }
+            this.queryPermissions = this.record.QueryPermissions;
+            if (!this.isInitialLoad) this.cdr.detectChanges();
         }
     }
 
-    async loadCategories() {
-        try {
-            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-            const results = await rv.RunView<MJQueryCategoryEntity>({
-                EntityName: 'MJ: Query Categories',
-                OrderBy: 'Name',
-                ResultType: 'entity_object'
-            });
-            
-            if (results.Success && results.Results) {
-                this.categories = results.Results;
-                
-                // Build flat options for legacy compatibility
-                this.categoryOptions = [
-                    { text: 'Select Category...', value: '' },
-                    ...this.categories.map(cat => ({
-                        text: cat.Name,
-                        value: cat.ID
-                    }))
-                ];
-                
-                // Build tree data after options are set
-                this.categoryTreeData = this.buildCategoryTree(this.categories);
+    loadCategories() {
+        this.categories = QueryEngine.Instance.Categories;
 
-                // Update cached category path display
-                this.updateCategoryPathDisplay();
+        // Build flat options for legacy compatibility
+        this.categoryOptions = [
+            { text: 'Select Category...', value: '' },
+            ...this.categories.map(cat => ({
+                text: cat.Name,
+                value: cat.ID
+            }))
+        ];
 
-                // Trigger change detection to update the view (skip during init)
-                if (!this.isInitialLoad) this.cdr.detectChanges();
-            }
-        } catch (error) {
-            console.error('Error loading categories:', error);
-            this.categoryOptions = [{ text: 'Select Category...', value: '' }];
-            this.categoryTreeData = [];
-        }
+        // Build tree data after options are set
+        this.categoryTreeData = this.buildCategoryTree(this.categories);
+
+        // Update cached category path display
+        this.updateCategoryPathDisplay();
+
+        // Trigger change detection to update the view (skip during init)
+        if (!this.isInitialLoad) this.cdr.detectChanges();
     }
     
     private buildCategoryTree(categories: MJQueryCategoryEntity[]): CategoryTreeNode[] {
@@ -508,7 +412,7 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
         }
 
         // Reload parameters in case they were updated
-        await this.loadQueryParameters();
+        this.loadQueryParameters();
 
         // Show the run dialog — set before detectChanges to avoid NG0100
         this.showRunDialog = true;
@@ -629,15 +533,55 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
     }
     
     /**
-     * Handle category creation from dialog
+     * Create a new Query Category in a slide-in via the generic
+     * MJFormPresenterService. A new record opens in edit mode automatically.
+     * On save, refresh the category tree and select the new category.
      */
-    async onCategoryCreated(newCategory: MJQueryCategoryEntity) {
+    async createCategory(): Promise<void> {
+        const ref = this.formPresenter.Open({
+            EntityName: 'MJ: Query Categories',
+            Presentation: 'slide-in',
+            // Quick-create: drop the system-metadata (timestamps) section — empty
+            // for a new record. Merges over the slide-in preset (toolbar still off).
+            Config: { HiddenSectionKeys: ['systemMetadata'] },
+            Provider: this.ProviderToUse,
+        });
+        const saved = await ref.AfterSaved();
+        if (saved) {
+            this.onCategoryCreated(saved);
+        }
+    }
+
+    /**
+     * Edit the currently-selected category in a slide-in via the generic
+     * MJFormPresenterService. `StartInEditMode` opens the existing record
+     * editable. On save, refresh the category tree.
+     */
+    async editSelectedCategory(): Promise<void> {
+        if (!this.record.CategoryID) return;
+        const ref = this.formPresenter.Open({
+            EntityName: 'MJ: Query Categories',
+            RecordId: this.record.CategoryID,
+            Presentation: 'slide-in',
+            // Open editable + drop the system-metadata section. Partial config
+            // merges over the slide-in preset, so the toolbar stays suppressed.
+            Config: { StartInEditMode: true, HiddenSectionKeys: ['systemMetadata'] },
+            Provider: this.ProviderToUse,
+        });
+        const saved = await ref.AfterSaved();
+        if (saved) {
+            this.loadCategories();
+            this.cdr.detectChanges();
+        }
+    }
+
+    onCategoryCreated(newCategory: BaseEntity) {
         // Reload categories to include the new one
-        await this.loadCategories();
-        
+        this.loadCategories();
+
         // Set the new category as selected
-        this.record.CategoryID = newCategory.ID;
-        
+        this.record.CategoryID = (newCategory as MJQueryCategoryEntity).ID;
+
         // Trigger change detection
         this.cdr.detectChanges();
     }
@@ -731,11 +675,9 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
 
             // Reload related data after successful save as server-side processes may have updated them
             if (this.record && this.record.ID) {
-                await Promise.all([
-                    this.loadQueryParameters(),
-                    this.loadQueryFields(),
-                    this.loadQueryEntities()
-                ]);
+                this.loadQueryParameters();
+                this.loadQueryFields();
+                this.loadQueryEntities();
                 this.updateCategoryPathDisplay();
                 this.cdr.detectChanges();
             }
@@ -776,7 +718,7 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
      * Handle composition token click — navigate to the referenced query
      */
     onCompositionTokenClick(event: CompositionTokenClickEvent): void {
-        const md = this.ProviderToUse;
+        const allQueries = QueryEngine.Instance.Queries;
         const segments = event.FullPath.split('/').map(s => s.trim()).filter(s => s.length > 0);
         if (segments.length === 0) return;
 
@@ -784,16 +726,16 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
         const categorySegments = segments.slice(0, -1);
 
         // First try: exact match on Name + CategoryPath
-        let targetQuery = md.Queries.find(q => {
+        let targetQuery = allQueries.find(q => {
             if (q.Name !== queryName) return false;
             if (categorySegments.length === 0) return true;
-            const expectedPath = '/' + categorySegments.join('/') + '/';
+            const expectedPath = categorySegments.join('/');
             return q.CategoryPath === expectedPath;
         });
 
         // Fallback: match on Name alone
         if (!targetQuery) {
-            targetQuery = md.Queries.find(q => q.Name === queryName);
+            targetQuery = allQueries.find(q => q.Name === queryName);
         }
 
         if (targetQuery) {
@@ -811,7 +753,7 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
     /**
      * Navigate to a dependent query's record
      */
-    onDependentQueryClick(dep: QueryDependencyInfo): void {
+    onDependentQueryClick(dep: MJQueryDependencyEntity): void {
         const compositeKey = CompositeKey.FromID(dep.QueryID);
         this.navigationService.OpenEntityRecord('MJ: Queries', compositeKey);
     }

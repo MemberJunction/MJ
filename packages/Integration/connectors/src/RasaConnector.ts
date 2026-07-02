@@ -9,6 +9,7 @@ import {
     type PaginationState,
     type PaginationType,
     type ConnectionTestResult,
+    type ExternalObjectSchema,
     type FetchContext,
     type FetchBatchResult,
     type DefaultFieldMapping,
@@ -527,6 +528,36 @@ export class RasaConnector extends BaseRESTIntegrationConnector {
 
         const queryString = params.toString();
         return queryString ? `${basePath}?${queryString}` : basePath;
+    }
+
+    // ─── DiscoverObjects ──────────────────────────────────────────────
+
+    /**
+     * Canonical Rasa.io v1 API top-level objects.  Rasa.io's schema is
+     * fixed — there are no per-tenant "custom tables".  Custom subscriber
+     * attributes ARE per-tenant and surface as additional columns on
+     * `persons` via the existing DiscoverFields path (live-queries
+     * `/v1/persons/{id}/attributes` and merges into the persons field set).
+     */
+    public override async DiscoverObjects(
+        companyIntegration: MJCompanyIntegrationEntity,
+        contextUser: UserInfo
+    ): Promise<ExternalObjectSchema[]> {
+        const persisted = await super.DiscoverObjects(companyIntegration, contextUser);
+        const canonical: ExternalObjectSchema[] = [
+            { Name: 'persons', Label: 'Persons (Subscribers)', Description: 'Subscriber records. v1 API /v1/persons. Per-account custom attributes surface here via DiscoverFields.', SupportsIncrementalSync: true, SupportsWrite: true },
+            { Name: 'posts', Label: 'Posts (Articles)', Description: 'Newsletter content items / articles. v1 API /v1/posts.', SupportsIncrementalSync: true, SupportsWrite: false },
+            { Name: 'communities', Label: 'Communities', Description: 'Tenant communities the API key has access to. v1 API /v1/communities.', SupportsIncrementalSync: false, SupportsWrite: false },
+            { Name: 'analytics.activities', Label: 'Email Activity Analytics', Description: 'Open/click/delivery/bounce metrics bucketed by date. v1 API POST /v1/analytics/activities.', SupportsIncrementalSync: true, SupportsWrite: false },
+            { Name: 'analytics.articles', Label: 'Article Analytics', Description: 'Article click analytics ranked by popularity. v1 API POST /v1/analytics/articles.', SupportsIncrementalSync: true, SupportsWrite: false },
+            { Name: 'analytics.topics', Label: 'Topic Engagement Analytics', Description: 'Topic engagement ranking with unique user counts. v1 API POST /v1/analytics/topics.', SupportsIncrementalSync: true, SupportsWrite: false },
+        ];
+        const byName = new Map<string, ExternalObjectSchema>();
+        for (const o of persisted) byName.set(o.Name.toLowerCase(), o);
+        for (const c of canonical) {
+            if (!byName.has(c.Name.toLowerCase())) byName.set(c.Name.toLowerCase(), c);
+        }
+        return [...byName.values()];
     }
 
     // ─── TestConnection ──────────────────────────────────────────────

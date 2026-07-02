@@ -14,7 +14,7 @@
     @if (EntityName) {
       <span class="entity-badge">{{ EntityName }}</span>
     }
-    <button class="close-btn" (click)="OnClose()" title="Close">
+    <button class="close-btn" (click)="OnClose()" title="Close" aria-label="Close dialog">
       <i class="fa-solid fa-times"></i>
     </button>
   </div>

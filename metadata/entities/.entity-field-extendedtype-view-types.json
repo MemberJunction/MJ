@@ -1,0 +1,35 @@
+[
+  {
+    "_comments": [
+      "Marks the ViewType.Icon field as ExtendedType='Icon' so the generated admin form",
+      "renders the MJ icon picker (the stored values are already Font Awesome classes).",
+      "Done via metadata (source of truth) rather than a migration. The v5.39 Icon-backfill",
+      "ran before the v5.40 migration created the ViewType table, so this field was missed."
+    ],
+    "fields": {
+      "Name": "MJ: View Types"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "ExtendedType": "Icon"
+          },
+          "_comments": [
+            "Icon — Font Awesome class shown in the view-type switcher; icon-picker in the admin form"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: View Types&Name=Icon"
+          },
+          "sync": {
+            "lastModified": "2026-06-09T06:32:36.401Z",
+            "checksum": "39afc04784729464ed827591de05eb8a6c9dd7c9739e094d8b053af0d6a9b391"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: View Types"
+    }
+  }
+]

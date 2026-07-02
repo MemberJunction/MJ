@@ -11,6 +11,8 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ListSharingService, ListSharingSummary, ListShareDialogConfig, ListShareDialogResult } from '@memberjunction/ng-list-management';
 import { CapabilitiesForLevel, type ListCapabilities, type SharePermissionLevel } from '@memberjunction/lists-base';
 import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
+import { validateEnumParam, validateStringParam } from '../../shared/agent-tool-validation';
+import { buildListBrowseAgentContext, resolveNamedRecord, buildNotFoundError } from '../lists-agent-context';
 interface BrowseListItem {
   list: MJListEntity;
   itemCount: number;
@@ -45,10 +47,28 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
           </mj-stat-badge>
         </div>
         <div actions>
+          <!-- Single primary CTA; all filters live behind the Filter button in
+               the control bar below (concise chrome). -->
+          <button mjButton variant="primary" size="sm" (click)="createNewList()">
+            <i class="fa-solid fa-plus"></i> <span class="action-btn-label">New List</span>
+          </button>
+        </div>
+        <div toolbar>
+          <!-- Control bar: search · Filter · view. Owner, Entity and Favorites
+               all live behind the one Filter button; applied filters (including
+               tags) show as removable chips below. On mobile the popover docks
+               as a bottom sheet and the Filter button is icon-only. -->
+          <mj-page-search
+            Placeholder="Search lists..."
+            [Value]="searchTerm"
+            (ValueChange)="onSearchChange($event)">
+          </mj-page-search>
           <mj-filter-popover
-            [ActiveCount]="ActiveFilterCount"
-            [ShowClearAll]="ActiveFilterCount > 0"
-            (ClearAllRequested)="resetPopoverFilters()">
+            Label="Filters"
+            Icon="fa-solid fa-filter"
+            [ActiveCount]="TotalActiveFilterCount"
+            [ShowClearAll]="TotalActiveFilterCount > 0"
+            (ClearAllRequested)="clearAllAppliedFilters()">
             <mj-filter-panel
               [Fields]="listFilterFields"
               [Values]="listFilterValues"
@@ -56,61 +76,15 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
               (Reset)="resetPopoverFilters()">
             </mj-filter-panel>
           </mj-filter-popover>
-
           <mj-view-toggle
             [Options]="listViewOptions"
             [ActiveKey]="viewMode"
             (KeyChange)="setViewMode($any($event))">
           </mj-view-toggle>
-
-          <!-- Favorites-only toggle (Phase 5.3). Sits next to the view toggle
-               so it reads as "filter scope" alongside view mode. -->
-          <button
-            class="favorite-filter-toggle"
-            [class.favorite-filter-toggle--active]="showOnlyFavorites"
-            (click)="toggleShowOnlyFavorites()"
-            [title]="showOnlyFavorites ? 'Showing favorites only' : 'Show all lists'">
-            <i [class]="showOnlyFavorites ? 'fa-solid fa-star' : 'fa-regular fa-star'"></i>
-            Favorites
-          </button>
-
-          <button mjButton variant="primary" size="sm" (click)="createNewList()">
-            <i class="fa-solid fa-plus"></i> New List
-          </button>
-        </div>
-        <div toolbar>
-          <mj-page-search
-            Placeholder="Search lists..."
-            [Value]="searchTerm"
-            (ValueChange)="onSearchChange($event)">
-          </mj-page-search>
         </div>
       </mj-page-header>
 
       <mj-page-body>
-    
-      <!-- Active tag filters (Phase 4.3). Renders only when at least one
-           tag is active — multi-tag = AND. Clicking a chip's × removes it. -->
-      @if (tagFilters.length > 0) {
-        <div class="tag-filter-row">
-          <span class="tag-filter-row__label">
-            <i class="fa-solid fa-tag"></i>
-            Filtering by tag:
-          </span>
-          @for (f of tagFilters; track f.TagID) {
-            <button
-              class="tag-filter-chip"
-              type="button"
-              (click)="removeTagFilter(f.TagID)">
-              {{ f.Name }}
-              <i class="fa-solid fa-xmark"></i>
-            </button>
-          }
-          <button class="tag-filter-row__clear" type="button" (click)="clearTagFilters()">
-            Clear all
-          </button>
-        </div>
-      }
 
       <!-- Loading State -->
       @if (isLoading) {
@@ -121,13 +95,13 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
 
       <!-- Empty State - No Lists -->
       @if (!isLoading && allLists.length === 0) {
-        <div class="empty-state">
-          <div class="empty-state-icon-wrapper">
-            <div class="icon-bg"></div>
-            <i class="fa-solid fa-list-check"></i>
-          </div>
-          <h3>No Lists Yet</h3>
-          <p>Lists help you organize and track groups of records across your data.</p>
+        <mj-empty-state Size="large"
+          Icon="fa-solid fa-list-check"
+          Title="No Lists Yet"
+          Message="Lists help you organize and track groups of records across your data."
+          ActionText="Create Your First List"
+          ActionIcon="fa-solid fa-plus"
+          (Action)="createNewList()">
           <div class="empty-state-features">
             <div class="feature-item">
               <i class="fa-solid fa-check-circle"></i>
@@ -142,24 +116,18 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
               <span>Quick access from any view</span>
             </div>
           </div>
-          <button class="btn-create-large" (click)="createNewList()">
-            <i class="fa-solid fa-plus"></i>
-            Create Your First List
-          </button>
-        </div>
+        </mj-empty-state>
       }
-    
+
       <!-- Empty State - No Results -->
       @if (!isLoading && allLists.length > 0 && filteredLists.length === 0) {
-        <div class="empty-state search-empty">
-          <div class="empty-state-icon-wrapper search">
-            <i class="fa-solid fa-filter-circle-xmark"></i>
-          </div>
-          <h3>No Results Found</h3>
-          <p>No lists match your current filters.</p>
-          <p class="empty-hint">Try adjusting your search or filters.</p>
-          <button class="btn-clear" (click)="clearFilters()">Clear All Filters</button>
-        </div>
+        <mj-empty-state Variant="no-results"
+          Icon="fa-solid fa-filter-circle-xmark"
+          Title="No Results Found"
+          Message="No lists match your current filters. Try adjusting your search or filters."
+          ActionText="Reset filters"
+          ActionIcon="fa-solid fa-rotate-left"
+          (Action)="clearFilters()" />
       }
     
       <!-- Results Content -->
@@ -655,6 +623,14 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
       height: 100%;
     }
 
+    /* Control bar: on mobile search grows so the icon-only Filter + view toggle
+       stay on one line. On desktop search keeps its natural width. */
+    @media (max-width: 768px) {
+      mj-page-search {
+        flex: 1;
+      }
+    }
+
     .lists-browse-container {
       display: flex;
       flex-direction: column;
@@ -832,75 +808,12 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
       flex: 1;
     }
 
-    /* Empty State */
-    .empty-state {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      flex: 1;
-      padding: 48px 40px;
-      text-align: center;
-      max-width: 480px;
-      margin: 0 auto;
-    }
-
-    .empty-state-icon-wrapper {
-      position: relative;
-      margin-bottom: 24px;
-    }
-
-    .empty-state-icon-wrapper .icon-bg {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      width: 120px;
-      height: 120px;
-      border-radius: 50%;
-      background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
-    }
-
-    .empty-state-icon-wrapper > i {
-      position: relative;
-      font-size: 56px;
-      color: var(--mj-brand-primary);
-      z-index: 1;
-    }
-
-    .empty-state-icon-wrapper.search > i {
-      font-size: 48px;
-      color: var(--mj-text-disabled);
-    }
-
-    .empty-state h3 {
-      margin: 0 0 12px;
-      font-size: 22px;
-      font-weight: 600;
-      color: var(--mj-text-primary);
-    }
-
-    .empty-state p {
-      margin: 0 0 8px;
-      color: var(--mj-text-secondary);
-      font-size: 15px;
-      line-height: 1.5;
-    }
-
-    .empty-state p:last-of-type {
-      margin-bottom: 24px;
-    }
-
-    .empty-hint {
-      color: var(--mj-text-muted) !important;
-      font-size: 13px !important;
-    }
-
+    /* Onboarding feature checklist — projected into <mj-empty-state>. */
     .empty-state-features {
       display: flex;
       flex-direction: column;
-      gap: 8px;
-      margin-bottom: 28px;
+      gap: var(--mj-space-2);
+      margin: var(--mj-space-5) 0 var(--mj-space-2);
       text-align: left;
     }
 
@@ -915,42 +828,6 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
     .feature-item i {
       font-size: 14px !important;
       color: var(--mj-status-success) !important;
-    }
-
-    .btn-create-large {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 14px 28px;
-      background: var(--mj-brand-primary);
-      color: var(--mj-text-inverse);
-      border: none;
-      border-radius: 8px;
-      font-size: 15px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: all 0.2s;
-      box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-brand-primary) 30%, transparent);
-    }
-
-    .btn-create-large:hover {
-      background: var(--mj-brand-primary-hover);
-      transform: translateY(-1px);
-      box-shadow: 0 4px 12px color-mix(in srgb, var(--mj-brand-primary) 40%, transparent);
-    }
-
-    .btn-clear {
-      padding: 10px 20px;
-      background: var(--mj-bg-surface-sunken);
-      border: none;
-      border-radius: 6px;
-      color: var(--mj-text-secondary);
-      cursor: pointer;
-      transition: background 0.2s;
-    }
-
-    .btn-clear:hover {
-      background: var(--mj-border-default);
     }
 
     /* Content */
@@ -2020,7 +1897,176 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
     super.ngOnInit();
     this.subscribeToCategoryChanges();
     await this.loadData();
+    this.registerAgentTools();
+    this.publishAgentContext();
     this.NotifyLoadComplete();
+  }
+
+  // ================================================================
+  // AI Agent Context & Client Tools
+  //
+  // SAFETY BOUNDARY: This surface exposes only SAFE (read-only /
+  // navigational / selection) operations plus ONE bounded-mutation tool
+  // (CreateList) that merely opens the dialog-validated create flow.
+  // The following are INTENTIONALLY EXCLUDED from agent tools and must
+  // NOT be wired in:
+  //   - EditList     (editList)            — mutates an existing record
+  //   - DeleteList   (confirmDeleteList/deleteList) — destructive
+  //   - ShareList    (openShareDialog)      — grants access to others
+  //   - DuplicateList(duplicateList)        — bulk record copy
+  //   - ToggleFavorite(toggleFavorite)      — prefer the agent ask the user
+  // Edit/delete/share/duplicate/favorite stay user-driven on purpose.
+  // ================================================================
+
+  /**
+   * Report the Browse surface's salient state to the AI agent. Re-called
+   * on every meaningful state change (search / filter / view / sort /
+   * data load) so the chat agent and realtime co-agent stay in sync with
+   * what the user is looking at.
+   */
+  private publishAgentContext(): void {
+    this.navigationService.SetAgentContext(this, buildListBrowseAgentContext({
+      SearchTerm: this.searchTerm,
+      ViewMode: this.viewMode,
+      AllListCount: this.allLists.length,
+      FilteredListCount: this.filteredLists.length,
+      // Deep context: the NAMES of the lists currently on screen (bounded), so
+      // the agent can refer to / open them by name rather than an opaque GUID.
+      VisibleListNames: this.filteredLists.map(i => i.list.Name),
+      SelectedSort: this.selectedSort,
+      ActiveFilterCount: this.TotalActiveFilterCount,
+      SelectedOwner: this.selectedOwner,
+      SelectedEntity: this.selectedEntity,
+      ShowOnlyFavorites: this.showOnlyFavorites,
+    }));
+  }
+
+  /**
+   * Resolve an agent-supplied reference (a list ID or a list NAME, exact or
+   * partial) to one of the loaded Browse list items. Delegates the matching to
+   * the pure {@link resolveNamedRecord} helper over the filtered lists' rows.
+   */
+  private resolveBrowseListItem(input: string): BrowseListItem | null {
+    const match = resolveNamedRecord(input, this.allLists.map(i => ({ ID: i.list.ID, Name: i.list.Name })));
+    if (!match) {
+      return null;
+    }
+    return this.allLists.find(i => UUIDsEqual(i.list.ID, match.ID)) ?? null;
+  }
+
+  /**
+   * Register the Browse surface's agent-actionable tools. SAFE tools are
+   * navigation / search / filter / selection; the single bounded-mutation
+   * tool (CreateList) only opens the dialog-validated create flow.
+   */
+  private registerAgentTools(): void {
+    this.navigationService.SetAgentClientTools(this, [
+      {
+        Name: 'OpenList',
+        Description: 'Open a list in a new tab by its ID or name. Pass the list name the user says (see VisibleListNames) — the tool resolves an exact ID, an exact name, or a partial name match.',
+        ParameterSchema: { type: 'object', properties: { list: { type: 'string', description: 'The list ID or name to open' }, listId: { type: 'string', description: 'Deprecated alias for "list".' } } },
+        Handler: async (params: Record<string, unknown>) => {
+          const idCheck = validateStringParam(params['list'] ?? params['listId'], 'list');
+          if (!idCheck.ok) return idCheck.result;
+          const item = this.resolveBrowseListItem(idCheck.value);
+          if (!item) return { Success: false, ErrorMessage: buildNotFoundError(idCheck.value, this.allLists.map(i => ({ ID: i.list.ID, Name: i.list.Name })), 'list') };
+          this.openList(item);
+          return { Success: true, Data: { listName: item.list.Name } };
+        },
+      },
+      {
+        Name: 'SearchLists',
+        Description: 'Set the search term that filters the visible lists by name, description, entity, or owner.',
+        ParameterSchema: { type: 'object', properties: { searchTerm: { type: 'string', description: 'Text to search for' } }, required: ['searchTerm'] },
+        Handler: async (params: Record<string, unknown>) => {
+          const check = validateStringParam(params['searchTerm'], 'searchTerm');
+          if (!check.ok) return check.result;
+          this.onSearchChange(check.value);
+          this.publishAgentContext();
+          return { Success: true, Data: { resultCount: this.filteredLists.length } };
+        },
+      },
+      {
+        Name: 'FilterLists',
+        Description: 'Apply Owner / Entity / Favorites filters. Owner: "mine" | "all" | "others". Entity: an entity name or "all". Favorites: "favorites" | "all". Omitted keys are left unchanged.',
+        ParameterSchema: {
+          type: 'object',
+          properties: {
+            owner: { type: 'string', enum: ['mine', 'all', 'others'] },
+            entity: { type: 'string' },
+            favorites: { type: 'string', enum: ['favorites', 'all'] },
+          },
+        },
+        Handler: async (params: Record<string, unknown>) => {
+          const next: Record<string, unknown> = { ...this.listFilterValues };
+          if (params['owner'] !== undefined) {
+            const ownerCheck = validateEnumParam(params['owner'], ['mine', 'all', 'others'] as const, 'owner');
+            if (!ownerCheck.ok) return ownerCheck.result;
+            next['selectedOwner'] = ownerCheck.value;
+          }
+          if (params['entity'] !== undefined) {
+            const entityCheck = validateStringParam(params['entity'], 'entity');
+            if (!entityCheck.ok) return entityCheck.result;
+            next['selectedEntity'] = entityCheck.value;
+          }
+          if (params['favorites'] !== undefined) {
+            const favCheck = validateEnumParam(params['favorites'], ['favorites', 'all'] as const, 'favorites');
+            if (!favCheck.ok) return favCheck.result;
+            next['favorites'] = favCheck.value;
+          }
+          this.onFilterValuesChange(next);
+          this.publishAgentContext();
+          return { Success: true, Data: { resultCount: this.filteredLists.length, activeFilterCount: this.TotalActiveFilterCount } };
+        },
+      },
+      {
+        Name: 'ClearFilters',
+        Description: 'Clear all applied filters (Owner, Entity, Favorites, Tags).',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => {
+          this.clearAllAppliedFilters();
+          this.publishAgentContext();
+          return { Success: true, Data: { resultCount: this.filteredLists.length } };
+        },
+      },
+      {
+        Name: 'SetViewMode',
+        Description: 'Set the list view mode: "table", "card", or "hierarchy".',
+        ParameterSchema: { type: 'object', properties: { mode: { type: 'string', enum: ['table', 'card', 'hierarchy'] } }, required: ['mode'] },
+        Handler: async (params: Record<string, unknown>) => {
+          const check = validateEnumParam(params['mode'], ['table', 'card', 'hierarchy'] as const, 'mode');
+          if (!check.ok) return check.result;
+          this.setViewMode(check.value);
+          this.publishAgentContext();
+          return { Success: true };
+        },
+      },
+      {
+        Name: 'SortBy',
+        Description: 'Sort the lists by a field: "name", "updated", "items", or "entity".',
+        ParameterSchema: { type: 'object', properties: { field: { type: 'string', enum: ['name', 'updated', 'items', 'entity'] } }, required: ['field'] },
+        Handler: async (params: Record<string, unknown>) => {
+          const check = validateEnumParam(params['field'], ['name', 'updated', 'items', 'entity'] as const, 'field');
+          if (!check.ok) return check.result;
+          this.selectedSort = check.value;
+          this.onSortChange(check.value);
+          this.publishAgentContext();
+          return { Success: true };
+        },
+      },
+      {
+        // BOUNDED MUTATION: opens the create dialog only. The list name +
+        // entity are validated by the dialog before any record is written,
+        // so the agent cannot silently create a malformed/empty list.
+        Name: 'CreateList',
+        Description: 'Open the "Create New List" dialog. The user confirms the name and entity in the dialog; nothing is saved until they do.',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => {
+          this.createNewList();
+          return { Success: true };
+        },
+      },
+    ]);
   }
 
   /**
@@ -2249,6 +2295,7 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
 
   setViewMode(mode: ViewMode) {
     this.viewMode = mode;
+    this.publishAgentContext();
   }
 
   /** View-mode options for the shared <mj-view-toggle>. */
@@ -2260,7 +2307,11 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
 
   /** Values record consumed by the centralized <mj-filter-panel>. */
   public get listFilterValues(): Record<string, unknown> {
-    return { selectedOwner: this.selectedOwner, selectedEntity: this.selectedEntity };
+    return {
+      selectedOwner: this.selectedOwner,
+      selectedEntity: this.selectedEntity,
+      favorites: this.showOnlyFavorites ? 'favorites' : 'all',
+    };
   }
 
   /** Field config consumed by the centralized <mj-filter-panel>. */
@@ -2281,6 +2332,15 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
         filterable: this.entityOptions.length > 10,
         options: this.entityOptions.map(o => ({ text: o.name, value: o.value })),
       },
+      {
+        key: 'favorites',
+        type: 'chips',
+        label: 'Favorites',
+        chipOptions: [
+          { text: 'All lists', value: 'all' },
+          { text: 'Favorites only', value: 'favorites' },
+        ],
+      },
     ];
   }
 
@@ -2288,19 +2348,22 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
   public onFilterValuesChange(values: Record<string, unknown>): void {
     this.selectedOwner  = (values['selectedOwner']  as string) ?? 'mine';
     this.selectedEntity = (values['selectedEntity'] as string) ?? 'all';
+    this.showOnlyFavorites = values['favorites'] === 'favorites';
     this.applyFilters();
     this.buildCategoryTree();
+    this.publishAgentContext();
   }
 
-  /** Reset popover filters to defaults; leaves searchTerm alone. */
+  /** Reset the popover's own fields (Owner · Entity · Favorites); leaves search + tags alone. */
   public resetPopoverFilters(): void {
     this.selectedOwner = 'mine';
     this.selectedEntity = 'all';
+    this.showOnlyFavorites = false;
     this.applyFilters();
     this.buildCategoryTree();
   }
 
-  /** Active filter count for the popover badge (excludes searchTerm). */
+  /** Active popover-field count for the badge (Owner + Entity; excludes search). */
   public get ActiveFilterCount(): number {
     let n = 0;
     if (this.selectedOwner  && this.selectedOwner  !== 'mine') n++;
@@ -2308,10 +2371,27 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
     return n;
   }
 
+  /** Total active filters (Owner + Entity + Favorites + Tags) — drives the Filter button badge. */
+  public get TotalActiveFilterCount(): number {
+    return this.ActiveFilterCount + (this.showOnlyFavorites ? 1 : 0) + this.tagFilters.length;
+  }
+
+  /** Clear every filter (Owner · Entity · Favorites · Tags). Leaves search. */
+  public clearAllAppliedFilters(): void {
+    this.selectedOwner = 'mine';
+    this.selectedEntity = 'all';
+    this.showOnlyFavorites = false;
+    this.tagFilters = [];
+    void this.recomputeTagMembership();
+    this.buildCategoryTree();
+    this.publishAgentContext();
+  }
+
   onSearchChange(term: string) {
     this.searchTerm = term;
     this.applyFilters();
     this.buildCategoryTree();
+    this.publishAgentContext();
   }
 
   onEntityFilterChange(_value: string) {
@@ -2327,6 +2407,7 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
   onSortChange(_value: string) {
     this.applyFilters();
     this.buildCategoryTree();
+    this.publishAgentContext();
   }
 
   clearSearch() {
@@ -2336,10 +2417,15 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
   }
 
   clearFilters() {
+    // Reset EVERY dimension applyFilters() narrows on — search, owner, entity,
+    // favorites, and tags — so the empty-state "Reset filters" CTA actually clears
+    // the no-results state (favorites/tags were previously left active).
     this.searchTerm = '';
     this.selectedEntity = 'all';
     this.selectedOwner = 'mine';
-    this.applyFilters();
+    this.showOnlyFavorites = false;
+    this.tagFilters = [];
+    void this.recomputeTagMembership(); // empty tagFilters → clears tagFilteredListIds + re-applies
     this.buildCategoryTree();
   }
 

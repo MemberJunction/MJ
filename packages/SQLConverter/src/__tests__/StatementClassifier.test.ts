@@ -114,6 +114,29 @@ SELECT @role_exists = 1 FROM sys.database_principals WHERE name = 'cdp_Developer
   });
 
   // ============================================================
+  // Database principal blocks (baseline header idioms)
+  // ============================================================
+  describe('database principal blocks', () => {
+    it('should classify IF DATABASE_PRINCIPAL_ID ... CREATE ROLE as CONDITIONAL_DDL', () => {
+      const sql = `IF DATABASE_PRINCIPAL_ID(N'cdp_BI') IS NULL
+    EXEC('CREATE ROLE [cdp_BI] AUTHORIZATION [db_securityadmin]');`;
+      expect(classifyBatch(sql)).toBe('CONDITIONAL_DDL');
+    });
+
+    it('should classify IF DATABASE_PRINCIPAL_ID ... CREATE USER as SKIP_SQLSERVER', () => {
+      const sql = `IF DATABASE_PRINCIPAL_ID(N'MJ_CodeGen') IS NULL
+    EXEC('CREATE USER [MJ_CodeGen] FOR LOGIN [MJ_CodeGen]');`;
+      expect(classifyBatch(sql)).toBe('SKIP_SQLSERVER');
+    });
+
+    it('should classify IF IS_ROLEMEMBER ... ALTER ROLE ADD MEMBER as SKIP_SQLSERVER', () => {
+      const sql = `IF IS_ROLEMEMBER(N'cdp_Developer', N'MJ_Connect') = 0
+    ALTER ROLE [cdp_Developer] ADD MEMBER [MJ_Connect];`;
+      expect(classifyBatch(sql)).toBe('SKIP_SQLSERVER');
+    });
+  });
+
+  // ============================================================
   // CREATE_TABLE
   // ============================================================
   describe('CREATE_TABLE', () => {

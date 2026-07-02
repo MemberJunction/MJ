@@ -61,11 +61,16 @@ export class HomeApplication extends BaseApplication {
   private _storageLoadPromise: Promise<void> | null = null;
 
   /**
-   * Fingerprint of the last-processed active tab state (tabId::resourceRecordId).
+   * Fingerprint of the last-processed active tab state (tabId::resourceRecordId::title).
    * Guards against redundant stack mutations while still detecting content changes.
    * In single-resource mode the tab ID stays constant when navigating between records
    * (OpenTab replaces the temp tab's content but keeps its ID), so we must also
    * include the resourceRecordId to detect when the tab shows a different record.
+   *
+   * Title is also included so an in-place display-name change (e.g. user edits a
+   * record's Name field and saves — tabId and resourceRecordId stay the same but the
+   * title changes) triggers a re-evaluation. Without this, the dynamic nav item keeps
+   * showing the pre-edit name forever.
    */
   private _lastSeenTabFingerprint: string | null = null;
 
@@ -223,10 +228,25 @@ export class HomeApplication extends BaseApplication {
       return;
     }
 
-    // Build a fingerprint from tab ID + record content. In single-resource mode,
-    // OpenTab replaces the temp tab's content but keeps the same tab ID, so we
-    // need the resourceRecordId to detect when a different record is shown.
-    const fingerprint = `${activeTab.id}::${activeTab.resourceRecordId ?? ''}`;
+    // ALWAYS refresh the matching snapshot's label first — BEFORE the fingerprint
+    // bail. A burst of configuration$ emissions (typical on save) causes multiple
+    // concurrent updateCachedData calls; the first one proceeds past the fingerprint
+    // check and gets stuck awaiting createSnapshotIfOrphan, while the rest bail at
+    // fingerprint and race ahead with the *stale* snapshot. By the time the first
+    // call's async work completes and updates the snapshot, the gen-check in
+    // AppNav.updateCachedData has already discarded its results. The user is left
+    // with the right data in memory but rendered against the wrong label.
+    //
+    // Refreshing here is cheap (cache hit after my save-handler's pre-warm) and
+    // ensures every call — even fast bailers — produces fresh dynamic nav items.
+    await this.refreshExistingSnapshotLabel(activeTab);
+
+    // Build a fingerprint from tab ID + record content + title. In single-resource
+    // mode, OpenTab replaces the temp tab's content but keeps the same tab ID, so we
+    // need the resourceRecordId to detect when a different record is shown. Title is
+    // included so an in-place rename (record's Name field edited and saved — tabId
+    // and resourceRecordId stay the same but title changes) also triggers a refresh.
+    const fingerprint = `${activeTab.id}::${activeTab.resourceRecordId ?? ''}::${activeTab.title ?? ''}`;
     if (fingerprint === this._lastSeenTabFingerprint) {
       return;
     }
@@ -239,9 +259,13 @@ export class HomeApplication extends BaseApplication {
       return;
     }
 
-    // If this item is already in the stack, leave the order unchanged.
-    // Reordering on every click is visually jarring — items shift around
-    // while the user is clicking between existing nav items.
+    // If this item is already in the stack, leave the ORDER unchanged (reordering
+    // on every click is visually jarring) — but DO refresh its `resolvedLabel` if the
+    // underlying display name has changed. Without this, editing a record's Name
+    // field would leave the dynamic nav item showing the pre-edit name forever.
+    // Already-tracked snapshots are kept in their existing position (no jarring
+    // reorder) and have their label kept fresh by refreshExistingSnapshotLabel
+    // above — so here we only need to handle the NEW-snapshot case.
     const alreadyTracked = this.recentOrphanStack.some(
       s => s.resourceRecordId === snapshot.resourceRecordId
     );
@@ -256,6 +280,42 @@ export class HomeApplication extends BaseApplication {
     }
 
     this.saveStackToStorage();
+  }
+
+  /**
+   * Refreshes an already-tracked snapshot's `resolvedLabel` against the latest cached
+   * record name. Called unconditionally at the top of `updateRecentStack` (BEFORE the
+   * fingerprint bail), so even no-op-fingerprint calls don't render stale labels.
+   *
+   * Why this matters: when a record is saved, `configuration$` typically emits multiple
+   * times in quick succession (UpdateTabTitle, UpdateConfiguration, etc.). AppNav's
+   * subscription kicks off a `updateCachedData` for each. The first call wins the
+   * fingerprint race and starts the slow async `createSnapshotIfOrphan` chain;
+   * subsequent calls bail at fingerprint and race ahead with the still-unrefreshed
+   * snapshot. AppNav's `_updateGeneration` then discards the slow call's results.
+   * Without this method, the freshly-saved label lands in the snapshot — but never
+   * makes it to the rendered nav until some unrelated event triggers another cycle.
+   */
+  private async refreshExistingSnapshotLabel(activeTab: WorkspaceTab): Promise<void> {
+    if (!activeTab.resourceRecordId) {
+      return;
+    }
+    const existing = this.recentOrphanStack.find(
+      s => s.resourceRecordId === activeTab.resourceRecordId
+    );
+    if (!existing || !existing.entityName) {
+      return;
+    }
+    const newLabel = await this.resolveRecordLabel(
+      existing.entityName,
+      activeTab.resourceRecordId,
+      activeTab.title
+    );
+    if (newLabel && newLabel !== existing.resolvedLabel) {
+      existing.resolvedLabel = newLabel;
+      existing.title = activeTab.title;
+      this.saveStackToStorage();
+    }
   }
 
   /**

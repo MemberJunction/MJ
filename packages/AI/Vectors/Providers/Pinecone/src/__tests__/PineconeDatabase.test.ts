@@ -53,8 +53,16 @@ vi.mock('@memberjunction/global', () => ({
 }));
 
 vi.mock('@memberjunction/ai-vectordb', () => {
+  // Mirror the real VectorDBBase response helpers (now hoisted to the base class) so
+  // subclasses that call this.wrapSuccessResponse / this.wrapFailureResponse work under the mock.
   class MockVectorDBBase {
     constructor(_apiKey: string) {}
+    protected wrapSuccessResponse(data: unknown) {
+      return { success: true, message: '', data };
+    }
+    protected wrapFailureResponse(message?: string) {
+      return { success: false, message: message || 'An error occurred', data: null };
+    }
   }
   return {
     VectorDBBase: MockVectorDBBase,
@@ -275,6 +283,36 @@ describe('PineconeDatabase', () => {
       const result = await db.CreateRecords([{ id: 'r1', values: [1] }] as never, 'my-index');
       expect(result.success).toBe(true);
       expect(mockIndex).toHaveBeenCalledWith('my-index');
+    });
+
+    // Regression: a thrown upsert error (e.g. dimension mismatch) must surface as a FAILURE,
+    // not be swallowed into a success=true response that makes the pipeline claim it worked.
+    it('should return failure (not swallow) when upsert throws', async () => {
+      mockIndexInstance.upsert.mockRejectedValueOnce(
+        new Error('Vector dimension 1536 does not match the dimension of the index 512')
+      );
+      const result = await db.CreateRecords([{ id: 'r1', values: [1] }] as never, 'my-index');
+      expect(result.success).toBe(false);
+      expect(result.data).toBeNull();
+      expect(result.message).toContain('does not match the dimension');
+    });
+  });
+
+  /* ---- GetRecords ---- */
+  describe('GetRecords', () => {
+    it('should return fetched records on success', async () => {
+      mockIndexInstance.fetch.mockResolvedValueOnce({ records: {} });
+      const result = await db.GetRecords({ id: 'idx', data: ['r1'] } as never);
+      expect(result.success).toBe(true);
+    });
+
+    // Regression: a thrown fetch error must surface as a FAILURE, not a success with null data.
+    it('should return failure (not swallow) when fetch throws', async () => {
+      mockIndexInstance.fetch.mockRejectedValueOnce(new Error('fetch boom'));
+      const result = await db.GetRecords({ id: 'idx', data: ['r1'] } as never);
+      expect(result.success).toBe(false);
+      expect(result.data).toBeNull();
+      expect(result.message).toContain('fetch boom');
     });
   });
 

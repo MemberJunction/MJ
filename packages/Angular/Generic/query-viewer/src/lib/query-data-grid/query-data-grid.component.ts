@@ -13,9 +13,8 @@ import {
 import { trigger, transition, style, animate } from '@angular/animations';
 import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
-import { RunQuery, RunQueryParams, Metadata, QueryInfo, QueryFieldInfo } from '@memberjunction/core';
+import { MJQueryEntityExtended } from '@memberjunction/core-entities';
 import { PageChangeEvent } from '@memberjunction/ng-pagination';
-import { RunQueryResult } from '@memberjunction/core';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import {
     ColDef,
@@ -111,13 +110,13 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
     // Inputs
     // ========================================
 
-    private _queryInfo: QueryInfo | null = null;
+    private _queryInfo: MJQueryEntityExtended | null = null;
     /**
      * The QueryInfo metadata for the query being displayed.
      * Used to derive column configurations and entity linking.
      */
     @Input()
-    set QueryInfo(value: QueryInfo | null) {
+    set QueryInfo(value: MJQueryEntityExtended | null) {
         const previous = this._queryInfo;
         // Flush state for the previous query before switching
         if (previous && value !== previous) {
@@ -128,7 +127,7 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
             this.onQueryInfoChanged();
         }
     }
-    get QueryInfo(): QueryInfo | null {
+    get QueryInfo(): MJQueryEntityExtended | null {
         return this._queryInfo;
     }
 
@@ -424,7 +423,7 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
         }
 
         // Build columns from query fields
-        this.Columns = buildColumnsFromQueryFields(this._queryInfo.Fields);
+        this.Columns = buildColumnsFromQueryFields(this._queryInfo.QueryFields);
 
         // Apply initial state if provided via prop (takes precedence)
         if (this.InitialGridState) {

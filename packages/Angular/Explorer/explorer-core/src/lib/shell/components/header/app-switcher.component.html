@@ -1,5 +1,9 @@
 <div class="app-switcher-container" [class.loading]="isLoading">
   <div class="app-switcher-button"
+    mjClickable="Switch application"
+    testId="app-switcher-trigger"
+    [attr.aria-haspopup]="true"
+    [attr.aria-expanded]="showDropdown"
     (click)="toggleDropdown()">
     <!-- Show spinner when loading, otherwise show app icon -->
     @if (isLoading) {
@@ -19,6 +23,9 @@
         @for (app of apps; track app) {
           <div
             class="app-switcher-item"
+            [mjClickable]="app.Name"
+            [testId]="'app-switcher-item-' + app.Name"
+            [attr.aria-current]="IsActiveApp(app) ? 'true' : null"
             [class.active]="IsActiveApp(app)"
             [class.loading]="IsLoadingApp(app)"
             [style.--item-color]="app.GetColor()"
@@ -35,7 +42,7 @@
       </div>
       <!-- Divider + Configure pinned at bottom -->
       <div class="app-switcher-divider"></div>
-      <div class="app-switcher-item configure-item" (click)="openConfigDialog()">
+      <div class="app-switcher-item configure-item" mjClickable="Configure applications" testId="app-switcher-configure" (click)="openConfigDialog()">
         <i class="fa-solid fa-gear"></i>
         <span>Configure...</span>
       </div>

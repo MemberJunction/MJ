@@ -1,6 +1,6 @@
-import { LogError, Metadata } from "@memberjunction/core";
-import { MJActionExecutionLogEntity, MJActionEntity_IRuntimeActionConfiguration, MJActionFilterEntity, MJActionParamEntity, MJActionResultCodeEntity } from "@memberjunction/core-entities";
-import { MJGlobal, SafeJSONParse, UUIDsEqual } from "@memberjunction/global";
+import { BaseEntitySaveQueue, LogError, LogErrorEx, Metadata, UserInfo, IMetadataProvider } from "@memberjunction/core";
+import { MJActionExecutionLogEntity, MJActionEntity_IRuntimeActionConfiguration, MJActionCategoryEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity } from "@memberjunction/core-entities";
+import { BaseSingleton, MJGlobal, SafeJSONParse, UUIDsEqual } from "@memberjunction/global";
 import { BaseAction } from "./BaseAction";
 import {
     ActionEngineBase,
@@ -21,12 +21,81 @@ import type { BridgeHandlerMap } from "@memberjunction/code-execution";
  * Base class for executing actions. This class can be sub-classed if desired if you would like to modify the logic across ALL actions. To do so, sub-class this class and use the 
  * @RegisterClass decorator from the @memberjunction/global package to register your sub-class with the ClassFactory. This will cause your sub-class to be used instead of this base class when the Metadata object insantiates the ActionEngine.
  */
-export class ActionEngineServer extends ActionEngineBase {
+export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
 
 
    public static get Instance(): ActionEngineServer {
       return super.getInstance<ActionEngineServer>();
    }
+
+   /**
+    * ActionEngineServer is the server-side CAPABILITY layer (action execution, filters, logging). It
+    * does NOT extend ActionEngineBase and NEVER caches its own copy of the action metadata — it would
+    * otherwise be a second BaseEngine singleton issuing a duplicate RunViews batch and holding a second
+    * copy of all 6 cached arrays (the "Duplicate RunView Detected" telemetry warning). Instead it
+    * COMPOSES the single ActionEngineBase cache and proxies every cached collection / lookup to it,
+    * exactly like {@link AIEngine} wraps AIEngineBase. {@link Config} delegates to the base so there is
+    * one cache, loaded once, shared by every consumer (and reused by AIEngine.RefreshActions via the
+    * BaseEngineRegistry).
+    */
+   private get Base(): ActionEngineBase {
+      return ActionEngineBase.Instance;
+   }
+
+   /**
+    * Server-side context user for action execution and log stamping. Held HERE (not borrowed from the
+    * base) and captured on Config(), mirroring AIEngine which keeps its own _contextUser distinct from
+    * the shared base cache. Falls back to the base's context user when not explicitly set.
+    */
+   private _contextUser?: UserInfo;
+
+   /**
+    * Ensures the single ActionEngineBase metadata cache is loaded. Delegates entirely to the base —
+    * ActionEngineServer holds no metadata of its own.
+    */
+   public async Config(forceRefresh: boolean = false, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
+      if (contextUser) {
+         this._contextUser = contextUser;
+      }
+      await this.Base.Config(forceRefresh, contextUser, provider);
+   }
+
+   /** True once the underlying ActionEngineBase cache has loaded. */
+   public get Loaded(): boolean { return this.Base.Loaded; }
+
+   public get ContextUser(): UserInfo { return (this._contextUser ?? this.Base.ContextUser) as UserInfo; }
+   public set ContextUser(value: UserInfo) { this._contextUser = value; }
+
+   // ── Proxied cached collections (single source of truth: ActionEngineBase.Instance) ──
+   public get Actions(): MJActionEntityExtended[] { return this.Base.Actions; }
+   public get ActionCategories(): MJActionCategoryEntity[] { return this.Base.ActionCategories; }
+   public get ActionParams(): MJActionParamEntity[] { return this.Base.ActionParams; }
+   public get ActionFilters(): MJActionFilterEntity[] { return this.Base.ActionFilters; }
+   public get ActionResultCodes(): MJActionResultCodeEntity[] { return this.Base.ActionResultCodes; }
+   public get ActionLibraries(): MJActionLibraryEntity[] { return this.Base.ActionLibraries; }
+   public get CoreActions(): MJActionEntityExtended[] { return this.Base.CoreActions; }
+   public get NonCoreActions(): MJActionEntityExtended[] { return this.Base.NonCoreActions; }
+   public get CoreActionsRootCategoryID(): string { return this.Base.CoreActionsRootCategoryID; }
+
+   // ── Proxied lookups ──
+   public IsChildCategoryOf(categoryId: string, parentCategoryId: string): boolean { return this.Base.IsChildCategoryOf(categoryId, parentCategoryId); }
+   public IsCoreAction(action: MJActionEntityExtended): boolean { return this.Base.IsCoreAction(action); }
+   public IsCoreActionCategory(categoryId: string): boolean { return this.Base.IsCoreActionCategory(categoryId); }
+   public GetActionByName(actionName: string): MJActionEntityExtended | undefined { return this.Base.GetActionByName(actionName); }
+
+   /**
+    * Fire-and-forget queue for action-execution-log writes. Action-execution logging is observability —
+    * the action's result is returned regardless of whether the log row persists — so both the INSERT
+    * ('started') and the UPDATE ('ended') run off the DB round-trip critical path. `result.LogEntry.ID`
+    * is valid immediately because `NewRecord()` client-generates the uniqueidentifier PK.
+    *
+    * The queue keys by the log entity instance, so {@link EndActionLog}'s 'ended' UPDATE chains after that
+    * row's 'started' INSERT and applies its mutation *inside* the post-INSERT task — the UPDATE can never
+    * race the INSERT's reload (the "stuck at EndedAt=NULL / shows Running forever" bug is structurally
+    * impossible). The queue is self-bounding (in-flight tasks only), so it needs no flush on this
+    * long-lived singleton.
+    */
+   private readonly _logQueue = new BaseEntitySaveQueue();
 
    /**
     * Engine-default wall-clock timeout applied to any action whose
@@ -270,12 +339,15 @@ export class ActionEngineServer extends ActionEngineBase {
          return result;
       }
       catch (e) {
-         // if we get here, something went wrong in the action code
-         LogError(`Error running action ${params.Action.Name}:`, e);
+         // if we get here, something went wrong in the action code.
+         // NOTE: LogError's 2nd positional arg is `logToFileName`, NOT the error —
+         // passing the error there silently swallows it. Use LogErrorEx so the
+         // real message + stack trace actually print to the console.
+         LogErrorEx({ message: `Error running action ${params.Action.Name}`, error: e instanceof Error ? e : new Error(String(e)) });
          const result: ActionResult = {
             RunParams: params,
             Success: false,
-            Message: `Error running action ${params.Action.Name}: ${e.message}`,
+            Message: `Error running action ${params.Action.Name}: ${e instanceof Error ? e.message : String(e)}`,
             LogEntry: logEntry,
             Params: params.Params,
             Result: undefined
@@ -426,40 +498,43 @@ export class ActionEngineServer extends ActionEngineBase {
       logEntity.UserID = this.ContextUser.ID;
       // we will save this again in the EndActionLog, this is the initial state, and the action could add/modify the params
       logEntity.Params = JSON.stringify(params.Params);
-      
+
       if (saveRecord){
-         // initial save so we persist that the action has started, unless the saveRecord parameter tells us not to save
-         const saveResult: boolean = await logEntity.Save();
-         if(!saveResult){
-            LogError(`Failed to record start of action ${params.Action.Name}:`, undefined, logEntity.LatestResult);
-         }
+         // Fire-and-forget the 'started' INSERT (unless the caller opts out) — the action runs
+         // immediately, off the DB round-trip critical path. The ID is already assigned by NewRecord(),
+         // so the returned LogEntry.ID is valid right away. EndActionLog's 'ended' UPDATE chains after
+         // this INSERT (same entity key), so it can never race it.
+         this._logQueue.Insert(logEntity);
       }
 
       return logEntity;
    }
-   protected async EndActionLog(logEntity: MJActionExecutionLogEntity, params: RunActionParams, result: ActionResult) {
-      // this is where the log entry for the action run will be created
-      logEntity.EndedAt = new Date();
-      // Persist the final merged param set (inputs + outputs) — Runtime actions
-      // return a fresh array from the sandbox executor that lives on
-      // `result.Params`, so logging `params.Params` would lose every new output
-      // key. Custom/Generated actions mutate `params.Params` in place, and
-      // `result.Params` falls back to that same reference, so they remain
-      // equivalent.
-      logEntity.Params = JSON.stringify(result.Params ?? params.Params);
-      logEntity.ResultCode = result.Result?.ResultCode;
-      logEntity.Message = result.Message;
-      
-      // save a second time to record the action ending
-      const saveResult: boolean = await logEntity.Save();
-      if(!saveResult){
-         LogError(`Failed to record end of action ${params.Action.Name}:`, undefined, logEntity.LatestResult);
-      }
+
+   protected async EndActionLog(logEntity: MJActionExecutionLogEntity, params: RunActionParams, result: ActionResult): Promise<void> {
+      // Capture the 'ended' state NOW (accurate EndedAt + final merged params); the queued UPDATE applies
+      // + persists it only AFTER the 'started' INSERT commits (see _logQueue). Caller awaits neither save.
+      const endedAt = new Date();
+      // Persist the final merged param set (inputs + outputs) — Runtime actions return a fresh array
+      // from the sandbox executor that lives on `result.Params`, so logging `params.Params` would lose
+      // every new output key. Custom/Generated actions mutate `params.Params` in place, and
+      // `result.Params` falls back to that same reference, so they remain equivalent.
+      const finalParams = JSON.stringify(result.Params ?? params.Params);
+      const resultCode = result.Result?.ResultCode;
+      const message = result.Message;
+      // Fire-and-forget — the action's caller never blocks on the 'ended' UPDATE. The mutation runs
+      // INSIDE the post-INSERT task (after the 'started' INSERT lands), so it can never be reverted by
+      // the INSERT's reload. The queue is self-bounding, so no flush is needed on this long-lived singleton.
+      this._logQueue.Update(logEntity, () => {
+         logEntity.EndedAt = endedAt;
+         logEntity.Params = finalParams;
+         logEntity.ResultCode = resultCode;
+         logEntity.Message = message;
+      });
    }
 
    protected async StartAndEndActionLog(params: RunActionParams, result: ActionResult): Promise<MJActionExecutionLogEntity> {
-      // don't do the initial save
-      const logEntity: MJActionExecutionLogEntity = await this.StartActionLog(params, false); 
+      // No separate INSERT — the single 'ended' UPDATE (force-persist on a never-inserted NewRecord) inserts.
+      const logEntity: MJActionExecutionLogEntity = await this.StartActionLog(params, false);
       await this.EndActionLog(logEntity, params, result);
       return logEntity;
    }

@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T16 - Lists Create and Populate",
+    "Description": "Navigates to the Lists application, creates a new list, adds a record to it, and verifies the list contains the record.",
+    "InputDefinition": {
+      "goal": "Navigate to the Lists application (if available in the app switcher). Create a new list named 'Regression Test List'. Add at least one record to it (such as a Member record). Verify the list shows the added record.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "Lists application is active",
+        "A new list was created",
+        "At least one record was added to the list"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression"
+  },
+  "primaryKey": {
+    "ID": "5BE50BF7-D0C4-4A02-A441-41C8ECF08CF6"
+  },
+  "sync": {
+    "lastModified": "2026-06-05T02:16:28.024Z",
+    "checksum": "7d5b49f12c44a8c9b6b404fddf27300990d92c74cae41a1811af74b34c79b530"
+  }
+}

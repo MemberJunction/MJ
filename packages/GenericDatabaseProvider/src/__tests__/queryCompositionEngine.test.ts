@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { QueryCompositionEngine, CompositionResult } from '../queryCompositionEngine';
-import { QueryInfo, Metadata, UserInfo, QueryDependencySpec } from '@memberjunction/core';
+import { UserInfo, QueryDependencySpec } from '@memberjunction/core';
+import { MJQueryEntityExtended, QueryEngine } from '@memberjunction/core-entities';
 
 // ---- Helpers for building mock QueryInfo objects ----
 
@@ -13,35 +14,42 @@ function makeQueryInfo(overrides: Partial<{
     Status: string;
     UserCanRun: boolean;
     UsesTemplate: boolean;
-}>): QueryInfo {
-    const q = new QueryInfo();
-    q.ID = overrides.ID ?? 'query-1';
-    q.Name = overrides.Name ?? 'Test Query';
-    q.SQL = overrides.SQL ?? 'SELECT 1';
-    q.Reusable = overrides.Reusable ?? true;
-    q.Status = (overrides.Status ?? 'Approved') as QueryInfo['Status'];
-    q.UsesTemplate = overrides.UsesTemplate ?? false;
+}>): MJQueryEntityExtended {
+    const categoryPath = overrides.CategoryPath ?? '/Test/';
+    // Strip leading/trailing slashes to match QueryEngine format
+    const normalizedPath = categoryPath.replace(/^\/|\/$/g, '');
 
-    // Mock CategoryPath (normally computed from category hierarchy)
+    const status = overrides.Status ?? 'Approved';
+    const canRun = overrides.UserCanRun ?? true;
+
+    const q: Record<string, unknown> = {
+        ID: overrides.ID ?? 'query-1',
+        Name: overrides.Name ?? 'Test Query',
+        SQL: overrides.SQL ?? 'SELECT 1',
+        Reusable: overrides.Reusable ?? true,
+        Status: status,
+        UsesTemplate: overrides.UsesTemplate ?? false,
+        UserCanRun: vi.fn().mockReturnValue({ canRun, deniedEntities: [] }),
+        GetPlatformSQL: vi.fn().mockReturnValue(overrides.SQL ?? 'SELECT 1'),
+    };
+
     Object.defineProperty(q, 'CategoryPath', {
-        get: () => overrides.CategoryPath ?? '/Test/',
-        configurable: true
+        get: () => normalizedPath,
+        configurable: true,
     });
 
-    // Mock UserCanRun
-    q.UserCanRun = vi.fn().mockReturnValue(overrides.UserCanRun ?? true);
+    Object.defineProperty(q, 'IsApproved', {
+        get: () => status === 'Approved',
+        configurable: true,
+    });
 
-    // Mock GetPlatformSQL to just return the SQL property
-    q.GetPlatformSQL = vi.fn().mockReturnValue(q.SQL);
-
-    return q;
+    return q as unknown as MJQueryEntityExtended;
 }
 
-function mockMetadataQueries(queries: QueryInfo[]): void {
-    vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue({
+function mockQueryEngineQueries(queries: MJQueryEntityExtended[]): void {
+    vi.spyOn(QueryEngine, 'Instance', 'get').mockReturnValue({
         Queries: queries,
-        QueryDependencies: []
-    } as ReturnType<typeof Metadata.Provider>);
+    } as unknown as QueryEngine);
 }
 
 // ---- Tests ----
@@ -282,7 +290,7 @@ SELECT 1 AS Val`;
                 SQL: 'SELECT ID, Name FROM Customers WHERE Active = 1'
             });
 
-            mockMetadataQueries([baseQuery]);
+            mockQueryEngineQueries([baseQuery]);
 
             const sql = 'SELECT * FROM {{query:"Sales/Active Customers"}} ac WHERE ac.Name LIKE \'%test%\'';
             const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
@@ -305,7 +313,7 @@ SELECT 1 AS Val`;
                 SQL: 'SELECT ID, Name FROM Customers WHERE Active = 1'
             });
 
-            mockMetadataQueries([baseQuery]);
+            mockQueryEngineQueries([baseQuery]);
 
             const sql = `
                 SELECT a.ID, b.Name
@@ -326,7 +334,7 @@ SELECT 1 AS Val`;
                 SQL: "SELECT * FROM Customers WHERE Region = {{region}}"
             });
 
-            mockMetadataQueries([baseQuery]);
+            mockQueryEngineQueries([baseQuery]);
 
             const sql = `
                 SELECT a.*, b.*
@@ -349,7 +357,7 @@ SELECT 1 AS Val`;
                 SQL: "SELECT * FROM Customers WHERE Region = {{region}}"
             });
 
-            mockMetadataQueries([baseQuery]);
+            mockQueryEngineQueries([baseQuery]);
 
             const sql = `SELECT * FROM {{query:"Sales/By Region(region='Northeast')"}} c`;
             const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
@@ -367,7 +375,7 @@ SELECT 1 AS Val`;
                 SQL: "SELECT * FROM Changes WHERE CreatedAt >= DATEADD(DAY, -{{lookbackDays}}, GETUTCDATE())"
             });
 
-            mockMetadataQueries([baseQuery]);
+            mockQueryEngineQueries([baseQuery]);
 
             const sql = `SELECT * FROM {{query:"Demos/Recent Changes(lookbackDays='30')"}} rc`;
             const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
@@ -385,7 +393,7 @@ SELECT 1 AS Val`;
                 SQL: "SELECT * FROM Scores WHERE Score > {{minScore}}"
             });
 
-            mockMetadataQueries([baseQuery]);
+            mockQueryEngineQueries([baseQuery]);
 
             const sql = `SELECT * FROM {{query:"Test/Threshold(minScore='95.5')"}} t`;
             const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
@@ -402,7 +410,7 @@ SELECT 1 AS Val`;
                 SQL: "SELECT * FROM Users WHERE Name = {{name}}"
             });
 
-            mockMetadataQueries([baseQuery]);
+            mockQueryEngineQueries([baseQuery]);
 
             const sql = `SELECT * FROM {{query:"Test/By Name(name='O''Brien')"}} u`;
             const tokens = engine.ParseCompositionTokens(sql);
@@ -419,7 +427,7 @@ SELECT 1 AS Val`;
                 SQL: "SELECT * FROM Customers WHERE Region = {{region}}"
             });
 
-            mockMetadataQueries([baseQuery]);
+            mockQueryEngineQueries([baseQuery]);
 
             const sql = 'SELECT * FROM {{query:"Sales/By Region(region=userRegion)"}} c';
             const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
@@ -430,7 +438,7 @@ SELECT 1 AS Val`;
         });
 
         it('should throw on non-existent query reference', () => {
-            mockMetadataQueries([]);
+            mockQueryEngineQueries([]);
 
             const sql = 'SELECT * FROM {{query:"NonExistent/Query"}} q';
             expect(() => engine.ResolveComposition(sql, 'sqlserver', mockUser))
@@ -445,7 +453,7 @@ SELECT 1 AS Val`;
                 Reusable: false
             });
 
-            mockMetadataQueries([nonReusable]);
+            mockQueryEngineQueries([nonReusable]);
 
             const sql = 'SELECT * FROM {{query:"Sales/Private Query"}} q';
             expect(() => engine.ResolveComposition(sql, 'sqlserver', mockUser))
@@ -461,7 +469,7 @@ SELECT 1 AS Val`;
                 Status: 'Pending'
             });
 
-            mockMetadataQueries([pending]);
+            mockQueryEngineQueries([pending]);
 
             const sql = 'SELECT * FROM {{query:"Sales/Pending Query"}} q';
             expect(() => engine.ResolveComposition(sql, 'sqlserver', mockUser))
@@ -477,7 +485,7 @@ SELECT 1 AS Val`;
                 UserCanRun: false
             });
 
-            mockMetadataQueries([restricted]);
+            mockQueryEngineQueries([restricted]);
 
             const sql = 'SELECT * FROM {{query:"Sales/Restricted Query"}} q';
             expect(() => engine.ResolveComposition(sql, 'sqlserver', mockUser))
@@ -500,7 +508,7 @@ SELECT 1 AS Val`;
                 SQL: 'SELECT * FROM {{query:"Test/Query A"}} a'
             });
 
-            mockMetadataQueries([queryA, queryB]);
+            mockQueryEngineQueries([queryA, queryB]);
 
             const sql = 'SELECT * FROM {{query:"Test/Query A"}} a';
             expect(() => engine.ResolveComposition(sql, 'sqlserver', mockUser))
@@ -515,7 +523,7 @@ SELECT 1 AS Val`;
                 SQL: 'SELECT * FROM {{query:"Test/Self Ref"}} s'
             });
 
-            mockMetadataQueries([selfRef]);
+            mockQueryEngineQueries([selfRef]);
 
             const sql = 'SELECT * FROM {{query:"Test/Self Ref"}} s';
             expect(() => engine.ResolveComposition(sql, 'sqlserver', mockUser))
@@ -537,7 +545,7 @@ SELECT 1 AS Val`;
                 SQL: 'SELECT * FROM {{query:"Test/Leaf Query"}} lq'
             });
 
-            mockMetadataQueries([leaf, middle]);
+            mockQueryEngineQueries([leaf, middle]);
 
             const sql = 'SELECT * FROM {{query:"Test/Middle Query"}} mq';
             const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
@@ -562,7 +570,7 @@ SELECT 1 AS Val`;
                 SQL: 'SELECT * FROM {{query:"Deep/Level 2"}} l2'
             });
 
-            mockMetadataQueries([level3, level2, level1]);
+            mockQueryEngineQueries([level3, level2, level1]);
 
             const sql = 'SELECT * FROM {{query:"Deep/Level 1"}} l1';
             const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
@@ -581,7 +589,7 @@ SELECT 1 AS Val`;
                 SQL: 'SELECT ID FROM Items'
             });
 
-            mockMetadataQueries([baseQuery]);
+            mockQueryEngineQueries([baseQuery]);
 
             const sql = 'WITH existing AS (SELECT 1) SELECT * FROM existing e JOIN {{query:"Test/Base"}} b ON e.ID = b.ID';
             const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
@@ -615,7 +623,7 @@ SELECT 1 AS Val`;
                 SQL: 'SELECT 2'
             });
 
-            mockMetadataQueries([query1, query2]);
+            mockQueryEngineQueries([query1, query2]);
 
             // Reference by name only (no category path) — ambiguous
             const sql = 'SELECT * FROM {{query:"Users"}} u';
@@ -637,7 +645,7 @@ SELECT 1 AS Val`;
                 SQL: 'SELECT ID FROM AdminUsers'
             });
 
-            mockMetadataQueries([salesUsers, adminUsers]);
+            mockQueryEngineQueries([salesUsers, adminUsers]);
 
             // Full category path resolves ambiguity
             const sql = 'SELECT * FROM {{query:"Sales/Users"}} u';
@@ -656,7 +664,7 @@ SELECT 1 AS Val`;
                 SQL: 'SELECT 1'
             });
 
-            mockMetadataQueries([leaf]);
+            mockQueryEngineQueries([leaf]);
 
             const sql = 'SELECT * FROM {{query:"Test/Leaf"}} l';
             const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
@@ -674,7 +682,7 @@ SELECT 1 AS Val`;
                 SQL: 'SELECT 42'
             });
 
-            mockMetadataQueries([unique]);
+            mockQueryEngineQueries([unique]);
 
             // No category path, just name — unambiguous because only one match
             const sql = 'SELECT * FROM {{query:"Unique Query"}} uq';
@@ -693,7 +701,7 @@ SELECT 1 AS Val`;
                 Status: 'Rejected'
             });
 
-            mockMetadataQueries([rejected]);
+            mockQueryEngineQueries([rejected]);
 
             const sql = 'SELECT * FROM {{query:"Test/Rejected"}} r';
             expect(() => engine.ResolveComposition(sql, 'sqlserver', mockUser))
@@ -709,7 +717,7 @@ SELECT 1 AS Val`;
                 Status: 'Expired'
             });
 
-            mockMetadataQueries([expired]);
+            mockQueryEngineQueries([expired]);
 
             const sql = 'SELECT * FROM {{query:"Test/Expired"}} e';
             expect(() => engine.ResolveComposition(sql, 'sqlserver', mockUser))
@@ -729,7 +737,7 @@ SELECT 1 AS Val`;
                 SQL: 'SELECT 1'
             });
 
-            mockMetadataQueries([baseQuery]);
+            mockQueryEngineQueries([baseQuery]);
 
             const sql1 = 'SELECT * FROM {{query:"Test/Deterministic"}} d';
             const result1 = engine.ResolveComposition(sql1, 'sqlserver', mockUser);
@@ -749,7 +757,7 @@ SELECT 1 AS Val`;
                 SQL: 'SELECT * FROM T WHERE x = {{x}}'
             });
 
-            mockMetadataQueries([baseQuery]);
+            mockQueryEngineQueries([baseQuery]);
 
             const sql = `
                 SELECT a.*, b.*
@@ -769,7 +777,7 @@ SELECT 1 AS Val`;
                 SQL: 'SELECT 1'
             });
 
-            mockMetadataQueries([baseQuery]);
+            mockQueryEngineQueries([baseQuery]);
 
             const sql = 'SELECT * FROM {{query:"Test/Platform Test"}} p';
             const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
@@ -785,7 +793,7 @@ SELECT 1 AS Val`;
                 SQL: 'SELECT 1'
             });
 
-            mockMetadataQueries([baseQuery]);
+            mockQueryEngineQueries([baseQuery]);
 
             const sql = 'SELECT * FROM {{query:"Test/PG Test"}} p';
             const result = engine.ResolveComposition(sql, 'postgresql', mockUser);
@@ -806,7 +814,7 @@ SELECT 1 AS Val`;
                 SQL: 'WITH InnerCTE AS (SELECT ID, Name FROM Users WHERE Active = 1) SELECT * FROM InnerCTE WHERE Name IS NOT NULL'
             });
 
-            mockMetadataQueries([depQuery]);
+            mockQueryEngineQueries([depQuery]);
 
             const sql = 'SELECT * FROM {{query:"Test/With Inner CTE"}} t';
             const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
@@ -828,7 +836,7 @@ SELECT 1 AS Val`;
                 SQL: 'WITH A AS (SELECT 1 AS x), B AS (SELECT 2 AS y) SELECT A.x, B.y FROM A, B'
             });
 
-            mockMetadataQueries([depQuery]);
+            mockQueryEngineQueries([depQuery]);
 
             const sql = 'SELECT * FROM {{query:"Test/Multi Inner"}} t';
             const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
@@ -848,7 +856,7 @@ SELECT 1 AS Val`;
                 SQL: "WITH Agg AS (SELECT MemberID, COUNT(DISTINCT ChapterID) AS ChaptersJoined FROM (SELECT * FROM Memberships WHERE Status = 'Active') sub GROUP BY MemberID) SELECT * FROM Agg"
             });
 
-            mockMetadataQueries([depQuery]);
+            mockQueryEngineQueries([depQuery]);
 
             const sql = 'SELECT * FROM {{query:"Test/Nested Parens"}} t';
             const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
@@ -867,7 +875,7 @@ SELECT 1 AS Val`;
                 SQL: 'WITH DepCTE AS (SELECT ID FROM Users) SELECT * FROM DepCTE'
             });
 
-            mockMetadataQueries([depQuery]);
+            mockQueryEngineQueries([depQuery]);
 
             const sql = 'WITH MainCTE AS (SELECT 1 AS z) SELECT m.*, d.* FROM MainCTE m, {{query:"Test/Dep With CTE"}} d';
             const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
@@ -887,7 +895,7 @@ SELECT 1 AS Val`;
                 SQL: "WITH Filtered AS (SELECT * FROM T WHERE Name = 'Test (Dept)') SELECT * FROM Filtered"
             });
 
-            mockMetadataQueries([depQuery]);
+            mockQueryEngineQueries([depQuery]);
 
             const sql = 'SELECT * FROM {{query:"Test/String Parens"}} t';
             const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
@@ -909,7 +917,7 @@ SELECT 1 AS Val`;
                 SQL: 'SELECT ID, Name FROM Users WHERE Active = 1 ORDER BY Name ASC'
             });
 
-            mockMetadataQueries([baseQuery]);
+            mockQueryEngineQueries([baseQuery]);
 
             const sql = 'SELECT * FROM {{query:"Test/Ordered"}} o';
             const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
@@ -929,7 +937,7 @@ SELECT 1 AS Val`;
                 SQL: 'SELECT TOP 10 ID, Name FROM Users ORDER BY Name ASC'
             });
 
-            mockMetadataQueries([baseQuery]);
+            mockQueryEngineQueries([baseQuery]);
 
             const sql = 'SELECT * FROM {{query:"Test/Top Query"}} t';
             const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
@@ -945,7 +953,7 @@ SELECT 1 AS Val`;
                 SQL: 'SELECT ID FROM Users ORDER BY ID OFFSET 10 ROWS FETCH NEXT 20 ROWS ONLY'
             });
 
-            mockMetadataQueries([baseQuery]);
+            mockQueryEngineQueries([baseQuery]);
 
             const sql = 'SELECT * FROM {{query:"Test/Offset Query"}} o';
             const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
@@ -961,7 +969,7 @@ SELECT 1 AS Val`;
                 SQL: 'SELECT ID, Name FROM Users ORDER BY Name FOR XML PATH'
             });
 
-            mockMetadataQueries([baseQuery]);
+            mockQueryEngineQueries([baseQuery]);
 
             const sql = 'SELECT * FROM {{query:"Test/XML Query"}} x';
             const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
@@ -977,7 +985,7 @@ SELECT 1 AS Val`;
                 SQL: 'SELECT * FROM (SELECT TOP 5 ID FROM Users ORDER BY ID) sub'
             });
 
-            mockMetadataQueries([baseQuery]);
+            mockQueryEngineQueries([baseQuery]);
 
             const sql = 'SELECT * FROM {{query:"Test/Subquery"}} s';
             const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
@@ -993,7 +1001,7 @@ SELECT 1 AS Val`;
     describe('Max Depth', () => {
         it('should throw when composition depth exceeds maximum', () => {
             // Create a chain of 12 queries, each referencing the next
-            const queries: QueryInfo[] = [];
+            const queries: MJQueryEntityExtended[] = [];
             for (let i = 0; i < 12; i++) {
                 const nextRef = i < 11
                     ? `SELECT * FROM {{query:"Test/Q${i + 1}"}} q`
@@ -1006,7 +1014,7 @@ SELECT 1 AS Val`;
                 }));
             }
 
-            mockMetadataQueries(queries);
+            mockQueryEngineQueries(queries);
 
             const sql = 'SELECT * FROM {{query:"Test/Q0"}} q';
             expect(() => engine.ResolveComposition(sql, 'sqlserver', mockUser))
@@ -1035,7 +1043,7 @@ SELECT 1 AS Val`;
                 CategoryPath: '/Test/',
                 SQL: 'SELECT 1'
             });
-            mockMetadataQueries([realQuery]);
+            mockQueryEngineQueries([realQuery]);
 
             const tokens = engine.ParseCompositionTokens(sql);
             expect(tokens).toHaveLength(1);
@@ -1048,7 +1056,7 @@ SELECT 1 AS Val`;
             const q = makeQueryInfo({
                 ID: 'q-1', Name: 'Q', CategoryPath: '/Test/', SQL: 'SELECT 1'
             });
-            mockMetadataQueries([q]);
+            mockQueryEngineQueries([q]);
 
             const tokens = engine.ParseCompositionTokens(sql);
             expect(tokens).toHaveLength(1);
@@ -1078,7 +1086,7 @@ SELECT * FROM {{query:"Test/C"}} c`;
                 UsesTemplate: false,
             });
 
-            mockMetadataQueries([baseQuery]);
+            mockQueryEngineQueries([baseQuery]);
 
             const sql = 'SELECT * FROM {{query:"Test/Plain Query"}} q';
             const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
@@ -1095,7 +1103,7 @@ SELECT * FROM {{query:"Test/C"}} c`;
                 UsesTemplate: true,
             });
 
-            mockMetadataQueries([templateQuery]);
+            mockQueryEngineQueries([templateQuery]);
 
             const sql = 'SELECT * FROM {{query:"Test/Template Query"}} q';
             const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
@@ -1121,7 +1129,7 @@ SELECT * FROM {{query:"Test/C"}} c`;
                 UsesTemplate: false,
             });
 
-            mockMetadataQueries([leaf, middle]);
+            mockQueryEngineQueries([leaf, middle]);
 
             const sql = 'SELECT * FROM {{query:"Test/Middle No Template"}} mq';
             const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
@@ -1148,7 +1156,7 @@ SELECT * FROM {{query:"Test/C"}} c`;
                 SQL: 'SELECT 2', UsesTemplate: false,
             });
 
-            mockMetadataQueries([dep1, dep2]);
+            mockQueryEngineQueries([dep1, dep2]);
 
             const sql = 'SELECT * FROM {{query:"Test/Dep1"}} a JOIN {{query:"Test/Dep2"}} b ON 1=1';
             const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
@@ -1170,7 +1178,7 @@ SELECT * FROM {{query:"Test/C"}} c`;
                 SQL: 'SELECT ID, Name FROM Users ORDER BY Name ASC',
             });
 
-            mockMetadataQueries([depQuery]);
+            mockQueryEngineQueries([depQuery]);
 
             const sql = 'SELECT * FROM {{query:"Test/Ordered Query"}} oq';
             const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
@@ -1188,7 +1196,7 @@ SELECT * FROM {{query:"Test/C"}} c`;
                 SQL: 'SELECT * FROM Sales ORDER BY Region ASC, Amount DESC, Date',
             });
 
-            mockMetadataQueries([depQuery]);
+            mockQueryEngineQueries([depQuery]);
 
             const sql = 'SELECT * FROM {{query:"Test/Multi Order"}} mo';
             const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
@@ -1206,7 +1214,7 @@ SELECT * FROM {{query:"Test/C"}} c`;
                 SQL: 'SELECT TOP 5 ID, Name FROM Users ORDER BY Score DESC',
             });
 
-            mockMetadataQueries([depQuery]);
+            mockQueryEngineQueries([depQuery]);
 
             const sql = 'SELECT * FROM {{query:"Test/Top Query"}} tq';
             const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
@@ -1223,7 +1231,7 @@ SELECT * FROM {{query:"Test/C"}} c`;
                 SQL: 'SELECT ID FROM Users ORDER BY ID OFFSET 10 ROWS FETCH NEXT 5 ROWS ONLY',
             });
 
-            mockMetadataQueries([depQuery]);
+            mockQueryEngineQueries([depQuery]);
 
             const sql = 'SELECT * FROM {{query:"Test/Offset Query"}} oq';
             const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
@@ -1240,7 +1248,7 @@ SELECT * FROM {{query:"Test/C"}} c`;
                 SQL: "SELECT ID, Name FROM Users ORDER BY Name FOR XML PATH('User')",
             });
 
-            mockMetadataQueries([depQuery]);
+            mockQueryEngineQueries([depQuery]);
 
             const sql = 'SELECT * FROM {{query:"Test/XML Query"}} xq';
             const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
@@ -1257,7 +1265,7 @@ SELECT * FROM {{query:"Test/C"}} c`;
                 SQL: 'SELECT * FROM (SELECT TOP 10 ID FROM Users ORDER BY Score DESC) sub',
             });
 
-            mockMetadataQueries([depQuery]);
+            mockQueryEngineQueries([depQuery]);
 
             const sql = 'SELECT * FROM {{query:"Test/Subquery Order"}} so';
             const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
@@ -1279,7 +1287,7 @@ ORDER BY m.Name`,
                 UsesTemplate: true,
             });
 
-            mockMetadataQueries([depQuery]);
+            mockQueryEngineQueries([depQuery]);
 
             const sql = 'SELECT * FROM {{query:"Test/Nunjucks Ordered"}} no';
             const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
@@ -1299,7 +1307,7 @@ ORDER BY m.Name`,
                 SQL: 'SELECT ID, ROW_NUMBER() OVER (ORDER BY Score DESC) AS RowNum FROM Users ORDER BY Name',
             });
 
-            mockMetadataQueries([depQuery]);
+            mockQueryEngineQueries([depQuery]);
 
             const sql = 'SELECT * FROM {{query:"Test/Window Query"}} wq';
             const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
@@ -1318,7 +1326,7 @@ ORDER BY m.Name`,
                 SQL: 'SELECT ID, Name FROM Users ORDER BY Name ASC',
             });
 
-            mockMetadataQueries([depQuery]);
+            mockQueryEngineQueries([depQuery]);
 
             const sql = 'SELECT * FROM {{query:"Test/PG Query"}} pq';
             const result = engine.ResolveComposition(sql, 'postgresql', mockUser);
@@ -1341,7 +1349,7 @@ ORDER BY m.Name`,
                 UsesTemplate: true,
             });
 
-            mockMetadataQueries([depQuery]);
+            mockQueryEngineQueries([depQuery]);
 
             // Outer query has a comment containing {{query:"..."}} documentation
             const sql = `-- This query uses {{query:"..."}} composition syntax
@@ -1365,7 +1373,7 @@ SELECT * FROM {{query:"Test/Template Dep(days='7')"}} td`;
                 UsesTemplate: true,
             });
 
-            mockMetadataQueries([depQuery]);
+            mockQueryEngineQueries([depQuery]);
 
             const sql = `/* References: {{query:"..."}} */
 SELECT * FROM {{query:"Test/Block Comment Dep"}} bcd`;
@@ -1384,7 +1392,7 @@ SELECT * FROM {{query:"Test/Block Comment Dep"}} bcd`;
                 UsesTemplate: false,
             });
 
-            mockMetadataQueries([depQuery]);
+            mockQueryEngineQueries([depQuery]);
 
             const sql = `-- Contains {{query:"..."}} in comment
 SELECT * FROM {{query:"Test/No Template Dep"}} ntd`;
@@ -1405,7 +1413,7 @@ SELECT ID FROM Events WHERE CreatedAt > DATEADD(DAY, -{{lookbackDays}}, GETUTCDA
                 UsesTemplate: true,
             });
 
-            mockMetadataQueries([depQuery]);
+            mockQueryEngineQueries([depQuery]);
 
             const sql = `SELECT * FROM {{query:"Test/Commented Dep(lookbackDays='30')"}} cd`;
             const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
@@ -1423,7 +1431,7 @@ SELECT ID FROM Events WHERE CreatedAt > DATEADD(DAY, -{{lookbackDays}}, GETUTCDA
     describe('Inline Dependency Resolution', () => {
         it('should resolve an inline dependency instead of looking up metadata', () => {
             // No metadata queries registered — should not throw "Referenced query not found"
-            mockMetadataQueries([]);
+            mockQueryEngineQueries([]);
 
             const inlineDeps: QueryDependencySpec[] = [
                 {
@@ -1445,7 +1453,7 @@ SELECT ID FROM Events WHERE CreatedAt > DATEADD(DAY, -{{lookbackDays}}, GETUTCDA
 
         it('should skip governance validation for inline dependencies', () => {
             // Inline dep with Reusable=false and Status=Pending — should NOT throw
-            mockMetadataQueries([]);
+            mockQueryEngineQueries([]);
 
             const inlineDeps: QueryDependencySpec[] = [
                 {
@@ -1471,7 +1479,7 @@ SELECT ID FROM Events WHERE CreatedAt > DATEADD(DAY, -{{lookbackDays}}, GETUTCDA
                 CategoryPath: '/Test/',
                 SQL: 'SELECT ID FROM MetadataTable',
             });
-            mockMetadataQueries([metadataQuery]);
+            mockQueryEngineQueries([metadataQuery]);
 
             const inlineDeps: QueryDependencySpec[] = [
                 {
@@ -1490,7 +1498,7 @@ SELECT ID FROM Events WHERE CreatedAt > DATEADD(DAY, -{{lookbackDays}}, GETUTCDA
         });
 
         it('should match inline deps by name only when no category segments in token', () => {
-            mockMetadataQueries([]);
+            mockQueryEngineQueries([]);
 
             const inlineDeps: QueryDependencySpec[] = [
                 {
@@ -1509,7 +1517,7 @@ SELECT ID FROM Events WHERE CreatedAt > DATEADD(DAY, -{{lookbackDays}}, GETUTCDA
         });
 
         it('should match inline deps case-insensitively', () => {
-            mockMetadataQueries([]);
+            mockQueryEngineQueries([]);
 
             const inlineDeps: QueryDependencySpec[] = [
                 {
@@ -1527,7 +1535,7 @@ SELECT ID FROM Events WHERE CreatedAt > DATEADD(DAY, -{{lookbackDays}}, GETUTCDA
         });
 
         it('should resolve nested inline dependencies recursively', () => {
-            mockMetadataQueries([]);
+            mockQueryEngineQueries([]);
 
             const inlineDeps: QueryDependencySpec[] = [
                 {
@@ -1554,7 +1562,7 @@ SELECT ID FROM Events WHERE CreatedAt > DATEADD(DAY, -{{lookbackDays}}, GETUTCDA
         });
 
         it('should detect cycles in inline dependencies', () => {
-            mockMetadataQueries([]);
+            mockQueryEngineQueries([]);
 
             // Outer references Inner, Inner references Outer — cycle
             const inlineDeps: QueryDependencySpec[] = [
@@ -1585,7 +1593,7 @@ SELECT ID FROM Events WHERE CreatedAt > DATEADD(DAY, -{{lookbackDays}}, GETUTCDA
         });
 
         it('should propagate UsesTemplate flag from inline dependencies', () => {
-            mockMetadataQueries([]);
+            mockQueryEngineQueries([]);
 
             const inlineDeps: QueryDependencySpec[] = [
                 {
@@ -1610,7 +1618,7 @@ SELECT ID FROM Events WHERE CreatedAt > DATEADD(DAY, -{{lookbackDays}}, GETUTCDA
                 CategoryPath: '/Sales/',
                 SQL: 'SELECT ID FROM SalesData',
             });
-            mockMetadataQueries([metadataQuery]);
+            mockQueryEngineQueries([metadataQuery]);
 
             const inlineDeps: QueryDependencySpec[] = [
                 {
@@ -1638,7 +1646,7 @@ SELECT ID FROM Events WHERE CreatedAt > DATEADD(DAY, -{{lookbackDays}}, GETUTCDA
         });
 
         it('should generate deterministic synthetic IDs for inline deps', () => {
-            mockMetadataQueries([]);
+            mockQueryEngineQueries([]);
 
             const inlineDeps: QueryDependencySpec[] = [
                 {
@@ -1659,7 +1667,7 @@ SELECT ID FROM Events WHERE CreatedAt > DATEADD(DAY, -{{lookbackDays}}, GETUTCDA
         });
 
         it('should deduplicate same inline dependency referenced twice', () => {
-            mockMetadataQueries([]);
+            mockQueryEngineQueries([]);
 
             const inlineDeps: QueryDependencySpec[] = [
                 {
@@ -1681,7 +1689,7 @@ SELECT ID FROM Events WHERE CreatedAt > DATEADD(DAY, -{{lookbackDays}}, GETUTCDA
         });
 
         it('should resolve inline dependency with static parameters', () => {
-            mockMetadataQueries([]);
+            mockQueryEngineQueries([]);
 
             const inlineDeps: QueryDependencySpec[] = [
                 {
@@ -1706,7 +1714,7 @@ SELECT ID FROM Events WHERE CreatedAt > DATEADD(DAY, -{{lookbackDays}}, GETUTCDA
                 CategoryPath: '/T/',
                 SQL: 'SELECT 1',
             });
-            mockMetadataQueries([metadataQuery]);
+            mockQueryEngineQueries([metadataQuery]);
 
             // Empty array — should fall back to metadata
             const sql = 'SELECT * FROM {{query:"T/Q"}} q';
@@ -1717,7 +1725,7 @@ SELECT ID FROM Events WHERE CreatedAt > DATEADD(DAY, -{{lookbackDays}}, GETUTCDA
         });
 
         it('should resolve inline deps for PostgreSQL platform', () => {
-            mockMetadataQueries([]);
+            mockQueryEngineQueries([]);
 
             const inlineDeps: QueryDependencySpec[] = [
                 {
@@ -1867,7 +1875,7 @@ ORDER BY JoinYear, JoinMonth`;
                 SQL: MEMBER_ACTIVITY_COUNTS_SQL,
                 UsesTemplate: true,
             });
-            mockMetadataQueries([dep]);
+            mockQueryEngineQueries([dep]);
 
             const mainSQL = 'SELECT mac.MemberID, mac.FirstName, mac.TotalActivityCount FROM {{query:"Engagement Analytics/Member Activity Counts"}} mac WHERE mac.TotalActivityCount > 5';
             const result = engine.ResolveComposition(mainSQL, 'sqlserver', mockUser);
@@ -1889,7 +1897,7 @@ ORDER BY JoinYear, JoinMonth`;
                 SQL: MEMBER_ACTIVITY_COUNTS_SQL,
                 UsesTemplate: true,
             });
-            mockMetadataQueries([dep]);
+            mockQueryEngineQueries([dep]);
 
             const mainSQL = `WITH PrimaryChapters AS (
     SELECT cm.MemberID, cm.ChapterID, cm.Chapter AS ChapterName,
@@ -1922,7 +1930,7 @@ LEFT JOIN PrimaryChapters pc ON mac.MemberID = pc.MemberID AND pc.rn = 1`;
                 SQL: CHAPTER_ENGAGEMENT_SUMMARY_SQL,
                 UsesTemplate: true,
             });
-            mockMetadataQueries([dep]);
+            mockQueryEngineQueries([dep]);
 
             const mainSQL = 'SELECT ch.ChapterName, ch.ActiveMemberCount, ch.UniqueEventsAttended FROM {{query:"Engagement Analytics/Chapter Engagement Summary"}} ch WHERE ch.ActiveMemberCount > 10';
             const result = engine.ResolveComposition(mainSQL, 'sqlserver', mockUser);
@@ -1951,7 +1959,7 @@ LEFT JOIN PrimaryChapters pc ON mac.MemberID = pc.MemberID AND pc.rn = 1`;
                 SQL: MEMBER_LIFETIME_REVENUE_SQL,
                 UsesTemplate: true,
             });
-            mockMetadataQueries([dep1, dep2]);
+            mockQueryEngineQueries([dep1, dep2]);
 
             const mainSQL = 'SELECT mac.MemberID, mac.TotalActivityCount, rev.TotalRevenue FROM {{query:"Engagement Analytics/Member Activity Counts"}} mac JOIN {{query:"Revenue/Member Lifetime Revenue"}} rev ON mac.MemberID = rev.MemberID';
             const result = engine.ResolveComposition(mainSQL, 'sqlserver', mockUser);
@@ -1975,7 +1983,7 @@ LEFT JOIN PrimaryChapters pc ON mac.MemberID = pc.MemberID AND pc.rn = 1`;
                 SQL: BOARD_OF_DIRECTORS_SQL,
                 UsesTemplate: false,
             });
-            mockMetadataQueries([dep]);
+            mockQueryEngineQueries([dep]);
 
             const mainSQL = 'SELECT bd.FirstName, bd.LastName, bd.Board_Position FROM {{query:"MSTA/Board of Directors"}} bd';
             const result = engine.ResolveComposition(mainSQL, 'sqlserver', mockUser);
@@ -1997,7 +2005,7 @@ LEFT JOIN PrimaryChapters pc ON mac.MemberID = pc.MemberID AND pc.rn = 1`;
                 SQL: ACTIVE_MEMBERS_BY_TYPE_SQL,
                 UsesTemplate: false,
             });
-            mockMetadataQueries([dep]);
+            mockQueryEngineQueries([dep]);
 
             const mainSQL = 'SELECT am.MembershipType, am.ActiveMemberCount FROM {{query:"Reports/Active Members By Membership Type"}} am WHERE am.ActiveMemberCount > 100';
             const result = engine.ResolveComposition(mainSQL, 'sqlserver', mockUser);
@@ -2018,7 +2026,7 @@ LEFT JOIN PrimaryChapters pc ON mac.MemberID = pc.MemberID AND pc.rn = 1`;
                 SQL: EVENT_REVENUE_SUMMARY_SQL,
                 UsesTemplate: false,
             });
-            mockMetadataQueries([dep]);
+            mockQueryEngineQueries([dep]);
 
             const mainSQL = 'SELECT ev.EventName, ev.TotalRevenue FROM {{query:"Revenue/Event Revenue Summary"}} ev ORDER BY ev.TotalRevenue DESC';
             const result = engine.ResolveComposition(mainSQL, 'sqlserver', mockUser);
@@ -2039,7 +2047,7 @@ LEFT JOIN PrimaryChapters pc ON mac.MemberID = pc.MemberID AND pc.rn = 1`;
                 SQL: MEMBER_ACTIVITY_COUNTS_SQL,
                 UsesTemplate: true,
             });
-            mockMetadataQueries([dep]);
+            mockQueryEngineQueries([dep]);
 
             const mainSQL = `SELECT mac.MemberID, mac.TotalActivityCount FROM {{query:"Engagement Analytics/Member Activity Counts(MinActivityCount='5', MembershipType=MembershipType)"}} mac`;
             const result = engine.ResolveComposition(mainSQL, 'sqlserver', mockUser);
@@ -2063,7 +2071,7 @@ LEFT JOIN PrimaryChapters pc ON mac.MemberID = pc.MemberID AND pc.rn = 1`;
                 SQL: MEMBER_ACTIVITY_COUNTS_SQL,
                 UsesTemplate: true,
             });
-            mockMetadataQueries([dep]);
+            mockQueryEngineQueries([dep]);
 
             const mainSQL = `SELECT
     CASE WHEN mac.TotalActivityCount >= 10 THEN 'Highly Active'
@@ -2109,7 +2117,7 @@ GROUP BY CASE WHEN mac.TotalActivityCount >= 10 THEN 'Highly Active'
                 SQL: MEMBERSHIP_GROWTH_SQL,
                 UsesTemplate: true,
             });
-            mockMetadataQueries([dep1, dep2, dep3]);
+            mockQueryEngineQueries([dep1, dep2, dep3]);
 
             const mainSQL = `SELECT am.MembershipType, am.ActiveMemberCount, rev.Revenue AS MonthlyRevenue, growth.NewMembers
 FROM {{query:"Reports/Active Members By Membership Type"}} am
@@ -2133,7 +2141,7 @@ LEFT JOIN {{query:"Reports/Membership Growth By Period"}} growth ON 1=1`;
                 SQL: BOARD_OF_DIRECTORS_SQL,
                 UsesTemplate: false,
             });
-            mockMetadataQueries([dep]);
+            mockQueryEngineQueries([dep]);
 
             const mainSQL = `WITH RegionCounts AS (
     SELECT bd.School_District, COUNT(*) AS BoardMemberCount
@@ -2170,7 +2178,7 @@ SELECT * FROM RegionCounts WHERE BoardMemberCount > 1`;
                 SQL: CHAPTER_ENGAGEMENT_SUMMARY_SQL,
                 UsesTemplate: true,
             });
-            mockMetadataQueries([dep1, dep2]);
+            mockQueryEngineQueries([dep1, dep2]);
 
             const mainSQL = `WITH CrossReference AS (
     SELECT mac.MemberID, mac.TotalActivityCount, ch.ChapterName
@@ -2208,7 +2216,7 @@ SELECT * FROM CrossReference`;
                 SQL: MEMBER_ACTIVITY_COUNTS_SQL,
                 UsesTemplate: true,
             });
-            mockMetadataQueries([dep1, dep2]);
+            mockQueryEngineQueries([dep1, dep2]);
 
             const mainSQL = `SELECT ev.EventName, ev.TotalRevenue, ev.TotalRegistrations,
     AVG(mac.EventsAttended) AS AvgMemberEvents
@@ -2237,7 +2245,7 @@ GROUP BY ev.EventName, ev.TotalRevenue, ev.TotalRegistrations`;
                 SQL: MEMBER_ACTIVITY_COUNTS_SQL,
                 UsesTemplate: true,
             });
-            mockMetadataQueries([dep]);
+            mockQueryEngineQueries([dep]);
 
             const mainSQL = `SELECT high.MemberID AS HighEngagement, low.MemberID AS LowEngagement
 FROM {{query:"Engagement Analytics/Member Activity Counts"}} high
@@ -2268,7 +2276,7 @@ JOIN {{query:"Engagement Analytics/Member Activity Counts"}} low ON 1=1`;
                 SQL: ACTIVE_MEMBERS_BY_TYPE_SQL,
                 UsesTemplate: false,
             });
-            mockMetadataQueries([dep1, dep2]);
+            mockQueryEngineQueries([dep1, dep2]);
 
             const mainSQL = `SELECT mac.MemberID, mac.TotalActivityCount, am.ActiveMemberCount
 FROM {{query:"Engagement Analytics/Member Activity Counts(MinActivityCount='3')"}} mac
@@ -2298,7 +2306,7 @@ JOIN {{query:"Reports/Active Members By Membership Type"}} am ON 1=1`;
                 SQL: "SELECT * FROM Changes WHERE CreatedAt >= DATEADD(DAY, -{{ lookbackDays | sqlNumber }}, GETUTCDATE())",
             });
 
-            mockMetadataQueries([depQuery]);
+            mockQueryEngineQueries([depQuery]);
 
             const sql = 'SELECT * FROM {{query:"Demos/Recent Changes(lookbackDays=numDays)"}} rc';
             const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
@@ -2317,7 +2325,7 @@ JOIN {{query:"Reports/Active Members By Membership Type"}} am ON 1=1`;
                 SQL: "SELECT * FROM Customers WHERE Region = {{ region | sqlString }}",
             });
 
-            mockMetadataQueries([depQuery]);
+            mockQueryEngineQueries([depQuery]);
 
             const sql = 'SELECT * FROM {{query:"Sales/By Region(region=userRegion)"}} c';
             const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
@@ -2336,7 +2344,7 @@ JOIN {{query:"Reports/Active Members By Membership Type"}} am ON 1=1`;
                 SQL: "SELECT TOP {{ limit | default(25) | sqlNumber }} * FROM Items",
             });
 
-            mockMetadataQueries([depQuery]);
+            mockQueryEngineQueries([depQuery]);
 
             const sql = 'SELECT * FROM {{query:"Test/Limited Results(limit=maxRows)"}} lr';
             const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
@@ -2356,7 +2364,7 @@ JOIN {{query:"Reports/Active Members By Membership Type"}} am ON 1=1`;
                 SQL: "SELECT * FROM Customers WHERE Region = {{ region | sqlString }}",
             });
 
-            mockMetadataQueries([depQuery]);
+            mockQueryEngineQueries([depQuery]);
 
             const sql = `SELECT * FROM {{query:"Sales/By Region(region='West')"}} c`;
             const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
@@ -2375,7 +2383,7 @@ JOIN {{query:"Reports/Active Members By Membership Type"}} am ON 1=1`;
                 SQL: "SELECT * FROM Changes WHERE CreatedAt >= DATEADD(DAY, -{{ lookbackDays | sqlNumber }}, GETUTCDATE())",
             });
 
-            mockMetadataQueries([depQuery]);
+            mockQueryEngineQueries([depQuery]);
 
             const sql = `SELECT * FROM {{query:"Demos/Recent Changes(lookbackDays='30')"}} rc`;
             const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
@@ -2395,7 +2403,7 @@ JOIN {{query:"Reports/Active Members By Membership Type"}} am ON 1=1`;
                 SQL: "SELECT * FROM Changes WHERE Region = {{ region | sqlString }} AND CreatedAt >= DATEADD(DAY, -{{ lookbackDays | sqlNumber }}, GETUTCDATE())",
             });
 
-            mockMetadataQueries([depQuery]);
+            mockQueryEngineQueries([depQuery]);
 
             // region is static, lookbackDays is pass-through
             const sql = `SELECT * FROM {{query:"Analytics/Regional Changes(region='West', lookbackDays=numDays)"}} rc`;

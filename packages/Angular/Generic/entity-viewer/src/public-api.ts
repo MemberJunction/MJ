@@ -46,6 +46,15 @@ export * from './lib/duplicate-view-dialog/duplicate-view-dialog.component';
 // Shared View Warning Dialog (warning when saving shared views)
 export * from './lib/shared-view-warning-dialog/shared-view-warning-dialog.component';
 
+// View Selector (saved-view dropdown)
+export * from './lib/view-selector/view-selector.component';
+
+// View Workspace (composite: browse an entity's data across saved views)
+export * from './lib/view-workspace/view-workspace.component';
+
+// View Type Switcher (reusable dropdown for switching the active view type)
+export * from './lib/view-type-switcher/view-type-switcher.component';
+
 // Recycle Bin (slide-in for hard-deleted records, gated on entity Delete permission)
 export * from './lib/recycle-bin/recycle-bin.component';
 export * from './lib/recycle-bin/recycle-bin-chip.component';
@@ -54,5 +63,16 @@ export * from './lib/recycle-bin/events/recycle-bin-events';
 // Utilities
 export * from './lib/utils/highlight.util';
 export * from './lib/utils/record.util';
+
+// View-Type Plugin Architecture (contracts, engine, built-in descriptors)
+export * from './lib/view-types';
+
+// View-type renderer plug-ins (dynamic-mounted by the container) + their per-view config shapes.
+// Exported so downstream apps can strongly type a view's `config` blob or register custom view types.
+export * from './lib/view-types/renderers/grid-view-renderer.component';
+export * from './lib/view-types/renderers/cards-view-renderer.component';
+export * from './lib/view-types/renderers/timeline-view-renderer.component';
+export * from './lib/view-types/renderers/map-view-renderer.component';
+
 // Geo support exports
 export const ENTITY_VIEWER_GEO_VERSION = 1;

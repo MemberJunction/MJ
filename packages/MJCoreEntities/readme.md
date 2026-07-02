@@ -554,15 +554,15 @@ This package's `src/generated/entity_subclasses.ts` file is **entirely auto-gene
 
 ## Dependencies
 
-- [@memberjunction/core](../MJCore/README.md) -- Base entity classes, metadata system, RunView, BaseEngine
+- [@memberjunction/core](../MJCore/readme.md) -- Base entity classes, metadata system, RunView, BaseEngine
 - [@memberjunction/global](../MJGlobal/README.md) -- `@RegisterClass` decorator, global utilities
 - [@memberjunction/ai](../AI/README.md) -- AI integration types (used by some engine classes)
-- [@memberjunction/interactive-component-types](../InteractiveComponentTypes/README.md) -- ComponentSpec type for component entity extensions
+- [@memberjunction/interactive-component-types](../InteractiveComponents/README.md) -- ComponentSpec type for component entity extensions
 - [zod](https://zod.dev/) -- Runtime schema validation
 
 ## Related Packages
 
-- [@memberjunction/core](../MJCore/README.md) -- Framework foundation this package builds on
+- [@memberjunction/core](../MJCore/readme.md) -- Framework foundation this package builds on
 - [@memberjunction/core-entities-server](../MJCoreEntitiesServer/README.md) -- Server-side extensions of entities defined here (e.g., smart filter AI implementation)
 - [@memberjunction/server](../MJServer/README.md) -- Server that uses these entities for API operations
 

@@ -1,0 +1,90 @@
+<!-- ══════ ITEM DETAIL SLIDE-IN ══════ -->
+@if (Show && Item) {
+    <div class="at-slide-overlay" (click)="Closed.emit()"></div>
+    <div class="at-slide-panel at-detail-panel">
+        <div class="at-slide-header">
+            <h3><i class="fa-solid fa-file-lines"></i> Content Item</h3>
+            <button class="at-slide-close" aria-label="Close item detail" (click)="Closed.emit()"><i class="fa-solid fa-times"></i></button>
+        </div>
+        <div class="at-slide-body">
+            <!-- Header -->
+            <div class="at-detail-item-header">
+                <h4 class="at-detail-item-name">{{ Item.Name }}</h4>
+                <div class="at-detail-badges">
+                    <span class="at-detail-badge at-detail-badge-source">{{ Item.SourceName }}</span>
+                    @if (Item.RequiresContentType) {
+                        <span class="at-detail-badge at-detail-badge-type">{{ Item.ContentTypeName }}</span>
+                        @if (Item.FileTypeName) {
+                            <span class="at-detail-badge at-detail-badge-file"><i class="fa-solid fa-file"></i> {{ Item.FileTypeName }}</span>
+                        }
+                    }
+                </div>
+            </div>
+
+            <!-- URL -->
+            @if (Item.URL) {
+                <div class="at-detail-section">
+                    <div class="at-detail-section-label">URL</div>
+                    <a [href]="Item.URL" target="_blank" class="at-detail-link">
+                        {{ Item.URL }}
+                        <i class="fa-solid fa-external-link-alt" style="font-size: 0.65rem; margin-left: 4px;"></i>
+                    </a>
+                </div>
+            }
+
+            <!-- Text Preview -->
+            @if (Item.TextContent) {
+                <div class="at-detail-section">
+                    <div class="at-detail-section-label">Content Preview</div>
+                    <div class="at-detail-text-preview">{{ Item.TextContent }}</div>
+                </div>
+            }
+
+            <!-- Tags (weighted) -->
+            @if (Item.Tags.length > 0) {
+                <div class="at-detail-section">
+                    <div class="at-detail-section-label">Tags ({{ Item.Tags.length }})</div>
+                    <div class="at-detail-tags">
+                        @for (wt of Item.Tags; track wt.Tag) {
+                            <span class="at-tag-pill at-tag-weighted" [style.font-size]="TagFontSize(wt.Weight)">
+                                {{ wt.Tag }}
+                                <span class="at-tag-weight">{{ FormatWeight(wt.Weight) }}</span>
+                            </span>
+                        }
+                    </div>
+                </div>
+            }
+
+            <!-- Metadata -->
+            <div class="at-detail-section">
+                <div class="at-detail-section-label">Metadata</div>
+                <div class="at-detail-meta-grid">
+                    @if (Item.Checksum) {
+                        <div class="at-detail-meta-row">
+                            <span class="at-detail-meta-key">Checksum</span>
+                            <span class="at-detail-meta-value at-detail-meta-mono">{{ Item.Checksum }}</span>
+                        </div>
+                    }
+                    <div class="at-detail-meta-row">
+                        <span class="at-detail-meta-key">Created</span>
+                        <span class="at-detail-meta-value">{{ Item.CreatedAt }}</span>
+                    </div>
+                    <div class="at-detail-meta-row">
+                        <span class="at-detail-meta-key">Updated</span>
+                        <span class="at-detail-meta-value">{{ Item.UpdatedAt }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="at-detail-actions">
+                <button class="at-action-btn at-primary-btn" (click)="OpenRecordRequested.emit(Item)">
+                    <i class="fa-solid fa-external-link-alt"></i> Open Record
+                </button>
+                <button class="at-action-btn at-secondary-btn" disabled>
+                    <i class="fa-solid fa-magnifying-glass"></i> See Similar Items
+                </button>
+            </div>
+        </div>
+    </div>
+}

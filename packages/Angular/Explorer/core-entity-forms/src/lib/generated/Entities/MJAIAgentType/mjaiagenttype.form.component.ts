@@ -21,6 +21,7 @@ export class MJAIAgentTypeFormComponent extends BaseFormComponent {
             { sectionKey: 'behaviorUISettings', sectionName: 'Behavior & UI Settings', isExpanded: true },
             { sectionKey: 'storageSettings', sectionName: 'Storage Settings', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
+            { sectionKey: 'mJAIAgentCoAgents', sectionName: 'AI Agent Co Agents', isExpanded: false },
             { sectionKey: 'mJAIAgents', sectionName: 'AI Agents', isExpanded: false }
         ]);
     }

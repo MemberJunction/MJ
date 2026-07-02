@@ -1,4 +1,4 @@
-import { Metadata, UserInfo } from '@memberjunction/core';
+import { Metadata, UserInfo, RunView } from '@memberjunction/core';
 import {
     FlattenedRecord,
     ReverseDependency,
@@ -43,6 +43,9 @@ export interface DeletionAudit {
  * Identifies all records that need to be deleted, in what order, and potential issues
  */
 export class DeletionAuditor {
+    /** Maximum number of values placed in a single `IN (...)` clause when batching existence checks. */
+    private static readonly MAX_IN_CLAUSE = 1000;
+
     constructor(
         private metadata: Metadata,
         private contextUser: UserInfo
@@ -220,17 +223,113 @@ export class DeletionAuditor {
         const existingRecords: FlattenedRecord[] = [];
         const alreadyDeleted = new Map<string, FlattenedRecord>();
 
-        // Import SyncEngine to check record existence
-        const syncEngine = new SyncEngine(this.contextUser);
+        if (records.length === 0) {
+            return { existingRecords, alreadyDeleted };
+        }
 
+        // Group by entity so each entity's keys can be checked in batched IN(...) queries
+        // instead of one database round-trip per record.
+        const byEntity = new Map<string, FlattenedRecord[]>();
+        for (const record of records) {
+            const list = byEntity.get(record.entityName);
+            if (list) {
+                list.push(record);
+            } else {
+                byEntity.set(record.entityName, [record]);
+            }
+        }
+
+        for (const [entityName, entityRecords] of byEntity) {
+            const entityInfo = this.metadata.Entities.find(e => e.Name === entityName);
+            const primaryKeys = entityInfo?.PrimaryKeys ?? [];
+
+            if (entityInfo && primaryKeys.length === 1) {
+                await this.checkSinglePkExistence(entityName, primaryKeys[0].Name, entityRecords, existingRecords, alreadyDeleted);
+            } else {
+                // Composite key or unknown entity: fall back to per-record existence checks.
+                await this.checkExistencePerRecord(entityRecords, existingRecords, alreadyDeleted);
+            }
+        }
+
+        return { existingRecords, alreadyDeleted };
+    }
+
+    /**
+     * Batched existence check for single-primary-key entities. Resolves all keys with a small
+     * number of `IN (...)` queries instead of one round-trip per record.
+     */
+    private async checkSinglePkExistence(
+        entityName: string,
+        pkField: string,
+        records: FlattenedRecord[],
+        existingRecords: FlattenedRecord[],
+        alreadyDeleted: Map<string, FlattenedRecord>
+    ): Promise<void> {
+        const recordByKey = new Map<string, FlattenedRecord>();
+        for (const record of records) {
+            const value = record.record.primaryKey?.[pkField] ?? record.record.fields?.[pkField];
+            if (value == null) {
+                // Cannot determine the key — assume it still exists (safe: avoids skipping a real delete).
+                existingRecords.push(record);
+                continue;
+            }
+            recordByKey.set(value.toString().trim().toUpperCase(), record);
+        }
+
+        const existing = new Set<string>();
+        const rv = new RunView();
+        const keys = Array.from(recordByKey.keys());
+
+        for (let i = 0; i < keys.length; i += DeletionAuditor.MAX_IN_CLAUSE) {
+            const chunk = keys.slice(i, i + DeletionAuditor.MAX_IN_CLAUSE);
+            const inList = chunk.map(v => `'${v.replace(/'/g, "''")}'`).join(', ');
+            try {
+                const result = await rv.RunView({
+                    EntityName: entityName,
+                    ExtraFilter: `${pkField} IN (${inList})`,
+                    Fields: [pkField],
+                    IgnoreMaxRows: true, // a full IN-chunk can equal/exceed the entity's UserViewMaxRows cap
+                    ResultType: 'simple'
+                }, this.contextUser);
+
+                if (result.Success && result.Results) {
+                    for (const row of result.Results) {
+                        const v = row[pkField];
+                        if (v != null) {
+                            existing.add(v.toString().trim().toUpperCase());
+                        }
+                    }
+                } else {
+                    // Query failed — assume this chunk's records exist (safe default).
+                    chunk.forEach(v => existing.add(v));
+                }
+            } catch {
+                chunk.forEach(v => existing.add(v));
+            }
+        }
+
+        for (const [key, record] of recordByKey) {
+            if (existing.has(key)) {
+                existingRecords.push(record);
+            } else {
+                alreadyDeleted.set(record.id, record);
+            }
+        }
+    }
+
+    /** Per-record existence fallback for composite-key or unknown entities. */
+    private async checkExistencePerRecord(
+        records: FlattenedRecord[],
+        existingRecords: FlattenedRecord[],
+        alreadyDeleted: Map<string, FlattenedRecord>
+    ): Promise<void> {
+        const syncEngine = new SyncEngine(this.contextUser);
         for (const record of records) {
             try {
-                // Check if record exists in database
                 const existingEntity = await syncEngine.loadEntity(
                     record.entityName,
                     record.record.primaryKey || {}
                 );
-
                 if (existingEntity) {
                     existingRecords.push(record);
                 } else {
@@ -241,8 +340,6 @@ export class DeletionAuditor {
                 existingRecords.push(record);
             }
         }
-
-        return { existingRecords, alreadyDeleted };
     }
 
     /**

@@ -69,13 +69,14 @@
       }
       <!-- Empty State -->
       @if (FilteredApps.length === 0 && SearchQuery) {
-        <div class="empty-state"
+        <mj-empty-state
+          Variant="no-results"
+          Size="compact"
+          Icon="fa-solid fa-magnifying-glass"
+          Title="No applications found"
+          Message="Try a different search term or search the Knowledge Hub"
           role="status"
-          aria-live="polite">
-          <i class="fa-solid fa-search empty-icon" aria-hidden="true"></i>
-          <div class="empty-text">No applications found</div>
-          <div class="empty-subtext">Try a different search term or search the Knowledge Hub</div>
-        </div>
+          aria-live="polite" />
       }
     </div>
     <!-- Loading State Overlay -->

@@ -3,7 +3,7 @@ import { QueryParameterProcessor } from '../queryParameterProcessor.js';
 import type { ParameterValidationResult } from '../queryParameterProcessor.js';
 import { RunQuerySQLFilterManager } from '@memberjunction/core';
 
-// Helper to build mock QueryParameterInfo objects
+// Helper to build mock MJQueryParameterEntity objects
 function makeParamDef(overrides: Record<string, unknown> = {}) {
   return {
     QueryID: 'q1',
@@ -16,13 +16,6 @@ function makeParamDef(overrides: Record<string, unknown> = {}) {
     ValidationFilters: null as string | null,
     DetectionMethod: 'Manual' as const,
     AutoDetectConfidenceScore: null,
-    get ParsedFilters(): unknown[] {
-      try {
-        return this.ValidationFilters ? JSON.parse(this.ValidationFilters) : [];
-      } catch {
-        return [];
-      }
-    },
     ...overrides,
   };
 }

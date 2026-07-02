@@ -43,6 +43,19 @@ export interface TenantContext {
 }
 
 /**
+ * Per-session resource scope carried on {@link UserInfo} for a magic-link resource share.
+ * Sourced from the verified session token's claims. RLS filters reference it via the
+ * `{{ScopeResourceID}}` / `{{ScopeResourceType}}` tokens to pin a shared resource (and
+ * its FK-reachable dependents) without broadening the granted role.
+ */
+export interface MagicLinkScope {
+    /** Primary-key value of the shared resource (stringified). */
+    ResourceID?: string;
+    /** ResourceType name/id of the shared resource. */
+    ResourceType?: string;
+}
+
+/**
  * A list of all users who have or had access to the system.
  * Contains user profile information, authentication details, and role assignments.
  */
@@ -164,6 +177,41 @@ export class UserInfo extends BaseInfo {
     }
     public set TenantContext(value: TenantContext | undefined) {
         this._TenantContext = value;
+    }
+
+    private _MagicLinkScope?: MagicLinkScope = undefined;
+
+    /**
+     * Per-session resource scope for a magic-link share. Set at request time from the
+     * verified session token's claims (the link's ResourceType/ResourceID). Consumed by
+     * RLS filters via the `{{ScopeResourceID}}` / `{{ScopeResourceType}}` tokens in
+     * {@link RowLevelSecurityFilterInfo.MarkupFilterText}, so a resource-share link can
+     * be scoped to exactly one resource (and its FK-reachable dependents) without the
+     * granted role being broad. Same getter/setter (non-enumerable) rationale as
+     * TenantContext — it is not a database/GraphQL field.
+     */
+    public get MagicLinkScope(): MagicLinkScope | undefined {
+        return this._MagicLinkScope;
+    }
+    public set MagicLinkScope(value: MagicLinkScope | undefined) {
+        this._MagicLinkScope = value;
+    }
+
+    private _IsMagicLinkAnonymous: boolean = false;
+
+    /**
+     * True when this request resolves to the shared Anonymous magic-link principal whose
+     * roles are synthesized in memory per-session (never persisted, so anonymous sessions
+     * can't accrete privileges across links). The server reads this to serve the synthesized
+     * {@link UserRoles} for the session's own user row instead of the DB query (which returns
+     * empty for the role-less shared principal by design). Same getter/setter (non-enumerable)
+     * rationale as TenantContext/MagicLinkScope — it is not a database/GraphQL field.
+     */
+    public get IsMagicLinkAnonymous(): boolean {
+        return this._IsMagicLinkAnonymous;
+    }
+    public set IsMagicLinkAnonymous(value: boolean) {
+        this._IsMagicLinkAnonymous = value;
     }
 
     private _UserRoles: UserRoleInfo[] = []
@@ -361,6 +409,12 @@ export class RowLevelSecurityFilterInfo extends BaseInfo {
                     ret = ret.replace(new RegExp(`{{User${key}}}`, 'g'), String(val))
                 }
             }
+            // Per-session magic-link resource scope. Fail-closed: an absent scope resolves
+            // to '' so a resource-pinned predicate (e.g. ID = '{{ScopeResourceID}}') matches
+            // NO rows rather than leaking — a session without the scope sees nothing.
+            const scope = user.MagicLinkScope;
+            ret = ret.replace(/\{\{ScopeResourceID\}\}/g, scope?.ResourceID ?? '');
+            ret = ret.replace(/\{\{ScopeResourceType\}\}/g, scope?.ResourceType ?? '');
         }
         const unresolvedMatch = ret.match(/\{\{User\w+\}\}/);
         if (unresolvedMatch) {

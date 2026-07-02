@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { ComponentLinter } from '../../lib/component-linter';
+import { ComponentLinter } from '@memberjunction/react-linter';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 
 // Base spec for query-based components

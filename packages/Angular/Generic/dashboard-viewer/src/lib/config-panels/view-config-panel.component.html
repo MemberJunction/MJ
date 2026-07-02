@@ -71,24 +71,13 @@
     <span class="form-hint">Leave empty to use view/entity name as title</span>
   </div>
 
-  <!-- Display Options (Collapsible) -->
-  <div class="collapsible-section">
-    <button
-      type="button"
-      class="collapsible-header"
-      (click)="toggleDisplayOptions()"
-      [attr.aria-expanded]="showDisplayOptions">
-      <span class="collapsible-title">
-        <i class="fa-solid fa-grip"></i>
-        Display Options
-      </span>
-      <i class="collapsible-chevron fa-solid"
-        [class.fa-chevron-down]="!showDisplayOptions"
-      [class.fa-chevron-up]="showDisplayOptions"></i>
-    </button>
-
-    @if (showDisplayOptions) {
-      <div class="collapsible-content">
+  <!-- Display Options -->
+  <mj-accordion-panel [(Expanded)]="showDisplayOptions" Size="sm">
+    <ng-template mjAccordionTitle>
+      <i class="fa-solid fa-grip"></i>
+      Display Options
+    </ng-template>
+    <div class="config-section-body">
         <!-- Display Mode -->
         <div class="form-group">
           <label>Display Mode</label>
@@ -218,28 +207,16 @@
             </select>
           </div>
         }
-      </div>
-    }
-  </div>
+    </div>
+  </mj-accordion-panel>
 
-  <!-- Advanced Options (Collapsible) -->
-  <div class="collapsible-section">
-    <button
-      type="button"
-      class="collapsible-header"
-      (click)="toggleAdvancedOptions()"
-      [attr.aria-expanded]="showAdvancedOptions">
-      <span class="collapsible-title">
-        <i class="fa-solid fa-filter"></i>
-        Advanced Filtering
-      </span>
-      <i class="collapsible-chevron fa-solid"
-        [class.fa-chevron-down]="!showAdvancedOptions"
-      [class.fa-chevron-up]="showAdvancedOptions"></i>
-    </button>
-
-    @if (showAdvancedOptions) {
-      <div class="collapsible-content">
+  <!-- Advanced Filtering -->
+  <mj-accordion-panel [(Expanded)]="showAdvancedOptions" Size="sm">
+    <ng-template mjAccordionTitle>
+      <i class="fa-solid fa-filter"></i>
+      Advanced Filtering
+    </ng-template>
+    <div class="config-section-body">
         <!-- Extra Filter -->
         <div class="form-group">
           <label for="extraFilter">
@@ -256,7 +233,6 @@
             SQL WHERE clause to filter records (applied in addition to view filters)
           </span>
         </div>
-      </div>
-    }
-  </div>
+    </div>
+  </mj-accordion-panel>
 </div>

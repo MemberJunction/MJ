@@ -20,7 +20,7 @@ import {
   EntityFieldTSType,
   RunView,
 } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { MJRecordChangeEntity } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
@@ -135,6 +135,15 @@ export class RecordChangesComponent extends BaseAngularComponent implements OnIn
 
   viewData: MJRecordChangeEntity[] = [];
   filteredData: MJRecordChangeEntity[] = [];
+
+  /**
+   * Change lookup keyed by NormalizeUUID(ID), rebuilt whenever {@link viewData}
+   * loads. Lets {@link getRestoredFromSourceChange} resolve a restore row's
+   * source change in O(1) instead of an O(rows) `UUIDsEqual` scan — which was
+   * previously executed twice per restore row per CD cycle (once in the
+   * template `@if` and once inside `getChangeSummary`), giving O(rows^2)/CD.
+   */
+  private viewDataById = new Map<string, MJRecordChangeEntity>();
   dateGroups: DateGroup[] = [];
   expandedItems: Set<string> = new Set();
 
@@ -258,6 +267,7 @@ export class RecordChangesComponent extends BaseAngularComponent implements OnIn
           this.viewData = changes.sort(
             (a: MJRecordChangeEntity, b: MJRecordChangeEntity) => new Date(b.ChangedAt).getTime() - new Date(a.ChangedAt).getTime(),
           );
+          this.rebuildViewDataIndex();
           this.rebuildConditionalPills();
           this.applyFilters();
           this.IsLoading = false;
@@ -602,7 +612,18 @@ export class RecordChangesComponent extends BaseAngularComponent implements OnIn
   public getRestoredFromSourceChange(change: MJRecordChangeEntity): MJRecordChangeEntity | null {
     const sourceId = (change as any).RestoredFromID;
     if (!sourceId) return null;
-    return this.viewData.find(c => UUIDsEqual(c.ID, sourceId)) ?? null;
+    return this.viewDataById.get(NormalizeUUID(sourceId)) ?? null;
+  }
+
+  /**
+   * Rebuilds {@link viewDataById} from the current {@link viewData}. Called once
+   * per data load so source-change resolution is an O(1) Map read.
+   */
+  private rebuildViewDataIndex(): void {
+    this.viewDataById.clear();
+    for (const c of this.viewData) {
+      this.viewDataById.set(NormalizeUUID(c.ID), c);
+    }
   }
 
   /**

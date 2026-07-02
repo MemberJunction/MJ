@@ -51,11 +51,15 @@ graph TD
 
 - **AIPromptRunner integration**: Uses the managed "Content Autotagging" prompt, enabling prompt versioning and model routing through MJ's prompt management system (no direct `BaseLLM` calls)
 - **Tag weights**: Each generated tag includes a relevance weight (0.0--1.0) indicating how strongly the tag relates to the content
+- **Streaming crawl → classify pipeline**: Content items flow into the LLM batcher as the crawler discovers them — total wall-clock is roughly `max(crawl, classify)` instead of `crawl + classify`. Backwards-compatible with array callers
 - **Batch processing**: Configurable batch size (default: 20) with concurrent processing within each batch
 - **Parallel tagging + vectorization**: Tagging and vectorization run in parallel for maximum throughput
 - **Per-source/type embedding model selection**: Cascade resolution for embedding model and vector index -- source override, then content type default, then global fallback (first active vector index)
 - **Real-time progress reporting**: `AutotagProgressCallback` provides per-item progress updates during processing
 - **Graceful provider skip**: Providers skip gracefully when no content sources are configured for their type
+- **Per-source run budgets**: `MaxItemsPerRun`, `MaxNewTagsPerRun`, `MaxTokensPerRun`, `MaxCostPerRun`, `MaxNewTagsPerItem` cap each run's resource use. When a cap trips, the run pauses gracefully — the next invocation picks up where it left off (change-detection skips already-processed items)
+- **Content-stable change detection**: Hash is computed over extracted body text, not raw HTML, so incidental markup changes (timestamps, CSRF tokens, build hashes) don't trigger spurious re-classification. Single HTTP fetch derives both the hash and the page text
+- **Website crawler defaults that work out of the box**: `MaxDepth=2`, recursive crawl enabled, conservative URL normalization (fragment-strip, trailing-slash collapse, query-param sort) so common URL variants dedupe correctly
 
 ## Installation
 
@@ -67,18 +71,26 @@ npm install @memberjunction/content-autotagging
 
 ```mermaid
 sequenceDiagram
-    participant Source as Content Source
+    participant Source as Content Source<br/>(crawler/streamer)
     participant Engine as AutotagBaseEngine
     participant Extract as Text Extractor
     participant Prompt as AIPromptRunner
     participant Vec as Embedding + VectorDB
     participant DB as Database
 
-    Source->>Engine: Provide content items
-    Engine->>Engine: Change detection (checksum)
+    loop For each discovered item (streaming)
+        Source->>Source: Fetch URL/file (1 HTTP request)
+        Source->>Source: Hash extracted body text
+        Source->>DB: Lookup existing checksum (scoped to source)
+        alt Unchanged
+            Source-->>Source: Skip — no LLM cost
+        else New / changed
+            Source->>Engine: Yield ContentItem
+        end
+    end
+    Engine->>Engine: Accumulate items into BatchSize chunks
+    Engine->>Engine: Apply rate limit + budget gate
     Engine->>Extract: Extract text (PDF/Office/HTML)
-    Extract-->>Engine: Raw text
-    Engine->>Engine: Chunk text for token limits
     par Tagging
         Engine->>Prompt: Run "Content Autotagging" prompt
         Prompt-->>Engine: Tags (with weights) + Attributes
@@ -87,8 +99,13 @@ sequenceDiagram
         Vec-->>Engine: Vectorization result
     end
     Engine->>DB: Save ContentItem + Tags + Attributes
-    Engine->>DB: Create ProcessRun record
+    Engine->>Engine: Check RunBudget; pause if exhausted
+    Engine->>DB: Create / update ProcessRun record (checkpoint)
 ```
+
+The crawl and LLM stages run concurrently against a bounded buffer. The
+LLM consumer starts processing as soon as the first batch fills — it does
+not wait for every content source to finish crawling.
 
 ## Content Sources
 
@@ -158,6 +175,8 @@ const websiteTagger = new AutotagWebsite();
 await websiteTagger.Autotag(contextUser);
 ```
 
+Per-source crawl knobs (see [Website Crawl Settings](#website-crawl-settings) below) are read from `ContentSourceParam` rows; per-source run-budget knobs (see [Run Budgets](#run-budgets) below) are read from the source's `Configuration` JSON with a `ContentSourceParam` override.
+
 ### Local File System Processing
 
 ```typescript
@@ -221,6 +240,45 @@ export class AutotagCustomSource extends AutotagBase {
   }
 }
 ```
+
+## Website Crawl Settings
+
+The `AutotagWebsite` provider reads its crawl behavior from two layered sources:
+
+1. **Typed `Configuration.Website` sub-object** on the content source (canonical for new sources, set via the Content Source form's "Website Crawler Settings" section).
+2. **`ContentSourceParam` rows** with matching keys (legacy storage / per-instance sharper override — wins over the typed sub-object when both are present).
+
+Each knob has a sensible default so newly-created sources work without configuration; override only the ones you need.
+
+| Key | Type | Default | Purpose |
+|---|---|---|---|
+| `MaxDepth` | integer | `2` | Recursion ceiling for in-domain links. `0` = just the start URL; `2` = root + section pages + their child content pages. Higher values combine multiplicatively with the per-page delay |
+| `CrawlSitesInLowerLevelDomain` | boolean | `true` | When `true`, the recursive depth-aware crawler runs. Setting `false` disables it (single-page behavior) |
+| `CrawlOtherSitesInTopLevelDomain` | boolean | `false` | When `true`, also adds sibling-path URLs found on the seed page (no recursion). Off by default to avoid accidental fan-out |
+| `URLPattern` | regex string | `.*` | Only URLs matching this pattern are added to the visited set. Use to scope to e.g. `^https://example\.com/blog/.*` |
+| `RootURL` | string | derived from start URL | URL prefix used for the in-domain check. When unset, derived as the parent directory of the seed URL |
+
+**URL normalization (always on).** Before any visited-set check, URLs are normalized: fragments (`#section`) stripped, single trailing slash collapsed (except root `/`), query parameters sorted. Path case is preserved (RFC 3986). This catches the common variants (`/page` vs `/page/`, `?a=1&b=2` vs `?b=2&a=1`) without merging genuinely distinct case-sensitive paths.
+
+**Change detection.** Each discovered URL is fetched once. The SHA-256 hash is computed over the **extracted body text** (not raw HTML), so incidental markup churn — server-rendered timestamps, CSRF tokens, build hashes, ad rotators — doesn't trigger spurious re-classification. The hash query is scoped to the current `ContentSourceID` so 404 boilerplate on one site can't silently skip a real page on another.
+
+## Run Budgets
+
+Every Autotag run can be capped along several axes. Caps are checked after each batch; when any cap exhausts, the run pauses gracefully via the existing `CancellationRequested` machinery. Next invocation picks up where it left off — the change-detection short-circuit (above) skips already-processed items, so re-crawl wastes only HTTP, not LLM cycles.
+
+| Knob | Source | Counted by | Behavior when exhausted |
+|---|---|---|---|
+| `MaxItemsPerRun` | `ConfigurationObject` or `ContentSourceParam` | One per content item handed to the LLM (excludes items skipped by change-detection) | Pause; resume next run |
+| `MaxNewTagsPerRun` | `ConfigurationObject` | One per auto-created tag | Pause; resume next run |
+| `MaxNewTagsPerItem` | `ConfigurationObject` | Per item; resets each new ContentItem | Remaining tags for that item route to the suggestion queue with `Reason='MaxItemTagsExceeded'` instead of being created |
+| `MaxTokensPerRun` | `ConfigurationObject` or `ContentSourceParam` | Cumulative prompt + completion tokens | Pause; resume next run |
+| `MaxCostPerRun` | `ConfigurationObject` or `ContentSourceParam` | Cumulative USD | Pause; resume next run |
+
+Priority order when several caps trip in the same batch: **items → tags → tokens → cost**. The items knob ranks first because it's the most user-intuitive ("do at most 100 today, do the rest tomorrow") and not tied to a specific model's pricing or tokenization.
+
+`MaxItemsPerRun` / `MaxTokensPerRun` / `MaxCostPerRun` may also be overridden per-source-instance via a matching `ContentSourceParam` row; that override beats the `ConfigurationObject` default. Tag-related knobs come from `ConfigurationObject` only.
+
+> **Note on resume granularity**: today the LLM phase's `LastProcessedOffset` cursor is array-indexed and works fully for callers that materialize an array (e.g. `AutotagEntity`). The streaming path relies on change-detection dedup for "functional resume" — pages already processed are skipped on re-crawl, so the work picks up correctly even though the HTTP discovery happens again. True crawl-side resume (persisted discovered-URL list) is a planned follow-up.
 
 ## Database Entities
 

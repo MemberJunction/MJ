@@ -193,70 +193,14 @@
    Empty State
    ======================================== */
 
-.empty-state {
+/* Empty state centered in the dashboard pane (mj-empty-state centers its own
+   content; absolute positioning keeps it overlaid on the layout container). */
+.dashboard-empty {
     position: absolute;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    text-align: center;
-    color: var(--dashboard-empty-color, var(--mj-text-secondary));
     max-width: 400px;
-    padding: 40px;
-}
-
-.empty-state .empty-icon {
-    width: 80px;
-    height: 80px;
-    border-radius: 50%;
-    background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin: 0 auto 24px;
-}
-
-.empty-state .empty-icon i {
-    font-size: 36px;
-    color: var(--mj-brand-primary);
-}
-
-.empty-state h3 {
-    margin: 0 0 12px 0;
-    font-size: 20px;
-    font-weight: 500;
-    color: var(--mj-text-primary);
-}
-
-.empty-state p {
-    margin: 0 0 24px 0;
-    font-size: 14px;
-    color: var(--dashboard-empty-text, var(--mj-text-secondary));
-    line-height: 1.5;
-}
-
-.add-part-button {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 12px 24px;
-    border: none;
-    border-radius: 6px;
-    background: var(--mj-brand-primary);
-    color: var(--mj-text-inverse);
-    font-size: 14px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-brand-primary) 30%, transparent);
-}
-
-.add-part-button:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px color-mix(in srgb, var(--mj-brand-primary) 40%, transparent);
-}
-
-.add-part-button i {
-    font-size: 14px;
 }
 
 /* ========================================

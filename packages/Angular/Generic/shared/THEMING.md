@@ -850,6 +850,6 @@ If a saved preference references a theme ID that is no longer registered (e.g. a
 |---|---|
 | Token definitions (SCSS) | [`src/lib/_tokens.scss`](./src/lib/_tokens.scss) |
 | ThemeService (TypeScript) | [`src/lib/theme.service.ts`](./src/lib/theme.service.ts) |
-| Shell integration | [`packages/Angular/Explorer/explorer-core/src/lib/shell/shell.component.ts`](../../../Explorer/explorer-core/src/lib/shell/shell.component.ts) |
-| User menu theme items | [`packages/Angular/Explorer/explorer-core/src/lib/user-menu/base-user-menu.ts`](../../../Explorer/explorer-core/src/lib/user-menu/base-user-menu.ts) |
+| Shell integration | [`packages/Angular/Explorer/explorer-core/src/lib/shell/shell.component.ts`](../../Explorer/explorer-core/src/lib/shell/shell.component.ts) |
+| User menu theme items | [`packages/Angular/Explorer/explorer-core/src/lib/user-menu/base-user-menu.ts`](../../Explorer/explorer-core/src/lib/user-menu/base-user-menu.ts) |
 | Workspace initializer | [`packages/Angular/Explorer/workspace-initializer/`](../../../Explorer/workspace-initializer/) |

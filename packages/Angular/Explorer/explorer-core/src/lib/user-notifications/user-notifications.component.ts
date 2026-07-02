@@ -124,10 +124,14 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
   }
 
   public isNotificationClickable(notification: MJUserNotificationEntity): boolean {
-    // Check for agent-request type (navigated via NavigationService, not URL)
+    // Check for special types navigated via NavigationService (not a URL)
     if (notification.ResourceConfiguration && notification.ResourceConfiguration.trim().length > 0) {
       const config = SafeJSONParse<AgentRequestResourceConfig>(notification.ResourceConfiguration);
       if (config && config.type?.trim().toLowerCase() === 'agent-request' && config.requestId) {
+        return true;
+      }
+      const typeName = SafeJSONParse<{ type?: string }>(notification.ResourceConfiguration)?.type?.trim().toLowerCase();
+      if (typeName === 'meet-room') {
         return true;
       }
     }
@@ -356,9 +360,37 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
       if (this.navigateToConversation(notification)) {
         return;
       }
+      if (this.navigateToMeetRoom(notification)) {
+        return;
+      }
 
       this.navigateToResource(notification);
     }
+  }
+
+  /**
+   * Opens the Meet app's Live Room in JOIN mode for a `meet-room` invite notification (the
+   * `{ type:'meet-room', room }` ResourceConfiguration), mirroring {@link navigateToConversation}.
+   * Returns `false` (not handled) when the config isn't a meet-room invite or the Meet app is absent.
+   */
+  private navigateToMeetRoom(notification: MJUserNotificationEntity): boolean {
+    if (!notification.ResourceConfiguration || notification.ResourceConfiguration.trim().length === 0) {
+      return false;
+    }
+    const config = SafeJSONParse<{ type?: string; room?: string }>(notification.ResourceConfiguration);
+    if (!config || config.type?.trim().toLowerCase() !== 'meet-room') {
+      return false;
+    }
+    const meetApp = this.appManager.GetAppByName('Meet');
+    if (!meetApp) {
+      return false;
+    }
+    const navConfig: Record<string, string> = {};
+    if (config.room) {
+      navConfig['room'] = config.room;
+    }
+    this.navigationService.OpenNavItemByName('Live Room', navConfig, meetApp.ID);
+    return true;
   }
 
   /**

@@ -13,6 +13,7 @@ export * from './lib/resource-wrappers/view-resource.component'
 export * from './lib/resource-wrappers/list-detail-resource.component'
 export * from './lib/resource-wrappers/chat-conversations-resource.component'
 export * from './lib/resource-wrappers/artifact-resource.component'
+export * from './lib/conversation-feedback'
 
 // Command Palette (only component and service, no module)
 export * from './lib/command-palette/command-palette.component';
@@ -31,6 +32,7 @@ export * from './lib/single-list-detail/single-list-detail.component'
 export * from './lib/user-profile/user-profile.component'
 export * from './lib/user-notifications/user-notifications.component';
 export * from './lib/guards/auth-guard.service';
+export * from './lib/guards/app-lock-guard.service';
 export * from './lib/guards/entities.guard';
 
 export * from './lib/single-query/single-query.component'

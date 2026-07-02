@@ -36,7 +36,7 @@
             (click)="overviewCmp?.ToggleAutoRefresh()"
             title="Toggle auto-refresh">
             <i class="fa-solid fa-rotate"></i>
-            Auto: {{overviewCmp?.AutoRefreshEnabled ? 'ON' : 'OFF'}}
+            <span class="action-btn-label">Auto: {{overviewCmp?.AutoRefreshEnabled ? 'ON' : 'OFF'}}</span>
           </button>
         }
         @case ('jobs') {
@@ -53,7 +53,7 @@
           </mj-filter-popover>
           <mj-refresh-button (Clicked)="jobsCmp?.Refresh()"></mj-refresh-button>
           <button mjButton variant="primary" size="sm" (click)="jobsCmp?.OpenCreateSlideout()">
-            <i class="fa-solid fa-plus"></i> New Job
+            <i class="fa-solid fa-plus"></i> <span class="action-btn-label">New Job</span>
           </button>
         }
         @case ('activity') {

@@ -4,6 +4,7 @@ import {
     MJQueryFieldEntity,
     MJQueryEntityEntity,
     MJQueryDependencyEntity,
+    QueryEngine,
 } from "@memberjunction/core-entities";
 import { UUIDsEqual } from "@memberjunction/global";
 import type {
@@ -623,7 +624,20 @@ export async function RemoveAllRecords(
  * Loads all existing records of a given entity type for a query.
  * Returns an empty array if the query has not been saved yet.
  */
-async function loadExistingRecords<T>(
+/**
+ * Loads existing child records for a query.
+ *
+ * Prefers QueryEngine's in-memory cache when it is loaded (long-running MJAPI
+ * server): the engine already holds every query child and auto-refreshes via
+ * BaseEntity events, so we avoid a redundant RunView per save. When the cache
+ * is NOT loaded — typically a short-lived CLI process such as `mj sync push`
+ * or `mj codegen`, where QueryEngine was never `Config()`'d — we must read the
+ * authoritative state from the database. Trusting the empty cache there
+ * misclassifies already-persisted children as new and re-INSERTs them, hitting
+ * `UQ_QueryParameter_QueryID_Name` (and the sibling unique constraints), which
+ * on PostgreSQL aborts the entire push transaction and rolls back the run.
+ */
+async function loadExistingRecords<T extends { QueryID: string }>(
     entityName: string,
     queryID: string,
     runViewProvider: IRunViewProvider,
@@ -632,15 +646,31 @@ async function loadExistingRecords<T>(
 ): Promise<T[]> {
     if (!isSaved) return [];
 
-    const result = await runViewProvider.RunView<T>({
+    const qe = QueryEngine.Instance;
+    if (qe.Loaded) {
+        switch (entityName) {
+            case 'MJ: Query Parameters':
+                return qe.GetQueryParameters(queryID) as unknown as T[];
+            case 'MJ: Query Fields':
+                return qe.GetQueryFields(queryID) as unknown as T[];
+            case 'MJ: Query Entities':
+                return qe.QueryEntities.filter(e => UUIDsEqual(e.QueryID, queryID)) as unknown as T[];
+            case 'MJ: Query Dependencies':
+                return qe.Dependencies.filter(d => UUIDsEqual(d.QueryID, queryID)) as unknown as T[];
+            default:
+                return [];
+        }
+    }
+
+    // Cache cold — read straight from the DB so the add/update/remove delta is
+    // computed against real persisted state, not an empty cache.
+    const result = await runViewProvider.RunView({
         EntityName: entityName,
         ExtraFilter: `QueryID='${queryID}'`,
         ResultType: 'entity_object'
     }, contextUser);
-
     if (!result.Success) {
-        throw new Error(`Failed to load existing ${entityName}: ${result.ErrorMessage}`);
+        throw new Error(`Failed to load existing ${entityName} for query ${queryID}: ${result.ErrorMessage}`);
     }
-
-    return result.Results || [];
+    return (result.Results || []) as unknown as T[];
 }

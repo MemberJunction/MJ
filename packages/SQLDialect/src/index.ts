@@ -18,6 +18,7 @@ export { GetDialect } from './dialectFactory.js';
 export {
     IsBooleanSQLType,
     IsStringSQLType,
+    IsFixedWidthStringSQLType,
     IsDateSQLType,
     IsIntegerSQLType,
     IsFloatSQLType,

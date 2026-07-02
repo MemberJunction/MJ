@@ -1,9 +1,45 @@
-import { AppContext, Arg, Ctx, Int, Query, Resolver } from '@memberjunction/server';
-import { MJUser_, MJUserResolverBase } from '../generated/generated.js';
+import { AppContext, Arg, Ctx, FieldResolver, Int, PubSub, PubSubEngine, Query, Resolver, Root } from '@memberjunction/server';
+import { UUIDsEqual } from '@memberjunction/global';
+import { MJUser_, MJUserRole_, MJUserResolverBase } from '../generated/generated.js';
 import { GetReadOnlyProvider } from '../util.js';
 
 @Resolver(MJUser_)
 export class UserResolver extends MJUserResolverBase {
+
+  /**
+   * Roles for the current user row.
+   *
+   * Overrides the generated field resolver to support ANONYMOUS magic-link sessions: those
+   * resolve to a shared Anonymous principal that holds NO roles in the database (by design —
+   * persisting them would let anonymous sessions accrete privileges across links). The roles
+   * are synthesized per-request in {@link buildMagicLinkSessionUser} and live only on the
+   * request's `UserInfo`. For the session's OWN user row we serve those synthesized roles
+   * directly, skipping the generated DB query (which returns empty) and its `MJ: User Roles`
+   * read-permission check (which the restricted anon role wouldn't pass). Every other case —
+   * named users, named magic-link users, listing other users' roles — falls through to the
+   * generated resolver unchanged, so there is no behavioral or security change off this path.
+   */
+  @FieldResolver(() => [MJUserRole_])
+  async MJUserRoles_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() context: AppContext, @PubSub() pubSub: PubSubEngine) {
+    const sessionUser = context.userPayload?.userRecord;
+    if (sessionUser?.IsMagicLinkAnonymous && UUIDsEqual(mjuser_.ID, sessionUser.ID)) {
+      const now = new Date();
+      // Build rows with the entity's RAW field names, then run them through the same
+      // name→code-name mapping the generated resolver uses (e.g. __mj_CreatedAt →
+      // _mj__CreatedAt). Returning raw names directly trips GraphQL's non-nullable check.
+      const rows = (sessionUser.UserRoles ?? []).map((r: { UserID: string; RoleID: string; RoleName?: string; Role?: string }) => ({
+        ID: sessionUser.ID,
+        UserID: r.UserID,
+        RoleID: r.RoleID,
+        User: sessionUser.Name,
+        Role: r.RoleName ?? r.Role,
+        __mj_CreatedAt: now,
+        __mj_UpdatedAt: now,
+      }));
+      return this.ArrayMapFieldNamesToCodeNames('MJ: User Roles', rows, sessionUser);
+    }
+    return super.MJUserRoles_UserIDArray(mjuser_, context, pubSub);
+  }
   @Query(() => MJUser_)
   async CurrentUser(@Ctx() context: AppContext) {
     // Check API key scope authorization for user read (self)

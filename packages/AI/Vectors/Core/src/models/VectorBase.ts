@@ -9,29 +9,48 @@ export class VectorBase {
     _runView: RunView;
     _metadata: Metadata;
     _currentUser: UserInfo;
-    private _provider: IMetadataProvider | null = null;
+    protected _provider: IMetadataProvider | null = null;
 
-    constructor() {
-        this._runView = new RunView();
-        this._metadata = (this._provider as unknown as Metadata) ?? new Metadata();
-        this._currentUser = this._metadata.CurrentUser;
+    /**
+     * @param provider - Optional metadata provider to bind this instance (and all of its
+     * metadata/view operations) to. Server-side callers servicing per-request connections
+     * MUST pass their request-scoped provider (e.g. `this.ProviderToUse` from a BaseEntity
+     * subclass) — relying on the global default silently uses the wrong connection in
+     * multi-provider scenarios. Falls back to the global default provider when omitted.
+     */
+    constructor(provider?: IMetadataProvider | null) {
+        // Fall back to the global default only when no provider was supplied
+        this._metadata = (provider as unknown as Metadata) ?? new Metadata();
+        this.Provider = provider ?? null; // setter also binds _runView to the provider
+        this._currentUser = provider?.CurrentUser ?? this._metadata.CurrentUser;
     }
 
-    public get Metadata(): Metadata { return this._metadata; }
+    /**
+     * Provider-aware metadata access: returns the explicit provider when one was supplied
+     * (constructor or `Provider` setter), otherwise the global default. All metadata
+     * operations in this class hierarchy go through this getter so a bound instance never
+     * leaks onto the global provider.
+     */
+    public get Metadata(): IMetadataProvider { return this._provider ?? (this._metadata as unknown as IMetadataProvider); }
     public get RunView(): RunView { return this._runView; }
     public get CurrentUser(): UserInfo { return this._currentUser; }
     public set CurrentUser(user: UserInfo) { this._currentUser = user; }
 
     /**
-     * Optional metadata provider override. Callers should set
-     * `instance.Provider = providerToUse` before invoking helper methods
-     * in multi-provider contexts. Falls back to the global default provider when unset.
+     * Optional metadata provider override. Pass the provider to the constructor (preferred)
+     * or set `instance.Provider = providerToUse` before invoking helper methods in
+     * multi-provider contexts. Setting it rebinds the internal RunView instance so view
+     * execution rides the same provider. Falls back to the global default when unset.
      */
     public get Provider(): IMetadataProvider {
         return this._provider ?? (this._metadata as unknown as IMetadataProvider);
     }
     public set Provider(value: IMetadataProvider | null) {
         this._provider = value;
+        // Real providers (ProviderBase subclasses) implement IRunViewProvider too;
+        // FromMetadataProvider centralizes that cast. With no explicit provider the
+        // RunView falls back to the global default, matching the Metadata getter.
+        this._runView = value ? RunView.FromMetadataProvider(value) : new RunView();
     }
 
     protected async GetRecordsByEntityID(entityID: string, recordIDs?: CompositeKey[]): Promise<BaseEntity[]> {

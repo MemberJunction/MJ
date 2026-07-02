@@ -35,16 +35,24 @@ import { MJButtonDirective } from '../button/button.directive';
       [size]="Size"
       [disabled]="Disabled || Loading"
       [attr.title]="Title"
-      [attr.aria-label]="!ShowLabel ? Title : null"
+      [attr.aria-label]="Title"
       (click)="OnClick($event)">
       <i class="fa-solid fa-arrows-rotate" [class.fa-spin]="Loading" aria-hidden="true"></i>
       @if (ShowLabel) {
-        {{ Label }}
+        <span class="mj-refresh-button__label">{{ Label }}</span>
       }
     </button>
   `,
   styles: [`
     :host { display: inline-flex; }
+
+    /* Icon-only on mobile — the spinning arrows + aria-label carry it; the
+       text just costs width in the compact chrome control row. */
+    @media (max-width: 768px) {
+      .mj-refresh-button__label {
+        display: none;
+      }
+    }
   `]
 })
 export class MJRefreshButtonComponent {

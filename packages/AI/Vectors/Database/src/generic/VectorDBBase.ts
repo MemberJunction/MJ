@@ -4,6 +4,7 @@ import { BaseRequestParams, BaseResponse, CreateIndexParams,
         VectorRecord } from "./record";
 import { HybridQueryOptions, QueryOptions } from './query.types';
 import { SharedIndexFilterOptions, VectorMetadataFilter } from './MetadataFilter';
+import { ColocatedQueryOptions, ColocatedQueryResult, IColocatedVectorHost, IsColocatedVectorHost } from './colocated.types';
 
 export abstract class VectorDBBase {
     private _apiKey: string;
@@ -19,6 +20,20 @@ export abstract class VectorDBBase {
             throw new Error('API key cannot be empty');
 
         this._apiKey = apiKey;
+    }
+
+    /**
+     * True when this driver does not accept ingestion via `CreateRecord(s)` /
+     * `UpdateRecord(s)` — implies vectors are managed out-of-band (e.g.
+     * `SimpleVectorServiceProvider` reads embeddings directly from
+     * `MJ: Entity Record Documents.VectorJSON`). Pipelines that would
+     * otherwise call ingestion APIs should short-circuit when this is true
+     * to avoid spurious "unsupported" error logs.
+     *
+     * Subclasses that genuinely support ingestion leave the default `false`.
+     */
+    public get IsReadOnly(): boolean {
+        return false;
     }
 
     //Union types to allow the sub class implementing the functions to mark them as async or not
@@ -120,5 +135,120 @@ export abstract class VectorDBBase {
      */
     public BuildMetadataFilter(options: SharedIndexFilterOptions): object | undefined {
         return VectorMetadataFilter.FromOptions(options);
+    }
+
+    // ----------------------------------------------------------------
+    //  Colocated (in-database) vector support
+    // ----------------------------------------------------------------
+
+    /**
+     * The host relational connection a colocated provider borrows to store and query
+     * vectors in the same database as the application's entity data. `undefined` until
+     * {@link SetColocatedHost} (or {@link TryWireColocatedHost}) is called.
+     */
+    protected ColocatedHost: IColocatedVectorHost | undefined;
+
+    /**
+     * Whether this provider stores vectors inside the application's relational database and
+     * can resolve query results to entity records without an external mapping hop. Override
+     * and return `true` in colocated providers (e.g. `PgVectorColocated`, `SQLServerVectorDatabase`).
+     */
+    public get SupportsColocatedQuery(): boolean {
+        return false;
+    }
+
+    /**
+     * Whether this provider's `QueryIndex`/`HybridQuery` `params.id` is the **EntityDocumentID**
+     * (a GUID) rather than an external/logical index name. External services (Pinecone, Qdrant)
+     * and DB-colocated providers key by an index name and return `false` (the default). The
+     * in-process {@link SimpleVectorServiceProvider} reads vectors out of
+     * `MJ: Entity Record Documents` keyed by EntityDocumentID, so it overrides this to `true`.
+     *
+     * Callers that hold both identifiers (e.g. the duplicate-record detector) consult this to
+     * pass the correct `id` for the resolved provider instead of assuming index-name semantics.
+     */
+    public get QueryKeyIsEntityDocumentID(): boolean {
+        return false;
+    }
+
+    /**
+     * Whether this provider requires an API key / credential to operate. Defaults to `true`
+     * for external, cloud-hosted vector services (Pinecone, Qdrant, …). Override and return
+     * `false` for in-process / local providers that authenticate via the host process or the
+     * application's own database rather than a remote credential — e.g. the in-memory
+     * `SimpleVectorServiceProvider`, which reads vectors out of `MJ: Entity Record
+     * Documents.VectorJSON` and never calls an external service.
+     *
+     * Callers that gate on a missing key (e.g. the Entity Vector Sync pipeline and the
+     * duplicate-record detector) consult this so a keyless local provider isn't rejected
+     * with a spurious "No API Key found" error.
+     */
+    public get RequiresAPIKey(): boolean {
+        return true;
+    }
+
+    /**
+     * Wire in the host relational connection so this provider reuses it for colocated
+     * storage and queries instead of opening its own pool. No-op semantics for providers
+     * that ignore it; colocated providers require it before any operation.
+     */
+    public SetColocatedHost(host: IColocatedVectorHost): void {
+        this.ColocatedHost = host;
+    }
+
+    /**
+     * Convenience used by callers that hold an opaque provider reference (the active MJ data
+     * provider). If `host` implements {@link IColocatedVectorHost} *and* this provider supports
+     * colocated queries, wire it in.
+     *
+     * @returns `true` if the host was wired in, `false` otherwise.
+     */
+    public TryWireColocatedHost(host: unknown): boolean {
+        if (this.SupportsColocatedQuery && IsColocatedVectorHost(host)) {
+            this.SetColocatedHost(host);
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Run a colocated query that fuses a vector component with an optional keyword component
+     * in a single server-side statement, applying an optional metadata filter. Only meaningful
+     * when {@link SupportsColocatedQuery} is `true`; the default implementation throws to surface
+     * misuse on providers that don't support it.
+     */
+    public ColocatedQuery(_params: ColocatedQueryOptions, _contextUser?: UserInfo): Promise<ColocatedQueryResult> {
+        return Promise.reject(new Error('ColocatedQuery is not supported by this provider (SupportsColocatedQuery is false)'));
+    }
+
+    /**
+     * Build a standard SUCCESS {@link BaseResponse}. Shared across all drivers so every
+     * provider reports results in a uniform shape.
+     *
+     * @param data - The provider-specific payload to attach to the response.
+     */
+    protected wrapSuccessResponse(data: unknown): BaseResponse {
+        return {
+            success: true,
+            message: '',
+            data,
+        };
+    }
+
+    /**
+     * Build a standard FAILURE {@link BaseResponse}.
+     *
+     * **Always** return this (never a success response) from a `catch` block — returning a
+     * success response on error silently swallows real failures and makes callers, and the
+     * vectorization pipeline, believe an operation worked when it did not.
+     *
+     * @param message - Optional human-readable error detail; falls back to a generic message.
+     */
+    protected wrapFailureResponse(message?: string): BaseResponse {
+        return {
+            success: false,
+            message: message || 'An error occurred',
+            data: null,
+        };
     }
 }

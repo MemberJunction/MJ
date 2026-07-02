@@ -10,6 +10,8 @@
   width: 100%;
   height: 100%;
   overflow: hidden;
+  /* Positioned context for the in-place realtime "call mode" overlay (absolute inset:0) */
+  position: relative;
 }
 
 .chat-header {
@@ -23,6 +25,26 @@
   background: var(--mj-bg-surface-card);
   z-index: 10;
   box-shadow: var(--mj-shadow-sm);
+}
+
+/* agentPresence slot — sticky top, anchored with the header. Per Matt's
+   06-10 placement design: persistent presence indicator above the messages.
+   Renders only when [showAgentCharacter] is true, so existing embeds see no
+   layout change. The prominent variant grows toward a centered presence
+   (per Matt: "can grow larger toward a centered presence"). */
+.chat-agent-presence {
+  flex-shrink: 0;
+  padding: 8px 20px;
+  border-bottom: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface-card);
+  display: flex;
+  align-items: center;
+  z-index: 11;
+}
+
+.chat-agent-presence--prominent {
+  padding: 16px 20px;
+  justify-content: center;
 }
 
 .chat-info {
@@ -257,6 +279,7 @@
 }
 .chat-actions {
   display: flex;
+  align-items: center;
   gap: 8px;
 }
 
@@ -369,6 +392,58 @@
   min-height: 0;
   overflow: hidden;
   position: relative; /* For upload overlay positioning */
+}
+
+/* ────────────────────────────────────────────────────────────────────
+   demonstrationSurface layout-mode (Matt's 06-10 placement design)
+   ────────────────────────────────────────────────────────────────────
+   When .chat-content-area gets .demonstration-mode, the layout flips
+   from "messages pane (+ optional artifact pane)" to "stage + side rail":
+     - stage (.chat-demonstration-stage) — left, flexible, holds the
+       consumer's projected demonstrationSurface slot template
+     - rail (.chat-messages-pane) — right, fixed-width 320px, holds the
+       messages list + composer ("the conversation as a companion rail")
+   On mobile (≤768px) the same two stack vertically (stage above, rail
+   below) per Matt's note about mobile. The rail intentionally keeps the
+   composer inside it — Matt's design refers to the conversation rail
+   inclusively (messages + composer together), not as separate regions.
+*/
+.chat-demonstration-stage {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+  background: var(--mj-bg-surface);
+  border-right: 1px solid var(--mj-border-default);
+  flex: 1;
+  min-width: 0;
+}
+
+.chat-content-area.demonstration-mode .chat-messages-pane,
+.chat-content-area.demonstration-mode .chat-messages-pane.full-width {
+  flex: 0 0 320px;
+  width: 320px;
+  min-width: 0;
+}
+
+@media (max-width: 768px) {
+  .chat-content-area.demonstration-mode {
+    flex-direction: column;
+  }
+
+  .chat-content-area.demonstration-mode .chat-demonstration-stage {
+    flex: 1 1 60%;
+    border-right: none;
+    border-bottom: 1px solid var(--mj-border-default);
+    height: auto;
+  }
+
+  .chat-content-area.demonstration-mode .chat-messages-pane,
+  .chat-content-area.demonstration-mode .chat-messages-pane.full-width {
+    flex: 1 1 40%;
+    width: 100%;
+    height: auto;
+  }
 }
 
 /* Upload indicator overlay - centered in conversation area */
@@ -590,13 +665,9 @@
   gap: 16px;
 }
 
-.empty-state {
+/* Empty-state spans the full artifacts grid */
+.artifacts-empty-fill {
   grid-column: 1/-1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 60px 20px;
 }
 
 .artifact-modal-card {
@@ -1089,9 +1160,9 @@
   flex-shrink: 0;
 }
 
-.artifact-picker-item i.fa-file-pdf { color: #e53e3e; }
-.artifact-picker-item i.fa-file-excel { color: #38a169; }
-.artifact-picker-item i.fa-file-word { color: #3182ce; }
+.artifact-picker-item i.fa-file-pdf { color: var(--mj-status-error); }
+.artifact-picker-item i.fa-file-excel { color: var(--mj-status-success); }
+.artifact-picker-item i.fa-file-word { color: var(--mj-brand-primary); }
 .artifact-picker-item i.fa-file { color: var(--mj-text-muted); }
 
 .artifact-picker-item-info {
@@ -1112,4 +1183,66 @@
 .artifact-picker-item-meta {
   font-size: 11px;
   color: var(--mj-text-muted);
+}
+
+/* ---------- Floating "on call" pill (minimized realtime voice session) ----------
+   Shown bottom-right of the chat panel while the live call overlay is minimized
+   (e.g. after a gear-gated dev link navigated to a record). The mic + session stay
+   live; tapping the pill restores the full call overlay. */
+.voice-call-pill {
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+  z-index: 49; /* just under the full call overlay (z-index 50) */
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 16px 9px 13px;
+  border-radius: var(--mj-radius-full, 9999px);
+  border: 1px solid var(--mj-border-strong);
+  background: var(--mj-bg-surface-elevated, var(--mj-bg-surface));
+  color: var(--mj-text-primary);
+  font-family: inherit;
+  cursor: pointer;
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--mj-brand-primary) 18%, transparent);
+  transition: border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
+}
+.voice-call-pill:hover {
+  border-color: var(--mj-brand-primary);
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--mj-brand-primary) 28%, transparent);
+  transform: translateY(-1px);
+}
+.voice-call-pill i {
+  font-size: 14px;
+  color: var(--mj-brand-primary);
+}
+.voice-call-pill__pulse {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--mj-status-success);
+  flex-shrink: 0;
+  animation: voice-pill-pulse 1.6s ease-in-out infinite;
+}
+.voice-call-pill__text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.25;
+}
+.voice-call-pill__name {
+  font-size: 12.5px;
+  font-weight: 700;
+}
+.voice-call-pill__hint {
+  font-size: 10.5px;
+  color: var(--mj-text-muted);
+}
+@keyframes voice-pill-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--mj-status-success) 45%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 5px color-mix(in srgb, var(--mj-status-success) 0%, transparent);
+  }
 }

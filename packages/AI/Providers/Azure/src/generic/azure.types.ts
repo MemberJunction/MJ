@@ -195,4 +195,16 @@ export interface AzureTokenUsage {
    * Total number of tokens used
    */
   total_tokens: number;
+
+  /**
+   * Optional breakdown of the prompt token count. Azure (OpenAI-compatible) reports cached
+   * input tokens here when prompt caching is active. `prompt_tokens` INCLUDES these cached
+   * tokens, so adapters must subtract `cached_tokens` to get the net-new (uncached) prompt count.
+   */
+  prompt_tokens_details?: {
+    /**
+     * Number of prompt tokens served from the provider's prompt cache (a cache read/hit).
+     */
+    cached_tokens?: number;
+  };
 }

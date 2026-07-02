@@ -1,9 +1,10 @@
 import { Arg, Ctx, ObjectType, Query, Resolver, Field, Int, InputType } from 'type-graphql';
-import { RunQuery, QueryInfo, IRunQueryProvider, IMetadataProvider, RunQueryParams, LogError, RunQueryWithCacheCheckParams, RunQueriesWithCacheCheckResponse, RunQueryWithCacheCheckResult } from '@memberjunction/core';
+import { RunQuery, IRunQueryProvider, IMetadataProvider, RunQueryParams, LogError, RunQueryWithCacheCheckParams, RunQueriesWithCacheCheckResponse, RunQueryWithCacheCheckResult, RunQueryEnrichment } from '@memberjunction/core';
 import { AppContext } from '../types.js';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { GraphQLJSONObject } from 'graphql-type-json';
 import { Metadata } from '@memberjunction/core';
+import { MJQueryEntity, QueryEngine } from '@memberjunction/core-entities';
 import { GetReadOnlyProvider } from '../util.js';
 import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
 import { ResolverBase } from '../generic/ResolverBase.js';
@@ -39,6 +40,9 @@ export class RunQueryInput {
 
   @Field(() => String, { nullable: true, description: 'Description to use in audit log' })
   AuditLogDescription?: string;
+
+  @Field(() => GraphQLJSONObject, { nullable: true, description: 'Optional runtime-only directive to post-process result rows through a registered query result enricher ({ EnricherKey, Config })' })
+  Enrichment?: RunQueryEnrichment;
 }
 
 @ObjectType()
@@ -149,9 +153,9 @@ export class RunQueriesWithCacheCheckOutput {
 
 @Resolver()
 export class RunQueryResolver extends ResolverBase {
-  private async findQuery(md: IMetadataProvider, QueryID: string, QueryName?: string, CategoryID?: string, CategoryPath?: string, refreshMetadataIfNotFound: boolean = false): Promise<QueryInfo | null> {
-    // Filter queries based on provided criteria
-    const queries = md.Queries.filter(q => {
+  private async findQuery(md: IMetadataProvider, QueryID: string, QueryName?: string, CategoryID?: string, CategoryPath?: string, refreshMetadataIfNotFound: boolean = false): Promise<MJQueryEntity | null> {
+    const qe = QueryEngine.Instance;
+    const queries = qe.Queries.filter(q => {
       if (QueryID) {
         return q.ID.trim().toLowerCase() === QueryID.trim().toLowerCase();
       } else if (QueryName) {
@@ -169,8 +173,8 @@ export class RunQueryResolver extends ResolverBase {
 
     if (queries.length === 0) {
       if (refreshMetadataIfNotFound) {
-        // If we didn't find the query, refresh metadata and try again
-        await md.Refresh();
+        // If we didn't find the query, force-refresh QueryEngine and retry
+        await QueryEngine.Instance.Config(true);
         return this.findQuery(md, QueryID, QueryName, CategoryID, CategoryPath, false); // change the refresh flag to false so we don't loop infinitely
       } 
       else {
@@ -190,7 +194,8 @@ export class RunQueryResolver extends ResolverBase {
                      @Arg('MaxRows', () => Int, {nullable: true}) MaxRows?: number,
                      @Arg('StartRow', () => Int, {nullable: true}) StartRow?: number,
                      @Arg('ForceAuditLog', () => Boolean, {nullable: true}) ForceAuditLog?: boolean,
-                     @Arg('AuditLogDescription', () => String, {nullable: true}) AuditLogDescription?: string): Promise<RunQueryResultType> {
+                     @Arg('AuditLogDescription', () => String, {nullable: true}) AuditLogDescription?: string,
+                     @Arg('Enrichment', () => GraphQLJSONObject, {nullable: true}) Enrichment?: RunQueryEnrichment): Promise<RunQueryResultType> {
     // Check API key scope authorization for query execution
     await this.CheckAPIKeyScopeAuthorization('query:run', QueryID, context.userPayload);
 
@@ -199,7 +204,7 @@ export class RunQueryResolver extends ResolverBase {
     const rq = new RunQuery(provider as unknown as IRunQueryProvider);
     console.log('GetQueryData called with:', { QueryID, Parameters, MaxRows, StartRow, ForceAuditLog, AuditLogDescription });
     const result = await rq.RunQuery(
-      { 
+      {
         QueryID: QueryID,
         CategoryID: CategoryID,
         CategoryPath: CategoryPath,
@@ -207,8 +212,9 @@ export class RunQueryResolver extends ResolverBase {
         MaxRows: MaxRows,
         StartRow: StartRow,
         ForceAuditLog: ForceAuditLog,
-        AuditLogDescription: AuditLogDescription
-      }, 
+        AuditLogDescription: AuditLogDescription,
+        Enrichment: Enrichment
+      },
       context.userPayload.userRecord);
     console.log('RunQuery result:', { 
       Success: result.Success, 
@@ -255,22 +261,24 @@ export class RunQueryResolver extends ResolverBase {
                            @Arg('MaxRows', () => Int, {nullable: true}) MaxRows?: number,
                            @Arg('StartRow', () => Int, {nullable: true}) StartRow?: number,
                            @Arg('ForceAuditLog', () => Boolean, {nullable: true}) ForceAuditLog?: boolean,
-                           @Arg('AuditLogDescription', () => String, {nullable: true}) AuditLogDescription?: string): Promise<RunQueryResultType> {
+                           @Arg('AuditLogDescription', () => String, {nullable: true}) AuditLogDescription?: string,
+                           @Arg('Enrichment', () => GraphQLJSONObject, {nullable: true}) Enrichment?: RunQueryEnrichment): Promise<RunQueryResultType> {
     // Check API key scope authorization for query execution
     await this.CheckAPIKeyScopeAuthorization('query:run', QueryName, context.userPayload);
 
     const provider = GetReadOnlyProvider(context.providers, {allowFallbackToReadWrite: true});
     const rq = new RunQuery(provider as unknown as IRunQueryProvider);
     const result = await rq.RunQuery(
-      { 
-        QueryName: QueryName, 
+      {
+        QueryName: QueryName,
         CategoryID: CategoryID,
         CategoryPath: CategoryPath,
         Parameters: Parameters,
         MaxRows: MaxRows,
         StartRow: StartRow,
         ForceAuditLog: ForceAuditLog,
-        AuditLogDescription: AuditLogDescription
+        AuditLogDescription: AuditLogDescription,
+        Enrichment: Enrichment
       },
       context.userPayload.userRecord);
       
@@ -301,13 +309,14 @@ export class RunQueryResolver extends ResolverBase {
                                @Arg('MaxRows', () => Int, {nullable: true}) MaxRows?: number,
                                @Arg('StartRow', () => Int, {nullable: true}) StartRow?: number,
                                @Arg('ForceAuditLog', () => Boolean, {nullable: true}) ForceAuditLog?: boolean,
-                               @Arg('AuditLogDescription', () => String, {nullable: true}) AuditLogDescription?: string): Promise<RunQueryResultType> {
+                               @Arg('AuditLogDescription', () => String, {nullable: true}) AuditLogDescription?: string,
+                               @Arg('Enrichment', () => GraphQLJSONObject, {nullable: true}) Enrichment?: RunQueryEnrichment): Promise<RunQueryResultType> {
     const provider = GetReadOnlyProvider(context.providers, {allowFallbackToReadWrite: true});
     const md = provider as unknown as IMetadataProvider;
     const rq = new RunQuery(provider as unknown as IRunQueryProvider);
 
     const result = await rq.RunQuery(
-      { 
+      {
         QueryID: QueryID,
         CategoryID: CategoryID,
         CategoryPath: CategoryPath,
@@ -315,8 +324,9 @@ export class RunQueryResolver extends ResolverBase {
         MaxRows: MaxRows,
         StartRow: StartRow,
         ForceAuditLog: ForceAuditLog,
-        AuditLogDescription: AuditLogDescription
-      }, 
+        AuditLogDescription: AuditLogDescription,
+        Enrichment: Enrichment
+      },
       context.userPayload.userRecord);
     
     // If QueryName is not populated by the provider, use efficient lookup
@@ -359,12 +369,13 @@ export class RunQueryResolver extends ResolverBase {
                                      @Arg('MaxRows', () => Int, {nullable: true}) MaxRows?: number,
                                      @Arg('StartRow', () => Int, {nullable: true}) StartRow?: number,
                                      @Arg('ForceAuditLog', () => Boolean, {nullable: true}) ForceAuditLog?: boolean,
-                                     @Arg('AuditLogDescription', () => String, {nullable: true}) AuditLogDescription?: string): Promise<RunQueryResultType> {
+                                     @Arg('AuditLogDescription', () => String, {nullable: true}) AuditLogDescription?: string,
+                                     @Arg('Enrichment', () => GraphQLJSONObject, {nullable: true}) Enrichment?: RunQueryEnrichment): Promise<RunQueryResultType> {
     const provider = GetReadOnlyProvider(context.providers, {allowFallbackToReadWrite: true});
     const rq = new RunQuery(provider as unknown as IRunQueryProvider);
 
     const result = await rq.RunQuery(
-      { 
+      {
         QueryName: QueryName,
         CategoryID: CategoryID,
         CategoryPath: CategoryPath,
@@ -372,8 +383,9 @@ export class RunQueryResolver extends ResolverBase {
         MaxRows: MaxRows,
         StartRow: StartRow,
         ForceAuditLog: ForceAuditLog,
-        AuditLogDescription: AuditLogDescription
-      }, 
+        AuditLogDescription: AuditLogDescription,
+        Enrichment: Enrichment
+      },
       context.userPayload.userRecord);
     
     return {
@@ -419,7 +431,8 @@ export class RunQueryResolver extends ResolverBase {
       MaxRows: i.MaxRows,
       StartRow: i.StartRow,
       ForceAuditLog: i.ForceAuditLog,
-      AuditLogDescription: i.AuditLogDescription
+      AuditLogDescription: i.AuditLogDescription,
+      Enrichment: i.Enrichment
     }));
 
     // Execute all queries in parallel using the batch method
@@ -468,7 +481,8 @@ export class RunQueryResolver extends ResolverBase {
       MaxRows: i.MaxRows,
       StartRow: i.StartRow,
       ForceAuditLog: i.ForceAuditLog,
-      AuditLogDescription: i.AuditLogDescription
+      AuditLogDescription: i.AuditLogDescription,
+      Enrichment: i.Enrichment
     }));
 
     // Execute all queries in parallel using the batch method
@@ -531,6 +545,7 @@ export class RunQueryResolver extends ResolverBase {
           StartRow: item.params.StartRow,
           ForceAuditLog: item.params.ForceAuditLog,
           AuditLogDescription: item.params.AuditLogDescription,
+          Enrichment: item.params.Enrichment,
         },
         cacheStatus: item.cacheStatus ? {
           maxUpdatedAt: item.cacheStatus.maxUpdatedAt,

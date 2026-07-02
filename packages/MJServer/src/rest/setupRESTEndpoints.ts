@@ -1,5 +1,6 @@
 import express from 'express';
 import BodyParser from 'body-parser';
+import { LogStatusEx } from '@memberjunction/core';
 import { RESTEndpointHandler } from './RESTEndpointHandler.js';
 
 export const ___REST_API_BASE_PATH = '/api/v1';
@@ -63,9 +64,10 @@ export function setupRESTEndpoints(
     // Merge with default options
     const config = { ...DEFAULT_REST_API_OPTIONS, ...options };
 
-    // Skip setup if REST API is disabled
+    // Skip setup if REST API is disabled. REST on/off state is surfaced in the startup
+    // summary `Auth` line at standard level, so this detail is verbose-only.
     if (!config.enabled) {
-        console.log('REST API endpoints are disabled');
+        LogStatusEx({ message: 'REST API endpoints are disabled', verboseOnly: true });
         return;
     }
 
@@ -87,5 +89,5 @@ export function setupRESTEndpoints(
         app.use(basePath, BodyParser.json({ limit: '50mb' }), restHandler.getRouter());
     }
 
-    console.log(`REST API endpoints have been set up at ${basePath}`);
+    LogStatusEx({ message: `REST API endpoints have been set up at ${basePath}`, verboseOnly: true });
 }

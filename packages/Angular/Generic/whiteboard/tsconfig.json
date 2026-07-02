@@ -1,0 +1,22 @@
+{
+  "extends": "../../../../tsconfig.angular.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "outDir": "./dist",
+    "useDefineForClassFields": false,
+    "inlineSources": true,
+    "emitDecoratorMetadata": true,
+    "importHelpers": true,
+    "noImplicitAny": false,
+    "strictNullChecks": false,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true
+  },
+  "angularCompilerOptions": {
+    "fullTemplateTypeCheck": true,
+    "strictInjectionParameters": true
+  },
+  "files": ["src/public-api.ts"],
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist", "src/**/__tests__/**"]
+}

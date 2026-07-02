@@ -2,7 +2,8 @@ import { ProviderBase } from "./providerBase";
 import { UserInfo } from "./securityInfo";
 import { EntityDependency, EntityFieldInfo, EntityFieldTSType, EntityInfo, EntityPermissionType, RecordChange, RecordDependency, RecordMergeRequest, RecordMergeResult, RecordMergeDetailResult } from "./entityInfo";
 import { BaseEntity, BaseEntityResult, RecordChangePayload, RecordChangeSource, RestoreContext } from "./baseEntity";
-import { EntitySaveOptions, EntityDeleteOptions, EntityMergeOptions, PotentialDuplicateRequest, PotentialDuplicateResponse } from "./interfaces";
+import { EntitySaveOptions, EntityDeleteOptions, EntityMergeOptions, PotentialDuplicateRequest, PotentialDuplicateResponse, RemoteOpInvokeOptions, RemoteOpResult } from "./interfaces";
+import { dispatchRemoteOperationInProcess } from "./remoteOperationDispatch";
 import { TransactionItem } from "./transactionGroup";
 import { CompositeKey } from "./compositeKey";
 import { LogError } from "./logging";
@@ -102,6 +103,21 @@ export abstract class DatabaseProviderBase extends ProviderBase {
     }
 
     /**
+     * Server in-process transport for Remote Operations: resolves the registered operation by key
+     * and runs it via `ExecuteServer`. Inherited by both SQL Server and PostgreSQL providers. The
+     * client (GraphQL) provider overrides this to marshal over the wire instead.
+     */
+    protected override async InternalRouteOperation<TInput = unknown, TOutput = unknown>(operationKey: string, input: TInput, options: RemoteOpInvokeOptions): Promise<RemoteOpResult<TOutput>> {
+        let fallbackUser: UserInfo | undefined;
+        try {
+            fallbackUser = this.CurrentUser;
+        } catch {
+            // CurrentUser is unavailable until the provider is configured — rely on options.user instead.
+        }
+        return dispatchRemoteOperationInProcess<TInput, TOutput>(operationKey, input, options, this, fallbackUser);
+    }
+
+    /**
      * Executes a SQL query with optional parameters and options.
      * @param query
      * @param parameters
@@ -111,6 +127,15 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      * @returns A promise that resolves to an array of results of type T
      */
     abstract ExecuteSQL<T>(query: string, parameters?: unknown[], options?: ExecuteSQLOptions, contextUser?: UserInfo): Promise<Array<T>>
+
+    /**
+     * Builds a parameter placeholder for parameterized queries.
+     * Default: PG-style ($1, $2, ...). SQL Server overrides to @p0, @p1, etc.
+     * @param index Zero-based parameter index
+     */
+    public BuildParameterPlaceholder(index: number): string {
+        return `$${index + 1}`;
+    }
 
     /**
      * Begins a transaction for the current database connection.
@@ -359,7 +384,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
 
         const changes: Record<string, FieldChange> = {};
         for (const key in newData) {
-            const f = entityInfo.Fields.find((f) => f.Name.toLowerCase() === key.toLowerCase());
+            const f = entityInfo.FieldByName(key);
             if (!f) continue; // skip if field not found in entity info
 
             const bDiff = this.isFieldDifferent(f, oldData[key], newData[key]);
@@ -1269,13 +1294,9 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                     State: {},
                 };
 
-                entityResult.OriginalValues = entity.Fields.map((f) => {
-                    const tempStatus = f.ActiveStatusAssertions;
-                    f.ActiveStatusAssertions = false;
-                    const ret = { FieldName: f.Name, Value: f.Value };
-                    f.ActiveStatusAssertions = tempStatus;
-                    return ret;
-                });
+                // Reads f.Value directly (framework-internal capture for record-change history) —
+                // EntityField.Value does not assert active status, so no suppression is needed.
+                entityResult.OriginalValues = entity.Fields.map((f) => ({ FieldName: f.Name, Value: f.Value }));
                 entity.RegisterResultHistoryEntry(entityResult);
 
                 // Step 2: Validation hook

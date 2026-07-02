@@ -1,0 +1,63 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "BYO T02 - Contact Form Shows Confirmation",
+    "Description": "Navigates to the contact form, fills it out with valid data, clicks Submit, and verifies a 'Thanks!' confirmation message appears. Demonstrates the regression suite catching a broken form — the BYO app's Submit handler is a no-op, so this test is expected to FAIL when run against the buggy app.",
+    "InputDefinition": {
+      "goal": "Open the page at {{baseUrl}}/contact. Fill out the contact form with: Name='Alex Tester', Email='alex@example.com', Message='Hello, this is a regression test.' Then click the Submit button. After submission, a visible confirmation message containing the word 'Thanks' MUST appear on the page (typically styled in green or as a banner). If no such confirmation message appears within 3 seconds of clicking Submit, the test goal has NOT been met. Report whether you saw a 'Thanks' confirmation.",
+      "startUrl": "{{baseUrl}}/contact",
+      "allowedDomains": "{{allowedDomains}}"
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "finalUrlPattern": "/contact$",
+      "minConfidence": 0.7,
+      "maxSteps": 14,
+      "judgeValidationCriteria": [
+        "All three form fields (Name, Email, Message) were filled with the requested values",
+        "The Submit button was clicked",
+        "A confirmation message containing 'Thanks' is visible on the page after submission"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 14,
+      "maxExecutionTime": 150000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:2",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.7,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.3,
+          "config": {
+            "maxSteps": 14
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.7,
+        "step-count": 0.3
+      }
+    },
+    "Status": "Active",
+    "Tags": "byo-app,regression"
+  },
+  "primaryKey": {
+    "ID": "71B14201-ADC0-4FF3-A553-D0C98E84ADAA"
+  },
+  "sync": {
+    "lastModified": "2026-05-27T00:01:43.624Z",
+    "checksum": "a33d5762423e867f7a58f570c138c6eb539ff23e33044c87bb7852da58acf01a"
+  }
+}

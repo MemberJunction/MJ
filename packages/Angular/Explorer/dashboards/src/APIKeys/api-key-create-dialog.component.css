@@ -109,29 +109,6 @@
     flex-shrink: 0;
 }
 
-:host ::ng-deep .slideout-footer .k-button {
-    min-width: 100px;
-    padding: 10px 20px;
-    font-weight: 600;
-    border-radius: 8px;
-    transition: all 0.2s ease;
-}
-
-:host ::ng-deep .slideout-footer .k-button-solid-primary {
-    background: var(--mj-brand-primary);
-    border: none;
-    box-shadow: var(--mj-shadow-brand-sm);
-}
-
-:host ::ng-deep .slideout-footer .k-button-solid-primary:hover {
-    transform: translateY(-1px);
-    box-shadow: var(--mj-shadow-brand-md);
-}
-
-:host ::ng-deep .slideout-footer .k-button i {
-    margin: 0 5px;
-}
-
 /* Step Indicator */
 .step-indicator {
     display: flex;
@@ -305,17 +282,6 @@
 }
 
 /* Error Message */
-.error-message {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 12px 16px;
-    background: var(--mj-color-error-50);
-    border: 1px solid var(--mj-status-error-border);
-    border-radius: 8px;
-    color: var(--mj-color-error-600);
-    font-size: 14px;
-}
 
 /* Scopes */
 .scopes-header {
@@ -467,58 +433,27 @@
     margin-top: 2px;
 }
 
-.scope-tip {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 12px 16px;
-    background: var(--mj-status-info-bg);
-    border-radius: 8px;
+/* scope hint — positioning only; box chrome owned by <mj-alert> */
+.scope-hint-spacing {
     margin-top: 16px;
-    font-size: 13px;
-    color: var(--mj-status-info-text);
 }
 
-.scope-tip i {
-    color: var(--mj-status-info);
-}
-
-.scope-tip code {
-    background: var(--mj-color-info-100);
+.scope-hint-spacing code {
+    /* semantic surface + inherited text so the chip stays legible in dark mode
+       (the old primitive --mj-color-info-100 didn't adapt → light-on-light) */
+    background: var(--mj-bg-surface-sunken);
+    color: inherit;
     padding: 2px 6px;
     border-radius: 4px;
     font-family: monospace;
 }
 
-/* No Scopes Warning */
-.no-scopes-warning {
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-    padding: 16px;
-    background: linear-gradient(135deg, var(--mj-color-error-50) 0%, var(--mj-color-error-100) 100%);
-    border: 1px solid var(--mj-status-error-border);
-    border-radius: 10px;
+/* No-scopes alert — positioning only; box chrome owned by <mj-alert> */
+.noscope-spacing {
     margin-top: 16px;
-    font-size: 13px;
-    color: var(--mj-status-error);
 }
 
-.no-scopes-warning i {
-    font-size: 20px;
-    color: var(--mj-color-error-600);
-    margin-top: 2px;
-    flex-shrink: 0;
-}
-
-.no-scopes-warning strong {
-    display: block;
-    color: var(--mj-status-error);
-    font-size: 14px;
-    margin-bottom: 4px;
-}
-
-.no-scopes-warning p {
+.noscope-spacing p {
     margin: 0;
     line-height: 1.5;
 }
@@ -550,20 +485,6 @@
     border-radius: 12px;
     padding: 20px;
     margin-bottom: 24px;
-}
-
-.key-warning {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    padding: 10px 16px;
-    background: color-mix(in srgb, var(--mj-brand-primary) 20%, transparent);
-    border-radius: 8px;
-    margin-bottom: 16px;
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--mj-color-accent-300);
 }
 
 .key-value {
@@ -639,43 +560,8 @@
     color: var(--mj-text-primary);
 }
 
-/* Security Note */
-.security-note {
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-    text-align: left;
-    padding: 16px;
-    background: linear-gradient(135deg, var(--mj-color-success-50) 0%, var(--mj-color-success-100) 100%);
-    border-radius: 10px;
-    font-size: 13px;
-    color: var(--mj-color-success-800);
-}
-
-.security-note i {
-    font-size: 20px;
-    color: var(--mj-status-success);
-    margin-top: 2px;
-}
-
-.security-note strong {
-    display: block;
-    margin-bottom: 4px;
-}
-
 /* Form input styling */
-:host ::ng-deep .form-input .k-input,
-:host ::ng-deep .form-textarea .k-input-inner,
-:host ::ng-deep .k-datepicker .k-input {
-    padding: 10px 14px;
-    border-radius: 8px;
-    font-size: 14px;
-    border-color: var(--mj-border-default);
-    transition: all 0.2s ease;
-}
-
 :host ::ng-deep .form-input:focus-within,
-:host ::ng-deep .form-textarea:focus-within,
-:host ::ng-deep .k-datepicker:focus-within {
+:host ::ng-deep .form-textarea:focus-within {
     box-shadow: var(--mj-focus-ring);
 }

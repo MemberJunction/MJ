@@ -16,7 +16,7 @@ const defaultDialect = new SQLServerDialect();
 export function parseQuerySQL(sql: string, dialect: SQLParserDialect = defaultDialect): ParseResult {
     const analysis = SQLParser.Analyze(sql);
     const deterministicParams = SQLParser.ExtractParameterInfo(sql);
-    const tableRefs = SQLParser.ExtractTableRefs(sql);
+    const tableRefs = SQLParser.ExtractTableRefs(sql, dialect);
     const selectColumns = SQLParser.ExtractSelectColumns(sql, dialect);
 
     return { analysis, deterministicParams, tableRefs, selectColumns };

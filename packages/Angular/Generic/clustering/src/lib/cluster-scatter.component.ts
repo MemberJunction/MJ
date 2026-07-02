@@ -82,6 +82,13 @@ export class ClusterScatterComponent implements AfterViewInit, OnDestroy, OnChan
     @Input() Clusters: ClusterInfo[] = [];
 
     /**
+     * Legend / color mode. `'cluster'` (default) colors each point by its assigned
+     * cluster; `'entity'` colors by the point's source entity (`Metadata.EntityName`),
+     * which is the useful mode for multi-entity analyses.
+     */
+    @Input() ColorBy: 'cluster' | 'entity' = 'cluster';
+
+    /**
      * When `true`, a semi-transparent loading overlay is displayed
      * on top of the scatter plot.
      */
@@ -458,6 +465,12 @@ export class ClusterScatterComponent implements AfterViewInit, OnDestroy, OnChan
     private panStartX = 0;
     private panStartY = 0;
     private panStartViewBox = [0, 0, 1000, 700];
+    // 3D orbit-drag state
+    private isRotating = false;
+    private rotateStartX = 0;
+    private rotateStartY = 0;
+    private rotateStartYaw = 0;
+    private rotateStartPitch = 0;
     private boundOnMouseMove: ((e: MouseEvent) => void) | null = null;
     private boundOnMouseUp: ((e: MouseEvent) => void) | null = null;
 
@@ -532,10 +545,137 @@ export class ClusterScatterComponent implements AfterViewInit, OnDestroy, OnChan
      * @returns CSS color string.
      */
     public GetPointColor(point: ClusterPoint): string {
+        if (this.ColorBy === 'entity') {
+            return this.getEntityColor(point);
+        }
         if (point.ClusterId < 0) return '#64748b'; // outlier gray
         const palette = this.getActivePalette();
         const cluster = this.Clusters.find(c => c.Id === point.ClusterId);
         return cluster?.Color ?? palette[point.ClusterId % palette.length];
+    }
+
+    // ================================================================
+    // Color-by-entity (multi-entity analyses)
+    // ================================================================
+
+    /** Stable entity-name → color map, assigned in first-seen order. */
+    private entityColorMap = new Map<string, string>();
+
+    /** Resolve a color for a point keyed by its source entity name. */
+    private getEntityColor(point: ClusterPoint): string {
+        const name = (point.Metadata?.['EntityName'] as string) || (point.Metadata?.['Entity'] as string) || 'Unknown';
+        let color = this.entityColorMap.get(name);
+        if (!color) {
+            const palette = this.getActivePalette();
+            color = palette[this.entityColorMap.size % palette.length];
+            this.entityColorMap.set(name, color);
+        }
+        return color;
+    }
+
+    /** Distinct source entities present in the data (for the entity legend). */
+    public get EntityLegend(): Array<{ Name: string; Color: string; Count: number }> {
+        if (this.ColorBy !== 'entity') return [];
+        const counts = new Map<string, number>();
+        for (const p of this.Points) {
+            const name = (p.Metadata?.['EntityName'] as string) || (p.Metadata?.['Entity'] as string) || 'Unknown';
+            counts.set(name, (counts.get(name) ?? 0) + 1);
+        }
+        return [...counts.entries()].map(([Name, Count]) => ({
+            Name,
+            Count,
+            Color: this.getEntityColor({ Metadata: { EntityName: Name } } as unknown as ClusterPoint),
+        }));
+    }
+
+    // ================================================================
+    // 3D projection (static isometric, depth-cued)
+    // ================================================================
+
+    /** True when any point carries a Z coordinate (a 3D projection). */
+    public get Is3D(): boolean {
+        return this.Points.some(p => p.Z != null);
+    }
+
+    /** Orbit angles (radians) for the interactive 3D projection. Updated by drag. */
+    public Yaw = 0.6;
+    public Pitch = 0.45;
+
+    /** Rotate a centered (x,y,z) by the current yaw (around Y) then pitch (around X). */
+    private rotate(point: ClusterPoint): { x: number; y: number; z: number } {
+        const x0 = point.X - 500;
+        const y0 = point.Y - 350;
+        const z0 = (point.Z ?? 500) - 500;
+        const cy = Math.cos(this.Yaw), sy = Math.sin(this.Yaw);
+        // yaw around vertical (Y) axis
+        const x1 = x0 * cy + z0 * sy;
+        const z1 = -x0 * sy + z0 * cy;
+        const y1 = y0;
+        // pitch around horizontal (X) axis
+        const cp = Math.cos(this.Pitch), sp = Math.sin(this.Pitch);
+        const y2 = y1 * cp - z1 * sp;
+        const z2 = y1 * sp + z1 * cp;
+        return { x: x1, y: y2, z: z2 };
+    }
+
+    /** Project a point's (X,Y,Z) to a screen X in the SVG coordinate space. */
+    public PX(point: ClusterPoint): number {
+        if (!this.Is3D || point.Z == null) return point.X;
+        return 500 + this.rotate(point).x;
+    }
+
+    /** Project a point's (X,Y,Z) to a screen Y in the SVG coordinate space. */
+    public PY(point: ClusterPoint): number {
+        if (!this.Is3D || point.Z == null) return point.Y;
+        return 350 + this.rotate(point).y;
+    }
+
+    /** Normalized depth [0=far, 1=near] for a point, used for size/opacity cues. */
+    private depthNorm(point: ClusterPoint): number {
+        if (!this.Is3D || point.Z == null) return 1;
+        const depth = this.rotate(point).z;
+        // centered coords span roughly ±440 per axis; combined depth ~[-760, 760]
+        return Math.max(0, Math.min(1, (depth + 600) / 1200));
+    }
+
+    /** Reset the 3D orbit to the default viewing angle. */
+    public ResetRotation(): void {
+        this.Yaw = 0.6;
+        this.Pitch = 0.45;
+        this.cdr.detectChanges();
+    }
+
+    /**
+     * Cluster labels positioned at each cluster's centroid in *projected* space.
+     * Used to label clusters in 3D (where the 2D centroid-glow path is disabled).
+     * Recomputes as the user orbits because it depends on PX/PY (yaw/pitch).
+     */
+    public get ProjectedClusterLabels(): Array<{ X: number; Y: number; ClusterId: number; Color: string }> {
+        if (!this.Is3D) return [];
+        const groups = new Map<number, ClusterPoint[]>();
+        for (const p of this.Points) {
+            if (p.ClusterId < 0) continue;
+            const arr = groups.get(p.ClusterId);
+            if (arr) arr.push(p); else groups.set(p.ClusterId, [p]);
+        }
+        const palette = this.getActivePalette();
+        const out: Array<{ X: number; Y: number; ClusterId: number; Color: string }> = [];
+        for (const [cid, pts] of groups) {
+            const sx = pts.reduce((s, p) => s + this.PX(p), 0) / pts.length;
+            const sy = pts.reduce((s, p) => s + this.PY(p), 0) / pts.length;
+            const cluster = this.Clusters.find(c => c.Id === cid);
+            out.push({ X: sx, Y: sy, ClusterId: cid, Color: cluster?.Color ?? palette[cid % palette.length] });
+        }
+        return out;
+    }
+
+    /**
+     * Points in render order. In 3D, far points are drawn first so nearer points
+     * paint on top (SVG has no z-index); in 2D the original order is preserved.
+     */
+    public get RenderPoints(): ClusterPoint[] {
+        if (!this.Is3D) return this.Points;
+        return [...this.Points].sort((a, b) => this.depthNorm(a) - this.depthNorm(b));
     }
 
     /**
@@ -549,6 +689,10 @@ export class ClusterScatterComponent implements AfterViewInit, OnDestroy, OnChan
     public GetPointRadius(point: ClusterPoint): number {
         if (this.SelectedPointIds.has(point.VectorKey)) {
             return this.HighlightRadius;
+        }
+        if (this.Is3D) {
+            // Nearer points (depth→1) render larger to convey depth.
+            return this.DotRadius * (0.6 + 0.7 * this.depthNorm(point));
         }
         return this.DotRadius;
     }
@@ -564,6 +708,10 @@ export class ClusterScatterComponent implements AfterViewInit, OnDestroy, OnChan
     public GetPointOpacity(point: ClusterPoint): number {
         if (this.HoveredPoint && this.HoveredPoint.VectorKey !== point.VectorKey) {
             return this.DotOpacity * 0.5;
+        }
+        if (this.Is3D) {
+            // Fade far points slightly for depth perception.
+            return this.DotOpacity * (0.55 + 0.45 * this.depthNorm(point));
         }
         return this.DotOpacity;
     }
@@ -696,7 +844,18 @@ export class ClusterScatterComponent implements AfterViewInit, OnDestroy, OnChan
      * @param event  The native mouse event.
      */
     public OnMouseDown(event: MouseEvent): void {
-        if (event.button !== 0 || !this.EnablePan) return;
+        if (event.button !== 0) return;
+        // In 3D mode a left-drag orbits the camera (so depth is perceivable);
+        // in 2D it pans the viewBox.
+        if (this.Is3D) {
+            this.isRotating = true;
+            this.rotateStartX = event.clientX;
+            this.rotateStartY = event.clientY;
+            this.rotateStartYaw = this.Yaw;
+            this.rotateStartPitch = this.Pitch;
+            return;
+        }
+        if (!this.EnablePan) return;
         this.isPanning = true;
         this.panStartX = event.clientX;
         this.panStartY = event.clientY;
@@ -1010,6 +1169,15 @@ export class ClusterScatterComponent implements AfterViewInit, OnDestroy, OnChan
     // ================================================================
 
     private onMouseMove(event: MouseEvent): void {
+        if (this.isRotating) {
+            const dx = event.clientX - this.rotateStartX;
+            const dy = event.clientY - this.rotateStartY;
+            this.Yaw = this.rotateStartYaw + dx * 0.01;
+            // clamp pitch so the scene never flips upside down
+            this.Pitch = Math.max(-1.3, Math.min(1.3, this.rotateStartPitch + dy * 0.01));
+            this.cdr.detectChanges();
+            return;
+        }
         if (!this.isPanning || !this.svgRef) return;
         const svg = this.svgRef.nativeElement;
         const rect = svg.getBoundingClientRect();
@@ -1033,6 +1201,7 @@ export class ClusterScatterComponent implements AfterViewInit, OnDestroy, OnChan
 
     private onMouseUp(_event: MouseEvent): void {
         this.isPanning = false;
+        this.isRotating = false;
     }
 
     private computeCentroids(): void {

@@ -122,6 +122,8 @@ Invoke the Workflow Planner sub-agent and describe the user's goal and any relev
 - Clear, single objective that one agent can handle
 - Many agents are capable of doing multi-step work on their own — prefer single-agent delegation when one agent's description covers all the steps
 
+**Form Builder fast-path.** When the user asks to "build / generate / modify / refine / tweak a form for *X* entity" — or you see an `ActiveForm` chip in `AppContext` and the user describes a form-shaped change — **delegate to the Form Builder agent**. The Form Builder owns the runtime-form lifecycle (Create / Modify / Activate / Revert) and knows how to branch between net-new and refinement paths. Don't try to handle form authoring with general-purpose actions.
+
 **Complex Multi-Agent Work** → Delegate to Workflow Planner
 - Multiple distinct objectives requiring different specialists
 - Tasks that build on each other across agent boundaries

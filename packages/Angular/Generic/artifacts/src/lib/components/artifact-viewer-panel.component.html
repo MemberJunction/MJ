@@ -87,10 +87,12 @@
     }
 
     @if (error) {
-      <div class="error-state">
-        <i class="fas fa-exclamation-triangle"></i>
-        <span>{{ error }}</span>
-      </div>
+      <mj-empty-state
+        Variant="error"
+        Icon="fa-solid fa-triangle-exclamation"
+        Title="Couldn't load artifact"
+        [Message]="error"
+        Size="compact" />
     }
 
     @if (!isLoading && !error && artifact) {
@@ -124,7 +126,8 @@
                 (openEntityRecord)="onOpenEntityRecord($event)"
                 (navigationRequest)="onNavigationRequest($event)"
                 (pluginLoaded)="onPluginLoaded()"
-                (tabsChanged)="onTabsChanged()">
+                (tabsChanged)="onTabsChanged()"
+                (applyFormRequested)="applyFormRequested.emit($event)">
               </mj-artifact-type-plugin-viewer>
             </div>
           }
@@ -238,10 +241,10 @@
                 }
               </div>
             } @else {
-              <div class="empty-state">
-                <i class="fas fa-link"></i>
-                <p>No links available</p>
-              </div>
+              <mj-empty-state
+                Icon="fa-solid fa-link"
+                Title="No links available"
+                Size="compact" />
             }
           </div>
 

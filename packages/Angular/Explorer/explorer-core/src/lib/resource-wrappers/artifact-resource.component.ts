@@ -3,7 +3,8 @@ import { DataSnapshot, Metadata, UserInfo } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData, MJEnvironmentEntityExtended } from '@memberjunction/core-entities';
-import { AnalyzeArtifactService } from '@memberjunction/ng-artifacts';
+import { AnalyzeArtifactService, InteractiveFormApplyService } from '@memberjunction/ng-artifacts';
+import type { ComponentSpec } from '@memberjunction/interactive-component-types';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 /**
@@ -25,7 +26,8 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
           [showSaveToCollection]="true"
           [canShare]="true"
           [canEdit]="true"
-          (analyzeRequested)="onAnalyzeRequested($event)">
+          (analyzeRequested)="onAnalyzeRequested($event)"
+          (applyFormRequested)="onApplyFormRequested($event)">
         </mj-artifact-viewer-panel>
       }
     </div>
@@ -42,6 +44,20 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
 })
 export class ArtifactResource extends BaseResourceComponent {
   private readonly analyzeService = inject(AnalyzeArtifactService);
+  private readonly applyService = inject(InteractiveFormApplyService);
+
+  /**
+   * Apply-to-my-form handler — see InteractiveFormApplyService.
+   * Confirms with the user, then routes to Create or Modify depending on
+   * whether an Active override already exists for this entity+user.
+   */
+  async onApplyFormRequested(event: { spec: unknown; entityName: string }): Promise<void> {
+    await this.applyService.ConfirmAndApply(
+      event.spec as ComponentSpec,
+      event.entityName,
+      this.ProviderToUse,
+    );
+  }
 
   public currentUser: UserInfo | null = null;
   public artifactId: string = '';

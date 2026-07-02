@@ -1,5 +1,178 @@
 # @memberjunction/open-app-engine
 
+## 5.44.0
+
+### Minor Changes
+
+- 7279819: Fixes PostgreSQL lowercase-schema entity class names breaking mixed-case OpenApp builds.
+
+### Patch Changes
+
+- 6cf6c43: Fix `mj app install` corrupting `mj.config.cjs` (#2975). When inserting a new top-level section (`dynamicPackages` / `entityPackageName`) before the closing brace of `module.exports = { ... }`, the preceding property is now comma-terminated, so a config whose last property is a brace-terminated block (e.g. `openApps: { ... }` with no trailing comma) stays valid JavaScript instead of breaking the next `require('mj.config.cjs')` (the `mj migrate` / `mj codegen` / build steps an install runs). The comma logic is string- and comment-aware so a `//` inside a value like `'http://x'` or braces inside strings are never miscounted. Additionally, every config write (all six add/remove/toggle functions) now passes through a post-write parse guard that compiles the result first and, on any malformed output, fails loudly with the file left untouched — so a bad edit can never silently ship a broken config.
+- Updated dependencies [3633fbb]
+- Updated dependencies [1367fbb]
+- Updated dependencies [5396d90]
+- Updated dependencies [7279819]
+- Updated dependencies [d44e430]
+- Updated dependencies [6f74b17]
+- Updated dependencies [be5ab50]
+- Updated dependencies [aa9102d]
+- Updated dependencies [2f926df]
+- Updated dependencies [863a10d]
+- Updated dependencies [2f9b863]
+  - @memberjunction/core-entities@5.44.0
+  - @memberjunction/core@5.44.0
+  - @memberjunction/global@5.44.0
+  - @memberjunction/sql-dialect@5.44.0
+
+## 5.43.0
+
+### Minor Changes
+
+- 9200b13: feat(open-app): connector-extraction modality — multi-app repos, in-repo subpath, teardown, and `OpenApp.Subpath`
+
+  Adds the Open-App capabilities needed to ship vendor connectors as installable apps from a single multi-app repo (e.g. `MemberJunction/Integrations`):
+  - **Multi-app repos via in-repo subpath** — `mj app install <repo>/<subpath>` resolves a per-app manifest under a subdirectory; scoped-tag version resolution (`<subpath>@<version>`) per app.
+  - **`OpenApp.Subpath` column** (migration + CodeGen) persists which in-repo directory an app installed from, so upgrade/remove re-fetch the right manifest.
+  - **Remove-time teardown** (`migrations.teardownDirectory`) — retires the rows an app's seed migrations wrote into the shared core schema (`__mj` Integration/IO/IOF/Action), which dropping the app's own schema cannot reach. Platform-aware (`-pg` on Postgres) + subpath-aware.
+  - **Array-form `dependencies`** accepted in the manifest (normalized to a record), so apps that ship `dependencies` as an array of `{ name, repository, versionRange }` validate and install.
+
+### Patch Changes
+
+- a95ef89: fix(open-app): `mj app` runtime-load + lifecycle correctness, plus installer/Explorer fixes
+
+  The next-applicable subset of the OpenApp lifecycle audit — runtime-load and install/upgrade/remove correctness — across four packages:
+  - **`@memberjunction/open-app-engine`.** Makes an installed Open App actually take effect and the lifecycle reversible/repeatable: installed server packages load at boot from `dynamicPackages.server[]` (and their generated GraphQL resolvers enter the live schema), and installed client packages are recorded in `dynamicPackages.client[]`; install status + reinstall correctness (npm-install failure leaves the app `Disabled` not falsely `Active`; an `Error`-state app is reinstallable; rollback drops only a schema we created; migrations baseline so a `V1` migration is never skipped); atomic upgrade dependency rewrite; and remove data-safety (DB-first ordering, co-tenant shared-schema guard, and metadata cleanup committed in one transaction on PostgreSQL). Also removes an app's **own `Application` row on uninstall** — an app's metadata-sync migration registers an `Application` (fixed UUID) grouping its entities; removal previously left it orphaned, so a reinstall's migration re-`INSERT`ed the same UUID and failed on `PK_Application_ID`. Removal now deletes an Application **wholly owned** by the removed schema (best-effort, after the atomic metadata commit; an Application that also groups other apps' entities, or one with user-added dependents, is left intact and reused). +unit tests.
+  - **`@memberjunction/cli`.** The Open App client load mechanism now lives in distributed packages instead of bespoke MJExplorer files. `mj codegen manifest` gains `--open-app-client-bootstrap`: after generating the class-registrations manifest, it appends a managed, idempotent block of side-effect imports — one per installed Open App client package recorded in `dynamicPackages.client[]` — so the apps' `@RegisterClass` decorators run when the client bundle loads. The block is rebuilt on every run, so it tracks install/remove/enable/disable (each of which edits `dynamicPackages.client`). This lets MJExplorer drop its hand-written `ensure-open-app-bootstrap.mjs` script, the separate generated bootstrap file, and the extra `app.module.ts` import — keeping the app paper-thin (changes there don't auto-distribute like npm packages). +unit tests for the pure block transform.
+  - **`@memberjunction/installer`.** The configure phase wrote a real `.env` (DB credentials, API keys) but emitted no `.gitignore`, so a freshly scaffolded project could commit secrets via `git init && git add .`. It now guarantees a `.gitignore` ignoring `.env`/`.env.*` (keeping `.env.example`); idempotent — appends only missing entries, never rewriting user lines.
+  - **`@memberjunction/ng-explorer-app`.** Fixes an MJExplorer login crash where `MJNotificationService.Instance` was read before DI constructed the singleton (surfaced by magic-link's instant, no-redirect login) — the service is now injected into `MJExplorerAppComponent` so it's constructed before `handleLogin` runs.
+
+- Updated dependencies [40eb4e0]
+- Updated dependencies [9f6aa87]
+- Updated dependencies [b98366b]
+- Updated dependencies [9200b13]
+- Updated dependencies [ad8d8f1]
+- Updated dependencies [a4cdfb0]
+  - @memberjunction/core@5.43.0
+  - @memberjunction/global@5.43.0
+  - @memberjunction/sql-dialect@5.43.0
+  - @memberjunction/core-entities@5.43.0
+
+## 5.42.0
+
+### Patch Changes
+
+- 63d7610: App-level PostgreSQL support (code-only — no schema/metadata changes):
+  - **open-app-engine**: `mj app install/upgrade/remove` now work on PostgreSQL — the CLI orchestrator
+    builds a `PostgreSQLDataProvider` when `dbPlatform=postgresql` (was hardcoded to SQL Server), and
+    the installer selects the platform-specific migration directory (`<dir>-pg` / `migrations.directoryPostgres`)
+    so PG apps run plpgsql migrations instead of T-SQL.
+  - **db-auto-doc**: dialect-aware description write-back — emits PostgreSQL `COMMENT ON` statements
+    (double-quoted identifiers, no `sp_addextendedproperty` / `GO`) when the configured provider is postgresql.
+
+- b7092ca: PostgreSQL runtime correctness, found during fresh-DB PG end-to-end testing:
+  - **codegen-lib**: clean MJAPI engine load on PostgreSQL — `AutoUpdatePath` written as a
+    dialect-correct boolean literal, plus a PG-only migration removing orphan related-entity-name
+    virtual EntityField rows whose column the generated PG base view never emits (these crashed
+    EntityActionEngine / AI Credential Bindings / Scheduling with `column "..." does not exist`).
+  - **open-app-engine**: app uninstall now deletes all FK-dependent metadata (Entity Field Values,
+    Entity Settings) in dependency order and reports a real failure instead of swallowing errors
+    into a false "success".
+  - **postgresql-dataprovider**: dialect-correct per-field entity-search predicate (no `N'...'`
+    literal prefix, no `ESCAPE` clause) — fixes `syntax error at or near "ESCAPE"` on live search.
+
+- Updated dependencies [9b9b484]
+- Updated dependencies [2f225e4]
+- Updated dependencies [0fa3cbc]
+  - @memberjunction/core@5.42.0
+  - @memberjunction/global@5.42.0
+
+## 5.41.0
+
+### Patch Changes
+
+- Updated dependencies [8fd6f59]
+- Updated dependencies [cd6c5f0]
+- Updated dependencies [8c8b658]
+- Updated dependencies [659ee5b]
+- Updated dependencies [cc604aa]
+- Updated dependencies [15b743b]
+- Updated dependencies [a5f5472]
+- Updated dependencies [ddaa30e]
+  - @memberjunction/core@5.41.0
+  - @memberjunction/global@5.41.0
+
+## 5.40.2
+
+### Patch Changes
+
+- @memberjunction/core@5.40.2
+- @memberjunction/global@5.40.2
+
+## 5.40.1
+
+### Patch Changes
+
+- Updated dependencies [e50381b]
+  - @memberjunction/core@5.40.1
+  - @memberjunction/global@5.40.1
+
+## 5.40.0
+
+### Patch Changes
+
+- Updated dependencies [804f9f6]
+- Updated dependencies [73bb233]
+- Updated dependencies [43e6c0f]
+  - @memberjunction/core@5.40.0
+  - @memberjunction/global@5.40.0
+
+## 5.39.0
+
+### Patch Changes
+
+- Updated dependencies [361eb4c]
+- Updated dependencies [f4bf584]
+- Updated dependencies [3c53858]
+- Updated dependencies [ae74fd5]
+- Updated dependencies [9bc2916]
+- Updated dependencies [a101a34]
+  - @memberjunction/core@5.39.0
+  - @memberjunction/global@5.39.0
+
+## 5.38.0
+
+### Patch Changes
+
+- 21d967f: feat(open-app): resolve the full transitive dependency graph up front, with real cross-repo cycle detection; forward `AllowDoubleUnderscoreSchema` / `Verbose` to dependency installs
+
+  `mj app install` now fetches every reachable dependency's manifest and resolves the complete transitive graph before installing anything, installing members in leaf-first topological order. This detects genuine cross-repo cycles (e.g. `A -> B -> A`) and fails fast with a clear message instead of recursing unbounded. Resolution runs once up front; pre-resolved members install without re-resolving their own subtrees.
+
+  Also fixes a latent bug in the existing recursive install: the `--dangerously-ignore-dbl-underscore-schema-rule` override (and `--verbose`) set on the top-level `mj app install` were not forwarded to the recursive dependency installs. An app whose dependency uses a `__`-prefixed schema (e.g. BCSaaS → `mj-bizapps-common` with schema `__mj_BizAppsCommon`) would fail at the dependency step with "Schema names starting with '\_\_' are reserved for MJ internals" even when the override was set on the parent. Inherited install-behavior options now propagate to dependency installs. App-identity options (`Source`, `Version`) are intentionally not forwarded — each dependency has its own.
+
+  Public `InstallApp`/`UpgradeApp` signatures are unchanged.
+
+- Updated dependencies [4ee0b06]
+- Updated dependencies [30f598d]
+- Updated dependencies [748b2e7]
+- Updated dependencies [ce7d2f5]
+- Updated dependencies [275afda]
+- Updated dependencies [6a3ac36]
+- Updated dependencies [c0b40c0]
+- Updated dependencies [d5a51b3]
+- Updated dependencies [3d739a3]
+- Updated dependencies [ebb0e3d]
+  - @memberjunction/core@5.38.0
+  - @memberjunction/global@5.38.0
+
+## 5.37.0
+
+### Patch Changes
+
+- Updated dependencies [4f15f31]
+  - @memberjunction/core@5.37.0
+  - @memberjunction/global@5.37.0
+
 ## 5.36.0
 
 ### Patch Changes

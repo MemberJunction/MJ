@@ -169,6 +169,49 @@ const entity = MJGlobal.Instance.ClassFactory.CreateInstance<BaseEntity>(
 // Returns an instance of the highest-priority registered subclass for 'Users'
 ```
 
+### Structured registration: `@RegisterClassEx` + metadata
+
+When a registration needs anything beyond `(baseClass, key, priority)` — toggling the rarely-used flags, or attaching **metadata** for runtime filtering — reach for `@RegisterClassEx`. It's the same registration under the hood, but accepts a typed options bag instead of trailing positional booleans:
+
+```typescript
+import { RegisterClassEx } from '@memberjunction/global';
+
+@RegisterClassEx(BaseFormPanel, {
+    key: 'content-sources:tag-pipeline',
+    skipNullKeyWarning: true,
+    metadata: {
+        entity: 'MJ: Content Sources',
+        slot: 'after-fields',
+        sortKey: 100,
+    },
+})
+export class TagPipelinePanel extends BaseFormPanel { /* ... */ }
+```
+
+The `metadata` field is stored on the `ClassRegistration` and is purely a runtime aid for discovery — it has no effect on the priority / key lookup. Pair it with one of the discovery helpers below:
+
+| Helper                                                | Use when …                                                                                                                                       |
+|------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------|
+| `GetAllRegistrationsByMetadata(base, predicate)`     | You have structured discriminators (`entity`, `slot`, `sortKey`, etc.) and want to filter on multiple fields. Recommended default.               |
+| `GetAllRegistrationsByKeyPrefix(base, prefix)`       | Registrations share a structured key prefix (e.g. `"breed:..."` / `"<EntityName>:..."`) and you want everything below that prefix.               |
+| `GetAllRegistrationsByKeyPattern(base, regex)`       | More nuanced key matching than a prefix can express.                                                                                              |
+
+```typescript
+// Discover every panel that should appear in a given form's slot
+const panels = MJGlobal.Instance.ClassFactory.GetAllRegistrationsByMetadata(
+    BaseFormPanel,
+    (m) => m?.entity === 'MJ: Content Sources' && m?.slot === 'after-fields',
+);
+// Sort by metadata.sortKey, then by Priority, then by registration order
+panels.sort((a, b) => {
+    const aSort = (a.Metadata?.sortKey as number) ?? 0;
+    const bSort = (b.Metadata?.sortKey as number) ?? 0;
+    return bSort !== aSort ? bSort - aSort : b.Priority - a.Priority;
+});
+```
+
+`@RegisterClass` also accepts an optional sixth positional `metadata` arg for parity, but the options-bag form scales better past three arguments and reads better at call sites — prefer `@RegisterClassEx` for new code.
+
 ### Event System
 
 MJGlobal provides a publish/subscribe event bus built on RxJS. Events can be observed in real-time or with replay (a `ReplaySubject` buffering up to 100 events for 30 seconds).
@@ -413,6 +456,26 @@ cache.Remove('user-prefs');
 cache.Clear();
 ```
 
+### KeyedSerialTaskQueue
+
+An entity-agnostic primitive for **fire-and-forget work that must serialize per key**. Tasks enqueued under the same key (compared by object identity) run strictly in order — the next can't start until the prior settles — while tasks under different keys run concurrently. Failures are tallied for a later `flush()` and never propagate outward, so the enqueue site is never blocked, nor broken, by a background failure.
+
+It is **self-bounding**: only in-flight tasks are retained (they drop out as they settle) and failures accumulate into counters, so a long-lived queue that never flushes does not grow without bound.
+
+```typescript
+import { KeyedSerialTaskQueue } from '@memberjunction/global';
+
+const queue = new KeyedSerialTaskQueue({ onError: (err, label) => console.error(label, err) });
+
+// Same key (the `record` object) → these run in order; different keys → concurrent.
+queue.enqueue(record, () => insert(record));
+queue.enqueue(record, () => update(record), { label: 'update', isOk: (ok) => ok === true });
+
+const { failures, rejections } = await queue.flush(); // await in-flight tasks + read/reset the failure tally
+```
+
+The canonical consumer is `BaseEntitySaveQueue` in `@memberjunction/core`, which builds the fire-and-forget entity-save pattern (INSERT then chained UPDATE, with the "mutate-after-insert" race made structurally impossible) on top of this primitive.
+
 ### WarningManager
 
 A singleton warning system with session-level deduplication, debounced output, and tree-structured formatting. Tracks deprecation warnings, field-not-found warnings, and redundant load warnings.
@@ -631,6 +694,75 @@ function RegisterClass(
 | `rxjs` | Observable-based event system (`Subject`, `ReplaySubject`) |
 | `lodash` | Deep comparison, type checking, object utilities |
 | `uuid` | UUID v4 generation |
+
+## Field Rules Engine
+
+A **framework-agnostic** engine for computing field values from declarative rules and a composable
+transform pipeline. It is the shared substrate behind two MemberJunction features — and is designed so
+*any* code can use it, because it lives here in `global` with zero dependencies beyond this package:
+
+| Layer | Package | Use it when |
+|---|---|---|
+| **Pure engine** (this package) | `@memberjunction/global` | You have a **plain record** (`Record<string, unknown>`) — from anywhere — and want to compute/transform field values. No entity, no DB required. |
+| **`EntityFieldRules`** | `@memberjunction/core` | The **target is an MJ entity** — you want metadata validation, automatic type coercion, RunView-backed lookups, and write-back with Record Changes versioning. Builds on this engine. |
+| **`FieldMappingEngine`** | `@memberjunction/integration` | The **other side is a live external system** (its own protocol, auth, match resolution, sync direction). Uses this engine for the per-field transforms. |
+
+> One engine, three purpose-built layers. Pick the lowest one that fits: if you only have a dict, use this; if you're updating an entity, use core; if you're syncing an external system, that's integration's job.
+
+### Two pieces
+
+**1. `FieldTransformEngine` — a transform pipeline over `(value, fields)`**
+
+Runs an ordered list of `TransformStep`s. Step types: `direct`, `regex`, `split`, `combine`, `lookup`
+(in-memory map), `format`, `coerce`, `substring`, `custom` (a `(value, fields) => result` expression,
+compiled once and LRU-cached). Per-step `OnError` is `Skip` | `Null` | `Fail` (default `Null` — grace).
+
+```ts
+import { FieldTransformEngine } from '@memberjunction/global';
+
+const e = new FieldTransformEngine();
+e.ExecutePipeline('19.99', {}, [{ Type: 'coerce', Config: { TargetType: 'number' } }]).Value; // 19.99
+e.Evaluate("fields.First + ' ' + fields.Last", undefined, { First: 'Ada', Last: 'Lovelace' });  // 'Ada Lovelace'
+```
+
+**2. `FieldRulesEvaluator` — rules → a per-field diff (no mutation)**
+
+A `FieldRule` sets a `TargetField` from a `Source` — `static` | `field` | `formula` | `lookup` —
+optionally through a `Transforms` pipeline, gated by an optional `Condition` (a **safe** boolean
+expression via this package's `SafeExpressionEvaluator`). `ComputeChanges` returns a `FieldChange[]`
+(old → new per rule) **without applying anything** — which is exactly what makes a **dry-run preview**
+possible: the caller decides whether to write.
+
+```ts
+import { FieldRulesEvaluator, type FieldRuleSet } from '@memberjunction/global';
+
+const ruleSet: FieldRuleSet = {
+    Rules: [
+        { TargetField: 'FullName', Source: { Kind: 'formula', Expression: "fields.FirstName + ' ' + fields.LastName" } },
+        { TargetField: 'Tier', Source: { Kind: 'static', Value: 'Gold' }, Condition: 'Revenue > 1000' },
+    ],
+};
+
+// LookupResolver is optional — only needed for `lookup` sources. core's EntityFieldRules supplies a
+// RunView-backed one; here you inject your own (or omit it).
+const changes = await new FieldRulesEvaluator().ComputeChanges(
+    { FirstName: 'Ada', LastName: 'Lovelace', FullName: '', Revenue: 5000, Tier: 'Bronze' },
+    ruleSet,
+);
+// → [{ Field: 'FullName', OldValue: '', NewValue: 'Ada Lovelace', Changed: true, Applied: true }, …]
+```
+
+### Safety
+
+- `Condition` expressions use the **safe** evaluator (blocklisted patterns, no statements).
+- `formula` / `custom` value expressions compile with `new Function` (the same model as the established
+  integration `custom` transform) — author them from privileged users/agents, not untrusted input.
+- The engine performs **no I/O**; `lookup` reaches a database only through the resolver you inject.
+
+### See also
+
+- **`EntityFieldRules`** in [`@memberjunction/core`](../MJCore/README.md#entity-field-rules) — the metadata-aware layer for updating entities (validation, coercion, lookups, apply).
+- **`FieldMappingEngine`** in [`@memberjunction/integration`](../Integration/engine/README.md#field-mapping--the-shared-transform-engine) — external-system field mapping built on this engine.
 
 ## Related Packages
 

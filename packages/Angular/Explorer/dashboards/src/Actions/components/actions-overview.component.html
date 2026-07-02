@@ -6,7 +6,13 @@
     <!-- [meta] intentionally omitted — chrome slot discipline audit Task B.
          totalActions was a single inventory count; the body's KPI cards
          surface this and other metrics in their proper place. -->
-    <div actions>
+    <!-- No [actions] — this page has no primary CTA; the control bar lives in [toolbar] per §3. -->
+    <div toolbar>
+      <mj-page-search
+        Placeholder="Search actions..."
+        [Value]="searchTerm$.value"
+        (ValueChange)="onSearchChange($event)">
+      </mj-page-search>
       <mj-filter-popover
         [ActiveCount]="ActiveFilterCount"
         [ShowClearAll]="ActiveFilterCount > 0"
@@ -18,13 +24,6 @@
           (Reset)="resetFilters()">
         </mj-filter-panel>
       </mj-filter-popover>
-    </div>
-    <div toolbar>
-      <mj-page-search
-        Placeholder="Search actions..."
-        [Value]="searchTerm$.value"
-        (ValueChange)="onSearchChange($event)">
-      </mj-page-search>
     </div>
   </mj-page-header>
 
@@ -133,10 +132,8 @@
             }
           </div>
         } @else {
-          <div class="empty-state">
-            <i class="fa-solid fa-chart-bar"></i>
-            <p>No category statistics available</p>
-          </div>
+          <mj-empty-state Size="compact" Icon="fa-solid fa-chart-bar"
+            Title="No category statistics available" />
         }
       </div>
     </div>
@@ -167,10 +164,8 @@
             }
           </div>
         } @else {
-          <div class="empty-state">
-            <i class="fa-solid fa-cogs"></i>
-            <p>No recent actions found</p>
-          </div>
+          <mj-empty-state Size="compact" Icon="fa-solid fa-cogs"
+            Title="No recent actions found" />
         }
       </div>
     </div>
@@ -184,8 +179,8 @@
         @if (recentExecutions.length > 0) {
           <div class="executions-list">
             @for (execution of recentExecutions; track execution.ID) {
-              <div class="execution-item" [class.expanded]="execution.isExpanded">
-                <div class="execution-header" (click)="toggleExecutionExpanded(execution)">
+              <mj-accordion-panel Size="sm" [FlushBody]="true" [Expanded]="execution.isExpanded ?? false" (ExpandedChange)="execution.isExpanded = $event">
+                <ng-template mjAccordionTitle>
                   <div class="execution-time">
                     {{ execution.StartedAt | date:'MMM d, HH:mm' }}
                   </div>
@@ -198,15 +193,12 @@
                       {{ execution.ResultCode || 'Unknown' }}
                     </span>
                   </div>
-                  <div class="execution-expand-icon">
-                    <i [class]="execution.isExpanded ? 'fa-solid fa-chevron-up' : 'fa-solid fa-chevron-down'"></i>
-                  </div>
-                </div>
-                @if (execution.isExpanded) {
+                </ng-template>
+                <ng-template mjAccordionBody>
                   <div class="execution-details">
                     <div class="params-section">
                       <h5><i class="fa-solid fa-sliders"></i> Parameters</h5>
-                      <mj-code-editor 
+                      <mj-code-editor
                         [ngModel]="formatJsonParams(execution.Params)"
                         [readonly]="true"
                         [language]="'json'"
@@ -223,15 +215,13 @@
                       </button>
                     </div>
                   </div>
-                }
-              </div>
+                </ng-template>
+              </mj-accordion-panel>
             }
           </div>
         } @else {
-          <div class="empty-state">
-            <i class="fa-solid fa-history"></i>
-            <p>No recent executions found</p>
-          </div>
+          <mj-empty-state Size="compact" Icon="fa-solid fa-history"
+            Title="No recent executions found" />
         }
       </div>
     </div>

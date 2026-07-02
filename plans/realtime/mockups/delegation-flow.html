@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Delegation Flow + Result Surfacing · Real-Time Agents</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="mockups.css">
+<style>
+  .call-overlay { position: fixed; inset: 56px 0 0 0; z-index: 40; display: flex; justify-content: center; background: var(--mj-bg-overlay); backdrop-filter: blur(8px); padding: 22px; }
+  .call-panel { width: 100%; max-width: 760px; background: var(--mj-bg-surface-card); border: 1px solid var(--mj-border-strong); border-radius: var(--mj-radius-2xl); box-shadow: var(--mj-shadow-2xl); display: flex; flex-direction: column; overflow: hidden; max-height: calc(100vh - 96px); }
+  .call-header { display: flex; align-items: center; gap: 16px; padding: 18px 22px; border-bottom: 1px solid var(--mj-border-default); background: linear-gradient(180deg, rgba(245,158,11,0.07), transparent); }
+  .ch-id { flex: 1; }
+  .ch-name { font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .ch-for { font-size: 12px; color: var(--mj-text-muted); margin-top: 2px; }
+  .ch-state { display: flex; align-items: center; gap: 10px; padding: 7px 14px; border-radius: var(--mj-radius-full); background: var(--mj-status-warning-bg); border: 1px solid var(--mj-status-warning); }
+  .call-thread { flex: 1; overflow-y: auto; padding: 22px; }
+  .two-col-note { display:grid; grid-template-columns: 1fr; gap: 14px; }
+  .stage-tag { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--mj-brand-primary); margin: 22px 0 10px; display:flex; align-items:center; gap:8px; }
+  .stage-tag::after { content:""; flex:1; height:1px; background: var(--mj-border-default); }
+</style>
+</head>
+<body>
+<div class="page-ambient"></div>
+<div class="app-shell">
+  <div class="app-topbar">
+    <a class="backlink" href="index.html"><i class="fa-solid fa-arrow-left"></i> Index</a>
+    <div class="brand-lockup" style="margin-left:6px"><span class="brand-mark"><i class="fa-solid fa-bolt"></i></span><span class="brand-sub" style="margin-left:2px">Delegation</span></div>
+    <div class="topbar-spacer"></div>
+    <span class="topbar-pill"><i class="fa-solid fa-diagram-project"></i> Co-Agent → Sage</span>
+    <div class="topbar-user">AM</div>
+  </div>
+
+  <div class="call-overlay">
+    <div class="call-panel">
+      <div class="call-header">
+        <div class="agent-orb" data-state="thinking" style="--orb-size:52px"></div>
+        <div class="ch-id">
+          <div class="ch-name">Voice for Sage</div>
+          <div class="ch-for">Delegating real work to Sage while keeping the conversation moving</div>
+        </div>
+        <div class="ch-state">
+          <i class="fa-solid fa-spinner fa-spin" style="color:var(--mj-status-warning)"></i>
+          <span style="font-size:13px;font-weight:600;color:var(--mj-status-warning-text)">Working on it…</span>
+        </div>
+      </div>
+
+      <div class="call-thread">
+        <div class="thread">
+          <div class="turn turn--user">
+            <div class="turn-avatar">AM</div>
+            <div>
+              <div class="turn-meta"><span class="typed-tag">spoken</span> You</div>
+              <div class="bubble">what's the weather in LA, SF, and NYC?</div>
+            </div>
+          </div>
+          <div class="turn turn--agent">
+            <div class="turn-avatar">S</div>
+            <div>
+              <div class="turn-meta">Sage <span class="muted">· voice</span></div>
+              <div class="bubble">Got it, I'll have Sage check the weather for those three cities and then I'll share what comes back.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- STAGE 1: working card (live step progress) -->
+        <div class="stage-tag"><i class="fa-solid fa-gear"></i> Handoff in progress (live)</div>
+        <div class="work-card">
+          <div class="work-card__head">
+            <div class="avatar avatar--sage" style="width:30px;height:30px;font-size:12px">S</div>
+            <div>
+              <div class="work-card__title">Handing off to Sage</div>
+              <div class="muted" style="font-size:11.5px">AIAgentRun · child of this session · started 0:02s ago</div>
+            </div>
+            <span class="pill pill--sage" style="margin-left:auto"><i class="fa-solid fa-bolt"></i> Running</span>
+          </div>
+          <div class="work-steps">
+            <div class="work-step work-step--done"><span class="si"><i class="fa-solid fa-check"></i></span> Analyzing request — 3 cities identified</div>
+            <div class="work-step work-step--active"><span class="si"><i class="fa-solid fa-spinner"></i></span> Fetching weather data</div>
+            <div class="work-step work-step--pending"><span class="si"></span> Formatting results</div>
+          </div>
+        </div>
+
+        <!-- STAGE 2: completed result card surfaced inline, with provenance -->
+        <div class="stage-tag"><i class="fa-solid fa-circle-check" style="color:var(--mj-status-success)"></i> Result returned — surfaced on screen as Sage narrates</div>
+
+        <!-- agent narration + provenance link to the card -->
+        <div class="turn turn--agent" style="margin-bottom:6px">
+          <div class="turn-avatar">S</div>
+          <div>
+            <div class="turn-meta">Sage <span class="muted">· voice</span> <span class="caption-cursor"></span></div>
+            <div class="bubble">Los Angeles is clear and about 78.5°. San Francisco is clear and about 67.8°. New York City is clear and about 76.2°.</div>
+          </div>
+        </div>
+
+        <!-- provenance connector -->
+        <div class="provenance" style="margin-left:42px">
+          <div class="result-card">
+            <div class="result-card__head">
+              <div class="avatar avatar--sage" style="width:22px;height:22px;font-size:10px">S</div>
+              <span style="color:var(--mj-color-violet-300)">Weather</span>
+              <span class="via-tag" style="margin-left:auto"><i class="fa-solid fa-arrow-left-long"></i> via Sage · run #a3f1</span>
+            </div>
+            <div class="weather-row">
+              <div class="weather-city">
+                <div class="wc-icon"><i class="fa-solid fa-sun"></i></div>
+                <div><div class="weather-name">Los Angeles</div><div class="weather-cond">Clear</div></div>
+              </div>
+              <div class="weather-temp">78.5°</div>
+            </div>
+            <div class="weather-row">
+              <div class="weather-city">
+                <div class="wc-icon"><i class="fa-solid fa-sun"></i></div>
+                <div><div class="weather-name">San Francisco</div><div class="weather-cond">Clear</div></div>
+              </div>
+              <div class="weather-temp">67.8°</div>
+            </div>
+            <div class="weather-row">
+              <div class="weather-city">
+                <div class="wc-icon"><i class="fa-solid fa-sun"></i></div>
+                <div><div class="weather-name">New York City</div><div class="weather-cond">Clear</div></div>
+              </div>
+              <div class="weather-temp">76.2°</div>
+            </div>
+          </div>
+          <div class="muted" style="font-size:11px;margin-top:8px;display:flex;align-items:center;gap:6px">
+            <i class="fa-solid fa-shield-halved"></i> Result produced by Sage's own AIAgentRun (Completed) — not invented by the voice co-agent.
+            <a href="session-detail.html" style="font-weight:600">Open run ↗</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="call-controls" style="display:flex;align-items:center;justify-content:center;gap:20px;padding:16px 22px 22px;border-top:1px solid var(--mj-border-subtle)">
+        <div class="ctrl-group"><button class="ctrl"><i class="fa-solid fa-microphone"></i></button><span class="ctrl-label">Mute</span></div>
+        <div class="ctrl-group"><button class="ctrl ctrl--on"><i class="fa-solid fa-closed-captioning"></i></button><span class="ctrl-label">Captions</span></div>
+        <div class="ctrl-group"><button class="ctrl ctrl--end"><i class="fa-solid fa-phone-slash"></i></button><span class="ctrl-label" style="color:var(--mj-status-error)">End call</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

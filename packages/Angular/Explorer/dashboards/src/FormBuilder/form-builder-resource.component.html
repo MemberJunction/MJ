@@ -1,0 +1,987 @@
+<!--
+    ┌─────────────────────────────────────────────────────────────────────────┐
+    │ FORM BUILDER COCKPIT                                                    │
+    │   4 panes: Forms list │ Versions │ Code / Preview / Layout │ Chat AI    │
+    │   Forms-list rail and Chat rail both collapse to a strip.               │
+    └─────────────────────────────────────────────────────────────────────────┘
+-->
+<div class="fb-cockpit"
+     [class.left-collapsed]="LeftRailCollapsed"
+     [class.chat-collapsed]="ChatPaneCollapsed">
+
+  <!-- Collapsed strip (left). Rendered OUTSIDE the splitter so the
+       splitter only ever contains expanded panes. Click the chevron to
+       re-expand; persisted via UserInfoEngine. -->
+  @if (LeftRailCollapsed) {
+    <div class="fb-collapsed-strip" role="region" aria-label="Forms list (collapsed)">
+      <button class="fb-rail-collapse" type="button" (click)="ToggleLeftRail()"
+              aria-label="Expand forms list">
+        <i class="fa-solid fa-chevron-right"></i>
+      </button>
+      <div class="fb-collapsed-strip-label"><i class="fa-solid fa-table-list"></i></div>
+    </div>
+  }
+
+  <!-- ══════════════════════════════════════════════════════════════════
+       SPLITTER — wraps the visible (expanded) panes. Percentage-based;
+       drag-end persists sizes via OnSplitterDragEnd → savePrefs.
+       ══════════════════════════════════════════════════════════════════ -->
+  <as-split direction="horizontal"
+            class="fb-splitter"
+            unit="percent"
+            gutterSize="6"
+            (dragEnd)="OnSplitterDragEnd($event)">
+
+  @if (!LeftRailCollapsed) {
+  <as-split-area [size]="LeftPanePct" [minSize]="12">
+  <!-- ══════════════════════════════════════════════════════════════════
+       LEFT — Forms list (existing form-role Components, with version rail
+       below). Collapses to a strip.
+       ══════════════════════════════════════════════════════════════════ -->
+  <aside class="fb-forms-rail">
+    <div class="fb-rail-header">
+      <button class="fb-rail-collapse" type="button" (click)="ToggleLeftRail()"
+              [attr.aria-label]="LeftRailCollapsed ? 'Expand forms list' : 'Collapse forms list'">
+        <i class="fa-solid" [class.fa-chevron-left]="!LeftRailCollapsed" [class.fa-chevron-right]="LeftRailCollapsed"></i>
+      </button>
+      @if (!LeftRailCollapsed) {
+        <h3 class="fb-rail-title">Forms</h3>
+        <button class="fb-rail-icon-btn" type="button" (click)="ToggleFormsViewMode()"
+                [title]="FormsViewMode === 'list' ? 'Switch to tree view (Schema → Entity → Form)' : 'Switch to flat list'">
+          <i class="fa-solid" [class.fa-list]="FormsViewMode === 'list'" [class.fa-folder-tree]="FormsViewMode === 'tree'"></i>
+        </button>
+        <button class="fb-rail-new" type="button" (click)="OnNewForm()" title="New form">
+          <i class="fa-solid fa-plus"></i>
+          <span>New</span>
+        </button>
+      }
+    </div>
+
+    @if (!LeftRailCollapsed) {
+
+    <!-- Inner vertical splitter: forms list ↕ versions panel.
+         Persisted via `formsListHeightPct` in cockpit prefs. When either
+         inner panel is collapsed, only the other one renders (no
+         splitter), matching VS-Code's panel collapse behavior. -->
+    @if (FormsListCollapsed) {
+      <!-- Forms list collapsed → just show the header strip + full versions -->
+      <div class="fb-inner-panel-header" (click)="ToggleFormsListCollapsed()">
+        <i class="fa-solid fa-chevron-right"></i>
+        <span>Forms</span>
+        <span class="fb-inner-panel-count">{{ ExistingForms.length }}</span>
+      </div>
+      <ng-container *ngTemplateOutlet="versionsPanel"></ng-container>
+    } @else if (VersionsCollapsed) {
+      <!-- Versions collapsed → full forms list + header strip for versions -->
+      <ng-container *ngTemplateOutlet="formsPanel"></ng-container>
+      @if (SelectedFormID) {
+        <div class="fb-inner-panel-header" (click)="ToggleVersionsCollapsed()">
+          <i class="fa-solid fa-chevron-right"></i>
+          <span>Versions</span>
+          @if (Versions.length > 0) {
+            <span class="fb-inner-panel-count">{{ Versions.length }}</span>
+          }
+        </div>
+      }
+    } @else {
+      <!-- Both panels open — use a vertical splitter between them. -->
+      <as-split direction="vertical"
+                class="fb-inner-splitter"
+                unit="percent"
+                gutterSize="6"
+                (dragEnd)="OnInnerSplitterDragEnd($event)">
+        <as-split-area [size]="SelectedFormID ? FormsListHeightPct : 100" [minSize]="20">
+          <ng-container *ngTemplateOutlet="formsPanel"></ng-container>
+        </as-split-area>
+        @if (SelectedFormID) {
+          <as-split-area [size]="100 - FormsListHeightPct" [minSize]="15">
+            <ng-container *ngTemplateOutlet="versionsPanel"></ng-container>
+          </as-split-area>
+        }
+      </as-split>
+    }
+
+    <!-- ─── Forms-list panel template ────────────────────────────── -->
+    <ng-template #formsPanel>
+      <div class="fb-inner-panel">
+        <div class="fb-inner-panel-header fb-inner-panel-header--open" (click)="ToggleFormsListCollapsed()">
+          <i class="fa-solid fa-chevron-down"></i>
+          <span>Forms</span>
+          <span class="fb-inner-panel-count">{{ filteredForms.length }} / {{ ExistingForms.length }}</span>
+        </div>
+        <div class="fb-rail-search-row">
+          <div class="fb-rail-search">
+            <i class="fa-solid fa-search"></i>
+            <input type="text"
+                   placeholder="Search forms…"
+                   [value]="LeftRailFilter"
+                   (input)="OnLeftRailFilterChange($event)" />
+          </div>
+          <div class="fb-entity-filter" [class.open]="EntityFilterDropdownOpen">
+            <button type="button" class="fb-entity-filter-btn" (click)="ToggleEntityFilterDropdown()"
+                    [title]="FormsEntityFilter ? 'Entity: ' + FormsEntityFilter : 'All entities'">
+              <i class="fa-solid fa-table"></i>
+              <span>{{ FormsEntityFilter || 'All entities' }}</span>
+              <i class="fa-solid fa-chevron-down chev"></i>
+            </button>
+            @if (EntityFilterDropdownOpen) {
+              <div class="fb-entity-filter-popover" (click)="$event.stopPropagation()">
+                <input type="text" class="fb-entity-filter-search"
+                       placeholder="Search entities…"
+                       [value]="EntityFilterSearch"
+                       (input)="OnEntityFilterSearch($event)" />
+                <ul class="fb-entity-filter-list">
+                  <li class="fb-entity-filter-item"
+                      [class.fb-entity-filter-item--selected]="!FormsEntityFilter"
+                      (click)="PickEntityFilter('')">
+                    <i class="fa-solid fa-asterisk"></i>
+                    <span>All entities</span>
+                    <span class="fb-entity-filter-count">{{ ExistingForms.length }}</span>
+                  </li>
+                  @for (opt of entityFilterOptions; track opt.name) {
+                    <li class="fb-entity-filter-item"
+                        [class.fb-entity-filter-item--selected]="FormsEntityFilter === opt.name"
+                        (click)="PickEntityFilter(opt.name)">
+                      @if (opt.icon) { <i [class]="opt.icon"></i> } @else { <i class="fa-solid fa-table"></i> }
+                      <span>{{ opt.display }}</span>
+                      <span class="fb-entity-filter-count">{{ opt.count }}</span>
+                    </li>
+                  }
+                </ul>
+              </div>
+            }
+          </div>
+        </div>
+        <!-- Status filter chips + sort -->
+        <div class="fb-rail-chips">
+          <button type="button"
+                  class="fb-chip"
+                  [class.fb-chip--on]="FormsStatusFilter.has('Active')"
+                  (click)="ToggleStatusFilter('Active')"
+                  title="Show forms with Active overrides">
+            <i class="fa-solid fa-circle-dot"></i>Active
+          </button>
+          <button type="button"
+                  class="fb-chip"
+                  [class.fb-chip--on]="FormsStatusFilter.has('Pending')"
+                  (click)="ToggleStatusFilter('Pending')"
+                  title="Show forms with Pending (draft) overrides">
+            <i class="fa-solid fa-circle-dot"></i>Pending
+          </button>
+          <button type="button"
+                  class="fb-chip"
+                  [class.fb-chip--on]="FormsStatusFilter.has('Inactive')"
+                  (click)="ToggleStatusFilter('Inactive')"
+                  title="Show forms with Inactive overrides">
+            <i class="fa-solid fa-circle-dot"></i>Inactive
+          </button>
+          <span class="fb-spacer"></span>
+          <select class="fb-rail-sort" [value]="FormsSortMode"
+                  (change)="SetFormsSortMode($any($event.target).value)" title="Sort">
+            <option value="updated-desc">Recently edited</option>
+            <option value="updated-asc">Oldest edits</option>
+            <option value="name-asc">Name A→Z</option>
+            <option value="name-desc">Name Z→A</option>
+          </select>
+        </div>
+        <div class="fb-rail-list">
+          @if (IsLoading) {
+            <div class="fb-rail-empty">Loading…</div>
+          } @else if (filteredForms.length === 0) {
+            @if (LeftRailFilter || FormsEntityFilter || FormsStatusFilter.size < 3) {
+              <mj-empty-state class="fb-rail-empty" Size="compact" Variant="no-results"
+                Icon="fa-solid fa-table-list" Title="No forms match the current filters" />
+            } @else {
+              <mj-empty-state class="fb-rail-empty" Size="compact" Icon="fa-solid fa-table-list"
+                Title="No forms yet" Message="Click New to start." />
+            }
+          } @else if (FormsViewMode === 'tree') {
+            <!-- Tree view: Schema → Entity → Forms -->
+            @for (g of treeGroups; track g.schema) {
+              <div class="fb-tree-schema">
+                <div class="fb-tree-schema-header">
+                  <i class="fa-solid fa-database"></i>
+                  <span>{{ g.schema }}</span>
+                </div>
+                @for (e of g.entities; track e.entity) {
+                  <div class="fb-tree-entity">
+                    <div class="fb-tree-entity-header" [title]="e.entity">
+                      @if (e.icon) { <i [class]="e.icon"></i> } @else { <i class="fa-solid fa-table"></i> }
+                      <span>{{ e.entityDisplay }}</span>
+                      <span class="fb-tree-entity-count">{{ e.forms.length }}</span>
+                    </div>
+                    @for (form of e.forms; track form.ID) {
+                      <ng-container *ngTemplateOutlet="formRow; context: { $implicit: form, treeIndent: true }"></ng-container>
+                    }
+                  </div>
+                }
+              </div>
+            }
+          } @else {
+            <!-- Flat list view -->
+            @for (form of filteredForms; track form.ID) {
+              <ng-container *ngTemplateOutlet="formRow; context: { $implicit: form }"></ng-container>
+            }
+          }
+        </div>
+      </div>
+    </ng-template>
+
+    <!-- ─── Form row template (used by both list + tree) ─────────── -->
+    <ng-template #formRow let-form let-treeIndent="treeIndent">
+      <button class="fb-rail-item"
+              type="button"
+              [class.active]="form.ID === SelectedFormID"
+              [class.fb-rail-item--tree]="treeIndent"
+              [class.fb-rail-item--dirty]="form.ID === SelectedFormID && DirtyFlag"
+              (click)="OnFormPicked(form)"
+              (contextmenu)="OnFormRowContextMenu(form, $event)">
+        <button class="fb-rail-pin"
+                type="button"
+                [class.fb-rail-pin--on]="IsFormPinned(form)"
+                (click)="TogglePinForm(form, $event)"
+                [attr.aria-label]="IsFormPinned(form) ? 'Unpin' : 'Pin'"
+                [title]="IsFormPinned(form) ? 'Unpin from top' : 'Pin to top'">
+          <i class="fa-solid fa-thumbtack"></i>
+        </button>
+        <div class="fb-rail-item-icon">
+          @if (form.TargetEntityIcon) { <i [class]="form.TargetEntityIcon"></i> } @else { <i class="fa-solid fa-table-list"></i> }
+        </div>
+        <div class="fb-rail-item-body">
+          <div class="fb-rail-item-name">
+            {{ form.Name }}
+            @if (form.ID === SelectedFormID && DirtyFlag) { <span class="fb-rail-item-dirty-dot" title="Unsaved changes">●</span> }
+          </div>
+          <div class="fb-rail-item-sub">
+            @if (form.TargetEntityName) {
+              <span class="fb-rail-item-entity">{{ form.TargetEntityName }}</span>
+            }
+            @if (form.UpdatedAt) {
+              <span class="fb-rail-item-time">· {{ form.UpdatedAt | date:'short' }}</span>
+            }
+          </div>
+        </div>
+        @if (form.OverrideStatus) {
+          <span class="fb-rail-badge"
+                [class.fb-rail-badge--active]="form.OverrideStatus === 'Active'"
+                [class.fb-rail-badge--inactive]="form.OverrideStatus === 'Inactive'"
+                [class.fb-rail-badge--pending]="form.OverrideStatus === 'Pending'"
+                [title]="form.OverrideStatus + ' override'">
+            <i class="fa-solid fa-circle-dot"></i>
+          </span>
+        }
+      </button>
+    </ng-template>
+
+    <!-- ─── Versions-panel template ──────────────────────────────── -->
+    <ng-template #versionsPanel>
+      @if (SelectedFormID) {
+        <div class="fb-inner-panel">
+          <div class="fb-inner-panel-header fb-inner-panel-header--open" (click)="ToggleVersionsCollapsed()">
+            <i class="fa-solid fa-chevron-down"></i>
+            <span>Versions</span>
+            @if (Versions.length > 0) {
+              <span class="fb-inner-panel-count">{{ Versions.length }}</span>
+            }
+          </div>
+          <div class="fb-versions-list">
+            @if (VersionsLoading) {
+              <div class="fb-rail-empty">Loading…</div>
+            } @else if (Versions.length === 0) {
+              <mj-empty-state class="fb-rail-empty" Size="compact" Icon="fa-solid fa-clock-rotate-left" Title="No version history yet" />
+            } @else {
+              @for (v of Versions; track v.ID) {
+                <div class="fb-version-row"
+                     [class.is-active]="v.IsActive"
+                     [class.is-pending]="v.IsPending"
+                     [class.is-selected]="v.ID === SelectedFormID"
+                     [class.is-diff-source]="v.ID === DiffSourceVersionID"
+                     role="button"
+                     tabindex="0"
+                     [title]="'Load v' + v.Version + ' into the editor. Right-click for more.'"
+                     (click)="OnVersionRowClick(v)"
+                     (keydown.enter)="OnVersionRowClick(v)"
+                     (keydown.space)="OnVersionRowClick(v); $event.preventDefault()">
+                  <span class="fb-version-marker" aria-hidden="true">
+                    <i class="fa-solid fa-circle"></i>
+                  </span>
+                  <div class="fb-version-row-main">
+                    <div class="fb-version-label">
+                      v{{ v.Version }}
+                      @if (v.IsActive) {
+                        <span class="fb-version-tag is-active">Active</span>
+                      } @else if (v.IsPending) {
+                        <span class="fb-version-tag is-pending">Pending</span>
+                      } @else {
+                        <span class="fb-version-tag">Inactive</span>
+                      }
+                      @if (v.ID === DiffSourceVersionID) {
+                        <span class="fb-version-tag fb-version-tag--diff">Diff: A</span>
+                      }
+                    </div>
+                    <div class="fb-version-meta">
+                      @if (v.UpdatedAt) { {{ v.UpdatedAt | date:'short' }} } @else { (no timestamp) }
+                    </div>
+                  </div>
+                  <button class="fb-version-action fb-version-action--diff" type="button"
+                          (click)="OnVersionDiffClick(v, $event)"
+                          [title]="DiffSourceVersionID ? (DiffSourceVersionID === v.ID ? 'Click another version to compare. Click again to cancel.' : 'Compare with selected version') : 'Start diff: pick this as source, then click another version'">
+                    <i class="fa-solid fa-code-compare"></i>
+                  </button>
+                  @if (!v.IsActive) {
+                    <button class="fb-version-activate" type="button"
+                            (click)="$event.stopPropagation(); OnActivateVersion(v)"
+                            [title]="v.IsPending ? 'Activate this Pending version' : 'Restore: roll back to this version'">
+                      <i class="fa-solid" [class.fa-circle-check]="v.IsPending" [class.fa-rotate-left]="!v.IsPending"></i>
+                      <span class="fb-version-activate-label">{{ v.IsPending ? 'Activate' : 'Restore' }}</span>
+                    </button>
+                  }
+                </div>
+              }
+            }
+          </div>
+        </div>
+      }
+    </ng-template>
+
+    } <!-- end if !LeftRailCollapsed -->
+  </aside>
+  </as-split-area>
+  }
+
+  <!-- ══════════════════════════════════════════════════════════════════
+       CENTER — Tabbed (Preview / Code / Layout) + toolbar
+       ══════════════════════════════════════════════════════════════════ -->
+  <as-split-area [size]="CenterPanePct" [minSize]="30">
+  <section class="fb-center">
+
+    <div class="fb-toolbar">
+      <input type="text"
+             class="fb-name-input"
+             [value]="SelectedFormName"
+             placeholder="Form name…"
+             (input)="OnFormNameInput($event)"
+             title="Form name — used as the JS function identifier in the generated code" />
+
+      <div class="fb-entity-picker" [class.open]="IsEntityPickerOpen">
+        <button type="button" class="fb-entity-btn" (click)="ToggleEntityPicker()">
+          <i class="fa-solid fa-table"></i>
+          <span>
+            @if (TargetEntityName) {
+              {{ TargetEntityName }}
+            } @else {
+              <em>Pick entity…</em>
+            }
+          </span>
+          <i class="fa-solid fa-chevron-down chev"></i>
+        </button>
+        @if (IsEntityPickerOpen) {
+          <div class="fb-entity-popover" (click)="$event.stopPropagation()">
+            <input type="text"
+                   class="fb-entity-search"
+                   placeholder="Search entities…"
+                   [value]="EntityPickerSearch"
+                   (input)="OnEntityPickerSearch($event)" />
+            <ul class="fb-entity-list">
+              @for (e of filteredEntityChoices; track e.Name; let idx = $index) {
+                @if (idx < 50) {
+                  <li class="fb-entity-item" (click)="OnEntityPicked(e.Name)">
+                    <span class="fb-entity-display">{{ e.DisplayName }}</span>
+                    <span class="fb-entity-name">{{ e.Name }}</span>
+                  </li>
+                }
+              }
+            </ul>
+          </div>
+        }
+      </div>
+
+      <!-- Override status pill — only meaningful when an existing
+           override is loaded. Controls EntityFormOverride.Status
+           (Active / Inactive / Pending). The forms-runtime resolver
+           reads this to decide whether to use this form for the user. -->
+      @if (ActiveOverrideID && ActiveOverrideStatus) {
+        <div class="fb-status-picker" [class.open]="OverrideStatusPickerOpen">
+          <button type="button"
+                  class="fb-status-pill"
+                  [class.fb-status-pill--active]="ActiveOverrideStatus === 'Active'"
+                  [class.fb-status-pill--inactive]="ActiveOverrideStatus === 'Inactive'"
+                  [class.fb-status-pill--pending]="ActiveOverrideStatus === 'Pending'"
+                  [disabled]="OverrideStatusSaving"
+                  (click)="ToggleOverrideStatusPicker()"
+                  [title]="'Override status: ' + ActiveOverrideStatus + ' — click to change'">
+            <i class="fa-solid fa-circle-dot"></i>
+            <span>{{ ActiveOverrideStatus }}</span>
+            <i class="fa-solid fa-chevron-down chev"></i>
+          </button>
+          @if (OverrideStatusPickerOpen) {
+            <div class="fb-status-popover" (click)="$event.stopPropagation()">
+              @for (opt of OverrideStatusOptions; track opt.value) {
+                <button type="button"
+                        class="fb-status-option"
+                        [class.fb-status-option--selected]="ActiveOverrideStatus === opt.value"
+                        [disabled]="OverrideStatusSaving"
+                        (click)="OnOverrideStatusPicked(opt.value)">
+                  <i [class]="opt.icon"></i>
+                  <span class="fb-status-option-label">{{ opt.label }}</span>
+                  <span class="fb-status-option-desc">{{ opt.description }}</span>
+                </button>
+              }
+            </div>
+          }
+        </div>
+      }
+
+      <!-- Custom-code chip — fires when the canvas parser flagged the
+           loaded code as containing constructs it can't round-trip (hand-
+           authored JSX, computed children, AI-generated patterns, etc.).
+           Signals to the user that this form is in "code-only" authoring
+           mode and is the on-screen explanation for why the Layout tab
+           is disabled. Title spells out the contract on hover. -->
+      @if (CanvasDiverged && HasActiveForm) {
+        <span class="fb-custom-code-chip"
+              title="This form contains custom code the drag-and-drop canvas cannot round-trip. The Layout tab is disabled to prevent overwriting your code; edit in Code instead.">
+          <i class="fa-solid fa-code"></i>
+          Custom code
+        </span>
+      }
+
+      <span class="fb-spacer"></span>
+
+      <!-- Center-pane view-mode segmented control -->
+      <div class="fb-modeseg" role="tablist" aria-label="Center pane view">
+        <button type="button"
+                role="tab"
+                class="fb-modeseg-btn"
+                [class.active]="CenterPaneMode === 'preview'"
+                [attr.aria-selected]="CenterPaneMode === 'preview'"
+                (click)="SetCenterPaneMode('preview')">
+          <i class="fa-solid fa-eye"></i> Preview
+        </button>
+        <button type="button"
+                role="tab"
+                class="fb-modeseg-btn"
+                [class.active]="CenterPaneMode === 'code'"
+                [attr.aria-selected]="CenterPaneMode === 'code'"
+                (click)="SetCenterPaneMode('code')">
+          <i class="fa-solid fa-code"></i> Code
+        </button>
+        <!-- Layout tab is disabled when the code has diverged from what
+             the canvas can represent (hand-authored JSX, computed
+             constructs, etc.). The canvas can't safely round-trip such
+             code, so editing on Layout and re-emitting would overwrite
+             the user's hand-written bits. CanvasDiverged is set by
+             `parseCanvasFromCode` when it sees `hasUnknownConstructs`
+             or a parse failure. -->
+        <button type="button"
+                role="tab"
+                class="fb-modeseg-btn"
+                [class.active]="CenterPaneMode === 'layout'"
+                [attr.aria-selected]="CenterPaneMode === 'layout'"
+                [disabled]="CanvasDiverged"
+                [title]="CanvasDiverged
+                    ? 'Layout is disabled — the form has hand-authored code the drag-drop canvas cannot round-trip. Edit in Code instead.'
+                    : 'Drag-and-drop canvas editor'"
+                (click)="SetCenterPaneMode('layout')">
+          <i class="fa-solid fa-table-cells"></i> Layout
+        </button>
+      </div>
+
+      @if (SelectedFormID && ActiveOverrideID) {
+        <button type="button" class="fb-action" (click)="OpenEditFormDetailsDialog()"
+                title="Edit form details: name, description, scope, priority, status">
+          <i class="fa-solid fa-pen"></i>
+          <span>Details</span>
+        </button>
+      }
+      @if (SelectedFormID) {
+        <button type="button" class="fb-action fb-action--danger" (click)="OnDelete()"
+                title="Delete this form and its overrides">
+          <i class="fa-solid fa-trash"></i>
+          <span>Delete</span>
+        </button>
+      }
+      <button type="button" class="fb-action fb-action--primary" (click)="OnSave()" [disabled]="!DirtyFlag">
+        <i class="fa-solid fa-floppy-disk"></i>
+        <span>Save</span>
+      </button>
+    </div>
+
+    <div class="fb-center-body">
+      <!-- Version overlay — floating, top-left of the center pane.
+           Shows which Component version the editor is currently bound
+           to, decoupled from the version-rail's selected highlight.
+           When the user clicks an older row to inspect history, this
+           chip stays in sync and visually flags "you are NOT looking
+           at what the runtime serves" by going amber for non-Active
+           historical versions. Clicking the chip dismisses focus
+           but performs no navigation — it's a status indicator. -->
+      @if (CurrentSelectedVersion && HasActiveForm) {
+        <div class="fb-version-overlay"
+             [class.fb-version-overlay--active]="CurrentSelectedVersion.IsActive"
+             [class.fb-version-overlay--pending]="CurrentSelectedVersion.IsPending"
+             [class.fb-version-overlay--historical]="!CurrentSelectedVersion.IsActive && !CurrentSelectedVersion.IsPending"
+             [title]="CurrentSelectedVersion.IsActive
+                ? 'Viewing the version the runtime is currently serving.'
+                : CurrentSelectedVersion.IsPending
+                  ? 'Viewing a Pending version — AI-authored, not yet Activated.'
+                  : 'Viewing an Inactive historical version — the runtime is serving a different version.'">
+          <i class="fa-solid fa-clock-rotate-left"></i>
+          <span class="fb-version-overlay-label">Viewing v{{ CurrentSelectedVersion.Version }}</span>
+          @if (CurrentSelectedVersion.IsActive) {
+            <span class="fb-version-overlay-tag fb-version-overlay-tag--active">Active</span>
+          } @else if (CurrentSelectedVersion.IsPending) {
+            <span class="fb-version-overlay-tag fb-version-overlay-tag--pending">Pending</span>
+          } @else {
+            <span class="fb-version-overlay-tag fb-version-overlay-tag--historical">Historical</span>
+          }
+        </div>
+      }
+
+      @if (!SelectedFormID && !IsNewForm) {
+        <!-- No form picked or being created — invite the user to pick or
+             create one. Lists recently-edited forms for quick access. -->
+        <mj-empty-state class="fb-empty fb-empty--landing" Size="large" Icon="fa-solid fa-pen-ruler"
+          Title="Form Builder"
+          Message="Pick a form on the left or click + New above the list to start a new one. The Form Builder agent on the right will help you author and refine via natural language.">
+          @if (ExistingForms.length > 0) {
+            <div class="fb-empty-recent">
+              <div class="fb-empty-recent-label">Recently edited</div>
+              <div class="fb-empty-recent-list">
+                @for (form of filteredForms.slice(0, 5); track form.ID) {
+                  <button class="fb-empty-recent-item" type="button" (click)="OnFormPicked(form)">
+                    @if (form.TargetEntityIcon) { <i [class]="form.TargetEntityIcon"></i> } @else { <i class="fa-solid fa-table-list"></i> }
+                    <div class="fb-empty-recent-meta">
+                      <div class="fb-empty-recent-name">{{ form.Name }}</div>
+                      <div class="fb-empty-recent-entity">{{ form.TargetEntityName }}</div>
+                    </div>
+                  </button>
+                }
+              </div>
+            </div>
+          }
+        </mj-empty-state>
+      } @else if (!TargetEntityName) {
+        <mj-empty-state class="fb-empty" Icon="fa-solid fa-table-list"
+          Title="Pick an entity to start"
+          Message="Choose the target entity above, then refine the form via code, preview, or drag-drop layout." />
+      } @else {
+        <!-- Preview pane: live render via mj-interactive-form when we have
+             a usable spec + can resolve the entity. For an unsaved canvas,
+             the code is what's "live" via canvas → code regen; preview
+             will render off that. -->
+        @if (CenterPaneMode === 'preview') {
+          <div class="fb-preview-host">
+            <!-- Preview record picker strip — same affordance shape as the
+                 artifact-viewer form-aware branch, so users see one consistent
+                 pattern across the chat artifact path and the cockpit path. -->
+            <div class="fb-preview-toolstrip">
+              <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+              <span>Previewing record:</span>
+              <button type="button"
+                      class="fb-preview-chip"
+                      (click)="TogglePreviewPicker()">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <strong>{{ PreviewRecordLabel || 'No record' }}</strong>
+                @if (!PreviewRecordIsReal && PreviewRecord) {
+                  <span class="fb-preview-chip-badge">Mock</span>
+                }
+                <i class="fa-solid fa-chevron-down"></i>
+              </button>
+              <span class="fb-preview-chip-entity">{{ TargetEntityName }}</span>
+              @if (PreviewRecord && PreviewRecordIsReal) {
+                <button type="button" class="fb-preview-open-record"
+                        (click)="OpenPreviewRecord()"
+                        title="Open this record in a new tab">
+                  <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                  <span>Open record</span>
+                </button>
+              }
+              @if (PreviewError) {
+                <span class="fb-preview-warning" [title]="PreviewError">
+                  <i class="fa-solid fa-triangle-exclamation"></i>
+                </span>
+              }
+            </div>
+
+            @if (PreviewPickerOpen) {
+              <div class="fb-preview-picker-panel" (click)="$event.stopPropagation()">
+                <input type="text"
+                       class="fb-preview-picker-search"
+                       placeholder="Search records by name…"
+                       [value]="PreviewSearchTerm"
+                       (input)="OnPreviewSearchInput($event)" />
+                @if (PreviewSearchResults.length > 0) {
+                  <ul class="fb-preview-picker-results">
+                    @for (r of PreviewSearchResults; track r.ID) {
+                      <li class="fb-preview-picker-row" (click)="OnPreviewRecordPicked(r)">
+                        <i class="fa-solid fa-circle-dot"></i>
+                        <span>{{ r.Label }}</span>
+                      </li>
+                    }
+                  </ul>
+                } @else if (PreviewSearchTerm.length > 0) {
+                  <div class="fb-preview-picker-empty">No matches.</div>
+                } @else {
+                  <div class="fb-preview-picker-empty">No records in this entity.</div>
+                }
+              </div>
+            }
+
+            <div class="fb-preview-frame">
+              @if (PreviewLoading) {
+                <div class="fb-preview-empty">
+                  <i class="fa-solid fa-spinner fa-spin"></i>
+                  <p>Loading preview…</p>
+                </div>
+              } @else if (!PreviewSpec) {
+                <mj-empty-state class="fb-preview-empty" Icon="fa-solid fa-eye"
+                  Title="Live preview"
+                  Message="Code is empty — switch to Code or Layout to start." />
+              } @else if (PreviewRecord) {
+                <!--
+                  Retrospective fix #10: subscribe to LoadErrorChanged so
+                  spec parse / mount errors surface in the cockpit's own
+                  error pane instead of only appearing inline inside the
+                  React component.
+                -->
+                <!-- previewMode=true → no toolbar wrap; just the form
+                     body. Cockpit's own toolbar already handles saving
+                     the spec; the form's own Save/Cancel/Edit/Delete are
+                     not relevant in preview. -->
+                <mj-interactive-form
+                  [componentSpec]="PreviewSpec"
+                  [record]="PreviewRecord"
+                  [previewMode]="true"
+                  (LoadErrorChanged)="OnPreviewLoadError($event)">
+                </mj-interactive-form>
+              } @else {
+                <mj-empty-state class="fb-preview-empty" Variant="error"
+                  Icon="fa-solid fa-triangle-exclamation"
+                  [Title]="PreviewError || 'Could not bind a record for preview.'" />
+              }
+            </div>
+          </div>
+        }
+
+        @if (CenterPaneMode === 'code') {
+          <div class="fb-code-host">
+            <!-- mj-code-editor (CodeMirror under the hood). The 'javascript'
+                 language extension enables full JS + JSX highlighting —
+                 enough for the form-role component spec the agent emits. -->
+            <mj-code-editor
+              class="fb-code-editor"
+              [ngModel]="EditableCode"
+              (ngModelChange)="OnEditableCodeChange($event)"
+              [language]="'javascript'"
+              [indentWithTab]="true">
+            </mj-code-editor>
+          </div>
+        }
+
+        @if (CenterPaneMode === 'layout') {
+          <div class="fb-canvas-host">
+            <!--
+              Retrospective fix #6: warn the user when the loaded JSX has
+              hand-authored content the canvas can't represent. Saving from
+              the canvas regenerates code, which would overwrite those edits.
+              The banner lets users know to keep editing in Code instead.
+            -->
+            @if (CanvasDiverged) {
+              <div class="fb-canvas-divergence-banner">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+                <span>
+                  <strong>Code has hand-authored content the canvas can't display.</strong>
+                  Saving from the Layout tab will regenerate code from the canvas and
+                  <strong>overwrite those edits</strong>. To preserve them, edit the Code tab directly.
+                </span>
+              </div>
+            }
+            <mj-form-builder-canvas
+              [Canvas]="Canvas"
+              [Schema]="Schema"
+              [SelectedElementId]="SelectedElementId"
+              [SelectedSectionId]="SelectedSectionId"
+              (CanvasChanged)="OnCanvasChanged($event)"
+              (ElementSelected)="OnElementSelected($event)"
+              (SectionSelected)="OnSectionSelected($event)"
+              (Deselected)="OnDeselected()">
+            </mj-form-builder-canvas>
+          </div>
+        }
+      }
+    </div>
+  </section>
+  </as-split-area>
+
+  <!-- ══════════════════════════════════════════════════════════════════
+       CHAT PANE — Form Builder AI cockpit-mate
+       Embedded right pane that always sits next to the editor. Mounts the
+       chat-area component directly (same interior the floating overlay
+       wraps). Collapses to a strip rendered OUTSIDE the splitter so the
+       drag handle doesn't appear next to a collapsed pane.
+       ══════════════════════════════════════════════════════════════════ -->
+  <!-- Chat pane only renders when a form is actively being shown. Empty
+       cockpit (no form selected, no "New Form" in progress) hides the
+       chat surface entirely so we don't show an agent shell against no
+       subject. The collapsed strip below is gated on the same flag. -->
+  @if (!ChatPaneCollapsed && HasActiveForm) {
+  <as-split-area [size]="ChatPanePct" [minSize]="15">
+  <aside class="fb-chat-pane">
+    <div class="fb-rail-header">
+      @if (!ChatPaneCollapsed) {
+        <h3 class="fb-rail-title">
+          <i class="fa-solid fa-wand-magic-sparkles"></i> Form Builder AI
+        </h3>
+      }
+      <button class="fb-rail-collapse" type="button" (click)="ToggleChatPane()"
+              [attr.aria-label]="ChatPaneCollapsed ? 'Expand chat pane' : 'Collapse chat pane'">
+        <i class="fa-solid" [class.fa-chevron-right]="!ChatPaneCollapsed" [class.fa-chevron-left]="ChatPaneCollapsed"></i>
+      </button>
+    </div>
+
+    @if (!ChatPaneCollapsed) {
+      <!-- Context strip — small label above the chat so the user always
+           sees which form the agent has context on. Shows the override
+           status + version too so the user knows what state they're
+           editing (Active live vs Pending draft vs Inactive historical). -->
+      @if (SelectedFormID && TargetEntityName) {
+        <div class="fb-chat-context">
+          <div class="fb-chat-context-row">
+            <div class="fb-chat-context-label">Editing</div>
+            <div class="fb-chat-context-value">{{ SelectedFormName }}</div>
+            @if (CurrentSelectedVersion) {
+              <span class="fb-chat-context-version">v{{ CurrentSelectedVersion.Version }}</span>
+            }
+            @if (ActiveOverrideStatus) {
+              <span class="fb-rail-badge"
+                    [class.fb-rail-badge--active]="ActiveOverrideStatus === 'Active'"
+                    [class.fb-rail-badge--inactive]="ActiveOverrideStatus === 'Inactive'"
+                    [class.fb-rail-badge--pending]="ActiveOverrideStatus === 'Pending'">
+                <i class="fa-solid fa-circle-dot"></i>
+                {{ ActiveOverrideStatus }}
+              </span>
+            }
+          </div>
+          <div class="fb-chat-context-sub">{{ TargetEntityName }}</div>
+          @if (LineageConversations.length > 1) {
+            <div class="fb-chat-context-row">
+              <button class="fb-chat-context-history"
+                      type="button"
+                      (click)="ToggleConversationHistoryDropdown()"
+                      title="Switch to another conversation about this form">
+                <i class="fa-solid fa-clock-rotate-left"></i>
+                <span>{{ LineageConversations.length }} conversations</span>
+                <i class="fa-solid fa-chevron-down"></i>
+              </button>
+              @if (ConversationHistoryDropdownOpen) {
+                <div class="fb-chat-context-history-popover" (click)="$event.stopPropagation()">
+                  @for (c of LineageConversations; track c.ID) {
+                    <button type="button"
+                            class="fb-chat-context-history-item"
+                            [class.fb-chat-context-history-item--active]="c.ID === ChatConversationId"
+                            (click)="PickLineageConversation(c)">
+                      <i class="fa-solid fa-message"></i>
+                      <span class="fb-chat-context-history-name">{{ c.Name || '(unnamed)' }}</span>
+                      @if (c.UpdatedAt) {
+                        <span class="fb-chat-context-history-time">{{ c.UpdatedAt | date:'short' }}</span>
+                      }
+                    </button>
+                  }
+                </div>
+              }
+            </div>
+          }
+        </div>
+      } @else {
+        <div class="fb-chat-context fb-chat-context--empty">
+          <div class="fb-chat-context-sub">Pick or create a form to start.</div>
+        </div>
+      }
+
+      <!-- Embedded chat-area — same interior component the floating overlay
+           wraps. Mounting it directly here means the chat lives in the
+           cockpit's right pane (no overlay popping). `appContext` carries
+           the ActiveForm shape so Sage / Form Builder agent sees the
+           cockpit state with every message. -->
+      <div class="fb-chat-embed">
+        @if (IsNewForm && !SelectedFormID) {
+          <!-- New, unsaved form — disable chat until the form has an ID.
+               Without this, the chat would be bound to whatever conversation
+               was previously loaded (wrong subject), or would create a
+               conversation linked to a record that doesn't exist yet. -->
+          <div class="fb-chat-context fb-chat-context--empty">
+            <i class="fa-solid fa-lock" style="font-size: 1.5rem; opacity: 0.5; margin-bottom: 0.5rem;"></i>
+            <div class="fb-chat-context-sub">Save the form to start a conversation with the Form Builder agent.</div>
+          </div>
+        } @else if (currentUser) {
+          <!-- conversationCreated must be wired — without it the chat
+               stays stuck on the welcome screen after the user sends the
+               first message (we never flip out of new-conversation mode). -->
+          <!-- pendingMessage + pendingAttachments are the atomic-handoff
+               buffer the chat-area emits as part of `conversationCreated`.
+               Feeding them back as inputs is what actually posts the
+               user's first message after the conversation is created;
+               without this, the chat creates the conversation but
+               appears stuck on the welcome screen. -->
+          <mj-conversation-chat-area
+            [Provider]="Provider"
+            [environmentId]="ChatEnvironmentId"
+            [currentUser]="currentUser"
+            [conversationId]="ChatConversationId"
+            [conversation]="ChatConversation"
+            [isNewConversation]="ChatIsNewConversation"
+            [suppressNewConversationEmptyState]="true"
+            [showAgentModePicker]="true"
+            [allowMentions]="false"
+            [pendingMessage]="ChatPendingMessage"
+            [pendingAttachments]="$any(ChatPendingAttachments)"
+            [overlayMode]="true"
+            [showExportButton]="false"
+            [showShareButton]="false"
+            [showArtifactIndicator]="false"
+            [appContext]="$any(ChatAppContext)"
+            [defaultAgentId]="FormBuilderAgentId"
+            [showAgentPicker]="false"
+            [applicationScope]="'Application'"
+            [applicationId]="CockpitApplicationId"
+            [linkedEntityId]="ComponentsEntityID"
+            [linkedRecordId]="SelectedFormID"
+            [threadId]="ChatThreadId"
+            [pendingArtifactId]="ChatPendingArtifactId"
+            [pendingArtifactVersionNumber]="ChatPendingArtifactVersionNumber"
+            [emptyStateGreeting]="'How can I help with this form?'"
+            (conversationCreated)="OnChatConversationCreated($event)"
+            (pendingMessageConsumed)="OnChatPendingMessageConsumed()"
+            (openEntityRecord)="OnChatOpenEntityRecord($event)"
+            (navigationRequest)="OnChatNavigationRequest($event)"
+            (taskClicked)="OnChatTaskClicked($event)"
+            (artifactLinkClicked)="OnChatArtifactLinkClicked($event)"
+            (conversationRenamed)="OnChatConversationRenamed($event)"
+            (threadOpened)="OnChatThreadOpened($event)"
+            (threadClosed)="OnChatThreadClosed()"
+            (pendingArtifactConsumed)="OnChatPendingArtifactConsumed()">
+          </mj-conversation-chat-area>
+        } @else {
+          <div class="fb-chat-context fb-chat-context--empty">
+            <div class="fb-chat-context-sub">Loading…</div>
+          </div>
+        }
+      </div>
+    }
+  </aside>
+  </as-split-area>
+  }
+
+  </as-split>
+
+  <!-- Collapsed strip (chat). Same OUTSIDE-the-splitter pattern as the
+       left rail's strip. -->
+  @if (ChatPaneCollapsed && HasActiveForm) {
+    <div class="fb-collapsed-strip" role="region" aria-label="Form Builder AI (collapsed)">
+      <button class="fb-rail-collapse" type="button" (click)="ToggleChatPane()"
+              aria-label="Expand Form Builder AI">
+        <i class="fa-solid fa-chevron-left"></i>
+      </button>
+      <div class="fb-collapsed-strip-label"><i class="fa-solid fa-wand-magic-sparkles"></i></div>
+    </div>
+  }
+
+  <!-- ══════════════════════════════════════════════════════════════════
+       POST-SAVE OVERRIDE DIALOG (unchanged)
+       ══════════════════════════════════════════════════════════════════ -->
+  <mj-form-override-dialog
+    [Visible]="ShowFormOverrideDialog"
+    [ComponentName]="PendingOverrideComponentName"
+    [EntityName]="PendingOverrideEntityName"
+    [InitialName]="PendingOverrideInitialName"
+    [InitialDescription]="PendingOverrideInitialDescription"
+    [InitialNotes]="PendingOverrideInitialNotes"
+    [InitialStatus]="PendingOverrideInitialStatus"
+    [InitialScope]="PendingOverrideInitialScope"
+    [InitialRoleID]="PendingOverrideInitialRoleID"
+    [InitialPriority]="PendingOverrideInitialPriority"
+    [EditMode]="FormOverrideDialogEditMode"
+    (confirmed)="OnFormOverrideDialogConfirm($event)"
+    (dismissed)="OnFormOverrideDialogDismiss()">
+  </mj-form-override-dialog>
+
+  <!-- Inspector pane for Layout mode lives inside the Layout view — for the
+       Preview / Code modes it stays hidden (the field palette is only useful
+       in the canvas surface). When we resurrect it as a pop-out, this is
+       where it'll re-mount. -->
+
+  <!-- ══════════════════════════════════════════════════════════════════
+       RIGHT-CLICK CONTEXT MENU on form rows
+       ══════════════════════════════════════════════════════════════════ -->
+  @if (ContextMenuOpen && ContextMenuForm) {
+    <div class="fb-context-menu-backdrop" (click)="CloseContextMenu()" (contextmenu)="CloseContextMenu(); $event.preventDefault()"></div>
+    <div class="fb-context-menu"
+         [style.left.px]="ContextMenuX"
+         [style.top.px]="ContextMenuY"
+         (click)="$event.stopPropagation()">
+      <div class="fb-context-menu-header">{{ ContextMenuForm.Name }}</div>
+      <button type="button" class="fb-context-menu-item" (click)="ContextMenuTogglePin()">
+        <i class="fa-solid fa-thumbtack"></i>
+        <span>{{ IsFormPinned(ContextMenuForm) ? 'Unpin from top' : 'Pin to top' }}</span>
+      </button>
+      <button type="button" class="fb-context-menu-item" (click)="ContextMenuDuplicate()">
+        <i class="fa-solid fa-copy"></i>
+        <span>Duplicate</span>
+      </button>
+      <button type="button" class="fb-context-menu-item" (click)="ContextMenuCopyID()">
+        <i class="fa-solid fa-fingerprint"></i>
+        <span>Copy Component ID</span>
+      </button>
+      <button type="button" class="fb-context-menu-item" (click)="ContextMenuExportSpec()">
+        <i class="fa-solid fa-file-export"></i>
+        <span>Export Spec JSON</span>
+      </button>
+      <hr class="fb-context-menu-divider" />
+      <button type="button" class="fb-context-menu-item fb-context-menu-item--danger" (click)="ContextMenuDelete()">
+        <i class="fa-solid fa-trash"></i>
+        <span>Delete</span>
+      </button>
+    </div>
+  }
+
+  <!-- ══════════════════════════════════════════════════════════════════
+       VERSION DIFF DIALOG
+       ══════════════════════════════════════════════════════════════════ -->
+  @if (ShowDiffDialog) {
+    <div class="fb-diff-backdrop" (click)="CloseDiffDialog()">
+      <div class="fb-diff-modal" (click)="$event.stopPropagation()">
+        <header class="fb-diff-header">
+          <h3>
+            <i class="fa-solid fa-code-compare"></i>
+            Compare versions
+          </h3>
+          <button class="fb-diff-close" type="button" (click)="CloseDiffDialog()" aria-label="Close">
+            <i class="fa-solid fa-times"></i>
+          </button>
+        </header>
+        <div class="fb-diff-body">
+          <div class="fb-diff-pane">
+            <div class="fb-diff-pane-label">
+              <span class="fb-diff-pane-tag">A</span>
+              <span>v{{ versionByID(DiffSourceVersionID)?.Version }}</span>
+              <span class="fb-diff-pane-meta">{{ versionByID(DiffSourceVersionID)?.UpdatedAt | date:'short' }}</span>
+            </div>
+            <pre class="fb-diff-code">{{ DiffSourceCode }}</pre>
+          </div>
+          <div class="fb-diff-pane">
+            <div class="fb-diff-pane-label">
+              <span class="fb-diff-pane-tag fb-diff-pane-tag--b">B</span>
+              <span>v{{ versionByID(DiffTargetVersionID)?.Version }}</span>
+              <span class="fb-diff-pane-meta">{{ versionByID(DiffTargetVersionID)?.UpdatedAt | date:'short' }}</span>
+            </div>
+            <pre class="fb-diff-code">{{ DiffTargetCode }}</pre>
+          </div>
+        </div>
+        <footer class="fb-diff-footer">
+          <button class="btn" type="button" (click)="CloseDiffDialog()">Close</button>
+        </footer>
+      </div>
+    </div>
+  }
+</div>

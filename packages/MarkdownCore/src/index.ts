@@ -10,6 +10,7 @@ export * from './engine/markdown-engine';
 // Extensions (marked configuration building blocks)
 export * from './extensions/svg-renderer.extension';
 export * from './extensions/collapsible-headings.extension';
+export * from './extensions/html-block-repair.extension';
 
 // Helpers
 export * from './helpers/language';

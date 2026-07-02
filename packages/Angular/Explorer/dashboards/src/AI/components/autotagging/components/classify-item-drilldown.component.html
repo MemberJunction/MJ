@@ -1,0 +1,102 @@
+@if (!ItemID) {
+  <mj-empty-state class="cid-empty" Icon="fa-solid fa-arrow-pointer"
+    Title="No item selected" Message="Select an item to inspect its tags, reasoning, and provenance." />
+} @else if (IsLoading) {
+  <mj-loading text="Loading item detail..." size="small"></mj-loading>
+} @else {
+  <div class="cid-wrap">
+
+    <!-- (A) Rendered content / fields -->
+    <section class="cid-section">
+      <div class="cid-section-head">
+        <h4 class="cid-title"><i class="fa-solid fa-file-lines"></i> {{ DisplayName }}</h4>
+        <button mjButton variant="secondary" size="sm" (click)="OpenItemRecord()">
+          <i class="fa-solid fa-up-right-from-square"></i> Open Record
+        </button>
+      </div>
+      <div class="cid-fields">
+        <div class="cid-field"><span class="cid-field-label">Source</span><span class="cid-field-value">{{ SourceName }}</span></div>
+        @if (URL) {
+          <div class="cid-field">
+            <span class="cid-field-label">URL</span>
+            <a class="cid-field-link" [href]="URL" target="_blank" rel="noopener">{{ URL }}</a>
+          </div>
+        }
+      </div>
+      @if (TextPreview) {
+        <div class="cid-text-preview">{{ TextPreview }}</div>
+      }
+    </section>
+
+    <!-- (B) Tags with weight + reasoning + provenance link -->
+    <section class="cid-section">
+      <h4 class="cid-title"><i class="fa-solid fa-tags"></i> Tags ({{ Tags.length }})</h4>
+      @if (Tags.length === 0) {
+        <p class="cid-muted">No tags applied to this item.</p>
+      } @else {
+        <div class="cid-tag-list">
+          @for (tag of Tags; track tag.Tag + tag.CreatedAt) {
+            <div class="cid-tag-card">
+              <div class="cid-tag-head">
+                <span class="cid-tag-name" [style.fontSize]="TagFontSize(tag.Weight)">{{ tag.Tag }}</span>
+                <span class="cid-tag-weight">{{ FormatWeight(tag.Weight) }}</span>
+                @if (tag.AIPromptRunID) {
+                  <button class="cid-provenance-link" (click)="OpenPromptRun(tag)"
+                          title="Open the AI Prompt Run that produced this tag">
+                    <i class="fa-solid fa-robot"></i> Prompt Run
+                  </button>
+                }
+              </div>
+              @if (tag.Reasoning) {
+                <div class="cid-tag-reasoning">
+                  <i class="fa-solid fa-quote-left"></i> {{ tag.Reasoning }}
+                </div>
+              } @else {
+                <div class="cid-tag-reasoning cid-muted">No reasoning captured.</div>
+              }
+            </div>
+          }
+        </div>
+      }
+    </section>
+
+    <!-- (C) Provenance -->
+    <section class="cid-section">
+      <h4 class="cid-title"><i class="fa-solid fa-diagram-project"></i> Provenance</h4>
+      <div class="cid-provenance-list">
+        @for (fact of Provenance; track fact.Label + fact.Value) {
+          <div class="cid-provenance-row">
+            <i [class]="fact.Icon" class="cid-provenance-icon"></i>
+            <span class="cid-provenance-label">{{ fact.Label }}</span>
+            @if (fact.RecordEntity && fact.RecordID) {
+              <button class="cid-provenance-value cid-provenance-clickable" (click)="OpenProvenanceRecord(fact)">
+                {{ fact.Value }} <i class="fa-solid fa-up-right-from-square"></i>
+              </button>
+            } @else {
+              <span class="cid-provenance-value">{{ fact.Value }}</span>
+            }
+          </div>
+        }
+      </div>
+    </section>
+
+    <!-- (D) Audit -->
+    <section class="cid-section">
+      <h4 class="cid-title"><i class="fa-solid fa-clock-rotate-left"></i> Audit</h4>
+      @if (Audit.length === 0) {
+        <p class="cid-muted">No audit events recorded.</p>
+      } @else {
+        <ul class="cid-audit-list">
+          @for (entry of Audit; track entry.Label) {
+            <li class="cid-audit-row">
+              <i [class]="entry.Icon" class="cid-audit-icon"></i>
+              <span class="cid-audit-label">{{ entry.Label }}</span>
+              <span class="cid-audit-time">{{ entry.Timestamp }}</span>
+            </li>
+          }
+        </ul>
+      }
+    </section>
+
+  </div>
+}

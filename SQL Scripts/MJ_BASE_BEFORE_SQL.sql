@@ -1311,10 +1311,12 @@ BEGIN
           ISNULL(TRY_CONVERT(UNIQUEIDENTIFIER, ef.RelatedEntityID), '00000000-0000-0000-0000-000000000000') <> ISNULL(TRY_CONVERT(UNIQUEIDENTIFIER, re.ID), '00000000-0000-0000-0000-000000000000') OR -- Use TRY_CONVERT here
           ISNULL(LTRIM(RTRIM(ef.RelatedEntityFieldName)), '') <> ISNULL(LTRIM(RTRIM(fk.referenced_column)), '') OR
           ef.IsPrimaryKey <> CASE WHEN pk.ColumnName IS NOT NULL THEN 1 ELSE 0 END OR
-          ef.IsUnique <> CASE 
-              WHEN pk.ColumnName IS NOT NULL THEN 1 
+          ef.IsUnique <> CASE
+              WHEN pk.ColumnName IS NOT NULL THEN 1
               ELSE CASE WHEN uk.ColumnName IS NOT NULL THEN 1 ELSE 0 END
-          END
+          END OR
+          -- Detect AllowUpdateAPI that needs clearing on virtual transition
+          (ef.AllowUpdateAPI = 1 AND fromSQL.IsVirtual = 1 AND ef.IsVirtual = 0)
         );
 
     -- Step 4: Perform the update using the table variable
@@ -1335,6 +1337,10 @@ BEGIN
         ef.RelatedEntityFieldName = IIF(ef.AutoUpdateRelatedEntityInfo = 1, fr.RelatedEntityFieldName, ef.RelatedEntityFieldName), -- if AutoUpdate is not on, respect the current value
         ef.IsPrimaryKey = fr.IsPrimaryKey,
         ef.IsUnique = fr.IsUnique,
+        -- When a field transitions to virtual, it can no longer be written to.
+        -- IS-A parent fields are unaffected: they are created as virtual and
+        -- never go through a 0→1 transition in this SP.
+        ef.AllowUpdateAPI = IIF(fr.IsVirtual = 1 AND ef.IsVirtual = 0, 0, ef.AllowUpdateAPI),
         ef.__mj_UpdatedAt = GETUTCDATE()
     FROM
         [__mj].EntityField ef

@@ -80,8 +80,7 @@ Push to main branch or manually trigger the `publish.yml` workflow. The GitHub A
 1. Run migration tests
 2. Build all packages
 3. Publish to npm using OIDC (no manual npm token needed)
-4. Create distribution zip
-5. Merge main into next branch
+4. Merge main into next branch
 
 ### Step 6: Verify Publication
 

@@ -19,33 +19,32 @@
     </mj-stat-badge>
   </div>
   <div toolbar>
+    <!-- Concise-chrome control bar: search · Filter. Type lives behind the one
+         Filter button; applied filters show as removable chips below the card.
+         On mobile the popover docks as a bottom sheet. -->
     <mj-page-search
       Placeholder="Search roles by name or description..."
       [Value]="filters$.value.search"
       (ValueChange)="updateFilter({ search: $event })">
     </mj-page-search>
-    <div class="status-chips" role="group" aria-label="Filter by type">
-      <mj-filter-chip
-        Label="All"
-        [Active]="filters$.value.type === 'all'"
-        (Clicked)="onTypeFilterChange('all')">
-      </mj-filter-chip>
-      <mj-filter-chip
-        Label="System"
-        [Active]="filters$.value.type === 'system'"
-        (Clicked)="onTypeFilterChange('system')">
-      </mj-filter-chip>
-      <mj-filter-chip
-        Label="Custom"
-        [Active]="filters$.value.type === 'custom'"
-        (Clicked)="onTypeFilterChange('custom')">
-      </mj-filter-chip>
-    </div>
+    <mj-filter-popover
+      Label="Filters"
+      Icon="fa-solid fa-filter"
+      [ActiveCount]="TotalActiveFilterCount"
+      [ShowClearAll]="TotalActiveFilterCount > 0"
+      (ClearAllRequested)="clearAllAppliedFilters()">
+      <mj-filter-panel
+        [Fields]="filterFields"
+        [Values]="filterValues"
+        (ValuesChange)="onFilterPanelChange($event)"
+        (Reset)="clearAllAppliedFilters()">
+      </mj-filter-panel>
+    </mj-filter-popover>
   </div>
   <div actions>
     <mj-refresh-button [Loading]="isLoading" (Clicked)="refreshData()"></mj-refresh-button>
     <button mjButton variant="primary" size="sm" (click)="createNewRole()" aria-label="Add new role">
-      <i class="fa-solid fa-plus"></i> Add Role
+      <i class="fa-solid fa-plus"></i> <span class="mj-action-label">Add Role</span>
     </button>
   </div>
 </mj-page-header-interior>
@@ -194,11 +193,14 @@
           }
 
           @if (filteredRoles.length === 0) {
-            <div class="empty-state" role="status">
-              <i class="fa-solid fa-user-tag empty-icon" aria-hidden="true"></i>
-              <p class="empty-text">No roles found</p>
-              <p class="empty-subtext">Try adjusting your filters or create a new role</p>
-            </div>
+            <mj-empty-state
+              [Variant]="IsListNarrowed ? 'no-results' : 'empty'"
+              Icon="fa-solid fa-user-tag"
+              Title="No roles found"
+              Message="Try adjusting your filters or create a new role"
+              [ActionText]="IsListNarrowed ? 'Reset filters' : ''"
+              ActionIcon="fa-solid fa-rotate-left"
+              (Action)="resetAllFiltersAndSearch()" />
           }
         </div>
     }
@@ -241,10 +243,7 @@
         </div>
         <div class="modal-body" id="delete-dialog-desc">
           <p>Are you sure you want to delete the role <strong>{{ selectedRole.Name }}</strong>?</p>
-          <p class="text-warning">
-            <i class="fa-solid fa-warning" aria-hidden="true"></i>
-            This will affect all users assigned to this role.
-          </p>
+          <mj-alert Variant="warning" Message="This will affect all users assigned to this role." />
         </div>
         <div class="modal-footer">
           <!-- Primary action (Delete) on LEFT per MD3 design guide -->

@@ -10,6 +10,15 @@ import { SQLLogging } from './sql_logging';
 import { CodeGenConnection } from '../Database/codeGenDatabaseProvider';
 
 /**
+ * Narrow typed view over a parsed `ts.SourceFile` exposing the internal-but-stable
+ * `parseDiagnostics` property the parser populates during `ts.createSourceFile`.
+ * Lets us read syntax diagnostics without constructing a full `ts.Program`.
+ */
+interface ParsedSourceFile extends ts.SourceFile {
+    parseDiagnostics?: ts.Diagnostic[];
+}
+
+/**
  * Dynamically collects all own property names from BaseEntity's prototype chain
  * (excluding Object.prototype). Any entity field whose CodeName matches one of
  * these is suffixed with `_` to avoid shadowing base-class members at the
@@ -87,21 +96,10 @@ export class EntitySubClassGeneratorBase {
           ts.ScriptKind.TS
       );
 
-      // Check for syntax errors using a minimal compiler program
-      const compilerHost = ts.createCompilerHost({});
-      const originalGetSourceFile = compilerHost.getSourceFile;
-      compilerHost.getSourceFile = (fileName: string, languageVersion: ts.ScriptTarget) => {
-          if (fileName === 'jsontype-validation.ts') return sourceFile;
-          return originalGetSourceFile.call(compilerHost, fileName, languageVersion);
-      };
-
-      const program = ts.createProgram(
-          ['jsontype-validation.ts'],
-          { noEmit: true, strict: false, skipLibCheck: true },
-          compilerHost
-      );
-
-      const syntacticDiagnostics = program.getSyntacticDiagnostics(sourceFile);
+      // Read syntax errors directly from the parser-populated diagnostics on the
+      // source file — avoids constructing a full ts.Program (which loads the TS
+      // default-lib .d.ts files on every call).
+      const syntacticDiagnostics = (sourceFile as ParsedSourceFile).parseDiagnostics ?? [];
       for (const diag of syntacticDiagnostics) {
           const message = ts.flattenDiagnosticMessageText(diag.messageText, '\n');
           errors.push(`${prefix}: Syntax error — ${message}`);
@@ -649,7 +647,12 @@ ${validationFunctions}`
           const quotes = e.NeedsQuotes ? "'" : '';
           // Sort deterministically by Sequence, CreatedAt, then Value to prevent flip-flopping across runs
           const sortedValues = sortBySequenceAndCreatedAt([...e.EntityFieldValues]);
-          typeString = `union([${sortedValues.map((v) => `z.literal(${quotes}${v.Value}${quotes})`).join(', ')}])`;
+          // z.union() requires at least 2 members. When there's only one allowed
+          // value (single-value CHECK constraint), emit z.literal() directly.
+          const literals = sortedValues.map((v) => `z.literal(${quotes}${v.Value}${quotes})`);
+          typeString = literals.length === 1
+            ? literals[0].substring(2) // strip leading 'z.' since caller prepends it
+            : `union([${literals.join(', ')}])`;
           if (e.ValueListTypeEnum === EntityFieldValueListType.ListOrUserEntry) {
             // special case becuase a user can enter whatever they want
             typeString += `.or(z.${TypeScriptTypeFromSQLType(e.Type)}()) `;

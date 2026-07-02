@@ -245,4 +245,36 @@ SELECT * FROM save_result`;
                 .toBe("SELECT 'x'::BYTEA FROM t");
         });
     });
+
+    describe('uppercase-only keywords (TYPE / DATA) — DDL vs column name', () => {
+        // Regression: a runtime ALTER like `ALTER COLUMN "x" TYPE boolean` used to
+        // emit `ALTER COLUMN "x" "TYPE" boolean` (TYPE quoted as an identifier),
+        // which PG rejects with `syntax error at or near "TYPE"`. The all-caps
+        // keyword form must pass through unquoted.
+        it('leaves the all-caps TYPE keyword bare in an ALTER COLUMN', () => {
+            expect(quote('ALTER TABLE hubspot."Contacts" ALTER COLUMN "Active" TYPE boolean'))
+                .toBe('ALTER TABLE hubspot."Contacts" ALTER COLUMN "Active" TYPE boolean');
+        });
+
+        it('leaves the all-caps DATA keyword bare in SET DATA TYPE', () => {
+            expect(quote('ALTER TABLE x ALTER COLUMN "c" SET DATA TYPE integer'))
+                .toBe('ALTER TABLE x ALTER COLUMN "c" SET DATA TYPE integer');
+        });
+
+        // The other half of the fix: a PascalCase column literally named `Type`
+        // or `Data` (very common in MJ — RecordChange.Type, etc.) must STILL be
+        // quoted, because matching is case-SENSITIVE for these two words.
+        it('still quotes a PascalCase Type column reference', () => {
+            expect(quote('SELECT Type FROM x')).toBe('SELECT "Type" FROM x');
+        });
+
+        it('still quotes a PascalCase Data column reference', () => {
+            expect(quote('SELECT t.Data FROM x t')).toBe('SELECT t."Data" FROM x t');
+        });
+
+        it('still quotes Type when dot-qualified', () => {
+            expect(quote('SELECT rc.Type FROM __mj.vwRecordChanges rc'))
+                .toBe('SELECT rc."Type" FROM __mj."vwRecordChanges" rc');
+        });
+    });
 });

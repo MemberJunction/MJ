@@ -51,6 +51,7 @@ This package serves as the foundational layer for MemberJunction's Computer Use 
 - **PlaywrightBrowserAdapter**: Production-ready Chromium automation
 - **Isolated Interface**: No direct browser library dependencies in core logic
 - **Extensibility**: Implement `BaseBrowserAdapter` for custom browsers
+- **External-Browser Attach**: Connect to an already-running Chrome (CDP) or Playwright server via `BrowserConfig.Connect` — see **[External Browser Attach Guide](docs/EXTERNAL_BROWSER_ATTACH.md)**
 
 ### 🎪 Robust Error Handling
 - **No Uncaught Exceptions**: All errors wrapped in `ComputerUseResult`
@@ -995,15 +996,20 @@ npm run build
 npm test
 ```
 
-### Prompt Sync Process
+### Standalone Default Prompts (Single Source of Truth)
 
-The package includes default prompts for the controller and judge LLMs. These prompts are automatically synced from MemberJunction metadata during the build process:
+The package ships standalone default prompts for the controller and judge LLMs — `DEFAULT_CONTROLLER_PROMPT` / `DEFAULT_JUDGE_PROMPT` — used by the MJ-independent `ComputerUseEngine` / `LLMJudge` when no custom prompt is supplied. **These are not the package's own copy of the text** — they are **composed from shared parts** so this layer (Layer 1) and the MJ metadata templates (Layer 2) can never silently diverge.
 
-- **Source**: `metadata/prompts/templates/computer-use/` (metadata definitions)
-- **Target**: `packages/AI/ComputerUse/src/prompts/` (package code)
-- **Sync Script**: `scripts/sync-prompts.mjs` (runs automatically as prebuild step)
+How it works:
 
-The script converts Nunjucks-style metadata templates to simple TypeScript constants. If you modify the metadata prompts, they'll be automatically synced the next time you run `npm run build`.
+- The behavioral **core** of each prompt — the controller's Available Actions catalog and Response Format/Rules block, and the judge's core evaluation contract — lives **once** in `metadata/prompts/templates/computer-use/_includes/*.md` (`controller-actions.md`, `controller-response-format.md`, `judge-core.md`).
+- A **`prebuild`** step (`scripts/generate-prompt-parts.mjs`, runs automatically before `npm run build`) reads those partials and emits `src/prompts/prompt-parts.generated.ts` — each partial as an escaped string const (`CONTROLLER_ACTIONS`, `CONTROLLER_RESPONSE_FORMAT`, `JUDGE_CORE`).
+- `default-controller.ts` / `default-judge.ts` then **compose** `DEFAULT_CONTROLLER_PROMPT` / `DEFAULT_JUDGE_PROMPT` from those generated consts plus their per-layer top section (intro, goal, current state) and dynamic-section markers.
+- The metadata templates (Layer 2) pull the *same* partials in via MJ's push-time `{@include ./_includes/...}` directive.
+
+A drift-guard test (`src/__tests__/prompt-single-source.test.ts`) asserts both layers carry the same shared blocks.
+
+To change shared prompt text, edit the relevant `_includes/*.md` partial and re-run `npm run prebuild` — both layers update from the single source. **Never** hand-edit `src/prompts/prompt-parts.generated.ts`; it is regenerated on every build.
 
 For more details, see [scripts/README.md](scripts/README.md).
 

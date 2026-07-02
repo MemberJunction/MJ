@@ -1,0 +1,20 @@
+/* AI Bridge Agent Identity — provisioning hint. Tokens only. */
+
+.bai-hint {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin-top: 10px;
+    padding: 10px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    line-height: 1.45;
+    background: color-mix(in srgb, var(--mj-status-info) 10%, transparent);
+    color: var(--mj-status-info-text, var(--mj-text-secondary));
+    border: 1px solid color-mix(in srgb, var(--mj-status-info) 25%, var(--mj-border-default));
+}
+.bai-hint i {
+    color: var(--mj-status-info, var(--mj-brand-primary));
+    margin-top: 2px;
+    flex: 0 0 auto;
+}

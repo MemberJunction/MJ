@@ -1,0 +1,50 @@
+# Standalone compose — run the regression suite from OUTSIDE the MJ monorepo,
+# using the PUBLISHED agentic-test-runner image. No source build.
+#
+# Driven by `mj test regression remote --target=<file>` when not in the monorepo,
+# or directly:
+#   TARGET_DIR=$(pwd)/my-suite TARGET_FILE=target.json USER_ENV_FILE=$(pwd)/.env \
+#   docker compose -f docker-compose.standalone.yml up
+#
+# Mode D (bring-your-own-app) — layer your app's compose so it boots on the same
+# network; point the target's baseUrl at its in-network hostname:
+#   docker compose -f docker-compose.standalone.yml -f your-app.compose.yml up
+#
+# Provider DB: the test engine needs an MJ database (DB_*) to load test defs +
+# Computer Use prompts and record results — your instance under test, or a
+# throwaway. Auth `env:` references in the target resolve from USER_ENV_FILE.
+name: mj-regression-standalone
+
+services:
+  test-runner:
+    image: ${MJ_IMAGE:-memberjunction/agentic-test-runner:latest}
+    # Inject the user's whole .env (DB_*, auth env: refs, AI keys) into the
+    # container. Absolute path so it resolves regardless of cwd; optional so a
+    # missing file is fine (vars can come from the environment block below).
+    env_file:
+      - path: ${USER_ENV_FILE:-/dev/null}
+        required: false
+    environment:
+      # Provider DB (override via your .env / environment).
+      DB_HOST: "${DB_HOST:-host.docker.internal}"
+      DB_PORT: "${DB_PORT:-1433}"
+      DB_DATABASE: "${DB_DATABASE:-}"
+      DB_USERNAME: "${DB_USERNAME:-}"
+      DB_PASSWORD: "${DB_PASSWORD:-}"
+      DB_TRUST_SERVER_CERTIFICATE: "${DB_TRUST_SERVER_CERTIFICATE:-true}"
+      MJ_BASE_ENCRYPTION_KEY: "${MJ_BASE_ENCRYPTION_KEY:-}"
+      # AI vendor keys (Gemini is the primary model; Anthropic is failover).
+      AI_VENDOR_API_KEY__GeminiLLM: "${AI_VENDOR_API_KEY__GeminiLLM:-}"
+      AI_VENDOR_API_KEY__AnthropicLLM: "${AI_VENDOR_API_KEY__AnthropicLLM:-}"
+      TEST_SUITE_NAME: "${TEST_SUITE_NAME:-}"
+      MAX_PARALLEL_WORKERS: "${MAX_PARALLEL_WORKERS:-4}"
+    extra_hosts:
+      # Lets DB_HOST=host.docker.internal reach a DB published on the host (Linux too).
+      - "host.docker.internal:host-gateway"
+    shm_size: '2gb'
+    volumes:
+      # Your suite dir: target.json + metadata/ (tests + test-suites). Mounted at
+      # /work; the target's extraMetadataDirs should point at /work/metadata.
+      - ${TARGET_DIR:-./bacpac}:/work:ro
+      - ./test-results:/app/test-results
+    command: ["run", "--target=/work/${TARGET_FILE:-target.json}"]

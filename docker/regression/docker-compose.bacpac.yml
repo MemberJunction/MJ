@@ -1,0 +1,31 @@
+# Bacpac overlay — layered on top of docker-compose.test.yml when running the
+# regression suite against an imported .bacpac database:
+#
+#   docker compose -f docker-compose.test.yml -f docker-compose.bacpac.yml --profile full up
+#
+# `mj test regression up --bacpac=<path>` adds this overlay automatically and
+# sets BACPAC_DIR / BACPAC_FILE / BACPAC_UPGRADE / USER_METADATA_DIR.
+#
+# Why an overlay (not the base file): it pins db-setup to linux/amd64 so the
+# x64 SqlPackage build can run, and adds the bacpac/user-metadata bind mounts —
+# all of which would needlessly slow or clutter the common build-from-scratch
+# path if baked into the base compose.
+services:
+  db-setup:
+    # SqlPackage ships x64-only here; force amd64 (matches the sqlserver pin).
+    platform: linux/amd64
+    volumes:
+      # Directory holding the .bacpac (BACPAC_FILE names the file inside it).
+      - ${BACPAC_DIR:-./bacpac}:/app/bacpac:ro
+    environment:
+      BACPAC_FILE: "${BACPAC_FILE:-}"
+      BACPAC_UPGRADE: "${BACPAC_UPGRADE:-true}"
+
+  test-runner:
+    volumes:
+      # The user's suite metadata dir (tests + test-suites). Push it by setting
+      # EXTRA_METADATA_DIRS=/app/user-metadata (the CLI does this for you).
+      - ${USER_METADATA_DIR:-./bacpac}:/app/user-metadata:ro
+    environment:
+      # Lets the test-runner entrypoint skip the demo-user/standard-metadata seeding.
+      BACPAC_FILE: "${BACPAC_FILE:-}"

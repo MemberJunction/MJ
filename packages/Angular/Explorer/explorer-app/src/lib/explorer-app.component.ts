@@ -8,12 +8,12 @@
  *   <mj-explorer-app></mj-explorer-app>
  */
 
-import { Component, OnInit, OnDestroy, Inject, ViewEncapsulation, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, Inject, Optional, ViewEncapsulation, ChangeDetectorRef, ViewContainerRef, ComponentRef, Type, EnvironmentInjector } from '@angular/core';
 import { DOCUMENT } from '@angular/common';
 import { Router, NavigationEnd } from '@angular/router';
 import { Subject } from 'rxjs';
 import { filter, take, takeUntil } from 'rxjs/operators';
-import { CompositeKey, LogError, Metadata, SetProductionStatus } from '@memberjunction/core';
+import { CompositeKey, EntityInfo, LogError, Metadata, SetProductionStatus } from '@memberjunction/core';
 import { MJAuthBase, StandardUserInfo, AuthErrorType } from '@memberjunction/ng-auth-services';
 import { WorkspaceInitializerService } from '@memberjunction/ng-workspace-initializer';
 import { MJEnvironmentConfig, MJ_ENVIRONMENT } from '@memberjunction/ng-bootstrap';
@@ -22,11 +22,12 @@ import { NavigationService, AgentContextUpdate } from '@memberjunction/ng-shared
 import { AgentClientService } from '@memberjunction/ng-agent-client';
 import { ClientToolResultEvent } from '@memberjunction/ai-agent-client';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
-import { ConversationBridgeService } from '@memberjunction/ng-conversations';
+import { ConversationBridgeService, RealtimeSessionService } from '@memberjunction/ng-conversations';
 import { ApplicationManager, WorkspaceStateManager } from '@memberjunction/ng-base-application';
-import { AppContextSnapshot } from '@memberjunction/ai-core-plus';
+import { AppContextSnapshot, ClientToolMetadata } from '@memberjunction/ai-core-plus';
 
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+import { MJ_PRE_SHELL_GUARD, PreShellGuard } from './pre-shell-guard';
 @Component({
   standalone: false,
   selector: 'mj-explorer-app',
@@ -58,8 +59,31 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
   /** Suppresses chat overlay during initial app load — set true after workspace initializes */
   public IsChatOverlayReady = false;
 
+  /** Component rendered by PreShellGuard (blocks the shell until dismissed) */
+  private _preShellOverlayRef: ComponentRef<unknown> | null = null;
+  /** Whether a pre-shell guard overlay is blocking the shell */
+  preShellBlocked = false;
+
   /** Application context snapshot for AI agent awareness — updated on every app/tab transition */
   public AppContextSnapshot: AppContextSnapshot | null = null;
+
+  /** Shell-header height in pixels — matches `.shell-header { height: 60px }`. */
+  private static readonly SHELL_HEADER_PX = 60;
+
+  /**
+   * Top boundary (in px) the chat overlay bubble cannot be dragged past. The
+   * shell-header is 60px tall, but if the server-connectivity banner is showing
+   * it sits above the shell-header and pushes everything down. The banner
+   * component publishes its height to `--mj-connectivity-banner-height` on
+   * `<html>`, so we add it in. Re-evaluated on every change-detection pass —
+   * Angular's animation events fire CD when the banner show/hides finish.
+   */
+  public get ChatOverlayTopBoundaryPx(): number {
+    const bannerHeight = parseFloat(
+      getComputedStyle(document.documentElement).getPropertyValue('--mj-connectivity-banner-height')
+    ) || 0;
+    return MJExplorerAppComponent.SHELL_HEADER_PX + bannerHeight;
+  }
 
   private destroy$ = new Subject<void>();
 
@@ -74,9 +98,19 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
     private agentClient: AgentClientService,
     private navigationService: NavigationService,
     private bridge: ConversationBridgeService,
+    private realtimeSession: RealtimeSessionService,
+    // Injected (not just used statically) so the root singleton is constructed
+    // before handleLogin runs. Magic-link logs in instantly (token already in the
+    // URL hash, no redirect round-trip), so without this injection handleLogin can
+    // fire before anything else constructs MJNotificationService, leaving
+    // MJNotificationService.Instance undefined -> "ShouldSuppressToast" crash.
+    private notifications: MJNotificationService,
     private appManager: ApplicationManager,
     private workspaceState: WorkspaceStateManager,
     private cdr: ChangeDetectorRef,
+    @Optional() @Inject(MJ_PRE_SHELL_GUARD) private preShellGuard: PreShellGuard | null,
+    private environmentInjector: EnvironmentInjector,
+    private viewContainerRef: ViewContainerRef,
   ) {
     super();
     this.registerClientTools();
@@ -105,7 +139,7 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
         }
 
         // Suppress toast for agent completions when the user is actively viewing the conversation
-        MJNotificationService.Instance.ShouldSuppressToast = (statusObj: Record<string, unknown>) => {
+        this.notifications.ShouldSuppressToast = (statusObj: Record<string, unknown>) => {
           const convoId = statusObj['conversationId'] as string;
           if (!convoId) return false;
           const isViewingConvo = this.bridge.ActiveConversationID$.value === convoId
@@ -119,6 +153,17 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
         // Chat overlay can now render — workspace is initialized
         this.IsChatOverlayReady = true;
         this.cdr.detectChanges();
+
+        // Check if a pre-shell guard wants to block the shell (e.g., onboarding wizard)
+        if (this.preShellGuard) {
+          const blockComponent = await this.preShellGuard.CheckPreShellBlock(userInfo);
+          if (blockComponent) {
+            this.preShellBlocked = true;
+            this.cdr.detectChanges();
+            this.renderPreShellOverlay(blockComponent);
+            return;
+          }
+        }
 
         // Navigate to initial route
         if (this.initialPath === '/') {
@@ -134,6 +179,15 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
       } else if (result.error) {
         // Handle errors based on type
         if (result.error.type === 'no_roles') {
+          // Check if a pre-shell guard wants to handle the no_roles case (e.g., onboarding wizard)
+          if (this.preShellGuard) {
+            const blockComponent = await this.preShellGuard.CheckPreShellBlock(userInfo);
+            if (blockComponent) {
+              this.preShellBlocked = true;
+              this.renderPreShellOverlay(blockComponent);
+              return;
+            }
+          }
           // Show validation banner instead of generic error
           this.showValidationOnly = true;
           this.HasError = true;
@@ -241,7 +295,22 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
       )
       .subscribe((event) => {
         const url = (event as NavigationEnd).urlAfterRedirects || (event as NavigationEnd).url;
-        this.isChatRoute = url.includes('/chat') || url.includes('/conversations');
+        const nowChatRoute = url.includes('/chat') || url.includes('/conversations');
+        const activeConvoId = this.bridge.ActiveConversationID$.value;
+        // Symmetric conversation handoff across the chat-route boundary, so a live call / chat
+        // never dies on navigation — it just moves to whichever surface is visible. Fired for ANY
+        // navigation (nav click, deep link, back/forward), not only the agent's NavigateToApp tool.
+        if (this.isChatRoute && !nowChatRoute && activeConvoId) {
+          // Leaving the full chat workspace → hand the conversation to the floating overlay so it
+          // pops up there and persists.
+          this.bridge.SwitchToOverlay(activeConvoId);
+        } else if (!this.isChatRoute && nowChatRoute && activeConvoId) {
+          // Entering the full chat workspace while the overlay holds a live conversation → hand it
+          // to the workspace (BEFORE the overlay collapses) so the session continues there instead
+          // of being stranded in a collapsed bubble.
+          this.bridge.SwitchToWorkspace(activeConvoId);
+        }
+        this.isChatRoute = nowChatRoute;
       });
 
     // Track active app changes for AI agent context awareness
@@ -314,9 +383,33 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
 
   /** Build and update the application context snapshot for AI agent awareness */
   private async updateAppContext(): Promise<void> {
+    // Guard: this fires from BehaviorSubjects during early boot, before the provider is ready —
+    // `ProviderToUse` (and thus CurrentUser) can be undefined. Read defensively, never throw.
+    const md = this.ProviderToUse;
+    const currentUser = md?.CurrentUser ?? null;
+    // Apps the user can open — the valid AppName values for a NavigateToApp call. Computed here so
+    // it's available even when there's NO active app (overlay open over Home/Chat, pre-app boot).
+    const navigableApps = (this.appManager.GetAllApps() ?? [])
+      .map(a => ({ Name: a.Name, Description: a.Description || undefined }));
+
     const activeApp = this.appManager.GetActiveApp();
     if (!activeApp) {
-      this.AppContextSnapshot = null;
+      // No specific app is open, but the co-agent must STILL be able to navigate the user into one
+      // and run the global tools — so ship a navigable baseline instead of a null (thin) snapshot.
+      this.AppContextSnapshot = {
+        App: { Name: 'MemberJunction', Description: 'No specific app is open right now — you can open one.' },
+        ActiveNavItem: { Name: '(none)' },
+        OtherNavItems: [],
+        NavigableApps: navigableApps,
+        User: {
+          Name: currentUser?.Name || '',
+          Roles: currentUser?.UserRoles?.map(r => r.Role) || []
+        },
+        Capabilities: { Tools: this.currentToolManifest }
+      };
+      this.navigationService.PublishAppContextSnapshot(this.AppContextSnapshot);
+      this.realtimeSession.UpdateAppContext(this.AppContextSnapshot);
+      this.cdr.detectChanges();
       return;
     }
 
@@ -329,9 +422,6 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
     const activeNavItem = activeNavItemName
       ? navItems.find(n => n.Label === activeNavItemName)
       : navItems.find(n => n.isDefault) || navItems[0];
-
-    const md = this.ProviderToUse;
-    const currentUser = md.CurrentUser;
 
     this.AppContextSnapshot = {
       App: {
@@ -346,11 +436,24 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
       OtherNavItems: navItems
         .filter(n => n.Label !== activeNavItem?.Label && n.Status !== 'Disabled' && n.Status !== 'Pending')
         .map(n => ({ Name: n.Label, Description: n.Description })),
+      // Other apps the user can open — the valid AppName values for a NavigateToApp call. Without
+      // this the co-agent guesses the app name and navigation fails with "application undefined".
+      NavigableApps: navigableApps.filter(a => a.Name !== activeApp.Name),
       User: {
         Name: currentUser?.Name || '',
         Roles: currentUser?.UserRoles?.map(r => r.Role) || []
-      }
+      },
+      // Capability manifest = always-available globals + the active surface's persisted tools, so a
+      // snapshot rebuilt on app/nav change never drops the surface tools (see currentToolManifest).
+      Capabilities: { Tools: this.currentToolManifest }
     };
+    // Publish to any embedded chat-area subscribers (Form Builder
+    // cockpit, future domain dashboards). The floating overlay sees
+    // the change directly via its [AppContext] template binding; this
+    // observable channel is for chats mounted outside the overlay.
+    this.navigationService.PublishAppContextSnapshot(this.AppContextSnapshot);
+    // Keep any live realtime co-agent's streamed context in sync on app/nav changes too.
+    this.realtimeSession.UpdateAppContext(this.AppContextSnapshot);
     this.cdr.detectChanges();
 
     // Keep the bridge in sync with workspace visibility.
@@ -380,6 +483,14 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
         ...this.AppContextSnapshot,
         AdditionalContext: update.AgentContext,
       };
+      // Republish so any embedded chat-area subscribers (Form Builder
+      // cockpit, future dashboards with their own AI pane) pick up the
+      // new dashboard slice — the floating overlay sees it via the
+      // [AppContext] template binding regardless.
+      this.navigationService.PublishAppContextSnapshot(this.AppContextSnapshot);
+      // Continuous-streaming half of client-context delivery: push the updated snapshot to any LIVE
+      // realtime session so the ClientContextChannel streams it to the co-agent as a context note.
+      this.realtimeSession.UpdateAppContext(this.AppContextSnapshot);
       this.cdr.detectChanges();
     }
 
@@ -402,30 +513,150 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
           Handler: tool.Handler as (params: Record<string, unknown>) => Promise<{ Success: boolean; Data?: Record<string, unknown>; ErrorMessage?: string }>,
         });
       }
+
+      // Mirror the surface tools into the realtime session so the co-agent's ContextTool proxy can
+      // execute them client-side — MERGED with the always-available global tools (NavigateToApp,
+      // NavigateToRecord, …) so the co-agent can navigate AND drive the current surface.
+      this.realtimeSession.RegisterAppClientTools([
+        ...this.globalAgentTools,
+        ...update.AgentClientTools.map(t => ({ Name: t.Name, Handler: t.Handler })),
+      ]);
+
+      // PERSIST the active surface's capability manifest (names + schemas, no handlers) so EVERY
+      // snapshot (re)build merges it on top of the globals — not just this immediate update. Without
+      // persisting it, a snapshot rebuilt on a later app/nav change (or one that ran BEFORE the
+      // surface registered its tools) resets Capabilities.Tools to globals-only, and the agent loses
+      // the surface's tools even though their handlers are still registered — so it can't call them
+      // and falls back to a global tool with an invented arg. This is the "continually pass available
+      // client tools" half of client-context delivery.
+      this.activeDashboardToolManifest = update.AgentClientTools.map(t => ({
+        Name: t.Name,
+        Description: t.Description,
+        InputSchema: t.ParameterSchema,
+      }));
+      if (this.AppContextSnapshot) {
+        this.AppContextSnapshot = {
+          ...this.AppContextSnapshot,
+          Capabilities: { ...this.AppContextSnapshot.Capabilities, Tools: this.currentToolManifest },
+        };
+        this.navigationService.PublishAppContextSnapshot(this.AppContextSnapshot);
+        this.realtimeSession.UpdateAppContext(this.AppContextSnapshot);
+        this.cdr.detectChanges();
+      }
     }
   }
 
   /** Names of currently registered dashboard-specific tools (for cleanup on switch) */
   private activeDashboardToolNames: string[] = [];
 
+  /** Capability manifest (names + schemas) of the active surface's tools, persisted so it can be
+   *  merged into every snapshot (re)build — see handleAgentContextUpdate for why. */
+  private activeDashboardToolManifest: ClientToolMetadata[] = [];
+
+  /** The full client-tool manifest the agent should see: always-available globals + the active
+   *  surface's persisted tools. Used by every AppContextSnapshot build so the surface tools are
+   *  never dropped when the snapshot is rebuilt (the bug this fixes). NOTE: a known follow-up is
+   *  that on cross-app navigation the prior app's surface tools can linger until the new surface
+   *  registers — the proper place to clear/re-register per the tab lifecycle is the
+   *  ComponentCacheManager (it already caches each component's AgentClientTools for that purpose). */
+  private get currentToolManifest(): ClientToolMetadata[] {
+    return [...this.globalToolManifest, ...this.activeDashboardToolManifest];
+  }
+
   /** Register Explorer-specific client tool handlers with the AgentClientService */
+  /**
+   * Global client tools (Name + Handler), captured so the REALTIME co-agent's `ContextTool` can
+   * execute them too — not just the async chat agent. Merged with the active surface's tools in
+   * {@link handleAgentContextUpdate}. Without this, the realtime ContextTool can't perform
+   * NavigateToApp / NavigateToRecord / etc. and the co-agent falls back to (failing) delegation.
+   */
+  private globalAgentTools: Array<{ Name: string; Handler: (params: Record<string, unknown>) => Promise<unknown> | unknown }> = [];
+
+  /**
+   * Catalog (name + description + schema, no handlers) of the global tools, merged into
+   * {@link AppContextSnapshot}.Capabilities.Tools so the realtime context note tells the co-agent
+   * HOW to call NavigateToApp/NavigateToRecord/etc. (their params) — not just that they exist.
+   */
+  private globalToolManifest: ClientToolMetadata[] = [];
+
+  /**
+   * Case-insensitive parameter lookup across candidate keys. The realtime co-agent calls tools via
+   * the ContextTool proxy and can vary the casing/name of a parameter ('AppName' vs 'appName' vs
+   * 'name'/'target'); this makes the global nav handlers tolerant so a correct VALUE isn't lost to a
+   * keying mismatch. Returns the first non-empty match, else undefined.
+   */
+  private readToolParam(params: Record<string, unknown>, ...keys: string[]): string | undefined {
+    const lowerMap = new Map<string, unknown>();
+    for (const [k, v] of Object.entries(params ?? {})) {
+      lowerMap.set(k.toLowerCase(), v);
+    }
+    for (const key of keys) {
+      const v = lowerMap.get(key.toLowerCase());
+      if (v != null && String(v).trim().length > 0) {
+        return String(v);
+      }
+    }
+    return undefined;
+  }
+
+  /**
+   * Guards the global NavigateToRecord tool, which opens ONE specific record. Returns an actionable
+   * message (so the agent opens the entity list instead) when `recordId` is missing or a sentinel
+   * the model invents to mean "all records" (e.g. "__ALL__", "all", "*"), or `null` when the key is
+   * plausible. Without this, a hallucinated key routes to a broken record-load page yet the tool
+   * still reports success.
+   */
+  private invalidRecordKeyMessage(entityName: string, entityInfo: EntityInfo | undefined, recordId: string): string | null {
+    const sentinels = new Set(['', '__all__', 'all', '*', 'none', 'null', 'undefined', 'list', 'records']);
+    if (sentinels.has(recordId.trim().toLowerCase())) {
+      return `"${recordId || '(empty)'}" is not a specific record key, so NavigateToRecord cannot open it. ` +
+        `NavigateToRecord opens ONE existing record by its primary key. To show ALL records of ` +
+        `"${entityInfo?.Name ?? entityName}", open the entity in Data Explorer with the OpenEntity tool ` +
+        `(or navigate to that app), then filter/sort there.`;
+    }
+    return null;
+  }
+
   private registerClientTools(): void {
-    this.agentClient.RegisterTool({
+    // Register each global tool on BOTH the async agent-client AND capture it for the realtime
+    // session (one set of handlers, both agents) + the streamed capability manifest (schemas).
+    this.globalAgentTools = [];
+    this.globalToolManifest = [];
+    const register = (tool: {
+      Name: string;
+      Description: string;
+      ParameterSchema: Record<string, unknown>;
+      Handler: (params: Record<string, unknown>) => Promise<{ Success: boolean; Data?: Record<string, unknown>; ErrorMessage?: string }>;
+    }): void => {
+      this.agentClient.RegisterTool(tool);
+      this.globalAgentTools.push({ Name: tool.Name, Handler: tool.Handler });
+      this.globalToolManifest.push({ Name: tool.Name, Description: tool.Description, InputSchema: tool.ParameterSchema });
+    };
+    register({
       Name: 'NavigateToRecord',
-      Description: 'Navigate the user to a specific entity record',
+      Description: 'Open ONE specific, existing entity record by its primary key (the record\'s ID). ' +
+        'Use only when you have a concrete record id/key. Do NOT use this to browse, list, or "see all" ' +
+        'records of an entity — for that, open the entity in Data Explorer with the OpenEntity tool.',
       ParameterSchema: {
         type: 'object',
         properties: {
           EntityName: { type: 'string' },
-          RecordID: { type: 'string' }
+          RecordID: { type: 'string', description: 'The primary key of a single existing record (e.g. a GUID). Not a placeholder like "all".' }
         },
         required: ['EntityName', 'RecordID']
       },
       Handler: async (params) => {
-        const entityName = String(params['EntityName']);
-        const recordId = String(params['RecordID']);
+        const entityName = this.readToolParam(params, 'EntityName', 'entity') ?? '';
+        const recordId = this.readToolParam(params, 'RecordID', 'recordId', 'id', 'record') ?? '';
         const md = this.ProviderToUse;
-        const entityInfo = md.Entities.find(e => e.Name === entityName);
+        const entityInfo = md.EntityByName(entityName);
+        // Guard: this tool opens ONE record. Reject a missing / sentinel / non-record key (e.g. an
+        // agent inventing "__ALL__" to mean "all records") so we never route to a broken
+        // record-load page — return actionable feedback so the agent opens the entity list instead.
+        const invalid = this.invalidRecordKeyMessage(entityName, entityInfo, recordId);
+        if (invalid) {
+          return { Success: false, ErrorMessage: invalid };
+        }
         const pkey = new CompositeKey();
         if (entityInfo) {
           pkey.LoadFromURLSegment(entityInfo, recordId);
@@ -437,7 +668,7 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
       }
     });
 
-    this.agentClient.RegisterTool({
+    register({
       Name: 'NavigateToApp',
       Description: 'Navigate to a specific application and optionally a nav item within it',
       ParameterSchema: {
@@ -449,8 +680,8 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
         required: ['AppName']
       },
       Handler: async (params) => {
-        const appName = String(params['AppName']);
-        const navItemName = params['NavItemName'] ? String(params['NavItemName']) : undefined;
+        const appName = this.readToolParam(params, 'AppName', 'app', 'application', 'name', 'target') ?? '';
+        const navItemName = this.readToolParam(params, 'NavItemName', 'navItem', 'tab', 'section');
 
         // If currently in full chat workspace, hand conversation to overlay for continuity
         if (this.isChatRoute) {
@@ -476,7 +707,7 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
       }
     });
 
-    this.agentClient.RegisterTool({
+    register({
       Name: 'Sleep',
       Description: 'Wait for a specified number of seconds',
       ParameterSchema: {
@@ -493,7 +724,7 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
       }
     });
 
-    this.agentClient.RegisterTool({
+    register({
       Name: 'CopyToClipboard',
       Description: 'Copy text to the user\'s clipboard. Use when the user asks to copy something or when generating content the user will want to paste elsewhere (SQL, code, formatted data).',
       ParameterSchema: {
@@ -514,7 +745,7 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
       }
     });
 
-    this.agentClient.RegisterTool({
+    register({
       Name: 'ShowNotification',
       Description: 'Show a toast notification to the user. Use for confirmations, status updates, or alerts that don\'t need a chat message response.',
       ParameterSchema: {
@@ -530,12 +761,12 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
         const message = String(params['Message'] || '');
         const type = (String(params['Type'] || 'info')) as 'info' | 'success' | 'warning' | 'error';
         const duration = Number(params['DurationMs']) || 3000;
-        MJNotificationService.Instance.CreateSimpleNotification(message, type, duration);
+        this.notifications.CreateSimpleNotification(message, type, duration);
         return { Success: true, Data: { Shown: true } };
       }
     });
 
-    this.agentClient.RegisterTool({
+    register({
       Name: 'OpenBrowserTab',
       Description: 'Open a URL in a new browser tab. Use when the user asks to visit an external website, view documentation, or open any URL outside the current application.',
       ParameterSchema: {
@@ -556,7 +787,7 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
       }
     });
 
-    this.agentClient.RegisterTool({
+    register({
       Name: 'SetTheme',
       Description: 'Switch the application between dark mode and light mode. Use when the user asks for dark mode, light mode, or to toggle the theme.',
       ParameterSchema: {
@@ -578,6 +809,10 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
         return { Success: true, Data: { CurrentMode: this.IsDarkMode ? 'dark' : 'light' } };
       }
     });
+
+    // Make the global tools available to the realtime co-agent's ContextTool from the start
+    // (handleAgentContextUpdate later merges in the active surface's tools).
+    this.realtimeSession.RegisterAppClientTools(this.globalAgentTools);
   }
 
   /**
@@ -713,5 +948,34 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
     this.IsDarkMode = !this.IsDarkMode;
     localStorage.setItem(MJExplorerAppComponent.THEME_STORAGE_KEY, this.IsDarkMode ? 'dark' : 'light');
     this.applyThemeToDOM();
+  }
+
+  /**
+   * Render a pre-shell guard component as a full-page overlay.
+   * The component should emit a 'completed' event when done.
+   */
+  private renderPreShellOverlay(componentType: Type<unknown>): void {
+    this._preShellOverlayRef = this.viewContainerRef.createComponent(componentType, {
+      environmentInjector: this.environmentInjector
+    });
+
+    // Listen for a 'completed' output if the component has one
+    const instance = this._preShellOverlayRef.instance as Record<string, unknown>;
+    if (instance['completed'] && typeof (instance['completed'] as { subscribe?: Function }).subscribe === 'function') {
+      (instance['completed'] as { subscribe: (fn: () => void) => void }).subscribe(() => {
+        this.dismissPreShellOverlay();
+      });
+    }
+  }
+
+  /**
+   * Dismiss the pre-shell overlay and proceed to normal shell rendering.
+   * Reloads the page first so the user never sees a flash of stale shell state
+   * (e.g., "No Applications") while the old context is still in memory.
+   */
+  private dismissPreShellOverlay(): void {
+    // Reload first — the shell needs a full bootstrap to pick up new roles/context.
+    // Cleanup happens implicitly when the page unloads.
+    window.location.href = '/';
   }
 }

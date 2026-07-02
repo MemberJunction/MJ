@@ -127,4 +127,14 @@ export class RunComputerUseParams {
      * Useful for test drivers to capture logs for test run records.
      */
     public LogCallback?: (level: 'info' | 'warn' | 'error', message: string) => void;
+
+    /**
+     * Free-form markdown context about the application being tested. Rendered
+     * into the controller's system prompt under an "## Application Context"
+     * heading so the LLM doesn't rediscover navigation landmarks, route
+     * conventions, etc. on every test. When the engine is driven by the
+     * TestingFramework, this is typically sourced from `TestSuite.Configuration.
+     * applicationContext` and optionally extended per-test.
+     */
+    public ApplicationContext?: string;
 }

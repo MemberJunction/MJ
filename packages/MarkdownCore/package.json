@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/markdown-core",
   "type": "module",
-  "version": "5.36.0",
+  "version": "5.44.0",
   "description": "MemberJunction: Framework-agnostic markdown engine (marked config + custom extensions). Emits HTML or a token AST so it can be rendered by Angular (ng-markdown), React Native, or any other UI layer.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

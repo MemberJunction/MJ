@@ -113,6 +113,31 @@
   box-shadow: var(--mj-shadow-md);
 }
 
+:host ::ng-deep .mention-badge.entity {
+  background: var(--mj-status-success);
+  color: var(--mj-text-inverse);
+  border: 2px solid color-mix(in srgb, var(--mj-status-success) 40%, transparent);
+  box-shadow: var(--mj-shadow-md);
+}
+
+:host ::ng-deep .mention-badge.query {
+  background: var(--mj-status-warning);
+  color: var(--mj-text-inverse);
+  border: 2px solid color-mix(in srgb, var(--mj-status-warning) 40%, transparent);
+  box-shadow: var(--mj-shadow-md);
+}
+
+/* Skills: standard green fallback (AISkill.Color overrides via inline style) + sharp-cornered
+   rectangle — the shape differentiates skills from the rounded agent/user/entity pills.
+   Keep color + shape in sync with the composer chip (mention-editor's createMentionChip). */
+:host ::ng-deep .mention-badge.skill {
+  background: var(--mj-status-success);
+  color: var(--mj-text-inverse);
+  border: 2px solid color-mix(in srgb, var(--mj-text-inverse) 35%, transparent);
+  border-radius: 4px;
+  box-shadow: var(--mj-shadow-md);
+}
+
 :host ::ng-deep .mention-badge i {
   font-size: 12px;
   opacity: 0.95;
@@ -267,6 +292,23 @@
   font-weight: 400;
 }
 
+/* Right-side cluster anchoring.
+   The first of these three siblings that actually renders absorbs the
+   `margin-left: auto`, pushing the whole cluster right. Subsequent siblings
+   then sit next to it (relying on the flex container's `gap`). This used to
+   live only on .time-pill, which broke when timePillText returned null after
+   agent completion — the gear icon would shift to the left. */
+.time-pill,
+.test-feedback-icon,
+.agent-run-icon {
+  margin-left: auto;
+}
+.time-pill ~ .test-feedback-icon,
+.time-pill ~ .agent-run-icon,
+.test-feedback-icon ~ .agent-run-icon {
+  margin-left: 8px;
+}
+
 /* Time pill - unified styling for all AI message states */
 .time-pill {
   display: inline-flex;
@@ -276,7 +318,6 @@
   border-radius: 10px;
   font-size: 11px;
   font-weight: 500;
-  margin-left: auto;
   transition: all 0.3s ease;
 }
 
@@ -754,7 +795,10 @@
    Agent Run Icon & Details Panel
    ============================================ */
 
-/* Agent run gear icon in header - muted style for power users */
+/* Agent run gear icon in header - muted style for power users.
+   Left-margin is governed by the right-side cluster rules above so the gear
+   stays right-anchored whether or not the time pill / test-feedback icon
+   renders alongside it. */
 .agent-run-icon {
   display: inline-flex;
   align-items: center;
@@ -765,7 +809,6 @@
   cursor: pointer;
   transition: all 0.2s ease;
   user-select: none;
-  margin-left: 8px;
 }
 
 .agent-run-icon i.fa-cog {
@@ -781,7 +824,8 @@
   transform: scale(1.1);
 }
 
-/* Test feedback icon in header - appears for test runs */
+/* Test feedback icon in header - appears for test runs.
+   Left-margin handled by the right-side cluster rules above. */
 .test-feedback-icon {
   display: inline-flex;
   align-items: center;
@@ -792,7 +836,6 @@
   cursor: pointer;
   transition: all 0.2s ease;
   user-select: none;
-  margin-left: 8px;
 }
 
 .test-feedback-icon i.fa-flask {
@@ -1549,4 +1592,47 @@
   .attachment-strip {
     width: 100%;
   }
+}
+/* ── Markdown-rendered textarea values inside submitted form pills (e.g. the approved Plan) ── */
+:host ::ng-deep .form-response-pill .field-answer-markdown {
+  font-style: normal; /* the pill's default italic reads poorly on multi-line formatted content */
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--mj-text-primary);
+}
+:host ::ng-deep .form-response-pill .field-answer-markdown h1,
+:host ::ng-deep .form-response-pill .field-answer-markdown h2,
+:host ::ng-deep .form-response-pill .field-answer-markdown h3,
+:host ::ng-deep .form-response-pill .field-answer-markdown h4 {
+  font-size: 13.5px;
+  font-weight: 700;
+  margin: 10px 0 4px;
+  color: var(--mj-text-primary);
+}
+:host ::ng-deep .form-response-pill .field-answer-markdown p {
+  margin: 6px 0;
+}
+:host ::ng-deep .form-response-pill .field-answer-markdown ul,
+:host ::ng-deep .form-response-pill .field-answer-markdown ol {
+  margin: 6px 0;
+  padding-left: 22px;
+}
+:host ::ng-deep .form-response-pill .field-answer-markdown li {
+  margin: 3px 0;
+}
+:host ::ng-deep .form-response-pill .field-answer-markdown code {
+  font-size: 12px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--mj-status-success) 12%, transparent);
+}
+:host ::ng-deep .form-response-pill .field-answer-markdown table {
+  border-collapse: collapse;
+  margin: 8px 0;
+}
+:host ::ng-deep .form-response-pill .field-answer-markdown th,
+:host ::ng-deep .form-response-pill .field-answer-markdown td {
+  border: 1px solid color-mix(in srgb, var(--mj-status-success) 25%, transparent);
+  padding: 4px 10px;
+  font-size: 12.5px;
 }

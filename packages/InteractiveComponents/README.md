@@ -477,6 +477,26 @@ All interfaces are fully typed with TypeScript, providing:
 - Better code documentation
 - Reduced runtime errors
 
+## Forms subpath (`@memberjunction/interactive-component-types/forms`)
+
+The `/forms` subpath provides the **form-role contract** for components that
+declare `componentRole: 'form'` — the substrate that lets MJ render
+runtime-author forms inside Explorer with the same toolbar / save / delete
+behavior as a CodeGen-generated Angular form.
+
+| Export | Purpose |
+|---|---|
+| `FormHostProps` | What the host wrapper passes a form-role React component (entity name, primary key, record snapshot, mode, permissions). |
+| `FormEventNames` / `FormBeforeSaveArgs` / etc. | Standard event names + payload types the component emits via `callbacks.NotifyEvent`. |
+| `FormMethodNames` | Standard methods the component registers (`RequestSave`, `RequestCancel`) so the host toolbar can drive its save flow. |
+| `isFormRole(spec)` | Type-guard: does this `ComponentSpec` declare `componentRole: 'form'`? |
+| `CuratedFormSchema`, `buildCuratedFormSchema(entityName, provider)` | Curated, LLM-friendly view of an entity's schema for form authoring — FK references resolved to `{entity, displayField}`, value lists annotated with `allowedValues`, audit/virtual/computed fields stripped. |
+| `buildDefaultFormScaffold(entityName, provider)` | Produces a working form-role `ComponentSpec` that mirrors the CodeGen Angular default layout. Used as the baseline by the Form Builder agent and the dashboard's "New form" flow. |
+| `buildFixtureFormHostProps(schema, mode?)` | Synthesizes type-appropriate fixture values for live-preview rendering when no real `BaseEntity` is available (used by Component Studio preview + the chat artifact viewer's fallback mode). |
+| `getDeclaredFormEntityName(spec)` | Resolves the entity a form binds to from `spec.entityName` or `spec.dataRequirements.entities[0].name`. Pure helper shared by every form-role consumer. |
+
+See [/plans/interactive-forms/phase-2-runtime-loop.md](../../plans/interactive-forms/phase-2-runtime-loop.md) for the full architecture, lifecycle, and security model (Create / Modify / Activate / Revert + ownership checks).
+
 ## Dependencies
 
 - `@memberjunction/core`: Core MemberJunction types and interfaces

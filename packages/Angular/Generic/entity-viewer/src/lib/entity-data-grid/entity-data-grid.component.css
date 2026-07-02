@@ -221,51 +221,14 @@
    Error State
    ======================================== */
 
-.mj-grid-error {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 40px 20px;
-  color: var(--mj-status-error);
-  gap: 12px;
-}
-
-.mj-grid-error i {
-  font-size: 32px;
-}
-
-.error-retry {
-  padding: 8px 16px;
-  background: var(--mj-status-error);
-  color: var(--mj-text-inverse);
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 14px;
-}
-
-.error-retry:hover {
-  background: var(--mj-status-error-text);
-}
-
 /* ========================================
-   Empty State
+   Empty / Error State
    ======================================== */
 
-.mj-grid-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 60px 20px;
-  color: var(--grid-empty-text-color);
-  gap: 12px;
-}
-
-.mj-grid-empty i {
-  font-size: 48px;
-  color: var(--grid-empty-icon-color);
+/* Flex-fill so <mj-empty-state> placeholders occupy the grid content area
+   (the host centers its content but does not grow to fill the parent). */
+.mj-grid-state-fill {
+  flex: 1 1 auto;
 }
 
 /* ========================================

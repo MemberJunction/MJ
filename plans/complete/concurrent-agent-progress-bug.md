@@ -13,22 +13,22 @@ When 2+ agents are running concurrently, streaming progress messages are incorre
 ### The Flow
 
 1. **Client creates progress callback** for each agent invocation
-   - Location: [message-input.component.ts:600-660](packages/Angular/Generic/conversations/src/lib/components/message/message-input.component.ts#L600-L660)
+   - Location: [message-input.component.ts:600-660](../../packages/Angular/Generic/conversations/src/lib/components/message/message-input.component.ts#L600-L660)
    - Each callback is associated with a specific `ConversationDetailEntity`
 
 2. **GraphQL client subscribes to PubSub**
-   - Location: [graphQLAIClient.ts:308-343](packages/GraphQLDataProvider/src/graphQLAIClient.ts#L308-L343)
+   - Location: [graphQLAIClient.ts:308-343](../../packages/GraphQLDataProvider/src/graphQLAIClient.ts#L308-L343)
    - **PROBLEM**: All concurrent agents share the SAME PubSub subscription
    - Subscription filters for `RunAIAgentResolver` messages
    - ALL progress messages are forwarded to ALL active callbacks
 
 3. **Server publishes progress with agentRunId**
-   - Location: [RunAIAgentResolver.ts:222-236](packages/MJServer/src/resolvers/RunAIAgentResolver.ts#L222-L236)
+   - Location: [RunAIAgentResolver.ts:222-236](../../packages/MJServer/src/resolvers/RunAIAgentResolver.ts#L222-L236)
    - Each progress message includes `agentRunId` field
    - This uniquely identifies which agent run the progress belongs to
 
 4. **Client callback receives agentRunId but doesn't filter**
-   - Location: [message-input.component.ts:606](packages/Angular/Generic/conversations/src/lib/components/message/message-input.component.ts#L606)
+   - Location: [message-input.component.ts:606](../../packages/Angular/Generic/conversations/src/lib/components/message/message-input.component.ts#L606)
    - Code extracts `progressAgentRunId` from metadata
    - **CRITICAL BUG**: The agentRunId is logged but NEVER used to filter
    - Comment says "Filters by agentRunId" but no filtering actually happens!
@@ -137,7 +137,7 @@ Track which `conversationDetailId` maps to which `agentRunId`.
 
 When agent execution starts, emit the `agentRunId` and store it for filtering.
 
-**Location**: [message-input.component.ts:600](packages/Angular/Generic/conversations/src/lib/components/message/message-input.component.ts#L600)
+**Location**: [message-input.component.ts:600](../../packages/Angular/Generic/conversations/src/lib/components/message/message-input.component.ts#L600)
 
 Add a property to track the expected agent run ID:
 ```typescript
@@ -273,7 +273,7 @@ ConversationDetail B (Analysis Agent):
 ## Files to Modify
 
 1. **Primary Fix**:
-   - [message-input.component.ts:600-660](packages/Angular/Generic/conversations/src/lib/components/message/message-input.component.ts#L600-L660)
+   - [message-input.component.ts:600-660](../../packages/Angular/Generic/conversations/src/lib/components/message/message-input.component.ts#L600-L660)
      - Add agent run ID capture in closure
      - Add filtering logic
 

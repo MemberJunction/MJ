@@ -38,11 +38,11 @@ export class ResourcePermissionEngine extends BaseEngine<ResourcePermissionEngin
     }
 
     public get ResourceTypes(): MJResourceTypeEntity[] {
-        return this._ResourceTypes.ResourceTypes;
+        return this._ResourceTypes?.ResourceTypes ?? [];
     }
 
     public get Permissions(): MJResourcePermissionEntity[] {
-        return this._Permissions;
+        return this._Permissions ?? [];
     }
 
     /**

@@ -1,0 +1,77 @@
+<div class="coa-wrap">
+
+  <!-- KPI cards removed: the Pipeline Monitor's top KPI strip is now the single
+       canonical headline-metrics row (Active Sources / Content Items / Total Tags /
+       Avg Tags per Item / Errors). This section renders charts only, eliminating the
+       duplicate "Content Items" + "Total Tags" cards that previously appeared twice. -->
+
+  @if (IsLoading) {
+    <mj-loading text="Loading analytics..." size="small"></mj-loading>
+  } @else if (!HasData) {
+    <mj-empty-state class="coa-empty" Icon="fa-solid fa-chart-pie"
+      Title="No classification data yet" Message="Run the pipeline to populate analytics." />
+  } @else {
+    <div class="coa-charts">
+
+      <!-- Tag distribution (horizontal bars) -->
+      <div class="coa-chart-card">
+        <h4 class="coa-chart-title"><i class="fa-solid fa-ranking-star"></i> Top Tags</h4>
+        @if (DistributionBars.length === 0) {
+          <p class="coa-muted">No tags in scope.</p>
+        } @else {
+          <div class="coa-bars">
+            @for (bar of DistributionBars; track bar.Tag) {
+              <div class="coa-bar-row">
+                <span class="coa-bar-label" [title]="bar.Tag">{{ bar.Tag }}</span>
+                <div class="coa-bar-track">
+                  <div class="coa-bar-fill" [style.width.%]="bar.WidthPct"></div>
+                </div>
+                <span class="coa-bar-count">{{ FormatNumber(bar.Count) }}</span>
+              </div>
+            }
+          </div>
+        }
+      </div>
+
+      <!-- Items over time (line) -->
+      <div class="coa-chart-card">
+        <h4 class="coa-chart-title"><i class="fa-solid fa-chart-line"></i> Tags Over Time</h4>
+        @if (LinePoints.length === 0) {
+          <p class="coa-muted">No time-series data in scope.</p>
+        } @else {
+          <svg class="coa-line-svg" [attr.viewBox]="'0 0 ' + LineWidth + ' ' + LineHeight" preserveAspectRatio="none">
+            <path class="coa-line-path" [attr.d]="LinePath" fill="none" />
+            @for (pt of LinePoints; track pt.Label) {
+              <circle class="coa-line-dot" [attr.cx]="pt.X" [attr.cy]="pt.Y" r="2.5">
+                <title>{{ pt.Label }}: {{ FormatNumber(pt.Count) }}</title>
+              </circle>
+            }
+          </svg>
+          <div class="coa-line-axis">
+            <span>{{ LinePoints[0].Label }}</span>
+            <span>{{ LinePoints[LinePoints.length - 1].Label }}</span>
+          </div>
+        }
+      </div>
+
+      <!-- Weight histogram (vertical bars) -->
+      <div class="coa-chart-card">
+        <h4 class="coa-chart-title"><i class="fa-solid fa-chart-column"></i> Confidence Distribution</h4>
+        @if (HistogramBars.length === 0) {
+          <p class="coa-muted">No weighted tags in scope.</p>
+        } @else {
+          <div class="coa-histogram">
+            @for (hbar of HistogramBars; track hbar.Label) {
+              <div class="coa-hbar-col" [title]="hbar.Label + '% confidence: ' + hbar.Count">
+                <div class="coa-hbar-fill" [style.height.%]="hbar.HeightPct"></div>
+                <span class="coa-hbar-axis">{{ hbar.Label }}</span>
+              </div>
+            }
+          </div>
+          <div class="coa-hist-caption">Tag weight / confidence (%)</div>
+        }
+      </div>
+
+    </div>
+  }
+</div>

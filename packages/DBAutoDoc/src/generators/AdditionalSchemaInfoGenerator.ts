@@ -19,6 +19,7 @@
 
 import { DatabaseDocumentation, SchemaDefinition, TableDefinition, ColumnDefinition } from '../types/state.js';
 import { PKCandidate, FKCandidate } from '../types/discovery.js';
+import { DetectedOrganicKeysOutput, OrganicKeyConfig } from '../discovery/OrganicKeyTranslator.js';
 
 export interface AdditionalSchemaInfoOptions {
   /** Only include AI-discovered keys, not keys already present in the database schema */
@@ -33,6 +34,12 @@ export interface AdditionalSchemaInfoOptions {
   valueListConfidenceThreshold?: number;
   /** If true, skip emitting Fields[] entirely. Default false. */
   excludeValueLists?: boolean;
+  /**
+   * Organic-key detection output (per-schema/per-table OrganicKeys). When present,
+   * merged into each table's OrganicKeys[] so CodeGen's processOrganicKeyConfig
+   * writes EntityOrganicKey / EntityOrganicKeyRelatedEntity metadata.
+   */
+  organicKeys?: DetectedOrganicKeysOutput;
 }
 
 interface SoftPKEntry {
@@ -65,6 +72,8 @@ interface TableSchemaInfo {
   ForeignKeys?: SoftFKEntry[];
   /** Enum/value-list fields discovered by LLM analysis */
   Fields?: FieldValueListEntry[];
+  /** Organic-key configurations consumed by CodeGen's processOrganicKeyConfig */
+  OrganicKeys?: OrganicKeyConfig[];
 }
 
 interface SchemaNameInfo {
@@ -128,7 +137,25 @@ export class AdditionalSchemaInfoGenerator {
         );
 
         if (tableInfo) {
+          // Attach organic keys for this table when detection output is present.
+          const orgKeys = this.getOrganicKeysForTable(options.organicKeys, schema.name, table.name);
+          if (orgKeys.length > 0) {
+            tableInfo.OrganicKeys = orgKeys;
+          }
           tables.push(tableInfo);
+        }
+      }
+
+      // A table may have organic keys even if buildTableInfo returned null (no
+      // soft PK/FK and no value lists). Emit a minimal entry so they aren't lost.
+      if (options.organicKeys) {
+        const emittedTables = new Set(tables.map((t) => t.TableName));
+        for (const table of schema.tables) {
+          if (emittedTables.has(table.name)) continue;
+          const orgKeys = this.getOrganicKeysForTable(options.organicKeys, schema.name, table.name);
+          if (orgKeys.length > 0) {
+            tables.push({ TableName: table.name, OrganicKeys: orgKeys });
+          }
         }
       }
 
@@ -138,6 +165,22 @@ export class AdditionalSchemaInfoGenerator {
     }
 
     return JSON.stringify(result, null, 4);
+  }
+
+  /**
+   * Look up the organic keys detected for a specific schema.table from the
+   * detector's per-schema/per-table output. Returns [] when none.
+   */
+  private getOrganicKeysForTable(
+    organicKeys: DetectedOrganicKeysOutput | undefined,
+    schemaName: string,
+    tableName: string,
+  ): OrganicKeyConfig[] {
+    if (!organicKeys) return [];
+    const tablesForSchema = organicKeys[schemaName];
+    if (!tablesForSchema) return [];
+    const entry = tablesForSchema.find((t) => t.TableName === tableName);
+    return entry?.OrganicKeys ?? [];
   }
 
   /**

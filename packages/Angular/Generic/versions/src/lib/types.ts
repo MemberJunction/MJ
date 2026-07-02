@@ -19,6 +19,3 @@ export interface FieldChangeView {
     NewValue: string;
     ChangeType: 'Added' | 'Modified' | 'Removed';
 }
-
-/** Display mode for the slide panel container. */
-export type SlidePanelMode = 'slide' | 'dialog';
