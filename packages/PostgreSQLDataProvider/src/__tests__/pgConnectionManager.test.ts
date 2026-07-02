@@ -9,6 +9,10 @@ vi.mock('pg', () => {
     };
 
     class MockPool {
+        static lastConfig: Record<string, unknown> | undefined;
+        constructor(config?: Record<string, unknown>) {
+            MockPool.lastConfig = config;
+        }
         connect = vi.fn().mockResolvedValue(mockClient);
         query = vi.fn().mockResolvedValue({ rows: [] });
         end = vi.fn().mockResolvedValue(undefined);
@@ -20,6 +24,8 @@ vi.mock('pg', () => {
         },
     };
 });
+
+import pg from 'pg';
 
 describe('PGConnectionManager', () => {
     let manager: PGConnectionManager;
@@ -55,6 +61,21 @@ describe('PGConnectionManager', () => {
 
             expect(manager.IsConnected).toBe(true);
             expect(manager.Config).not.toBeNull();
+        });
+
+        it('should configure numeric type parsers on the pool', async () => {
+            await manager.Initialize({
+                Host: 'localhost',
+                Database: 'testdb',
+                User: 'user',
+                Password: 'pass',
+            });
+
+            const lastConfig = (pg.Pool as unknown as { lastConfig?: Record<string, unknown> }).lastConfig;
+            expect(lastConfig?.types).toBeDefined();
+            const types = lastConfig?.types as { getTypeParser: (oid: number, format?: string) => (v: string) => unknown };
+            expect(types.getTypeParser(1700, 'text')('0.0091')).toBe(0.0091);
+            expect(types.getTypeParser(20, 'text')('16972')).toBe(16972);
         });
 
         it('should store the config', async () => {

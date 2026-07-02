@@ -99,7 +99,7 @@ async function initializeSqlServerProvider(config: MJConfig): Promise<DatabasePr
 async function initializePostgresProvider(config: MJConfig): Promise<DatabaseProviderBase> {
   // Dynamic imports so SQL-Server-only environments never resolve pg/PG provider
   const pg = (await import('pg')).default;
-  const { PostgreSQLDataProvider, PostgreSQLProviderConfigData } =
+  const { PostgreSQLDataProvider, PostgreSQLProviderConfigData, MJPostgresTypes } =
     await import('@memberjunction/postgresql-dataprovider');
 
   const coreSchema = config.mjCoreSchema || '__mj';
@@ -111,6 +111,8 @@ async function initializePostgresProvider(config: MJConfig): Promise<DatabasePro
     database: config.dbDatabase,
     max: 10,
     min: 1,
+    // NUMERIC/BIGINT → JS numbers, same parsers the provider's own pool uses
+    types: MJPostgresTypes,
   });
 
   const testClient = await pgPool.connect();
