@@ -18,6 +18,7 @@ import {
     type SvgCodeBlockToken,
 } from '@memberjunction/markdown-core';
 import { Colors, Radius, Spacing, Type } from '@/theme/tokens';
+import { highlightCode } from './highlight';
 
 /**
  * Native markdown renderer.
@@ -32,8 +33,10 @@ import { Colors, Radius, Spacing, Type } from '@/theme/tokens';
  * tables, code blocks (with copy), inline code, bold/italic/strikethrough,
  * links, horizontal rules, and ```svg``` blocks (via react-native-svg).
  *
+ * Code blocks are syntax-highlighted on-device via `prismjs` (pure JS, no DOM),
+ * rendered as colored <Text> spans — see `./highlight`.
+ *
  * NOT yet handled (tracked for on-device QA, blocked on simulator/Xcode):
- * - Syntax highlighting inside code blocks (planned: react-native-syntax-highlighter / Prism).
  * - Mermaid diagrams (web-only; needs a browser render step — likely a WebView on mobile).
  */
 
@@ -214,7 +217,11 @@ function CodeBlock({ code, lang }: { code: string; lang?: string }) {
                 </Pressable>
             </View>
             <ScrollView horizontal directionalLockEnabled nestedScrollEnabled showsHorizontalScrollIndicator={false}>
-                <Text style={styles.codeText}>{code}</Text>
+                <Text style={styles.codeText}>
+                    {highlightCode(code, lang).map((run, i) => (
+                        <Text key={i} style={{ color: run.color }}>{run.text}</Text>
+                    ))}
+                </Text>
             </ScrollView>
         </View>
     );

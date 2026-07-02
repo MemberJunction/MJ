@@ -1,7 +1,29 @@
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MarkdownView } from '@/components/markdown/MarkdownView';
+import { Chart } from '@/components/charts/Chart';
+import { HtmlRenderer } from '@/components/artifacts/html-renderer';
 import { Colors, Spacing, Type } from '@/theme/tokens';
+
+/** Code-focused markdown so prismjs syntax highlighting is visible up top. */
+const CODE_SAMPLE = `\`\`\`typescript
+interface Agent { id: string; name: string; active: boolean; }
+
+function greet(agent: Agent): string {
+  // return a friendly line
+  return \`Hello, \${agent.name}!\`;
+}
+\`\`\`
+
+\`\`\`json
+{ "kind": "bar", "data": [{ "label": "Won", "value": 11 }] }
+\`\`\``;
+
+/** Sample HTML exercising the dependency-free HTML → RN renderer. */
+const SAMPLE_HTML = `<h3>HTML artifact renderer</h3>
+<p>Renders <strong>bold</strong>, <em>italic</em>, <a href="https://memberjunction.com">links</a>, and <code>inline code</code> without a WebView.</p>
+<ul><li>First bullet</li><li>Second bullet</li></ul>
+<blockquote>Server-generated HTML artifacts render natively.</blockquote>`;
 
 /**
  * DEV-ONLY on-device preview of the native MarkdownView (markdown-core AST → RN).
@@ -86,12 +108,85 @@ End of preview.
 `;
 
 export default function MarkdownPreviewScreen() {
+    const { width } = useWindowDimensions();
+    const chartWidth = width - Spacing.lg * 2;
     return (
         <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
             <View style={styles.banner}>
-                <Text style={styles.bannerText}>DEV · MarkdownView preview</Text>
+                <Text style={styles.bannerText}>DEV · render showcase</Text>
             </View>
             <ScrollView contentContainerStyle={styles.body}>
+                <Text style={styles.section}>Pie chart</Text>
+                <Chart
+                    width={chartWidth}
+                    spec={{
+                        kind: 'pie',
+                        title: 'Agent share',
+                        data: [
+                            { label: 'Skip', value: 40 },
+                            { label: 'Research', value: 25 },
+                            { label: 'Analyst', value: 20 },
+                            { label: 'Other', value: 15 },
+                        ],
+                    }}
+                />
+                <View style={styles.htmlWrap}>
+                    <HtmlRenderer html={SAMPLE_HTML} />
+                </View>
+
+                <Text style={styles.section}>Code highlighting (prismjs)</Text>
+                <MarkdownView value={CODE_SAMPLE} />
+
+                <Text style={styles.section}>Bar chart (react-native-svg)</Text>
+                <Chart
+                    width={chartWidth}
+                    spec={{
+                        kind: 'bar',
+                        title: 'Pipeline by stage',
+                        data: [
+                            { label: 'Lead', value: 42 },
+                            { label: 'Qual', value: 30 },
+                            { label: 'Prop', value: 18 },
+                            { label: 'Won', value: 11 },
+                        ],
+                    }}
+                />
+
+                <Text style={styles.section}>Line chart</Text>
+                <Chart
+                    width={chartWidth}
+                    spec={{
+                        kind: 'line',
+                        title: 'Weekly runs',
+                        data: [
+                            { label: 'W1', value: 12 },
+                            { label: 'W2', value: 19 },
+                            { label: 'W3', value: 14 },
+                            { label: 'W4', value: 23 },
+                        ],
+                    }}
+                />
+
+                <Text style={styles.section}>Pie chart</Text>
+                <Chart
+                    width={chartWidth}
+                    spec={{
+                        kind: 'pie',
+                        title: 'Agent share',
+                        data: [
+                            { label: 'Skip', value: 40 },
+                            { label: 'Research', value: 25 },
+                            { label: 'Analyst', value: 20 },
+                            { label: 'Other', value: 15 },
+                        ],
+                    }}
+                />
+
+                <View style={styles.htmlWrap}>
+                    <HtmlRenderer html={SAMPLE_HTML} />
+                </View>
+
+                <Text style={styles.section}>Full markdown sample</Text>
                 <MarkdownView value={SAMPLE} />
             </ScrollView>
         </SafeAreaView>
@@ -103,4 +198,6 @@ const styles = StyleSheet.create({
     banner: { paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm, backgroundColor: Colors.surface2 },
     bannerText: { fontSize: Type.caption, fontWeight: Type.bold, color: Colors.ink3, letterSpacing: 1.2 },
     body: { padding: Spacing.lg, paddingBottom: 60 },
+    section: { marginTop: Spacing.xl, marginBottom: Spacing.sm, fontSize: Type.body, fontWeight: Type.bold, color: Colors.ink },
+    htmlWrap: { marginTop: Spacing.xl },
 });

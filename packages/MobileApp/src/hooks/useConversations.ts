@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useMJ } from '@/providers/mj-provider';
 import { loadConversations, loadConversation, type ConversationListItem, type ConversationDetailLoad } from '@/data/services/conversations';
-import { loadArtifact, type LoadedArtifact } from '@/data/services/artifacts';
+import { loadArtifact, loadConversationArtifacts, type LoadedArtifact, type ArtifactSummary } from '@/data/services/artifacts';
 
 /**
  * Hook for the conversation list screen.
@@ -106,4 +106,35 @@ export function useArtifact(artifactId: string | undefined) {
     }, [status, artifactId]);
 
     return { artifact, loading, error };
+}
+
+/**
+ * Loads the artifact summaries for a conversation (dock view): category,
+ * preview snippet, and best-effort agent attribution.
+ */
+export function useConversationArtifacts(conversationId: string | undefined) {
+    const { status } = useMJ();
+    const [artifacts, setArtifacts] = useState<ArtifactSummary[] | null>(null);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<Error | null>(null);
+
+    useEffect(() => {
+        if (status !== 'ready' || !conversationId) return;
+        let cancelled = false;
+        setLoading(true);
+        setError(null);
+        (async () => {
+            try {
+                const list = await loadConversationArtifacts(conversationId);
+                if (!cancelled) setArtifacts(list);
+            } catch (e) {
+                if (!cancelled) setError(e instanceof Error ? e : new Error(String(e)));
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [status, conversationId]);
+
+    return { artifacts, loading, error };
 }

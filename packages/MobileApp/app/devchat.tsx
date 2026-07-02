@@ -11,7 +11,7 @@ import { Colors, Spacing, Type } from '@/theme/tokens';
  * indicator + Sage agent run + refresh). QA without manual typing:
  *   xcrun simctl openurl booted "org.memberjunction.mobile:///devchat"
  */
-const PROMPT = 'Briefly introduce yourself. Reply in markdown with a short "## Hello" heading and a 2-item bullet list.';
+const PROMPT = 'Reply in markdown ONLY (no preamble). Include: a "## Demo" heading, a one-sentence intro, then a TypeScript fenced code block showing a small function with types, then a 2-row markdown table with columns Name and Value.';
 
 export default function DevChat() {
     const { status } = useMJ();

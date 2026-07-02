@@ -1,17 +1,26 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Icons } from '@/components/Icon';
+import { HtmlRenderer } from '@/components/artifacts/html-renderer';
+import { Chart } from '@/components/charts/Chart';
+import { highlightCode } from '@/components/markdown/highlight';
 import { useArtifact } from '@/hooks/useConversations';
 import type { LoadedArtifact } from '@/data/services/artifacts';
 import { Colors, Radius, Shadow, Type } from '@/theme/tokens';
+
+/** Horizontal padding applied by the scroll body, used to size charts. */
+const BODY_PADDING = 16;
 
 /**
  * Single-artifact detail. Renders by classified content kind:
  *   json-table → key/value cards per row
  *   json       → pretty-printed JSON
  *   markdown   → lightweight markdown (headings/bold/bullets)
- *   code/text  → monospace / plain
+ *   html       → native HTML renderer (headings/lists/tables/links/…)
+ *   chart      → custom SVG chart (bar/line/pie)
+ *   code       → syntax-highlighted monospace (prismjs)
+ *   text       → plain
  * Interactive components are a Phase 2 item (react-runtime) — shown as a
  * "view on desktop" notice for now (see plan §4.3).
  *
@@ -65,6 +74,9 @@ export default function ArtifactDetailScreen() {
 }
 
 function ArtifactContent({ artifact }: { artifact: LoadedArtifact }) {
+    const { width } = useWindowDimensions();
+    const contentWidth = width - BODY_PADDING * 2;
+
     switch (artifact.kind) {
         case 'json-table':
             return (
@@ -88,14 +100,36 @@ function ArtifactContent({ artifact }: { artifact: LoadedArtifact }) {
             );
         case 'json':
             return <Text style={styles.code}>{JSON.stringify(artifact.json, null, 2)}</Text>;
+        case 'chart':
+            return artifact.chart
+                ? <View style={styles.chartCard}><Chart spec={artifact.chart} width={contentWidth - 28} /></View>
+                : <Text style={styles.code}>{JSON.stringify(artifact.json, null, 2)}</Text>;
+        case 'html':
+            return <HtmlRenderer html={artifact.content} />;
         case 'code':
-            return <Text style={styles.code}>{artifact.content}</Text>;
+            return <CodeView code={artifact.content} language={artifact.language} />;
         case 'markdown':
             return <MarkdownView source={artifact.content} />;
         case 'text':
         default:
             return <Text style={styles.text}>{artifact.content}</Text>;
     }
+}
+
+/**
+ * Syntax-highlighted, horizontally-scrollable code block. Reuses the shared
+ * prismjs-based highlighter so code artifacts match fenced code in markdown.
+ */
+function CodeView({ code, language }: { code: string; language?: string }) {
+    return (
+        <ScrollView horizontal directionalLockEnabled nestedScrollEnabled showsHorizontalScrollIndicator={false} style={styles.codeScroll}>
+            <Text style={styles.code}>
+                {highlightCode(code, language).map((run, i) => (
+                    <Text key={i} style={{ color: run.color }}>{run.text}</Text>
+                ))}
+            </Text>
+        </ScrollView>
+    );
 }
 
 /**
@@ -150,6 +184,8 @@ const styles = StyleSheet.create({
     cellVal: { fontSize: 13, color: Colors.ink, fontWeight: Type.medium, textAlign: 'right', flex: 1 },
 
     code: { fontFamily: 'Menlo', fontSize: 12.5, color: Colors.ink, backgroundColor: Colors.surface2, padding: 14, borderRadius: Radius.lg, lineHeight: 18 },
+    codeScroll: { backgroundColor: Colors.surface2, borderRadius: Radius.lg },
+    chartCard: { backgroundColor: Colors.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: Colors.line2, borderRadius: Radius.lg, padding: 14, ...Shadow.card },
     text: { fontSize: 15, color: Colors.ink, lineHeight: 23 },
 
     mdH: { color: Colors.ink, fontWeight: Type.bold, marginTop: 12, marginBottom: 4 },

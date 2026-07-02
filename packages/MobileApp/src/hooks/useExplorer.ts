@@ -2,10 +2,10 @@ import { useCallback, useEffect, useState } from 'react';
 import { useMJ } from '@/providers/mj-provider';
 import {
     loadEntities, loadEntityRecords, loadRecordDetail,
-    loadQueries, runQuery, loadDashboards,
+    loadQueries, runQuery, loadDashboards, loadDashboard,
     entityCount, queryCount,
     type EntityListItem, type EntityRecordsLoad, type RecordDetailLoad,
-    type QueryListItem, type QueryRunResult, type DashboardListItem,
+    type QueryListItem, type QueryRunResult, type DashboardListItem, type DashboardLoad,
 } from '@/data/services/explorer';
 
 /** Hub counts — entities, queries, dashboards. Metadata is in-memory so these are cheap. */
@@ -120,4 +120,32 @@ export function useDashboards() {
         return () => { cancelled = true; };
     }, [status]);
     return dashboards;
+}
+
+/** Load a single dashboard resolved into renderable parts. */
+export function useDashboard(dashboardId: string | undefined) {
+    const { status } = useMJ();
+    const [dashboard, setDashboard] = useState<DashboardLoad | null>(null);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<Error | null>(null);
+
+    useEffect(() => {
+        if (status !== 'ready' || !dashboardId) return;
+        let cancelled = false;
+        setLoading(true);
+        setError(null);
+        (async () => {
+            try {
+                const d = await loadDashboard(dashboardId);
+                if (!cancelled) setDashboard(d);
+            } catch (e) {
+                if (!cancelled) setError(e instanceof Error ? e : new Error(String(e)));
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [status, dashboardId]);
+
+    return { dashboard, loading, error };
 }

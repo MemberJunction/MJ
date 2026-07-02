@@ -5,6 +5,7 @@
  */
 
 import { Metadata, RunView, RunQuery, CompositeKey, type UserInfo, type EntityInfo, type EntityFieldInfo } from '@memberjunction/core';
+import type { MJDashboardEntity } from '@memberjunction/core-entities';
 
 // ---------------------------------------------------------------------------
 // Entities
@@ -247,4 +248,155 @@ export async function loadDashboards(contextUser?: UserInfo): Promise<DashboardL
     );
     if (!result.Success) return [];
     return (result.Results ?? []).map((d) => ({ id: d.ID, name: d.Name, description: d.Description }));
+}
+
+/** Renderable dashboard part kinds (mirrors MJ's Dashboard Part Types). */
+export type DashboardPartKind = 'view' | 'query' | 'artifact' | 'weburl' | 'unknown';
+
+/** A single parsed dashboard panel. */
+export type DashboardPart = {
+    /** Panel id from the layout. */
+    id: string;
+    /** Panel display title. */
+    title: string;
+    /** Normalized renderer kind. */
+    kind: DashboardPartKind;
+    /** Resolved Dashboard Part Type name. */
+    typeName: string;
+    /** Raw, type-specific panel config (viewId/queryId/artifactId/url/…). */
+    config: Record<string, unknown>;
+};
+
+/** A dashboard resolved into its renderable parts. */
+export type DashboardLoad = {
+    id: string;
+    name: string;
+    description: string | null;
+    updatedAt: Date | null;
+    parts: DashboardPart[];
+    /** Count of parts that can't render natively on mobile (desktop-only). */
+    desktopOnlyCount: number;
+};
+
+/** A node in the Golden Layout tree stored in `Dashboard.UIConfigDetails`. */
+type LayoutNode = {
+    type?: string;
+    content?: LayoutNode[];
+    title?: string;
+    componentState?: unknown;
+};
+
+/** The raw panel object embedded in a component node's `componentState`. */
+type RawPanel = {
+    id?: unknown;
+    title?: unknown;
+    partTypeId?: unknown;
+    config?: unknown;
+};
+
+/** Type guard for a plain object. */
+function isObject(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/** Walk the Golden Layout tree, collecting each component's panel state. */
+function collectPanels(root: LayoutNode | undefined): RawPanel[] {
+    const panels: RawPanel[] = [];
+    const visit = (node: LayoutNode | undefined): void => {
+        if (!node) return;
+        if (node.type === 'component' && isObject(node.componentState)) {
+            panels.push(node.componentState as RawPanel);
+        }
+        if (Array.isArray(node.content)) node.content.forEach(visit);
+    };
+    visit(root);
+    return panels;
+}
+
+/** Normalize a Dashboard Part Type name into a renderer kind. */
+function kindFromTypeName(name: string): DashboardPartKind {
+    const n = name.trim().toLowerCase();
+    if (n === 'view') return 'view';
+    if (n === 'query') return 'query';
+    if (n === 'artifact') return 'artifact';
+    if (n === 'weburl' || n === 'web url' || n === 'url') return 'weburl';
+    return 'unknown';
+}
+
+/** Parse `UIConfigDetails` into raw panels, tolerating malformed JSON. */
+function parsePanels(uiConfigDetails: string): RawPanel[] {
+    if (!uiConfigDetails || uiConfigDetails.trim() === '') return [];
+    try {
+        const parsed: unknown = JSON.parse(uiConfigDetails);
+        if (!isObject(parsed)) return [];
+        const layout = parsed.layout;
+        if (!isObject(layout)) return [];
+        const root = isObject(layout.root) ? (layout.root as LayoutNode) : undefined;
+        return collectPanels(root);
+    } catch {
+        return [];
+    }
+}
+
+/**
+ * Load a dashboard and resolve its layout config into typed, renderable parts.
+ *
+ * Dashboards persist their layout in `Dashboard.UIConfigDetails` as a Golden
+ * Layout config whose component nodes embed panel data in `componentState`.
+ * We walk that tree, resolve each panel's Part Type name (via the Dashboard
+ * Part Types lookup, falling back to the panel's own `config.type`), and return
+ * a flat, mobile-friendly part list. Panels that can't be recognized degrade to
+ * an `unknown` kind that the UI renders as a "desktop-optimized" placeholder.
+ *
+ * @param dashboardId The dashboard to load.
+ * @param contextUser Optional acting user (server-side scoping).
+ */
+export async function loadDashboard(dashboardId: string, contextUser?: UserInfo): Promise<DashboardLoad | null> {
+    const md = new Metadata();
+    const currentUser = contextUser ?? md.CurrentUser;
+
+    const dashboard = await md.GetEntityObject<MJDashboardEntity>('MJ: Dashboards', currentUser);
+    const loaded = await dashboard.Load(dashboardId);
+    if (!loaded) return null;
+
+    const rawPanels = parsePanels(dashboard.UIConfigDetails ?? '');
+    const partTypeNameById = await loadPartTypeNames(currentUser);
+
+    const parts: DashboardPart[] = rawPanels.map((panel, idx) => {
+        const config = isObject(panel.config) ? panel.config : {};
+        const partTypeId = typeof panel.partTypeId === 'string' ? panel.partTypeId : '';
+        const configType = typeof config.type === 'string' ? config.type : '';
+        const typeName = partTypeNameById.get(partTypeId) ?? configType ?? 'Custom';
+        return {
+            id: typeof panel.id === 'string' ? panel.id : `part-${idx}`,
+            title: typeof panel.title === 'string' && panel.title ? panel.title : (typeName || 'Panel'),
+            kind: kindFromTypeName(typeName),
+            typeName: typeName || 'Custom',
+            config,
+        };
+    });
+
+    const updatedAtRaw = (dashboard as unknown as { __mj_UpdatedAt?: Date }).__mj_UpdatedAt;
+    return {
+        id: dashboard.ID,
+        name: dashboard.Name,
+        description: dashboard.Description,
+        updatedAt: updatedAtRaw ? new Date(updatedAtRaw) : null,
+        parts,
+        desktopOnlyCount: parts.filter((p) => p.kind === 'unknown' || p.kind === 'weburl' || p.kind === 'view').length,
+    };
+}
+
+/** Map Dashboard Part Type id → name (small lookup table). */
+async function loadPartTypeNames(user: UserInfo | undefined): Promise<Map<string, string>> {
+    const out = new Map<string, string>();
+    const rv = new RunView();
+    const result = await rv.RunView<{ ID: string; Name: string }>(
+        { EntityName: 'MJ: Dashboard Part Types', Fields: ['ID', 'Name'], MaxRows: 200, ResultType: 'simple' },
+        user,
+    );
+    if (result.Success) {
+        for (const row of result.Results ?? []) out.set(row.ID, row.Name);
+    }
+    return out;
 }
