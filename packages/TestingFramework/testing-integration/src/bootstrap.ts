@@ -241,7 +241,7 @@ async function setupSqlServerProvider(
 
     const user = resolveContextUser(opts.ContextUserEmail);
     return {
-        Pool: pool, User: user, Storage: storage, Provider: Metadata.Provider, Db: db,
+        Pool: pool, User: user, Storage: storage, Provider: Metadata.Provider, Db: db, // global-provider-ok: this dedicated-process bootstrap just installed the one global provider (setupSQLServerClient) — it IS the single provider for this run (D1)
         ClosePool: async () => { await pool.close(); }
     };
 }
@@ -274,7 +274,7 @@ async function setupPostgreSQLProvider(
 
     const user = resolvePostgresContextUser(opts.ContextUserEmail);
     return {
-        Pool: undefined, User: user, Storage: storage, Provider: Metadata.Provider, Db: db,
+        Pool: undefined, User: user, Storage: storage, Provider: Metadata.Provider, Db: db, // global-provider-ok: this dedicated-process bootstrap just installed the one global provider (SetProvider above) — it IS the single provider for this run (D1)
         ClosePool: async () => {
             const pgPool = (provider as unknown as { DatabaseConnection?: { end?: () => Promise<void> } }).DatabaseConnection;
             await pgPool?.end?.();

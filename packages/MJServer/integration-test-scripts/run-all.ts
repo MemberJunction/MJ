@@ -81,7 +81,7 @@ const GROUPS: { Tier: string; Gate: string; Scripts: string[] }[] = [
 // ── tiny, dependency-free, TTY-aware ANSI helpers ──────────────────────────────────────────────
 const COLOR = process.stdout.isTTY && !process.env.NO_COLOR;
 const paint = (code: string) => (s: string) => (COLOR ? `\x1b[${code}m${s}\x1b[0m` : s);
-const bold = paint('1'), dim = paint('2'), red = paint('31'), green = paint('32'), yellow = paint('33'), cyan = paint('36');
+const bold = paint('1'), dim = paint('2'), red = paint('31'), green = paint('32'), cyan = paint('36');
 
 type Status = 'pass' | 'fail' | 'error' | 'skip';
 interface SuiteResult { Script: string; Tier: string; Code: number; Status: Status; DurationMs: number; Passed?: number; Total?: number; }
@@ -126,14 +126,14 @@ function runSuite(script: string, tier: string, index: number, count: number): P
 
         const child = spawn('npx', ['tsx', `${DIR}/${script}`], { env: process.env });
         let out = '';
-        const cap = (chunk: Buffer, to: NodeJS.WriteStream) => {
+        const capture = (chunk: { toString(): string }, isErr: boolean) => {
             const s = chunk.toString();
             out += s;
-            if (VERBOSE) to.write(s);
+            if (VERBOSE) (isErr ? process.stderr : process.stdout).write(s);
         };
-        child.stdout.on('data', (c) => cap(c, process.stdout));
-        child.stderr.on('data', (c) => cap(c, process.stderr));
-        child.on('close', (code) => {
+        child.stdout.on('data', (c: { toString(): string }) => capture(c, false));
+        child.stderr.on('data', (c: { toString(): string }) => capture(c, true));
+        child.on('close', (code: number | null) => {
             if (timer) clearInterval(timer);
             const durationMs = Date.now() - started;
             const { Status, Passed, Total } = classify(code ?? 2, out);

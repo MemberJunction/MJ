@@ -43,10 +43,10 @@ async function main(): Promise<void> {
     }
 
     const cc = await bootstrapIntegrationClient();
-    const md = new Metadata();
+    const md = new Metadata(); // global-provider-ok: dedicated single-provider Node integration test — bootstrapIntegrationClient configured the one global GraphQLDataProvider this process uses
     const ctx: IntegrationCheckContext = {
         User: md.CurrentUser,
-        Provider: Metadata.Provider,
+        Provider: Metadata.Provider, // global-provider-ok: the single global GraphQLDataProvider just configured for this dedicated test process
         Storage: cc.Storage,
         Schema: process.env.MJ_CORE_SCHEMA ?? '__mj'
     };

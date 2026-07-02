@@ -334,7 +334,10 @@ export async function CheckRls8_SeededScopedDivergence(ctx: IntegrationCheckCont
     Assert(clauseA.trim() !== '', `seeded user A is unexpectedly RLS-exempt on '${SEEDED_RLS_ENTITY}' (is it ONLY in the scoped role?)`);
     Assert(clauseB.trim() !== '', `seeded user B is unexpectedly RLS-exempt on '${SEEDED_RLS_ENTITY}'`);
     Assert(clauseA !== clauseB, `seeded users must get DIFFERENT scoped clauses (A='${clauseA}', B='${clauseB}')`);
-    Assert(clauseA.includes(a.ID) && clauseB.includes(b.ID), 'each seeded clause embeds its own UserID');
+    // Case-insensitive substring: a clause is scoped to a user iff it embeds that user's id. UUID casing
+    // differs across SQL Server (upper) / PostgreSQL (lower), so compare case-folded (see UUID_COMPARISON_GUIDE).
+    const clauseEmbedsId = (clause: string, id: string): boolean => clause.toLowerCase().includes(id.toLowerCase());
+    Assert(clauseEmbedsId(clauseA, a.ID) && clauseEmbedsId(clauseB, b.ID), 'each seeded clause embeds its own UserID');
 
     const params: RunViewParams = { EntityName: SEEDED_RLS_ENTITY, ResultType: 'simple' };
     const connStr = connStrOf(ctx.Provider);
