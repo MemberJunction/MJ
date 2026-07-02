@@ -28,7 +28,9 @@ on:
 jobs:
   integration:
     name: Integration Tier (deterministic, SQL Server)
-    timeout-minutes: 60
+    # Generous first-run budget: image builds (~25m uncached) + full migrate/CodeGen
+    # in db-setup + the aggregator itself. Tighten once a green run gives real numbers.
+    timeout-minutes: 120
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
@@ -36,11 +38,20 @@ jobs:
         with:
           ref: ${{ inputs.ref }}
 
+      # Two commands, deliberately: `up --wait` treats a one-shot container with no
+      # healthcheck as ready the moment it is RUNNING, so including db-setup in the
+      # `up` returns while migrations are still being applied — and the aggregator
+      # step's --no-deps skips the service_completed_successfully chain that guards
+      # the full-stack path. `compose run` runs db-setup in the foreground instead:
+      # it streams the migrate/CodeGen output into the CI log and propagates the
+      # container's exit code, so this step only passes once the DB is fully built.
       - name: Provision DB (sqlserver + db-setup only)
         run: |
           docker compose -f docker/regression/docker-compose.test.yml \
-            --profile full up -d --build --wait sqlserver db-setup
-        timeout-minutes: 25
+            --profile full up -d --build --wait sqlserver
+          docker compose -f docker/regression/docker-compose.test.yml \
+            --profile full run --build --rm db-setup
+        timeout-minutes: 80
 
       # `run` returns the command's exit code → the harness 0/1/2 contract gates the job.
       # --no-deps keeps mjapi/mjexplorer down (the deterministic tier runs in-process vs the
