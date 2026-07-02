@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { DEFAULT_MARKDOWN_CONFIG } from '../lib/types/markdown.types';
-import type { MarkdownConfig, HeadingInfo, MarkdownRenderEvent, AlertType } from '../lib/types/markdown.types';
+import { DEFAULT_MARKDOWN_CONFIG } from '../types/markdown.types';
+import type { MarkdownConfig, HeadingInfo, MarkdownRenderEvent, AlertType } from '../types/markdown.types';
 
 describe('DEFAULT_MARKDOWN_CONFIG', () => {
   it('should enable syntax highlighting', () => {
@@ -55,7 +55,7 @@ describe('DEFAULT_MARKDOWN_CONFIG', () => {
     expect(DEFAULT_MARKDOWN_CONFIG.sanitize).toBe(true);
   });
 
-  it('should use default mermaid theme', () => {
+  it('should default the mermaid theme to auto', () => {
     expect(DEFAULT_MARKDOWN_CONFIG.mermaidTheme).toBe('auto');
   });
 });
@@ -93,3 +93,7 @@ describe('AlertType', () => {
     expect(types).toHaveLength(5);
   });
 });
+
+// Keep MarkdownConfig referenced so the type import is exercised.
+const _sampleConfig: MarkdownConfig = { enableHighlight: true };
+void _sampleConfig;
