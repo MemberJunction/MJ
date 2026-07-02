@@ -52,6 +52,11 @@ export * from './operations';
 // RetrainingPolicy model, its DI seams, and the default honest drift detector (§12 / SP10).
 export * from './maintenance';
 
+// Agent builder — the Predictive Studio Agent's DETERMINISTIC builder: the pure
+// ModelingPlanSpec→pipeline-config mapper + PredictiveStudioPipelineBuilder (create
+// pipeline → train → publish gated on the trust verdict). Code, never LLM.
+export * from './agent';
+
 /**
  * Version marker for the Predictive Studio engine package. Kept in sync with the
  * package version so consumers can assert compatibility at runtime.

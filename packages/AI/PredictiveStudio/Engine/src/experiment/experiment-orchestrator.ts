@@ -39,6 +39,7 @@
  */
 
 import { LogError } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import type {
   ModelingPlanSpec,
   Budget,
@@ -414,7 +415,7 @@ export class ExperimentOrchestrator {
     // lost (it remains a candidate winner with its DB Status still `Completed`).
     const persisted = new Set<string>();
     for (const id of prunedIds) {
-      const iteration = iterations.find((it) => it.ID === id);
+      const iteration = iterations.find((it) => UUIDsEqual(it.ID, id));
       if (iteration && iteration.Status === 'Completed') {
         const saved = await this.markPruned(iteration, best, deps);
         if (saved) {

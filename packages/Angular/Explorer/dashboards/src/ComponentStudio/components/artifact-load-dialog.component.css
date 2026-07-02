@@ -423,35 +423,14 @@
 
 /* JSON Preview Section */
 .preview-json-section {
+  /* Now an <mj-accordion-panel> host — the accordion provides its own border box,
+     so the old border-top/padding-top separator is removed to avoid a double line. */
   margin-top: 15px;
-  border-top: 1px solid var(--mj-border-default);
-  padding-top: 10px;
 }
 
-.preview-json-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px;
-  cursor: pointer;
-  background: var(--mj-bg-surface-sunken);
-  border-radius: 4px;
-  transition: background 0.2s;
-}
-
-.preview-json-header:hover {
-  background: var(--mj-bg-surface-sunken);
-}
-
-.preview-json-header i {
-  font-size: 12px;
-  color: var(--mj-text-secondary);
-}
-
-.preview-json-header strong {
-  font-size: 13px;
-  color: var(--mj-text-primary);
-}
+/* .preview-json-header* removed — the accordion owns the disclosure header,
+   chevron, and hover. The <strong> title is projected into the accordion title
+   slot. */
 
 .preview-json-content {
   margin-top: 10px;

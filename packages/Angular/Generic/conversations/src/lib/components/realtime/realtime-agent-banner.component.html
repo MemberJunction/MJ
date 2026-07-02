@@ -93,23 +93,13 @@
       <span class="banner__state-label">{{ StateLabel(State) }}</span>
     </div>
 
-    <!-- Disclosure-gated app-bar action cluster (the overlay decides what renders). -->
+    <!-- Disclosure-gated app-bar action cluster: STATE + WINDOW-CHROME only. Call actions
+         (Mute / Captions / Details / Type / End) live in the bottom dock — the single home for
+         each control. Captions & End were removed from here (they were exact duplicates of the
+         dock's), and the standalone "pure audio" headphones was folded into the gear's Density =
+         Simple. What remains up here is non-duplicated chrome: the gear (density + dev links) and
+         Minimize. -->
     <div class="bar-actions">
-      @if (ShowPureAudio) {
-        <button type="button" class="iconb" (click)="PureAudioRequested.emit()"
-                title="Pure audio — simplest view, just the orb and the voice (sticks until you change it in the gear)"
-                aria-label="Switch to the simple pure-audio view">
-          <i class="fa-solid fa-headphones" aria-hidden="true"></i>
-        </button>
-      }
-      @if (ShowCaptionsControl) {
-        <button type="button" class="iconb" [class.iconb--on]="CaptionsOn"
-                (click)="ToggleCaptions()"
-                [title]="CaptionsOn ? 'Hide captions' : 'Show captions'"
-                [attr.aria-pressed]="CaptionsOn">
-          <i class="fa-solid fa-closed-captioning" aria-hidden="true"></i>
-        </button>
-      }
       @if (ShowGear) {
         <button type="button" class="iconb" [class.iconb--on]="GearOpen || DevMode"
                 (click)="ToggleGear($event)"
@@ -123,14 +113,6 @@
                 title="Hide the call view — the call stays live"
                 aria-label="Minimize the call view">
           <i class="fa-solid fa-down-left-and-up-right-to-center" aria-hidden="true"></i>
-        </button>
-      }
-      @if (ShowEnd) {
-        <span class="bar-sep" aria-hidden="true"></span>
-        <button type="button" class="end-pill" (click)="EndRequested.emit()"
-                title="End call" aria-label="End the call">
-          <i class="fa-solid fa-phone-slash" aria-hidden="true"></i>
-          <span>End call</span>
         </button>
       }
     </div>

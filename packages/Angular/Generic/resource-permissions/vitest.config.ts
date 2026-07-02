@@ -1,11 +1,11 @@
 import { defineProject, mergeConfig } from 'vitest/config';
-import sharedConfig from '../../../../vitest.shared';
+import domSharedConfig from '../../../../vitest.dom.shared';
 
 export default mergeConfig(
-  sharedConfig,
+  domSharedConfig,
   defineProject({
     test: {
-      environment: 'node',
+      name: '@memberjunction/ng-resource-permissions',
     },
   })
 );

@@ -25,7 +25,7 @@ import {
   Metadata,
 } from '@memberjunction/core';
 import { BaseEntity } from '@memberjunction/core';
-import { resolveMappingRef } from '@memberjunction/global';
+import { resolveMappingRef, UUIDsEqual } from '@memberjunction/global';
 import type { RecordRef, RecordProcessorContext, RecordResult } from '@memberjunction/record-set-processor-base';
 
 import { MLModelInferenceProcessor } from '../scoring/ml-model-inference-processor';
@@ -170,7 +170,7 @@ export class ProductionScoreRecordSetRunner implements IScoreRecordSetRunner {
     if (!entityId) {
       throw new Error(`Score Record Set: list '${listId}' not found.`);
     }
-    const entityName = (provider ?? Metadata.Provider)?.Entities.find((e) => e.ID === entityId)?.Name;
+    const entityName = (provider ?? Metadata.Provider)?.Entities.find((e) => UUIDsEqual(e.ID, entityId))?.Name;
     if (!entityName) {
       throw new Error(`Score Record Set: list '${listId}' targets an unknown entity (id '${entityId}').`);
     }

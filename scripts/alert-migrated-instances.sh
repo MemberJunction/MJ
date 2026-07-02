@@ -8,14 +8,16 @@
 # is unreliable). Uses the component's OWN styles extracted from source + real
 # tokens — no drift, deterministic. Regenerate as more areas migrate.
 #
-# Output: plans/alert-screenshots/migrated-instances.html
+# Output: plans/complete/alert-screenshots/migrated-instances.html
 # Usage:  scripts/alert-migrated-instances.sh
 
 set -eu
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 COMP="$ROOT/packages/Angular/Generic/ui-components/src/lib/alert/alert.component.ts"
 TOKENS_SCSS="$ROOT/packages/Angular/Generic/shared/src/lib/_tokens.scss"
-OUT="$ROOT/plans/alert-screenshots/migrated-instances.html"
+# NOTE: writes into the completed alert-migration archive; repoint out of
+# plans/complete/ if reusing for active work.
+OUT="$ROOT/plans/complete/alert-screenshots/migrated-instances.html"
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 
 "$ROOT/node_modules/.bin/sass" --no-source-map "$TOKENS_SCSS" "$TMP/tokens.css" >/dev/null

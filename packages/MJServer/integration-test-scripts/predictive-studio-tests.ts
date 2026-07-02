@@ -46,6 +46,7 @@
 import { TestRunner, Assert, AssertEqual } from './lib/harness';
 import { bootstrapAI } from './lib/ai-bootstrap';
 import { RunView, UserInfo, IMetadataProvider } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import {
     MJMLTrainingPipelineEntity,
     MJMLModelEntity,
@@ -238,11 +239,11 @@ async function main(): Promise<void> {
             // Spot-check the Train action's param + result-code contract (the wiring agents/UI depend on).
             const train = engine.GetActionByName('Train ML Model')!;
             AssertEqual(train.DriverClass, TRAIN_MODEL_DRIVER_CLASS, "Train action DriverClass matches the @RegisterClass key");
-            const trainParams = engine.ActionParams.filter((p) => p.ActionID === train.ID).map((p) => p.Name);
+            const trainParams = engine.ActionParams.filter((p) => UUIDsEqual(p.ActionID, train.ID)).map((p) => p.Name);
             for (const required of ['PipelineID', 'ModelID', 'HoldoutMetrics', 'LeakageFlagged']) {
                 Assert(trainParams.includes(required), `Train ML Model is missing the '${required}' param (have: ${trainParams.join(', ')})`);
             }
-            const trainCodes = engine.ActionResultCodes.filter((c) => c.ActionID === train.ID).map((c) => c.ResultCode);
+            const trainCodes = engine.ActionResultCodes.filter((c) => UUIDsEqual(c.ActionID, train.ID)).map((c) => c.ResultCode);
             for (const required of ['SUCCESS', 'VALIDATION_ERROR', 'TRAINING_FAILED']) {
                 Assert(trainCodes.includes(required), `Train ML Model is missing the '${required}' result code (have: ${trainCodes.join(', ')})`);
             }

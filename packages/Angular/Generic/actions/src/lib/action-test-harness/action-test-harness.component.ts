@@ -417,10 +417,6 @@ export class ActionTestHarnessComponent extends BaseAngularComponent implements 
         }
     }
 
-    public ToggleInputsCollapsed(): void {
-        this.InputsCollapsed = !this.InputsCollapsed;
-    }
-
     public ClearResults(): void {
         this.ExecutionResult = null;
         this.ExecutionError = null;

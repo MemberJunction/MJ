@@ -322,8 +322,8 @@ export class CreateAgentPanelComponent extends BaseAngularComponent implements O
         return this.availableActions;
     }
 
-    public ToggleAdvancedConfig(): void {
-        this.ShowAdvancedConfig = !this.ShowAdvancedConfig;
+    public OnAdvancedConfigExpandedChange(expanded: boolean): void {
+        this.ShowAdvancedConfig = expanded;
         this.cdr.markForCheck();
     }
 

@@ -9,7 +9,7 @@ import {
   MJDropdownComponent,
   MJNumericInputComponent,
   MJSwitchComponent,
-  MJAccordionPanelComponent,
+  MJAccordionModule,
   MJDialogComponent, MJDialogTitlebarComponent, MJDialogActionsComponent,
   MJEmptyStateComponent
 } from '@memberjunction/ng-ui-components';
@@ -56,7 +56,7 @@ import { TestHarnessWindowManagerService } from './lib/test-harness-window-manag
     MJDropdownComponent,
     MJNumericInputComponent,
     MJSwitchComponent,
-    MJAccordionPanelComponent,
+    MJAccordionModule,
     MJDialogComponent,
     MJDialogTitlebarComponent,
     MJDialogActionsComponent,

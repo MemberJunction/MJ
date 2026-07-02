@@ -53,7 +53,8 @@ export class MetadataExperimentEntityFactory implements IExperimentEntityFactory
     if (this.provider) {
       return this.provider.GetEntityObject<T>(entityName, contextUser ?? this.provider.CurrentUser);
     }
-    return new Metadata().GetEntityObject<T>(entityName, contextUser);
+    const md = this.provider ?? new Metadata();
+    return md.GetEntityObject<T>(entityName, contextUser);
   }
 }
 

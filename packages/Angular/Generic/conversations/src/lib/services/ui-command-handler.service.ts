@@ -2,6 +2,12 @@ import { Injectable, EventEmitter } from '@angular/core';
 import { ActionableCommand, AutomaticCommand, RefreshDataCommand, OpenURLCommand } from '@memberjunction/ai-core-plus';
 import { DataCacheService } from './data-cache.service';
 
+export interface ActionableCommandRequest {
+  command: ActionableCommand;
+  conversationId?: string | null;
+  conversationDetailId?: string | null;
+}
+
 /**
  * Service for handling UI commands from agents.
  *
@@ -16,7 +22,7 @@ export class UICommandHandlerService {
    * Event emitted when an actionable command requires host-app handling.
    * Currently only open:resource commands are emitted — open:url is handled directly.
    */
-  public actionableCommandRequested = new EventEmitter<ActionableCommand>();
+  public actionableCommandRequested = new EventEmitter<ActionableCommandRequest>();
 
   /**
    * Event emitted when an automatic command should be executed
@@ -32,13 +38,17 @@ export class UICommandHandlerService {
    * Execute an actionable command (triggered by user clicking a button).
    * Generic commands like open:url are handled directly; others are emitted to the host.
    */
-  public async executeActionableCommand(command: ActionableCommand): Promise<void> {
+  public async executeActionableCommand(command: ActionableCommand, origin?: Omit<ActionableCommandRequest, 'command'>): Promise<void> {
     if (command.type === 'open:url') {
       this.handleOpenUrl(command);
     } else {
       // open:resource requires app-specific navigation — emit for host to handle
       console.log('📤 Emitting actionable command for host app:', command);
-      this.actionableCommandRequested.emit(command);
+      this.actionableCommandRequested.emit({
+        command,
+        conversationId: origin?.conversationId ?? null,
+        conversationDetailId: origin?.conversationDetailId ?? null
+      });
     }
   }
 

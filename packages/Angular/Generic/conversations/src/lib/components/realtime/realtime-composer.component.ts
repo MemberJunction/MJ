@@ -11,8 +11,9 @@ import { RealtimeSessionService } from '../../services/realtime-session.service'
  *  - **Levels 0–1 (phone-call strip)** — big round call controls, centered: Mute, the
  *    Captions toggle (level 1+, arriving WITH the text it controls), the Details peek
  *    (level 0 paths where the surface panel isn't earned yet — lets the user look at the
- *    Activity/Whiteboard panels on demand), and End call. Level 1 adds the whispered
- *    "press T to type" hint — typing exists, but there's no visible composer yet.
+ *    Activity/Whiteboard panels on demand), the Type control, and End call. There's no visible
+ *    composer yet — the Type control opens it, and so does simply starting to type (the overlay
+ *    captures the first printable keystroke and seeds it via {@link AppendAndFocus}).
  *  - **Level 2+ (the dock)** — mute/captions shrink to compact minis and the in-call text
  *    input docks beside them (one bottom bar, per Redesign A's fused composer+controls).
  *    Submit calls {@link RealtimeSessionService.SendText}, which injects the text as a user
@@ -125,9 +126,28 @@ export class RealtimeComposerComponent {
     this.CaptionsToggled.emit(this.CaptionsOn);
   }
 
-  /** Focuses the dock's text input (the overlay's T-to-type hotkey lands here). */
+  /** Focuses the dock's text input (the overlay's Type control lands here). */
   public FocusInput(): void {
     this.dockInput?.nativeElement.focus();
+  }
+
+  /**
+   * TYPE-TO-COMPOSE: the overlay captured a printable keystroke while nothing was focused, so seed
+   * the draft with that character, focus the input, and put the caret at the end — the user just
+   * keeps typing and their first key isn't lost. Appends (rather than replaces) so a leftover draft
+   * is preserved. The native value is synced inline so the caret math is correct before Angular's
+   * next change-detection pass reconciles ngModel.
+   *
+   * @param text the character(s) to seed (typically the single key that opened the composer).
+   */
+  public AppendAndFocus(text: string): void {
+    this.Draft = (this.Draft ?? '') + text;
+    const el = this.dockInput?.nativeElement;
+    if (el) {
+      el.value = this.Draft;
+      el.focus();
+      el.setSelectionRange(this.Draft.length, this.Draft.length);
+    }
   }
 
   /** Send the typed text into the live session, then clear the input. */

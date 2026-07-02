@@ -1,6 +1,6 @@
 import { Component, AfterViewInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy, ViewChild } from '@angular/core';
 import { BaseDashboard } from '@memberjunction/ng-shared';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { Subject, Subscription } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
 import { SharedService } from '@memberjunction/ng-shared';
@@ -445,7 +445,7 @@ export class SchedulingDashboardComponent extends BaseDashboard implements After
     if (!match) {
       return { Success: false, ErrorMessage: buildSchedulingNotFoundError(ref, this.jobCandidates) };
     }
-    const job = this.currentJobs.find(j => j.jobId === match.ID);
+    const job = this.currentJobs.find(j => UUIDsEqual(j.jobId, match.ID));
     if (!job) {
       return { Success: false, ErrorMessage: buildSchedulingNotFoundError(ref, this.jobCandidates) };
     }
@@ -512,7 +512,7 @@ export class SchedulingDashboardComponent extends BaseDashboard implements After
     if (!match) {
       return { Success: false, ErrorMessage: buildSchedulingNotFoundError(ref, this.jobCandidates) };
     }
-    const job = this.currentJobs.find(j => j.jobId === match.ID);
+    const job = this.currentJobs.find(j => UUIDsEqual(j.jobId, match.ID));
     if (!job) {
       return { Success: false, ErrorMessage: buildSchedulingNotFoundError(ref, this.jobCandidates) };
     }
@@ -533,7 +533,7 @@ export class SchedulingDashboardComponent extends BaseDashboard implements After
     if (!match) {
       return { Success: false, ErrorMessage: buildSchedulingNotFoundError(ref, this.jobCandidates) };
     }
-    const job = this.currentJobs.find(j => j.jobId === match.ID);
+    const job = this.currentJobs.find(j => UUIDsEqual(j.jobId, match.ID));
     if (!job) {
       return { Success: false, ErrorMessage: buildSchedulingNotFoundError(ref, this.jobCandidates) };
     }

@@ -65,20 +65,17 @@ import { OracleResult } from './oracle-breakdown-table.component';
           <!-- Result Details -->
           @if (resultDetails) {
             <div class="details-section">
-              <div class="section-header">
-                <h4>
-                  <i class="fa-solid fa-file-alt"></i>
+              <mj-accordion-panel Size="sm" [FlushBody]="true" [(Expanded)]="showResultDetails">
+                <ng-template mjAccordionTitle>
+                  <i class="fa-solid fa-file-alt" style="color: var(--mj-brand-primary)"></i>
                   Result Details
-                </h4>
-                <button class="toggle-btn" (click)="toggleResultDetails()">
-                  <i class="fa-solid" [class.fa-chevron-down]="!showResultDetails" [class.fa-chevron-up]="showResultDetails"></i>
-                </button>
-              </div>
-              @if (showResultDetails) {
-                <div class="details-content">
-                  <pre class="json-viewer">{{ formatJSON(resultDetails) }}</pre>
-                </div>
-              }
+                </ng-template>
+                <ng-template mjAccordionBody>
+                  <div class="details-content">
+                    <pre class="json-viewer">{{ formatJSON(resultDetails) }}</pre>
+                  </div>
+                </ng-template>
+              </mj-accordion-panel>
             </div>
           }
           <!-- Feedback Section -->
@@ -261,19 +258,9 @@ import { OracleResult } from './oracle-breakdown-table.component';
       color: var(--mj-brand-primary);
     }
 
-    .toggle-btn {
-      background: none;
-      border: none;
-      color: var(--mj-text-secondary);
-      cursor: pointer;
-      padding: 4px 8px;
-      border-radius: 4px;
-      transition: background 0.2s ease;
-    }
-
-    .toggle-btn:hover {
-      background: var(--mj-bg-surface-sunken);
-    }
+    /* .toggle-btn removed — the Result Details chevron is now provided by
+       <mj-accordion-panel>. (.section-header is kept; the Feedback section
+       still uses it.) */
 
     .details-content {
       margin-top: 12px;
@@ -430,9 +417,9 @@ export class TestRunDetailPanelComponent {
     }
   }
 
-  toggleResultDetails(): void {
-    this.showResultDetails = !this.showResultDetails;
-  }
+  // toggleResultDetails() removed — the Result Details disclosure is now an
+  // <mj-accordion-panel> bound via [(Expanded)]="showResultDetails" (pure flip,
+  // default change detection), so no explicit toggle handler is needed.
 
   onClose(): void {
     this.close.emit();

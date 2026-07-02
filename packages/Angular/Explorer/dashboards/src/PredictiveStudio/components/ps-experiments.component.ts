@@ -2,6 +2,7 @@ import { ChangeDetectorRef, Component, Input, OnInit, ViewEncapsulation, inject 
 import { CommonModule } from '@angular/common';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { UUIDsEqual } from '@memberjunction/global';
 import { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import {
   MJExperimentSessionEntity,
@@ -228,7 +229,7 @@ export class PSExperimentsComponent implements OnInit {
   }
 
   public get session(): MJExperimentSessionEntity | undefined {
-    return this.engine?.Sessions.find((s) => s.ID === this.sessionId);
+    return this.engine?.Sessions.find((s) => UUIDsEqual(s.ID, this.sessionId));
   }
 
   public get iterationCountLabel(): string {

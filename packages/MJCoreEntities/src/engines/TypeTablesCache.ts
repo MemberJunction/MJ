@@ -22,7 +22,7 @@ export class TypeTablesCache extends BaseEngine<TypeTablesCache> {
     }
 
     public get EntityRelationshipDisplayComponents() {
-        return this._EntityRelationshipDisplayComponents;
+        return this.GetConfigData<MJEntityRelationshipDisplayComponentEntity>('_EntityRelationshipDisplayComponents');
     }
     private _EntityRelationshipDisplayComponents: MJEntityRelationshipDisplayComponentEntity[] = [];
 }

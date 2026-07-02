@@ -20,6 +20,7 @@ import {
   parseMetrics,
   primaryAuc,
   relativeTime,
+  toDate,
   PSIterationRow,
   PSModelRow,
   PSModelEventSource,
@@ -353,6 +354,27 @@ describe('buildActivityFeed', () => {
     expect(buildActivityFeed([], [], now)).toEqual([]);
     const many = Array.from({ length: 10 }, (_, i) => processRun({ ID: `r${i}`, StartTime: new Date(now.getTime() - i * 60000) }));
     expect(buildActivityFeed(many, [], now, 3).length).toBe(3);
+  });
+
+  it('does not crash on a run with no usable timestamp (null StartTime + CreatedAt)', () => {
+    // A just-created run can transiently arrive with no usable date — must not crash the whole feed.
+    const runs = [processRun({ ID: 'r-nodate', Status: 'Completed', SuccessCount: 5, StartTime: null, CreatedAt: null })];
+    let feed: ReturnType<typeof buildActivityFeed> = [];
+    expect(() => { feed = buildActivityFeed(runs, [], now, 6); }).not.toThrow();
+    expect(feed.length).toBe(1);
+    expect(feed[0].when).toBe('just now'); // falls back to `now`
+    expect(Number.isNaN(feed[0].sortMs)).toBe(false);
+  });
+});
+
+describe('toDate', () => {
+  it('coerces Date / ISO-string and rejects null / undefined / invalid', () => {
+    const d = new Date('2026-06-26T12:00:00Z');
+    expect(toDate(d)).toBe(d);
+    expect(toDate('2026-06-26T12:00:00Z')?.getTime()).toBe(d.getTime());
+    expect(toDate(null)).toBeNull();
+    expect(toDate(undefined)).toBeNull();
+    expect(toDate('not-a-date')).toBeNull();
   });
 });
 

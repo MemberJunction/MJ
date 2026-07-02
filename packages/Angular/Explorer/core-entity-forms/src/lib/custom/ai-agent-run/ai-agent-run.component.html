@@ -44,6 +44,12 @@
           </div>
         </div>
         <div class="header-right">
+          @if (record.PlanMode) {
+            <div class="plan-mode-badge" title="This run executed in Plan Mode — the agent presented a plan for human approval before executing actions or sub-agents">
+              <i class="fas fa-clipboard-check"></i>
+              Plan Mode
+            </div>
+          }
           <div class="status-badge" [attr.data-status]="record.Status">
             <i class="fas" [ngClass]="getStatusIcon(record.Status || '')"></i>
             {{ record.Status }}

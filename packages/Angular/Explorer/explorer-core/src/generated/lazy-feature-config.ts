@@ -49,7 +49,7 @@ const loadMcpModule = featureLoader(() => import('@memberjunction/ng-dashboards/
 // --- @memberjunction/ng-dashboards → ./module (3 entries) ---
 const loadModule = featureLoader(() => import('@memberjunction/ng-dashboards/module'));
 
-// --- @memberjunction/ng-dashboards → ./predictive-studio-dashboards.module (9 entries) ---
+// --- @memberjunction/ng-dashboards → ./predictive-studio-dashboards.module (3 entries) ---
 const loadPredictiveStudioDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/predictive-studio-dashboards.module'));
 
 // --- @memberjunction/ng-dashboards → ./scheduling-dashboards.module (4 entries) ---
@@ -183,15 +183,9 @@ export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {
   'BaseResourceComponent::DatabaseDesignerDashboard': loadModule,
 
   // @memberjunction/ng-dashboards → ./predictive-studio-dashboards.module
-  'BaseDashboard::PredictiveStudioDashboard': loadPredictiveStudioDashboardsModule,
-  'BaseResourceComponent::PredictiveStudioCatalogResource': loadPredictiveStudioDashboardsModule,
-  'BaseResourceComponent::PredictiveStudioCompareResource': loadPredictiveStudioDashboardsModule,
-  'BaseResourceComponent::PredictiveStudioDashboard': loadPredictiveStudioDashboardsModule,
-  'BaseResourceComponent::PredictiveStudioExperimentsResource': loadPredictiveStudioDashboardsModule,
-  'BaseResourceComponent::PredictiveStudioHomeResource': loadPredictiveStudioDashboardsModule,
-  'BaseResourceComponent::PredictiveStudioPipelinesResource': loadPredictiveStudioDashboardsModule,
-  'BaseResourceComponent::PredictiveStudioProductionResource': loadPredictiveStudioDashboardsModule,
-  'BaseResourceComponent::PredictiveStudioRegistryResource': loadPredictiveStudioDashboardsModule,
+  'BaseResourceComponent::PredictiveStudioModelsResource': loadPredictiveStudioDashboardsModule,
+  'BaseResourceComponent::PredictiveStudioPredictionsResource': loadPredictiveStudioDashboardsModule,
+  'BaseResourceComponent::PredictiveStudioStudioResource': loadPredictiveStudioDashboardsModule,
 
   // @memberjunction/ng-dashboards → ./scheduling-dashboards.module
   'BaseDashboard::SchedulingDashboard': loadSchedulingDashboardsModule,
@@ -223,4 +217,4 @@ export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {
 
 };
 
-export const LAZY_FEATURE_CONFIG_COUNT = 115;
+export const LAZY_FEATURE_CONFIG_COUNT = 109;

@@ -48,9 +48,9 @@ export class ClassifyOrgContextEditorComponent extends BaseAngularComponent {
         return this.ContextText !== this.savedText;
     }
 
-    /** Toggle the editor open/closed, lazy-loading the value the first time. */
-    public async Toggle(): Promise<void> {
-        this.Expanded = !this.Expanded;
+    /** React to the accordion expand/collapse, lazy-loading the value the first time. */
+    public async onExpandedChange(expanded: boolean): Promise<void> {
+        this.Expanded = expanded;
         if (this.Expanded && !this.loaded) {
             await this.load();
         }

@@ -1,7 +1,7 @@
 import { AfterViewInit, ChangeDetectorRef, Component, OnDestroy, OnInit } from '@angular/core';
 import { Metadata, NormalizedPermission, PermissionAction } from '@memberjunction/core';
 import { PermissionEngine, ResourceData } from '@memberjunction/core-entities';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 
 import { validateStringParam } from '../shared/agent-tool-validation';
@@ -122,7 +122,7 @@ export class PermissionsUserAccessResourceComponent extends BaseResourceComponen
         if (!needle) return null;
         const byCandidate = resolvePermissionsCandidate(input, this.userCandidates());
         if (byCandidate) {
-            return this.Users.find((u) => u.ID === byCandidate.ID) ?? null;
+            return this.Users.find((u) => UUIDsEqual(u.ID, byCandidate.ID)) ?? null;
         }
         // Fall back to an exact/contains email match.
         return (
@@ -242,7 +242,7 @@ export class PermissionsUserAccessResourceComponent extends BaseResourceComponen
             const md = this.ProviderToUse;
             this.SelectedUserId = md.CurrentUser?.ID ?? null;
             this.SelectedUserName = this.SelectedUserId
-                ? this.Users.find((u) => u.ID === this.SelectedUserId)?.Name ?? md.CurrentUser?.Name ?? null
+                ? this.Users.find((u) => UUIDsEqual(u.ID, this.SelectedUserId))?.Name ?? md.CurrentUser?.Name ?? null
                 : null;
             if (this.SelectedUserId) {
                 await this.loadPermissionsForSelectedUser();
@@ -256,7 +256,7 @@ export class PermissionsUserAccessResourceComponent extends BaseResourceComponen
 
     async OnUserChanged(userId: string): Promise<void> {
         this.SelectedUserId = userId;
-        this.SelectedUserName = this.Users.find((u) => u.ID === userId)?.Name ?? this.SelectedUserName;
+        this.SelectedUserName = this.Users.find((u) => UUIDsEqual(u.ID, userId))?.Name ?? this.SelectedUserName;
         await this.loadPermissionsForSelectedUser();
     }
 
@@ -294,6 +294,12 @@ export class PermissionsUserAccessResourceComponent extends BaseResourceComponen
 
     ToggleGroup(group: PermissionsDomainGroup): void {
         group.Expanded = !group.Expanded;
+        this.cdr.detectChanges();
+    }
+
+    /** Accordion-driven handler — SETS the emitted expanded value (vs. ToggleGroup's flip). */
+    public onGroupExpandedChange(group: PermissionsDomainGroup, expanded: boolean): void {
+        group.Expanded = expanded;
         this.cdr.detectChanges();
     }
 

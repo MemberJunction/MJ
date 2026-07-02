@@ -197,13 +197,24 @@ export class FeatureAssemblyExecutor {
     const pkField = params.primaryKeyField ?? 'ID';
 
     // 1. Resolve the target records (inline or fetched).
-    const records = await this.resolveRecords(params, dataAccess);
+    let records = await this.resolveRecords(params, dataAccess);
 
     // 2. Partition steps: data-assembly produce columns; preprocessing → ops.
     const { dataSteps, preprocessing } = this.partitionSteps(params.steps, guard);
 
     // 3. Build the ordered RAW column plan (schema) from the data-assembly steps.
     const columnPlan = await this.buildColumnPlan(dataSteps, params, guard, dataAccess);
+
+    // 3a. ANTI-SKEW (the train/serve parity guarantee). On-demand/scheduled scoring receives its
+    //     target records from an upstream scope that may have loaded them with a NARROW field
+    //     projection — dropping virtual/denormalized columns (e.g. a `MembershipType` value-list field
+    //     joined into the entity view but absent from the base table). The model trained on those
+    //     columns, so missing them at score time silently degrades every prediction toward a constant.
+    //     Re-read ONLY the absent required columns from the SAME entity view the training path reads,
+    //     then HARD-FAIL if any are still missing. This is the single seam where skew could enter, so
+    //     it's the single seam we close — symmetrically, for train / materialize / on-demand alike.
+    records = await this.hydrateMissingFeatureColumns(records, columnPlan, params, dataAccess, pkField);
+    this.assertRequiredColumnsPresent(records, columnPlan, params);
 
     // 4. Pre-index dated sources by record for as-of features.
     const datedIndex = await this.indexDatedSources(params, dataAccess, pkField, guard);
@@ -240,6 +251,105 @@ export class FeatureAssemblyExecutor {
       throw new Error(`Failed to fetch target records: ${res.ErrorMessage ?? 'unknown error'}`);
     }
     return res.Rows;
+  }
+
+  /**
+   * The RAW columns that must be present on every record because the matrix reads them
+   * directly off the row (the `select`-emitter source columns — which also cover the
+   * `llm-derived` / `flow-agent` persisted-attribute reads — plus the train-time target
+   * variable). Embedding / as-of / vision values are fetched or computed, not row-read, so
+   * they are deliberately excluded.
+   */
+  private requiredRowColumns(plan: ColumnPlan, params: FeatureAssemblyParams): string[] {
+    const cols = new Set<string>();
+    for (const e of plan.emitters) {
+      if (e.kind === 'select') {
+        cols.add(e.sourceColumn);
+      }
+    }
+    if (params.targetVariable) {
+      cols.add(params.targetVariable);
+    }
+    return [...cols];
+  }
+
+  /**
+   * Fill in any required raw column the resolved records are MISSING, by re-reading just those
+   * columns from the same entity view the training path reads (`dataAccess.fetchRows`), keyed by
+   * primary key. Columns already present are left untouched — so a complete record set (training,
+   * a full `entity_object` load, unit-test fixtures) incurs no second read and no blob tax; only
+   * the on-demand narrow-projection case pays for the re-read, and only for the dropped columns.
+   * Returns a new row array when anything was hydrated (non-mutating), else the original array.
+   */
+  private async hydrateMissingFeatureColumns(
+    records: SourceRow[],
+    plan: ColumnPlan,
+    params: FeatureAssemblyParams,
+    dataAccess: IFeatureDataAccess,
+    pkField: string,
+  ): Promise<SourceRow[]> {
+    if (records.length === 0) {
+      return records;
+    }
+    const required = this.requiredRowColumns(plan, params);
+    const missing = required.filter((col) => records.some((r) => !(col in r)));
+    if (missing.length === 0) {
+      return records;
+    }
+    const ids = records.map((r) => String(r[pkField] ?? '')).filter((id) => id.length > 0);
+    if (ids.length === 0) {
+      return records; // no keys to re-read by — the guardrail will surface the absent columns
+    }
+    const inList = ids.map((id) => `'${id.replace(/'/g, "''")}'`).join(', ');
+    const res = await dataAccess.fetchRows({
+      EntityName: params.targetEntityName,
+      ExtraFilter: `${pkField} IN (${inList})`,
+      Fields: [pkField, ...missing],
+      MaxRows: ids.length,
+    });
+    if (!res.Success) {
+      return records; // re-read failed — let the guardrail throw with a precise, actionable message
+    }
+    const byId = new Map(res.Rows.map((row) => [String(row[pkField] ?? ''), row]));
+    return records.map((r) => {
+      const fresh = byId.get(String(r[pkField] ?? ''));
+      if (!fresh) {
+        return r;
+      }
+      const merged: SourceRow = { ...r };
+      for (const col of missing) {
+        if (col in fresh) {
+          merged[col] = fresh[col];
+        }
+      }
+      return merged;
+    });
+  }
+
+  /**
+   * HARD FAIL when a required raw feature column is absent from the records after hydration. A
+   * model executing without a column it was trained on would silently produce degenerate (often
+   * constant) predictions — the most dangerous class of train/serve skew, because it looks like it
+   * succeeded. We refuse to assemble: the caller (e.g. {@link MLModelInferenceProcessor}) catches
+   * this and marks the run **Failed** with this message, which bubbles to the run history + UI. This
+   * also guards TRAINING — a pipeline declaring a column the entity view doesn't expose fails loudly
+   * up front rather than producing a no-signal model.
+   */
+  private assertRequiredColumnsPresent(records: SourceRow[], plan: ColumnPlan, params: FeatureAssemblyParams): void {
+    if (records.length === 0) {
+      return;
+    }
+    const required = this.requiredRowColumns(plan, params);
+    const absent = required.filter((col) => records.some((r) => !(col in r)));
+    if (absent.length > 0) {
+      throw new Error(
+        `FeatureAssembly: required feature column(s) [${absent.join(', ')}] are absent from the ` +
+          `assembly input for entity '${params.targetEntityName}'. The model was trained on these ` +
+          `columns but they were not available at score time — most often a narrow field projection ` +
+          `that dropped a virtual/denormalized column. Scoring is refused to avoid silently producing ` +
+          `degenerate predictions.`,
+      );
+    }
   }
 
   /**

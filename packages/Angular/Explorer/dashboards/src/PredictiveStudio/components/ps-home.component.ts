@@ -30,8 +30,8 @@ import {
  * because it grows unbounded. 100% entity-agnostic.
  *
  * **"Ask the agent" entry path.** The hero CTA and the agent entry-path card emit {@link askAgent} with a
- * starter prompt string. The host resource ({@link PSHomeResourceComponent}) reveals the docked Model
- * Development Agent chat seeded with that prompt. The prompt is a deliberately entity-agnostic template
+ * starter prompt string. The host resource (the Studio door's `PSStudioResourceComponent`) reveals the
+ * docked Model Development Agent chat seeded with that prompt. The prompt is a deliberately entity-agnostic template
  * ({@link PS_AGENT_STARTER_PROMPT}) — it never names a specific entity/target, so Predictive Studio stays
  * 100% domain-neutral and the agent leads the user through choosing what to predict.
  */

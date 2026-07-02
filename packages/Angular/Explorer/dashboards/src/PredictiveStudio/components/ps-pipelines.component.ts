@@ -109,7 +109,7 @@ const PS_PIPELINES_STARTER_PROMPT =
         <!-- Pipeline picker + toolbar -->
         <div class="pl-bar" data-testid="ps-pipelines-picker">
           @for (p of pipelines; track p.ID) {
-            <button class="pl-pill" [class.on]="p.ID === selectedPipelineId"
+            <button class="pl-pill" [class.on]="isSelectedPipeline(p)"
               data-testid="ps-pipelines-pill" (click)="selectPipeline(p.ID)">
               <i class="fa-solid fa-diagram-project"></i> {{ p.Name }}
               <span class="ps-badge" [class]="statusClass(p.Status)">{{ p.Status }}</span>
@@ -377,6 +377,10 @@ export class PSPipelinesComponent implements OnInit {
 
   private get selectedPipeline(): MJMLTrainingPipelineEntity | undefined {
     return this.pipelines.find((p) => UUIDsEqual(p.ID, this.selectedPipelineId));
+  }
+
+  public isSelectedPipeline(p: MJMLTrainingPipelineEntity): boolean {
+    return UUIDsEqual(p.ID, this.selectedPipelineId);
   }
 
   private parse<T>(raw: string | null | undefined, fallback: T): T {

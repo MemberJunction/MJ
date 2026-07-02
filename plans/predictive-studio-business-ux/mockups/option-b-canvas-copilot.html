@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Predictive Studio · Members likely to not renew — Cascadia Professional Society</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+/* ============================================================================
+   MJ MOCKUP BASE — inlined verbatim
+   ============================================================================ */
+:root{
+  color-scheme:light;
+  --mj-color-brand-50:#e6f3f9;--mj-color-brand-100:#b3dbed;--mj-color-brand-200:#80c3e1;--mj-color-brand-300:#4dabd5;--mj-color-brand-350:#3395c8;--mj-color-brand-400:#2699cc;--mj-color-brand-450:#1a88bf;--mj-color-brand-500:#0076b6;--mj-color-brand-600:#006aa3;--mj-color-brand-700:#005a8a;--mj-color-brand-800:#004a71;--mj-color-brand-900:#092340;
+  --mj-color-accent-50:#f0faff;--mj-color-accent-100:#e0f4fe;--mj-color-accent-200:#bae8fd;--mj-color-accent-300:#aae7fd;--mj-color-accent-400:#5cc0ed;--mj-color-accent-500:#38a9d9;--mj-color-accent-600:#2490c0;--mj-color-accent-700:#1d7299;--mj-color-accent-800:#1c5d7d;--mj-color-accent-900:#1b4d68;
+  --mj-color-tertiary-50:#ecfeff;--mj-color-tertiary-400:#22d3ee;--mj-color-tertiary-500:#06b6d4;--mj-color-tertiary-600:#0891b2;--mj-color-tertiary-700:#0e7490;
+  --mj-color-neutral-0:#ffffff;--mj-color-neutral-50:#f8fafc;--mj-color-neutral-100:#f1f5f9;--mj-color-neutral-200:#e2e8f0;--mj-color-neutral-300:#cbd5e1;--mj-color-neutral-400:#94a3b8;--mj-color-neutral-500:#64748b;--mj-color-neutral-600:#475569;--mj-color-neutral-700:#334155;--mj-color-neutral-800:#1e293b;--mj-color-neutral-900:#0f172a;--mj-color-neutral-950:#020617;
+  --mj-color-success-50:#f0fdf4;--mj-color-success-100:#dcfce7;--mj-color-success-400:#4ade80;--mj-color-success-500:#22c55e;--mj-color-success-600:#16a34a;--mj-color-success-700:#15803d;
+  --mj-color-warning-50:#fffbeb;--mj-color-warning-100:#fef3c7;--mj-color-warning-400:#fbbf24;--mj-color-warning-500:#f59e0b;--mj-color-warning-600:#d97706;--mj-color-warning-700:#b45309;
+  --mj-color-error-50:#fef2f2;--mj-color-error-100:#fee2e2;--mj-color-error-400:#f87171;--mj-color-error-500:#ef4444;--mj-color-error-600:#dc2626;--mj-color-error-700:#b91c1c;
+  --mj-color-info-50:#eff6ff;--mj-color-info-100:#dbeafe;--mj-color-info-500:#3b82f6;--mj-color-info-600:#2563eb;--mj-color-info-700:#1d4ed8;
+  --mj-color-violet-50:#f5f3ff;--mj-color-violet-100:#ede9fe;--mj-color-violet-400:#a78bfa;--mj-color-violet-500:#8b5cf6;--mj-color-violet-600:#7c3aed;
+  --mj-bg-page:var(--mj-color-neutral-50);--mj-bg-surface:var(--mj-color-neutral-0);--mj-bg-surface-elevated:var(--mj-color-neutral-0);--mj-bg-surface-card:var(--mj-color-neutral-50);--mj-bg-surface-sunken:var(--mj-color-neutral-100);--mj-bg-surface-hover:var(--mj-color-neutral-100);--mj-bg-surface-active:var(--mj-color-neutral-200);--mj-bg-overlay:rgba(15,23,42,.5);
+  --mj-text-primary:var(--mj-color-neutral-800);--mj-text-secondary:var(--mj-color-neutral-600);--mj-text-muted:var(--mj-color-neutral-500);--mj-text-disabled:var(--mj-color-neutral-400);--mj-text-inverse:var(--mj-color-neutral-0);--mj-text-link:var(--mj-color-brand-500);
+  --mj-border-default:var(--mj-color-neutral-200);--mj-border-subtle:var(--mj-color-neutral-100);--mj-border-strong:var(--mj-color-neutral-300);--mj-border-focus:var(--mj-color-brand-500);
+  --mj-brand-primary:var(--mj-color-brand-500);--mj-brand-primary-hover:var(--mj-color-brand-600);--mj-brand-primary-active:var(--mj-color-brand-700);--mj-brand-secondary:var(--mj-color-brand-900);--mj-brand-on-primary:var(--mj-color-neutral-0);
+  --mj-brand-accent:var(--mj-color-accent-400);--mj-brand-accent-subtle:var(--mj-color-accent-50);
+  --mj-status-success:var(--mj-color-success-500);--mj-status-success-bg:var(--mj-color-success-50);--mj-status-success-text:var(--mj-color-success-700);--mj-status-success-border:var(--mj-color-success-500);
+  --mj-status-warning:var(--mj-color-warning-500);--mj-status-warning-bg:var(--mj-color-warning-50);--mj-status-warning-text:var(--mj-color-warning-700);--mj-status-warning-border:var(--mj-color-warning-500);
+  --mj-status-error:var(--mj-color-error-500);--mj-status-error-bg:var(--mj-color-error-50);--mj-status-error-text:var(--mj-color-error-700);--mj-status-error-border:var(--mj-color-error-500);
+  --mj-status-info:var(--mj-color-info-500);--mj-status-info-bg:var(--mj-color-info-50);--mj-status-info-text:var(--mj-color-info-700);--mj-status-info-border:var(--mj-color-info-500);
+  --mj-font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;--mj-font-family-mono:'JetBrains Mono','SF Mono',Consolas,monospace;
+  --mj-radius-sm:4px;--mj-radius-md:8px;--mj-radius-lg:12px;--mj-radius-xl:16px;--mj-radius-2xl:24px;--mj-radius-full:9999px;
+  --mj-shadow-sm:0 1px 2px 0 rgba(0,0,0,.05);--mj-shadow-md:0 4px 6px -1px rgba(0,0,0,.1),0 2px 4px -2px rgba(0,0,0,.1);--mj-shadow-lg:0 10px 15px -3px rgba(0,0,0,.1),0 4px 6px -4px rgba(0,0,0,.1);--mj-shadow-xl:0 20px 25px -5px rgba(0,0,0,.1),0 8px 10px -6px rgba(0,0,0,.1);
+  --mj-shadow-brand-md:0 4px 12px rgba(0,118,182,.4);
+  --mj-transition-base:200ms ease;
+}
+[data-theme="dark"]{
+  color-scheme:dark;
+  --mj-bg-page:var(--mj-color-neutral-900);--mj-bg-surface:var(--mj-color-neutral-800);--mj-bg-surface-card:#253347;--mj-bg-surface-elevated:var(--mj-color-neutral-700);--mj-bg-surface-sunken:var(--mj-color-neutral-950);--mj-bg-surface-hover:var(--mj-color-neutral-600);--mj-bg-surface-active:var(--mj-color-neutral-500);--mj-bg-overlay:rgba(0,0,0,.7);
+  --mj-text-primary:var(--mj-color-neutral-100);--mj-text-secondary:var(--mj-color-neutral-300);--mj-text-muted:var(--mj-color-neutral-400);--mj-text-disabled:var(--mj-color-neutral-600);--mj-text-inverse:var(--mj-color-neutral-900);--mj-text-link:var(--mj-color-brand-300);
+  --mj-border-default:var(--mj-color-neutral-700);--mj-border-subtle:var(--mj-color-neutral-800);--mj-border-strong:var(--mj-color-neutral-600);--mj-border-focus:var(--mj-color-brand-400);
+  --mj-brand-primary:var(--mj-color-brand-400);--mj-brand-primary-hover:var(--mj-color-brand-300);--mj-brand-primary-active:var(--mj-color-brand-200);
+  --mj-brand-accent:var(--mj-color-accent-300);--mj-brand-accent-subtle:color-mix(in srgb,var(--mj-color-accent-400) 15%,transparent);
+  --mj-status-success-bg:rgba(34,197,94,.15);--mj-status-success-text:var(--mj-color-success-100);
+  --mj-status-warning-bg:rgba(245,158,11,.15);--mj-status-warning-text:var(--mj-color-warning-100);
+  --mj-status-error-bg:rgba(239,68,68,.15);--mj-status-error-text:var(--mj-color-error-100);
+  --mj-status-info-bg:rgba(59,130,246,.15);--mj-status-info-text:var(--mj-color-info-100);
+  --mj-shadow-sm:0 1px 2px 0 rgba(0,0,0,.3);--mj-shadow-md:0 4px 6px -1px rgba(0,0,0,.4);--mj-shadow-lg:0 10px 15px -3px rgba(0,0,0,.4);--mj-shadow-xl:0 20px 25px -5px rgba(0,0,0,.5);
+}
+
+/* ---- reset + base ---- */
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:var(--mj-font-family);background:var(--mj-bg-page);color:var(--mj-text-primary);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;}
+h1,h2,h3,h4{font-weight:600;line-height:1.25;color:var(--mj-text-primary)}
+a{color:var(--mj-text-link);text-decoration:none}
+.muted{color:var(--mj-text-muted)}.secondary{color:var(--mj-text-secondary)}
+.mono{font-family:var(--mj-font-family-mono)}
+
+/* ---- MJ Explorer shell chrome (top app bar) ---- */
+.mj-shell{min-height:100vh;display:flex;flex-direction:column}
+.mj-topbar{height:56px;flex:0 0 56px;display:flex;align-items:center;gap:20px;padding:0 20px;background:var(--mj-bg-surface);border-bottom:1px solid var(--mj-border-default);position:sticky;top:0;z-index:200}
+.mj-logo{display:flex;align-items:center;gap:10px;font-weight:700;color:var(--mj-brand-secondary)}
+.mj-logo .mark{width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,var(--mj-color-brand-500),var(--mj-color-brand-900));display:grid;place-items:center;color:#fff;font-size:15px}
+.mj-topnav{display:flex;gap:4px;align-items:center}
+.mj-topnav a{display:flex;align-items:center;gap:8px;padding:7px 12px;border-radius:8px;color:var(--mj-text-secondary);font-weight:500;font-size:13px}
+.mj-topnav a.active{background:color-mix(in srgb,var(--mj-brand-primary) 12%,transparent);color:var(--mj-brand-primary)}
+.mj-topnav a:hover:not(.active){background:var(--mj-bg-surface-hover)}
+.mj-topbar .spacer{flex:1}
+.mj-search{display:flex;align-items:center;gap:8px;background:var(--mj-bg-surface-sunken);border:1px solid var(--mj-border-default);border-radius:8px;padding:7px 12px;color:var(--mj-text-muted);min-width:240px;font-size:13px}
+.mj-iconbtn{width:34px;height:34px;border-radius:8px;display:grid;place-items:center;color:var(--mj-text-secondary);background:transparent;border:none;cursor:pointer}
+.mj-iconbtn:hover{background:var(--mj-bg-surface-hover)}
+.mj-avatar{width:32px;height:32px;border-radius:50%;background:var(--mj-color-brand-700);color:#fff;display:grid;place-items:center;font-weight:600;font-size:12px}
+
+/* ---- cards / surfaces ---- */
+.mj-card{background:var(--mj-bg-surface);border:1px solid var(--mj-border-default);border-radius:var(--mj-radius-lg);box-shadow:var(--mj-shadow-sm)}
+.mj-card-pad{padding:20px}
+
+/* ---- buttons (mirror mjButton directive) ---- */
+.mj-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:36px;padding:0 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid transparent;transition:var(--mj-transition-base);font-family:inherit;white-space:nowrap}
+.mj-btn-sm{height:30px;padding:0 12px;font-size:12px}
+.mj-btn-lg{height:44px;padding:0 22px;font-size:15px}
+.mj-btn--primary{background:var(--mj-brand-primary);color:var(--mj-brand-on-primary)}
+.mj-btn--primary:hover{background:var(--mj-brand-primary-hover)}
+.mj-btn--secondary{background:var(--mj-bg-surface);color:var(--mj-text-primary);border-color:var(--mj-border-strong)}
+.mj-btn--secondary:hover{background:var(--mj-bg-surface-hover)}
+.mj-btn--flat{background:transparent;color:var(--mj-text-secondary)}
+.mj-btn--flat:hover{background:var(--mj-bg-surface-hover)}
+.mj-btn--success{background:var(--mj-status-success);color:#fff}
+
+/* ---- badges / pills ---- */
+.mj-badge{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:var(--mj-radius-full);font-size:12px;font-weight:600}
+.mj-badge--success{background:var(--mj-status-success-bg);color:var(--mj-status-success-text)}
+.mj-badge--warning{background:var(--mj-status-warning-bg);color:var(--mj-status-warning-text)}
+.mj-badge--error{background:var(--mj-status-error-bg);color:var(--mj-status-error-text)}
+.mj-badge--info{background:var(--mj-status-info-bg);color:var(--mj-status-info-text)}
+.mj-badge--neutral{background:var(--mj-bg-surface-sunken);color:var(--mj-text-secondary)}
+
+/* ---- inputs ---- */
+.mj-input{height:38px;padding:0 12px;border:1px solid var(--mj-border-default);border-radius:8px;background:var(--mj-bg-surface);color:var(--mj-text-primary);font-family:inherit;font-size:13px;width:100%}
+.mj-input:focus{outline:none;border-color:var(--mj-border-focus);box-shadow:0 0 0 3px color-mix(in srgb,var(--mj-brand-primary) 15%,transparent)}
+
+/* ---- trust / risk semantic helpers ---- */
+.trust-poor{--trust:var(--mj-status-error);--trust-bg:var(--mj-status-error-bg);--trust-text:var(--mj-status-error-text)}
+.trust-fair{--trust:var(--mj-status-warning);--trust-bg:var(--mj-status-warning-bg);--trust-text:var(--mj-status-warning-text)}
+.trust-good{--trust:var(--mj-status-success);--trust-bg:var(--mj-status-success-bg);--trust-text:var(--mj-status-success-text)}
+.trust-excellent{--trust:var(--mj-color-success-600);--trust-bg:var(--mj-status-success-bg);--trust-text:var(--mj-status-success-text)}
+.risk-high{color:var(--mj-status-error-text);background:var(--mj-status-error-bg)}
+.risk-medium{color:var(--mj-status-warning-text);background:var(--mj-status-warning-bg)}
+.risk-low{color:var(--mj-status-success-text);background:var(--mj-status-success-bg)}
+
+/* ---- Skip agent / conversation widget base ---- */
+.skip-avatar{width:34px;height:34px;border-radius:50%;flex:0 0 34px;background:linear-gradient(135deg,var(--mj-color-accent-400),var(--mj-color-brand-500));display:grid;place-items:center;color:#fff;font-size:14px;box-shadow:var(--mj-shadow-sm)}
+.chat-msg{display:flex;gap:10px;align-items:flex-start;max-width:100%}
+.chat-bubble{padding:12px 14px;border-radius:14px;font-size:13.5px;line-height:1.55;max-width:560px}
+.chat-bubble.agent{background:var(--mj-bg-surface-card);border:1px solid var(--mj-border-subtle);border-top-left-radius:4px;color:var(--mj-text-primary)}
+.chat-bubble.user{background:var(--mj-brand-primary);color:#fff;border-top-right-radius:4px;margin-left:auto}
+.chat-row.user{flex-direction:row-reverse}
+.chat-input{display:flex;align-items:center;gap:10px;border:1px solid var(--mj-border-default);border-radius:var(--mj-radius-full);padding:8px 8px 8px 16px;background:var(--mj-bg-surface)}
+.chat-input input{flex:1;border:none;background:transparent;outline:none;font-family:inherit;font-size:14px;color:var(--mj-text-primary)}
+.chat-send{width:38px;height:38px;border-radius:50%;border:none;background:var(--mj-brand-primary);color:#fff;cursor:pointer;display:grid;place-items:center}
+.suggestion{padding:7px 12px;border:1px solid var(--mj-border-default);border-radius:var(--mj-radius-full);background:var(--mj-bg-surface);color:var(--mj-text-secondary);font-size:12.5px;cursor:pointer}
+.suggestion:hover{border-color:var(--mj-brand-primary);color:var(--mj-brand-primary)}
+
+/* ---- design-thesis banner ---- */
+.thesis{position:sticky;top:0;z-index:900;background:var(--mj-color-brand-900);color:#fff;padding:10px 20px;font-size:12.5px;display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+.thesis b{color:var(--mj-color-accent-300)}
+.thesis .tag{background:rgba(255,255,255,.14);padding:2px 9px;border-radius:var(--mj-radius-full);font-weight:600}
+
+/* ---- utility ---- */
+.flex{display:flex}.col{flex-direction:column}.items-center{align-items:center}.between{justify-content:space-between}.gap-2{gap:8px}.gap-3{gap:12px}.gap-4{gap:16px}.wrap{flex-wrap:wrap}
+.grow{flex:1}.tnum{font-variant-numeric:tabular-nums}
+
+/* ============================================================================
+   OPTION B — Canvas + docked co-pilot. Component CSS (tokens only).
+   ============================================================================ */
+.workspace{display:flex;flex:1;min-height:0;overflow:hidden}
+
+/* ---- LEFT: main canvas ---- */
+.canvas{flex:1;min-width:0;overflow-y:auto;padding:24px 28px 40px;display:flex;flex-direction:column;gap:18px}
+.page-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.page-head h1{font-size:23px;letter-spacing:-.01em}
+.page-sub{color:var(--mj-text-secondary);font-size:14px;margin-top:4px}
+.page-sub .dot{color:var(--mj-text-disabled);margin:0 7px}
+.refreshed{display:inline-flex;align-items:center;gap:6px;color:var(--mj-text-muted);font-size:12px;margin-top:7px}
+.refreshed i{font-size:11px}
+.head-right{display:flex;align-items:center;gap:8px}
+
+/* ---- trust verdict banner ---- */
+.trust-card{background:var(--mj-bg-surface);border:1px solid var(--mj-border-default);border-left:5px solid var(--trust);border-radius:var(--mj-radius-lg);box-shadow:var(--mj-shadow-sm);overflow:hidden;transition:var(--mj-transition-base)}
+.trust-top{display:flex;gap:18px;padding:20px 22px;align-items:flex-start}
+.trust-icon{width:52px;height:52px;flex:0 0 52px;border-radius:14px;background:var(--trust-bg);color:var(--trust);display:grid;place-items:center;font-size:23px}
+.trust-body{flex:1;min-width:0}
+.trust-grade-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.trust-grade{font-size:19px;font-weight:700;color:var(--mj-text-primary)}
+.trust-pill{display:inline-flex;align-items:center;gap:6px;background:var(--trust-bg);color:var(--trust-text);font-weight:700;font-size:12.5px;padding:4px 11px;border-radius:var(--mj-radius-full)}
+.trust-dots{display:inline-flex;gap:4px}
+.trust-dots i{font-size:13px;color:var(--trust)}
+.trust-dots i.off{color:var(--mj-border-strong)}
+.trust-line{font-size:15px;font-weight:600;color:var(--mj-text-primary);margin-top:9px}
+.trust-explain{color:var(--mj-text-secondary);font-size:13.5px;margin-top:5px;max-width:680px}
+.trust-howknow{display:inline-flex;align-items:center;gap:7px;color:var(--mj-text-muted);font-size:12.5px;margin-top:10px;background:var(--mj-bg-surface-sunken);padding:6px 11px;border-radius:var(--mj-radius-full)}
+
+/* analyst disclosure */
+.analyst{border-top:1px dashed var(--mj-border-default)}
+.analyst-toggle{display:flex;align-items:center;gap:9px;width:100%;background:transparent;border:none;cursor:pointer;padding:12px 22px;color:var(--mj-text-secondary);font-family:inherit;font-size:12.5px;font-weight:600}
+.analyst-toggle:hover{background:var(--mj-bg-surface-hover)}
+.analyst-toggle .chev{transition:var(--mj-transition-base)}
+.analyst.open .analyst-toggle .chev{transform:rotate(90deg)}
+.analyst-body{display:none;padding:0 22px 18px;}
+.analyst.open .analyst-body{display:block}
+.analyst-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.analyst-stat{background:var(--mj-bg-surface-sunken);border-radius:var(--mj-radius-md);padding:11px 13px}
+.analyst-stat .k{font-size:11px;color:var(--mj-text-muted);text-transform:uppercase;letter-spacing:.04em;font-weight:600}
+.analyst-stat .v{font-size:15px;font-weight:700;margin-top:3px;color:var(--mj-text-primary)}
+.analyst-stat .v.mono{font-family:var(--mj-font-family-mono);font-size:14px}
+
+/* weak-model affordance */
+.whatif{margin-top:12px;padding:0 22px 16px}
+.whatif-toggle{display:inline-flex;align-items:center;gap:8px;font-size:12px;color:var(--mj-text-muted);background:transparent;border:1px dashed var(--mj-border-strong);border-radius:var(--mj-radius-full);padding:6px 13px;cursor:pointer;font-family:inherit;font-weight:600}
+.whatif-toggle:hover{border-color:var(--mj-status-error);color:var(--mj-status-error-text)}
+
+/* ---- distribution strip ---- */
+.dist-card{padding:18px 20px}
+.dist-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:13px}
+.dist-head h3{font-size:14px}
+.dist-bar{display:flex;height:14px;border-radius:var(--mj-radius-full);overflow:hidden;background:var(--mj-bg-surface-sunken)}
+.dist-seg{height:100%}
+.dist-seg.high{background:var(--mj-status-error)}
+.dist-seg.med{background:var(--mj-status-warning)}
+.dist-seg.low{background:var(--mj-status-success)}
+.dist-legend{display:flex;gap:22px;margin-top:13px;flex-wrap:wrap}
+.dist-leg{display:flex;align-items:center;gap:9px}
+.dist-leg .swatch{width:11px;height:11px;border-radius:3px}
+.dist-leg .swatch.high{background:var(--mj-status-error)}
+.dist-leg .swatch.med{background:var(--mj-status-warning)}
+.dist-leg .swatch.low{background:var(--mj-status-success)}
+.dist-leg .num{font-weight:700;font-size:15px;color:var(--mj-text-primary)}
+.dist-leg .lbl{font-size:12px;color:var(--mj-text-muted)}
+
+/* ---- sticky action bar ---- */
+.action-bar{position:sticky;top:0;z-index:50;display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--mj-bg-surface);border:1px solid var(--mj-border-default);border-radius:var(--mj-radius-lg);box-shadow:var(--mj-shadow-sm);padding:13px 16px}
+.action-bar .bar-label{font-size:12px;color:var(--mj-text-muted);font-weight:600;margin-right:2px}
+.action-bar .grow{min-width:8px}
+
+/* ---- at-risk list ---- */
+.list-card{overflow:hidden;padding:0}
+.list-head{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--mj-border-default);flex-wrap:wrap;gap:10px}
+.list-head h3{font-size:15px}
+.list-head .sub{font-size:12.5px;color:var(--mj-text-muted)}
+.tbl{width:100%;border-collapse:collapse}
+.tbl thead th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--mj-text-muted);font-weight:600;padding:11px 16px;border-bottom:1px solid var(--mj-border-default);background:var(--mj-bg-surface-card);position:sticky;top:0}
+.tbl thead th .sortable{display:inline-flex;align-items:center;gap:5px;cursor:pointer}
+.tbl thead th i{font-size:9px;color:var(--mj-brand-primary)}
+.tbl tbody tr{border-bottom:1px solid var(--mj-border-subtle);transition:background var(--mj-transition-base)}
+.tbl tbody tr:last-child{border-bottom:none}
+.tbl tbody tr:hover{background:var(--mj-bg-surface-hover)}
+.tbl td{padding:13px 16px;vertical-align:middle}
+.rank{width:26px;height:26px;border-radius:8px;background:var(--mj-bg-surface-sunken);color:var(--mj-text-muted);display:grid;place-items:center;font-size:12px;font-weight:700;font-variant-numeric:tabular-nums}
+.member{display:flex;align-items:center;gap:11px;min-width:200px}
+.member .ava{width:36px;height:36px;flex:0 0 36px;border-radius:50%;display:grid;place-items:center;font-weight:600;font-size:12px;color:#fff}
+.member .nm{font-weight:600;color:var(--mj-text-primary);font-size:13.5px}
+.member .ty{font-size:12px;color:var(--mj-text-muted)}
+.since{font-size:12.5px;color:var(--mj-text-secondary);white-space:nowrap}
+.risk-cell{min-width:150px}
+.risk-row{display:flex;align-items:center;gap:9px}
+.risk-track{flex:1;height:8px;border-radius:var(--mj-radius-full);background:var(--mj-bg-surface-sunken);overflow:hidden;min-width:64px}
+.risk-fill{height:100%;border-radius:var(--mj-radius-full)}
+.risk-pct{font-weight:700;font-size:13.5px;font-variant-numeric:tabular-nums;min-width:38px;text-align:right}
+.reasons{display:flex;flex-wrap:wrap;gap:5px;max-width:340px}
+.reason-chip{font-size:11.5px;padding:3px 9px;border-radius:var(--mj-radius-full);background:var(--mj-bg-surface-sunken);color:var(--mj-text-secondary);border:1px solid var(--mj-border-subtle);white-space:nowrap}
+.row-actions{display:flex;align-items:center;gap:6px;justify-content:flex-end}
+.flash{animation:flashRow 2.2s ease}
+@keyframes flashRow{0%{background:color-mix(in srgb,var(--mj-brand-primary) 22%,transparent)}100%{background:transparent}}
+.list-foot{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-top:1px solid var(--mj-border-default);flex-wrap:wrap;gap:8px}
+.list-foot .cnt{font-size:12.5px;color:var(--mj-text-muted)}
+
+/* ---- RIGHT: docked Skip co-pilot ---- */
+.copilot{flex:0 0 374px;width:374px;border-left:1px solid var(--mj-border-default);background:var(--mj-bg-surface);display:flex;flex-direction:column;min-height:0}
+.copilot-head{display:flex;align-items:center;gap:11px;padding:14px 16px;border-bottom:1px solid var(--mj-border-default)}
+.copilot-head .nm{font-weight:700;font-size:14px}
+.copilot-head .status{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--mj-text-muted)}
+.copilot-head .status .live{width:7px;height:7px;border-radius:50%;background:var(--mj-status-success);box-shadow:0 0 0 3px var(--mj-status-success-bg)}
+.copilot-head .ml-tag{margin-left:auto;font-size:10.5px;color:var(--mj-text-muted);background:var(--mj-bg-surface-sunken);padding:3px 8px;border-radius:var(--mj-radius-full);font-weight:600}
+.thread{flex:1;overflow-y:auto;padding:18px 16px;display:flex;flex-direction:column;gap:16px}
+.t-time{text-align:center;font-size:11px;color:var(--mj-text-disabled);margin:-2px 0}
+.agent-block{display:flex;flex-direction:column;gap:9px}
+.agent-actions{display:flex;flex-direction:column;gap:7px;padding-left:44px}
+.skip-act{display:inline-flex;align-items:center;gap:9px;text-align:left;background:var(--mj-bg-surface);border:1px solid var(--mj-border-default);color:var(--mj-text-primary);font-family:inherit;font-size:12.5px;font-weight:600;padding:9px 12px;border-radius:var(--mj-radius-md);cursor:pointer;transition:var(--mj-transition-base)}
+.skip-act:hover{border-color:var(--mj-brand-primary);background:color-mix(in srgb,var(--mj-brand-primary) 7%,transparent);color:var(--mj-brand-primary)}
+.skip-act i{font-size:12px;color:var(--mj-brand-primary)}
+.skip-act:hover i{color:inherit}
+.skip-act.done{border-color:var(--mj-status-success);color:var(--mj-status-success-text);background:var(--mj-status-success-bg)}
+.skip-act.done i{color:var(--mj-status-success)}
+.typing{display:flex;gap:4px;padding:13px 14px}
+.typing span{width:6px;height:6px;border-radius:50%;background:var(--mj-text-disabled);animation:blink 1.4s infinite both}
+.typing span:nth-child(2){animation-delay:.2s}.typing span:nth-child(3){animation-delay:.4s}
+@keyframes blink{0%,80%,100%{opacity:.25}40%{opacity:1}}
+.copilot-foot{border-top:1px solid var(--mj-border-default);padding:12px 14px;display:flex;flex-direction:column;gap:10px}
+.sugg-row{display:flex;gap:7px;flex-wrap:wrap}
+.sugg-row .suggestion{font-size:11.5px;padding:5px 10px}
+
+/* ---- toast ---- */
+.toast-wrap{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);z-index:1000;display:flex;flex-direction:column;gap:10px;align-items:center}
+.toast{display:flex;align-items:center;gap:11px;background:var(--mj-color-neutral-900);color:#fff;padding:13px 18px;border-radius:var(--mj-radius-md);box-shadow:var(--mj-shadow-xl);font-size:13.5px;font-weight:500;animation:toastIn .3s ease}
+[data-theme="dark"] .toast{background:var(--mj-color-neutral-700);border:1px solid var(--mj-border-strong)}
+.toast i{color:var(--mj-status-success)}
+@keyframes toastIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+
+/* ---- weak-model modal ---- */
+.modal-back{position:fixed;inset:0;background:var(--mj-bg-overlay);z-index:1100;display:none;align-items:center;justify-content:center;padding:24px}
+.modal-back.open{display:flex}
+.modal{background:var(--mj-bg-surface);border:1px solid var(--mj-border-default);border-radius:var(--mj-radius-xl);box-shadow:var(--mj-shadow-xl);max-width:620px;width:100%;overflow:hidden}
+.modal-head{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--mj-border-default)}
+.modal-head h3{font-size:15px}
+.modal-body{padding:20px}
+.modal-foot{padding:14px 20px;border-top:1px solid var(--mj-border-default);display:flex;gap:10px}
+.disabled-bar{position:relative;opacity:.55;pointer-events:none;filter:grayscale(.3)}
+.blocked-note{display:flex;align-items:center;gap:9px;background:var(--mj-status-error-bg);color:var(--mj-status-error-text);border:1px solid var(--mj-status-error-border);border-radius:var(--mj-radius-md);padding:10px 13px;font-size:12.5px;font-weight:600;margin-top:14px}
+
+@media (max-width:1180px){.copilot{flex-basis:330px;width:330px}.reasons{max-width:240px}}
+</style>
+</head>
+<body>
+
+<!-- ============ DESIGN THESIS BANNER ============ -->
+<div class="thesis">
+  <span class="tag">B ·</span>
+  <span><b>Canvas + docked co-pilot</b> — a persistent visual workspace (trust verdict, ranked at-risk list, the four actions) with Skip docked alongside, driving and narrating. Best for: see-and-act on real lists. Tradeoff: two focal points.</span>
+</div>
+
+<div class="mj-shell">
+
+  <!-- ============ MJ EXPLORER TOP APP BAR ============ -->
+  <header class="mj-topbar">
+    <div class="mj-logo">
+      <div class="mark"><i class="fa-solid fa-mountain-sun"></i></div>
+      <span>Cascadia Professional Society</span>
+    </div>
+    <nav class="mj-topnav">
+      <a href="#"><i class="fa-solid fa-house"></i> Home</a>
+      <a href="#"><i class="fa-solid fa-users"></i> Members</a>
+      <a href="#" class="active"><i class="fa-solid fa-chart-line"></i> Predictions</a>
+      <a href="#"><i class="fa-solid fa-file-lines"></i> Reports</a>
+    </nav>
+    <div class="spacer"></div>
+    <div class="mj-search"><i class="fa-solid fa-magnifying-glass"></i> Search members, predictions…</div>
+    <button class="mj-iconbtn" id="themeToggle" title="Toggle dark mode"><i class="fa-solid fa-moon"></i></button>
+    <button class="mj-iconbtn" title="Notifications" style="position:relative">
+      <i class="fa-solid fa-bell"></i>
+      <span style="position:absolute;top:5px;right:6px;width:7px;height:7px;border-radius:50%;background:var(--mj-status-error)"></span>
+    </button>
+    <div class="mj-avatar" title="Renée Calloway · Director of Membership">RC</div>
+  </header>
+
+  <!-- ============ WORKSPACE ============ -->
+  <div class="workspace">
+
+    <!-- ---------- LEFT: MAIN CANVAS ---------- -->
+    <main class="canvas">
+
+      <!-- page header -->
+      <div class="page-head">
+        <div>
+          <h1>Members likely to not renew</h1>
+          <div class="page-sub">1,284 members up for renewal in the next 90 days <span class="dot">·</span> <strong style="color:var(--mj-status-error-text)">318 at-risk</strong></div>
+          <div class="refreshed"><i class="fa-solid fa-rotate"></i> Refreshed 4 minutes ago by Skip</div>
+        </div>
+        <div class="head-right">
+          <button class="mj-btn mj-btn--secondary mj-btn-sm"><i class="fa-solid fa-rotate"></i> Re-run</button>
+          <button class="mj-btn mj-btn--secondary mj-btn-sm"><i class="fa-solid fa-ellipsis"></i></button>
+        </div>
+      </div>
+
+      <!-- TRUST VERDICT -->
+      <section class="trust-card trust-good" id="trustCard">
+        <div class="trust-top">
+          <div class="trust-icon"><i class="fa-solid fa-shield-halved"></i></div>
+          <div class="trust-body">
+            <div class="trust-grade-row">
+              <span class="trust-grade">Good</span>
+              <span class="trust-dots">
+                <i class="fa-solid fa-circle"></i><i class="fa-solid fa-circle"></i><i class="fa-solid fa-circle"></i><i class="fa-solid fa-circle"></i><i class="fa-solid fa-circle off"></i>
+              </span>
+              <span class="trust-pill"><i class="fa-solid fa-circle-check"></i> Safe to use for prioritizing</span>
+            </div>
+            <div class="trust-line">Right about 8 out of 10 times.</div>
+            <div class="trust-explain">Reliable enough to prioritize who to reach out to. For high-stakes or one-off decisions, use your judgment too.</div>
+            <div class="trust-howknow"><i class="fa-solid fa-flask-vial"></i> Checked against 2,137 past members the model had never seen.</div>
+          </div>
+        </div>
+
+        <!-- weak-model "what if" affordance -->
+        <div class="whatif">
+          <button class="whatif-toggle" onclick="openWeak()"><i class="fa-solid fa-triangle-exclamation"></i> What if this model weren't reliable?</button>
+        </div>
+
+        <!-- analyst disclosure -->
+        <div class="analyst" id="analystBlock">
+          <button class="analyst-toggle" onclick="toggleAnalyst()">
+            <i class="fa-solid fa-chevron-right chev"></i> For analysts <span class="muted" style="font-weight:500">— the technical details</span>
+          </button>
+          <div class="analyst-body">
+            <div class="analyst-grid">
+              <div class="analyst-stat"><div class="k">Holdout AUC</div><div class="v mono">0.78</div></div>
+              <div class="analyst-stat"><div class="k">Accuracy</div><div class="v mono">80%</div></div>
+              <div class="analyst-stat"><div class="k">Algorithm</div><div class="v">Gradient Boosting</div></div>
+              <div class="analyst-stat"><div class="k">Training data</div><div class="v">3 years of history</div></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- DISTRIBUTION STRIP -->
+      <section class="mj-card dist-card">
+        <div class="dist-head">
+          <h3>Risk across all 1,284 members</h3>
+          <span class="muted" style="font-size:12px">Likelihood to lapse</span>
+        </div>
+        <div class="dist-bar">
+          <div class="dist-seg high" style="width:24.8%" title="High risk: 318"></div>
+          <div class="dist-seg med" style="width:35.9%" title="Medium risk: 461"></div>
+          <div class="dist-seg low" style="width:39.3%" title="Low risk: 505"></div>
+        </div>
+        <div class="dist-legend">
+          <div class="dist-leg"><span class="swatch high"></span><span class="num tnum">318</span><span class="lbl">High risk</span></div>
+          <div class="dist-leg"><span class="swatch med"></span><span class="num tnum">461</span><span class="lbl">Medium risk</span></div>
+          <div class="dist-leg"><span class="swatch low"></span><span class="num tnum">505</span><span class="lbl">Low risk</span></div>
+        </div>
+      </section>
+
+      <!-- STICKY ACTION BAR -->
+      <section class="action-bar" id="actionBar">
+        <span class="bar-label">What now?</span>
+        <button class="mj-btn mj-btn--primary" onclick="flashList()"><i class="fa-solid fa-phone-volume"></i> Review the call list</button>
+        <button class="mj-btn mj-btn--secondary" onclick="saveScores(this)"><i class="fa-solid fa-floppy-disk"></i> Save scores to records</button>
+        <button class="mj-btn mj-btn--secondary" onclick="startOutreach(this)"><i class="fa-solid fa-paper-plane"></i> Send to a list / outreach</button>
+        <button class="mj-btn mj-btn--secondary" onclick="toast('Summary exported to Excel ✓','fa-file-export')"><i class="fa-solid fa-share-nodes"></i> Share / export</button>
+      </section>
+
+      <!-- AT-RISK LIST -->
+      <section class="mj-card list-card" id="riskList">
+        <div class="list-head">
+          <div>
+            <h3>Who to call first</h3>
+            <div class="sub">Ranked by likelihood to lapse · highest first</div>
+          </div>
+          <button class="mj-btn mj-btn--flat mj-btn-sm"><i class="fa-solid fa-filter"></i> Filter</button>
+        </div>
+        <div style="overflow-x:auto">
+        <table class="tbl">
+          <thead>
+            <tr>
+              <th style="width:42px">#</th>
+              <th>Member</th>
+              <th>Member since</th>
+              <th class="risk-cell"><span class="sortable">Risk <i class="fa-solid fa-arrow-down"></i></span></th>
+              <th>Why they may not renew</th>
+              <th style="text-align:right">Action</th>
+            </tr>
+          </thead>
+          <tbody id="riskBody"><!-- rows injected by JS --></tbody>
+        </table>
+        </div>
+        <div class="list-foot">
+          <span class="cnt">Showing top 9 of <strong>318</strong> at-risk members</span>
+          <button class="mj-btn mj-btn--flat mj-btn-sm">View all 318 <i class="fa-solid fa-arrow-right"></i></button>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- ---------- RIGHT: DOCKED SKIP CO-PILOT ---------- -->
+    <aside class="copilot">
+      <div class="copilot-head">
+        <div class="skip-avatar"><i class="fa-solid fa-robot"></i></div>
+        <div>
+          <div class="nm">Skip</div>
+          <div class="status"><span class="live"></span> Online · your data analyst</div>
+        </div>
+        <span class="ml-tag">Predictive Studio</span>
+      </div>
+
+      <div class="thread" id="thread">
+        <div class="t-time">Today, 9:41 AM</div>
+
+        <!-- user question -->
+        <div class="chat-msg chat-row user">
+          <div class="chat-bubble user">Which members are likely to not renew this year?</div>
+        </div>
+
+        <!-- skip narration -->
+        <div class="agent-block">
+          <div class="chat-msg">
+            <div class="skip-avatar"><i class="fa-solid fa-robot"></i></div>
+            <div class="chat-bubble agent">
+              I looked at your <strong>1,284 members</strong> up for renewal in the next 90 days. <strong>318 look at-risk</strong> — about 1 in 4.<br><br>
+              I'm <strong>right about 8 in 10 times</strong> here, so this is a solid list to start your outreach from. I put the riskiest members at the top with the reasons why.
+            </div>
+          </div>
+          <div class="agent-actions">
+            <button class="skip-act" onclick="flashList()"><i class="fa-solid fa-arrow-down-wide-short"></i> Show me who to call first</button>
+            <button class="skip-act" onclick="saveScoresFromChat(this)"><i class="fa-solid fa-floppy-disk"></i> Save these scores to records</button>
+            <button class="skip-act" onclick="startOutreachFromChat(this)"><i class="fa-solid fa-paper-plane"></i> Start outreach to the 318</button>
+          </div>
+        </div>
+
+        <!-- follow-up -->
+        <div class="chat-msg chat-row user">
+          <div class="chat-bubble user">Can I trust this enough to act on it?</div>
+        </div>
+        <div class="agent-block">
+          <div class="chat-msg">
+            <div class="skip-avatar"><i class="fa-solid fa-robot"></i></div>
+            <div class="chat-bubble agent">
+              Yes — for prioritizing who to reach out to. I tested it against <strong>2,137 past members</strong> it had never seen and it was right about 80% of the time.<br><br>
+              I'd still use your judgment on any single high-stakes call. Want the technical breakdown?
+            </div>
+          </div>
+          <div class="agent-actions">
+            <button class="skip-act" onclick="openAnalystFromChat()"><i class="fa-solid fa-flask"></i> Show the analyst details</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="copilot-foot">
+        <div class="sugg-row">
+          <button class="suggestion" onclick="flashList()">Who should I call first?</button>
+          <button class="suggestion">Which new members are most at risk?</button>
+          <button class="suggestion">What's driving members to lapse?</button>
+        </div>
+        <div class="chat-input">
+          <input type="text" placeholder="Ask Skip about your members…">
+          <button class="chat-send"><i class="fa-solid fa-arrow-up"></i></button>
+        </div>
+      </div>
+    </aside>
+
+  </div>
+</div>
+
+<!-- toast container -->
+<div class="toast-wrap" id="toastWrap"></div>
+
+<!-- WEAK-MODEL SAFETY MODAL -->
+<div class="modal-back" id="weakModal">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>What a weak model would look like</h3>
+      <button class="mj-iconbtn" onclick="closeWeak()"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-body">
+      <p class="secondary" style="margin-bottom:16px">If Skip can't yet predict renewals reliably for your data, it tells you plainly — and <strong>blocks the actions</strong> so no one makes decisions off a guess.</p>
+
+      <div class="trust-card trust-poor">
+        <div class="trust-top">
+          <div class="trust-icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
+          <div class="trust-body">
+            <div class="trust-grade-row">
+              <span class="trust-grade">Not reliable yet</span>
+              <span class="trust-dots">
+                <i class="fa-solid fa-circle"></i><i class="fa-solid fa-circle off"></i><i class="fa-solid fa-circle off"></i><i class="fa-solid fa-circle off"></i><i class="fa-solid fa-circle off"></i>
+              </span>
+              <span class="trust-pill"><i class="fa-solid fa-ban"></i> Don't use for decisions</span>
+            </div>
+            <div class="trust-line">Right only about 5 out of 10 times — no better than a coin flip.</div>
+            <div class="trust-explain">There isn't enough clear signal in this data yet. Add more history or wait for the next renewal cycle, and Skip will try again.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="blocked-note"><i class="fa-solid fa-lock"></i> Because trust is too low, the four actions below are turned off.</div>
+
+      <div class="action-bar disabled-bar" style="margin-top:14px;box-shadow:none">
+        <span class="bar-label">What now?</span>
+        <button class="mj-btn mj-btn--primary"><i class="fa-solid fa-phone-volume"></i> Review the call list</button>
+        <button class="mj-btn mj-btn--secondary"><i class="fa-solid fa-floppy-disk"></i> Save scores</button>
+        <button class="mj-btn mj-btn--secondary"><i class="fa-solid fa-paper-plane"></i> Start outreach</button>
+        <button class="mj-btn mj-btn--secondary"><i class="fa-solid fa-share-nodes"></i> Share</button>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="mj-btn mj-btn--primary" onclick="closeWeak()">Got it</button>
+      <button class="mj-btn mj-btn--flat" onclick="closeWeak()">Back to my reliable model</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ---- member data ----
+const members = [
+  {n:'Margaret Chen', t:'Individual Professional', s:'2016', r:88, c:'#b45309', reasons:['No events attended in 14 months','Auto-renew is off','Stopped opening emails']},
+  {n:'David Okafor', t:'Early Career Professional', s:'2024', r:84, c:'#0e7490', reasons:['First renewal coming up','Low engagement','Dues increased 12%']},
+  {n:'Sarah Lindqvist', t:'Corporate', s:'2019', r:81, c:'#7c3aed', reasons:['Primary contact left the company','Portal logins down 60%']},
+  {n:'James Patterson', t:'Retired Professional', s:'2012', r:77, c:'#005a8a', reasons:['Participation dropped off','Asked about emeritus pricing']},
+  {n:'Aisha Rahman', t:'Individual Professional', s:'2021', r:74, c:'#0891b2', reasons:['No committee involvement','Hasn\'t attended the annual conference']},
+  {n:'Tomás Herrera', t:'Corporate', s:'2020', r:71, c:'#d97706', reasons:['Usage down 40%','Renewal invoice unpaid 3 weeks']},
+  {n:'Priya Nair', t:'Early Career Professional', s:'2023', r:68, c:'#16a34a', reasons:['Joined for one event','No logins in 90 days']},
+  {n:'Robert Feldman', t:'Individual Professional', s:'2015', r:64, c:'#475569', reasons:['Downgraded last year','Email engagement falling']},
+  {n:'Grace Mbeki', t:'Student', s:'2023', r:61, c:'#2563eb', reasons:['Graduating soon','No transition-to-professional yet']},
+];
+
+function initials(name){return name.split(' ').map(p=>p[0]).join('').slice(0,2).toUpperCase();}
+function riskClass(r){return r>=75?'high':r>=60?'med':'low';}
+function riskColor(r){return r>=75?'var(--mj-status-error)':r>=60?'var(--mj-status-warning)':'var(--mj-status-success)';}
+function riskTextColor(r){return r>=75?'var(--mj-status-error-text)':r>=60?'var(--mj-status-warning-text)':'var(--mj-status-success-text)';}
+
+const body = document.getElementById('riskBody');
+members.forEach((m,i)=>{
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td><div class="rank">${i+1}</div></td>
+    <td>
+      <div class="member">
+        <div class="ava" style="background:${m.c}">${initials(m.n)}</div>
+        <div><div class="nm">${m.n}</div><div class="ty">${m.t}</div></div>
+      </div>
+    </td>
+    <td class="since">Since ${m.s}</td>
+    <td class="risk-cell">
+      <div class="risk-row">
+        <div class="risk-track"><div class="risk-fill" style="width:${m.r}%;background:${riskColor(m.r)}"></div></div>
+        <span class="risk-pct" style="color:${riskTextColor(m.r)}">${m.r}%</span>
+      </div>
+    </td>
+    <td><div class="reasons">${m.reasons.map(x=>`<span class="reason-chip">${x}</span>`).join('')}</div></td>
+    <td><div class="row-actions">
+      <button class="mj-btn mj-btn--secondary mj-btn-sm"><i class="fa-solid fa-phone"></i> Call</button>
+      <button class="mj-iconbtn" style="width:30px;height:30px"><i class="fa-solid fa-ellipsis-vertical"></i></button>
+    </div></td>`;
+  body.appendChild(tr);
+});
+
+// ---- dark mode ----
+document.getElementById('themeToggle').addEventListener('click', function(){
+  const html = document.documentElement;
+  const dark = html.getAttribute('data-theme')==='dark';
+  if(dark){html.removeAttribute('data-theme');this.innerHTML='<i class="fa-solid fa-moon"></i>';}
+  else{html.setAttribute('data-theme','dark');this.innerHTML='<i class="fa-solid fa-sun"></i>';}
+});
+
+// ---- analyst disclosure ----
+function toggleAnalyst(){document.getElementById('analystBlock').classList.toggle('open');}
+function openAnalystFromChat(){
+  const b=document.getElementById('analystBlock');b.classList.add('open');
+  b.scrollIntoView({behavior:'smooth',block:'center'});
+}
+
+// ---- chat drives canvas ----
+function flashList(){
+  const el = document.getElementById('riskList');
+  el.scrollIntoView({behavior:'smooth',block:'start'});
+  el.classList.remove('flash');void el.offsetWidth;el.classList.add('flash');
+  document.querySelectorAll('#riskBody tr').forEach((tr,i)=>{
+    setTimeout(()=>{tr.classList.remove('flash');void tr.offsetWidth;tr.classList.add('flash');}, i*70);
+  });
+}
+
+// ---- toast ----
+function toast(msg, icon){
+  const w = document.getElementById('toastWrap');
+  const t = document.createElement('div');
+  t.className='toast';
+  t.innerHTML=`<i class="fa-solid ${icon||'fa-circle-check'}"></i> ${msg}`;
+  w.appendChild(t);
+  setTimeout(()=>{t.style.transition='opacity .4s';t.style.opacity='0';setTimeout(()=>t.remove(),400);},3600);
+}
+
+// ---- actions ----
+function saveScores(btn){
+  toast('Renewal Risk saved to 1,284 member records ✓','fa-floppy-disk');
+}
+function startOutreach(btn){
+  toast('318 members added to list "At-Risk Renewals — Q3" ✓','fa-paper-plane');
+}
+function saveScoresFromChat(btn){
+  saveScores(btn);
+  markDone(btn,'Saved to records ✓');
+}
+function startOutreachFromChat(btn){
+  startOutreach(btn);
+  markDone(btn,'Outreach started ✓');
+}
+function markDone(btn,label){
+  btn.classList.add('done');
+  btn.innerHTML=`<i class="fa-solid fa-circle-check"></i> ${label}`;
+}
+
+// ---- weak model modal ----
+function openWeak(){document.getElementById('weakModal').classList.add('open');}
+function closeWeak(){document.getElementById('weakModal').classList.remove('open');}
+document.getElementById('weakModal').addEventListener('click',function(e){if(e.target===this)closeWeak();});
+</script>
+</body>
+</html>

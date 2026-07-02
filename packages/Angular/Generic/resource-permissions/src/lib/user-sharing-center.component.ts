@@ -17,7 +17,7 @@ import {
     PermissionAction,
 } from '@memberjunction/core';
 import { PermissionEngine } from '@memberjunction/core-entities';
-import { MJDialogAction, MJDialogService, MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
+import { MJAccordionModule, MJDialogAction, MJDialogService, MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 /** Which tab the Sharing Center is currently displaying. */
@@ -87,7 +87,7 @@ export const DefaultSharingEntityResolver = (domainName: string): string | null 
 @Component({
     standalone: true,
     selector: 'mj-user-sharing-center',
-    imports: [CommonModule, MJEmptyStateComponent],
+    imports: [CommonModule, MJEmptyStateComponent, MJAccordionModule],
     changeDetection: ChangeDetectionStrategy.OnPush,
     templateUrl: './user-sharing-center.component.html',
     styleUrls: ['./user-sharing-center.component.css'],
@@ -215,8 +215,12 @@ export class UserSharingCenterComponent extends BaseAngularComponent implements 
         }
     }
 
-    ToggleGroup(group: SharingCenterDomainGroup): void {
-        group.Expanded = !group.Expanded;
+    /**
+     * Apply the expand/collapse state emitted by the accordion panel for a domain
+     * group. OnPush, so an explicit detectChanges() is required to reflect the change.
+     */
+    OnGroupExpandedChange(group: SharingCenterDomainGroup, expanded: boolean): void {
+        group.Expanded = expanded;
         this.cdr.detectChanges();
     }
 

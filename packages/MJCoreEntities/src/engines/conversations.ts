@@ -714,9 +714,22 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             conversation.LinkedRecordID = options.linkedRecordId;
         }
 
-        const saved = await conversation.Save();
-        if (!saved) {
-            throw new Error(conversation.LatestResult?.Message || 'Failed to create conversation');
+        // Guard our own save event: the engine's BaseEntity event handler
+        // (handleConversationEntityEvent) ALSO prepends a conversation it doesn't yet
+        // hold. When the save event is dispatched synchronously during Save(), that
+        // handler runs BEFORE the explicit prepend below, finds nothing in the list, and
+        // adds the conversation — then the prepend adds it a SECOND time, producing a
+        // duplicate row in the sidebar (cleared on refresh, since LoadConversations
+        // re-fetches clean). Wrapping in _selfMutating makes the handler skip our own
+        // mutation, mirroring every other mutating method here (SaveConversation, etc.).
+        this._selfMutating = true;
+        try {
+            const saved = await conversation.Save();
+            if (!saved) {
+                throw new Error(conversation.LatestResult?.Message || 'Failed to create conversation');
+            }
+        } finally {
+            this._selfMutating = false;
         }
 
         // The engine's cached list represents the main Chat app's view —
@@ -726,7 +739,9 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         // cockpit-originated conversation would pop into main chat the
         // moment it's created even though LoadConversations() filters it
         // out on next refresh.
-        if (conversation.ApplicationScope !== 'Application') {
+        // The GetConversation() check is belt-and-suspenders against a save event that
+        // slips past _selfMutating (e.g. async dispatch) — never add the same ID twice.
+        if (conversation.ApplicationScope !== 'Application' && !this.GetConversation(conversation.ID)) {
             const updated = [conversation, ...this._conversations$.value];
             this._conversations$.next(updated);
         }

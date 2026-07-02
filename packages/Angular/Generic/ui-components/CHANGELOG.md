@@ -1,5 +1,34 @@
 # @memberjunction/ng-ui-components
 
+## 5.44.0
+
+### Minor Changes
+
+- f8be8a0: Consolidate collapsible/disclosure UI onto the canonical `<mj-accordion-panel>` across MJ Explorer, and level up the accordion component itself.
+
+  **`@memberjunction/ng-ui-components` (the component):**
+  - New **`MJAccordionModule`** — bundles the panel + all three slot directives (`mjAccordionTitle`, `mjAccordionActions`, `mjAccordionBody`) so consumers import one symbol instead of four (works in both NgModule and standalone `imports`). An NgModule is used because AOT can't expand a value-array across a compiled-package boundary (NG1010) and an `as const` tuple is rejected by the `imports` type (TS2322).
+  - New lazy **`[mjAccordionBody]`** slot — heavy bodies (code editors, grids, charts) instantiate on first expand and stay alive for animated re-toggle, so consumers don't have to reason about content weight or hand-write `@if (expanded)`.
+  - Hardening: `--sm`/`--disabled`/`--muted-icon` modifiers scoped to child combinators (no nested-panel style bleed); `hasBeenExpanded` made non-public per naming conventions; added a DOM test proving the module exposes every declarable.
+
+  **~50 disclosure surfaces migrated** from bespoke `<div (click)>`-header + `@if` markup to `<mj-accordion-panel>` across 20 Angular packages — dashboard-viewer config panels, DevTools Class Registry, Version History diff/snapshot groups, the test-run dialog, Explorer section toggles (about-dialog, sql-logging, SystemDiagnostics, App Roles, Home add-pin, Integration activity, Actions/Permissions/Credentials/Testing/ComponentStudio), and Generic components (agents, clustering, conversations, search, entity-viewer, filter-builder, record-tags, resource-permissions, core-entity-forms). Each replaces a non-focusable `<div (click)>` header with a real `<button [attr.aria-expanded]>` — a genuine accessibility improvement, not cosmetic — and deletes the per-consumer collapse chrome CSS. Card-based collapsibles, trees, and fill-panes are intentionally out of scope (they route to their own primitives).
+
+  No public API changes in the consumer packages (internal refactor). Verified: all affected package test suites pass, CI UI gates green (design tokens + button overrides), and a full audit confirmed side-effects preserved with two visual regressions caught and fixed (SystemDiagnostics severity tint restored with semantic tokens; cluster-scatter members list scroll-confined via `[Fill]`).
+  </content>
+
+- 1e5e449: Add `<mj-alert>` — the canonical inline alert/banner component — and migrate the bespoke inline alerts across MJ Explorer onto it.
+
+  **New component** (`@memberjunction/ng-ui-components`): `MJAlertComponent` is the standardized, persistent in-flow message box (info / success / warning / error) — distinct from the transient corner toast (`NotificationService`). Standalone, design-token-driven, dark-mode-safe.
+  - Inputs: `Variant` (info/success/warning/error), `Size` (sm/md), `Title`, `Message`, `Icon` (per-variant default, overridable), `Dismissible` (+ `Dismissed` output), `Role` (auto ARIA `alert`/`status`).
+  - An `[actions]` content slot for buttons, default `<ng-content>` for rich bodies, dynamic `[Variant]` for state-driven banners.
+  - Backgrounds use an **opaque** status tint (`color-mix` into the surface) so an alert renders identically regardless of the backdrop behind it, plus a default bottom margin so it drops into flow content cleanly.
+
+  **Migration**: replaced the hand-rolled alert `<div>`s (`.alert`, `*-banner`, `error-message`/`info-box`/etc.) across the entire dashboards package and explorer-settings, explorer-core, core-entity-forms, and the Generic packages (artifacts, list-management, entity-viewer, agents, conversations, testing, actions, base-forms, resource-permissions). Dead per-component box CSS removed; original top/horizontal margins preserved via positioning-only classes. A `check:alerts` CI gate measures adoption and prevents new hand-rolled alerts from regressing.
+
+### Patch Changes
+
+- 0476455: Migrate inline empty-state placeholders to the canonical `<mj-empty-state>` component across Explorer and Generic Angular packages (UI-consistency objective O4), wiring the component into the packages that needed it (and adding `@memberjunction/ng-ui-components` as a dependency where missing). Also fixes reset-filter CTA correctness in three picker dialogs (sub-agent selector, add-action, action gallery) where the handler cleared only a subset of the active filter dimensions, and refines the UI adoption measurement script with a transparent three-tier empty-state count (raw widened → non-placeholder false-positives → wrappers-around-migrated → genuine).
+
 ## 5.43.0
 
 ### Patch Changes
