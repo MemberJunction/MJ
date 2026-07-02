@@ -10730,6 +10730,10 @@ The context is now within limits. Please retry your request with the recovered c
 
         // Guard: intersect the requested IDs with the agent-accepted ∩ user-permitted set.
         const allowed = AIEngine.Instance.GetSkillsForAgent(params.agent, params.contextUser);
+        const droppedIds = requestedIds.filter(id => !allowed.some(s => UUIDsEqual(id, s.ID)));
+        if (droppedIds.length > 0) {
+            this.notifyDroppedSkillRequests(droppedIds, params);
+        }
         const newlyActivated = allowed.filter(
             s => requestedIds.some(id => UUIDsEqual(id, s.ID)) &&
                  !this._activatedSkillIDs.some(id => UUIDsEqual(id, s.ID))
@@ -10757,6 +10761,40 @@ The context is now within limits. Please retry your request with the recovered c
             metadata: {
                 turnAdded: this._promptTurnCount,
                 messageType: 'skill-activation'
+            }
+        } as AgentChatMessage);
+    }
+
+    /**
+     * Handles user-requested skill IDs that failed the activation guard (agent-accepted ∩
+     * user-permitted). A silent drop leaves both the user AND the agent blind to the refusal —
+     * the agent then improvises around the missing capability instead of explaining it. This
+     * emits a server-side warning log and injects a system note into the conversation so the
+     * agent tells the user why the skill isn't available rather than working around it.
+     *
+     * @protected
+     */
+    protected notifyDroppedSkillRequests(droppedIds: string[], params: ExecuteAgentParams): void {
+        const names = droppedIds.map(
+            id => AIEngine.Instance.Skills.find(s => UUIDsEqual(s.ID, id))?.Name ?? id
+        );
+        const reason = params.agent.AcceptsSkills === 'None'
+            ? `agent '${params.agent.Name}' does not accept skills (AcceptsSkills='None')`
+            : `the skill(s) are not available to agent '${params.agent.Name}' — not Active, not assigned to it (AcceptsSkills='Limited'), or the user lacks Run permission`;
+        LogErrorEx({
+            message: `Requested skill activation dropped for [${names.join(', ')}]: ${reason}`,
+            severity: 'warning',
+            category: 'AgentSkills'
+        });
+        if (!params.conversationMessages) {
+            params.conversationMessages = [];
+        }
+        params.conversationMessages.push({
+            role: 'user',
+            content: `SYSTEM NOTE: The user requested activation of the following skill(s) for this run: ${names.join(', ')}. The request was NOT honored because ${reason}. Briefly inform the user that the requested skill(s) are not available to you and, if appropriate, suggest an agent that accepts skills or that an administrator can grant this capability. Do NOT attempt to build, delegate, or improvise a workaround for the missing capability.`,
+            metadata: {
+                turnAdded: this._promptTurnCount,
+                messageType: 'skill-activation-refused'
             }
         } as AgentChatMessage);
     }

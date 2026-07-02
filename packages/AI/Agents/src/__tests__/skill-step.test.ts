@@ -200,6 +200,46 @@ describe('preActivateRequestedSkills (requested-skill guard)', () => {
     });
 });
 
+// Mirrors BaseAgent.notifyDroppedSkillRequests: requested IDs absent from the guarded allowed set
+// are surfaced (warning log + injected system note) instead of vanishing. The reason text branches
+// on the agent's AcceptsSkills value: 'None' (agent opts out entirely) vs anything else (skill not
+// Active / not assigned under 'Limited' / user lacks Run permission). Note that dropped-detection
+// ignores the already-activated list — re-requesting an ACTIVE skill is a harmless no-op, not a drop.
+function selectDroppedRequests(requestedIds: string[], allowedSkills: MockSkill[]): string[] {
+    return requestedIds.filter(id => !allowedSkills.some(s => s.ID === id));
+}
+function droppedReasonKind(acceptsSkills: string): 'agent-opts-out' | 'not-available' {
+    return acceptsSkills === 'None' ? 'agent-opts-out' : 'not-available';
+}
+
+describe('notifyDroppedSkillRequests (dropped-request detection)', () => {
+    it('flags a requested ID that is not in the allowed set', () => {
+        expect(selectDroppedRequests(['s1', 's9'], SKILLS)).toEqual(['s9']);
+    });
+
+    it('flags every requested ID when the agent accepts no skills (empty allowed set)', () => {
+        expect(selectDroppedRequests(['s1', 's2'], [])).toEqual(['s1', 's2']);
+    });
+
+    it('flags nothing when all requested IDs are allowed', () => {
+        expect(selectDroppedRequests(['s1', 's2'], SKILLS)).toEqual([]);
+        expect(selectDroppedRequests([], SKILLS)).toEqual([]);
+    });
+
+    it('does NOT flag a re-request of an already-active allowed skill (idempotent no-op, not a drop)', () => {
+        // 's1' already active: selectPreActivations skips it, but it is still in the allowed set,
+        // so dropped-detection must not report it.
+        expect(selectPreActivations(['s1'], SKILLS, ['s1'])).toHaveLength(0);
+        expect(selectDroppedRequests(['s1'], SKILLS)).toEqual([]);
+    });
+
+    it("selects the agent-opts-out reason only for AcceptsSkills='None'", () => {
+        expect(droppedReasonKind('None')).toBe('agent-opts-out');
+        expect(droppedReasonKind('All')).toBe('not-available');
+        expect(droppedReasonKind('Limited')).toBe('not-available');
+    });
+});
+
 // =============================================================================
 // v5.45 — Skill Activation Governance & Observability
 // =============================================================================

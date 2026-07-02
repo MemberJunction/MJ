@@ -1607,7 +1607,7 @@ export type AgentChatMessageMetadata = {
     /** Whether this message has expired */
     isExpired?: boolean;
     /** Type of message (for lifecycle management and logging) */
-    messageType?: 'action-result' | 'client-tool-result' | 'tool-result' | 'loop-result' | 'sub-agent-result' | 'skill-activation' | 'chat' | 'system' | 'user';
+    messageType?: 'action-result' | 'client-tool-result' | 'tool-result' | 'loop-result' | 'sub-agent-result' | 'skill-activation' | 'skill-activation-refused' | 'chat' | 'system' | 'user';
     /** Name of the sub-agent (only for sub-agent-result messages) */
     subAgentName?: string;
     /** ID of the sub-agent (only for sub-agent-result messages) */
