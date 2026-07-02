@@ -101,12 +101,31 @@ export class ExternalDataSourceRouter extends BaseSingleton<ExternalDataSourceRo
     return { dataSource, dataSourceType, driver };
   }
 
-  /** Evict a cached driver (or all of them) — e.g. after editing a data source's config. */
-  public ClearCache(dataSourceId?: string): void {
+  /**
+   * Evict a cached driver (or all of them) — e.g. after editing a data source's config — and CLOSE its
+   * live connection pool so the eviction doesn't orphan open remote connections. Async because closing
+   * a pool is async; awaits the (memoized) resolution so it closes the same driver instance callers use.
+   */
+  public async ClearCache(dataSourceId?: string): Promise<void> {
     if (dataSourceId) {
-      this.driverCache.delete(dataSourceId);
+      await this.evictAndClose(dataSourceId);
     } else {
-      this.driverCache.clear();
+      await Promise.all(Array.from(this.driverCache.keys()).map((id) => this.evictAndClose(id)));
+    }
+  }
+
+  /** Remove one data source's cached driver and best-effort close its pool. */
+  private async evictAndClose(dataSourceId: string): Promise<void> {
+    const entry = this.driverCache.get(dataSourceId);
+    this.driverCache.delete(dataSourceId);
+    if (!entry) {
+      return;
+    }
+    try {
+      const { driver } = await entry;
+      await driver.CloseConnection(dataSourceId);
+    } catch {
+      // Resolution never completed (nothing to close) or the close failed — best-effort on the evict path.
     }
   }
 }

@@ -122,6 +122,10 @@ describe('PostgresExternalDataSourceDriver — SQL building', () => {
       expect(clause).toBe('"id" = $1');
       expect(values).toEqual(["1 OR 1=1"]);
     });
+
+    it('throws on an empty key set rather than building a match-everything WHERE', () => {
+      expect(() => d.pkWhere([], (i) => `$${i + 1}`)).toThrow(/at least one primary-key/i);
+    });
   });
 
   describe('mapObjectType', () => {

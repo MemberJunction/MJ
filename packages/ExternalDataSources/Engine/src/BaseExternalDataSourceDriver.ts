@@ -174,6 +174,16 @@ export abstract class BaseExternalDataSourceDriver<TConnection = unknown> {
   protected abstract invalidateConnection(dataSourceId: string): Promise<void>;
 
   /**
+   * Public entry point to close (and evict) the cached connection/pool for a data source — used by
+   * {@link ExternalDataSourceRouter.ClearCache} so evicting a driver actually releases its live remote
+   * connections rather than orphaning the pool. Thin wrapper over the protected {@link invalidateConnection};
+   * safe to call when nothing is cached for the id.
+   */
+  public async CloseConnection(dataSourceId: string): Promise<void> {
+    await this.invalidateConnection(dataSourceId);
+  }
+
+  /**
    * Runs a read operation and, if it fails with what looks like an auth/credential error, evicts
    * the cached connection (so the retry re-resolves the credential and reconnects) and retries
    * exactly once. This self-heals the common "credential rotated / token expired while a pooled

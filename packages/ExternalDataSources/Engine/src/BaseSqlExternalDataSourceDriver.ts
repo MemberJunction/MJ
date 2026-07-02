@@ -67,6 +67,11 @@ export abstract class BaseSqlExternalDataSourceDriver<TConnection = unknown> ext
     primaryKeys: readonly ExternalQueryParameter[],
     placeholder: (index: number) => string,
   ): { clause: string; values: Array<ExternalQueryParameter["value"]> } {
+    // Defense in depth: an empty key set would otherwise yield `WHERE ` (malformed SQL that could match
+    // every row). The router guards this before calling LoadSingle, but a direct caller must not slip through.
+    if (primaryKeys.length === 0) {
+      throw new Error("buildPrimaryKeyWhere requires at least one primary-key value.");
+    }
     const parts: string[] = [];
     const values: Array<ExternalQueryParameter["value"]> = [];
     primaryKeys.forEach((pk, i) => {
