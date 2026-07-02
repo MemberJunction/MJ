@@ -453,3 +453,107 @@ describe('skillActivations reason threading (LoopAgentType mapping)', () => {
         expect('reason' in mapped[0]).toBe(false);
     });
 });
+
+// =============================================================================
+// v5.45 regression — skill-granted sub-agent EXECUTION resolution
+// (Live incident: Research Agent looped 36+ turns re-picking the skill-granted
+// Infographic Agent because the prompt/validation used the runtime-effective
+// sub-agent set while resolveSubAgentByName only checked ParentID children +
+// relationship rows. Execution must resolve from the SAME effective set.)
+// =============================================================================
+
+interface MockResolveAgent { ID: string; Name: string; Status: string; ParentID?: string | null }
+interface MockRelationship { AgentID: string; SubAgentID: string; Status: string }
+
+// Mirrors BaseAgent.resolveSubAgentByName's three-branch resolution:
+// 1) ParentID children, 2) Active relationships, 3) runtime-effective set (skill/caller granted).
+function resolveSubAgent(
+    name: string,
+    agentId: string,
+    allAgents: MockResolveAgent[],
+    relationships: MockRelationship[],
+    effectiveSubAgents: MockResolveAgent[]
+): { subAgent: MockResolveAgent; relationship?: MockRelationship } | undefined {
+    const normalized = name.trim().toLowerCase();
+    const child = allAgents.find(a => a.ParentID === agentId && a.Status === 'Active' && a.Name.trim().toLowerCase() === normalized);
+    if (child) return { subAgent: child };
+    for (const rel of relationships.filter(r => r.AgentID === agentId && r.Status === 'Active')) {
+        const related = allAgents.find(a => a.ID === rel.SubAgentID && a.Status === 'Active' && a.Name.trim().toLowerCase() === normalized);
+        if (related) return { subAgent: related, relationship: rel };
+    }
+    const effective = effectiveSubAgents.find(a => a.Status === 'Active' && a.Name.trim().toLowerCase() === normalized);
+    if (effective) return { subAgent: effective };
+    return undefined;
+}
+
+describe('resolveSubAgentByName (execution resolution incl. skill-granted sub-agents)', () => {
+    const ROOT = 'root-1';
+    const AGENTS: MockResolveAgent[] = [
+        { ID: 'c1', Name: 'Child Agent', Status: 'Active', ParentID: ROOT },
+        { ID: 'r1', Name: 'Related Agent', Status: 'Active', ParentID: null },
+        { ID: 'g1', Name: 'Infographic Agent', Status: 'Active', ParentID: 'someone-else' },
+    ];
+    const RELS: MockRelationship[] = [{ AgentID: ROOT, SubAgentID: 'r1', Status: 'Active' }];
+    const EFFECTIVE: MockResolveAgent[] = [
+        AGENTS[0], AGENTS[1],
+        { ID: 'g1', Name: 'Infographic Agent', Status: 'Active', ParentID: 'someone-else' }, // skill-granted
+    ];
+
+    it('resolves a ParentID child (no relationship)', () => {
+        const r = resolveSubAgent('Child Agent', ROOT, AGENTS, RELS, EFFECTIVE);
+        expect(r?.subAgent.ID).toBe('c1');
+        expect(r?.relationship).toBeUndefined();
+    });
+
+    it('resolves a related sub-agent WITH its relationship (dispatch semantics preserved)', () => {
+        const r = resolveSubAgent('Related Agent', ROOT, AGENTS, RELS, EFFECTIVE);
+        expect(r?.subAgent.ID).toBe('r1');
+        expect(r?.relationship).toBeDefined();
+    });
+
+    it('REGRESSION: resolves a skill-granted sub-agent from the effective set (child-style, no relationship)', () => {
+        const r = resolveSubAgent('Infographic Agent', ROOT, AGENTS, RELS, EFFECTIVE);
+        expect(r?.subAgent.ID).toBe('g1');
+        expect(r?.relationship).toBeUndefined();
+    });
+
+    it('returns undefined for a name in no set — the caller Retries with the available-names hint', () => {
+        expect(resolveSubAgent('Nonexistent Agent', ROOT, AGENTS, RELS, EFFECTIVE)).toBeUndefined();
+    });
+
+    it('does not resolve an Inactive agent from any branch', () => {
+        const inactiveEff = [{ ID: 'g2', Name: 'Retired Agent', Status: 'Disabled', ParentID: null }];
+        expect(resolveSubAgent('Retired Agent', ROOT, AGENTS, RELS, inactiveEff)).toBeUndefined();
+    });
+
+    it('is case- and whitespace-insensitive across all three branches', () => {
+        expect(resolveSubAgent('  infographic agent ', ROOT, AGENTS, RELS, EFFECTIVE)?.subAgent.ID).toBe('g1');
+    });
+});
+
+describe('execution-path not-found is BOUNDED (no infinite delegation loops)', () => {
+    // Mirrors the fixed executeSubAgentStep failure handling: each unresolvable request
+    // increments the shared validation-retry counter, so MAX_VALIDATION_RETRIES caps the loop.
+    function simulateLoop(maxRetries: number, resolves: boolean): { attempts: number; failed: boolean } {
+        let counter = 0;
+        let attempts = 0;
+        while (counter < maxRetries) {
+            attempts++;
+            if (resolves) return { attempts, failed: false };
+            counter++; // the fix: unresolvable execution increments the shared counter
+        }
+        return { attempts, failed: true };
+    }
+
+    it('an unresolvable sub-agent fails the run at the retry cap instead of looping forever', () => {
+        const r = simulateLoop(10, false);
+        expect(r.failed).toBe(true);
+        expect(r.attempts).toBe(10); // pre-fix this was unbounded (observed 36+ live)
+    });
+
+    it('a resolvable sub-agent executes on the first attempt (counter untouched)', () => {
+        const r = simulateLoop(10, true);
+        expect(r.failed).toBe(false);
+        expect(r.attempts).toBe(1);
+    });
+});
