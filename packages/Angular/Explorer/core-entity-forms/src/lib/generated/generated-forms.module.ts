@@ -369,6 +369,9 @@ import { MJUserNotificationTypeFormComponent } from "./Entities/MJUserNotificati
 import { MJUserNotificationFormComponent } from "./Entities/MJUserNotification/mjusernotification.form.component";
 import { MJUserRecordLogFormComponent } from "./Entities/MJUserRecordLog/mjuserrecordlog.form.component";
 import { MJUserRoleFormComponent } from "./Entities/MJUserRole/mjuserrole.form.component";
+import { MJUserRoutineRecipientFormComponent } from "./Entities/MJUserRoutineRecipient/mjuserroutinerecipient.form.component";
+import { MJUserRoutineRunFormComponent } from "./Entities/MJUserRoutineRun/mjuserroutinerun.form.component";
+import { MJUserRoutineFormComponent } from "./Entities/MJUserRoutine/mjuserroutine.form.component";
 import { MJUserSettingFormComponent } from "./Entities/MJUserSetting/mjusersetting.form.component";
 import { MJUserViewCategoryFormComponent } from "./Entities/MJUserViewCategory/mjuserviewcategory.form.component";
 import { MJUserViewRunDetailFormComponent } from "./Entities/MJUserViewRunDetail/mjuserviewrundetail.form.component";
@@ -1018,12 +1021,12 @@ declarations: [
     MJUserNotificationFormComponent,
     MJUserRecordLogFormComponent,
     MJUserRoleFormComponent,
+    MJUserRoutineRecipientFormComponent,
+    MJUserRoutineRunFormComponent,
+    MJUserRoutineFormComponent,
     MJUserSettingFormComponent,
     MJUserViewCategoryFormComponent,
-    MJUserViewRunDetailFormComponent,
-    MJUserViewRunFormComponent,
-    MJUserViewFormComponent,
-    MJUserFormComponent],
+    MJUserViewRunDetailFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -1040,6 +1043,9 @@ export class GeneratedForms_SubModule_17 { }
 
 @NgModule({
 declarations: [
+    MJUserViewRunFormComponent,
+    MJUserViewFormComponent,
+    MJUserFormComponent,
     MJVectorDatabaseFormComponent,
     MJVectorIndexFormComponent,
     MJVersionInstallationFormComponent,

@@ -2912,6 +2912,56 @@
         }
     </mj-collapsible-panel>
 
+    <!-- User Routine Recipients Section -->
+    <mj-collapsible-panel
+        SectionKey="mJUserRoutineRecipients"
+        SectionName="User Routine Recipients"
+        Icon="fa fa-paper-plane"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJUserRoutineRecipients')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: User Routine Recipients','UserID')"
+                [NewRecordValues]="NewRecordValues('MJ: User Routine Recipients')"
+                [AllowLoad]="IsSectionExpanded('mJUserRoutineRecipients')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJUserRoutineRecipients', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- User Routines Section -->
+    <mj-collapsible-panel
+        SectionKey="mJUserRoutines"
+        SectionName="User Routines"
+        Icon="fa fa-sync-alt"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJUserRoutines')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: User Routines','UserID')"
+                [NewRecordValues]="NewRecordValues('MJ: User Routines')"
+                [AllowLoad]="IsSectionExpanded('mJUserRoutines')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJUserRoutines', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-related" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
 </mj-record-form-container>
         
