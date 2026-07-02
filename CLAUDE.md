@@ -415,6 +415,24 @@ If `my-feature` tracks `origin/next`:
 
 **This is a non-negotiable safety requirement.**
 
+## 🚨 Integration Testing — REQUIRED Before Any Project Is "Done" 🚨
+
+MemberJunction has a **live, headless integration suite** at [`packages/MJServer/integration-test-scripts/`](packages/MJServer/integration-test-scripts/) that exercises real server componentry against the live dev database (real SQLServerDataProvider, real engines, real entity saves — no mocks, no LLM calls in the deterministic tier). It sits between unit tests and the browser regression suite and catches the **seams between packages** that unit tests mock away.
+
+**The rule: no feature/PR is considered DONE until the deterministic integration tier has been run headless and passes.** Unit tests passing is necessary but NOT sufficient.
+
+```bash
+# The whole deterministic tier (from repo root) — REQUIRED before declaring done
+npm run test:integration
+
+# A single suite while iterating
+npx tsx packages/MJServer/integration-test-scripts/ai-skills-tests.ts
+```
+
+- The **deterministic tier** runs by default: credential-light, self-cleaning fixtures, no LLM cost. The **live-model tier** (real agent/prompt runs) is gated behind `RUN_AGENT_TESTS=1`; the **Predictive Studio tier** behind `PS_INTEGRATION=1`.
+- **Extend the suite with every feature.** When you ship server-side capability (new engine methods, new columns with runtime semantics, new gates), add deterministic cases to the matching `*-tests.ts` script (or create one and register it in `run-all.ts`). New suites must be **self-cleaning** (create + delete their own fixtures, tagged `(mj-integration-test — safe to delete)`) and reference-only toward existing records. Update the folder README's suite table when you do.
+- Suites live against the real DB, so run them AFTER migrations + CodeGen have been applied — they double as a smoke test that the schema, generated types, and engines agree.
+
 ## Unit Testing
 
 MemberJunction uses **Vitest** as the standard unit testing framework across all packages. Jest has been deprecated and all packages are migrated to Vitest.
