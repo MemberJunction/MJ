@@ -9,8 +9,9 @@ The driver runs each bundle's `NamedCheck[]` in array order against one bootstra
 `IntegrationCheckContext`; the per-check pass/fail lands in `TestRun.ResultDetails` as a bare
 `OracleResult[]` (one per check, `oracleType = checkId`).
 
-Counts: server 23 default / 26 with `runMutationTests`; client 11 default / 12 with `runMutationTests`;
-runquery 9 (the whole bundle mutates the DB by design, so it is not mutation-gated).
+Counts: server 26 default / 31 with `runMutationTests`; client 12 default / 13 with `runMutationTests`;
+runquery 10 (the whole bundle mutates the DB by design, so it is not mutation-gated). These counts
+include the net-new checks below (S27 / S28 / S29 / S30 / S31 / Q10 / C13 and AGG3 / DS3 / RLS4 in their bundles).
 
 | Orig id | Suite file | New Test (`MJ: Tests.Name`) | Bundle `type` | `checkId` | Mutating? | Needs MJAPI? |
 |---|---|---|---|---|---|---|
@@ -79,6 +80,27 @@ Query). Engine-level `SetupSuite`/`TeardownSuite` hooks do not exist until Phase
 the fixtures (`createRunQueryFixtures`) before the bundle's checks and tears them down
 (`teardownRunQueryFixtures`) in a `finally` — driver-level, inside the bundle. The tsx script does the
 same in its `main()`. Both consume the **one** shared fixture lifecycle in `runquery-cache.checks.ts`.
+
+## Net-new checks (post-migration coverage)
+
+Additional cache-integrity invariants the migrated checks did not cover. Each is a `NamedCheck` in
+its bundle, run by the driver/scripts exactly like the migrated ones.
+
+| `checkId` | Bundle | Invariant verified |
+|---|---|---|
+| `server-cache.S27` | `server-cache` | OrderBy is part of the cache identity — ASC vs DESC never cross-serve (S15 only exercised one OrderBy) |
+| `server-cache.S28` | `server-cache` | `IgnoreMaxRows` returns all rows (skips the entity `UserViewMaxRows` cap) even when the capped query was cached first |
+| `server-cache.S29` | `server-cache` | (mutation) a stored view honors its own WhereClause through the cache — a filtered view and the plain entity query do not cross-serve |
+| `server-cache.S30` | `server-cache` | (mutation) renaming a parent record refreshes cached child rows that denormalize its name |
+| `server-cache.S31` | `server-cache` | (security) a user lacking read permission is never served cached rows — read-permission is enforced regardless of cache state |
+| `runquery-cache.Q10` | `runquery-cache` | a TTL slot serves byte-identical row DATA on the hit (Q2 only checked row count) |
+| `client-cache.C13` | `client-cache` | AggregateResults are returned in the caller's requested order over the GraphQL/client transport |
+| `dataset-cache.DS3` | `dataset-cache` | `ClearDatasetCache` flips both status APIs back to false (DS2 only proved the positive) |
+| `rls-isolation.RLS4` | `rls-isolation` | empty RLS clause shares the slot / non-empty diverges — always-runnable (RLS1/RLS2 skip when a DB has no two distinct RLS users) |
+| `aggregates-cache.AGG3` | `aggregates-cache` | AggregateResults are returned in the caller's requested order, even when a reordered-but-equivalent aggregate query was cached first |
+
+> Several of these invariants are **not yet satisfied by the current implementation**; the specific
+> gaps (and proposed fixes) are documented in [`CACHE_INTEGRITY_BUGS.md`](./CACHE_INTEGRITY_BUGS.md).
 
 ## Ordering is load-bearing
 

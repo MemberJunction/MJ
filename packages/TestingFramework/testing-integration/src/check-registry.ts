@@ -9,10 +9,11 @@
  * is guaranteed across the process even when bundlers duplicate module code.
  */
 import { BaseSingleton } from '@memberjunction/global';
-import { NamedCheck } from './check';
+import { NamedCheck, BundleLifecycle } from './check';
 
 export class IntegrationCheckRegistry extends BaseSingleton<IntegrationCheckRegistry> {
     private checks = new Map<string, NamedCheck>();
+    private lifecycles = new Map<string, BundleLifecycle>();
 
     protected constructor() {
         super();
@@ -35,5 +36,19 @@ export class IntegrationCheckRegistry extends BaseSingleton<IntegrationCheckRegi
     /** All checks whose Id starts with `<prefix>.` (e.g. GetBundle('server-cache')). */
     public GetBundle(prefix: string): NamedCheck[] {
         return [...this.checks.values()].filter(c => c.Id.startsWith(prefix + '.'));
+    }
+
+    /**
+     * Register a bundle's setup/teardown lifecycle (mutating bundles that share a fixture).
+     * Both the driver and the standalone dispatcher scripts look this up by bundle name so a
+     * bundle's fixture is created/torn down identically on either execution path.
+     */
+    public RegisterLifecycle(bundle: string, lifecycle: BundleLifecycle): void {
+        this.lifecycles.set(bundle, lifecycle);
+    }
+
+    /** The lifecycle for a bundle, or undefined when the bundle needs no shared fixture. */
+    public GetLifecycle(bundle: string): BundleLifecycle | undefined {
+        return this.lifecycles.get(bundle);
     }
 }

@@ -328,3 +328,15 @@ export const RunQueryCacheChecks: NamedCheck[] = [
 for (const check of RunQueryCacheChecks) {
     IntegrationCheckRegistry.Instance.Register(check);
 }
+
+// The bundle's shared Query/Category fixtures, run through the generic bundle-lifecycle hook so the
+// driver and the dispatcher script create/tear them down identically (was a hardcoded driver special-case).
+IntegrationCheckRegistry.Instance.RegisterLifecycle('runquery-cache', {
+    Setup: async ctx => { ctx.Fixtures = await createRunQueryFixtures(ctx); },
+    Teardown: async ctx => {
+        if (ctx.Fixtures) {
+            await teardownRunQueryFixtures(ctx, ctx.Fixtures);
+            ctx.Fixtures = undefined;
+        }
+    }
+});

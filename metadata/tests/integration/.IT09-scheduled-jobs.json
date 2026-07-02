@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT09 - Scheduled Jobs Engine Lifecycle",
+    "Description": "Exercises the Scheduling engine's run lifecycle + distributed lease against the live DB, independent of what the job's driver does (the job points at a missing Record Process so the driver fails fast + deterministically — the engine contract runs identically on success or failure). SJ1: ExecuteScheduledJob persists a terminal MJ: Scheduled Job Run and increments the job's stats (RunCount, LastRunAt). SJ2: the distributed lock (LockToken/ExpectedCompletionAt) is released after the run so the job is immediately re-runnable, and a second execution bumps RunCount to 2. The bundle creates + tears down its own job/run fixtures.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "A run persists a terminal Scheduled Job Run + increments stats; the lease is released and the job is immediately re-runnable."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "scheduled-jobs"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "4AE5D806-62A1-4D9E-AED3-4F3DD85748D0"
+  },
+  "sync": {
+    "lastModified": "2026-07-02T18:38:01.282Z",
+    "checksum": "004b41dd8f5bc635c2f961b730aacdbaa2d6eb801c38027903a2a37b11013288"
+  }
+}

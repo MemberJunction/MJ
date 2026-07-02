@@ -9,6 +9,7 @@ export * from './tiers';
 export * from './instrumented-cache';
 export * from './test-runner';
 export * from './bootstrap';
+export * from './ai-verify';
 export * from './check';
 export * from './check-registry';
 export * from './types';
@@ -23,6 +24,19 @@ export * from './checks/runquery-cache.checks';
 export * from './checks/rls-isolation.checks';
 export * from './checks/dataset-cache.checks';
 export * from './checks/aggregates-cache.checks';
+export * from './checks/record-process.checks';
+export * from './checks/record-process-facade.checks';
+export * from './checks/scheduled-jobs.checks';
+export * from './checks/field-rules-bulk-update.checks';
+export * from './checks/remote-operations.checks';
+export * from './checks/ai-skills.checks';
+export * from './checks/api-keys.checks';
+export * from './checks/predictive-studio.checks';
+export * from './checks/remote-op-wire-progress.checks';
+export * from './checks/prompt-runner.checks';
+export * from './checks/agent-runner.checks';
+export * from './checks/concurrent.checks';
+export * from './checks/remote-op-ai-authoring.checks';
 
 // Side-effect only: the permanent Phase-0 smoke check (no exports of its own).
 import './checks/self-test.check';

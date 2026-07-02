@@ -7,8 +7,20 @@
  * each check in try/catch and maps the outcome onto an OracleResult — there is no
  * separate per-check result interface.
  */
-import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
-import type { MJQueryEntity, MJQueryCategoryEntity } from '@memberjunction/core-entities';
+import type { UserInfo, IMetadataProvider, RowLevelSecurityFilterInfo } from '@memberjunction/core';
+import type {
+    MJQueryEntity,
+    MJQueryCategoryEntity,
+    MJRecordProcessEntity,
+    MJScheduledJobEntity,
+    MJTemplateEntity,
+    MJTemplateContentEntity,
+    MJAISkillEntity,
+    MJRemoteOperationEntity,
+    MJMLTrainingPipelineEntity,
+    MJMLModelEntity,
+    MJMLModelScoringBindingEntity
+} from '@memberjunction/core-entities';
 import type sql from 'mssql';
 import type { InstrumentedLocalStorageProvider } from './instrumented-cache';
 
@@ -47,6 +59,138 @@ export interface RlsFixture {
     Usable: boolean;
     /** Why the fixture is unusable (for the skip note), when Usable is false. */
     Reason?: string;
+    /**
+     * A `{{UserID}}`-scoped RLS filter discovered from the provider's RowLevelSecurityFilters,
+     * for the token-substitution (RLS1) and distinct-predicate-text (RLS2) checks. Present
+     * independently of `Usable` — those checks only need a `{{UserID}}` filter (+ one or two
+     * distinct users), NOT two divergent effective clauses. Undefined ⇒ those checks skip-as-pass.
+     */
+    TokenFilter?: RowLevelSecurityFilterInfo;
+    /**
+     * A single non-exempt (user, entity) pair — a user with a NON-empty effective Read clause
+     * for that entity — for the live-RunView scoping check (RLS5). Present independently of the
+     * two-user `Usable` flag (needs only one non-exempt user). Undefined ⇒ RLS5 skips-as-pass.
+     */
+    LivePair?: { User: UserInfo; EntityName: string };
+    /**
+     * The two seeded, purpose-built RLS test users (`it-rls-a@` / `it-rls-b@integration.test`), each in
+     * ONLY the "Integration Test: RLS Scoped Reader" role — so both are genuinely scoped (non-exempt) on
+     * `MJ: AI Agent Runs`. Resolved by email from the user cache. When present, the deterministic checks
+     * RLS8/RLS9 exercise real multi-user isolation without depending on which pair discovery happens to
+     * pick; undefined (seed not pushed) ⇒ those checks skip-as-pass.
+     */
+    SeededScopedA?: UserInfo;
+    SeededScopedB?: UserInfo;
+    /**
+     * The seeded no-grant test user (`it-nogrant@integration.test`, no roles) — has NO read permission on
+     * `MJ: AI Agent Runs`, for the negative isolation check RLS10 (a user with no grant is served no rows).
+     * Replaces the incidental reliance on `anonymous@magic-link.local`. Undefined ⇒ RLS10 skips-as-pass.
+     */
+    SeededNoGrant?: UserInfo;
+}
+
+/** An accumulator of `{ entity, id }` rows a mutating bundle created and must delete in FK-safe order. */
+export interface CreatedRow {
+    entity: string;
+    id: string;
+}
+
+/** Minimal shape of a cached catalog entry (Action / Agent) the ai-skills fixture references by id + name. */
+export interface NamedRef {
+    ID: string;
+    Name: string;
+}
+
+/**
+ * Shared fixture for the `record-process-facade` bundle: one real `MJ: Record Processes`
+ * definition (0-row Filter scope, deterministic) reused by both checks, plus the ProcessRun
+ * IDs the checks create (appended at run time) so teardown can remove them before the process.
+ */
+export interface RecordProcessFacadeFixture {
+    Rp: MJRecordProcessEntity;
+    CreatedRunIds: string[];
+}
+
+/**
+ * Shared fixture for the `scheduled-jobs` bundle: one real `MJ: Scheduled Jobs` row (pointed at a
+ * missing Record Process so its driver fails fast + deterministically) reused across the ordered
+ * SJ1→SJ2 lifecycle checks. SchedulingEngine is a singleton accessed directly by the checks.
+ */
+export interface ScheduledJobsFixture {
+    Job: MJScheduledJobEntity;
+}
+
+/**
+ * Shared fixture for the `field-rules-bulk-update` bundle: the resolved entity ID + the IDs of the
+ * three throwaway `MJ: Action Categories` created in setup and reused across the ordered FR1→FR3 checks.
+ */
+export interface FieldRulesFixture {
+    EntityID: string;
+    Ids: string[];
+}
+
+/**
+ * Shared fixture for the `remote-operations` bundle: a throwaway Template (+ Text content), a
+ * FieldRules Record Process, and two Action Categories, reused across the ordered RO1→RO7 checks.
+ * `ControlRunID` is set by RO6 and consumed by RO7 (the control-op run).
+ */
+export interface RemoteOpsFixture {
+    Tmpl: MJTemplateEntity;
+    Content: MJTemplateContentEntity;
+    Rp: MJRecordProcessEntity;
+    CatIds: string[];
+    ActEntity: string;
+    ControlRunID?: string;
+}
+
+/**
+ * Shared fixture for the `ai-skills` bundle: the four skills + referenced FKs created/resolved in
+ * setup, plus the mutable teardown accumulators the checks append to (import checks create new skills
+ * that must be tracked). Deleted in FK-safe order: run steps+runs, grants, junctions, permissions, skills.
+ */
+export interface AiSkillsFixture {
+    SkillActive: MJAISkillEntity;
+    SkillDeprecated: MJAISkillEntity;
+    SkillOpen: MJAISkillEntity;
+    SkillAuto: MJAISkillEntity;
+    AnyAction: NamedRef;
+    BundledSubAgent: NamedRef;
+    GrantTargetAgent: NamedRef;
+    CreatedSkillIds: string[];
+    CreatedJunctionRows: CreatedRow[];
+    CreatedGrantIds: string[];
+    CreatedPermissionIds: string[];
+    CreatedRunFixtures: CreatedRow[];
+}
+
+/**
+ * Shared fixture for the `predictive-studio` bundle: a Pipeline → Model → Scoring Binding lineage chain
+ * (+ resolved FKs) created in setup and reused across the ordered PS1–PS5 seam checks, deleted child→parent.
+ */
+export interface PredictiveStudioFixture {
+    Pipeline: MJMLTrainingPipelineEntity;
+    Model: MJMLModelEntity;
+    Binding: MJMLModelScoringBindingEntity;
+    TargetEntityID: string;
+    AlgorithmID: string;
+}
+
+/**
+ * Shared fixture for the `remote-op-ai-authoring` bundle (live-model): one `MJ: Remote Operations` row
+ * (GenerationType='AI') created in setup and reused across the ordered RO4-1→RO4-3 checks (save→approve→emit),
+ * deleted after.
+ */
+export interface RemoteOpAiAuthoringFixture {
+    Op: MJRemoteOperationEntity;
+}
+
+/**
+ * Shared fixture for the `remote-op-wire-progress` bundle (client transport, needs MJAPI): a FieldRules
+ * Record Process + two Action Categories created over the wire and torn down after the WIRE1 check.
+ */
+export interface RemoteOpWireProgressFixture {
+    Rp: MJRecordProcessEntity;
+    CatIds: string[];
 }
 
 /** The bootstrapped, run-scoped real provider stack handed to every check. */
@@ -65,6 +209,22 @@ export interface IntegrationCheckContext {
     Fixtures?: RunQueryFixtures;
     /** Discovered two-user RLS fixture for the `rls-isolation` bundle (suite-scoped). */
     RlsFixture?: RlsFixture;
+    /** Shared fixture for the `record-process-facade` bundle (setup → checks → teardown). */
+    RpFacadeFixture?: RecordProcessFacadeFixture;
+    /** Shared fixture for the `scheduled-jobs` bundle. */
+    ScheduledJobsFixture?: ScheduledJobsFixture;
+    /** Shared fixture for the `field-rules-bulk-update` bundle. */
+    FieldRulesFixture?: FieldRulesFixture;
+    /** Shared fixture for the `remote-operations` bundle. */
+    RemoteOpsFixture?: RemoteOpsFixture;
+    /** Shared fixture for the `ai-skills` bundle. */
+    AiSkillsFixture?: AiSkillsFixture;
+    /** Shared fixture for the `predictive-studio` bundle. */
+    PredictiveStudioFixture?: PredictiveStudioFixture;
+    /** Shared fixture for the `remote-op-ai-authoring` bundle (live-model). */
+    RemoteOpAiAuthoringFixture?: RemoteOpAiAuthoringFixture;
+    /** Shared fixture for the `remote-op-wire-progress` bundle (client transport). */
+    RemoteOpWireProgressFixture?: RemoteOpWireProgressFixture;
     /**
      * The opaque per-selector `config` bag from `Test.Configuration.checks[].config`,
      * set by the driver/script before each bundle runs. Bundles read their own keys
@@ -89,4 +249,16 @@ export interface NamedCheck {
     RequiresMutation?: boolean;
     /** Gated tier — runs only when RUN_AGENT_TESTS is set (live-model checks). */
     RequiresLiveModel?: boolean;
+}
+
+/**
+ * Bundle-scoped setup/teardown for a mutating bundle. Setup creates the shared fixture and assigns
+ * it onto the context (e.g. `ctx.AiSkillsFixture = ...`); Teardown removes everything the bundle
+ * created in FK-safe order. The driver and the standalone dispatcher scripts both wrap a bundle's
+ * checks in `Setup` → run → `Teardown` (guaranteed finally), so the two front-ends share one
+ * definition. Teardown must be best-effort (never throw) so a check failure still cleans up.
+ */
+export interface BundleLifecycle {
+    Setup(ctx: IntegrationCheckContext): Promise<void>;
+    Teardown(ctx: IntegrationCheckContext): Promise<void>;
 }

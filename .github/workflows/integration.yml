@@ -1,0 +1,29 @@
+name: Integration Tier
+
+# Deterministic integration tier (D5.3). Runs the in-process cache/RLS/RunQuery suites
+# against a fresh DB on every PR that touches the relevant code or the integration metadata.
+#
+# The SQL Server lane is the BLOCKING gate and is defined ONCE in the reusable
+# integration-run.yml (same Docker db-setup pipeline the release suite uses — no duplicated,
+# separately-drifting provisioning).
+
+on:
+  pull_request:
+    branches: [next]
+    paths:
+      - 'package-lock.json'
+      - 'packages/**'
+      - 'metadata/test-types/**'
+      - 'metadata/tests/integration/**'
+      - 'metadata/test-suites/**'
+      - 'docker/regression/**'
+      - '.github/workflows/integration.yml'
+      - '.github/workflows/integration-run.yml'
+  workflow_dispatch:
+
+jobs:
+  # Blocking gate — the SQL Server deterministic tier, defined once and shared with
+  # release-test.yml. Default checkout (no ref) = this PR's merge commit.
+  integration-sqlserver:
+    name: Integration (SQL Server, deterministic)
+    uses: ./.github/workflows/integration-run.yml

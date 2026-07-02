@@ -4,6 +4,20 @@ import type { NamedCheck } from '../check';
 import { ServerCacheChecks } from '../checks/server-cache.checks';
 import { ClientCacheChecks } from '../checks/client-cache.checks';
 import { RunQueryCacheChecks } from '../checks/runquery-cache.checks';
+import { RlsIsolationChecks, RlsIsolationClientChecks } from '../checks/rls-isolation.checks';
+import { RecordProcessChecks } from '../checks/record-process.checks';
+import { RecordProcessFacadeChecks } from '../checks/record-process-facade.checks';
+import { ScheduledJobsChecks } from '../checks/scheduled-jobs.checks';
+import { FieldRulesBulkUpdateChecks } from '../checks/field-rules-bulk-update.checks';
+import { RemoteOperationsChecks } from '../checks/remote-operations.checks';
+import { AiSkillsChecks } from '../checks/ai-skills.checks';
+import { ApiKeysChecks } from '../checks/api-keys.checks';
+import { PredictiveStudioChecks } from '../checks/predictive-studio.checks';
+import { RemoteOpWireProgressChecks } from '../checks/remote-op-wire-progress.checks';
+import { PromptRunnerChecks } from '../checks/prompt-runner.checks';
+import { ConcurrentChecks } from '../checks/concurrent.checks';
+import { AgentRunnerChecks } from '../checks/agent-runner.checks';
+import { RemoteOpAiAuthoringChecks } from '../checks/remote-op-ai-authoring.checks';
 
 const makeCheck = (id: string): NamedCheck => ({ Id: id, Name: id, Fn: async () => { /* pass */ } });
 
@@ -36,7 +50,22 @@ describe('migrated bundles (coverage-loss guard)', () => {
     const bundles: Array<[string, NamedCheck[], number]> = [
         ['server-cache', ServerCacheChecks, 31],
         ['client-cache', ClientCacheChecks, 13],
-        ['runquery-cache', RunQueryCacheChecks, 10]
+        ['runquery-cache', RunQueryCacheChecks, 10],
+        ['rls-isolation', RlsIsolationChecks, 9],
+        ['rls-isolation-client', RlsIsolationClientChecks, 1],
+        ['record-process', RecordProcessChecks, 8],
+        ['record-process-facade', RecordProcessFacadeChecks, 2],
+        ['scheduled-jobs', ScheduledJobsChecks, 2],
+        ['field-rules-bulk-update', FieldRulesBulkUpdateChecks, 3],
+        ['remote-operations', RemoteOperationsChecks, 7],
+        ['ai-skills', AiSkillsChecks, 21],
+        ['api-keys', ApiKeysChecks, 3],
+        ['predictive-studio', PredictiveStudioChecks, 5],
+        ['remote-op-wire-progress', RemoteOpWireProgressChecks, 1],
+        ['prompt-runner', PromptRunnerChecks, 1],
+        ['concurrent', ConcurrentChecks, 2],
+        ['agent-runner', AgentRunnerChecks, 1],
+        ['remote-op-ai-authoring', RemoteOpAiAuthoringChecks, 3]
     ];
 
     for (const [prefix, checks, expectedCount] of bundles) {

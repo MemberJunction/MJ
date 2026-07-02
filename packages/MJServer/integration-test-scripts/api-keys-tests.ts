@@ -1,102 +1,60 @@
 /**
  * api-keys-tests.ts — live integration tests for the API Keys engine against REAL database metadata.
  *
- * The PatternMatcher / ScopeEvaluator pure logic already has unit specs; this exercises the engine
- * end-to-end against the actual seeded scopes/applications + a real key with real scope rules:
- *   - AK1: Config() loads the real seeded API Scopes (entity:read, agent:execute, full_access, ...)
- *   - AK2: Config() loads the real seeded API Applications (MJAPI, ...)
- *   - AK3: a real key with an explicit ALLOW rule (entity:read) and an explicit DENY rule
- *          (entity:delete) authorizes/denies correctly through Authorize() — then is cleaned up.
+ * Thin dispatcher: bootstraps the real server provider stack and runs the 'api-keys' bundle
+ * (AK1–AK3) from the shared IntegrationCheckRegistry, wrapping it in the bundle's registered
+ * lifecycle (Setup configures the in-process API Keys engine so AK1/AK2 read the seeded
+ * scopes/apps; Teardown is a no-op — AK3 self-cleans its own key/scope/log fixtures). The check
+ * bodies live ONCE in @memberjunction/testing-integration and are consumed identically by this
+ * script and by the IntegrationTestDriver.
  *
- * Deterministic (no model calls). Creates + deletes its own key/scope fixtures (try/finally cleanup).
+ * Deterministic (no model calls). Creates + deletes its own key/scope fixtures (AK3 try/finally).
  *
  * USAGE (from the repo root):
  *   npx tsx packages/MJServer/integration-test-scripts/api-keys-tests.ts
+ * Optional:
+ *   EMIT_OUTCOMES=<path>  — also write the golden-diff outcomes JSON.
  *
  * Exit code: 0 = passed, 1 = failures, 2 = bootstrap error.
  */
-import { TestRunner, Assert, AssertEqual } from './lib/harness';
-import { bootstrapAI } from './lib/ai-bootstrap';
-import { RunView } from '@memberjunction/core';
-import { MJAPIKeyEntity, MJAPIKeyScopeEntity, MJAPIKeyUsageLogEntity } from '@memberjunction/core-entities';
-import { GetAPIKeyEngine } from '@memberjunction/api-keys';
+import {
+    TestRunner, EmitOutcomes, IntegrationCheckRegistry, bootstrapIntegrationServer
+} from './lib/harness';
+import type { IntegrationCheckContext } from './lib/harness';
 
-const TEST_LABEL = 'mj-integration-test-key (safe to delete)';
+const BUNDLE = 'api-keys';
 
 async function main(): Promise<void> {
-    const { user, provider } = await bootstrapAI();
-    const suite = new TestRunner('API Keys engine live integration (real scopes/apps + end-to-end authorize)');
+    const ic = await bootstrapIntegrationServer({ ContextUserEmail: process.env.MJ_TEST_USER_EMAIL });
+    const ctx: IntegrationCheckContext = {
+        User: ic.User,
+        Provider: ic.Provider,
+        Storage: ic.Storage,
+        Pool: ic.Pool,
+        Schema: ic.Db.Schema
+    };
 
-    const engine = GetAPIKeyEngine();
-    await engine.Config(true, user);
-
-    suite.Test('AK1: Config() loads the real seeded API Scopes from the database', async () => {
-        const paths = new Set(engine.Scopes.map((s) => s.FullPath));
-        for (const expected of ['full_access', 'entity:read', 'entity:delete', 'agent:execute']) {
-            Assert(paths.has(expected), `seeded scope '${expected}' not loaded (got ${engine.Scopes.length} scopes)`);
+    const reg = IntegrationCheckRegistry.Instance;
+    const lifecycle = reg.GetLifecycle(BUNDLE);
+    let failures = 0;
+    if (lifecycle) {
+        await lifecycle.Setup(ctx);
+    }
+    try {
+        const suite = new TestRunner('API Keys engine live integration (real scopes/apps + end-to-end authorize)');
+        for (const check of reg.GetBundle(BUNDLE)) {
+            suite.Test(check.Name, () => check.Fn(ctx));
         }
-        console.log(`      → ${engine.Scopes.length} scopes loaded (full_access, entity:*, agent:* present)`);
-    });
-
-    suite.Test('AK2: Config() loads the real seeded API Applications', async () => {
-        const apps = new Set(engine.Applications.map((a) => a.Name));
-        Assert(apps.has('MJAPI'), `seeded application 'MJAPI' not loaded (got: ${[...apps].join(', ')})`);
-        console.log(`      → ${engine.Applications.length} applications loaded (${[...apps].join(', ')})`);
-    });
-
-    suite.Test('AK3: a real key authorizes an explicitly-granted scope and denies an explicitly-denied one', async () => {
-        const md = provider;
-        const readScope = engine.Scopes.find((s) => s.FullPath === 'entity:read');
-        const deleteScope = engine.Scopes.find((s) => s.FullPath === 'entity:delete');
-        Assert(!!readScope && !!deleteScope, 'entity:read / entity:delete scopes not found in seeded metadata');
-
-        // --- create a real key + two explicit scope rules (allow read, deny delete) ---
-        const created = await engine.CreateAPIKey({ UserId: user.ID, Label: TEST_LABEL }, user);
-        Assert(created.Success && !!created.RawKey && !!created.APIKeyId, `CreateAPIKey failed: ${created.Error}`);
-        const hash = engine.HashAPIKey(created.RawKey!);
-        const cleanup: Array<() => Promise<unknown>> = [];
-
-        try {
-            for (const [scope, isDeny] of [[readScope!, false], [deleteScope!, true]] as const) {
-                const rule = await md.GetEntityObject<MJAPIKeyScopeEntity>('MJ: API Key Scopes', user);
-                rule.NewRecord();
-                rule.APIKeyID = created.APIKeyId!;
-                rule.ScopeID = scope.ID;
-                rule.ResourcePattern = '*';
-                rule.PatternType = 'Include';
-                rule.IsDeny = isDeny;
-                rule.Priority = isDeny ? 10 : 0;
-                Assert(await rule.Save(), `saving key scope failed: ${rule.LatestResult?.CompleteMessage}`);
-                cleanup.push(() => rule.Delete());
-            }
-            await engine.Config(true, user); // reload so the new key + rules are in cache
-
-            const allow = await engine.Authorize(hash, 'MJAPI', 'entity:read', 'Users', user);
-            Assert(allow.Allowed, `entity:read should be allowed: ${allow.Reason}`);
-
-            const deny = await engine.Authorize(hash, 'MJAPI', 'entity:delete', 'Users', user);
-            AssertEqual(deny.Allowed, false, `entity:delete should be denied (explicit deny rule): ${deny.Reason}`);
-
-            console.log(`      → key ${created.APIKeyId}: entity:read ALLOWED, entity:delete DENIED (real rules)`);
-        } finally {
-            for (const del of cleanup.reverse()) {
-                await del().catch(() => undefined);
-            }
-            // Authorize() writes audit rows to API Key Usage Logs (FK on APIKeyID) — remove them before the key.
-            const logs = await new RunView().RunView<MJAPIKeyUsageLogEntity>(
-                { EntityName: 'MJ: API Key Usage Logs', ExtraFilter: `APIKeyID='${created.APIKeyId}'`, ResultType: 'entity_object' }, user,
-            );
-            for (const log of logs.Results ?? []) {
-                await log.Delete().catch(() => undefined);
-            }
-            const key = await md.GetEntityObject<MJAPIKeyEntity>('MJ: API Keys', user);
-            if (await key.Load(created.APIKeyId!)) {
-                await key.Delete().catch(() => undefined);
-            }
+        failures = await suite.Run();
+        if (process.env.EMIT_OUTCOMES) {
+            await EmitOutcomes(suite, process.env.EMIT_OUTCOMES);
         }
-    });
-
-    const failures = await suite.Run();
+    } finally {
+        if (lifecycle) {
+            await lifecycle.Teardown(ctx);
+        }
+    }
+    await ic.ClosePool();
     process.exit(failures > 0 ? 1 : 0);
 }
 

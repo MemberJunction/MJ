@@ -29,7 +29,8 @@ import {
     OracleResult,
     SuiteFixtureContext
 } from '@memberjunction/testing-engine';
-import type { UserInfo } from '@memberjunction/core';
+import { Metadata } from '@memberjunction/core';
+import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import type sql from 'mssql';
 import {
@@ -46,14 +47,11 @@ import { IntegrationCheckRegistry } from './check-registry';
 import { IntegrationTestConfig, IntegrationCheckSelectionConfig } from './types';
 import { IntegrationTier, TIER_ENV_GATE, IsTierEnabled } from './tiers';
 import { TestOutcome, writeOutcomesFile } from './test-runner';
-import { createRunQueryFixtures, teardownRunQueryFixtures } from './checks/runquery-cache.checks';
 import { discoverRlsFixture } from './checks/rls-isolation.checks';
 
 const TARGET_TYPE = 'Integration Check Bundle';
 /** Bundles that run against the GraphQL client transport (everything else: SQL server). */
-const CLIENT_BUNDLES = new Set(['client-cache', 'rls-isolation-client']);
-/** The one bundle that needs self-contained Query/Category fixtures. */
-const FIXTURE_BUNDLE = 'runquery-cache';
+const CLIENT_BUNDLES = new Set(['client-cache', 'rls-isolation-client', 'remote-op-wire-progress']);
 /** Bundles that need the discovered two-user RLS fixture threaded into the context. */
 const RLS_BUNDLES = new Set(['rls-isolation', 'rls-isolation-client']);
 /** Key under SuiteFixtureContext.Data where the discovered RLS fixture is stashed. */
@@ -229,12 +227,16 @@ export class IntegrationTestDriver extends BaseTestDriver {
         }
 
         const runMutation = selConfig?.runMutationTests === true;
-        const needsFixtures = bundleType === FIXTURE_BUNDLE;
-        if (needsFixtures) {
+
+        // A mutating bundle registers a lifecycle (setup creates a shared fixture on the context,
+        // teardown removes it). Run its Setup before the checks; a Setup failure short-circuits the
+        // bundle with one failing 'fixtures' oracle (never re-thrown). Teardown is guaranteed in finally.
+        const lifecycle = IntegrationCheckRegistry.Instance.GetLifecycle(bundleType);
+        if (lifecycle) {
             try {
-                checkCtx.Fixtures = await createRunQueryFixtures(checkCtx);
+                await lifecycle.Setup(checkCtx);
             } catch (fxErr) {
-                const message = `runquery-cache fixture setup failed: ${(fxErr as Error).message}`;
+                const message = `${bundleType} fixture setup failed: ${(fxErr as Error).message}`;
                 oracleResults.push({ oracleType: `${bundleType}.fixtures`, passed: false, score: 0, message, details: { DurationMs: 0 } });
                 outcomes.push({ Name: `${bundleType}.fixtures`, Passed: false, DurationMs: 0, Error: message });
                 this.logToTestRun(context, 'error', message);
@@ -261,9 +263,13 @@ export class IntegrationTestDriver extends BaseTestDriver {
                 await this.runCheck(context, checkCtx, check.Id, check.Name, check.Fn, oracleResults, outcomes);
             }
         } finally {
-            if (needsFixtures && checkCtx.Fixtures) {
-                await teardownRunQueryFixtures(checkCtx, checkCtx.Fixtures);
-                checkCtx.Fixtures = undefined;
+            if (lifecycle) {
+                // Best-effort — a teardown failure must never mask a check result or leave TestRun 'Running'.
+                try {
+                    await lifecycle.Teardown(checkCtx);
+                } catch (tdErr) {
+                    this.logToTestRun(context, 'warn', `${bundleType} teardown warning: ${(tdErr as Error).message}`);
+                }
             }
         }
     }
@@ -328,16 +334,23 @@ export class IntegrationTestDriver extends BaseTestDriver {
         const activeBootstrap = getActiveIntegrationBootstrap();
         let pool: sql.ConnectionPool | undefined = activeBootstrap?.Pool;
         let schema: string | undefined = activeBootstrap?.Db.Schema;
+        // The REAL database provider (a DatabaseProviderBase): the bootstrap's own provider when a
+        // bootstrap ran in-process, else the global one installed by the CLI's initializeMJProvider.
+        // NOT `this.Provider` — its getter returns a `new Metadata()` FACADE when the engine injected
+        // no provider, and the facade lacks IRemoteOperationProvider.RouteOperation (so remote-op
+        // checks would fail with "No remote-operation-capable provider"). Dedicated single-provider
+        // process (D1), so the global is unambiguous and matches what the tsx dispatcher passes.
+        let provider: IMetadataProvider = activeBootstrap?.Provider ?? Metadata.Provider;
         if (!storage) {
             const ic = await bootstrapIntegrationServer();
             storage = ic.Storage;
             pool = ic.Pool;
             schema = ic.Db.Schema;
+            provider = ic.Provider;
         }
         return {
             User: context.contextUser,
-            // Dedicated single-provider process: the driver's provider IS the global one.
-            Provider: this.Provider,
+            Provider: provider,
             Storage: storage,
             Pool: pool,
             Schema: schema ?? (process.env.MJ_CORE_SCHEMA ?? '__mj')

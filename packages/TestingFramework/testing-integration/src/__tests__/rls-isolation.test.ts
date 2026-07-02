@@ -25,6 +25,24 @@ function providerWith(entityName: string, clauseFor: (u: UserInfo) => string): I
     return { Entities: [entity] } as unknown as IMetadataProvider;
 }
 
+/**
+ * Build a mock provider that also exposes RowLevelSecurityFilters, so the extended
+ * TokenFilter/LivePair discovery can be exercised. Each filter carries FilterText and a
+ * MarkupFilterText that substitutes `{{UserID}}` with the user's id (mirrors the real one).
+ */
+function providerWithFilters(
+    entityName: string,
+    clauseFor: (u: UserInfo) => string,
+    filterTexts: string[]
+): IMetadataProvider {
+    const base = providerWith(entityName, clauseFor) as unknown as { Entities: EntityInfo[] };
+    const filters = filterTexts.map(text => ({
+        FilterText: text,
+        MarkupFilterText: (u: UserInfo) => text.replace(/\{\{UserID\}\}/g, u.ID)
+    }));
+    return { Entities: base.Entities, RowLevelSecurityFilters: filters } as unknown as IMetadataProvider;
+}
+
 describe('discoverRlsFixture', () => {
     it('finds two distinct users with DIFFERENT non-empty clauses (the common {{UserID}} case)', () => {
         const users = [user('u1', 'a@x'), user('u2', 'b@x')];
@@ -75,6 +93,72 @@ describe('discoverRlsFixture', () => {
 
         expect(fx.Usable).toBe(true);
         expect([fx.UserA.ID, fx.UserB.ID].sort()).toEqual(['u1', 'u2']);
+    });
+});
+
+describe('discoverRlsFixture — extended fixture pieces (TokenFilter, LivePair)', () => {
+    it('discovers a {{UserID}}-scoped TokenFilter and it substitutes to the user id', () => {
+        const users = [user('u1', 'a@x'), user('u2', 'b@x')];
+        const provider = providerWithFilters('AI Agent Runs', u => `UserID = '${u.ID}'`, [
+            `TenantID = 'fixed'`, // a non-{{UserID}} filter (should be skipped)
+            `UserID = '{{UserID}}'` // the token filter we expect discovery to pick
+        ]);
+
+        const fx = discoverRlsFixture(provider, users);
+
+        expect(fx.TokenFilter).toBeDefined();
+        expect(fx.TokenFilter!.FilterText).toContain('{{UserID}}');
+        expect(fx.TokenFilter!.MarkupFilterText(users[0])).toContain('u1');
+        expect(fx.TokenFilter!.MarkupFilterText(users[0])).not.toContain('{{UserID}}');
+    });
+
+    it('leaves TokenFilter undefined when no {{UserID}} filter exists', () => {
+        const users = [user('u1', 'a@x'), user('u2', 'b@x')];
+        const provider = providerWithFilters('E', u => `UserID = '${u.ID}'`, [`TenantID = 'fixed'`]);
+
+        expect(discoverRlsFixture(provider, users).TokenFilter).toBeUndefined();
+    });
+
+    it('discovers a LivePair (first non-exempt user + entity) when a scoped user exists', () => {
+        const users = [user('owner', 'o@x'), user('u1', 'a@x')];
+        // owner is exempt (empty clause); u1 gets a real clause on the entity.
+        const provider = providerWith('AI Agent Runs', u => (u.ID === 'owner' ? '' : `UserID = '${u.ID}'`));
+
+        const fx = discoverRlsFixture(provider, users);
+
+        expect(fx.LivePair).toBeDefined();
+        expect(fx.LivePair!.User.ID).toBe('u1');
+        expect(fx.LivePair!.EntityName).toBe('AI Agent Runs');
+    });
+
+    it('leaves LivePair undefined when every user is RLS-exempt', () => {
+        const users = [user('u1', 'a@x'), user('u2', 'b@x')];
+        const provider = providerWith('E', () => '');
+
+        expect(discoverRlsFixture(provider, users).LivePair).toBeUndefined();
+    });
+
+    it('resolves the seeded RLS test users by email (case-insensitive) when present', () => {
+        const users = [
+            user('a', 'IT-RLS-A@integration.test'),   // case-insensitive match
+            user('b', 'it-rls-b@integration.test'),
+            user('c', 'it-nogrant@integration.test'),
+            user('x', 'someone@else.test'),
+        ];
+        const fx = discoverRlsFixture(providerWith('E', () => ''), users);
+
+        expect(fx.SeededScopedA?.ID).toBe('a');
+        expect(fx.SeededScopedB?.ID).toBe('b');
+        expect(fx.SeededNoGrant?.ID).toBe('c');
+    });
+
+    it('leaves the seeded users undefined when the seed is absent', () => {
+        const users = [user('u1', 'a@x'), user('u2', 'b@x')];
+        const fx = discoverRlsFixture(providerWith('E', () => ''), users);
+
+        expect(fx.SeededScopedA).toBeUndefined();
+        expect(fx.SeededScopedB).toBeUndefined();
+        expect(fx.SeededNoGrant).toBeUndefined();
     });
 });
 

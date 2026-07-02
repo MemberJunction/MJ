@@ -2,7 +2,7 @@
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
     "Name": "IT06 - RLS Multi-User Cache Isolation",
-    "Description": "Proves User A's RLS-filtered cache entry can never serve User B. RLS1: two distinct effective RLS clauses yield distinct cache fingerprints (the rls:<hash> segment of GenerateRunViewFingerprint). RLS2: on the server superset slot (TrustLocalCacheCompletely), User B's identical read is a separate cold slot — not a hit on User A's slot — and no A-scoped rows leak. RLS4: an empty effective RLS clause does not change the fingerprint (RLS-exempt users keep sharing slots) while a non-empty clause does — an always-runnable fingerprint invariant that holds even on databases with no two distinct RLS users. Two-user fixture is DISCOVERED (never minted) from the provider's RLS filters + the user cache; degrades gracefully (skip-as-pass) when the DB has only RLS-exempt admins. The #1 security item from the #2824 backlog.",
+    "Description": "Proves User A's RLS-filtered data can never reach User B, end to end. The unified rls-isolation bundle (superset of the two implementations that coexisted after the next merge) runs RLS1-RLS6: RLS1 the {{UserID}} token substitutes to the user's own id (predicate markup works); RLS2 two distinct users get DIFFERENT self-scoped predicate text (SQL-level segregation); RLS3 two distinct effective clauses yield distinct cache fingerprints (the rls:<hash> segment of GenerateRunViewFingerprint); RLS4 on the server superset slot (TrustLocalCacheCompletely), User B's identical read is a separate cold slot — not a hit on User A's slot — and no A-scoped rows leak; RLS5 a live cache-bypassing RunView as a non-exempt user returns ONLY rows satisfying its RLS predicate; RLS6 an empty effective RLS clause does not change the fingerprint (RLS-exempt users keep sharing slots) while a non-empty clause does — an always-runnable invariant that holds even on databases with no two distinct RLS users. Plus RLS8-RLS10, which run DETERMINISTICALLY against three purpose-built seeded users (metadata/users: it-rls-a / it-rls-b each in ONLY the 'Integration Test: RLS Scoped Reader' role → genuinely scoped on MJ: AI Agent Runs; it-nogrant with no roles): RLS8 the two scoped users get distinct non-empty clauses + distinct fingerprints; RLS9 a live RunView as a scoped user returns only its own rows; RLS10 the no-grant user is served ZERO rows (negative case — replaces the old incidental reliance on anonymous@magic-link.local). The token/two-user/live-pair fixture is DISCOVERED (never minted) from the provider's RLS filters + the user cache, and the seeded users are resolved by email; each check degrades gracefully (skip-as-pass) when its fixture piece is unavailable (e.g. before the seed metadata is pushed). The #1 security item from the #2824 backlog.",
     "InputDefinition": {},
     "ExpectedOutcomes": {
       "summary": "Distinct RLS clauses => distinct cache fingerprints (empty clause => shared slot); User B never served from User A's slot; no cross-user rows."
@@ -25,7 +25,7 @@
     "ID": "C5B7E959-8620-42D7-857D-92796460DF62"
   },
   "sync": {
-    "lastModified": "2026-06-29T16:15:47.534Z",
-    "checksum": "9fcda39d9813576fe634864a6d6e3d5841bbd300de35de0c4170f15967b433bd"
+    "lastModified": "2026-07-02T18:38:01.179Z",
+    "checksum": "cae0451d200a083e763e26db1f8ccddf25e669f56eb49574d4f77e47e7e77efd"
   }
 }

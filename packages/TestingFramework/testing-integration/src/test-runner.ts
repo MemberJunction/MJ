@@ -112,6 +112,12 @@ export function Assert(condition: boolean, message: string): void {
     }
 }
 
+/**
+ * Sleep for `ms` — lets fire-and-forget run/step/detail saves (BaseEntitySaveQueue) land before a
+ * check reads them back. Lifted from the tsx harness so graduated bundles read it from the package.
+ */
+export const settle = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));
+
 export function AssertEqual<T>(actual: T, expected: T, message: string): void {
     if (actual !== expected) {
         throw new Error(`${message} — expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);

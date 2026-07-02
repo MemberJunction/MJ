@@ -1,0 +1,56 @@
+name: Integration Tier (reusable)
+
+# Single source of truth for the deterministic integration tier (D5.2/D5.3). Provisions
+# ONLY sqlserver + db-setup (migrations + AssociationDB + CodeGen + metadata push, all in
+# the tested db-setup container), then runs the in-process aggregator inside the test-runner
+# container — overriding its browser entrypoint. RUN_AGENT_TESTS is deliberately unset
+# (deterministic tier only; no token cost / flakiness, D5).
+#
+# Called by:
+#   - integration.yml      (on: pull_request)     — the blocking PR gate
+#   - release-test.yml      (on: workflow_dispatch) — the release validation suite
+#
+# Note: this reuses the SAME Docker pipeline the release suite uses, so the aggregator runs
+# byte-for-byte identically on PRs and at release time, and the migrate/CodeGen/metadata path
+# is the one db-setup already maintains (no hand-rolled, separately-drifting provisioning).
+# `npm run test:integration` runs run-all.ts → the standalone tsx scripts, which bootstrap
+# their own process and read checks from the registry directly — so NO Test/Suite metadata
+# push is required here (that path is only exercised by `mj test suite`, not the aggregator).
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: 'Git ref to test (defaults to the caller''s triggering ref)'
+        required: false
+        type: string
+
+jobs:
+  integration:
+    name: Integration Tier (deterministic, SQL Server)
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Provision DB (sqlserver + db-setup only)
+        run: |
+          docker compose -f docker/regression/docker-compose.test.yml \
+            --profile full up -d --build --wait sqlserver db-setup
+        timeout-minutes: 25
+
+      # `run` returns the command's exit code → the harness 0/1/2 contract gates the job.
+      # --no-deps keeps mjapi/mjexplorer down (the deterministic tier runs in-process vs the
+      # DB; client-cache-tests.ts — the only MJAPI-dependent suite — is excluded from run-all.ts).
+      - name: Run integration aggregator
+        run: |
+          docker compose -f docker/regression/docker-compose.test.yml \
+            --profile full run --rm --no-deps --entrypoint sh \
+            test-runner -c "npm run test:integration"
+
+      - name: Tear down
+        if: always()
+        run: docker compose -f docker/regression/docker-compose.test.yml --profile full down -v
