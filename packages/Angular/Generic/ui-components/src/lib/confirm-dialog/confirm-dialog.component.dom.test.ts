@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture } from '@angular/core/testing';
+import { renderComponentFixture, query, queryAll, text, capture } from '@memberjunction/ng-test-utils';
 import { MJConfirmDialogComponent } from './confirm-dialog.component';
 
 /**
@@ -9,53 +10,49 @@ import { MJConfirmDialogComponent } from './confirm-dialog.component';
  * the confirm button color per type, the LEFT-of-Cancel button order, the
  * confirm/cancel emit + auto-close semantics, and the Processing lockdown.
  *
- * Zoneless note: programmatic input state is set via `setInput` before
- * `detectChanges()` so the view is marked dirty the zoneless-correct way.
+ * Uses the shared `renderComponentFixture()` + dom-helpers from
+ * `@memberjunction/ng-test-utils`, which bake in the zoneless-correct setup
+ * order (inputs via `setInput`, then a single `detectChanges`) so specs can't
+ * reintroduce the NG0100 footgun.
  */
 describe('MJConfirmDialogComponent (DOM)', () => {
   function render(inputs: Record<string, unknown> = {}): ComponentFixture<MJConfirmDialogComponent> {
-    const fixture = TestBed.createComponent(MJConfirmDialogComponent);
-    fixture.componentRef.setInput('Visible', true); // default visible; overridable below
-    for (const [k, v] of Object.entries(inputs)) {
-      fixture.componentRef.setInput(k, v);
-    }
-    fixture.detectChanges();
-    return fixture;
+    // Visible defaults to true so most specs assert on the open dialog; overridable per spec.
+    return renderComponentFixture(MJConfirmDialogComponent, { inputs: { Visible: true, ...inputs } });
   }
-  const host = (f: ComponentFixture<MJConfirmDialogComponent>) => f.nativeElement as HTMLElement;
   const confirmBtn = (f: ComponentFixture<MJConfirmDialogComponent>) =>
-    host(f).querySelectorAll('.mj-dialog-actions button')[0] as HTMLButtonElement;
+    queryAll(f, '.mj-dialog-actions button')[0] as HTMLButtonElement;
   const cancelBtn = (f: ComponentFixture<MJConfirmDialogComponent>) =>
-    host(f).querySelectorAll('.mj-dialog-actions button')[1] as HTMLButtonElement;
+    queryAll(f, '.mj-dialog-actions button')[1] as HTMLButtonElement;
 
   it('renders nothing in the DOM when not Visible', () => {
     const f = render({ Visible: false });
-    expect(host(f).querySelector('.mj-confirm')).toBeNull();
+    expect(query(f, '.mj-confirm')).toBeNull();
   });
 
   it('renders the message and the optional detail line', () => {
     const f = render({ Message: 'Delete this?', DetailMessage: 'Cannot be undone.' });
-    expect(host(f).querySelector('.mj-confirm__message')?.textContent?.trim()).toBe('Delete this?');
-    expect(host(f).querySelector('.mj-confirm__detail')?.textContent?.trim()).toBe('Cannot be undone.');
+    expect(text(f, '.mj-confirm__message')).toBe('Delete this?');
+    expect(text(f, '.mj-confirm__detail')).toBe('Cannot be undone.');
   });
 
   it('omits the detail line when DetailMessage is empty', () => {
-    expect(host(render()).querySelector('.mj-confirm__detail')).toBeNull();
+    expect(query(render(), '.mj-confirm__detail')).toBeNull();
   });
 
   it('uses role=alertdialog on the dialog container', () => {
-    expect(host(render()).querySelector('.mj-dialog-container')?.getAttribute('role')).toBe('alertdialog');
+    expect(query(render(), '.mj-dialog-container')?.getAttribute('role')).toBe('alertdialog');
   });
 
   it('chooses the per-type default icon and honors an override', () => {
-    expect(host(render({ Type: 'danger' })).querySelector('.mj-confirm__icon')?.className).toContain('fa-triangle-exclamation');
-    expect(host(render({ Type: 'info' })).querySelector('.mj-confirm__icon')?.className).toContain('fa-circle-info');
-    expect(host(render()).querySelector('.mj-confirm__icon')?.className).toContain('fa-circle-question');
-    expect(host(render({ Icon: 'fa-solid fa-trash' })).querySelector('.mj-confirm__icon')?.className).toContain('fa-trash');
+    expect(query(render({ Type: 'danger' }), '.mj-confirm__icon')?.className).toContain('fa-triangle-exclamation');
+    expect(query(render({ Type: 'info' }), '.mj-confirm__icon')?.className).toContain('fa-circle-info');
+    expect(query(render(), '.mj-confirm__icon')?.className).toContain('fa-circle-question');
+    expect(query(render({ Icon: 'fa-solid fa-trash' }), '.mj-confirm__icon')?.className).toContain('fa-trash');
   });
 
   it('suppresses the icon when Icon=""', () => {
-    expect(host(render({ Icon: '' })).querySelector('.mj-confirm__icon')).toBeNull();
+    expect(query(render({ Icon: '' }), '.mj-confirm__icon')).toBeNull();
   });
 
   it('colors the confirm button danger for Type=danger, primary otherwise', () => {
@@ -72,31 +69,27 @@ describe('MJConfirmDialogComponent (DOM)', () => {
 
   it('emits Confirmed and stays open on confirm', () => {
     const f = render();
-    let confirmed = false;
-    let closed = false;
-    f.componentInstance.Confirmed.subscribe(() => (confirmed = true));
-    f.componentInstance.VisibleChange.subscribe(() => (closed = true));
+    const confirmed = capture(f.componentInstance.Confirmed);
+    const visibleChanges = capture(f.componentInstance.VisibleChange);
 
     confirmBtn(f).click();
     f.detectChanges();
 
-    expect(confirmed).toBe(true);
-    expect(closed).toBe(false); // confirm does NOT auto-close
+    expect(confirmed).toHaveLength(1);
+    expect(visibleChanges).toHaveLength(0); // confirm does NOT auto-close
     expect(f.componentInstance.Visible).toBe(true);
   });
 
   it('emits Cancelled and auto-closes on cancel', () => {
     const f = render();
-    let cancelled = false;
-    let visibleChange: boolean | null = null;
-    f.componentInstance.Cancelled.subscribe(() => (cancelled = true));
-    f.componentInstance.VisibleChange.subscribe((v) => (visibleChange = v));
+    const cancelled = capture(f.componentInstance.Cancelled);
+    const visibleChanges = capture(f.componentInstance.VisibleChange);
 
     cancelBtn(f).click();
     f.detectChanges();
 
-    expect(cancelled).toBe(true);
-    expect(visibleChange).toBe(false);
+    expect(cancelled).toHaveLength(1);
+    expect(visibleChanges).toEqual([false]);
     expect(f.componentInstance.Visible).toBe(false);
   });
 
@@ -109,12 +102,11 @@ describe('MJConfirmDialogComponent (DOM)', () => {
 
   it('blocks dismissal (does not emit Cancelled/close) while Processing', () => {
     const f = render({ Processing: true });
-    let cancelled = false;
-    f.componentInstance.Cancelled.subscribe(() => (cancelled = true));
+    const cancelled = capture(f.componentInstance.Cancelled);
 
     f.componentInstance.onDismiss(); // simulates Esc / backdrop from the underlying dialog
 
-    expect(cancelled).toBe(false);
+    expect(cancelled).toHaveLength(0);
     expect(f.componentInstance.Visible).toBe(true);
   });
 });
