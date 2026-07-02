@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { ComponentFixture } from '@angular/core/testing';
 import { renderComponentFixture, query, queryAll, text, attr, hasClass, click, capture, createFakeProvider } from '@memberjunction/ng-test-utils';
 import { BaseEntity, IMetadataProvider } from '@memberjunction/core';
-import { MjSlidePanelComponent, MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
+import { MjSlidePanelComponent, MJEmptyStateComponent, MJAccordionModule } from '@memberjunction/ng-ui-components';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
 import { RecordTagsComponent } from './record-tags.component';
@@ -47,7 +47,11 @@ function makeRecord(): BaseEntity {
 }
 
 const DECLARATIONS = [RecordTagsComponent];
-const IMPORTS = [CommonModule, MjSlidePanelComponent, SharedGenericModule, MJWordCloudComponent, MJEmptyStateComponent];
+// The Related Records section's template uses <mj-accordion-panel> (+ its title/body slot
+// directives), so the isolated TestBed must register the accordion via MJAccordionModule — the
+// real app gets it through record-tags.module.ts. Without it, rendering the populated branch
+// throws NG0304 ('mj-accordion-panel' is not a known element).
+const IMPORTS = [CommonModule, MjSlidePanelComponent, SharedGenericModule, MJWordCloudComponent, MJEmptyStateComponent, MJAccordionModule];
 
 // Render, then await the component's own async LoadTags() (ngOnInit fire-and-forgets it, and
 // zoneless whenStable() doesn't track that promise), then flush a final CD so the resolved state
@@ -162,18 +166,25 @@ describe('RecordTagsComponent (DOM, data-bound)', () => {
     expect(text(f, '.mj-related-title')).toBe('Related Records');
   });
 
-  it('collapses the Related Records body when the header is clicked', async () => {
+  it('collapses the Related Records accordion when the header is clicked', async () => {
     const f = await renderWithTags(TAGS);
-    // expanded by default → chevron-down, body present (empty-state row)
-    expect(hasClass(f, '.mj-related-header i', 'fa-chevron-down')).toBe(true);
+    // ShowRelated defaults to true, so the accordion is expanded on render.
+    // (The accordion signals expansion via the --expanded class; the chevron icon is
+    // static fa-chevron-down and rotated purely in CSS, and the body is kept alive after
+    // first expand for animation — so collapse is asserted via state + the class, not by
+    // the old bespoke chevron/@if body gating that this section no longer uses.)
+    expect(f.componentInstance.ShowRelated).toBe(true);
+    expect(query(f, '.mj-related-records-section .mj-accordion-panel--expanded')).not.toBeNull();
 
-    click(f, '.mj-related-header');
+    // Clicking the accordion header button toggles Expanded, whose two-way binding
+    // ([(Expanded)]="ShowRelated") flips ShowRelated to false.
+    click(f, '.mj-related-records-section .mj-accordion-header');
     f.detectChanges();
 
-    expect(hasClass(f, '.mj-related-header i', 'fa-chevron-right')).toBe(true);
-    expect(query(f, '.mj-related-empty')).toBeNull();
-    expect(query(f, '.mj-related-loading')).toBeNull();
-    expect(query(f, '.mj-related-list')).toBeNull();
+    expect(f.componentInstance.ShowRelated).toBe(false);
+    expect(query(f, '.mj-related-records-section .mj-accordion-panel--expanded')).toBeNull();
+    // The collapsed body region is marked inert (hidden) by the accordion.
+    expect(attr(f, '.mj-related-records-section .mj-accordion-body-outer', 'inert')).not.toBeNull();
   });
 
   it('emits PanelClosed when the slide panel reports a close', async () => {

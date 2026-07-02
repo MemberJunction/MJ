@@ -5,6 +5,7 @@ import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { CommonModule } from '@angular/common';
 import { ComponentFixture } from '@angular/core/testing';
 import { query, queryAll, text, click, capture, hasClass } from '@memberjunction/ng-test-utils';
+import { MJAccordionModule } from '@memberjunction/ng-ui-components';
 import { MJQueryEntityExtended, MJQueryFieldEntity, MJQueryParameterEntity } from '@memberjunction/core-entities';
 import { QueryInfoPanelComponent } from './query-info-panel.component';
 
@@ -13,8 +14,11 @@ import { QueryInfoPanelComponent } from './query-info-panel.component';
  * It is input-driven; the only data dependency is QueryInfo's already-loaded child arrays
  * (QueryFields / QueryParameters / QueryDependents), which we supply as typed structural mocks.
  *
- * The template embeds <mj-markdown> and <mj-code-editor>; we don't exercise those, so we
- * declare the component with NO_ERRORS_SCHEMA so the unknown child elements are ignored.
+ * The info sections are <mj-accordion-panel>s, so MJAccordionModule is registered for real (a
+ * stubbed-out accordion under NO_ERRORS_SCHEMA would drop the ng-template title/body slots).
+ * The template also embeds <mj-markdown> and <mj-code-editor>, which we don't exercise, so
+ * NO_ERRORS_SCHEMA remains to ignore those unknown elements. 'overview' and 'fields' start
+ * expanded; the Overview/Fields bodies are eager <ng-content>, the rest are lazy [mjAccordionBody].
  * Animations are stubbed via NoopAnimationsModule. UserInfoEngine.Instance.GetSetting in
  * ngOnInit is wrapped in try/catch in the component, so it is harmless here.
  */
@@ -49,7 +53,7 @@ function queryInfo(partial: Partial<QueryInfoShape> & { Name: string }): MJQuery
 
 function render(inputs: Record<string, unknown>): ComponentFixture<QueryInfoPanelComponent> {
   TestBed.configureTestingModule({
-    imports: [CommonModule, NoopAnimationsModule],
+    imports: [CommonModule, NoopAnimationsModule, MJAccordionModule],
     declarations: [QueryInfoPanelComponent],
     schemas: [NO_ERRORS_SCHEMA],
   });
@@ -138,7 +142,7 @@ describe('QueryInfoPanelComponent (DOM)', () => {
     expect(opened).toEqual([{ queryId: 'q-123', queryName: 'Sales' }]);
   });
 
-  it('collapses the Fields section when its header is clicked', () => {
+  it('collapses the Fields section when its accordion header is clicked', () => {
     const f = render({
       Visible: true,
       QueryInfo: queryInfo({ Name: 'Q', QueryFields: [field('ID', 'uniqueidentifier')] }),
@@ -147,13 +151,19 @@ describe('QueryInfoPanelComponent (DOM)', () => {
     expect(query(f, '.field-item')).not.toBeNull();
     expect(f.componentInstance.IsSectionExpanded('fields')).toBe(true);
 
-    // Find the Fields section header by its title text and click it.
-    const fieldsHeader = queryAll(f, '.section-header').find((h) => h.querySelector('.section-title')?.textContent?.trim() === 'Fields');
-    expect(fieldsHeader).toBeDefined();
-    (fieldsHeader as HTMLElement).click();
+    // Find the Fields accordion panel by its title text and click its header. The header's
+    // Toggle() emits ExpandedChange, wired to ToggleSection('fields').
+    const fieldsPanel = queryAll(f, 'mj-accordion-panel').find(
+      (p) => p.querySelector('.section-title')?.textContent?.trim() === 'Fields',
+    );
+    expect(fieldsPanel).toBeDefined();
+    (fieldsPanel!.querySelector('.mj-accordion-header') as HTMLElement).click();
     f.detectChanges();
 
+    // Section is now collapsed; the accordion drops its --expanded class. (The field-item stays
+    // in the DOM — it's eager <ng-content>, just marked inert — so state, not presence, is the
+    // assertion.)
     expect(f.componentInstance.IsSectionExpanded('fields')).toBe(false);
-    expect(query(f, '.field-item')).toBeNull();
+    expect(fieldsPanel!.querySelector('.mj-accordion-panel--expanded')).toBeNull();
   });
 });

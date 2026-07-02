@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { CommonModule } from '@angular/common';
-import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
+import { MJEmptyStateComponent, MJAccordionModule } from '@memberjunction/ng-ui-components';
 import { renderComponentFixture, query, queryAll, text, click, capture } from '@memberjunction/ng-test-utils';
 import { SearchFilterComponent } from './search-filter.component';
 import { SearchFilter, SearchFilterChangeEvent } from './search-types';
@@ -31,14 +31,19 @@ describe('SearchFilterComponent (DOM)', () => {
 
   const render = (inputs: Record<string, unknown> = {}) =>
     renderComponentFixture(SearchFilterComponent, {
-      imports: [CommonModule, MJEmptyStateComponent],
+      // Each filter category is rendered as an <mj-accordion-panel>, so the isolated TestBed
+      // must register the accordion via MJAccordionModule (the real app gets it through the
+      // search module). Without it, rendering throws NG0304. The option rows live in the
+      // accordion's [mjAccordionBody]; categories are Expanded by default (Collapsible=true and
+      // nothing collapsed), so the accordion instantiates the body and the rows are in the DOM.
+      imports: [CommonModule, MJEmptyStateComponent, MJAccordionModule],
       declarations: [SearchFilterComponent],
       inputs: { Filters: FILTERS, ShowRelevanceSlider: false, ...inputs },
     });
 
   it('renders one category block per filter', () => {
     const fixture = render();
-    expect(queryAll(fixture, '.filter-category').length).toBe(2);
+    expect(queryAll(fixture, 'mj-accordion-panel').length).toBe(2);
     const names = queryAll(fixture, '.filter-category-name').map((e) => e.textContent?.trim());
     expect(names).toEqual(['Entity', 'Source']);
   });
@@ -46,7 +51,7 @@ describe('SearchFilterComponent (DOM)', () => {
   it('renders multi-option categories as interactive checkbox labels', () => {
     const fixture = render();
     // The "Entity" category has 2 options → two checkbox labels (.filter-option, not readonly).
-    const entityBlock = queryAll(fixture, '.filter-category')[0];
+    const entityBlock = queryAll(fixture, 'mj-accordion-panel')[0];
     const interactive = entityBlock.querySelectorAll('label.filter-option');
     expect(interactive.length).toBe(2);
     expect(entityBlock.querySelectorAll('.filter-option-readonly').length).toBe(0);
@@ -54,7 +59,7 @@ describe('SearchFilterComponent (DOM)', () => {
 
   it('renders single-option categories as a read-only row (no checkbox)', () => {
     const fixture = render();
-    const sourceBlock = queryAll(fixture, '.filter-category')[1];
+    const sourceBlock = queryAll(fixture, 'mj-accordion-panel')[1];
     expect(sourceBlock.querySelectorAll('.filter-option-readonly').length).toBe(1);
     expect(sourceBlock.querySelectorAll('label.filter-option').length).toBe(0);
   });
@@ -73,7 +78,7 @@ describe('SearchFilterComponent (DOM)', () => {
 
   it('marks an option checkbox as checked when its value is in ActiveFilters', () => {
     const fixture = render({ ActiveFilters: { Entity: ['users'] } });
-    const entityBlock = queryAll(fixture, '.filter-category')[0];
+    const entityBlock = queryAll(fixture, 'mj-accordion-panel')[0];
     const firstCheckbox = entityBlock.querySelector('.filter-checkbox');
     expect(firstCheckbox?.classList.contains('filter-checkbox-checked')).toBe(true);
   });
@@ -81,7 +86,7 @@ describe('SearchFilterComponent (DOM)', () => {
   it('emits FilterChanged with the toggled selection when an option is clicked', () => {
     const fixture = render({ ActiveFilters: {} });
     const changes: SearchFilterChangeEvent[] = capture(fixture.componentInstance.FilterChanged);
-    const entityBlock = queryAll(fixture, '.filter-category')[0];
+    const entityBlock = queryAll(fixture, 'mj-accordion-panel')[0];
     (entityBlock.querySelector('label.filter-option') as HTMLElement).click();
     expect(changes.length).toBe(1);
     expect(changes[0].Category).toBe('Entity');
@@ -120,14 +125,22 @@ describe('SearchFilterComponent (DOM)', () => {
     expect(text(fixture, '.filter-empty')).toContain('No filters available');
   });
 
-  it('collapses a filter category and flips its chevron when the header is clicked', () => {
+  it('collapses a filter category when its accordion header is clicked', () => {
     const fixture = render();
-    const header = query(fixture, '.filter-category-header') as HTMLElement;
-    expect(header.classList.contains('filter-category-collapsed')).toBe(false);
-    expect(header.querySelector('.fa-chevron-up')).not.toBeNull(); // expanded
-    header.click(); // ToggleCategory
+    const firstPanel = queryAll(fixture, 'mj-accordion-panel')[0];
+    // Collapsible=true and nothing collapsed → the panel is Expanded by default (the accordion
+    // signals expansion via the --expanded class; the chevron is a static icon rotated in CSS,
+    // so collapse is asserted via IsCategoryCollapsed() state + the class rather than the old
+    // bespoke .filter-category-header chevron-up/down that this template no longer uses).
+    expect(fixture.componentInstance.IsCategoryCollapsed('Entity')).toBe(false);
+    expect(firstPanel.querySelector('.mj-accordion-panel--expanded')).not.toBeNull();
+
+    // Clicking the accordion header toggles Expanded, whose (ExpandedChange) is wired to
+    // OnCategoryExpandedChange → adds the category to CollapsedCategories.
+    (firstPanel.querySelector('.mj-accordion-header') as HTMLElement).click();
     fixture.detectChanges();
-    expect(header.classList.contains('filter-category-collapsed')).toBe(true);
-    expect(header.querySelector('.fa-chevron-down')).not.toBeNull(); // collapsed
+
+    expect(fixture.componentInstance.IsCategoryCollapsed('Entity')).toBe(true);
+    expect(firstPanel.querySelector('.mj-accordion-panel--expanded')).toBeNull();
   });
 });
