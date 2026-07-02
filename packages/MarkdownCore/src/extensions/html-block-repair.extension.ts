@@ -16,6 +16,10 @@ import { MarkedExtension, Token, Tokens } from 'marked';
  *   - whose content starts with an HTML tag or comment, and
  *   - directly adjacent to an `html` token (the signature of a split block).
  * Prose, fenced code examples, and standalone indented code are left untouched.
+ *
+ * Pure token-stream logic — no DOM dependency — so it lives in the
+ * framework-agnostic core engine and benefits both the web (HTML) and native
+ * (AST) output paths.
  */
 export function createHtmlBlockRepairExtension(): MarkedExtension {
   const looksLikeHtml = (text: string): boolean => /^\s*<\/?[a-zA-Z!]/.test(text || '');

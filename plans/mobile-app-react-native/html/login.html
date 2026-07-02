@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>MJ Mobile · Sign In</title>
+<meta name="viewport" content="width=393, initial-scale=1">
+<style>
+  :root {
+    --bg: #fafaf7;
+    --surface: #ffffff;
+    --ink: #0d0d10;
+    --ink-2: #4a4a52;
+    --ink-3: #8a8a93;
+    --line: rgba(13,13,16,0.08);
+    --brand: #264FAF;
+    --shadow-lg: 0 24px 60px rgba(13,13,16,0.10);
+    --shadow-card: 0 1px 2px rgba(13,13,16,0.04), 0 8px 20px rgba(13,13,16,0.06);
+  }
+  * { box-sizing: border-box; -webkit-font-smoothing: antialiased; }
+  html, body {
+    margin: 0; padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", system-ui, sans-serif;
+    background: #e8e6df;
+    color: var(--ink);
+    min-height: 100vh;
+  }
+  .device-wrap { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 32px 16px; }
+  .device {
+    width: 393px; height: 852px;
+    background: var(--bg);
+    border-radius: 54px;
+    box-shadow: var(--shadow-lg), 0 0 0 12px #1a1a1f, 0 0 0 13px #2a2a30;
+    position: relative; overflow: hidden;
+  }
+  .dynamic-island { position: absolute; top: 11px; left: 50%; transform: translateX(-50%); width: 124px; height: 36px; background: #000; border-radius: 20px; z-index: 10; }
+  .home-indicator { position: absolute; bottom: 9px; left: 50%; transform: translateX(-50%); width: 134px; height: 5px; background: #0d0d10; border-radius: 3px; opacity: 0.85; }
+  .statusbar { height: 54px; display: flex; align-items: flex-end; justify-content: space-between; padding: 0 28px 8px; font-size: 17px; font-weight: 600; letter-spacing: -0.02em; }
+
+  .hero {
+    padding: 80px 36px 0;
+    display: flex; flex-direction: column; align-items: center;
+    text-align: center;
+  }
+  .logo {
+    width: 80px; height: 80px;
+    border-radius: 22px;
+    background: linear-gradient(135deg, var(--brand), #4a72d6);
+    display: inline-flex; align-items: center; justify-content: center;
+    color: white;
+    font-size: 38px; font-weight: 800;
+    letter-spacing: -0.04em;
+    box-shadow: 0 18px 40px rgba(38,79,175,0.35);
+    margin-bottom: 28px;
+  }
+  .wordmark {
+    font-size: 34px; font-weight: 700;
+    letter-spacing: -0.025em;
+    margin-bottom: 8px;
+  }
+  .tagline {
+    font-size: 16px;
+    color: var(--ink-2);
+    line-height: 1.45;
+    max-width: 290px;
+  }
+  .form {
+    padding: 64px 28px 0;
+  }
+  .field {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 14px 16px;
+    box-shadow: var(--shadow-card);
+    margin-bottom: 10px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .field .icon { color: var(--ink-3); }
+  .field input {
+    border: none; outline: none; flex: 1;
+    font-family: inherit; font-size: 15.5px;
+    color: var(--ink); background: transparent;
+  }
+  .field input::placeholder { color: var(--ink-3); }
+  .sign-in-btn {
+    width: 100%; height: 52px;
+    background: var(--ink); color: white;
+    border: none; border-radius: 14px;
+    font-size: 15.5px; font-weight: 600;
+    margin-top: 16px;
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    box-shadow: 0 6px 18px rgba(13,13,16,0.20);
+  }
+  .divider {
+    margin: 22px 0 18px;
+    display: flex; align-items: center; gap: 12px;
+    color: var(--ink-3); font-size: 12px; font-weight: 500;
+    letter-spacing: 0.04em;
+  }
+  .divider::before, .divider::after {
+    content: ''; height: 1px; flex: 1; background: var(--line);
+  }
+  .sso-btn {
+    width: 100%; height: 48px;
+    background: var(--surface); color: var(--ink);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    font-size: 14.5px; font-weight: 600;
+    display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+    margin-bottom: 8px;
+  }
+  .footer-note {
+    position: absolute; bottom: 60px; left: 0; right: 0;
+    text-align: center;
+    font-size: 12px; color: var(--ink-3);
+    padding: 0 36px;
+    line-height: 1.5;
+  }
+  .footer-note a { color: var(--brand); text-decoration: none; font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="device-wrap">
+  <div class="device">
+    <div class="dynamic-island"></div>
+    <div class="statusbar">
+      <div>9:41</div>
+      <div style="display:inline-flex; gap:6px; align-items:center;">
+        <svg width="18" height="12" viewBox="0 0 18 12" fill="currentColor"><rect x="0" y="6" width="3" height="6" rx="1"/><rect x="5" y="3" width="3" height="9" rx="1"/><rect x="10" y="0" width="3" height="12" rx="1"/></svg>
+        <svg width="26" height="12" viewBox="0 0 26 12" fill="currentColor"><rect x="0" y="1" width="22" height="10" rx="2.5" fill="none" stroke="currentColor"/><rect x="2" y="3" width="18" height="6" rx="1"/><rect x="23" y="4" width="2" height="4" rx="0.5"/></svg>
+      </div>
+    </div>
+
+    <div class="hero">
+      <div class="logo">M</div>
+      <div class="wordmark">MemberJunction</div>
+      <div class="tagline">Talk to your data. Anywhere.</div>
+    </div>
+
+    <div class="form">
+      <div class="field">
+        <span class="icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><path d="M22 6l-10 7L2 6"/></svg>
+        </span>
+        <input placeholder="you@company.com" value="amith@bluecypress.io">
+      </div>
+      <button class="sign-in-btn">
+        Continue
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+      </button>
+
+      <div class="divider">or</div>
+
+      <button class="sso-btn">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+        Continue with passkey
+      </button>
+      <button class="sso-btn">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+        Continue with Google
+      </button>
+      <button class="sso-btn">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M17.05 12.04c-.03-3.05 2.49-4.51 2.6-4.59-1.42-2.08-3.63-2.37-4.41-2.39-1.88-.19-3.67 1.11-4.62 1.11-.96 0-2.43-1.08-4.01-1.06-2.06.03-3.96 1.2-5.02 3.03-2.14 3.72-.55 9.23 1.54 12.25 1.02 1.48 2.23 3.14 3.81 3.08 1.54-.06 2.12-.99 3.97-.99 1.85 0 2.38.99 4 .96 1.66-.03 2.71-1.51 3.72-3 1.17-1.71 1.65-3.39 1.68-3.48-.04-.02-3.22-1.24-3.26-4.92zM14.13 3.5c.85-1.03 1.42-2.46 1.26-3.89-1.22.05-2.7.81-3.58 1.84-.79.91-1.48 2.37-1.3 3.77 1.36.11 2.76-.69 3.62-1.72z"/></svg>
+        Continue with Apple
+      </button>
+    </div>
+
+    <div class="footer-note">
+      By signing in you agree to MemberJunction's <a href="#">Terms</a> and <a href="#">Privacy Policy</a>.
+    </div>
+
+    <div class="home-indicator"></div>
+  </div>
+</div>
+</body>
+</html>
