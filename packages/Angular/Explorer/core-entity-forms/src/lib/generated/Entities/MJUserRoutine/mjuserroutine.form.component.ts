@@ -16,13 +16,14 @@ export class MJUserRoutineFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'routineOwnership', sectionName: 'Routine Ownership', isExpanded: true },
             { sectionKey: 'routineConfiguration', sectionName: 'Routine Configuration', isExpanded: true },
-            { sectionKey: 'executionDetails', sectionName: 'Execution Details', isExpanded: true },
-            { sectionKey: 'schedulingAndNotifications', sectionName: 'Scheduling and Notifications', isExpanded: true },
+            { sectionKey: 'executionSettings', sectionName: 'Execution Settings', isExpanded: true },
+            { sectionKey: 'schedulingAndTiming', sectionName: 'Scheduling and Timing', isExpanded: true },
+            { sectionKey: 'notifications', sectionName: 'Notifications', isExpanded: true },
+            { sectionKey: 'executionHistory', sectionName: 'Execution History', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJUserRoutineRecipients', sectionName: 'User Routine Recipients', isExpanded: false },
-            { sectionKey: 'mJUserRoutineRuns', sectionName: 'User Routine Runs', isExpanded: false }
+            { sectionKey: 'mJUserRoutineRuns', sectionName: 'User Routine Runs', isExpanded: false },
+            { sectionKey: 'mJUserRoutineRecipients', sectionName: 'User Routine Recipients', isExpanded: false }
         ]);
     }
 }

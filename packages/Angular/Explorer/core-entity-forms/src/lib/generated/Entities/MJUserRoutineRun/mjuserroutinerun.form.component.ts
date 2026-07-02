@@ -15,13 +15,10 @@ export class MJUserRoutineRunFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'routineInformation', sectionName: 'Routine Information', isExpanded: true },
+            { sectionKey: 'routineContext', sectionName: 'Routine Context', isExpanded: true },
             { sectionKey: 'executionTimeline', sectionName: 'Execution Timeline', isExpanded: true },
-            { sectionKey: 'executionStatus', sectionName: 'Execution Status', isExpanded: true },
-            { sectionKey: 'agentIntegration', sectionName: 'Agent Integration', isExpanded: true },
-            { sectionKey: 'promptIntegration', sectionName: 'Prompt Integration', isExpanded: true },
-            { sectionKey: 'actionIntegration', sectionName: 'Action Integration', isExpanded: true },
-            { sectionKey: 'resultData', sectionName: 'Result Data', isExpanded: true },
+            { sectionKey: 'executionResults', sectionName: 'Execution Results', isExpanded: true },
+            { sectionKey: 'linkedExecutions', sectionName: 'Linked Executions', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

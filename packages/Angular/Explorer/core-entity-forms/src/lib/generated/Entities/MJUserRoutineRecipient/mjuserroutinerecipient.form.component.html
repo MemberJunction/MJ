@@ -10,11 +10,11 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Routine Context Section -->
+    <!-- Routine Association Section -->
     <mj-collapsible-panel
-        SectionKey="routineContext"
-        SectionName="Routine Context"
-        Icon="fa fa-sync"
+        SectionKey="routineAssociation"
+        SectionName="Routine Association"
+        Icon="fa fa-tasks"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -29,11 +29,11 @@
 
     </mj-collapsible-panel>
 
-    <!-- Recipient Configuration Section -->
+    <!-- Recipient Details Section -->
     <mj-collapsible-panel
-        SectionKey="recipientConfiguration"
-        SectionName="Recipient Configuration"
-        Icon="fa fa-address-card"
+        SectionKey="recipientDetails"
+        SectionName="Recipient Details"
+        Icon="fa fa-user"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -54,6 +54,16 @@
             [FormContext]="formContext"
             LinkType="Email"
         ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Notification Settings Section -->
+    <mj-collapsible-panel
+        SectionKey="notificationSettings"
+        SectionName="Notification Settings"
+        Icon="fa fa-bell"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"

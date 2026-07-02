@@ -10,11 +10,11 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Routine Information Section -->
+    <!-- Routine Context Section -->
     <mj-collapsible-panel
-        SectionKey="routineInformation"
-        SectionName="Routine Information"
-        Icon="fa fa-info-circle"
+        SectionKey="routineContext"
+        SectionName="Routine Context"
+        Icon="fa fa-tasks"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -33,7 +33,7 @@
     <mj-collapsible-panel
         SectionKey="executionTimeline"
         SectionName="Execution Timeline"
-        Icon="fa fa-calendar"
+        Icon="fa fa-clock"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -55,11 +55,11 @@
 
     </mj-collapsible-panel>
 
-    <!-- Execution Status Section -->
+    <!-- Execution Results Section -->
     <mj-collapsible-panel
-        SectionKey="executionStatus"
-        SectionName="Execution Status"
-        Icon="fa fa-flag"
+        SectionKey="executionResults"
+        SectionName="Execution Results"
+        Icon="fa fa-check-circle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -67,6 +67,22 @@
             [ShowLabel]="true"
             FieldName="Status"
             Type="select"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ResultSummary"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ResultHash"
+            Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -89,85 +105,39 @@
 
     </mj-collapsible-panel>
 
-    <!-- Agent Integration Section -->
+    <!-- Linked Executions Section -->
     <mj-collapsible-panel
-        SectionKey="agentIntegration"
-        SectionName="Agent Integration"
-        Icon="fa fa-info-circle"
+        SectionKey="linkedExecutions"
+        SectionName="Linked Executions"
+        Icon="fa fa-link"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
-            [ShowLabel]="false"
+            [ShowLabel]="true"
             FieldName="AgentRunID"
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
             LinkType="Record"
         ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Prompt Integration Section -->
-    <mj-collapsible-panel
-        SectionKey="promptIntegration"
-        SectionName="Prompt Integration"
-        Icon="fa fa-comment-dots"
-        [Form]="this"
-        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
-            [ShowLabel]="false"
+            [ShowLabel]="true"
             FieldName="PromptRunID"
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
             LinkType="Record"
         ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Action Integration Section -->
-    <mj-collapsible-panel
-        SectionKey="actionIntegration"
-        SectionName="Action Integration"
-        Icon="fa fa-bolt"
-        [Form]="this"
-        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
-            [ShowLabel]="false"
+            [ShowLabel]="true"
             FieldName="ActionExecutionLogID"
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
             LinkType="Record"
-        ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Result Data Section -->
-    <mj-collapsible-panel
-        SectionKey="resultData"
-        SectionName="Result Data"
-        Icon="fa fa-info-circle"
-        [Form]="this"
-        [FormContext]="formContext">
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ResultSummary"
-            Type="textarea"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ResultHash"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>

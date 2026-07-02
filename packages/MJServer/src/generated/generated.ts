@@ -89582,11 +89582,11 @@ export class MJUserRoutine_ {
     @MaxLength(255)
     NotificationTemplate?: string;
         
-    @Field(() => [MJUserRoutineRecipient_])
-    MJUserRoutineRecipients_RoutineIDArray: MJUserRoutineRecipient_[]; // Link to MJUserRoutineRecipients
-    
     @Field(() => [MJUserRoutineRun_])
     MJUserRoutineRuns_RoutineIDArray: MJUserRoutineRun_[]; // Link to MJUserRoutineRuns
+    
+    @Field(() => [MJUserRoutineRecipient_])
+    MJUserRoutineRecipients_RoutineIDArray: MJUserRoutineRecipient_[]; // Link to MJUserRoutineRecipients
     
 }
 
@@ -89813,16 +89813,6 @@ export class MJUserRoutineResolver extends ResolverBase {
         return result;
     }
     
-    @FieldResolver(() => [MJUserRoutineRecipient_])
-    async MJUserRoutineRecipients_RoutineIDArray(@Root() mjuserroutine_: MJUserRoutine_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: User Routine Recipients', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwUserRoutineRecipients')} WHERE ${provider.QuoteIdentifier('RoutineID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: User Routine Recipients', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, [mjuserroutine_.ID], undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: User Routine Recipients', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
     @FieldResolver(() => [MJUserRoutineRun_])
     async MJUserRoutineRuns_RoutineIDArray(@Root() mjuserroutine_: MJUserRoutine_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: User Routine Runs', userPayload);
@@ -89830,6 +89820,16 @@ export class MJUserRoutineResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwUserRoutineRuns')} WHERE ${provider.QuoteIdentifier('RoutineID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: User Routine Runs', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, [mjuserroutine_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: User Routine Runs', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJUserRoutineRecipient_])
+    async MJUserRoutineRecipients_RoutineIDArray(@Root() mjuserroutine_: MJUserRoutine_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: User Routine Recipients', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwUserRoutineRecipients')} WHERE ${provider.QuoteIdentifier('RoutineID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: User Routine Recipients', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjuserroutine_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: User Routine Recipients', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -91422,11 +91422,11 @@ export class MJUser_ {
     @Field(() => [MJAISkill_])
     MJAISkills_CreatedByUserIDArray: MJAISkill_[]; // Link to MJAISkills
     
-    @Field(() => [MJUserRoutineRecipient_])
-    MJUserRoutineRecipients_UserIDArray: MJUserRoutineRecipient_[]; // Link to MJUserRoutineRecipients
-    
     @Field(() => [MJUserRoutine_])
     MJUserRoutines_UserIDArray: MJUserRoutine_[]; // Link to MJUserRoutines
+    
+    @Field(() => [MJUserRoutineRecipient_])
+    MJUserRoutineRecipients_UserIDArray: MJUserRoutineRecipient_[]; // Link to MJUserRoutineRecipients
     
 }
 
@@ -92673,16 +92673,6 @@ export class MJUserResolverBase extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [MJUserRoutineRecipient_])
-    async MJUserRoutineRecipients_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: User Routine Recipients', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwUserRoutineRecipients')} WHERE ${provider.QuoteIdentifier('UserID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: User Routine Recipients', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, [mjuser_.ID], undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: User Routine Recipients', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
     @FieldResolver(() => [MJUserRoutine_])
     async MJUserRoutines_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: User Routines', userPayload);
@@ -92690,6 +92680,16 @@ export class MJUserResolverBase extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwUserRoutines')} WHERE ${provider.QuoteIdentifier('UserID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: User Routines', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, [mjuser_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: User Routines', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJUserRoutineRecipient_])
+    async MJUserRoutineRecipients_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: User Routine Recipients', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwUserRoutineRecipients')} WHERE ${provider.QuoteIdentifier('UserID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: User Routine Recipients', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjuser_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: User Routine Recipients', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         

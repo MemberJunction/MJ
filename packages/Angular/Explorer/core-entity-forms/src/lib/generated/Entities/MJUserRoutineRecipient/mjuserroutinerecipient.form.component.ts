@@ -15,8 +15,9 @@ export class MJUserRoutineRecipientFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'routineContext', sectionName: 'Routine Context', isExpanded: true },
-            { sectionKey: 'recipientConfiguration', sectionName: 'Recipient Configuration', isExpanded: true },
+            { sectionKey: 'routineAssociation', sectionName: 'Routine Association', isExpanded: true },
+            { sectionKey: 'recipientDetails', sectionName: 'Recipient Details', isExpanded: true },
+            { sectionKey: 'notificationSettings', sectionName: 'Notification Settings', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }
