@@ -263,7 +263,8 @@ export class LoopAgentType extends BaseAgentType {
                     else {
                         retVal.step = 'Skill' as BaseAgentNextStep['step'];
                         retVal.skillActivations = response.nextStep.skills.map(skill => ({
-                            name: skill.name
+                            name: skill.name,
+                            ...(skill.reason ? { reason: skill.reason } : {})
                         }));
                     }
                     break;

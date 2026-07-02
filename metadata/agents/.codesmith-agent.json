@@ -7,6 +7,7 @@
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
       "Status": "Active",
       "AcceptsSkills": "All",
+      "SkillActivationMode": "Auto",
       "ModelSelectionMode": "Agent",
       "ExposeAsAction": true,
       "InvocationMode": "Any",
@@ -55,8 +56,8 @@
       "ID": "03E3675E-E8C7-41B3-92C6-99520FF35FAB"
     },
     "sync": {
-      "lastModified": "2026-07-01T23:32:33.160Z",
-      "checksum": "0bb95255bb574d1f8d0bfd302fc871b8f259116fa9f5a0c3e5b26bfdd18879b7"
+      "lastModified": "2026-07-02T11:38:35.317Z",
+      "checksum": "67ad798867ea9b2efde1ad772351d9e34f46814ca6a11763d0698d6b625bdaec"
     }
   }
 ]
