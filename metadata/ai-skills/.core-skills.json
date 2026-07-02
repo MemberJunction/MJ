@@ -5,6 +5,7 @@
       "Description": "Search the web, evaluate source credibility, and extract summarized findings with proper citations",
       "Instructions": "@file:templates/web-research.skill.md",
       "Status": "Active",
+      "ActivationMode": "Auto",
       "Category": "Research",
       "IconClass": "fa-solid fa-globe",
       "Color": "#2563EB",
@@ -83,8 +84,8 @@
       "ID": "6FBC5823-3418-4788-A75F-5AC6E0654DB1"
     },
     "sync": {
-      "lastModified": "2026-07-01T23:25:37.209Z",
-      "checksum": "577c848d64323b02ec02b8088b98048e7d63e019ab1770f4cbea4a5afb676c7e"
+      "lastModified": "2026-07-02T11:40:21.173Z",
+      "checksum": "f7d6814dd6c543d7e894e49065916a76820ae44aba1e7d75d9da15605464dc9d"
     }
   },
   {
@@ -93,6 +94,7 @@
       "Description": "Find and run saved queries, compose or write read-only SQL against entity base views, and aggregate results",
       "Instructions": "@file:templates/data-analysis-queries.skill.md",
       "Status": "Active",
+      "ActivationMode": "Auto",
       "Category": "Data",
       "IconClass": "fa-solid fa-database",
       "Color": "#7C3AED",
@@ -186,8 +188,8 @@
       "ID": "1D34B15B-D65D-46FE-8DF1-5921D58BB292"
     },
     "sync": {
-      "lastModified": "2026-07-01T23:25:37.243Z",
-      "checksum": "3b55de53f81b6aa824d7c8782d5807aaf5a92b9a661cfd7e46d12eca4cc0e0ec"
+      "lastModified": "2026-07-02T11:40:21.190Z",
+      "checksum": "24df4b91dddbe512eb6f51517490146ade43736b8e37178ad76d651e493301c9"
     }
   },
   {
@@ -196,6 +198,7 @@
       "Description": "Create publication-quality SVG charts, diagrams, networks, word clouds, and composed infographics, plus Mermaid diagrams",
       "Instructions": "@file:templates/data-visualization.skill.md",
       "Status": "Active",
+      "ActivationMode": "Auto",
       "Category": "Visualization",
       "IconClass": "fa-solid fa-chart-pie",
       "Color": "#EA580C",
@@ -302,8 +305,8 @@
       "ID": "9C6B8B20-6083-414C-BC08-820BD1CE1DC2"
     },
     "sync": {
-      "lastModified": "2026-07-01T23:25:37.227Z",
-      "checksum": "372b93838b00fce7590e66eb147d39013f6b0128154d5ba58cdbc20fb210cdd8"
+      "lastModified": "2026-07-02T11:40:21.203Z",
+      "checksum": "0bdd5fe695be28ac9113b6efc750b53ac689a1d1c641dc8b67d4f9e6461a4eb4"
     }
   }
 ]

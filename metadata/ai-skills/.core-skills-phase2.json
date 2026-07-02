@@ -5,6 +5,7 @@
       "Description": "Compose professional PDF, DOCX, and XLSX documents section by section, preview, and finalize for delivery",
       "Instructions": "@file:templates/document-builder.skill.md",
       "Status": "Active",
+      "ActivationMode": "Auto",
       "Category": "Documents",
       "IconClass": "fa-solid fa-file-lines",
       "Color": "#0F766E",
@@ -83,8 +84,8 @@
       "ID": "D0DD8A0E-D899-4445-839D-B6F605313F3A"
     },
     "sync": {
-      "lastModified": "2026-07-02T01:11:04.854Z",
-      "checksum": "86578b0a03494f2dcf959e3c8f3bad84eb5fc59a3eb58bb6fd2a4e1452ea3426"
+      "lastModified": "2026-07-02T11:40:20.866Z",
+      "checksum": "25c4b5e6f31cbd500536b90ffa497a22e9835ab62a74931cd93ae5b1b34bd935"
     }
   },
   {
@@ -93,6 +94,7 @@
       "Description": "Send individual messages, bulk audience sends, and Slack/Teams channel posts — with confirm-before-send guardrails",
       "Instructions": "@file:templates/communications.skill.md",
       "Status": "Active",
+      "ActivationMode": "RequestedOnly",
       "Category": "Communication",
       "IconClass": "fa-solid fa-paper-plane",
       "Color": "#DC2626",
@@ -158,8 +160,8 @@
       "ID": "72D2ED7F-F5BC-4602-96CA-D21C05913BC5"
     },
     "sync": {
-      "lastModified": "2026-07-02T01:11:04.820Z",
-      "checksum": "2401390521983b2e70b896b6e51f800c2ac796eff771227433335c58653ff7ba"
+      "lastModified": "2026-07-02T11:40:20.642Z",
+      "checksum": "7660f19a4be24f7fea4d22c188452f9b5803dfaac48f5e8c32855e71f0ed0aed"
     }
   },
   {
@@ -168,6 +170,7 @@
       "Description": "Parse CSV, Excel, JSON, XML, and PDF data, validate and map it between schemas, and aggregate results",
       "Instructions": "@file:templates/data-import-transform.skill.md",
       "Status": "Active",
+      "ActivationMode": "Auto",
       "Category": "Data",
       "IconClass": "fa-solid fa-shuffle",
       "Color": "#4F46E5",
@@ -287,8 +290,8 @@
       "ID": "BF7CEB7C-EA24-4FEE-AC2E-EC423B5CEB4A"
     },
     "sync": {
-      "lastModified": "2026-07-02T01:11:04.800Z",
-      "checksum": "aaecd7158cc9971bbfb95d3eabf9cdf5b87e7bc916201d59562b964940f3f519"
+      "lastModified": "2026-07-02T11:40:20.882Z",
+      "checksum": "4d0b9f0c80a695ab0bedf1c5a97b9ebc432d27f9f63c6654f3a10a880c5fa830"
     }
   },
   {
@@ -297,6 +300,7 @@
       "Description": "Discover, search, read, organize, and share files across configured storage providers (no delete operations)",
       "Instructions": "@file:templates/file-management.skill.md",
       "Status": "Active",
+      "ActivationMode": "Auto",
       "Category": "Files",
       "IconClass": "fa-solid fa-folder-open",
       "Color": "#B45309",
@@ -466,8 +470,8 @@
       "ID": "FA69543B-83BF-4923-AD82-392F71AD8789"
     },
     "sync": {
-      "lastModified": "2026-07-02T01:11:04.838Z",
-      "checksum": "a1f91d9003e1bb96179b41ff201c6ef492b396d19f4b48720b2bc41365c858d0"
+      "lastModified": "2026-07-02T11:40:20.829Z",
+      "checksum": "46ac79c1cc50354e352ec18f1d2cbb5836a21e89779a1edd91b97d133e443900"
     }
   },
   {
@@ -476,6 +480,7 @@
       "Description": "Inspect, create, update, test-run, and remove scheduled jobs — with plain-language schedule confirmation",
       "Instructions": "@file:templates/scheduling-automation.skill.md",
       "Status": "Active",
+      "ActivationMode": "Auto",
       "Category": "Automation",
       "IconClass": "fa-solid fa-clock",
       "Color": "#0891B2",
@@ -567,8 +572,8 @@
       "ID": "1994CFD7-CB3F-4359-BDB4-126FD33BAB52"
     },
     "sync": {
-      "lastModified": "2026-07-02T01:11:04.871Z",
-      "checksum": "e5905e9ed15d7f8120b5b961b4f7287e6317abcc4285fb7474e24b9acb8babf0"
+      "lastModified": "2026-07-02T11:40:20.848Z",
+      "checksum": "65b9d3e29497ab156c79454f7bcc1f153a1f18f00aaac078ea9905c82ecadb77"
     }
   },
   {
@@ -577,6 +582,7 @@
       "Description": "Build record lists from views, compose and maintain segments, share lists, and resolve audiences",
       "Instructions": "@file:templates/lists-audiences.skill.md",
       "Status": "Active",
+      "ActivationMode": "Auto",
       "Category": "Data",
       "IconClass": "fa-solid fa-list-check",
       "Color": "#65A30D",
@@ -733,8 +739,8 @@
       "ID": "BF6E02D4-C940-4F43-B8F2-4A49F7655E68"
     },
     "sync": {
-      "lastModified": "2026-07-02T01:11:04.903Z",
-      "checksum": "0a9279f85f22c414bf329615f5f266c65117c0d5f5375b8cbf2ae6bd33afe61d"
+      "lastModified": "2026-07-02T11:40:20.898Z",
+      "checksum": "ff0109942bc8fe7e8f57b7081397266ee3701499c590e5ff1726c9f3889308a6"
     }
   },
   {
@@ -743,6 +749,7 @@
       "Description": "Execute sandboxed JavaScript for precise calculations, statistics, and data transformations",
       "Instructions": "@file:templates/code-computation.skill.md",
       "Status": "Active",
+      "ActivationMode": "Auto",
       "Category": "Automation",
       "IconClass": "fa-solid fa-code",
       "Color": "#334155",
@@ -784,8 +791,8 @@
       "ID": "4380A27F-1218-4A81-94F4-A9902A92080C"
     },
     "sync": {
-      "lastModified": "2026-07-02T01:11:04.889Z",
-      "checksum": "45bdb2f771aa8ba30cad9c4a4121c203e0a4ec9867b0d1872813308ea41a6a13"
+      "lastModified": "2026-07-02T11:40:20.911Z",
+      "checksum": "ab33b051d34fc63243f788f0ae0a39be2acc72c0f069b6abf5aa995008d37dce"
     }
   }
 ]
