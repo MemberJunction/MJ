@@ -1,7 +1,7 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges, ChangeDetectorRef } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
-import { MJWindowComponent, MJButtonDirective, MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
+import { MJWindowComponent, MJButtonDirective, MJEmptyStateComponent, MJConfirmService } from '@memberjunction/ng-ui-components';
 import { UserInfo } from '@memberjunction/core';
 import { MJArtifactEntity } from '@memberjunction/core-entities';
 import { ArtifactPermissionService, ArtifactPermission, ArtifactPermissionSet } from '../../services/artifact-permission.service';
@@ -219,7 +219,8 @@ export class ArtifactShareModalComponent implements OnInit, OnChanges {
 
     constructor(
         private permissionService: ArtifactPermissionService,
-        private cdr: ChangeDetectorRef
+        private cdr: ChangeDetectorRef,
+        private confirmService: MJConfirmService
     ) {}
 
     async ngOnInit(): Promise<void> {
@@ -431,7 +432,7 @@ export class ArtifactShareModalComponent implements OnInit, OnChanges {
     }
 
     async onRevokePermission(permission: PermissionDisplay): Promise<void> {
-        if (!confirm(`Remove ${permission.userName}'s access to this artifact?`)) {
+        if (!(await this.confirmService.ConfirmDelete({ title: 'Remove Access', message: `Remove ${permission.userName}'s access to this artifact?`, confirmText: 'Remove' }))) {
             return;
         }
 

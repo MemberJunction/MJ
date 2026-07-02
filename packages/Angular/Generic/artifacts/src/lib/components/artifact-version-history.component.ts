@@ -1,5 +1,6 @@
-import { Component, Input, Output, EventEmitter, OnInit } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, inject } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+import { MJConfirmService } from '@memberjunction/ng-ui-components';
 import { MJArtifactEntity, MJArtifactVersionEntity } from '@memberjunction/core-entities';
 import { UserInfo, RunView } from '@memberjunction/core';
 
@@ -107,6 +108,8 @@ import { UserInfo, RunView } from '@memberjunction/core';
   `]
 })
 export class ArtifactVersionHistoryComponent extends BaseAngularComponent implements OnInit  {
+  private confirmService = inject(MJConfirmService);
+
   @Input() artifact!: MJArtifactEntity;
   @Input() currentUser!: UserInfo;
 
@@ -148,7 +151,7 @@ export class ArtifactVersionHistoryComponent extends BaseAngularComponent implem
   }
 
   async onRestoreVersion(version: MJArtifactVersionEntity): Promise<void> {
-    if (!confirm(`Restore to version ${version.VersionNumber}? This will create a new version.`)) return;
+    if (!(await this.confirmService.Confirm({ title: 'Restore version', message: `Restore to version ${version.VersionNumber}?`, detail: 'This will create a new version.' }))) return;
 
     try {
       // Restoring creates a new version with the old content

@@ -1,7 +1,7 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges, ChangeDetectorRef } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
-import { MJWindowComponent, MJButtonDirective, MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
+import { MJWindowComponent, MJButtonDirective, MJEmptyStateComponent, MJConfirmService } from '@memberjunction/ng-ui-components';
 import { UserInfo } from '@memberjunction/core';
 import { MJCollectionEntity } from '@memberjunction/core-entities';
 import { CollectionPermissionService, CollectionPermission, PermissionSet } from '../../services/collection-permission.service';
@@ -244,7 +244,8 @@ export class CollectionShareModalComponent implements OnInit, OnChanges {
 
     constructor(
         private permissionService: CollectionPermissionService,
-        private cdr: ChangeDetectorRef
+        private cdr: ChangeDetectorRef,
+        private confirmService: MJConfirmService
     ) {}
 
     async ngOnInit(): Promise<void> {
@@ -423,7 +424,7 @@ export class CollectionShareModalComponent implements OnInit, OnChanges {
     }
 
     async onRevokePermission(permission: PermissionDisplay): Promise<void> {
-        if (!confirm(`Remove ${permission.userName}'s access to this collection and all its child collections?`)) {
+        if (!(await this.confirmService.ConfirmDelete({ title: 'Remove Access', message: `Remove ${permission.userName}'s access to this collection and all its child collections?`, confirmText: 'Remove' }))) {
             return;
         }
 
