@@ -205,6 +205,15 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
       // Pre-fix this used `!isReinstall`, leaking a freshly-created schema when a removed
       // app's schema had been dropped and was recreated on reinstall (B18).
       schemaCreated = schemaResult.Created === true;
+
+      // Persist the case-stable canonical schema name so entity ClassName/CodeName and
+      // GraphQL type names keep their PascalCase prefix on PostgreSQL (where the physical
+      // schema is folded to lowercase). Idempotent UPDATE keyed on the physical name —
+      // a no-op until the SchemaInfo row exists (created out-of-band by CodeGen's
+      // spUpdateSchemaInfoFromDatabase), which then backfills the value catalog-only.
+      // Best-effort: a failure here must not fail the install (the canonical name is a
+      // codegen-time naming concern, recoverable on the next codegen pass).
+      await PersistCanonicalSchemaName(manifest, context);
     }
 
     // Step 8: Run migrations
@@ -1112,6 +1121,54 @@ async function HandleSchemaCreation(manifest: MJAppManifest, context: Orchestrat
   }
 
   return { Success: false, ErrorMessage: `Schema '${manifest.schema.name}' does not exist and createIfNotExists is false` };
+}
+
+/**
+ * Persists the app's canonical (case-preserved) schema name onto its SchemaInfo row.
+ *
+ * The physical schema is created under its platform-canonical form (lowercased on PostgreSQL),
+ * which is what `SchemaInfo.SchemaName` ends up holding (CodeGen reads it from the DB catalog).
+ * The original casing survives only in the manifest (`manifest.schema.name`), so we record it in
+ * `SchemaInfo.CanonicalSchemaName`. `vwEntities` and the runtime GraphQL type-name path then prefer
+ * it (with a COALESCE/?? fallback to SchemaName), keeping PostgreSQL class names PascalCase and in
+ * lockstep with the published entity packages.
+ *
+ * Keyed on the PHYSICAL schema name (matching how the row is created). Idempotent UPDATE — a no-op
+ * when the SchemaInfo row doesn't exist yet (it is materialized out-of-band by CodeGen's
+ * `spUpdateSchemaInfoFromDatabase`, which leaves CanonicalSchemaName NULL and then backfills it
+ * from the installed-app record). Best-effort: failures are warned, never fatal to the install.
+ */
+async function PersistCanonicalSchemaName(manifest: MJAppManifest, context: OrchestratorContext): Promise<void> {
+  if (!manifest.schema) {
+    return;
+  }
+  const canonicalName = manifest.schema.name;
+
+  // Entirely best-effort: building the statement touches the provider's Dialect, so the WHOLE body
+  // (not just ExecuteSQL) is guarded — a provider without a usable Dialect must never fail the install.
+  try {
+    const dialect = context.DatabaseProvider.Dialect;
+    const mjSchema = context.MJCoreSchema ?? '__mj';
+    const physicalName = dialect.CanonicalSchemaName(canonicalName);
+
+    // Portable, parameter-free single statement (the install path runs raw SQL, not parameterized);
+    // values are string-literal-escaped via the dialect. SchemaName comparison is case-folded so it
+    // matches whether the catalog stored it lowercased (PG) or as-authored (SQL Server).
+    const table = dialect.QuoteSchema(mjSchema, 'SchemaInfo');
+    const canonicalLiteral = dialect.QuoteStringLiteral(canonicalName);
+    const physicalLiteral = dialect.QuoteStringLiteral(physicalName);
+    const sql =
+      `UPDATE ${table} SET ${dialect.QuoteIdentifier('CanonicalSchemaName')} = ${canonicalLiteral} ` +
+      `WHERE LOWER(${dialect.QuoteIdentifier('SchemaName')}) = LOWER(${physicalLiteral})`;
+
+    await context.DatabaseProvider.ExecuteSQL(sql);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    context.Callbacks?.OnWarn?.(
+      'Schema',
+      `Could not persist canonical schema name for '${canonicalName}' (will be backfilled at codegen time): ${message}`,
+    );
+  }
 }
 
 /**

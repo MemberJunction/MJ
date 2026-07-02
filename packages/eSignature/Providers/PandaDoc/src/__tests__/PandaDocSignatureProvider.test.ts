@@ -176,6 +176,74 @@ describe('PandaDocSignatureProvider', () => {
             expect(result.externalEnvelopeId).toBe('DOC-4');
             expect(result.ErrorMessage).toContain('400');
         });
+
+        it('omits a fields map when no coordinate fields are supplied', async () => {
+            await provider.initialize({ ...VALID_CONFIG, readinessIntervalMs: 1 });
+            fetchMock
+                .mockResolvedValueOnce(jsonResponse({ id: 'DOC-5', status: 'document.draft' })) // upload (already draft)
+                .mockResolvedValueOnce(jsonResponse({ id: 'DOC-5', status: 'document.draft' })) // readiness
+                .mockResolvedValueOnce(jsonResponse({})); // send
+
+            await provider.CreateEnvelope({
+                title: 'Doc',
+                documents: [{ bytes: Buffer.from('x'), filename: 'a.pdf', contentType: 'application/pdf' }],
+                recipients: [{ email: 'a@b.com' }],
+            });
+
+            const form = fetchMock.mock.calls[0][1].body as FormData;
+            const data = JSON.parse(form.get('data') as string);
+            expect(data.fields).toBeUndefined();
+        });
+
+        it('builds a role-bound fields map for coordinate fields (points from normalized %)', async () => {
+            await provider.initialize({ ...VALID_CONFIG, readinessIntervalMs: 1 });
+            fetchMock
+                .mockResolvedValueOnce(jsonResponse({ id: 'DOC-6', status: 'document.draft' })) // upload
+                .mockResolvedValueOnce(jsonResponse({ id: 'DOC-6', status: 'document.draft' })) // readiness
+                .mockResolvedValueOnce(jsonResponse({})); // send
+
+            await provider.CreateEnvelope({
+                title: 'Doc',
+                documents: [{ bytes: Buffer.from('x'), filename: 'a.pdf', contentType: 'application/pdf' }],
+                recipients: [{ email: 'a@b.com', fields: [{ type: 'signature', page: 1, xPercent: 50, yPercent: 80 }] }],
+            });
+
+            const form = fetchMock.mock.calls[0][1].body as FormData;
+            const data = JSON.parse(form.get('data') as string);
+            // A synthesized role binds the recipient and the field together.
+            expect(data.recipients[0].role).toBe('Signer 1');
+            const field = data.fields['mj_0_0'];
+            expect(field).toMatchObject({
+                type: 'signature',
+                role: 'Signer 1',
+                page: 0, // 0-based
+                x: 306, // 50% of 612pt (US-Letter fallback)
+                y: 634, // 80% of 792pt
+                required: true,
+            });
+        });
+
+        it('converts coordinates against the ACTUAL page size (points) when supplied', async () => {
+            await provider.initialize({ ...VALID_CONFIG, readinessIntervalMs: 1 });
+            fetchMock
+                .mockResolvedValueOnce(jsonResponse({ id: 'DOC-7', status: 'document.draft' })) // upload
+                .mockResolvedValueOnce(jsonResponse({ id: 'DOC-7', status: 'document.draft' })) // readiness
+                .mockResolvedValueOnce(jsonResponse({})); // send
+
+            await provider.CreateEnvelope({
+                title: 'Doc',
+                documents: [{ bytes: Buffer.from('x'), filename: 'a.pdf', contentType: 'application/pdf' }],
+                // A4 = 595 × 842 pt (PandaDoc is already in points, so used directly).
+                recipients: [
+                    { email: 'a@b.com', fields: [{ type: 'signature', page: 1, xPercent: 50, yPercent: 80, pageWidthPt: 595, pageHeightPt: 842 }] },
+                ],
+            });
+
+            const form = fetchMock.mock.calls[0][1].body as FormData;
+            const data = JSON.parse(form.get('data') as string);
+            // 50% of 595 = 298 (rounded); 80% of 842 = 674 (rounded).
+            expect(data.fields['mj_0_0']).toMatchObject({ x: 298, y: 674 });
+        });
     });
 
     describe('GetEnvelopeStatus', () => {

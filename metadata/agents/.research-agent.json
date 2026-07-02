@@ -456,6 +456,8 @@
       "Description": "Orchestrator agent for comprehensive research across multiple domains. Analyzes research requests, delegates tasks to specialized sub-agents (Web Research, Database Research, File Research, Report Writer), and coordinates the research workflow. Uses iterative methodology with source validation and contradiction detection. Delegates final synthesis and report generation to the Report Writer sub-agent.",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
       "Status": "Active",
+      "AcceptsSkills": "All",
+      "SkillActivationMode": "Auto",
       "DefaultArtifactTypeID": "@lookup:MJ: Artifact Types.Name=Research Content",
       "ExecutionOrder": 0,
       "ModelSelectionMode": "Agent",
@@ -844,8 +846,8 @@
       "ID": "E614D2BF-7C52-4A71-B90A-8C8DBB55BCFB"
     },
     "sync": {
-      "lastModified": "2026-03-13T19:10:49.923Z",
-      "checksum": "60a494e770cbb957cbb097efad5b1a0f33be9f448b10899197f2fa3bc4032b7d"
+      "lastModified": "2026-07-02T11:38:35.790Z",
+      "checksum": "ad8c6b8a11df2da6e4eb6b9017cb3d5f9ce8e3578188c5f7367cd91b258b70ba"
     }
   }
 ]

@@ -98,10 +98,10 @@ export type ConversationGroupBy = 'project' | 'date' | 'none';
 /**
  * Type of entity being mentioned
  */
-export type MentionType = 'agent' | 'user' | 'entity' | 'query';
+export type MentionType = 'agent' | 'user' | 'entity' | 'query' | 'skill';
 
 /**
- * Represents a mention in a message (@Agent or @User)
+ * Represents a mention in a message (@Agent, @User, #Entity, or /Skill)
  */
 export interface Mention {
   type: MentionType;
@@ -111,11 +111,14 @@ export interface Mention {
 }
 
 /**
- * Result of parsing mentions from a message
+ * Result of parsing mentions from a message.
+ * Structurally mirrors `MentionParseResult` from `@memberjunction/conversations-runtime`
+ * (deliberate duplicate — cross-package re-exports are prohibited). Keep in sync.
  */
 export interface MentionParseResult {
   mentions: Mention[];
   agentMention: Mention | null; // Single agent mention (first one found)
   userMentions: Mention[]; // All user mentions
   entityMentions: Mention[]; // All entity mentions (#Entity)
+  skillMentions: Mention[]; // All skill mentions (/Skill)
 }

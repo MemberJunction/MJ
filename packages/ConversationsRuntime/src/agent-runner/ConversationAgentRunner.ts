@@ -73,6 +73,12 @@ export interface ProcessMessageInput {
      */
     planMode?: boolean;
     /**
+     * Skill IDs the user requested via `/skill-name` mentions in the composer. Forwarded to the
+     * server, which intersects them with the agent's accepted skills AND the user's Run permission
+     * before any activate. Defaults to none.
+     */
+    requestedSkillIDs?: string[];
+    /**
      * Optional explicit agent ID. When set, wins over the {@link DefaultAgentResolver}
      * chain. Mirrors the widget's `[DefaultAgentId]` input.
      */
@@ -198,6 +204,7 @@ export class ConversationAgentRunner {
                         })),
                 },
                 ...(input.planMode ? { PlanMode: true } : {}),
+                ...(input.requestedSkillIDs?.length ? { RequestedSkillIDs: input.requestedSkillIDs } : {}),
                 CreateArtifacts: true,
                 CreateNotification: true,
                 OnProgress: input.onProgress

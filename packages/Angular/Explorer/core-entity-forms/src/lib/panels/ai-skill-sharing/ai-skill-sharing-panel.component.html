@@ -10,8 +10,8 @@
     } @else {
         <div class="ai-skill-sharing-actions">
             @if (CanShareSkills) {
-                <button mjButton variant="secondary" size="sm" (click)="OpenShareDialog()">
-                    <i class="fa-solid fa-share-nodes"></i> Share
+                <button mjButton variant="secondary" size="sm" (click)="OpenPermissionsDialog()">
+                    <i class="fa-solid fa-shield-halved"></i> Manage Permissions
                 </button>
             }
 
@@ -35,11 +35,9 @@
     }
 </mj-collapsible-panel>
 
-@if (ShareContext) {
-    <mj-resource-share-dialog
-        [Visible]="ShareDialogVisible"
-        [Context]="ShareContext"
-        [Adapter]="ShareAdapter"
-        (Result)="OnShareDialogResult($event)">
-    </mj-resource-share-dialog>
+@if (PermissionsDialogVisible) {
+    <mj-skill-permissions-dialog
+        [Skill]="Record"
+        (Closed)="OnPermissionsDialogClosed()">
+    </mj-skill-permissions-dialog>
 }

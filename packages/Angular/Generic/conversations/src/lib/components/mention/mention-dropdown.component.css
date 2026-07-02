@@ -56,6 +56,13 @@
   background: var(--mj-brand-primary);
 }
 
+/* Skill icon container: standard green fallback (a skill's own AISkill.Color overrides via
+   inline style) + sharp corners — mirrors the rectangular skill chip in composer + messages. */
+.suggestion-icon.skill {
+  background: var(--mj-status-success);
+  border-radius: 4px;
+}
+
 .suggestion-icon .suggestion-image {
   width: 32px;
   height: 32px;
@@ -98,6 +105,11 @@
 
 .suggestion-type-badge.query {
   background: var(--mj-status-warning);
+}
+
+/* Skills: standard green (a skill's own AISkill.Color overrides via inline style). */
+.suggestion-type-badge.skill {
+  background: var(--mj-status-success);
 }
 
 .suggestion-description {

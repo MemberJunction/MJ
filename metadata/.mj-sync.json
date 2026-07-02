@@ -46,6 +46,7 @@
     "agent-types",
     "client-tool-definitions",
     "agents",
+    "ai-skills",
     "vector-databases",
     "vector-indexes",
     "entity-document-types",

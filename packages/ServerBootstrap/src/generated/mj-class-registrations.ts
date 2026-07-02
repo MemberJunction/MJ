@@ -67,10 +67,10 @@ import {
 
 // @memberjunction/ai-gemini (4 classes)
 import {
-    GeminiEmbedding2,
     GeminiImageGenerator,
     GeminiLLM,
     GeminiRealtime,
+    GeminiEmbedding,
 } from '@memberjunction/ai-gemini';
 
 // @memberjunction/ai-groq (1 classes)
@@ -588,6 +588,7 @@ import {
     MJWorkspaceItemEntity,
     QueryPermissionProvider,
     ResourcePermissionProvider,
+    AISkillPermissionProvider,
 } from '@memberjunction/core-entities';
 
 // @memberjunction/actions-base (2 classes)
@@ -1042,6 +1043,8 @@ import {
     SearchResultSetToolLibrary,
     TextToolLibrary,
     WhiteboardChannelServer,
+    AISkillExportMarkdownServerOperation,
+    AISkillImportMarkdownServerOperation,
 } from '@memberjunction/ai-agents';
 
 // @memberjunction/action-runtime-host (1 classes)
@@ -1105,6 +1108,7 @@ import {
     MJTemplateContentEntityServer,
     MJUserViewEntityServer,
     MJVectorIndexEntityServer,
+    MJAISkillPermissionEntityServer,
 } from '@memberjunction/core-entities-server';
 
 // @memberjunction/codegen-lib (5 classes)
@@ -1368,7 +1372,6 @@ export const CLASS_REGISTRATIONS: any[] = [
     ElevenLabsAudioGenerator,
     ElevenLabsRealtime,
     FireworksLLM,
-    GeminiEmbedding2,
     GeminiImageGenerator,
     GeminiLLM,
     GeminiRealtime,
@@ -2307,13 +2310,18 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJTenantFilterMiddleware,
     RateLimitMiddleware,
     SkipProxyAgent,
+    AISkillExportMarkdownServerOperation,
+    AISkillImportMarkdownServerOperation,
+    AISkillPermissionProvider,
+    GeminiEmbedding,
+    MJAISkillPermissionEntityServer,
 ];
 
 /** Marker constant indicating the manifest has been loaded. */
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 953;
+export const CLASS_REGISTRATIONS_COUNT = 957;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

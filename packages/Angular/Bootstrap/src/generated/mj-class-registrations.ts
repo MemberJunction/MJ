@@ -426,6 +426,7 @@ import {
     MJWorkspaceItemEntity,
     QueryPermissionProvider,
     ResourcePermissionProvider,
+    AISkillPermissionProvider,
 } from '@memberjunction/core-entities';
 
 // @memberjunction/actions-base (2 classes)
@@ -1287,13 +1288,14 @@ export const CLASS_REGISTRATIONS: any[] = [
     QueryResource,
     SearchResultsResource,
     UserViewResource,
+    AISkillPermissionProvider,
 ];
 
 /** Marker constant indicating the manifest has been loaded. */
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 593;
+export const CLASS_REGISTRATIONS_COUNT = 594;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
