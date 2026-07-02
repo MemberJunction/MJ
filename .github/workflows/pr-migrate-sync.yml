@@ -1,0 +1,134 @@
+name: Test metadata sync push
+
+# On every PR targeting `next` (and each push to such a PR), verify the committed
+# migrations + metadata are RUNTIME-valid: apply the migrations to a fresh DB, then
+# `mj sync push` the committed metadata against THAT schema. (`changes.yml` does the
+# STATIC migration-file checks; this is the runtime half of the ADR-009 convention —
+# metadata committed without its matching migration fails here.)
+#
+# ONE job, on purpose:
+#   * migrate + sync push are two STEPS of one job so applying the migrations IS the
+#     setup for sync push — one build, one migrate, one DB, handed straight across.
+#     (Separate jobs each get a fresh runner + empty DB; GitHub can't pass a live
+#     container between jobs.)
+#   * The job ALWAYS runs (no path filter on the job/workflow). The FIRST step decides
+#     whether this change can affect migrate/sync; if not, every heavy step below is
+#     skipped and the job still finishes green in seconds. Because the job always runs
+#     and always reports a result, it is safe to mark as a REQUIRED check — whereas a
+#     job/workflow skipped by a path filter never reports, and a required check that
+#     never reports blocks the PR forever. (GitHub still has no native per-job path
+#     filter as of 2026, so this first-step gate is the simple, dependency-free way.)
+#
+# Mark the "Migrate then metadata sync push" check as required on `next`.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [next]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Migrate then metadata sync push
+    timeout-minutes: 45
+    runs-on: ubuntu-latest
+    # The committed mj.config.cjs reads every DB credential from these env vars.
+    env:
+      DB_HOST: localhost
+      DB_DATABASE: test
+      DB_USERNAME: sa
+      DB_PASSWORD: VeryStr0ngP@ssw0rd
+      CODEGEN_DB_USERNAME: sa
+      CODEGEN_DB_PASSWORD: VeryStr0ngP@ssw0rd
+      DB_TRUST_SERVER_CERTIFICATE: 'true'
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0  # full history — matches the repo's other build jobs; lets the diff below see the PR base
+
+      # The gate: does this change touch migrations/ or metadata/ (or this workflow
+      # file itself)? If not, skip the heavy steps (still passes). Runs as the first
+      # STEP of the always-running job (not a separate job) precisely so the required
+      # check always reports.
+      - name: Decide whether to run the heavy steps
+        id: decide
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "Event is ${{ github.event_name }} (not a PR) — running."
+            exit 0
+          fi
+          CHANGED="$(git diff --name-only '${{ github.event.pull_request.base.sha }}' '${{ github.sha }}')"
+          # Match changes under migrations/ or metadata/, OR to this workflow file
+          # itself — so edits to the test are exercised end-to-end (including the PR
+          # that introduces it), instead of skipping because only .github/ changed.
+          if echo "$CHANGED" | grep -qE '^(migrations|metadata)/|^\.github/workflows/pr-migrate-sync\.yml$'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "migrations/, metadata/, or this workflow changed — running migrate + sync push."
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "No relevant changes — skipping heavy steps (job still passes)."
+          fi
+
+      # Same early guard the other DB-migrate workflows (migrations.yml, publish.yml)
+      # run before migrate: fail fast with a clear message on a malformed migration
+      # filename (bad timestamp, future date) instead of a cryptic flyway error later.
+      - name: Validate migration filenames
+        if: steps.decide.outputs.run == 'true'
+        run: ./.github/scripts/validate-migration-filenames.sh
+
+      - name: Create docker network
+        if: steps.decide.outputs.run == 'true'
+        run: docker network create -d bridge local-net
+
+      - name: Create SQL Server container
+        if: steps.decide.outputs.run == 'true'
+        run: docker run --rm -d --network local-net --name sql -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=VeryStr0ngP@ssw0rd" -p 1433:1433 mcr.microsoft.com/mssql/server:2022-latest
+
+      - name: Wait for SQL Server to be ready
+        if: steps.decide.outputs.run == 'true'
+        run: sleep 20  # Give SQL Server time to initialize
+
+      - name: Create SQL database
+        if: steps.decide.outputs.run == 'true'
+        run: docker run --rm --network local-net mcr.microsoft.com/mssql-tools /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -Q "CREATE DATABASE [test];"
+
+      - name: Set up node
+        if: steps.decide.outputs.run == 'true'
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: 'npm'
+          cache-dependency-path: 'package-lock.json'
+
+      - name: Install dependencies
+        if: steps.decide.outputs.run == 'true'
+        run: npm ci
+
+      # Build the local mj CLI (+ its dependency graph) so migrate + sync push run
+      # against THIS branch's CLI — not a published npm release. Scoped to
+      # @memberjunction/cli → skips the Angular/Explorer packages (~half the monorepo)
+      # this test never uses. Built ONCE; both steps below reuse it.
+      - name: Build mj CLI
+        if: steps.decide.outputs.run == 'true'
+        run: npx turbo build --filter=@memberjunction/cli
+
+      # Step A — migrations. Applying them IS the setup for sync push; the resulting
+      # live DB carries straight into step B. A failure here stops the job (fail-fast),
+      # so the red step is unambiguously "migrations".
+      - name: Migrate — apply committed migrations to the fresh DB
+        if: steps.decide.outputs.run == 'true'
+        run: node packages/MJCLI/bin/run.js migrate
+
+      # Step B — the actual test: reconcile committed metadata/ against the just-migrated
+      # DB. --dir=metadata points at the root .mj-sync.json (directoryOrder). --ci makes
+      # it non-interactive and fail (exit 1) on any error/validation issue. A red step
+      # here (with step A green) is unambiguously "sync push".
+      - name: Sync push — reconcile committed metadata (mj sync push --ci)
+        if: steps.decide.outputs.run == 'true'
+        run: node packages/MJCLI/bin/run.js sync push --dir=metadata --ci
