@@ -134,21 +134,17 @@
   <!-- Notifications Content -->
   <div class="notifications-content">
     @if (NotificationsToShow.length === 0 && AllNotifications.length === 0) {
-      <div class="empty-state">
-        <div class="empty-icon">
-          <i class="fa-solid fa-bell-slash"></i>
-        </div>
-        <h3>No Notifications</h3>
-        <p>You're all caught up! New notifications will appear here.</p>
-      </div>
+      <mj-empty-state
+        Variant="success"
+        Icon="fa-solid fa-bell-slash"
+        Title="No Notifications"
+        Message="You're all caught up! New notifications will appear here." />
     } @else if (NotificationsToShow.length === 0) {
-      <div class="empty-state">
-        <div class="empty-icon">
-          <i class="fa-solid fa-filter-circle-xmark"></i>
-        </div>
-        <h3>No Matching Notifications</h3>
-        <p>Try adjusting your filters to see more notifications.</p>
-      </div>
+      <mj-empty-state
+        Variant="no-results"
+        Icon="fa-solid fa-filter-circle-xmark"
+        Title="No Matching Notifications"
+        Message="Try adjusting your filters to see more notifications." />
     } @else {
       <!-- Notifications List -->
       <div class="notifications-list">

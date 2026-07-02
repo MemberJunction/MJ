@@ -172,7 +172,7 @@
     <mj-collapsible-panel
         SectionKey="applicationIntegration"
         SectionName="Application Integration"
-        Icon="fa fa-plug"
+        Icon="fa fa-info-circle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -205,7 +205,34 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="AdditionalData"
-            Type="code"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Meeting Media Section -->
+    <mj-collapsible-panel
+        SectionKey="meetingMedia"
+        SectionName="Meeting Media"
+        Icon="fa fa-video"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="RecordingFileID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="EgressID"
+            Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>

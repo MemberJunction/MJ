@@ -566,61 +566,24 @@
    EMPTY STATE
    ============================================================ */
 
-.component-studio .empty-state {
+/* The canvas (.panel-center) is a flex-row container, so the empty-state must
+   grow to fill it and center — restores the old .empty-state flex:1 + bg. */
+.component-studio mj-empty-state {
   flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   background: var(--mj-bg-surface-sunken);
 }
 
-.component-studio .empty-state .empty-state-content {
-  text-align: center;
-  max-width: 400px;
-}
-
-.component-studio .empty-state .empty-state-content .empty-state-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 72px;
-  height: 72px;
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
-  margin-bottom: 16px;
-}
-
-.component-studio .empty-state .empty-state-content .empty-state-icon i {
-  font-size: 28px;
-  color: var(--mj-brand-primary);
-}
-
-.component-studio .empty-state .empty-state-content i {
-  color: var(--mj-border-default);
-  margin-bottom: 16px;
-}
-
-.component-studio .empty-state .empty-state-content h2 {
-  margin: 0 0 8px;
-  font-size: 22px;
-  font-weight: 600;
-  color: var(--mj-text-primary);
-}
-
-.component-studio .empty-state .empty-state-content p {
-  margin: 0 0 24px;
-  color: var(--mj-text-secondary);
-  font-size: 14px;
-  line-height: 1.5;
-}
-
-.component-studio .empty-state .empty-state-content .empty-state-actions {
+/* Onboarding actions + quick-start row are projected into <mj-empty-state>.
+   The actions need a top margin to separate from the message — the old layout
+   got this from the message paragraph's margin-bottom, removed with its CSS. */
+.component-studio .empty-state-actions {
   display: flex;
   gap: 8px;
   justify-content: center;
+  margin-top: var(--mj-space-6);
 }
 
-.component-studio .empty-state .empty-state-content .quick-start-templates {
+.component-studio .quick-start-templates {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -629,13 +592,13 @@
   margin-top: 16px;
 }
 
-.component-studio .empty-state .empty-state-content .quick-start-templates .quick-start-label {
+.component-studio .quick-start-templates .quick-start-label {
   font-size: 12px;
   color: var(--mj-text-secondary);
   margin-right: 4px;
 }
 
-.component-studio .empty-state .empty-state-content .quick-start-templates .quick-start-btn {
+.component-studio .quick-start-templates .quick-start-btn {
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -649,13 +612,13 @@
   transition: all 0.15s ease;
 }
 
-.component-studio .empty-state .empty-state-content .quick-start-templates .quick-start-btn:hover {
+.component-studio .quick-start-templates .quick-start-btn:hover {
   background: var(--mj-bg-surface-sunken);
   color: var(--mj-text-primary);
   border-color: var(--mj-border-default);
 }
 
-.component-studio .empty-state .empty-state-content .quick-start-templates .quick-start-btn i {
+.component-studio .quick-start-templates .quick-start-btn i {
   font-size: 11px;
   color: var(--mj-brand-primary);
   margin-bottom: 0;

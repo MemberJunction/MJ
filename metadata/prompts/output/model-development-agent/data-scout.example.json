@@ -1,0 +1,21 @@
+{
+  "taskComplete": true,
+  "message": "Proposed data sources and features for the churn target, drawn from approved queries and entity documentation. Important: I flagged 'last_payment_date' as a leakage risk — it's only populated after renewal, so it would secretly encode the answer. I've marked it to exclude.",
+  "reasoning": "Used approved MJ: Queries and DBAutoDoc to identify engagement and tenure signals; enumerated leakage risks aggressively.",
+  "payloadChangeRequest": {
+    "updateElements": {
+      "CandidateSources": [
+        { "Kind": "Query", "Ref": "Member Engagement Summary", "Why": "Approved query with per-member login and activity counts — engagement is a leading churn indicator." },
+        { "Kind": "Entity", "Ref": "Members", "Why": "Tenure, plan tier, and demographic attributes available at prediction time." }
+      ],
+      "CandidateFeatures": [
+        { "Name": "LoginCountLast30Days", "SourceRef": "Member Engagement Summary", "Kind": "numeric", "Why": "Recent disengagement is an early churn signal." },
+        { "Name": "TenureMonths", "SourceRef": "Members", "Kind": "numeric", "Why": "Newer members churn at different rates than long-tenured ones." },
+        { "Name": "PlanTier", "SourceRef": "Members", "Kind": "categorical", "Why": "Tier correlates with commitment and price sensitivity." }
+      ],
+      "LeakageNotes": [
+        { "Field": "last_payment_date", "Risk": "Only populated after a renewal occurs, so it directly reveals the outcome — a classic leak that looks great in testing but is unusable in production.", "Action": "exclude" }
+      ]
+    }
+  }
+}

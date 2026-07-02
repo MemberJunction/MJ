@@ -38,16 +38,14 @@
             <mj-loading text="Loading agent requests..."></mj-loading>
         </div>
     } @else if (FilteredRequests.length === 0) {
-        <div class="empty-state">
-            <i class="fa-solid fa-inbox empty-icon"></i>
-            @if (Requests.length === 0) {
-                <p class="empty-text">No agent requests yet</p>
-                <p class="empty-subtext">When agents need human input, their requests will appear here.</p>
-            } @else {
-                <p class="empty-text">No requests match your filters</p>
-                <button class="clear-filters-btn" (click)="ClearFilters()">Clear Filters</button>
-            }
-        </div>
+        <mj-empty-state
+            [Variant]="Requests.length === 0 ? 'empty' : 'no-results'"
+            Icon="fa-solid fa-inbox"
+            [Title]="Requests.length === 0 ? 'No agent requests yet' : 'No requests match your filters'"
+            [Message]="Requests.length === 0 ? 'When agents need human input, their requests will appear here.' : ''"
+            [ActionText]="Requests.length === 0 ? '' : 'Reset filters'"
+            ActionIcon="fa-solid fa-rotate-left"
+            (Action)="ClearFilters()" />
     } @else {
         <div class="requests-list">
             @for (request of FilteredRequests; track request.ID) {

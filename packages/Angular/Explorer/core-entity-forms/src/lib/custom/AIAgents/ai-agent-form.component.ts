@@ -274,6 +274,11 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
     public executionSearchText: string = '';
     public filteredExecutions: MJAIAgentRunEntityExtended[] = [];
 
+    /** Message shown when the execution-history search matches nothing. */
+    public get ExecutionSearchEmptyMessage(): string {
+        return `No execution history found matching "${this.executionSearchText}"`;
+    }
+
     /** Which record type the Execution History section shows: agent runs (default) or realtime voice sessions */
     public executionHistoryView: 'runs' | 'sessions' = 'runs';
 

@@ -62,20 +62,25 @@
     </div>
   }
 
-  <!-- Collapsible filter expression summary -->
+  <!-- Collapsible filter expression summary — migrated to <mj-accordion-panel>.
+       The bespoke .expression-toggle / chevron and the @if(isSummaryExpanded) body
+       gate are replaced by the accordion header/chevron and lazy/animated body.
+       toggleSummary() is a pure flip + Default CD, so two-way [(Expanded)] is used. -->
   @if (showSummary && hasActiveFilters) {
-    <div class="filter-expression-summary" [class.expanded]="isSummaryExpanded">
-      <button type="button" class="expression-toggle" (click)="toggleSummary()">
-        <i class="fa-solid" [class.fa-chevron-right]="!isSummaryExpanded" [class.fa-chevron-down]="isSummaryExpanded"></i>
+    <mj-accordion-panel
+      Size="sm"
+      [FlushBody]="true"
+      [(Expanded)]="isSummaryExpanded">
+      <ng-template mjAccordionTitle>
         <i class="fa-solid fa-code expression-icon"></i>
         <span class="expression-label">View Filter Expression</span>
-        <span class="expression-badge">{{ getFilterCount() }}</span>
-      </button>
-      @if (isSummaryExpanded) {
+        <span class="mj-accordion-badge mj-accordion-badge--right">{{ getFilterCount() }}</span>
+      </ng-template>
+      <ng-template mjAccordionBody>
         <div class="expression-content">
           <pre class="expression-text" [innerHTML]="getFilterSummaryHtml()"></pre>
         </div>
-      }
-    </div>
+      </ng-template>
+    </mj-accordion-panel>
   }
 </div>

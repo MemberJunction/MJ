@@ -35,10 +35,8 @@
             </div>
 
             @if (card.Items.length === 0) {
-              <div class="ch-empty">
-                <i class="fa-solid fa-circle-check"></i>
-                <span>No {{ card.Meta.Title | lowercase }} right now.</span>
-              </div>
+              <mj-empty-state class="ch-empty" Variant="success" Size="compact" Icon="fa-solid fa-circle-check"
+                [Title]="'No ' + card.Meta.Title.toLowerCase() + ' right now.'" />
             } @else {
               <!-- Top examples (capped at PreviewLimit) -->
               <div class="ch-list">

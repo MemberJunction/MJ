@@ -9,17 +9,11 @@
   }
 
   @if (ErrorMessage && !IsLoading) {
-    <div class="message error">
-      <i class="fa-solid fa-exclamation-circle"></i>
-      <span>{{ ErrorMessage }}</span>
-    </div>
+    <mj-alert Variant="error">{{ ErrorMessage }}</mj-alert>
   }
 
   @if (SuccessMessage && !IsLoading) {
-    <div class="message success">
-      <i class="fa-solid fa-check-circle"></i>
-      <span>{{ SuccessMessage }}</span>
-    </div>
+    <mj-alert Variant="success">{{ SuccessMessage }}</mj-alert>
   }
 
   @if (!IsLoading && !ErrorMessage) {
@@ -35,10 +29,10 @@
         </div>
         <div class="panel-content">
           @if (AvailableApps.length === 0) {
-            <div class="empty-state">
-              <i class="fa-solid fa-check-circle"></i>
-              <span>All applications are selected</span>
-            </div>
+            <mj-empty-state
+              Size="compact"
+              Icon="fa-solid fa-circle-check"
+              Title="All applications are selected" />
           }
           @for (item of AvailableApps; track item.App.ID) {
             <div class="app-item" (click)="AddApp(item)">
@@ -74,10 +68,10 @@
         </div>
         <div class="panel-content" (dragover)="OnDragOver($event)">
           @if (ActiveApps.length === 0) {
-            <div class="empty-state">
-              <i class="fa-solid fa-arrow-left"></i>
-              <span>Add applications from the list</span>
-            </div>
+            <mj-empty-state
+              Size="compact"
+              Icon="fa-solid fa-arrow-left"
+              Title="Add applications from the list" />
           }
           @for (item of ActiveApps; track item.App.ID; let i = $index; let first = $first; let last = $last) {
             <div

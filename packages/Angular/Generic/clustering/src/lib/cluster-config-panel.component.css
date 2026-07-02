@@ -189,34 +189,11 @@
 }
 
 /* Multi-entity source selector */
-.multi-source-toggle {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    width: 100%;
-    padding: 8px 10px;
-    background: var(--mj-bg-surface-sunken);
-    border: 1px solid var(--mj-border-default);
-    border-radius: 8px;
-    color: var(--mj-text-secondary);
-    font-size: 0.78rem;
-    font-weight: 600;
-    cursor: pointer;
-}
-
-.multi-source-toggle:hover { color: var(--mj-text-primary); }
-
-.multi-source-badge {
-    margin-left: auto;
-    background: var(--mj-brand-primary);
-    color: var(--mj-text-inverse);
-    border-radius: 10px;
-    padding: 1px 8px;
-    font-size: 0.7rem;
-}
+/* .multi-source-toggle / .multi-source-badge removed: the bespoke disclosure
+   toggle + count pill were replaced by <mj-accordion-panel> (header/chevron)
+   and the standard .mj-accordion-badge--right. */
 
 .multi-source-list {
-    margin-top: 6px;
     border: 1px solid var(--mj-border-default);
     border-radius: 8px;
     padding: 8px;

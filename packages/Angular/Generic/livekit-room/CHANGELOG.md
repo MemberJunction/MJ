@@ -1,5 +1,23 @@
 # @memberjunction/ng-livekit-room
 
+## 5.44.0
+
+### Minor Changes
+
+- 5de2d37: `LiveKitRoomComponent`: make the room controller injectable. The component previously did `new LiveKitRoomController()` inline (untestable, no seam to substitute); it now resolves a new exported `LIVEKIT_ROOM_CONTROLLER_FACTORY` injection token and invokes it. The default factory returns `new LiveKitRoomController()`, so **runtime behavior is unchanged** — this is purely additive.
+
+  A host (or test) can now provide an alternate/fake controller: `{ provide: LIVEKIT_ROOM_CONTROLLER_FACTORY, useValue: () => myController }`. Used to add a container-level DOM spec that drives the room entirely from a fake controller (no `livekit-client`, no media), proving the injected-fake-container test pattern.
+
+### Patch Changes
+
+- 0476455: Migrate inline empty-state placeholders to the canonical `<mj-empty-state>` component across Explorer and Generic Angular packages (UI-consistency objective O4), wiring the component into the packages that needed it (and adding `@memberjunction/ng-ui-components` as a dependency where missing). Also fixes reset-filter CTA correctness in three picker dialogs (sub-agent selector, add-action, action gallery) where the handler cleared only a subset of the active filter dimensions, and refines the UI adoption measurement script with a transparent three-tier empty-state count (raw widened → non-placeholder false-positives → wrappers-around-migrated → genuine).
+- Updated dependencies [f8be8a0]
+- Updated dependencies [1e5e449]
+- Updated dependencies [0476455]
+  - @memberjunction/ng-ui-components@5.44.0
+  - @memberjunction/ng-whiteboard@5.44.0
+  - @memberjunction/livekit-room-core@5.44.0
+
 ## 5.43.0
 
 ### Minor Changes

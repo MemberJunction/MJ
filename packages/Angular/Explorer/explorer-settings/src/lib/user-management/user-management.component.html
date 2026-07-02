@@ -294,11 +294,14 @@
           }
 
           @if (filteredUsers.length === 0) {
-            <div class="empty-state" role="status">
-              <i class="fa-solid fa-users-slash empty-icon" aria-hidden="true"></i>
-              <p class="empty-text">No users found</p>
-              <p class="empty-subtext">Try adjusting your filters or add a new user</p>
-            </div>
+            <mj-empty-state
+              [Variant]="IsListNarrowed ? 'no-results' : 'empty'"
+              Icon="fa-solid fa-users-slash"
+              Title="No users found"
+              Message="Try adjusting your filters or add a new user"
+              [ActionText]="IsListNarrowed ? 'Reset filters' : ''"
+              ActionIcon="fa-solid fa-rotate-left"
+              (Action)="resetAllFiltersAndSearch()" />
           }
         </div>
     }

@@ -51,9 +51,10 @@ interface ConversationMember {
             @if (!isLoading) {
               <div class="members-list">
                 @if (members.length === 0) {
-                  <div class="empty-state">
-                    <p>No additional members yet</p>
-                  </div>
+                  <mj-empty-state
+                    Icon="fa-solid fa-user-group"
+                    Title="No additional members yet"
+                    Size="compact" />
                 }
                 @for (member of members; track member) {
                   <div class="member-item">
@@ -197,17 +198,6 @@ interface ConversationMember {
     .btn-remove:hover {
       background: #ffebee;
       color: #d32f2f;
-    }
-
-    .empty-state {
-      padding: 24px;
-      text-align: center;
-      color: #999;
-    }
-
-    .empty-state p {
-      margin: 0;
-      font-size: 13px;
     }
 
     .loading-indicator {

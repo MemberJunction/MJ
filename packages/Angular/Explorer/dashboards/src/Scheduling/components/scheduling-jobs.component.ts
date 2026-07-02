@@ -229,6 +229,26 @@ export class SchedulingJobsComponent implements OnInit, OnDestroy {
     if (this.TypeFilter) this.OnTypeFilterChange('');
   }
 
+  /** True when search and/or filters narrow the job list. */
+  public get IsListNarrowed(): boolean {
+    return this.SearchTerm !== '' || this.ActiveFilterCount > 0;
+  }
+
+  /** Reset search + all filters (used by the no-results empty-state CTA). */
+  public ResetAllFiltersAndSearch(): void {
+    if (this.SearchTerm) this.OnSearchChange('');
+    this.ResetFilters();
+  }
+
+  /** Empty-state primary CTA: reset when narrowed, otherwise create a job. */
+  public OnEmptyStateAction(): void {
+    if (this.IsListNarrowed) {
+      this.ResetAllFiltersAndSearch();
+    } else {
+      this.OpenCreateSlideout();
+    }
+  }
+
   public Refresh(): void {
     this.schedulingService.refresh();
   }

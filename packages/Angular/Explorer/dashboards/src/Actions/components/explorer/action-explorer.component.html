@@ -126,29 +126,14 @@
     <!-- Content Area -->
     <div class="explorer-content">
       @if (FilteredActions.length === 0 && !IsLoading) {
-        <div class="empty-state">
-          @if (StateService.hasActiveFilters() || SelectedCategoryId !== 'all') {
-            <i class="fa-solid fa-filter-circle-xmark"></i>
-            <h3>No actions match your filters</h3>
-            <p>Try adjusting your search or filter criteria</p>
-            <button mjButton
-              variant="outline"
-              (click)="StateService.clearFilters(); StateService.setSelectedCategoryId('all')">
-              <i class="fa-solid fa-times"></i>
-              Clear All Filters
-            </button>
-          } @else {
-            <i class="fa-solid fa-bolt"></i>
-            <h3>No actions yet</h3>
-            <p>Create your first action to get started</p>
-            <button mjButton
-              variant="primary"
-              (click)="onNewAction()">
-              <i class="fa-solid fa-plus"></i>
-              Create Action
-            </button>
-          }
-        </div>
+        <mj-empty-state
+          [Variant]="IsListNarrowed ? 'no-results' : 'empty'"
+          [Icon]="IsListNarrowed ? 'fa-solid fa-filter-circle-xmark' : 'fa-solid fa-bolt'"
+          [Title]="IsListNarrowed ? 'No actions match your filters' : 'No actions yet'"
+          [Message]="IsListNarrowed ? 'Try adjusting your search or filter criteria' : 'Create your first action to get started'"
+          [ActionText]="IsListNarrowed ? 'Reset filters' : 'Create Action'"
+          [ActionIcon]="IsListNarrowed ? 'fa-solid fa-rotate-left' : 'fa-solid fa-plus'"
+          (Action)="onEmptyStateAction()" />
       } @else {
         <!-- Card View -->
         @if (ViewMode === 'card') {

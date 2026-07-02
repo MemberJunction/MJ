@@ -16,6 +16,19 @@ import { TagEngineBase } from '@memberjunction/tag-engine-base';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { MJLeftNavItem, MJLeftNavSection } from '@memberjunction/ng-ui-components';
+import {
+    buildAnalyticsAgentContext,
+    isValidAnalyticsTab,
+    isValidAnalyticsDateRange,
+    resolveAnalyticsName,
+    buildAnalyticsNotFoundError,
+    capAnalyticsList,
+    ANALYTICS_TABS,
+    ANALYTICS_DATE_RANGES,
+    AnalyticsTab,
+    AnalyticsDateRange,
+} from './analytics-agent-context';
+import { validateStringParam } from '../../../shared/agent-tool-validation';
 
 // ================================================================
 // Interfaces
@@ -444,42 +457,224 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
         this.NotifyLoadComplete();
     }
 
+    /**
+     * Publish the surface state to the AI agent. Re-emitted on every meaningful
+     * state change (tab switch, date-range / entity filter, source selection,
+     * drill-down open/close, data load, co-occurrence recompute). Deepened to
+     * Data-Explorer depth: the always-on KPI/filter strip plus the ACTIVE tab's
+     * deep slice (top tags + co-occurrence, source comparison, quality stats,
+     * cost KPIs) — built by the pure, mode-scoped {@link buildAnalyticsAgentContext}.
+     */
     private emitAgentContext(): void {
-        this.navigationService.SetAgentContext(this, {
-            ActiveTab: this.ActiveTab,
+        const activeTab: AnalyticsTab = isValidAnalyticsTab(this.ActiveTab) ? this.ActiveTab : 'overview';
+        this.navigationService.SetAgentContext(this, buildAnalyticsAgentContext({
+            ActiveTab: activeTab,
             DateRange: this.ActiveDateRange,
             EntityFilter: this.EntityFilter,
-            KPIs: this.KPIs.map(k => ({ Label: k.Label, Value: k.Value })),
-        });
+            EntityFilterOptions: this.EntityFilterOptions,
+            IsLoading: this.IsLoading,
+            DrillDownTarget: this.DrillDownTarget,
+            KPIs: this.KPIs.map(k => ({ Label: k.Label, Value: k.Value, Delta: k.Delta })),
+            PipelineStatusText: this.PipelineStatusText,
+            PipelineStatusOk: this.PipelineStatusOk,
+            TopTags: this.TopTags.map(t => ({
+                Name: t.Name, UsageCount: t.UsageCount, AvgWeight: t.AvgWeight, TopEntity: t.TopEntity,
+            })),
+            CoOccurrencePairs: this.CoOccurrencePairs.map(p => ({
+                TagAName: p.TagAName, TagBName: p.TagBName, Count: p.Count,
+            })),
+            CoOccurrenceLastComputed: this.CoOccurrenceLastComputed,
+            SourceComparison: this.SourceComparison.map(s => ({
+                Name: s.Name, Items: s.Items, AvgWeight: s.AvgWeight, Status: s.Status,
+            })),
+            SelectedSourceName: this.SelectedSourceName,
+            QualityScore: this.QualityScore,
+            ConfidenceStats: this.ConfidenceStats.map(c => ({ Label: c.Label, Value: c.Value })),
+            CostKPIs: this.CostKPIs.map(c => ({ Label: c.Label, Value: c.Value })),
+        }));
     }
 
+    /**
+     * 🚨 SAFETY BOUNDARY (Knowledge Hub · Analytics)
+     * ------------------------------------------------------------------
+     * Analytics is a READ-ONLY reporting surface. The agent may SWITCH tabs,
+     * SET the date-range / entity filter, SELECT a source, OPEN / CLOSE a
+     * drill-down, EXPORT the visible data as CSV, and RECOMPUTE the
+     * co-occurrence matrix (an idempotent, server-side aggregate refresh —
+     * the same deliberate button the user has).
+     *
+     * Intentionally NOT exposed: nothing mutates content, tags, sources, or
+     * runs. There is no archive/edit/delete path on this surface to gate; the
+     * co-occurrence recompute only re-derives an aggregate table. CSV export is
+     * a local download of already-visible aggregate rows (no record bodies).
+     * Tolerant handlers: every Handler returns { Success, Data?, ErrorMessage? }
+     * and never throws; source / entity-filter references resolve by
+     * exact→contains name match with an "available names" error on a miss.
+     */
     private registerAgentTools(): void {
         this.navigationService.SetAgentClientTools(this, [
             {
                 Name: 'SwitchAnalyticsTab',
-                Description: 'Switch to a specific analytics tab (overview, tags, sources, pipeline, quality)',
-                ParameterSchema: { type: 'object', properties: { tab: { type: 'string' } }, required: ['tab'] },
+                Description: 'Switch to a specific analytics tab (overview, tags, sources, pipeline, quality, cost)',
+                ParameterSchema: {
+                    type: 'object',
+                    properties: { tab: { type: 'string', enum: [...ANALYTICS_TABS] } },
+                    required: ['tab'],
+                },
                 Handler: async (params: Record<string, unknown>) => {
-                    this.SelectTab(params['tab'] as string);
-                    return { Success: true };
+                    if (!isValidAnalyticsTab(params['tab'])) {
+                        return { Success: false, ErrorMessage: `Invalid tab. Expected one of: ${ANALYTICS_TABS.join(', ')}.` };
+                    }
+                    this.SelectTab(params['tab']);
+                    return { Success: true, Data: { ActiveTab: this.ActiveTab } };
                 },
             },
             {
                 Name: 'SetAnalyticsDateRange',
                 Description: 'Set the analytics date range filter (7D, 30D, 90D, YTD, All)',
-                ParameterSchema: { type: 'object', properties: { range: { type: 'string' } }, required: ['range'] },
+                ParameterSchema: {
+                    type: 'object',
+                    properties: { range: { type: 'string', enum: [...ANALYTICS_DATE_RANGES] } },
+                    required: ['range'],
+                },
                 Handler: async (params: Record<string, unknown>) => {
-                    this.SetDateRange(params['range'] as string);
+                    if (!isValidAnalyticsDateRange(params['range'])) {
+                        return { Success: false, ErrorMessage: `Invalid range. Expected one of: ${ANALYTICS_DATE_RANGES.join(', ')}.` };
+                    }
+                    this.SetDateRange(params['range'] as AnalyticsDateRange);
+                    return { Success: true, Data: { DateRange: this.ActiveDateRange } };
+                },
+            },
+            {
+                Name: 'SetAnalyticsEntityFilter',
+                Description: 'Filter the analytics surface to a specific entity / content type (by name, or "All Entities" to clear).',
+                ParameterSchema: {
+                    type: 'object',
+                    properties: { entity: { type: 'string', description: 'The entity / content-type label, or "All Entities".' } },
+                    required: ['entity'],
+                },
+                Handler: async (params: Record<string, unknown>) => {
+                    const check = validateStringParam(params['entity'], 'entity');
+                    if (!check.ok) {
+                        return check.result;
+                    }
+                    const match = resolveAnalyticsName(check.value, this.EntityFilterOptions);
+                    if (!match) {
+                        return buildAnalyticsNotFoundError(check.value, this.EntityFilterOptions, 'entity filter');
+                    }
+                    this.SetEntityFilter(match);
+                    return { Success: true, Data: { EntityFilter: this.EntityFilter } };
+                },
+            },
+            {
+                Name: 'SelectAnalyticsSource',
+                Description: 'Select a content source on the Sources tab to view its detail (by name). Switches to the Sources tab.',
+                ParameterSchema: {
+                    type: 'object',
+                    properties: { source: { type: 'string', description: 'The content-source name.' } },
+                    required: ['source'],
+                },
+                Handler: async (params: Record<string, unknown>) => {
+                    const check = validateStringParam(params['source'], 'source');
+                    if (!check.ok) {
+                        return check.result;
+                    }
+                    const names = this.SourceComparison.map(s => s.Name);
+                    const match = resolveAnalyticsName(check.value, names);
+                    if (!match) {
+                        return buildAnalyticsNotFoundError(check.value, names, 'source');
+                    }
+                    if (this.ActiveTab !== 'sources') {
+                        this.SelectTab('sources');
+                    }
+                    this.SelectSource(match);
+                    this.emitAgentContext();
+                    return { Success: true, Data: { SelectedSourceName: this.SelectedSourceName } };
+                },
+            },
+            {
+                Name: 'OpenAnalyticsDrillDown',
+                Description: 'Open the drill-down table for a KPI or widget key (e.g. kpi-totalTags, tagGrowth, dailyThroughput). Toggles closed if already open for that key.',
+                ParameterSchema: {
+                    type: 'object',
+                    properties: { key: { type: 'string', description: 'The drill-down key.' } },
+                    required: ['key'],
+                },
+                Handler: async (params: Record<string, unknown>) => {
+                    const check = validateStringParam(params['key'], 'key');
+                    if (!check.ok) {
+                        return check.result;
+                    }
+                    if (!check.value.trim()) {
+                        return { Success: false, ErrorMessage: 'key must be a non-empty drill-down key.' };
+                    }
+                    this.OpenDrillDown(check.value);
+                    this.emitAgentContext();
+                    return { Success: true, Data: { DrillDownTarget: this.DrillDownTarget } };
+                },
+            },
+            {
+                Name: 'CloseAnalyticsDrillDown',
+                Description: 'Close the currently open analytics drill-down table.',
+                ParameterSchema: { type: 'object', properties: {} },
+                Handler: async () => {
+                    this.CloseDrillDown();
+                    this.emitAgentContext();
                     return { Success: true };
                 },
             },
             {
                 Name: 'ExportAnalyticsCSV',
-                Description: 'Export analytics data as CSV',
-                ParameterSchema: { type: 'object', properties: { dataKey: { type: 'string' } }, required: ['dataKey'] },
+                Description: 'Export a named analytics data set as CSV (top-tags, kpis, cost-usage).',
+                ParameterSchema: {
+                    type: 'object',
+                    properties: { dataKey: { type: 'string', enum: ['top-tags', 'kpis', 'cost-usage'] } },
+                    required: ['dataKey'],
+                },
                 Handler: async (params: Record<string, unknown>) => {
-                    this.ExportTabDataCSV(params['dataKey'] as string);
+                    const check = validateStringParam(params['dataKey'], 'dataKey');
+                    if (!check.ok) {
+                        return check.result;
+                    }
+                    this.ExportTabDataCSV(check.value);
                     return { Success: true };
+                },
+            },
+            {
+                Name: 'RecomputeAnalyticsCoOccurrence',
+                Description: 'Recompute the tag co-occurrence matrix (idempotent server-side aggregate refresh).',
+                ParameterSchema: { type: 'object', properties: {} },
+                Handler: async () => {
+                    if (this.IsRecomputingCoOccurrence) {
+                        return { Success: false, ErrorMessage: 'A co-occurrence recompute is already in progress.' };
+                    }
+                    await this.RecomputeCoOccurrence();
+                    this.emitAgentContext();
+                    return { Success: true, Data: { CoOccurrencePairCount: this.CoOccurrencePairs.length } };
+                },
+            },
+            {
+                Name: 'RefreshAnalyticsData',
+                Description: 'Reload all analytics data from the database and rebuild every aggregation.',
+                ParameterSchema: { type: 'object', properties: {} },
+                Handler: async () => {
+                    await this.loadAllData();
+                    this.emitAgentContext();
+                    return { Success: true, Data: { KPICount: this.KPIs.length } };
+                },
+            },
+            {
+                Name: 'ListAnalyticsSources',
+                Description: 'List the content sources compared on the Sources tab (bounded).',
+                ParameterSchema: { type: 'object', properties: {} },
+                Handler: async () => {
+                    return {
+                        Success: true,
+                        Data: {
+                            Sources: capAnalyticsList(this.SourceComparison.map(s => ({ Name: s.Name, Items: s.Items, Status: s.Status }))),
+                            TotalCount: this.SourceComparison.length,
+                        },
+                    };
                 },
             },
         ]);
@@ -520,6 +715,7 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
         this.CloseDrillDown();
         this.rebuildAllAggregations();
         this.persistAnalyticsPreferences();
+        this.emitAgentContext();
         this.cdr.detectChanges();
     }
 
@@ -528,6 +724,7 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
         this.CloseDrillDown();
         this.rebuildAllAggregations();
         this.persistAnalyticsPreferences();
+        this.emitAgentContext();
         this.cdr.detectChanges();
     }
 

@@ -156,34 +156,30 @@
       @if (FilteredEntityGroups.length > 0) {
         <div class="entity-groups">
           @for (group of FilteredEntityGroups; track group) {
-            <div class="entity-group">
-              <div class="entity-group-header" (click)="ToggleEntityGroup(group)">
-                <div class="entity-group-left">
-                  <i class="fa-solid fa-chevron-right entity-chevron"
-                    [class.expanded]="group.IsExpanded">
-                  </i>
-                  <i [class]="group.EntityIcon" class="entity-icon"></i>
-                  <span class="entity-group-name">{{group.EntityName}}</span>
-                </div>
+            <mj-accordion-panel Size="sm" [FlushBody]="true"
+                [Expanded]="group.IsExpanded" (ExpandedChange)="ToggleEntityGroup(group)">
+              <ng-template mjAccordionTitle>
+                <i [class]="group.EntityIcon" class="entity-icon"></i>
+                <span class="entity-group-name">{{group.EntityName}}</span>
                 <div class="entity-group-badges">
                   @if (group.AddedCount > 0) {
-                    <span class="badge change-added">
+                    <span class="mj-accordion-badge mj-accordion-badge--success">
                       +{{group.AddedCount}}
                     </span>
                   }
                   @if (group.RemovedCount > 0) {
-                    <span class="badge change-removed">
+                    <span class="mj-accordion-badge mj-accordion-badge--error">
                       -{{group.RemovedCount}}
                     </span>
                   }
                   @if (group.ModifiedCount > 0) {
-                    <span class="badge change-modified">
+                    <span class="mj-accordion-badge mj-accordion-badge--warning">
                       ~{{group.ModifiedCount}}
                     </span>
                   }
                 </div>
-              </div>
-              @if (group.IsExpanded) {
+              </ng-template>
+              <ng-template mjAccordionBody>
                 <div class="entity-group-items">
                   @for (item of group.Items; track item) {
                     <div class="diff-item-wrapper">
@@ -234,36 +230,31 @@
                             }
                           }
                           @if (!item.IsLoadingFields && item.FieldsLoaded && item.FieldChanges.length === 0) {
-                            <div class="diff-fields-empty">
-                              <span>No field-level changes available</span>
-                            </div>
+                            <mj-empty-state class="diff-fields-empty" Size="compact"
+                              Icon="" Title="No field-level changes available" />
                           }
                         </div>
                       }
                     </div>
                   }
                 </div>
-              }
-            </div>
+              </ng-template>
+            </mj-accordion-panel>
           }
         </div>
       }
       <!-- No changes -->
       @if (FilteredEntityGroups.length === 0 && TotalChanges === 0) {
-        <div class="empty-state">
-          <i class="fa-solid fa-check-circle empty-icon" style="color: #10b981;"></i>
-          <h3>No differences found</h3>
-          <p>The compared states are identical.</p>
-        </div>
+        <mj-empty-state Variant="success"
+          Title="No differences found"
+          Message="The compared states are identical." />
       }
     }
     <!-- No results yet -->
     @if (!HasDiffResult && !IsDiffLoading) {
-      <div class="empty-state">
-        <i class="fa-solid fa-code-compare empty-icon"></i>
-        <h3>Select labels to compare</h3>
-        <p>Choose a diff mode and select labels above, then click Compare.</p>
-      </div>
+      <mj-empty-state Icon="fa-solid fa-code-compare"
+        Title="Select labels to compare"
+        Message="Choose a diff mode and select labels above, then click Compare." />
     }
   }
   </mj-page-body>

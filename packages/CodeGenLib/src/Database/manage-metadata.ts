@@ -990,10 +990,18 @@ export class ManageMetadataBase {
             if (UUIDsEqual(existingParentId, parentId)) {
                logStatus(`    > IS-A: "${childName}" already has ParentID set to "${parentName}", skipping`);
             } else {
-               // Set ParentID on the child entity
-               await this.runQueryWithParams(pool, `UPDATE ${this.qs(schema, 'Entity')} SET ParentID = @ParentID WHERE ID = @ChildID`,
-               { 'ParentID': parentId, 'ChildID': childId }
-               );
+               // Set ParentID on the child entity. Build an inlined (non-parameterized) UPDATE and
+               // run it via LogSQLAndExecute so the assignment is BOTH executed live AND serialized
+               // into the CodeGen_Run migration — mirroring applySoftPKFKConfig(). A parameterized
+               // runQueryWithParams() executes live but is never written to the migration file, so on
+               // any migration-only/clean deploy Entity.ParentID stays NULL, IsChildType is false, and
+               // creating a child record fails on the child→parent FK (the IS-A base view + mirrored
+               // virtual fields are already serialized, but this one flag was not).
+               const updateSQL = `UPDATE ${this.qs(schema, 'Entity')}
+                                  SET ${this.qi(EntityInfo.UpdatedAtFieldName)}=${this.utcNow()},
+                                      ${this.qi('ParentID')} = '${parentId}'
+                                  WHERE ${this.qi('ID')} = '${childId}'`;
+               await this.LogSQLAndExecute(pool, updateSQL, `Set IS-A ParentID for "${childName}" → "${parentName}"`);
 
                if (existingParentId) {
                   logStatus(`    > IS-A: Updated "${childName}" ParentID from previous value to "${parentName}"`);

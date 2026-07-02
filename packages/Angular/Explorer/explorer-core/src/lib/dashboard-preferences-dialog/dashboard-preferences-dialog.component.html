@@ -43,10 +43,11 @@
     }
 
     @if (error) {
-      <div class="error-container">
-        <i class="fa-solid fa-exclamation-triangle"></i>
-        {{ error }}
-      </div>
+      <mj-empty-state
+        Variant="error"
+        Size="compact"
+        Icon="fa-solid fa-triangle-exclamation"
+        [Title]="error" />
     }
 
     @if (!loading && !error) {
@@ -62,10 +63,11 @@
                (cdkDropListDropped)="onDrop($event)">
 
             @if (availableDashboards.length === 0) {
-              <div class="empty-state">
-                <i class="fa-solid fa-info-circle"></i>
-                All dashboards are configured
-              </div>
+              <mj-empty-state
+                Variant="success"
+                Size="compact"
+                Icon="fa-solid fa-circle-check"
+                Title="All dashboards are configured" />
             }
 
             @for (dashboard of availableDashboards; track dashboard.ID) {
@@ -103,10 +105,10 @@
                (cdkDropListDropped)="onDrop($event)">
 
             @if (configuredDashboards.length === 0) {
-              <div class="empty-state">
-                <i class="fa-solid fa-info-circle"></i>
-                No dashboards configured
-              </div>
+              <mj-empty-state
+                Size="compact"
+                Icon="fa-solid fa-circle-info"
+                Title="No dashboards configured" />
             }
 
             @for (dashboard of configuredDashboards; track dashboard.ID; let i = $index) {

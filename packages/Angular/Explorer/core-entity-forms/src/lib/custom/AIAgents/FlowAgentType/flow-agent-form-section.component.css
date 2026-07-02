@@ -16,23 +16,8 @@ mj-flow-agent-editor {
     min-height: 400px;
 }
 
+/* Fill the section's height so the placeholder centers in the available pane */
 .flow-empty-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 40px 20px;
-    text-align: center;
-    color: var(--mj-text-disabled);
-}
-
-.flow-empty-state i {
-    font-size: 32px;
-    margin-bottom: 12px;
-    color: var(--mj-border-strong);
-}
-
-.flow-empty-state p {
-    font-size: 14px;
-    margin: 0;
+    display: block;
+    min-height: 400px;
 }

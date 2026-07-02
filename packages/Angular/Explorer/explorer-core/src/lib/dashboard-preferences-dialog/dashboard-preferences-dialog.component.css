@@ -56,22 +56,13 @@
   padding: 20px 24px;
 }
 
-.loading-container, .error-container {
+.loading-container {
   display: flex;
   align-items: center;
   justify-content: center;
   height: 200px;
   flex-direction: column;
   gap: 12px;
-}
-
-.error-container {
-  color: var(--mj-status-error);
-}
-
-.error-container i {
-  font-size: 24px;
-  margin-bottom: 8px;
 }
 
 .preferences-panels {
@@ -108,22 +99,6 @@
   flex: 1;
   overflow-y: auto;
   padding: 8px;
-}
-
-.empty-state {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100px;
-  color: var(--mj-text-muted);
-  font-style: italic;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.empty-state i {
-  font-size: 24px;
-  opacity: 0.5;
 }
 
 .dashboard-item {

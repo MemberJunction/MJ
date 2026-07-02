@@ -125,7 +125,9 @@ export class MJUserFormComponent extends BaseFormComponent {
             { sectionKey: 'mJAIAgentSessions', sectionName: 'AI Agent Sessions', isExpanded: false },
             { sectionKey: 'mJAIAgentSessionBridgeParticipants', sectionName: 'AI Agent Session Bridge Participants', isExpanded: false },
             { sectionKey: 'mJRemoteOperations', sectionName: 'Remote Operations', isExpanded: false },
-            { sectionKey: 'mJProcessRuns', sectionName: 'Process Runs', isExpanded: false }
+            { sectionKey: 'mJProcessRuns', sectionName: 'Process Runs', isExpanded: false },
+            { sectionKey: 'mJAISkillPermissions', sectionName: 'AI Skill Permissions', isExpanded: false },
+            { sectionKey: 'mJAISkills', sectionName: 'AI Skills', isExpanded: false }
         ]);
     }
 }

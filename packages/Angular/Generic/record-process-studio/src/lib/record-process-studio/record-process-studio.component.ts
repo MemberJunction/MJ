@@ -9,7 +9,7 @@ import { ChangeDetectionStrategy, ChangeDetectorRef, Component, Input, OnInit, i
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { RunView } from '@memberjunction/core';
 import { EntityActionUXHostComponent, type EntityActionUXContext, type EntityActionUXResult } from '@memberjunction/ng-entity-action-ux';
-import { MJButtonDirective } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 import { RecordProcessEditorComponent } from '../record-process-editor/record-process-editor.component';
 
 /** A row of the process list (read-only projection). */
@@ -31,7 +31,7 @@ interface ProcessRow {
     selector: 'mj-record-process-studio',
     standalone: true,
     changeDetection: ChangeDetectionStrategy.OnPush,
-    imports: [RecordProcessEditorComponent, EntityActionUXHostComponent, MJButtonDirective],
+    imports: [RecordProcessEditorComponent, EntityActionUXHostComponent, MJButtonDirective, MJEmptyStateComponent],
     template: `
         @if (Mode === 'list') {
             <div class="rps-bar">
@@ -45,11 +45,12 @@ interface ProcessRow {
             @if (Loading) {
                 <div class="rps-msg"><i class="fa-solid fa-circle-notch fa-spin"></i> Loading…</div>
             } @else if (Filtered.length === 0) {
-                <div class="rps-empty">
-                    <i class="fa-solid fa-list-check"></i>
-                    <p>No bulk operations yet.</p>
-                    <button mjButton variant="primary" (click)="New()"><i class="fa-solid fa-plus"></i> Create one</button>
-                </div>
+                <mj-empty-state class="rps-empty"
+                    Icon="fa-solid fa-list-check"
+                    Title="No bulk operations yet"
+                    ActionText="Create one"
+                    ActionIcon="fa-solid fa-plus"
+                    (Action)="New()" />
             } @else {
                 <div class="rps-table">
                     <div class="rps-tr rps-head">

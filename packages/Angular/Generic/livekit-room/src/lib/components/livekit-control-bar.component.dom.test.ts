@@ -1,12 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { ComponentFixture } from '@angular/core/testing';
-import { renderComponentFixture } from '@memberjunction/ng-test-utils';
-
-// This branch's @memberjunction/ng-test-utils exposes only renderComponentFixture (the
-// dom-helpers are phase-2, not merged here). Thin local query helpers over the fixture's
-// nativeElement keep these specs self-contained and match the pilot specs' native-query style.
-const query = <T>(f: ComponentFixture<T>, sel: string): HTMLElement | null => f.nativeElement.querySelector(sel);
-const queryAll = <T>(f: ComponentFixture<T>, sel: string): HTMLElement[] => Array.from(f.nativeElement.querySelectorAll(sel));
+import { renderComponentFixture, query, queryAll } from '@memberjunction/ng-test-utils';
 import { LiveKitControlBarComponent } from './livekit-control-bar.component';
 
 /**

@@ -5,6 +5,7 @@ import { UUIDsEqual } from '@memberjunction/global';
 import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { MJConfirmService } from '@memberjunction/ng-ui-components';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 export interface ArtifactSelectionResult {
@@ -57,6 +58,7 @@ export class ArtifactSelectionDialogComponent extends BaseAngularComponent imple
   private searchSubject = new Subject<string>();
 
   private notificationService = inject(MJNotificationService);
+  private confirmService = inject(MJConfirmService);
   private cdr = inject(ChangeDetectorRef);
 
   async ngOnInit() {
@@ -294,11 +296,8 @@ export class ArtifactSelectionDialogComponent extends BaseAngularComponent imple
       
       // If updating, show confirmation
       if (this.versionAction === 'update') {
-        const confirm = window.confirm(
-          `Are you sure you want to overwrite version ${this.selectedVersion!.VersionNumber}? This action cannot be undone.`
-        );
-
-        if (!confirm) return;
+        const confirmed = await this.confirmService.Confirm({ title: 'Overwrite version', message: `Overwrite version ${this.selectedVersion!.VersionNumber}?`, detail: 'This action cannot be undone.' });
+        if (!confirmed) return;
       }
 
       this.Close.emit(result);

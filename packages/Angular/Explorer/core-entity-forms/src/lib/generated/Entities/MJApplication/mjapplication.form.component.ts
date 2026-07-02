@@ -19,6 +19,7 @@ export class MJApplicationFormComponent extends BaseFormComponent {
             { sectionKey: 'applicationConfiguration', sectionName: 'Application Configuration', isExpanded: true },
             { sectionKey: 'generalInformation', sectionName: 'General Information', isExpanded: true },
             { sectionKey: 'navigationSettings', sectionName: 'Navigation Settings', isExpanded: true },
+            { sectionKey: 'agentConfiguration', sectionName: 'Agent Configuration', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJApplicationEntities', sectionName: 'Entities', isExpanded: false },
             { sectionKey: 'mJApplicationSettings', sectionName: 'Application Settings', isExpanded: false },

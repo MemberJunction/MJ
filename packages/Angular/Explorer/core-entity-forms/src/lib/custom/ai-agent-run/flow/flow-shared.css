@@ -1,0 +1,27 @@
+/* Shared chrome for every flow renderer's <svg> host.
+   These components use ViewEncapsulation.None so this CSS reaches SVG nodes
+   created imperatively via createElementNS (which never receive Angular's
+   emulated-encapsulation scoping attribute). Everything is namespaced under
+   `.flow-svg` to avoid leaking into the rest of the app. */
+.flow-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+.flow-svg text { fill: var(--mj-text-primary); }
+.flow-svg .ftxt-secondary { fill: var(--mj-text-secondary); }
+.flow-svg .ftxt-muted { fill: var(--mj-text-muted); }
+.flow-svg .ftxt-on { fill: var(--mj-text-inverse); }
+.flow-svg .fgrid { stroke: var(--mj-border-subtle); }
+.flow-svg .fhand { stroke: var(--mj-text-secondary); }
+.flow-svg .fhand-dot { fill: var(--mj-text-primary); }
+.flow-svg .fstar-bg { fill: var(--mj-text-muted); }
+/* outlined label for legibility over edges / busy fields */
+.flow-svg .fhalo { paint-order: stroke; stroke: var(--mj-bg-page); stroke-width: 3.5px; stroke-linejoin: round; }
+
+/* Heat / activity glow tiers — driven by `currentColor` (the node's category color). */
+.flow-svg .glow1 { filter: drop-shadow(0 0 4px currentColor); }
+.flow-svg .glow2 { filter: drop-shadow(0 0 9px currentColor); }
+.flow-svg .glow3 { filter: drop-shadow(0 0 16px currentColor); }

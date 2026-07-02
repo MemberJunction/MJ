@@ -2,7 +2,9 @@ import { Dropbox, DropboxOptions, files } from 'dropbox';
 import { RegisterClass } from '@memberjunction/global';
 import env from 'env-var';
 import mime from 'mime-types';
+import { Readable } from 'stream';
 import {
+  BuildHttpRangeHeader,
   CreatePreAuthUploadUrlPayload,
   FileSearchOptions,
   FileSearchResult,
@@ -10,6 +12,8 @@ import {
   FileStorageBase,
   GetObjectParams,
   GetObjectMetadataParams,
+  GetObjectStreamParams,
+  ObjectStreamResult,
   StorageListResult,
   StorageObjectMetadata,
 } from '../generic/FileStorageBase';
@@ -1093,6 +1097,116 @@ export class DropboxFileStorage extends FileStorageBase {
       console.error('Error getting object', { params, error });
       throw new Error(`Failed to get object: ${params.objectId || params.fullPath}`);
     }
+  }
+
+  /**
+   * Dropbox supports ranged streaming: `filesGetTemporaryLink` returns a short-lived
+   * pre-authenticated content URL that honors the HTTP `Range` header.
+   */
+  public override get SupportsStreaming(): boolean {
+    return true;
+  }
+
+  /**
+   * Streams a file's content from Dropbox, optionally honoring a byte range.
+   *
+   * The Dropbox SDK's `filesDownload` returns the entire file binary in memory and exposes no
+   * Range seam, so this method instead requests a short-lived temporary content link via
+   * `filesGetTemporaryLink` and `fetch`es it with the inclusive `Range` encoded by
+   * {@link BuildHttpRangeHeader}. The Dropbox content endpoint honors the `Range` header. The fetch
+   * response body is a web `ReadableStream`, converted to a Node {@link Readable} via
+   * `Readable.fromWeb` so the file is never fully buffered. `Content-Type`/`Content-Length`/
+   * `Content-Range` are read off the HTTP response headers; the total object size falls back to the
+   * link's `metadata.size` when the server omits `Content-Range`.
+   *
+   * @param params - Object identifier (prefer objectId) plus optional Range.
+   * @returns A Promise resolving to an {@link ObjectStreamResult}.
+   * @throws Error if the file doesn't exist or cannot be streamed.
+   */
+  public override async GetObjectStream(params: GetObjectStreamParams): Promise<ObjectStreamResult> {
+    try {
+      // Validate params
+      if (!params.objectId && !params.fullPath) {
+        throw new Error('Either objectId or fullPath must be provided');
+      }
+
+      // Resolve to a Dropbox path (fast path via objectId — Dropbox IDs are prefixed with "id:").
+      const path = params.objectId
+        ? params.objectId.startsWith('id:')
+          ? params.objectId
+          : `id:${params.objectId}`
+        : this._normalizePath(params.fullPath!);
+
+      // filesGetTemporaryLink returns both a Range-capable content URL and the file metadata.
+      const linkResponse = await this._client.filesGetTemporaryLink({ path });
+      const downloadUrl = linkResponse.result.link;
+      const total = linkResponse.result.metadata?.size ?? 0;
+      const fileName = linkResponse.result.metadata?.name;
+      const fallbackContentType = fileName ? mime.lookup(fileName) || undefined : undefined;
+
+      const headers = params.Range ? { Range: BuildHttpRangeHeader(params.Range) } : undefined;
+      const response = await fetch(downloadUrl, headers ? { headers } : undefined);
+
+      if (!response.ok && response.status !== 206) {
+        throw new Error(`Failed to stream item: ${response.statusText}`);
+      }
+      if (!response.body) {
+        throw new Error(`Empty response body for object: ${params.objectId || params.fullPath}`);
+      }
+
+      // The fetch body is a WHATWG ReadableStream; convert to a Node Readable without buffering.
+      const stream = Readable.fromWeb(response.body as Parameters<typeof Readable.fromWeb>[0]);
+
+      const contentLengthHeader = response.headers.get('content-length');
+      const result: ObjectStreamResult = {
+        Stream: stream,
+        ContentType: response.headers.get('content-type') || fallbackContentType,
+        ContentLength: contentLengthHeader != null ? Number(contentLengthHeader) : undefined,
+      };
+
+      if (params.Range) {
+        const contentRange = this._parseDropboxContentRange(response.headers.get('content-range'));
+        if (contentRange) {
+          result.ContentRange = contentRange;
+          if (result.ContentLength == null) {
+            result.ContentLength = contentRange.End - contentRange.Start + 1;
+          }
+        } else {
+          // Server didn't echo a Content-Range; compute it from the metadata size, clamped.
+          const start = Math.min(params.Range.Start, Math.max(total - 1, 0));
+          const end = params.Range.End != null ? Math.min(params.Range.End, total - 1) : total - 1;
+          result.ContentRange = { Start: start, End: end, Total: total };
+          if (result.ContentLength == null) {
+            result.ContentLength = end - start + 1;
+          }
+        }
+      } else if (result.ContentLength == null && total > 0) {
+        result.ContentLength = total;
+      }
+
+      return result;
+    } catch (error) {
+      console.error('Error streaming object', { params, error });
+      throw new Error(`Failed to stream object: ${params.objectId || params.fullPath}`);
+    }
+  }
+
+  /**
+   * Parses an HTTP `Content-Range` header value (`bytes start-end/total`) into the structured
+   * form used by {@link ObjectStreamResult.ContentRange}.
+   *
+   * @param contentRange - The raw `Content-Range` header value from the download response, if present.
+   * @returns The parsed range, or undefined when no (valid) range header was returned.
+   */
+  private _parseDropboxContentRange(contentRange: string | null): { Start: number; End: number; Total: number } | undefined {
+    if (!contentRange) {
+      return undefined;
+    }
+    const match = /bytes\s+(\d+)-(\d+)\/(\d+)/.exec(contentRange);
+    if (!match) {
+      return undefined;
+    }
+    return { Start: Number(match[1]), End: Number(match[2]), Total: Number(match[3]) };
   }
 
   /**

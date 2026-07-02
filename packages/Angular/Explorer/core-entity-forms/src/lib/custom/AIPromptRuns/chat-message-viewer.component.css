@@ -51,25 +51,6 @@
     max-height: 800px;
 }
 
-.empty-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 3rem;
-    color: var(--mj-text-muted);
-}
-
-.empty-state i {
-    font-size: 3rem;
-    margin-bottom: 1rem;
-}
-
-.empty-state p {
-    font-size: 1rem;
-    margin: 0;
-}
-
 /* Message Card */
 .message-card {
     background: var(--mj-bg-surface-card);

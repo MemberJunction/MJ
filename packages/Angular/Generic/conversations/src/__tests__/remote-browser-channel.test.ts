@@ -42,6 +42,7 @@ function makeContext(
 ): RealtimeChannelContext {
   return {
     AgentName: 'Sage',
+    Provider: null,
     SendContextNote: (text: string) => log.Notes.push(text),
     RequestSave: () => undefined,
     SetFocusMode: () => undefined,
@@ -79,6 +80,7 @@ function makeDelayedSessionContext(
   setTimeout(() => { current = id; }, delayMs);
   return {
     AgentName: 'Sage',
+    Provider: null,
     SendContextNote: (text: string) => log.Notes.push(text),
     RequestSave: () => undefined,
     SetFocusMode: () => undefined,
@@ -643,6 +645,7 @@ describe('RemoteBrowserChannel — browser_AchieveGoal (async start + poll)', ()
     let pollIdx = 0;
     return {
       AgentName: 'Sage',
+      Provider: null,
       SendContextNote: (text: string) => log.Notes.push(text),
       RequestSave: () => undefined,
       SetFocusMode: () => undefined,

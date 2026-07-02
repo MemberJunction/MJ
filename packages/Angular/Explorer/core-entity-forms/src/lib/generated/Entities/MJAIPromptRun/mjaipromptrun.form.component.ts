@@ -27,7 +27,8 @@ export class MJAIPromptRunFormComponent extends BaseFormComponent {
             { sectionKey: 'mJAIPromptRunsRerunFromPromptRunID', sectionName: 'AI Prompt Runs (Rerun From)', isExpanded: false },
             { sectionKey: 'mJAIResultCache', sectionName: 'AI Result Cache', isExpanded: false },
             { sectionKey: 'mJContentItemTags', sectionName: 'Content Item Tags', isExpanded: false },
-            { sectionKey: 'mJAIPromptRunsParentID', sectionName: 'AI Prompt Runs (Parent Run)', isExpanded: false }
+            { sectionKey: 'mJAIPromptRunsParentID', sectionName: 'AI Prompt Runs (Parent Run)', isExpanded: false },
+            { sectionKey: 'mJDuplicateRunDetailMatches', sectionName: 'Duplicate Run Detail Matches', isExpanded: false }
         ]);
     }
 }

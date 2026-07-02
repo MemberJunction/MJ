@@ -17,7 +17,7 @@ import {
     type RecordProcessScopeOverride,
 } from '@memberjunction/core-entities';
 import type { RemoteOpResult } from '@memberjunction/core';
-import { MJDialogComponent, MJDialogActionsComponent, MJButtonDirective, MJProgressBarComponent } from '@memberjunction/ng-ui-components';
+import { MJDialogComponent, MJDialogActionsComponent, MJButtonDirective, MJProgressBarComponent, MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 import { BaseEntityActionRuntimeUX } from '../base-entity-action-runtime-ux';
 import { buildRecordProcessScope, displayValue } from '../scope';
 
@@ -74,7 +74,7 @@ interface RawDetail {
     selector: 'mj-record-process-runner-ux',
     standalone: true,
     changeDetection: ChangeDetectionStrategy.OnPush,
-    imports: [MJDialogComponent, MJDialogActionsComponent, MJButtonDirective, MJProgressBarComponent],
+    imports: [MJDialogComponent, MJDialogActionsComponent, MJButtonDirective, MJProgressBarComponent, MJEmptyStateComponent],
     template: `
         <mj-dialog [Visible]="true" [Width]="760" [Title]="Title" [Closeable]="State !== 'applying'" (Close)="OnCancel()">
             <div class="rp-runner">
@@ -120,10 +120,10 @@ interface RawDetail {
                         </div>
 
                         @if (DiffRows.length === 0) {
-                            <div class="rp-empty">
-                                <i class="fa-regular fa-circle-check"></i>
-                                <p>Nothing to change — the rules didn't match any of the selected {{ EntityLabel }}.</p>
-                            </div>
+                            <mj-empty-state class="rp-empty" Size="compact" Variant="success"
+                                Icon="fa-regular fa-circle-check"
+                                Title="Nothing to change"
+                                [Message]="'The rules did not match any of the selected ' + EntityLabel + '.'" />
                         } @else {
                             <div class="rp-diff" role="table">
                                 @for (row of DiffRows; track row.RecordID) {

@@ -384,7 +384,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
 
         const changes: Record<string, FieldChange> = {};
         for (const key in newData) {
-            const f = entityInfo.Fields.find((f) => f.Name.toLowerCase() === key.toLowerCase());
+            const f = entityInfo.FieldByName(key);
             if (!f) continue; // skip if field not found in entity info
 
             const bDiff = this.isFieldDifferent(f, oldData[key], newData[key]);

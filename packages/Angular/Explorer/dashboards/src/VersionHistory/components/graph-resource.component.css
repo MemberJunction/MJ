@@ -91,12 +91,6 @@
     color: var(--mj-brand-primary);
 }
 
-.empty-list {
-    padding: 20px;
-    text-align: center;
-    font-size: 13px;
-    color: var(--mj-text-secondary);
-}
 
 /* Detail Panel */
 .entity-detail-panel {
@@ -249,40 +243,9 @@
     opacity: 0.5;
 }
 
-.empty-relationships {
-    padding: 12px;
-    text-align: center;
-    font-size: 13px;
-    color: var(--mj-text-muted);
-}
 
-/* No Selection */
-.no-selection {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 60px 20px;
-    text-align: center;
+/* No-selection placeholder fills the detail pane so it centers (the small
+   relationship/list empties stay compact — natural height). */
+.graph-detail-empty {
     height: 100%;
-}
-
-.no-selection-icon {
-    font-size: 48px;
-    color: var(--mj-text-muted);
-    margin-bottom: 16px;
-}
-
-.no-selection h3 {
-    font-size: 18px;
-    font-weight: 600;
-    color: var(--mj-text-primary);
-    margin: 0 0 8px 0;
-}
-
-.no-selection p {
-    font-size: 14px;
-    color: var(--mj-text-secondary);
-    margin: 0;
-    max-width: 300px;
 }

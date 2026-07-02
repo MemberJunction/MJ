@@ -1,0 +1,81 @@
+<!--
+  Entity-agnostic model-prediction panel. Renders NOTHING unless the current
+  record's entity has active scoring bindings (HasPredictions gate). Driven
+  entirely by metadata — no entity-specific or domain-specific markup.
+-->
+@if (HasPredictions) {
+  <mj-collapsible-panel
+      SectionKey="modelPredictions"
+      SectionName="Model Predictions"
+      Icon="fa-solid fa-wand-magic-sparkles"
+      [Form]="FormComponent"
+      [FormContext]="FormContext"
+      [BadgeCount]="Cards.length">
+
+    <div class="mpp-cards">
+      @for (card of Cards; track card.bindingId) {
+        <div class="mpp-card">
+
+          <!-- Header: label + provenance -->
+          <div class="mpp-card-head">
+            <div class="mpp-label">{{ card.label }}</div>
+            <div class="mpp-provenance">
+              <i class="fa-solid fa-diagram-project mpp-prov-icon" aria-hidden="true"></i>
+              <span>{{ card.provenance }}</span>
+              @if (card.lastScored) {
+                <span class="mpp-dot" aria-hidden="true">·</span>
+                <span class="mpp-scored">Scored {{ card.lastScored }}</span>
+              }
+            </div>
+          </div>
+
+          <!-- Value -->
+          <div class="mpp-value-row">
+            <span class="mpp-value" [class.mpp-value-muted]="card.displayValue === '—'">
+              {{ card.displayValue }}
+            </span>
+          </div>
+
+          <!-- Probability gauge — neutral 3-band tercile. No moral direction. -->
+          @if (card.isProbability) {
+            <div class="mpp-gauge" role="img"
+                 [attr.aria-label]="card.label + ' ' + card.displayValue + ', ' + card.band + ' band'">
+              <div class="mpp-gauge-track">
+                <div class="mpp-gauge-fill"
+                     [class.mpp-band-low]="card.band === 'low'"
+                     [class.mpp-band-mid]="card.band === 'mid'"
+                     [class.mpp-band-high]="card.band === 'high'"
+                     [style.width.%]="card.gaugePct"></div>
+              </div>
+              <div class="mpp-gauge-scale">
+                <span>0%</span>
+                <span>50%</span>
+                <span>100%</span>
+              </div>
+            </div>
+          }
+
+          <!-- Top drivers (feature importance) — omitted cleanly when unavailable -->
+          @if (card.drivers.length > 0) {
+            <div class="mpp-drivers">
+              <div class="mpp-drivers-title">
+                <i class="fa-solid fa-ranking-star" aria-hidden="true"></i>
+                Top drivers
+              </div>
+              @for (driver of card.drivers; track driver.name) {
+                <div class="mpp-driver">
+                  <span class="mpp-driver-name" [title]="driver.name">{{ driver.name }}</span>
+                  <span class="mpp-driver-bar-track">
+                    <span class="mpp-driver-bar-fill" [style.width.%]="driver.relativePct"></span>
+                  </span>
+                </div>
+              }
+            </div>
+          }
+
+        </div>
+      }
+    </div>
+
+  </mj-collapsible-panel>
+}

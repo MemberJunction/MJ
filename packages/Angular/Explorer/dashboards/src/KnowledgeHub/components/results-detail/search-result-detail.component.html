@@ -99,10 +99,8 @@
                 @if (IsLoadingRelated) {
                     <mj-loading text="Loading..." size="small"></mj-loading>
                 } @else if (RelatedItems.length === 0) {
-                    <div class="sidebar-empty">
-                        <i class="fa-solid fa-link sidebar-empty-icon"></i>
-                        <p>No related items found</p>
-                    </div>
+                    <mj-empty-state Size="compact" Icon="fa-solid fa-link"
+                        Title="No related items found" />
                 } @else {
                     @for (item of RelatedItems; track item.ID) {
                         <div class="related-item" (click)="OnRelatedItemClick(item)">
@@ -119,8 +117,7 @@
         </div>
     </div>
 } @else {
-    <div class="detail-empty">
-        <i class="fa-solid fa-file-magnifying-glass detail-empty-icon"></i>
-        <p>Select a search result to view details</p>
-    </div>
+    <mj-empty-state class="detail-empty" Icon="fa-solid fa-file-magnifying-glass"
+        Title="No result selected"
+        Message="Select a search result to view details" />
 }

@@ -395,10 +395,6 @@ export class ArtifactLoadDialogComponent extends BaseAngularComponent implements
     return this.activeTab === 0 ? this.artifacts : this.collectionArtifacts;
   }
 
-  toggleJsonPreview(): void {
-    this.showJsonPreview = !this.showJsonPreview;
-  }
-
   getPreviewJSON(): string {
     return this.previewSpec ? JSON.stringify(this.previewSpec, null, 2) : '';
   }

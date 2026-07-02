@@ -97,19 +97,14 @@
   animation: rt-slide 1.6s ease-in-out infinite;
 }
 
-/* ---------- Done chip (collapsed single line) ---------- */
-.done {
+/* ---------- Done state (collapsed single line) ---------- */
+/* Width constraint preserved on the migrated accordion panel. */
+.done-accordion {
+  display: block;
   max-width: 560px;
 }
-.done-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.done-row .done-chip {
-  flex: 1;
-  min-width: 0;
-}
+/* Removed bespoke .done / .done-row / .done-row .done-chip layout chrome — the header
+   row layout is now owned by mj-accordion-panel (header-row + actions slot). */
 
 /* ---------- Developer link (gear-gated "Open run") ---------- */
 .dev-link {
@@ -176,36 +171,16 @@
   white-space: nowrap;
   text-overflow: ellipsis;
 }
-.done-chip {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  width: 100%;
-  text-align: left;
-  font-family: inherit;
-  font-size: 12.5px;
-  padding: 6px 12px;
-  border-radius: var(--mj-radius-full, 9999px);
-  background: var(--mj-bg-surface);
-  border: 1px solid var(--mj-border-default);
-  color: var(--mj-text-secondary);
-  cursor: pointer;
-  transition: border-color 140ms ease, background 140ms ease;
-}
-.done-chip:hover {
-  border-color: var(--sage-border);
-  background: var(--mj-bg-surface-hover, var(--mj-bg-surface));
-}
+/* Removed bespoke .done-chip button chrome (background/border/radius/hover) — the
+   clickable header is now the mj-accordion-panel toggle. The chip's inner content
+   styling (mark/agent/sep/preview/via-badge) is retained as accordion title content. */
 .done-chip__mark {
   font-size: 11px;
   color: var(--mj-status-success);
   flex-shrink: 0;
 }
-.done-chip--failed .done-chip__mark {
+.done-accordion--failed .done-chip__mark {
   color: var(--mj-status-error);
-}
-.done-chip--failed {
-  border-color: var(--mj-status-error-border, var(--mj-border-default));
 }
 .done-chip__agent {
   font-weight: 700;
@@ -237,11 +212,7 @@
   font-size: 9px;
   cursor: help;
 }
-.done-chip__chev {
-  font-size: 10px;
-  color: var(--mj-text-muted);
-  flex-shrink: 0;
-}
+/* Removed .done-chip__chev — mj-accordion-panel provides its own chevron. */
 
 /* ---------- Expanded result detail ---------- */
 .done-detail {

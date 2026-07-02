@@ -195,6 +195,12 @@ export class FormResolverService {
             return [];
         }
 
+        // If the engine couldn't load due to permission denial, fall back to
+        // the generated form — no overrides available.
+        if (InteractiveFormsEngine.Instance.IsPermissionConstrained) {
+            return [];
+        }
+
         const userRoleIds = new Set(
             (user.UserRoles ?? []).map(r => r.RoleID).filter((id): id is string => !!id),
         );
