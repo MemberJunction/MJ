@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { renderComponentFixture, query, queryAll, text } from '@memberjunction/ng-test-utils';
 import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 import { MentionDropdownComponent } from './mention-dropdown.component';
-import type { MentionSuggestion } from '../../services/mention-autocomplete.service';
+import type { MentionSuggestion } from '../../composer-trigger-provider';
 
 /**
  * DOM spec for <mj-mention-dropdown> — the @mention autocomplete list.

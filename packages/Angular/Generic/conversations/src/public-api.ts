@@ -23,6 +23,9 @@ export * from './lib/services/export.service';
 export * from './lib/services/notification.service';
 export * from './lib/services/toast.service';
 export * from './lib/services/mention-parser.service';
+// AI-aware mention suggestion engine (BaseSingleton — use MentionAutocompleteService.Instance).
+// NOTE: the generic MentionSuggestion TYPE lives in @memberjunction/ng-composer — import it
+// from there directly (no re-exports between packages).
 export * from './lib/services/mention-autocomplete.service';
 export * from './lib/services/collection-permission.service';
 export * from './lib/services/artifact-permission.service';
@@ -42,16 +45,26 @@ export * from './lib/services/delegation-result-parser';
 export * from './lib/components/workspace/conversation-workspace.component';
 export * from './lib/components/navigation/conversation-navigation.component';
 export * from './lib/components/sidebar/conversation-sidebar.component';
+export * from './lib/components/sidebar/routines-section.component';
 export * from './lib/components/conversation/conversation-list.component';
 export * from './lib/components/conversation/conversation-chat-area.component';
 export * from './lib/components/conversation/conversation-empty-state.component';
 export * from './lib/components/message/message-item.component';
 export * from './lib/components/message/message-list.component';
 export * from './lib/components/message/message-input.component';
-export * from './lib/components/message/message-input-box.component';
+// AI-aware composer wrapper (mj-ai-composer): mj-message-input-box + the three AI trigger
+// plugins built in, proxying the input box's full inputs/outputs/methods surface.
+export * from './lib/components/composer/ai-composer.component';
+// Composer trigger-provider plugins ('@' / '#' / '/') — ClassFactory-registered; also
+// directly instantiable for explicit provider lists.
+export * from './lib/composer-plugins/base-conversation-mention.provider';
+export * from './lib/composer-plugins/agent-mention.provider';
+export * from './lib/composer-plugins/record-mention.provider';
+export * from './lib/composer-plugins/skill-command.provider';
+export * from './lib/composer-plugins/load-composer-plugins';
+// NOTE: MessageInputBoxComponent, MentionEditorComponent (+ PendingAttachment), and
+// MentionDropdownComponent live in @memberjunction/ng-composer — import from there directly.
 export * from './lib/components/message/conversation-message-rating.component';
-export * from './lib/components/mention/mention-dropdown.component';
-export * from './lib/components/mention/mention-editor.component';
 export * from './lib/components/collection/collection-tree.component';
 export * from './lib/components/collection/collection-view.component';
 export * from './lib/components/collection/collections-full-view.component';

@@ -439,6 +439,30 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
     }
 
     /**
+     * True when a job's driver declares itself a by-design high-frequency poller
+     * (`BaseScheduledJob.IsHighFrequencyByDesign`) — e.g. the User Routine Dispatcher's
+     * 1-minute sweep. Such jobs are exempt from the high-frequency warning. Resolution
+     * failures (unknown type / unregistered driver) fall through to `false` so the
+     * warning still fires for misconfigured jobs.
+     * @private
+     */
+    private isHighFrequencyByDesign(job: MJScheduledJobEntity): boolean {
+        try {
+            const jobType = this.ScheduledJobTypes.find(t => UUIDsEqual(t.ID, job.JobTypeID));
+            if (!jobType?.DriverClass) {
+                return false;
+            }
+            const driver = MJGlobal.Instance.ClassFactory.CreateInstance<BaseScheduledJob>(
+                BaseScheduledJob,
+                jobType.DriverClass
+            );
+            return driver?.IsHighFrequencyByDesign === true;
+        } catch {
+            return false;
+        }
+    }
+
+    /**
      * Inspect every active job's cron expression and emit a hard-to-miss
      * banner warning for any whose minimum run interval is below the
      * configured threshold (5 minutes). Each offending job is warned about
@@ -452,6 +476,9 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
 
         for (const job of this.ScheduledJobs) {
             if (this.highFrequencyWarnedJobIds.has(job.ID) || !job.CronExpression) {
+                continue;
+            }
+            if (this.isHighFrequencyByDesign(job)) {
                 continue;
             }
             const intervalMs = CronExpressionHelper.GetMinIntervalMs(
