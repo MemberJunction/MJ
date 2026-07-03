@@ -23,6 +23,8 @@ import {
     RunView,
 } from '@memberjunction/core';
 import {
+    MJConversationEntity,
+    MJEnvironmentEntityExtended,
     MJScheduledJobEntity,
     MJUserRoutineEntity,
     MJUserRoutineRecipientEntity,
@@ -67,6 +69,9 @@ const DEFAULT_NOTIFICATION_TEMPLATE_NAME = 'User Routine Notification - Default'
 
 /** Name of the metadata-seeded `MJ: User Notification Types` row used for in-app delivery. */
 const NOTIFICATION_TYPE_NAME = 'User Routine';
+
+/** Name of the Explorer application that scopes (hides) routine conversations. */
+const ROUTINES_APPLICATION_NAME = 'Routines';
 
 /** Cap on the persisted ResultSummary length — keeps run rows compact; full detail lives on the linked run/log records. */
 const RESULT_SUMMARY_MAX_LENGTH = 4000;
@@ -403,7 +408,17 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
         }
     }
 
-    /** Run an Agent target via AgentRunner, threading StartingPayload + RequestedSkillIDs. */
+    /**
+     * Run an Agent target via AgentRunner, threading StartingPayload + RequestedSkillIDs.
+     *
+     * When the routine's dedicated conversation is available (existing `ConversationID`,
+     * or creatable — see {@link EnsureRoutineConversation}), the run goes through
+     * `RunAgentInConversation` so it lands as a proper conversation turn: a user
+     * ConversationDetail carrying InitialMessage, an assistant ConversationDetail with the
+     * agent result, and the AIAgentRun stamped with ConversationID/ConversationDetailID.
+     * When no conversation can be resolved, the run falls back to standalone `RunAgent`
+     * — identical outcome recording, just no conversation thread.
+     */
     private async executeAgentTarget(
         routine: MJUserRoutineEntity,
         contextUser: UserInfo,
@@ -415,16 +430,22 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
             throw new Error(`Agent ${routine.TargetID} not found for routine "${routine.Name}"`);
         }
 
+        const userMessage = routine.InitialMessage ?? `Run routine "${routine.Name}"`;
         const runner = new AgentRunner();
-        const result = await runner.RunAgent({
+        const baseParams = {
             agent,
-            conversationMessages: [{ role: 'user', content: routine.InitialMessage ?? `Run routine "${routine.Name}"` }],
+            conversationMessages: [{ role: 'user' as const, content: userMessage }],
             payload: routine.StartingPayload ? SafeJSONParse(routine.StartingPayload) ?? undefined : undefined,
             requestedSkillIDs: this.parseRequestedSkillIDs(routine),
             contextUser,
             // Keep the dispatcher job's lease alive while a long agent run makes progress.
             onProgress: () => { void heartbeat?.(); },
-        });
+        };
+
+        const conversationId = await this.EnsureRoutineConversation(routine, contextUser);
+        const result = conversationId
+            ? (await runner.RunAgentInConversation(baseParams, { conversationId, userMessage })).agentResult
+            : await runner.RunAgent(baseParams);
 
         return {
             Success: result.success,
@@ -434,6 +455,74 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
             PromptRunID: null,
             ActionExecutionLogID: null,
         };
+    }
+
+    /**
+     * Resolves (or lazily creates) the routine's dedicated conversation. Public so the
+     * integration suite can exercise the creation/reuse contract without an LLM call.
+     *
+     * The conversation is owned by the routine's owner and created with
+     * `ApplicationScope='Application'` + the "${ROUTINES_APPLICATION_NAME}" Application's ID,
+     * which keeps it OUT of the default chat list (the same hide mechanism meeting-room and
+     * Form Builder cockpit conversations use) while remaining fully reachable from the
+     * routine's UI. It is also Linked to the routine record (LinkedEntityID/LinkedRecordID)
+     * and pins the routine's agent as DefaultAgentID.
+     *
+     * Best-effort by design: any resolution/creation failure logs and returns null so the
+     * run proceeds standalone — a missing Routines app must never break a scheduled run.
+     */
+    public async EnsureRoutineConversation(routine: MJUserRoutineEntity, owner: UserInfo): Promise<string | null> {
+        if (routine.ConversationID) {
+            return routine.ConversationID;
+        }
+        try {
+            const md = new Metadata() as unknown as IMetadataProvider; // global-provider-ok: server-global scheduled task
+            const app = await this.findRoutinesApplication(owner);
+            if (!app) {
+                this.log(`Routines application not found — running "${routine.Name}" standalone (no conversation)`);
+                return null;
+            }
+            const conversation = await md.GetEntityObject<MJConversationEntity>('MJ: Conversations', owner);
+            conversation.NewRecord();
+            conversation.Name = routine.Name;
+            conversation.Type = 'Routine';
+            conversation.UserID = owner.ID;
+            conversation.EnvironmentID = routine.EnvironmentID ?? MJEnvironmentEntityExtended.DefaultEnvironmentID;
+            conversation.ApplicationScope = 'Application';
+            conversation.ApplicationID = app.ID;
+            if (routine.TargetType === 'Agent') {
+                conversation.DefaultAgentID = routine.TargetID;
+            }
+            const routineEntity = md.EntityByName('MJ: User Routines');
+            if (routineEntity) {
+                conversation.LinkedEntityID = routineEntity.ID;
+                conversation.LinkedRecordID = routine.ID;
+            }
+            if (!await conversation.Save()) {
+                this.logError(`Failed to create conversation for routine "${routine.Name}": ${conversation.LatestResult?.CompleteMessage ?? 'unknown'} — running standalone`);
+                return null;
+            }
+            routine.ConversationID = conversation.ID;
+            if (!await routine.Save()) {
+                // The conversation still serves this run; persistence retries next run.
+                this.logError(`Failed to persist ConversationID on routine "${routine.Name}": ${routine.LatestResult?.CompleteMessage ?? 'unknown'}`);
+            }
+            return conversation.ID;
+        } catch (error) {
+            this.logError(`EnsureRoutineConversation failed for "${routine.Name}": ${error instanceof Error ? error.message : String(error)} — running standalone`);
+            return null;
+        }
+    }
+
+    /** The "${ROUTINES_APPLICATION_NAME}" Application row whose scope hides routine conversations from the default chat list. */
+    private async findRoutinesApplication(contextUser: UserInfo): Promise<{ ID: string } | null> {
+        const result = await new RunView().RunView<{ ID: string }>({
+            EntityName: 'MJ: Applications',
+            ExtraFilter: `Name='${ROUTINES_APPLICATION_NAME}'`,
+            Fields: ['ID'],
+            ResultType: 'simple',
+        }, contextUser);
+        return result.Success && result.Results.length > 0 ? result.Results[0] : null;
     }
 
     /** Parse RequestedSkillIDs (JSON array of AISkill IDs) — invalid/non-array content is ignored with a log. */

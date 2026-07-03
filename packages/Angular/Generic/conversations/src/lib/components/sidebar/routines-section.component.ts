@@ -1,10 +1,11 @@
-import { ChangeDetectorRef, Component, Input, OnDestroy, OnInit, inject } from '@angular/core';
+import { CompositeKey } from '@memberjunction/core';
+import { ChangeDetectorRef, Component, EventEmitter, Input, OnDestroy, OnInit, Output, inject } from '@angular/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJUserRoutineEntity, UserRoutineEngine } from '@memberjunction/core-entities';
 import { NormalizeUUID } from '@memberjunction/global';
-import { FormatRelativeTime, LoadRoutineTargetCatalog } from '@memberjunction/ng-user-routines';
+import { ConversationOpenedEventArgs, FormatRelativeTime, HistoryRecordOpenedEventArgs, LoadRoutineTargetCatalog } from '@memberjunction/ng-user-routines';
 
 /** Maximum routine rows shown in the compact sidebar section. */
 const MAX_SIDEBAR_ROUTINES = 4;
@@ -54,6 +55,20 @@ export class RoutinesSectionComponent extends BaseAngularComponent implements On
     public TopRoutines: MJUserRoutineEntity[] = [];
     /** Total routine count for the header badge. */
     public TotalCount = 0;
+    /**
+     * A run history row's linked execution record (Agent Run / Prompt Run / Action Log)
+     * was clicked. Same shape as the chat area's openEntityRecord — the host (Explorer
+     * wrapper or workspace) routes it to navigation; this package never navigates itself.
+     */
+    @Output() openEntityRecord = new EventEmitter<{ entityName: string; compositeKey: CompositeKey }>();
+
+    /**
+     * The user asked to open a routine's dedicated conversation (the hidden,
+     * Application-scoped thread its runs append to). Emits the conversation ID;
+     * the host selects it in chat — this component closes the slide-in first.
+     */
+    @Output() openConversation = new EventEmitter<string>();
+
     /** Slide-in open state. */
     public SlideInVisible = false;
     /** Routine to open the slide-in on (history view). */
@@ -106,6 +121,18 @@ export class RoutinesSectionComponent extends BaseAngularComponent implements On
         this.SlideInNewRoutine = true;
         this.SlideInVisible = true;
         this.cdr.markForCheck();
+    }
+
+    /** Opens the routine's conversation in the host chat surface (closing the slide-in). */
+    public OnConversationOpened(args: ConversationOpenedEventArgs): void {
+        this.OnSlideInClosed();
+        this.SlideInVisible = false;
+        this.openConversation.emit(args.ConversationID);
+    }
+
+    /** Bridges the slide-in's HistoryRecordOpened to the standard openEntityRecord chain. */
+    public OnHistoryRecordOpened(args: HistoryRecordOpenedEventArgs): void {
+        this.openEntityRecord.emit({ entityName: args.EntityName, compositeKey: CompositeKey.FromID(args.RecordID) });
     }
 
     public OnSlideInClosed(): void {

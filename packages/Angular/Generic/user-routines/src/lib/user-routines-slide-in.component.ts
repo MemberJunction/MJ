@@ -1,6 +1,6 @@
 import { ChangeDetectorRef, Component, EventEmitter, Input, Output, ViewChild, inject } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import {
+import { ConversationOpenedEventArgs,
     AfterRoutineCreatedEventArgs,
     AfterRoutineDeletedEventArgs,
     AfterRoutinePausedEventArgs,
@@ -85,6 +85,8 @@ export class UserRoutinesSlideInComponent extends BaseAngularComponent {
     @Output() AfterRoutineDeleted = new EventEmitter<AfterRoutineDeletedEventArgs>();
     @Output() RoutineSelected = new EventEmitter<RoutineSelectedEventArgs>();
     @Output() HistoryRecordOpened = new EventEmitter<HistoryRecordOpenedEventArgs>();
+    /** Re-emitted — the routine's dedicated conversation was requested. */
+    @Output() ConversationOpened = new EventEmitter<ConversationOpenedEventArgs>();
 
     /** Opens the slide-in (optionally straight onto a routine's history or the editor). */
     public Open(options?: { RoutineID?: string; NewRoutine?: boolean }): void {

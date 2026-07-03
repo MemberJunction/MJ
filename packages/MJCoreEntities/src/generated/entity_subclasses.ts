@@ -30624,7 +30624,7 @@ export const MJUserRoutineSchema = z.object({
         * * Description: Optional JSON starting payload passed to the target on each run.`),
     RequestedSkillIDs: z.string().nullable().describe(`
         * * Field Name: RequestedSkillIDs
-        * * Display Name: Requested Skill IDs
+        * * Display Name: Requested Skills
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Optional JSON array of MJ: AI Skills IDs to pre-activate when the routine target is an Agent — threaded as ExecuteAgentParams.requestedSkillIDs so the agent starts each scheduled run with the requested skills' instructions and tools in effect (subject to all availability gates; ActivationMode does not gate this explicit-request path). Ignored for Action/Prompt targets.`),
     CronExpression: z.string().describe(`
@@ -30714,6 +30714,12 @@ export const MJUserRoutineSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    ConversationID: z.string().nullable().describe(`
+        * * Field Name: ConversationID
+        * * Display Name: Conversation
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Conversations (vwConversations.ID)
+        * * Description: The dedicated conversation this routine's Agent runs append to (created on first conversation-mode run, Application-scoped so it stays out of the default chat list). NULL when the routine has never run in conversation mode.`),
     User: z.string().describe(`
         * * Field Name: User
         * * Display Name: User Name
@@ -30725,6 +30731,10 @@ export const MJUserRoutineSchema = z.object({
     NotificationTemplate: z.string().nullable().describe(`
         * * Field Name: NotificationTemplate
         * * Display Name: Notification Template Name
+        * * SQL Data Type: nvarchar(255)`),
+    Conversation: z.string().nullable().describe(`
+        * * Field Name: Conversation
+        * * Display Name: Conversation Name
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -111981,7 +111991,7 @@ export class MJUserRoutineEntity extends BaseEntity<MJUserRoutineEntityType> {
 
     /**
     * * Field Name: RequestedSkillIDs
-    * * Display Name: Requested Skill IDs
+    * * Display Name: Requested Skills
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Optional JSON array of MJ: AI Skills IDs to pre-activate when the routine target is an Agent — threaded as ExecuteAgentParams.requestedSkillIDs so the agent starts each scheduled run with the requested skills' instructions and tools in effect (subject to all availability gates; ActivationMode does not gate this explicit-request path). Ignored for Action/Prompt targets.
     */
@@ -112186,6 +112196,20 @@ export class MJUserRoutineEntity extends BaseEntity<MJUserRoutineEntityType> {
     }
 
     /**
+    * * Field Name: ConversationID
+    * * Display Name: Conversation
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Conversations (vwConversations.ID)
+    * * Description: The dedicated conversation this routine's Agent runs append to (created on first conversation-mode run, Application-scoped so it stays out of the default chat list). NULL when the routine has never run in conversation mode.
+    */
+    get ConversationID(): string | null {
+        return this.Get('ConversationID');
+    }
+    set ConversationID(value: string | null) {
+        this.Set('ConversationID', value);
+    }
+
+    /**
     * * Field Name: User
     * * Display Name: User Name
     * * SQL Data Type: nvarchar(100)
@@ -112210,6 +112234,15 @@ export class MJUserRoutineEntity extends BaseEntity<MJUserRoutineEntityType> {
     */
     get NotificationTemplate(): string | null {
         return this.Get('NotificationTemplate');
+    }
+
+    /**
+    * * Field Name: Conversation
+    * * Display Name: Conversation Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Conversation(): string | null {
+        return this.Get('Conversation');
     }
 }
 

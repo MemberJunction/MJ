@@ -9,7 +9,7 @@ import { MJConfirmService } from '@memberjunction/ng-ui-components';
 import { DescribeCronExpression } from '@memberjunction/global';
 import { FormatRelativeTime, RoutineChipVariant, RoutineStatusVariant, RunStatusVariant } from './routine-ui-helpers';
 import { LoadRoutineTargetCatalog } from './routine-target-catalog';
-import {
+import { ConversationOpenedEventArgs,
     AfterRoutineDeletedEventArgs,
     AfterRoutinePausedEventArgs,
     AfterRoutineRunNowEventArgs,
@@ -281,6 +281,16 @@ export class MyRoutinesListComponent extends BaseAngularComponent implements OnI
         } finally {
             this.BusyRoutineIDs.delete(routine.ID);
             this.cdr.markForCheck();
+        }
+    }
+
+    /** The routine's dedicated conversation was requested (chat icon on the card). */
+    @Output() ConversationOpened = new EventEmitter<ConversationOpenedEventArgs>();
+
+    /** Raises ConversationOpened for hosts to present the routine's conversation. */
+    public OpenConversation(routine: MJUserRoutineEntity): void {
+        if (routine.ConversationID) {
+            this.ConversationOpened.emit(new ConversationOpenedEventArgs(routine.ConversationID, routine));
         }
     }
 

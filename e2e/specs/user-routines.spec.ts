@@ -18,6 +18,9 @@
  *     bell, and the linked Agent-run record.
  *   • Cleanup is guaranteed (try/finally): the routine is deleted through the
  *     UI (confirm dialog included) so no every-minute fixture is left running.
+ *     NOTE: the routine's dedicated conversation intentionally SURVIVES deletion
+ *     (content outlives the schedule); it is hidden (Application-scoped) and
+ *     name-tagged "safe to delete" — prune periodically if e2e runs accumulate.
  *
  * SELECTORS:
  *   Stable class hooks that ship with the components:

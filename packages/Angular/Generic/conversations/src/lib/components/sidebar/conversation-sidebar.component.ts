@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter } from '@angular/core';
-import { UserInfo } from '@memberjunction/core';
+import { CompositeKey, UserInfo } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { NavigationTab } from '../../models/conversation-state.model';
 
@@ -38,7 +38,9 @@ import { NavigationTab } from '../../models/conversation-state.model';
            'MJ: User Routines' (checked inside the section component). -->
       <mj-conversation-routines-section
         [Provider]="Provider"
-        [ShowRoutines]="ShowRoutines">
+        [ShowRoutines]="ShowRoutines"
+        (openEntityRecord)="openEntityRecord.emit($event)"
+        (openConversation)="conversationSelected.emit($event)">
       </mj-conversation-routines-section>
     </div>
     `,
@@ -80,6 +82,8 @@ export class ConversationSidebarComponent extends BaseAngularComponent {
   @Input() ShowRoutines: boolean = true;
 
   @Output() conversationSelected = new EventEmitter<string>();
+  /** Forwarded from the routines section — a run's linked execution record was clicked. */
+  @Output() openEntityRecord = new EventEmitter<{ entityName: string; compositeKey: CompositeKey }>();
   @Output() newConversationRequested = new EventEmitter<void>();
   @Output() pinSidebarRequested = new EventEmitter<void>();
   @Output() unpinSidebarRequested = new EventEmitter<void>();

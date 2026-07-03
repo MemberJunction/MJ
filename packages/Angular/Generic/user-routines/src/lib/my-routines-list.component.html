@@ -101,6 +101,11 @@
           <button mjButton variant="flat" size="sm" title="View run history" (click)="OpenHistory(routine)">
             <i class="fa-solid fa-timeline"></i>
           </button>
+          @if (routine.ConversationID) {
+            <button mjButton variant="flat" size="sm" title="Open this routine's conversation" (click)="OpenConversation(routine)">
+              <i class="fa-solid fa-comments"></i>
+            </button>
+          }
           <button mjButton variant="flat" size="sm" title="Delete routine"
             [disabled]="BusyRoutineIDs.has(routine.ID)"
             (click)="DeleteRoutine(routine)">

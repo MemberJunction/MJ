@@ -54,7 +54,10 @@ import { Subject, takeUntil } from 'rxjs';
               </mj-conversation-list>
               <!-- Routines — pinned at the very bottom of the sidebar. Gated inside the
                    section component by Read permission on 'MJ: User Routines'. -->
-              <mj-conversation-routines-section></mj-conversation-routines-section>
+              <mj-conversation-routines-section
+                (openEntityRecord)="onOpenEntityRecord($event)"
+                (openConversation)="onConversationSelected($event)">
+              </mj-conversation-routines-section>
             }
           </div>
         }

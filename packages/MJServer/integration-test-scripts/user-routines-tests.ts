@@ -92,6 +92,7 @@ async function main(): Promise<void> {
     // surviving action logs + the deleted runs' notification rows.
     const orphanedActionLogIds: string[] = [];
     const orphanedRunIds: string[] = [];
+    const createdConversationIds: string[] = [];
 
     /** Create a routine fixture with sensible defaults; overrides applied before Save. */
     const makeRoutine = async (
@@ -385,11 +386,38 @@ async function main(): Promise<void> {
             }
         });
 
+        // ── Routine conversations (deterministic — EnsureRoutineConversation directly, no LLM) ──
+        suite.Test('UR15: EnsureRoutineConversation creates a hidden, Application-scoped conversation linked to the routine', async () => {
+            const r = await makeRoutine('Conversation Mode', (x) => { x.Status = 'Paused'; x.TargetType = 'Action'; });
+            const driver = new UserRoutineDispatcherDriver();
+            const conversationId = await driver.EnsureRoutineConversation(r, user);
+            Assert(conversationId != null, 'expected a conversation to be created (requires the Routines application in the instance)');
+            createdConversationIds.push(conversationId!);
+            AssertEqual(String(r.ConversationID), String(conversationId), 'ConversationID must be persisted on the routine');
+
+            const convo = await fetchById('MJ: Conversations', conversationId!, user);
+            AssertEqual(String(convo.ApplicationScope), 'Application', 'conversation must be Application-scoped (hidden from the default chat list)');
+            Assert(convo.ApplicationID != null, 'Application scope requires a bound ApplicationID (CK_Conversation_ScopeAppBinding)');
+            AssertEqual(String(convo.Type), 'Routine', 'conversation Type marks its origin');
+            AssertEqual(String(convo.UserID), String(user.ID), 'conversation is owned by the routine owner');
+            AssertEqual(String(convo.LinkedRecordID), String(r.ID), 'conversation links back to the routine record');
+        });
+
+        suite.Test('UR16: EnsureRoutineConversation is idempotent — the second call reuses the persisted conversation', async () => {
+            const r = await makeRoutine('Conversation Reuse', (x) => { x.Status = 'Paused'; x.TargetType = 'Action'; });
+            const driver = new UserRoutineDispatcherDriver();
+            const first = await driver.EnsureRoutineConversation(r, user);
+            Assert(first != null, 'first call must create a conversation');
+            createdConversationIds.push(first!);
+            const second = await driver.EnsureRoutineConversation(r, user);
+            AssertEqual(String(second), String(first), 'second call must return the SAME conversation, not create another');
+        });
+
         const failures = await suite.Run();
-        await cleanup(provider, user, createdRecipientIds, createdRoutineIds, orphanedActionLogIds, orphanedRunIds);
+        await cleanup(provider, user, createdRecipientIds, createdRoutineIds, orphanedActionLogIds, orphanedRunIds, createdConversationIds);
         process.exit(failures > 0 ? 1 : 0);
     } catch (error) {
-        await cleanup(provider, user, createdRecipientIds, createdRoutineIds, orphanedActionLogIds, orphanedRunIds);
+        await cleanup(provider, user, createdRecipientIds, createdRoutineIds, orphanedActionLogIds, orphanedRunIds, createdConversationIds);
         throw error;
     }
 }
@@ -405,6 +433,7 @@ async function cleanup(
     routineIds: string[],
     orphanedActionLogIds: string[] = [],
     orphanedRunIds: string[] = [],
+    conversationIds: string[] = [],
 ): Promise<void> {
     const del = async (entityName: string, id: string) => {
         try {
@@ -456,6 +485,8 @@ async function cleanup(
     }
     for (const id of recipientIds) await del('MJ: User Routine Recipients', id);
     for (const id of routineIds) await del('MJ: User Routines', id);
+    // Conversations AFTER routines — UserRoutine.ConversationID FK-references them.
+    for (const id of conversationIds) await del('MJ: Conversations', id);
 }
 
 main().catch((error) => {

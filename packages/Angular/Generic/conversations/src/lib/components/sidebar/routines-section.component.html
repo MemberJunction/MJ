@@ -34,7 +34,9 @@
       [(Visible)]="SlideInVisible"
       [InitialRoutineID]="SlideInRoutineID"
       [StartInNewRoutine]="SlideInNewRoutine"
-      (Closed)="OnSlideInClosed()">
+      (Closed)="OnSlideInClosed()"
+      (HistoryRecordOpened)="OnHistoryRecordOpened($event)"
+      (ConversationOpened)="OnConversationOpened($event)">
     </mj-user-routines-slide-in>
   </div>
 }

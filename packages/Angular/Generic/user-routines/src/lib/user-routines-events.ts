@@ -79,6 +79,28 @@ export class RoutineSelectedEventArgs extends UserRoutineEventArgs {}
  * (Agent Run / Prompt Run / Action Execution Log). The host owns navigation —
  * Generic components never touch the Router.
  */
+/**
+ * Raised when the user opens a routine's dedicated conversation (the Application-scoped
+ * thread the dispatcher appends each Agent run to). The host decides how to present it —
+ * the conversations surface selects it in chat; other hosts may navigate.
+ */
+export class ConversationOpenedEventArgs {
+    /** The conversation to open. */
+    readonly ConversationID: string;
+
+    /** The routine the conversation belongs to. */
+    readonly Routine: MJUserRoutineEntity;
+
+    /** Timestamp when the event was raised. */
+    readonly Timestamp: Date;
+
+    constructor(conversationId: string, routine: MJUserRoutineEntity) {
+        this.ConversationID = conversationId;
+        this.Routine = routine;
+        this.Timestamp = new Date();
+    }
+}
+
 export class HistoryRecordOpenedEventArgs {
     /** Entity name of the linked record (e.g. 'MJ: AI Agent Runs'). */
     readonly EntityName: string;

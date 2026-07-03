@@ -3,7 +3,7 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJUserRoutineEntity, UserRoutineEngine } from '@memberjunction/core-entities';
 import { MyRoutinesListComponent, RoutineCounts, RoutineStatusFilter } from './my-routines-list.component';
 import { RoutineHistoryComponent } from './routine-history.component';
-import {
+import { ConversationOpenedEventArgs,
     AfterRoutineCreatedEventArgs,
     AfterRoutineDeletedEventArgs,
     AfterRoutinePausedEventArgs,
@@ -87,6 +87,8 @@ export class UserRoutinesCommandCenterComponent extends BaseAngularComponent {
     @Output() AfterRoutineDeleted = new EventEmitter<AfterRoutineDeletedEventArgs>();
     @Output() RoutineSelected = new EventEmitter<RoutineSelectedEventArgs>();
     @Output() HistoryRecordOpened = new EventEmitter<HistoryRecordOpenedEventArgs>();
+    /** Re-emitted from the list — the routine's dedicated conversation was requested. */
+    @Output() ConversationOpened = new EventEmitter<ConversationOpenedEventArgs>();
     /** Loaded/filtered counts changed in the list view. */
     @Output() CountsChanged = new EventEmitter<RoutineCounts>();
     /** The active internal view changed ('list' | 'editor' | 'history'). */

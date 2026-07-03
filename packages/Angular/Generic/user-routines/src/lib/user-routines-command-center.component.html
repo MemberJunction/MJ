@@ -62,6 +62,7 @@
           (CreateRequested)="ShowNewRoutine()"
           (EditRequested)="OnEditRequested($event)"
           (HistoryRequested)="OnHistoryRequested($event)"
+          (ConversationOpened)="ConversationOpened.emit($event)"
           (RoutineSelected)="OnRoutineSelected($event)"
           (CountsChanged)="OnCountsChanged($event)"
           (BeforeRoutinePaused)="BeforeRoutinePaused.emit($event)"

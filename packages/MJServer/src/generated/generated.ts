@@ -38535,6 +38535,9 @@ export class MJConversation_ {
     @Field(() => [MJAIAgentSession_])
     MJAIAgentSessions_ConversationIDArray: MJAIAgentSession_[]; // Link to MJAIAgentSessions
     
+    @Field(() => [MJUserRoutine_])
+    MJUserRoutines_ConversationIDArray: MJUserRoutine_[]; // Link to MJUserRoutines
+    
 }
 
 //****************************************************************************
@@ -38809,6 +38812,16 @@ export class MJConversationResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIAgentSessions')} WHERE ${provider.QuoteIdentifier('ConversationID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Sessions', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, [mjconversation_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Sessions', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJUserRoutine_])
+    async MJUserRoutines_ConversationIDArray(@Root() mjconversation_: MJConversation_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: User Routines', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwUserRoutines')} WHERE ${provider.QuoteIdentifier('ConversationID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: User Routines', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjconversation_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: User Routines', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -89570,6 +89583,10 @@ export class MJUserRoutine_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `The dedicated conversation this routine's Agent runs append to (created on first conversation-mode run, Application-scoped so it stays out of the default chat list). NULL when the routine has never run in conversation mode.`}) 
+    @MaxLength(36)
+    ConversationID?: string;
+        
     @Field() 
     @MaxLength(100)
     User: string;
@@ -89581,6 +89598,10 @@ export class MJUserRoutine_ {
     @Field({nullable: true}) 
     @MaxLength(255)
     NotificationTemplate?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    Conversation?: string;
         
     @Field(() => [MJUserRoutineRun_])
     MJUserRoutineRuns_RoutineIDArray: MJUserRoutineRun_[]; // Link to MJUserRoutineRuns
@@ -89667,6 +89688,9 @@ export class CreateMJUserRoutineInput {
     @Field(() => Boolean, { nullable: true })
     NotifyViaEmail?: boolean;
 
+    @Field({ nullable: true })
+    ConversationID: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -89748,6 +89772,9 @@ export class UpdateMJUserRoutineInput {
 
     @Field(() => Boolean, { nullable: true })
     NotifyViaEmail?: boolean;
+
+    @Field({ nullable: true })
+    ConversationID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
