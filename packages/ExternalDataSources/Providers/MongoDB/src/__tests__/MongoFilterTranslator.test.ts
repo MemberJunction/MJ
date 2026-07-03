@@ -116,4 +116,31 @@ describe('MongoFilterTranslator', () => {
       expect(MongoFilterTranslator.CoerceObjectId('name', hex)).toBe(hex);   // non-_id passes through
     });
   });
+
+  describe('LikeToRegex — ReDoS hardening (collapse consecutive %)', () => {
+    it('collapses a run of % into a single .* (no catastrophic backtracking)', () => {
+      expect(MongoFilterTranslator.LikeToRegex('%%%%%X')).toBe('^.*X$');
+      expect(MongoFilterTranslator.LikeToRegex('%%a%%b%%')).toBe('^.*a.*b.*$');
+    });
+    it('still handles single wildcards and escapes regex metachars', () => {
+      expect(MongoFilterTranslator.LikeToRegex('a_b')).toBe('^a.b$');
+      expect(MongoFilterTranslator.LikeToRegex('a.b+c')).toBe('^a\\.b\\+c$');
+    });
+    it('a LIKE with many % no longer emits stacked .*.* groups', () => {
+      const regex = (MongoFilterTranslator.Translate("name LIKE '%%%%%%%%%%x'") as { name: { $regex: string } }).name.$regex;
+      expect(regex).toBe('^.*x$');
+      expect(regex).not.toContain('.*.*');
+    });
+  });
+
+  describe('numeric literal validation (fail loud, not silent NaN)', () => {
+    it('throws on a malformed numeric literal instead of producing {$eq: NaN}', () => {
+      expect(() => MongoFilterTranslator.Translate('version = 1.2.3')).toThrow(/Invalid numeric literal/);
+      expect(() => MongoFilterTranslator.Translate('x = 1.2.3.4')).toThrow(/Invalid numeric literal/);
+    });
+    it('still parses a valid integer and decimal', () => {
+      expect(MongoFilterTranslator.Translate('n = 42')).toEqual({ n: { $eq: 42 } });
+      expect(MongoFilterTranslator.Translate('n = 3.14')).toEqual({ n: { $eq: 3.14 } });
+    });
+  });
 });

@@ -227,9 +227,56 @@ export abstract class BaseExternalDataSourceDriver<TConnection = unknown> {
             return (v as { toString(): string }).toString();
         }
       }
-      // Plain object or array (json/jsonb/VARIANT/nested doc/array) — CodeGen types these as nvarchar,
-      // so serialize to a JSON string rather than leak a live object across the boundary.
-      return JSON.stringify(v);
+      // Plain object or array (json/jsonb/VARIANT/nested doc/array) — CodeGen types these as nvarchar, so
+      // serialize to a JSON string. Deep-normalize FIRST so nested bson stays lossless: a raw JSON.stringify
+      // would defer to each nested value's toJSON, where bson `Long` can emit a lossy Number (>2^53) and
+      // `Decimal128` an Extended-JSON object — exactly the losses top-level normalization prevents.
+      return JSON.stringify(this.deepNormalizeForJson(v));
+    }
+    return v;
+  }
+
+  /**
+   * Recursively convert a value into a JSON-safe structure with all nested bson wrappers unwrapped to
+   * lossless primitives, for use before {@link normalizeValue} JSON-stringifies a nested object/array.
+   * Mirrors normalizeValue's scalar rules but for the DEEP case: `Long`/`Decimal128`/`ObjectId` → string,
+   * `Double`/`Int32` → number, `Binary` → base64 string (a Buffer can't live inside a JSON string), plain
+   * objects/arrays are walked. DB-sourced JSON/bson is acyclic, so no cycle guard is needed.
+   */
+  private deepNormalizeForJson(v: unknown): unknown {
+    if (v === null || v === undefined) return v;
+    if (typeof v === 'bigint') return v.toString();
+    if (v instanceof Date) return v; // JSON.stringify emits its ISO form
+    if (Buffer.isBuffer(v)) return v.toString('base64');
+    if (typeof v === 'object') {
+      const bsonType = (v as { _bsontype?: string })._bsontype;
+      if (bsonType) {
+        switch (bsonType) {
+          case 'Long':
+          case 'Decimal128':
+          case 'ObjectId':
+          case 'ObjectID':
+            return (v as { toString(): string }).toString();
+          case 'Binary': {
+            const bin = v as { buffer?: Buffer; value?: (asRaw?: boolean) => Buffer };
+            const buf = bin.buffer ?? (typeof bin.value === 'function' ? bin.value(true) : undefined);
+            return Buffer.isBuffer(buf) ? buf.toString('base64') : (v as { toString(): string }).toString();
+          }
+          case 'Double':
+          case 'Int32':
+            return (v as { valueOf(): number }).valueOf();
+          default:
+            return (v as { toString(): string }).toString();
+        }
+      }
+      if (Array.isArray(v)) {
+        return v.map((x) => this.deepNormalizeForJson(x));
+      }
+      const out: Record<string, unknown> = {};
+      for (const k in v as Record<string, unknown>) {
+        out[k] = this.deepNormalizeForJson((v as Record<string, unknown>)[k]);
+      }
+      return out;
     }
     return v;
   }

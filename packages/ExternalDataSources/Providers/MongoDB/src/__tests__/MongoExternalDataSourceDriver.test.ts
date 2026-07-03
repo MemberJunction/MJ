@@ -35,6 +35,16 @@ describe('MongoExternalDataSourceDriver — read-only pipeline guard', () => {
   it('tolerates non-object stages without throwing', () => {
     expect(() => d.assertReadOnly([null as unknown as object, 'weird' as unknown as object])).not.toThrow();
   });
+
+  it('rejects a write stage nested inside $facet / $lookup / $unionWith sub-pipelines (deep walk)', () => {
+    expect(() => d.assertReadOnly([{ $facet: { a: [{ $match: {} }, { $out: 'evil' }] } }])).toThrow(/forbidden write stage '\$out'/);
+    expect(() => d.assertReadOnly([{ $lookup: { from: 'x', pipeline: [{ $merge: { into: 'evil' } }], as: 'j' } }])).toThrow(/forbidden write stage '\$merge'/);
+    expect(() => d.assertReadOnly([{ $unionWith: { coll: 'x', pipeline: [{ $out: 'evil' }] } }])).toThrow(/forbidden write stage '\$out'/);
+  });
+
+  it('still allows a legitimate nested read-only sub-pipeline', () => {
+    expect(() => d.assertReadOnly([{ $lookup: { from: 'x', pipeline: [{ $match: { active: true } }], as: 'j' } }])).not.toThrow();
+  });
 });
 
 describe('MongoExternalDataSourceDriver — native query param guard', () => {

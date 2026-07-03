@@ -79,7 +79,13 @@ function tokenize(input: string): Token[] {
     if (/[0-9]/.test(c) || (c === '-' && /[0-9]/.test(input[i + 1] ?? ''))) {
       let n = c; i++;
       while (i < input.length && /[0-9.]/.test(input[i])) n += input[i++];
-      tokens.push({ kind: 'number', value: Number(n) });
+      const num = Number(n);
+      // Fail loud on a malformed numeric literal (e.g. `1.2.3`, `1.`, stray `.`). Number("1.2.3") is NaN,
+      // which would otherwise become {$eq: NaN} and silently match ZERO documents — a confusing wrong result.
+      if (!Number.isFinite(num)) {
+        throw new Error(`Invalid numeric literal '${n}' in filter.`);
+      }
+      tokens.push({ kind: 'number', value: num });
       continue;
     }
 
@@ -225,9 +231,18 @@ export class MongoFilterTranslator {
   /** Convert a SQL LIKE pattern to an anchored, regex-escaped pattern (% -> .*, _ -> .). */
   public static LikeToRegex(pattern: string): string {
     let out = '^';
+    let prevWildcard = false; // collapse consecutive `%` so `%%%…` -> a single `.*`
     for (const ch of pattern) {
-      if (ch === '%') out += '.*';
-      else if (ch === '_') out += '.';
+      if (ch === '%') {
+        // A run of `%` is equivalent to one `.*`. Emitting `.*.*.*…` produces catastrophic regex
+        // backtracking (ReDoS) against a non-matching input — MongoDB's $regex runs on a backtracking
+        // engine, so a crafted `LIKE '%%%…%X'` could pin a server thread. Coalesce the run.
+        if (!prevWildcard) out += '.*';
+        prevWildcard = true;
+        continue;
+      }
+      prevWildcard = false;
+      if (ch === '_') out += '.';
       else out += ch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     }
     return out + '$';

@@ -273,15 +273,27 @@ export class MongoExternalDataSourceDriver extends BaseExternalDataSourceDriver<
   /** Forbidden aggregation stages that would write/persist data (violating read-only access). */
   private static readonly WriteStages = new Set(['$out', '$merge']);
 
-  /** Throw if any pipeline stage is a write stage ($out / $merge). */
+  /**
+   * Throw if a write stage ($out / $merge) appears ANYWHERE in the pipeline — including nested
+   * sub-pipelines ($facet / $lookup / $unionWith). MongoDB currently only permits these stages at the
+   * top level, but relying on that placement rule is fragile; a deep walk enforces read-only structurally
+   * regardless of where the server would allow the stage.
+   */
   protected assertReadOnlyPipeline(pipeline: unknown[]): void {
-    for (const stage of pipeline) {
-      if (stage && typeof stage === 'object') {
-        for (const key of Object.keys(stage)) {
-          if (MongoExternalDataSourceDriver.WriteStages.has(key)) {
-            throw new Error(`MongoDB native query contains a forbidden write stage '${key}'. External data sources are read-only.`);
-          }
+    this.assertNoWriteStageDeep(pipeline);
+  }
+
+  private assertNoWriteStageDeep(node: unknown): void {
+    if (Array.isArray(node)) {
+      for (const item of node) this.assertNoWriteStageDeep(item);
+      return;
+    }
+    if (node && typeof node === 'object') {
+      for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
+        if (MongoExternalDataSourceDriver.WriteStages.has(key)) {
+          throw new Error(`MongoDB native query contains a forbidden write stage '${key}'. External data sources are read-only.`);
         }
+        this.assertNoWriteStageDeep(value);
       }
     }
   }

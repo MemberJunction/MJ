@@ -283,6 +283,23 @@ describe('BaseExternalDataSourceDriver', () => {
       expect(driver.exposeNormalizeValue([1, 2, 3])).toBe('[1,2,3]');
     });
 
+    it('recurses into nested objects/arrays so nested BSON stays lossless (not a lossy toJSON)', () => {
+      const long = { _bsontype: 'Long', toString: () => '9223372036854775807' };
+      const dec = { _bsontype: 'Decimal128', toString: () => '12345678901234.5678' };
+      const oid = { _bsontype: 'ObjectId', toString: () => '507f1f77bcf86cd799439011' };
+      const nested = { order: { qty: long, total: dec, ref: oid }, tags: [long] };
+      expect(driver.exposeNormalizeValue(nested)).toBe(
+        '{"order":{"qty":"9223372036854775807","total":"12345678901234.5678","ref":"507f1f77bcf86cd799439011"},"tags":["9223372036854775807"]}',
+      );
+    });
+
+    it('encodes a nested Buffer/Binary as base64 inside the JSON string', () => {
+      const bin = { _bsontype: 'Binary', buffer: Buffer.from([0xde, 0xad, 0xbe, 0xef]) };
+      expect(driver.exposeNormalizeValue({ blob: bin, raw: Buffer.from([1, 2, 3]) })).toBe(
+        `{"blob":"${Buffer.from([0xde, 0xad, 0xbe, 0xef]).toString('base64')}","raw":"${Buffer.from([1, 2, 3]).toString('base64')}"}`,
+      );
+    });
+
     it('unwraps a BSON Long / Decimal128 / ObjectId to its string form', () => {
       const long = { _bsontype: 'Long', toString: () => '9223372036854775807' };
       const dec = { _bsontype: 'Decimal128', toString: () => '12345678901234.5678' };
