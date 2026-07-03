@@ -38,7 +38,8 @@
     "axios": "^1.13.4",
     "class-validator": "^0.14.3",
     "mj_generatedactions": "1.0.0",
-    "mj_generatedentities": "1.0.0"
+    "mj_generatedentities": "1.0.0",
+    "@askskip/server": "^0.0.4"
   },
   "repository": {
     "type": "git",

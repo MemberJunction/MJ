@@ -101,6 +101,8 @@ interface DynamicServerPackage {
   PackageName?: string;
   /** Optional named export to invoke after import (a startup hook). */
   StartupExport?: string;
+  /** Open App name this package belongs to (for tracking). */
+  AppName?: string;
   /** Whether this package should be loaded. Treated as enabled unless explicitly `false`. */
   Enabled?: boolean;
 }
@@ -182,63 +184,6 @@ async function loadDynamicAppPackages(configResult: { config: Record<string, unk
 
   console.log('');
   return resolverPaths;
-}
-
-/**
- * A single entry in the `dynamicPackages.server` section of mj.config.cjs.
- * Written by the Open App install engine for each installed server-side package.
- */
-interface DynamicServerPackage {
-  /** npm package name to dynamically import (triggers @RegisterClass side effects) */
-  PackageName: string;
-  /** Optional named function export to call after import (e.g., 'LoadAcmeServer') */
-  StartupExport?: string;
-  /** Open App name this package belongs to (for tracking) */
-  AppName?: string;
-  /** Whether this package should be loaded. Allows disabling without removing. */
-  Enabled?: boolean;
-}
-
-/**
- * Loads server-side Open App packages declared in `dynamicPackages.server`.
- *
- * For each entry with `Enabled === true`, dynamically imports the package
- * (triggering its @RegisterClass decorators) and, if a `StartupExport` function
- * is exported, awaits it. Errors are isolated per-package so one broken app
- * package does not abort server boot.
- *
- * @param configResult - The loaded MemberJunction configuration
- */
-async function loadDynamicServerPackages(configResult: { config: Record<string, unknown> }): Promise<void> {
-  const dynamicPackages = configResult.config?.dynamicPackages as { server?: DynamicServerPackage[] } | undefined;
-  const serverPackages = dynamicPackages?.server;
-  if (!serverPackages?.length) {
-    return;
-  }
-
-  const enabled = serverPackages.filter((p) => p.Enabled === true);
-  if (enabled.length === 0) {
-    return;
-  }
-
-  console.log('Loading dynamic server (Open App) packages...');
-
-  for (const entry of enabled) {
-    try {
-      // Dynamic import to trigger side effects (class registration)
-      const mod = await import(entry.PackageName);
-      // Call the optional startup export if it exists and is a function
-      if (entry.StartupExport && typeof mod?.[entry.StartupExport] === 'function') {
-        await mod[entry.StartupExport]();
-      }
-      console.log(`  Loaded dynamic package: ${entry.PackageName}${entry.AppName ? ` (${entry.AppName})` : ''}`);
-    } catch (error: unknown) {
-      // Isolate failures — a broken app package should not crash server boot
-      console.error(`  Error loading dynamic package ${entry.PackageName}:`, error);
-    }
-  }
-
-  console.log('');
 }
 
 /**
