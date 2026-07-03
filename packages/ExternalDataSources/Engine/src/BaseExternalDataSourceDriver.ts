@@ -143,7 +143,10 @@ export abstract class BaseExternalDataSourceDriver<TConnection = unknown> {
     allowInsecure: boolean | undefined;
     dataSourceName: string;
   }): void {
-    if (opts.tlsEnabled || opts.allowInsecure) {
+    // Strict `=== true`: allowInsecure comes from user JSON (ConnectionConfig), where a mistyped
+    // truthy value like the STRING "false" would otherwise disable this security gate. Only an actual
+    // boolean true opts out of TLS enforcement.
+    if (opts.tlsEnabled || opts.allowInsecure === true) {
       return;
     }
     if (!this.isLocalHost(opts.host)) {
@@ -173,15 +176,95 @@ export abstract class BaseExternalDataSourceDriver<TConnection = unknown> {
 
   /** Render an arbitrary thrown value as a human-readable message string. Shared by all drivers. */
   protected errorText(e: unknown): string {
-    return e instanceof Error ? e.message : String(e);
+    const raw = e instanceof Error ? e.message : String(e);
+    return this.redactConnectionSecrets(raw);
+  }
+
+  /**
+   * Strip credentials from any connection-string-like `scheme://user:pass@host` embedded in a message.
+   * Driver SDKs (notably MongoDB) echo the connection URI in their errors; when a caller supplied a URI
+   * with inline credentials (e.g. `mongodb://user:pass@host`) those secrets would otherwise leak into
+   * logs and API error responses. Redacts the entire userinfo portion, leaving the host intact.
+   */
+  protected redactConnectionSecrets(message: string): string {
+    return message.replace(/([a-z][a-z0-9+.-]*:\/\/)[^@/\s]+@/gi, '$1***@');
+  }
+
+  /**
+   * Normalize a raw remote value into an MJ-safe primitive so it round-trips losslessly and matches the
+   * type CodeGen assigns the field. Native DB drivers return values that don't survive the JS/JSON
+   * boundary: high-precision numbers as lossy `number`s, JSON/complex columns as JS objects, MongoDB
+   * bson wrappers as objects. This converts:
+   *  - `BigInt`                       → decimal string (never a lossy Number)
+   *  - MongoDB bson `Long`/`Decimal128` → their exact string; `ObjectId` → hex string; `Binary` → Buffer;
+   *    other bson scalars → their JS value
+   *  - plain object / array           → JSON string (matches the `nvarchar(MAX)` CodeGen maps json/variant/nested to)
+   *  - everything else (string/number/boolean/Date/Buffer/null) passes through unchanged.
+   * Drivers additionally configure their SDK to return large numeric COLUMNS as strings (this catches
+   * the residual cases the SDK still hands back as objects/BigInt).
+   */
+  protected normalizeValue(v: unknown): unknown {
+    if (v === null || v === undefined) return v;
+    if (typeof v === 'bigint') return v.toString();
+    if (v instanceof Date || Buffer.isBuffer(v)) return v;
+    if (typeof v === 'object') {
+      const bsonType = (v as { _bsontype?: string })._bsontype;
+      if (bsonType) {
+        switch (bsonType) {
+          case 'Long':
+          case 'Decimal128':
+          case 'ObjectId':
+          case 'ObjectID':
+            return (v as { toString(): string }).toString();
+          case 'Binary': {
+            const bin = v as { buffer?: Buffer; value?: (asRaw?: boolean) => Buffer };
+            return bin.buffer ?? (typeof bin.value === 'function' ? bin.value(true) : v);
+          }
+          case 'Double':
+          case 'Int32':
+            return (v as { valueOf(): number }).valueOf();
+          default:
+            return (v as { toString(): string }).toString();
+        }
+      }
+      // Plain object or array (json/jsonb/VARIANT/nested doc/array) — CodeGen types these as nvarchar,
+      // so serialize to a JSON string rather than leak a live object across the boundary.
+      return JSON.stringify(v);
+    }
+    return v;
+  }
+
+  /** Apply {@link normalizeValue} to every field of every row in place, returning the same array. */
+  protected normalizeRows<TRow extends Record<string, unknown>>(rows: TRow[]): TRow[] {
+    for (const row of rows) {
+      for (const k in row) {
+        (row as Record<string, unknown>)[k] = this.normalizeValue(row[k]);
+      }
+    }
+    return rows;
   }
 
   /**
    * Evict (and close) the cached connection/pool for a data source so the next operation
    * re-resolves its credential and reconnects. Called by {@link withConnectionRetry} on an auth
    * failure. Implementations must be safe to call when nothing is cached for the id.
+   *
+   * `expectedIdentity` (when provided) is the exact cached handle the caller observed failing —
+   * from {@link peekConnection}. Implementations MUST only evict if the currently-cached handle is
+   * still that same identity; otherwise a concurrent request already replaced the pool with a fresh,
+   * healthy one and evicting it would cause needless reconnect churn (the H1 identity race). When
+   * `expectedIdentity` is undefined (explicit cache-clear, or a cold failure), evict unconditionally.
    */
-  protected abstract invalidateConnection(dataSourceId: string): Promise<void>;
+  protected abstract invalidateConnection(dataSourceId: string, expectedIdentity?: unknown): Promise<void>;
+
+  /**
+   * Return the currently-cached connection handle (the pooled promise) for identity-guarded eviction,
+   * or undefined if nothing is cached / the driver doesn't track connections. Overridden by drivers
+   * that maintain a per-data-source connection cache. See {@link withConnectionRetry}.
+   */
+  protected peekConnection(_dataSourceId: string): unknown {
+    return undefined;
+  }
 
   /**
    * Public entry point to close (and evict) the cached connection/pool for a data source — used by
@@ -204,6 +287,9 @@ export abstract class BaseExternalDataSourceDriver<TConnection = unknown> {
     dataSource: MJExternalDataSourceEntity,
     op: () => Promise<T>,
   ): Promise<T> {
+    // Capture the connection identity the operation is about to use, so that on an auth failure we
+    // only evict THAT handle — not a fresh pool a concurrent request may have reconnected in between.
+    const identity = this.peekConnection(dataSource.ID);
     try {
       return await op();
     } catch (e) {
@@ -213,7 +299,7 @@ export abstract class BaseExternalDataSourceDriver<TConnection = unknown> {
       // Evict the cached connection so the retry re-resolves the credential. A failure while
       // closing a half-dead pool must not supplant the original auth error or skip the retry.
       try {
-        await this.invalidateConnection(dataSource.ID);
+        await this.invalidateConnection(dataSource.ID, identity);
       } catch { /* best-effort eviction; proceed to the retry regardless */ }
       return await op();
     }

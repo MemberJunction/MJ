@@ -100,12 +100,34 @@ export class MySQLExternalDataSourceDriver extends BaseSqlExternalDataSourceDriv
       // Secure by default: verify the server cert unless the config explicitly opts out.
       ssl: config.ssl ? { rejectUnauthorized: config.sslRejectUnauthorized !== false } : undefined,
       connectionLimit: config.maxPoolSize ?? 5,
+      // Lossless numerics: mysql2 defaults BIGINT to a JS number (rounds past 2^53) — return BIGINT (and
+      // DECIMAL, already string by default) as strings so large keys/decimals survive. Small INTs stay numbers.
+      supportBigNumbers: true,
+      bigNumberStrings: true,
+      // Interpret DATETIME/TIMESTAMP (no tz) as UTC wall-clock rather than the process-local zone, so a
+      // stored 12:00 doesn't come back shifted by the server's offset.
+      timezone: 'Z',
+      // BIT(1) defaults to a Buffer and BOOLEAN (TINYINT(1)) to a number — decode both to real booleans
+      // (matching the MJ `bit` type). Everything else defers to mysql2's default (honoring bigNumberStrings).
+      typeCast: (field, next) => {
+        if (field.type === 'BIT' && field.length === 1) { const b = field.buffer(); return b ? b[0] === 1 : null; }
+        if (field.type === 'TINY' && field.length === 1) { const s = field.string(); return s === null ? null : s === '1'; }
+        return next();
+      },
     });
     return pool;
   }
 
-  protected async invalidateConnection(dataSourceId: string): Promise<void> {
+  protected peekConnection(dataSourceId: string): unknown {
+    return this.pools.get(dataSourceId);
+  }
+
+  protected async invalidateConnection(dataSourceId: string, expectedIdentity?: unknown): Promise<void> {
     const existing = this.pools.get(dataSourceId);
+    // Identity guard: skip if a concurrent request already replaced this pool (see base withConnectionRetry).
+    if (expectedIdentity !== undefined && existing !== expectedIdentity) {
+      return;
+    }
     if (existing) {
       this.pools.delete(dataSourceId);
       try { await (await existing).end(); } catch { /* best-effort close on the failure path */ }
@@ -136,7 +158,7 @@ export class MySQLExternalDataSourceDriver extends BaseSqlExternalDataSourceDriv
         const sqlText = this.buildSelectSql(target, params);
         const [rows] = await pool.query(sqlText);
         const totalRowCount = await this.maybeCount(pool, target, params);
-        return { success: true, rows: rows as TRow[], totalRowCount, executionTimeMs: Date.now() - start };
+        return { success: true, rows: this.normalizeRows(rows as TRow[]), totalRowCount, executionTimeMs: Date.now() - start };
       });
     } catch (e) {
       return { success: false, rows: [], errorMessage: this.errorText(e), executionTimeMs: Date.now() - start };
@@ -149,12 +171,15 @@ export class MySQLExternalDataSourceDriver extends BaseSqlExternalDataSourceDriv
     primaryKeys: readonly ExternalQueryParameter[],
     contextUser?: UserInfo,
   ): Promise<TRow | null> {
-    const pool = await this.getConnection(dataSource, contextUser);
-    const target = this.qualifyObject(dataSource, objectName);
-    const { clause, values } = this.buildPrimaryKeyWhere(primaryKeys, () => `?`);
-    const [rows] = await pool.query(`SELECT * FROM ${target} WHERE ${clause} LIMIT 1`, values);
-    const list = rows as TRow[];
-    return list[0] ?? null;
+    // Wrapped in withConnectionRetry so a rotated credential self-heals here too (parity with RunView).
+    return await this.withConnectionRetry(dataSource, async () => {
+      const pool = await this.getConnection(dataSource, contextUser);
+      const target = this.qualifyObject(dataSource, objectName);
+      const { clause, values } = this.buildPrimaryKeyWhere(primaryKeys, () => `?`);
+      const [rows] = await pool.query(`SELECT * FROM ${target} WHERE ${clause} LIMIT 1`, values);
+      const list = this.normalizeRows(rows as TRow[]);
+      return list[0] ?? null;
+    });
   }
 
   public async RunNativeQuery<TRow extends ExternalRow = ExternalRow>(
@@ -172,7 +197,7 @@ export class MySQLExternalDataSourceDriver extends BaseSqlExternalDataSourceDriv
         // mysql2 uses positional placeholders (?); bind values in array order.
         const values = (params ?? []).map((p) => p.value);
         const [result] = await pool.query(queryText, values);
-        const rows = Array.isArray(result) ? (result as TRow[]) : [];
+        const rows = Array.isArray(result) ? this.normalizeRows(result as TRow[]) : [];
         const rowCount = Array.isArray(result) ? result.length : ((result as mysql.ResultSetHeader)?.affectedRows ?? 0);
         return { success: true, rows, rowCount, executionTimeMs: Date.now() - start };
       });

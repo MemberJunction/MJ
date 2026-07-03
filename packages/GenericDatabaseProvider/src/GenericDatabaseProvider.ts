@@ -708,10 +708,14 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     ): Promise<Record<string, unknown>[]> {
         if (!rows || rows.length === 0) return rows;
 
-        // Step 1: Platform-specific datetime adjustment (virtual hook)
+        // Step 1: Platform-specific datetime adjustment (virtual hook).
+        // SKIP for external entities: AdjustDatetimeFields applies THIS provider's platform correction
+        // (e.g. SQL Server appends 'Z' to compensate for how tedious marshals datetimes from the LOCAL
+        // MJ database). External rows come from a different engine whose own driver already normalized
+        // datetimes to proper Date objects — re-applying the local correction would double-shift them.
         const datetimeFields = entityInfo.DatetimeFields; // memoized on EntityInfo (was Fields.filter per query)
         let processedRows: Record<string, unknown>[] = rows;
-        if (datetimeFields.length > 0) {
+        if (datetimeFields.length > 0 && !entityInfo.ExternalDataSourceID) {
             processedRows = await this.AdjustDatetimeFields(processedRows, datetimeFields, entityInfo);
         }
 

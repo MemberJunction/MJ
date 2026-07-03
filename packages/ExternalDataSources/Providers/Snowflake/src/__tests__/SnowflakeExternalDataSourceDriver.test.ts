@@ -21,6 +21,12 @@ class TestableSnowflakeDriver extends SnowflakeExternalDataSourceDriver {
   public authErr(e: unknown) {
     return this.isAuthError(e);
   }
+  public castProj(fields: readonly string[] | undefined, columns: Parameters<TestableSnowflakeDriver['buildCastAwareProjection']>[1]) {
+    return this.buildCastAwareProjection(fields, columns);
+  }
+  public selCast(target: string, params: ExternalViewParams, columns: Parameters<TestableSnowflakeDriver['buildSelectSqlCastAware']>[2]) {
+    return this.buildSelectSqlCastAware(target, params, columns);
+  }
 }
 
 const ds = (over: Partial<MJExternalDataSourceEntity>): MJExternalDataSourceEntity =>
@@ -117,5 +123,33 @@ describe('SnowflakeExternalDataSourceDriver — isAuthError (credential-rotation
   it('returns false for non-auth errors (must NOT evict+retry a normal query error)', () => {
     expect(d.authErr(new Error("SQL compilation error: Object 'FOO' does not exist"))).toBe(false);
     expect(d.authErr({ code: '000904' })).toBe(false);
+  });
+
+  describe('buildCastAwareProjection (precision-safe NUMBER, native FLOAT)', () => {
+    const cols = [
+      { name: 'ID', needsStringCast: true },     // NUMBER(38,0) — big int
+      { name: 'DBL', needsStringCast: false },   // FLOAT — stays a native number
+      { name: 'TXT', needsStringCast: false },
+    ];
+    it('returns * when nothing needs casting', () => {
+      expect(d.castProj(undefined, [{ name: 'DBL', needsStringCast: false }])).toBe('*');
+    });
+    it('returns * when metadata is unavailable', () => {
+      expect(d.castProj(undefined, [])).toBe('*');
+    });
+    it('expands * casting only the high-precision NUMBER columns (FLOAT left native)', () => {
+      expect(d.castProj(undefined, cols)).toBe('CAST("ID" AS VARCHAR) AS "ID", "DBL", "TXT"');
+    });
+    it('casts a requested high-precision field, quotes the rest (case-insensitive)', () => {
+      expect(d.castProj(['id', 'dbl'], cols)).toBe('CAST("id" AS VARCHAR) AS "id", "dbl"');
+    });
+  });
+
+  describe('buildSelectSqlCastAware', () => {
+    const cols = [{ name: 'ID', needsStringCast: true }, { name: 'TXT', needsStringCast: false }];
+    it('embeds the cast-aware projection with LIMIT/OFFSET paging', () => {
+      const sqlText = d.selCast('"S"."T"', { objectName: 'T', maxRows: 5, offset: 10, orderBy: '"ID"' }, cols);
+      expect(sqlText).toBe('SELECT CAST("ID" AS VARCHAR) AS "ID", "TXT" FROM "S"."T" ORDER BY "ID" LIMIT 5 OFFSET 10');
+    });
   });
 });

@@ -119,8 +119,16 @@ export class MongoExternalDataSourceDriver extends BaseExternalDataSourceDriver<
     return client;
   }
 
-  protected async invalidateConnection(dataSourceId: string): Promise<void> {
+  protected peekConnection(dataSourceId: string): unknown {
+    return this.clients.get(dataSourceId);
+  }
+
+  protected async invalidateConnection(dataSourceId: string, expectedIdentity?: unknown): Promise<void> {
     const existing = this.clients.get(dataSourceId);
+    // Identity guard: skip if a concurrent request already replaced this client (see base withConnectionRetry).
+    if (expectedIdentity !== undefined && existing !== expectedIdentity) {
+      return;
+    }
     if (existing) {
       this.clients.delete(dataSourceId);
       try { await (await existing).close(); } catch { /* best-effort close on the failure path */ }
@@ -167,7 +175,7 @@ export class MongoExternalDataSourceDriver extends BaseExternalDataSourceDriver<
 
         const rows = await coll.find(filter, options).toArray();
         const totalRowCount = params.maxRows != null ? await coll.countDocuments(filter) : undefined;
-        return { success: true, rows: rows as unknown as TRow[], totalRowCount, executionTimeMs: Date.now() - start };
+        return { success: true, rows: this.normalizeRows(rows as unknown as Record<string, unknown>[]) as unknown as TRow[], totalRowCount, executionTimeMs: Date.now() - start };
       });
     } catch (e) {
       return { success: false, rows: [], errorMessage: this.errorText(e), executionTimeMs: Date.now() - start };
@@ -186,14 +194,17 @@ export class MongoExternalDataSourceDriver extends BaseExternalDataSourceDriver<
     if (primaryKeys.length === 0) {
       throw new Error("MongoDB LoadSingle requires at least one primary-key value.");
     }
-    const db = await this.getConnection(dataSource, contextUser);
-    const filter: Record<string, unknown> = {};
-    for (const pk of primaryKeys) {
-      // Coerce a string _id to ObjectId (Mongo's default key type) so load-by-PK actually resolves.
-      filter[pk.name] = MongoFilterTranslator.CoerceObjectId(pk.name, pk.value);
-    }
-    const doc = await db.collection(objectName).findOne(filter);
-    return (doc as unknown as TRow) ?? null;
+    // Wrapped in withConnectionRetry so a rotated credential self-heals here too (parity with RunView).
+    return await this.withConnectionRetry(dataSource, async () => {
+      const db = await this.getConnection(dataSource, contextUser);
+      const filter: Record<string, unknown> = {};
+      for (const pk of primaryKeys) {
+        // Coerce a string _id to ObjectId (Mongo's default key type) so load-by-PK actually resolves.
+        filter[pk.name] = MongoFilterTranslator.CoerceObjectId(pk.name, pk.value);
+      }
+      const doc = await db.collection(objectName).findOne(filter);
+      return doc ? (this.normalizeRows([doc as Record<string, unknown>])[0] as unknown as TRow) : null;
+    });
   }
 
   public async RunNativeQuery<TRow extends ExternalRow = ExternalRow>(
@@ -220,7 +231,7 @@ export class MongoExternalDataSourceDriver extends BaseExternalDataSourceDriver<
         // which violates the read-only contract of an external data source.
         this.assertReadOnlyPipeline(spec.pipeline);
         const rows = await db.collection(spec.collection).aggregate(spec.pipeline as Document[]).toArray();
-        return { success: true, rows: rows as unknown as TRow[], rowCount: rows.length, executionTimeMs: Date.now() - start };
+        return { success: true, rows: this.normalizeRows(rows as unknown as Record<string, unknown>[]) as unknown as TRow[], rowCount: rows.length, executionTimeMs: Date.now() - start };
       });
     } catch (e) {
       return { success: false, rows: [], rowCount: 0, errorMessage: this.errorText(e), executionTimeMs: Date.now() - start };

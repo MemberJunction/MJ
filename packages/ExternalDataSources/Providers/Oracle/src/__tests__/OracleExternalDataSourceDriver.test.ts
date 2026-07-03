@@ -163,5 +163,23 @@ describe('OracleExternalDataSourceDriver — SQL building', () => {
       const cs = '(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=localhost)(PORT=1521))(CONNECT_DATA=(SERVICE_NAME=x)))';
       expect(d.transport({ connectString: cs })).toEqual({ host: 'localhost', tlsEnabled: false });
     });
+
+    it('passes a RAC descriptor mixing a LOCAL plaintext node with a REMOTE TCPS node (per-address pairing)', () => {
+      // The remote node is TCPS (encrypted); only the plaintext node is local. A global "any TCP" flag
+      // would wrongly brand the remote TCPS host as plaintext and block it — per-address pairing must not.
+      const cs = '(DESCRIPTION=(ADDRESS_LIST=' +
+        '(ADDRESS=(PROTOCOL=TCP)(HOST=localhost)(PORT=1521))' +
+        '(ADDRESS=(PROTOCOL=TCPS)(HOST=rac.oraclecloud.com)(PORT=2484)))' +
+        '(CONNECT_DATA=(SERVICE_NAME=x)))';
+      expect(d.transport({ connectString: cs })).toEqual({ host: 'rac.oraclecloud.com', tlsEnabled: true });
+    });
+
+    it('still rejects a RAC descriptor mixing a LOCAL TCPS node with a REMOTE plaintext node', () => {
+      const cs = '(DESCRIPTION=(ADDRESS_LIST=' +
+        '(ADDRESS=(PROTOCOL=TCPS)(HOST=localhost)(PORT=2484))' +
+        '(ADDRESS=(PROTOCOL=TCP)(HOST=evil.remote.com)(PORT=1521)))' +
+        '(CONNECT_DATA=(SERVICE_NAME=x)))';
+      expect(d.transport({ connectString: cs })).toEqual({ host: 'evil.remote.com', tlsEnabled: false });
+    });
   });
 });

@@ -18,6 +18,12 @@ class TestableSQLServerDriver extends SQLServerExternalDataSourceDriver {
   public groupFks(rows: Parameters<TestableSQLServerDriver['groupForeignKeys']>[0]) {
     return this.groupForeignKeys(rows);
   }
+  public castProj(fields: readonly string[] | undefined, columns: Parameters<TestableSQLServerDriver['buildCastAwareProjection']>[1]) {
+    return this.buildCastAwareProjection(fields, columns);
+  }
+  public selCast(target: string, params: ExternalViewParams, columns: Parameters<TestableSQLServerDriver['buildSelectSqlCastAware']>[2]) {
+    return this.buildSelectSqlCastAware(target, params, columns);
+  }
 }
 
 const ds = (over: Partial<MJExternalDataSourceEntity>): MJExternalDataSourceEntity =>
@@ -94,6 +100,40 @@ describe('SQLServerExternalDataSourceDriver — SQL building', () => {
         { Column: 'order_id', ReferencedColumn: 'id' },
         { Column: 'order_region', ReferencedColumn: 'region' },
       ]);
+    });
+  });
+
+  describe('buildCastAwareProjection (decimal-safe)', () => {
+    const cols = [
+      { name: 'id', isLossyNumeric: false },
+      { name: 'price', isLossyNumeric: true },
+      { name: 'name', isLossyNumeric: false },
+    ];
+    it('returns * when no column is lossy-numeric', () => {
+      expect(d.castProj(undefined, [{ name: 'id', isLossyNumeric: false }])).toBe('*');
+    });
+    it('returns * when column metadata is unavailable (probe failed)', () => {
+      expect(d.castProj(undefined, [])).toBe('*');
+    });
+    it('expands * to an explicit list CASTing only the lossy-numeric columns', () => {
+      expect(d.castProj(undefined, cols)).toBe('[id], CAST([price] AS VARCHAR(64)) AS [price], [name]');
+    });
+    it('casts a requested lossy field and quotes the rest (case-insensitive match)', () => {
+      expect(d.castProj(['ID', 'PRICE'], cols)).toBe('[ID], CAST([PRICE] AS VARCHAR(64)) AS [PRICE]');
+    });
+    it('leaves an unknown requested field simply quoted (no cast)', () => {
+      expect(d.castProj(['mystery'], cols)).toBe('[mystery]');
+    });
+  });
+
+  describe('buildSelectSqlCastAware', () => {
+    const cols = [{ name: 'id', isLossyNumeric: false }, { name: 'amt', isLossyNumeric: true }];
+    it('embeds the cast-aware projection into the full SELECT with paging', () => {
+      const sqlText = d.selCast('[s].[t]', { objectName: 't', maxRows: 5, offset: 10, orderBy: 'id' }, cols);
+      expect(sqlText).toBe('SELECT [id], CAST([amt] AS VARCHAR(64)) AS [amt] FROM [s].[t] ORDER BY id OFFSET 10 ROWS FETCH NEXT 5 ROWS ONLY');
+    });
+    it('still screens a malicious filter clause', () => {
+      expect(() => d.selCast('[s].[t]', { objectName: 't', filter: 'x); DROP TABLE t; --' }, cols)).toThrow();
     });
   });
 });

@@ -123,22 +123,41 @@ export class OracleExternalDataSourceDriver extends BaseSqlExternalDataSourceDri
     const cs = config.connectString.trim();
     const stripBrackets = (h: string) => h.replace(/^\[|\]$/g, '');
 
-    // TNS descriptor: collect every network host + whether ANY address is plaintext TCP (not TCPS).
-    // (IPC/BEQ addresses carry no HOST and are local, so they don't factor into remote-plaintext risk.)
+    // TNS descriptor: parse EACH `(ADDRESS=...)` block so a PROTOCOL pairs with the HOST in the SAME
+    // address. A global "any PROTOCOL=TCP appears" flag over-blocks a legitimate RAC/failover descriptor
+    // that mixes a LOCAL plaintext node with REMOTE TCPS nodes (the remote node is encrypted, but the
+    // global flag would wrongly brand it plaintext). Splitting on ADDRESS pairs protocol↔host correctly
+    // while still catching the real risks (a remote plaintext node, or a decoy TCPS token elsewhere).
     if (cs.includes('(')) {
-      const hosts = [...cs.matchAll(/HOST\s*=\s*([^)\s]+)/gi)].map((m) => stripBrackets(m[1]));
-      const hasPlaintextTcp = /PROTOCOL\s*=\s*tcp\b/i.test(cs); // \b excludes tcps
-      if (hosts.length === 0) {
-        // No network host parsed. A plaintext TCP address declared without a resolvable host → fail
-        // closed (force allowInsecureTransport); otherwise (IPC/BEQ local) treat as secure.
-        return hasPlaintextTcp ? { host: '<unresolved-remote>', tlsEnabled: false } : { host: '', tlsEnabled: true };
+      const addressSegments = cs.split(/\(\s*ADDRESS\s*=/i).slice(1);
+      const addresses = addressSegments.map((seg) => {
+        // First PROTOCOL/HOST within this address (a decoy `(X=PROTOCOL=TCPS)` after CONNECT_DATA is
+        // ignored because the real address tokens come first). Missing protocol WITH a host → treat as
+        // plaintext (fail-closed). IPC/BEQ carry no host and are local, so they pose no remote risk.
+        const proto = seg.match(/PROTOCOL\s*=\s*(\w+)/i)?.[1]?.toLowerCase();
+        const rawHost = seg.match(/HOST\s*=\s*([^)\s]+)/i)?.[1];
+        const host = rawHost ? stripBrackets(rawHost) : undefined;
+        const isNetwork = !!host || proto === 'tcp' || proto === 'tcps';
+        return { host, plaintext: isNetwork && proto !== 'tcps' };
+      });
+
+      // Weakest link: a REMOTE address reachable over plaintext → gate rejects unless opted in.
+      const remotePlaintext = addresses.find((a) => a.plaintext && a.host && !this.isLocalHost(a.host));
+      if (remotePlaintext) {
+        return { host: remotePlaintext.host!, tlsEnabled: false };
       }
-      const remotePlaintextHost = hasPlaintextTcp ? hosts.find((h) => !this.isLocalHost(h)) : undefined;
-      if (remotePlaintextHost) {
-        return { host: remotePlaintextHost, tlsEnabled: false }; // weakest link → gate rejects unless opted in
+      // A plaintext address declared without a resolvable host → fail closed (can't prove it's local).
+      if (addresses.some((a) => a.plaintext && !a.host)) {
+        return { host: '<unresolved-remote>', tlsEnabled: false };
       }
-      // Either all network addresses are TCPS, or every plaintext address is local — safe to pass.
-      return { host: hosts.find((h) => !this.isLocalHost(h)) ?? hosts[0], tlsEnabled: !hasPlaintextTcp };
+      // No remote plaintext remains. If there's a remote address it must be TCPS (encrypted) → safe.
+      const remoteAddress = addresses.find((a) => a.host && !this.isLocalHost(a.host));
+      if (remoteAddress) {
+        return { host: remoteAddress.host!, tlsEnabled: true };
+      }
+      // Only local / hostless (IPC/BEQ) addresses remain — safe to pass regardless (the gate lets any
+      // local host through). tlsEnabled mirrors whether a plaintext address was present, for accuracy.
+      return { host: addresses.map((a) => a.host).find(Boolean) ?? '', tlsEnabled: !addresses.some((a) => a.plaintext) };
     }
 
     // Easy-Connect form: [tcp(s)://]host[:port][/service]. NO scheme (or tcp://) ⇒ plaintext TCP by
@@ -152,8 +171,16 @@ export class OracleExternalDataSourceDriver extends BaseSqlExternalDataSourceDri
     };
   }
 
-  protected async invalidateConnection(dataSourceId: string): Promise<void> {
+  protected peekConnection(dataSourceId: string): unknown {
+    return this.pools.get(dataSourceId);
+  }
+
+  protected async invalidateConnection(dataSourceId: string, expectedIdentity?: unknown): Promise<void> {
     const existing = this.pools.get(dataSourceId);
+    // Identity guard: skip if a concurrent request already replaced this pool (see base withConnectionRetry).
+    if (expectedIdentity !== undefined && existing !== expectedIdentity) {
+      return;
+    }
     if (existing) {
       this.pools.delete(dataSourceId);
       try { await (await existing).close(0); } catch { /* best-effort close on the failure path */ }
@@ -184,7 +211,7 @@ export class OracleExternalDataSourceDriver extends BaseSqlExternalDataSourceDri
         const sqlText = this.buildSelectSql(target, params);
         const { rows } = await this.query<TRow>(pool, sqlText);
         const totalRowCount = await this.maybeCount(pool, target, params);
-        return { success: true, rows, totalRowCount, executionTimeMs: Date.now() - start };
+        return { success: true, rows: this.normalizeRows(rows), totalRowCount, executionTimeMs: Date.now() - start };
       });
     } catch (e) {
       return { success: false, rows: [], errorMessage: this.errorText(e), executionTimeMs: Date.now() - start };
@@ -197,17 +224,20 @@ export class OracleExternalDataSourceDriver extends BaseSqlExternalDataSourceDri
     primaryKeys: readonly ExternalQueryParameter[],
     contextUser?: UserInfo,
   ): Promise<TRow | null> {
-    const pool = await this.getConnection(dataSource, contextUser);
-    const target = this.qualifyObject(dataSource, objectName);
-    const { clause, values } = this.buildPrimaryKeyWhere(primaryKeys, (i) => `:pk${i}`);
-    const binds: Record<string, ExternalQueryParameter["value"]> = {};
-    values.forEach((v, i) => { binds[`pk${i}`] = v; });
-    const { rows } = await this.query<TRow>(
-      pool,
-      `SELECT * FROM ${target} WHERE ${clause} FETCH FIRST 1 ROWS ONLY`,
-      binds,
-    );
-    return rows[0] ?? null;
+    // Wrapped in withConnectionRetry so a rotated credential self-heals here too (parity with RunView).
+    return await this.withConnectionRetry(dataSource, async () => {
+      const pool = await this.getConnection(dataSource, contextUser);
+      const target = this.qualifyObject(dataSource, objectName);
+      const { clause, values } = this.buildPrimaryKeyWhere(primaryKeys, (i) => `:pk${i}`);
+      const binds: Record<string, ExternalQueryParameter["value"]> = {};
+      values.forEach((v, i) => { binds[`pk${i}`] = v; });
+      const { rows } = await this.query<TRow>(
+        pool,
+        `SELECT * FROM ${target} WHERE ${clause} FETCH FIRST 1 ROWS ONLY`,
+        binds,
+      );
+      return this.normalizeRows(rows)[0] ?? null;
+    });
   }
 
   public async RunNativeQuery<TRow extends ExternalRow = ExternalRow>(
@@ -230,7 +260,7 @@ export class OracleExternalDataSourceDriver extends BaseSqlExternalDataSourceDri
         const { rows } = await this.query<TRow>(pool, queryText, binds);
         // Read-only native queries are always SELECTs (enforced by the screen), so the row count is
         // simply the number of rows returned — not a falsy-coalesce into rowsAffected (which is 0 for a SELECT).
-        return { success: true, rows, rowCount: rows.length, executionTimeMs: Date.now() - start };
+        return { success: true, rows: this.normalizeRows(rows), rowCount: rows.length, executionTimeMs: Date.now() - start };
       });
     } catch (e) {
       return { success: false, rows: [], rowCount: 0, errorMessage: this.errorText(e), executionTimeMs: Date.now() - start };
@@ -284,7 +314,22 @@ export class OracleExternalDataSourceDriver extends BaseSqlExternalDataSourceDri
   private async query<T>(pool: oracledb.Pool, sql: string, binds: Record<string, unknown> = {}): Promise<{ rows: T[]; rowsAffected: number }> {
     const conn = await pool.getConnection();
     try {
-      const res = await conn.execute(sql, binds, { outFormat: oracledb.OUT_FORMAT_OBJECT });
+      const res = await conn.execute(sql, binds, {
+        outFormat: oracledb.OUT_FORMAT_OBJECT,
+        // Lossless numerics: oracledb returns NUMBER as a JS number (rounds past 2^53 / 15 sig digits).
+        // Fetch NUMBER as string EXCEPT for clearly-small integers (precision 1..15, scale 0) so large
+        // ids / high-scale decimals survive; small ints stay numeric. (Introspection reads only small
+        // catalog numbers, so this is safe there too.)
+        fetchTypeHandler: (metaData) => {
+          if (metaData.dbType === oracledb.DB_TYPE_NUMBER) {
+            const p = metaData.precision ?? 0;
+            const s = metaData.scale ?? 0;
+            const smallInteger = p > 0 && p <= 15 && s === 0;
+            if (!smallInteger) return { type: oracledb.STRING };
+          }
+          return undefined;
+        },
+      });
       return { rows: (res.rows as T[]) ?? [], rowsAffected: res.rowsAffected ?? 0 };
     } finally {
       await conn.close();

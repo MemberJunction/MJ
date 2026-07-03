@@ -51,6 +51,13 @@ interface SQLServerCredentialValues extends Record<string, string> {
   password: string;
 }
 
+/** Column metadata for decimal-safe projection: the column name and whether it needs CAST-to-string. */
+interface SqlColumnMeta {
+  name: string;
+  /** True for DECIMAL/NUMERIC/MONEY/SMALLMONEY — tedious returns these as a lossy JS number. */
+  isLossyNumeric: boolean;
+}
+
 /**
  * SQL Server driver for External Data Sources. Read-only, live-proxied access
  * to an external Microsoft SQL Server database via node-mssql (`mssql`). One pooled
@@ -66,6 +73,11 @@ export class SQLServerExternalDataSourceDriver extends BaseSqlExternalDataSource
   // Cache the in-flight CREATION promise (not the resolved pool) so concurrent first-requests share
   // one pool instead of each building one and leaking all but the last (the cold-start race).
   private pools = new Map<string, Promise<sql.ConnectionPool>>();
+
+  // Per-(dataSource,schema,object) column metadata, cached so we probe INFORMATION_SCHEMA at most once
+  // per object. Drives decimal-safe projection: tedious returns DECIMAL/NUMERIC/MONEY as a lossy JS
+  // number, so those columns are CAST to string in the SELECT projection (see buildSelectSqlCastAware).
+  private columnMetaCache = new Map<string, Promise<SqlColumnMeta[]>>();
 
   protected async getConnection(dataSource: MJExternalDataSourceEntity, contextUser?: UserInfo): Promise<sql.ConnectionPool> {
     const existing = this.pools.get(dataSource.ID);
@@ -106,8 +118,23 @@ export class SQLServerExternalDataSourceDriver extends BaseSqlExternalDataSource
     return pool;
   }
 
-  protected async invalidateConnection(dataSourceId: string): Promise<void> {
+  protected peekConnection(dataSourceId: string): unknown {
+    return this.pools.get(dataSourceId);
+  }
+
+  protected async invalidateConnection(dataSourceId: string, expectedIdentity?: unknown): Promise<void> {
     const existing = this.pools.get(dataSourceId);
+    // Identity guard: skip if a concurrent request already replaced this pool (see base withConnectionRetry).
+    if (expectedIdentity !== undefined && existing !== expectedIdentity) {
+      return;
+    }
+    // Drop cached column metadata for this source too — a dropped/re-added source could have a
+    // reshaped schema, and the cache key is prefixed by dataSourceId so we can target it.
+    for (const key of [...this.columnMetaCache.keys()]) {
+      if (key.startsWith(`${dataSourceId}||`)) {
+        this.columnMetaCache.delete(key);
+      }
+    }
     if (existing) {
       this.pools.delete(dataSourceId);
       try { await (await existing).close(); } catch { /* best-effort close on the failure path */ }
@@ -135,10 +162,12 @@ export class SQLServerExternalDataSourceDriver extends BaseSqlExternalDataSource
       return await this.withConnectionRetry(dataSource, async () => {
         const pool = await this.getConnection(dataSource, contextUser);
         const target = this.qualifyObject(dataSource, params.objectName);
-        const sqlText = this.buildSelectSql(target, params);
+        const columns = await this.getObjectColumns(pool, dataSource, params.objectName);
+        const sqlText = this.buildSelectSqlCastAware(target, params, columns);
         const res = await pool.request().query(sqlText);
         const totalRowCount = await this.maybeCount(pool, target, params);
-        return { success: true, rows: res.recordset as unknown as TRow[], totalRowCount, executionTimeMs: Date.now() - start };
+        const rows = this.normalizeRows(res.recordset as unknown as Record<string, unknown>[]) as unknown as TRow[];
+        return { success: true, rows, totalRowCount, executionTimeMs: Date.now() - start };
       });
     } catch (e) {
       return { success: false, rows: [], errorMessage: this.errorText(e), executionTimeMs: Date.now() - start };
@@ -151,13 +180,19 @@ export class SQLServerExternalDataSourceDriver extends BaseSqlExternalDataSource
     primaryKeys: readonly ExternalQueryParameter[],
     contextUser?: UserInfo,
   ): Promise<TRow | null> {
-    const pool = await this.getConnection(dataSource, contextUser);
-    const target = this.qualifyObject(dataSource, objectName);
-    const { clause, values } = this.buildPrimaryKeyWhere(primaryKeys, (i) => `@pk${i}`);
-    const request = pool.request();
-    values.forEach((v, i) => request.input(`pk${i}`, v));
-    const res = await request.query(`SELECT TOP (1) * FROM ${target} WHERE ${clause}`);
-    return (res.recordset[0] as unknown as TRow) ?? null;
+    // Wrapped in withConnectionRetry so a rotated credential self-heals here too (parity with RunView).
+    return await this.withConnectionRetry(dataSource, async () => {
+      const pool = await this.getConnection(dataSource, contextUser);
+      const target = this.qualifyObject(dataSource, objectName);
+      const columns = await this.getObjectColumns(pool, dataSource, objectName);
+      const projection = this.buildCastAwareProjection(undefined, columns);
+      const { clause, values } = this.buildPrimaryKeyWhere(primaryKeys, (i) => `@pk${i}`);
+      const request = pool.request();
+      values.forEach((v, i) => request.input(`pk${i}`, v));
+      const res = await request.query(`SELECT TOP (1) ${projection} FROM ${target} WHERE ${clause}`);
+      const row = res.recordset[0];
+      return row ? (this.normalizeRows([row as Record<string, unknown>])[0] as unknown as TRow) : null;
+    });
   }
 
   public async RunNativeQuery<TRow extends ExternalRow = ExternalRow>(
@@ -178,7 +213,10 @@ export class SQLServerExternalDataSourceDriver extends BaseSqlExternalDataSource
           req.input(p.name, p.value);
         }
         const res = await req.query(queryText);
-        const rows = (res.recordset as unknown as TRow[]) ?? [];
+        // Native queries carry an arbitrary projection we can't rewrite for decimal-safety (we'd have to
+        // parse the SELECT), so DECIMAL precision is best-effort here; normalizeRows still handles bigint
+        // and object-typed values. Callers needing lossless decimals should CAST in their query text.
+        const rows = this.normalizeRows((res.recordset as unknown as Record<string, unknown>[]) ?? []) as unknown as TRow[];
         return {
           success: true,
           rows,
@@ -264,6 +302,97 @@ export class SQLServerExternalDataSourceDriver extends BaseSqlExternalDataSource
     }
     const res = await pool.request().query(`SELECT COUNT(*) AS cnt FROM ${target}${params.filter ? ` WHERE ${params.filter}` : ''}`);
     return Number(res.recordset[0]?.cnt ?? 0);
+  }
+
+  // ---- decimal-safe projection ---------------------------------------------
+  // tedious returns DECIMAL/NUMERIC/MONEY/SMALLMONEY as a lossy JS `number` (BIGINT, by contrast, comes
+  // back as a string, so it needs no help). To preserve full precision we CAST those columns to string in
+  // the SELECT projection. That requires knowing the object's columns, so we probe INFORMATION_SCHEMA once
+  // per object and cache the result. When no fields are requested (a `*` read), we expand `*` into an
+  // explicit column list ONLY when a lossy-numeric column exists — otherwise `*` is left untouched.
+
+  /** Split an objectName into (schema, object), honoring an explicit `schema.object` and the source default. */
+  private splitSchemaObject(dataSource: MJExternalDataSourceEntity, objectName: string): { schema: string; object: string } {
+    if (objectName.includes('.')) {
+      const [schema, object] = objectName.split('.');
+      return { schema, object };
+    }
+    return { schema: dataSource.DefaultSchema ?? 'dbo', object: objectName };
+  }
+
+  /** Probe (and cache) the column list + which columns are lossy-numeric for an object. */
+  private getObjectColumns(pool: sql.ConnectionPool, dataSource: MJExternalDataSourceEntity, objectName: string): Promise<SqlColumnMeta[]> {
+    const { schema, object } = this.splitSchemaObject(dataSource, objectName);
+    const key = `${dataSource.ID}||${schema}||${object}`;
+    const cached = this.columnMetaCache.get(key);
+    if (cached) {
+      return cached;
+    }
+    const loading = this.loadObjectColumns(pool, schema, object);
+    this.columnMetaCache.set(key, loading);
+    // Never cache a failed probe — evict so the next call retries; the empty fallback still applies below.
+    loading.catch(() => {
+      if (this.columnMetaCache.get(key) === loading) {
+        this.columnMetaCache.delete(key);
+      }
+    });
+    return loading;
+  }
+
+  private async loadObjectColumns(pool: sql.ConnectionPool, schema: string, object: string): Promise<SqlColumnMeta[]> {
+    const res = await pool.request().input('schema', schema).input('object', object).query(
+      `SELECT COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = @schema AND TABLE_NAME = @object ORDER BY ORDINAL_POSITION`);
+    const lossy = new Set(['decimal', 'numeric', 'money', 'smallmoney']);
+    return res.recordset.map((r: { COLUMN_NAME: string; DATA_TYPE: string }) => ({
+      name: r.COLUMN_NAME,
+      isLossyNumeric: lossy.has((r.DATA_TYPE ?? '').toLowerCase()),
+    }));
+  }
+
+  /** VARCHAR wide enough for any DECIMAL(38,s): 38 digits + sign + point. money fits comfortably. */
+  private castNumericToString(colName: string): string {
+    return `CAST(${this.quoteIdent(colName)} AS VARCHAR(64)) AS ${this.quoteIdent(colName)}`;
+  }
+
+  /**
+   * Build a projection that CASTs lossy-numeric columns to string. `fields` (when supplied) is the
+   * requested column subset; otherwise all columns are projected. Returns `*` only when we have no
+   * column metadata AND no explicit fields (introspection failed) — a safe, if lossy, fallback.
+   */
+  protected buildCastAwareProjection(fields: readonly string[] | undefined, columns: SqlColumnMeta[]): string {
+    const lossyByName = new Map(columns.map((c) => [c.name.toLowerCase(), c.isLossyNumeric]));
+    if (fields?.length) {
+      return fields.map((f) => (lossyByName.get(f.toLowerCase()) ? this.castNumericToString(f) : this.quoteIdent(f))).join(', ');
+    }
+    if (!columns.length) {
+      return '*'; // no metadata (e.g. probe failed) — fall back to a plain wildcard read
+    }
+    if (!columns.some((c) => c.isLossyNumeric)) {
+      return '*'; // nothing needs casting — keep the cheaper wildcard
+    }
+    return columns.map((c) => (c.isLossyNumeric ? this.castNumericToString(c.name) : this.quoteIdent(c.name))).join(', ');
+  }
+
+  /**
+   * Decimal-safe variant of {@link buildSelectSql}: identical clause construction, but the projection
+   * routes through {@link buildCastAwareProjection} so DECIMAL/NUMERIC/MONEY come back as lossless strings.
+   */
+  protected buildSelectSqlCastAware(target: string, params: ExternalViewParams, columns: SqlColumnMeta[]): string {
+    if (params.filter) {
+      this.screenReadOnlyClause(params.filter, 'where');
+    }
+    if (params.orderBy) {
+      this.screenReadOnlyClause(params.orderBy, 'orderby');
+    }
+    const projection = this.buildCastAwareProjection(params.fields, columns);
+    const effectiveParams = this.applyDefaultOrderBy(params);
+    let sqlText = `SELECT ${this.selectTopClause(effectiveParams)}${projection} FROM ${target}`;
+    if (params.filter) {
+      sqlText += ` WHERE ${params.filter}`;
+    }
+    sqlText += this.orderAndPageClause(effectiveParams);
+    return sqlText;
   }
 
   private assembleSchema(

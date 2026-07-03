@@ -55,6 +55,15 @@ class TestExternalDriver extends BaseExternalDataSourceDriver<{ fake: true }> {
   public exposeAssertSecureTransport(opts: { host?: string; tlsEnabled: boolean; allowInsecure?: boolean; dataSourceName: string }) {
     return this.assertSecureTransport(opts);
   }
+  public exposeRedactConnectionSecrets(msg: string) {
+    return this.redactConnectionSecrets(msg);
+  }
+  public exposeNormalizeValue(v: unknown) {
+    return this.normalizeValue(v);
+  }
+  public exposeNormalizeRows<T extends Record<string, unknown>>(rows: T[]) {
+    return this.normalizeRows(rows);
+  }
 }
 
 // Test fixture — only the fields the helpers read. Cast through unknown is the
@@ -196,6 +205,101 @@ describe('BaseExternalDataSourceDriver', () => {
 
     it('allows a non-local plaintext host only with the explicit allowInsecureTransport opt-out', () => {
       expect(call({ host: 'db.example.com', allowInsecure: true })).not.toThrow();
+    });
+
+    it('requires a STRICT boolean true — a mistyped truthy string "false" does NOT disable the gate', () => {
+      expect(() => driver.exposeAssertSecureTransport({
+        host: 'db.example.com', tlsEnabled: false,
+        allowInsecure: 'false' as unknown as boolean, dataSourceName: 'X',
+      })).toThrow(/unencrypted connection/);
+    });
+  });
+
+  describe('redactConnectionSecrets', () => {
+    it('strips inline user:pass credentials from a connection URI in an error message', () => {
+      const msg = 'failed to connect to mongodb://alice:s3cr3t@cluster0.example.com:27017/db';
+      const out = driver.exposeRedactConnectionSecrets(msg);
+      expect(out).toContain('mongodb://***@cluster0.example.com:27017/db');
+      expect(out).not.toContain('s3cr3t');
+      expect(out).not.toContain('alice');
+    });
+
+    it('redacts a token-only userinfo (no colon) too', () => {
+      expect(driver.exposeRedactConnectionSecrets('postgres://TOKEN@host/db')).toBe('postgres://***@host/db');
+    });
+
+    it('leaves a URL with no credentials untouched', () => {
+      expect(driver.exposeRedactConnectionSecrets('mongodb://cluster0.example.com:27017/db')).toBe('mongodb://cluster0.example.com:27017/db');
+    });
+
+    it('passes through a plain error message with no URI', () => {
+      expect(driver.exposeRedactConnectionSecrets('ECONNREFUSED 10.0.0.1:5432')).toBe('ECONNREFUSED 10.0.0.1:5432');
+    });
+  });
+
+  describe('normalizeValue', () => {
+    it('passes null and undefined through untouched', () => {
+      expect(driver.exposeNormalizeValue(null)).toBeNull();
+      expect(driver.exposeNormalizeValue(undefined)).toBeUndefined();
+    });
+
+    it('stringifies a native bigint (lossless for values past 2^53)', () => {
+      expect(driver.exposeNormalizeValue(9223372036854775807n)).toBe('9223372036854775807');
+    });
+
+    it('leaves plain primitives (number / string / boolean) as-is', () => {
+      expect(driver.exposeNormalizeValue(42)).toBe(42);
+      expect(driver.exposeNormalizeValue('hi')).toBe('hi');
+      expect(driver.exposeNormalizeValue(true)).toBe(true);
+    });
+
+    it('preserves Date and Buffer instances by reference (not JSON-stringified)', () => {
+      const d = new Date('2024-06-01T12:00:00Z');
+      const b = Buffer.from([0xde, 0xad]);
+      expect(driver.exposeNormalizeValue(d)).toBe(d);
+      expect(driver.exposeNormalizeValue(b)).toBe(b);
+    });
+
+    it('JSON-stringifies a plain object (JSON/JSONB/VARIANT columns typed as text)', () => {
+      expect(driver.exposeNormalizeValue({ k: 'v', n: 42 })).toBe('{"k":"v","n":42}');
+      expect(driver.exposeNormalizeValue([1, 2, 3])).toBe('[1,2,3]');
+    });
+
+    it('unwraps a BSON Long / Decimal128 / ObjectId to its string form', () => {
+      const long = { _bsontype: 'Long', toString: () => '9223372036854775807' };
+      const dec = { _bsontype: 'Decimal128', toString: () => '12345678901234.5678' };
+      const oid = { _bsontype: 'ObjectId', toString: () => '507f1f77bcf86cd799439011' };
+      expect(driver.exposeNormalizeValue(long)).toBe('9223372036854775807');
+      expect(driver.exposeNormalizeValue(dec)).toBe('12345678901234.5678');
+      expect(driver.exposeNormalizeValue(oid)).toBe('507f1f77bcf86cd799439011');
+    });
+
+    it('unwraps a BSON Binary to its Buffer', () => {
+      const buf = Buffer.from([1, 2, 3]);
+      const bin = { _bsontype: 'Binary', buffer: buf };
+      expect(driver.exposeNormalizeValue(bin)).toBe(buf);
+    });
+
+    it('unwraps a BSON Double / Int32 to a native number via valueOf', () => {
+      expect(driver.exposeNormalizeValue({ _bsontype: 'Double', valueOf: () => 3.14 })).toBe(3.14);
+      expect(driver.exposeNormalizeValue({ _bsontype: 'Int32', valueOf: () => 7 })).toBe(7);
+    });
+  });
+
+  describe('normalizeRows', () => {
+    it('normalizes every value across every row in place and returns the same array', () => {
+      const rows = [
+        { a: 10n, b: { k: 'v' }, c: 'text' },
+        { a: 20n, b: [1, 2], c: null },
+      ];
+      const result = driver.exposeNormalizeRows(rows);
+      expect(result).toBe(rows);
+      expect(rows[0]).toEqual({ a: '10', b: '{"k":"v"}', c: 'text' });
+      expect(rows[1]).toEqual({ a: '20', b: '[1,2]', c: null });
+    });
+
+    it('handles an empty row set', () => {
+      expect(driver.exposeNormalizeRows([])).toEqual([]);
     });
   });
 });

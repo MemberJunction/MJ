@@ -92,12 +92,31 @@ export class PostgresExternalDataSourceDriver extends BaseSqlExternalDataSourceD
       // Secure by default: verify the server cert unless the config explicitly opts out.
       ssl: config.ssl ? { rejectUnauthorized: config.sslRejectUnauthorized !== false } : undefined,
       max: config.maxPoolSize ?? 5,
+      // Interpret timestamp-without-tz + date as UTC wall-clock rather than the process-local zone, so a
+      // stored 12:00 doesn't come back shifted by the server's offset. PER-POOL (not the global
+      // pg.types), so the host MJ-DB PostgreSQL provider's own datetime parsing is untouched.
+      types: { getTypeParser: PostgresExternalDataSourceDriver.pgTypeParser },
     });
     return pool;
   }
 
-  protected async invalidateConnection(dataSourceId: string): Promise<void> {
+  /** Per-pool pg type parser: UTC for timestamp(1114)/date(1082); everything else uses pg's default. */
+  private static pgTypeParser(oid: number, format?: unknown): (value: string) => unknown {
+    if (oid === 1114) return (v: string) => (v == null ? null : new Date(v.replace(' ', 'T') + 'Z'));
+    if (oid === 1082) return (v: string) => (v == null ? null : new Date(v + 'T00:00:00Z'));
+    return pg.types.getTypeParser(oid as Parameters<typeof pg.types.getTypeParser>[0], format as never) as (value: string) => unknown;
+  }
+
+  protected peekConnection(dataSourceId: string): unknown {
+    return this.pools.get(dataSourceId);
+  }
+
+  protected async invalidateConnection(dataSourceId: string, expectedIdentity?: unknown): Promise<void> {
     const existing = this.pools.get(dataSourceId);
+    // Identity guard: skip if a concurrent request already replaced this pool (see base withConnectionRetry).
+    if (expectedIdentity !== undefined && existing !== expectedIdentity) {
+      return;
+    }
     if (existing) {
       this.pools.delete(dataSourceId);
       try { await (await existing).end(); } catch { /* best-effort close on the failure path */ }
@@ -128,7 +147,7 @@ export class PostgresExternalDataSourceDriver extends BaseSqlExternalDataSourceD
         const sql = this.buildSelectSql(target, params);
         const res = await pool.query(sql);
         const totalRowCount = await this.maybeCount(pool, target, params);
-        return { success: true, rows: res.rows as TRow[], totalRowCount, executionTimeMs: Date.now() - start };
+        return { success: true, rows: this.normalizeRows(res.rows as TRow[]), totalRowCount, executionTimeMs: Date.now() - start };
       });
     } catch (e) {
       return { success: false, rows: [], errorMessage: this.errorText(e), executionTimeMs: Date.now() - start };
@@ -141,11 +160,14 @@ export class PostgresExternalDataSourceDriver extends BaseSqlExternalDataSourceD
     primaryKeys: readonly ExternalQueryParameter[],
     contextUser?: UserInfo,
   ): Promise<TRow | null> {
-    const pool = await this.getConnection(dataSource, contextUser);
-    const target = this.qualifyObject(dataSource, objectName);
-    const { clause, values } = this.buildPrimaryKeyWhere(primaryKeys, (i) => `$${i + 1}`);
-    const res = await pool.query(`SELECT * FROM ${target} WHERE ${clause} LIMIT 1`, values);
-    return (res.rows[0] as TRow) ?? null;
+    // Wrapped in withConnectionRetry so a rotated credential self-heals here too (parity with RunView).
+    return await this.withConnectionRetry(dataSource, async () => {
+      const pool = await this.getConnection(dataSource, contextUser);
+      const target = this.qualifyObject(dataSource, objectName);
+      const { clause, values } = this.buildPrimaryKeyWhere(primaryKeys, (i) => `$${i + 1}`);
+      const res = await pool.query(`SELECT * FROM ${target} WHERE ${clause} LIMIT 1`, values);
+      return this.normalizeRows(res.rows as TRow[])[0] ?? null;
+    });
   }
 
   public async RunNativeQuery<TRow extends ExternalRow = ExternalRow>(
@@ -165,7 +187,7 @@ export class PostgresExternalDataSourceDriver extends BaseSqlExternalDataSourceD
         const res = await pool.query(queryText, values);
         return {
           success: true,
-          rows: res.rows as TRow[],
+          rows: this.normalizeRows(res.rows as TRow[]),
           rowCount: res.rowCount ?? res.rows.length,
           executionTimeMs: Date.now() - start,
         };
