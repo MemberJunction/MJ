@@ -87,16 +87,21 @@ export class ExternalDataSourceRouter extends BaseSingleton<ExternalDataSourceRo
       throw new Error(`External data source type '${dataSource.TypeID}' (for '${dataSource.Name}') not found.`);
     }
 
-    const driver = MJGlobal.Instance.ClassFactory.CreateInstance<BaseExternalDataSourceDriver>(
-      BaseExternalDataSourceDriver,
-      dataSourceType.DriverClass,
-    );
-    if (!driver) {
+    // Must check GetRegistration explicitly: CreateInstance returns an instance of the ABSTRACT base
+    // (never null) when the DriverClass isn't registered, so a `!driver` guard would be dead code and the
+    // first driver call would throw a cryptic "x is not a function" instead of this clear message. A typo
+    // in DriverClass, or the driver package not being imported, is a realistic operational scenario.
+    const cf = MJGlobal.Instance.ClassFactory;
+    if (!cf.GetRegistration(BaseExternalDataSourceDriver, dataSourceType.DriverClass)) {
       throw new Error(
         `No external data source driver registered for DriverClass '${dataSourceType.DriverClass}' ` +
         `(data source '${dataSource.Name}'). Ensure the driver package is installed and its @RegisterClass key matches.`,
       );
     }
+    const driver = cf.CreateInstance<BaseExternalDataSourceDriver>(
+      BaseExternalDataSourceDriver,
+      dataSourceType.DriverClass,
+    )!;
 
     return { dataSource, dataSourceType, driver };
   }

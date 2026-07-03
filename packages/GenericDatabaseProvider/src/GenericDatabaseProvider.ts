@@ -1463,10 +1463,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 // normal SQL path that applies them runs below this early return — so fold them in
                 // here, else a UserView over an external entity silently returns unfiltered rows.
                 const externalParams = await this.mergeExternalViewParams(params, viewEntity, user);
-                const externalRouter = MJGlobal.Instance.ClassFactory.CreateInstance<ExternalDataSourceReadRouter>(ExternalDataSourceReadRouter);
-                if (!externalRouter) {
-                    throw new Error(`Entity '${entityInfo.Name}' is backed by an external data source but no ExternalDataSourceReadRouter is registered. Ensure @memberjunction/external-data-sources is loaded.`);
-                }
+                const externalRouter = this.resolveExternalReadRouterOrThrow(`Entity '${entityInfo.Name}'`);
                 const externalResult = await externalRouter.RunViewExternal<T>(entityInfo, externalParams, user, this);
                 // Apply the same row post-processing MJ-DB reads get (field decryption + datetime
                 // normalization). Without this, an Encrypt-flagged external field surfaces as ciphertext.
@@ -2407,10 +2404,27 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         if (!params.EntityName) return undefined;
         const entityInfo = this.EntityByName(params.EntityName);
         if (!entityInfo?.ExternalDataSourceID) return undefined; // MJ-DB entity — event-invalidated, no TTL
-        const router = MJGlobal.Instance.ClassFactory.CreateInstance<ExternalDataSourceReadRouter>(ExternalDataSourceReadRouter);
-        if (!router) return 0; // external but no router resolvable — don't cache (avoid stale-forever)
+        // Must check GetRegistration, not CreateInstance's return: CreateInstance returns an instance of
+        // the ABSTRACT base (never null) when unregistered, so a `!router` check would be dead code.
+        const cf = MJGlobal.Instance.ClassFactory;
+        if (!cf.GetRegistration(ExternalDataSourceReadRouter)) return 0; // no router — don't cache (avoid stale-forever)
+        const router = cf.CreateInstance<ExternalDataSourceReadRouter>(ExternalDataSourceReadRouter)!;
         const ttlSeconds = await router.GetCacheTTLSeconds(entityInfo.ExternalDataSourceID, contextUser, this);
         return ttlSeconds > 0 ? ttlSeconds * 1000 : 0;
+    }
+
+    /**
+     * Resolve the External Data Sources read router, or throw a CLEAR error when the EDS engine isn't
+     * loaded. IMPORTANT: `ClassFactory.CreateInstance` returns an instance of the ABSTRACT base class
+     * (not null) when no concrete class is registered, so a `if (!router)` guard is dead code and the
+     * caller would instead hit a cryptic "router.X is not a function" TypeError. Gate on GetRegistration.
+     */
+    private resolveExternalReadRouterOrThrow(context: string): ExternalDataSourceReadRouter {
+        const cf = MJGlobal.Instance.ClassFactory;
+        if (!cf.GetRegistration(ExternalDataSourceReadRouter)) {
+            throw new Error(`${context} is backed by an external data source but no ExternalDataSourceReadRouter is registered. Ensure @memberjunction/external-data-sources is loaded.`);
+        }
+        return cf.CreateInstance<ExternalDataSourceReadRouter>(ExternalDataSourceReadRouter)!;
     }
 
     /**
@@ -3003,10 +3017,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             // RLS-protected entity, the query author is responsible for scoping the SQL (and the source
             // credential should be least-privilege). Do not assume EDS RLS covers the Query path.
             if (query.ExternalDataSourceID) {
-                const externalRouter = MJGlobal.Instance.ClassFactory.CreateInstance<ExternalDataSourceReadRouter>(ExternalDataSourceReadRouter);
-                if (!externalRouter) {
-                    throw new Error(`Query '${query.Name}' is bound to an external data source but no ExternalDataSourceReadRouter is registered. Ensure @memberjunction/external-data-sources is loaded.`);
-                }
+                const externalRouter = this.resolveExternalReadRouterOrThrow(`Query '${query.Name}'`);
                 return await this.runExternalQueryWithCache(query, finalSQL, params, externalRouter, contextUser);
             }
 
@@ -3620,10 +3631,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         if (entityInfo.ExternalDataSourceID) {
             // Refuse rather than silently bypass Row-Level Security (a remote system can't enforce it).
             this.assertExternalReadAllowedUnderRLS(entityInfo, user);
-            const externalRouter = MJGlobal.Instance.ClassFactory.CreateInstance<ExternalDataSourceReadRouter>(ExternalDataSourceReadRouter);
-            if (!externalRouter) {
-                throw new Error(`Entity '${entityInfo.Name}' is backed by an external data source but no ExternalDataSourceReadRouter is registered. Ensure @memberjunction/external-data-sources is loaded.`);
-            }
+            const externalRouter = this.resolveExternalReadRouterOrThrow(`Entity '${entityInfo.Name}'`);
             const externalResult = await externalRouter.LoadExternalRecord<Record<string, unknown>>(
                 entityInfo,
                 compositeKey,
