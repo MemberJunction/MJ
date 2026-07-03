@@ -52,7 +52,7 @@ export type ConversationListItem = {
  */
 export async function loadConversations(contextUser?: UserInfo): Promise<ConversationListItem[]> {
     const rv = new RunView();
-    const md = new Metadata();
+    const md = new Metadata();  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
     const currentUser = contextUser ?? md.CurrentUser;
 
     const userFilter = currentUser?.ID
@@ -178,7 +178,7 @@ export async function loadConversation(
     conversationId: string,
     contextUser?: UserInfo,
 ): Promise<ConversationDetailLoad | null> {
-    const md = new Metadata();
+    const md = new Metadata();  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
     const currentUser = contextUser ?? md.CurrentUser;
 
     const conversation = await md.GetEntityObject<MJConversationEntity>(ENTITY_CONVERSATION, currentUser);

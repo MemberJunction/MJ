@@ -4,6 +4,8 @@ import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { MJProviderRoot } from '@/providers/mj-provider';
+import { AppLockGate } from '@/auth/AppLockGate';
+import { PushNotificationsBoot } from '@/hooks/usePushRegistration';
 import { Colors } from '@/theme/tokens';
 
 /**
@@ -18,6 +20,9 @@ import { Colors } from '@/theme/tokens';
  *   screen via `useMJ()`. Also imports `@/polyfills` for its side effects
  *   (RN globals MJ core libraries expect) — this import MUST stay first.
  * Interactions: none directly; sets header-less, right-sliding screen defaults.
+ *   Also mounts two device-feature helpers inside the provider: {@link AppLockGate}
+ *   (P2.4 — biometric lock over the stack) and {@link PushNotificationsBoot}
+ *   (P2.3 — one-time push registration once the provider is ready).
  * Mockup: none — navigation shell / app chrome.
  */
 export default function RootLayout() {
@@ -26,13 +31,16 @@ export default function RootLayout() {
             <SafeAreaProvider>
                 <MJProviderRoot>
                     <StatusBar style="dark" />
-                    <Stack
-                        screenOptions={{
-                            headerShown: false,
-                            contentStyle: { backgroundColor: Colors.bg },
-                            animation: 'slide_from_right',
-                        }}
-                    />
+                    <PushNotificationsBoot />
+                    <AppLockGate>
+                        <Stack
+                            screenOptions={{
+                                headerShown: false,
+                                contentStyle: { backgroundColor: Colors.bg },
+                                animation: 'slide_from_right',
+                            }}
+                        />
+                    </AppLockGate>
                 </MJProviderRoot>
             </SafeAreaProvider>
         </GestureHandlerRootView>

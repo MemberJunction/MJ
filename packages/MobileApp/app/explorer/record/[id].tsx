@@ -34,7 +34,19 @@ export default function RecordDetailScreen() {
                     <Text numberOfLines={1} style={styles.headerTitle}>{data?.title ?? 'Record'}</Text>
                     <Text style={styles.headerSub}>{data?.entity.DisplayName ?? entity} · view only</Text>
                 </View>
-                <View style={styles.iconBtn} />
+                {data ? (
+                    <Pressable
+                        hitSlop={8}
+                        style={styles.iconBtn}
+                        accessibilityLabel="Edit record"
+                        accessibilityRole="button"
+                        onPress={() => router.push({ pathname: '/explorer/record/[id]/edit', params: { id, entity } })}
+                    >
+                        <Icons.Edit size={20} color={Colors.ink} strokeWidth={2} />
+                    </Pressable>
+                ) : (
+                    <View style={styles.iconBtn} />
+                )}
             </View>
 
             {loading && !data ? (
