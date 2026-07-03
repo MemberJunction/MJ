@@ -12,10 +12,14 @@ import {
   ChangeDetectorRef
 } from '@angular/core';
 import { ControlValueAccessor, NG_VALUE_ACCESSOR } from '@angular/forms';
-import { MentionAutocompleteService, MentionSuggestion } from '../../services/mention-autocomplete.service';
-import { UserInfo } from '@memberjunction/core';
-import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { MJAIAgentConfigurationEntity } from '@memberjunction/core-entities';
+import {
+  ComposerSuggestionRequest,
+  ComposerTriggerProvider,
+  DiscoverComposerTriggerProviders,
+  MentionSuggestion,
+  MentionSuggestionPreset
+} from '../../composer-trigger-provider';
+import { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 
 /**
@@ -71,14 +75,21 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
   @Input() placeholder: string = 'Type @ to mention agents or users, # for entities...';
   @Input() disabled: boolean = false;
   @Input() currentUser?: UserInfo;
-  /** Master switch for all mention/command triggers. When false the granular toggles are moot. */
+  /** Master switch for all mention/command triggers. When false no providers are consulted. */
   @Input() enableMentions: boolean = true;
-  /** Enables the '@' trigger (agent/user mentions). Only effective while enableMentions is true. */
-  @Input() enableAgentMentions: boolean = true;
-  /** Enables the '#' trigger (entity + query mentions). Only effective while enableMentions is true. */
-  @Input() enableEntityMentions: boolean = true;
-  /** Enables the '/' trigger (skill commands). Only effective while enableMentions is true. */
-  @Input() enableSkillCommands: boolean = true;
+  /**
+   * Explicit trigger-provider list — when bound, EXACTLY these providers are active
+   * (explicit list wins over discovery). Leave null to discover providers registered
+   * with the ClassFactory via `@RegisterClass(ComposerTriggerProvider, '<Key>')`.
+   */
+  @Input() TriggerProviders: ComposerTriggerProvider[] | null = null;
+  /**
+   * Discovery-mode filter: providers whose stable `Key` appears here are skipped when
+   * resolving registered providers. Ignored when `TriggerProviders` is bound.
+   */
+  @Input() ExcludedTriggerKeys: string[] = [];
+  /** Optional metadata provider scoping this editor (multi-provider hosts); passed through to trigger providers. */
+  @Input() Provider: IMetadataProvider | null = null;
   /** Auto-focus the editor after view init (the composer default). Disable when embedded in forms. */
   @Input() autoFocus: boolean = true;
 
@@ -109,20 +120,35 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
   private mentionQuery: string = '';
   /** The trigger char that opened the current mention dropdown */
   private activeTrigger: string = '@';
+  /**
+   * Monotonic sequence guarding the async suggestion fetch — a response only applies
+   * when no newer keystroke (or dropdown close) has superseded it.
+   */
+  private suggestionRequestSeq: number = 0;
+  /** Cap on the suggestions displayed; passed to providers as `MaxResults`. */
+  private static readonly MaxSuggestions: number = 50;
 
   /**
-   * Active mention trigger characters, computed from the master enableMentions switch and the
-   * granular per-trigger toggles: '@' = agent/user mentions, '#' = entity/query mentions,
-   * '/' = skill commands.
+   * The trigger providers this editor consults: the explicit `TriggerProviders` list
+   * when bound, otherwise ClassFactory discovery filtered by `ExcludedTriggerKeys`.
+   * Empty when `enableMentions` is off (or nothing is registered) — the editor then
+   * behaves as a plain text editor.
    */
-  private get mentionTriggers(): string[] {
+  private get activeProviders(): ComposerTriggerProvider[] {
     if (!this.enableMentions) {
       return [];
     }
+    return this.TriggerProviders ?? DiscoverComposerTriggerProviders(this.ExcludedTriggerKeys);
+  }
+
+  /** Unique trigger characters across the active providers (priority order preserved). */
+  private get mentionTriggers(): string[] {
     const triggers: string[] = [];
-    if (this.enableAgentMentions) triggers.push('@');
-    if (this.enableEntityMentions) triggers.push('#');
-    if (this.enableSkillCommands) triggers.push('/');
+    for (const provider of this.activeProviders) {
+      if (!triggers.includes(provider.TriggerChar)) {
+        triggers.push(provider.TriggerChar);
+      }
+    }
     return triggers;
   }
 
@@ -132,13 +158,17 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
   private pendingWriteValue: string | null = null;
 
   constructor(
-    private mentionAutocomplete: MentionAutocompleteService,
     private cdr: ChangeDetectorRef
   ) {}
 
   async ngOnInit(): Promise<void> {
-    if (this.enableMentions && this.currentUser) {
-      await this.mentionAutocomplete.initialize(this.currentUser);
+    // Warm up the active providers (best-effort — a provider that fails to warm
+    // simply serves its first real request cold).
+    if (this.enableMentions) {
+      const user = this.currentUser ?? null;
+      await Promise.all(
+        this.activeProviders.map((p) => p.Initialize(user).catch(() => undefined))
+      );
     }
   }
 
@@ -195,8 +225,8 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
     this.onChange(plainText);
     this.valueChange.emit(plainText);
 
-    // Handle @mention autocomplete
-    if (this.enableMentions && this.currentUser) {
+    // Handle mention/command autocomplete via the active trigger providers
+    if (this.enableMentions) {
       this.handleMentionInput();
     }
   }
@@ -294,7 +324,8 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
   }
 
   /**
-   * Handle @mention input detection
+   * Handle mention/command trigger detection — finds the nearest active trigger char
+   * before the cursor and kicks off the (async) provider suggestion fetch.
    */
   private handleMentionInput(): void {
     const selection = window.getSelection();
@@ -309,8 +340,7 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
     const range = selection.getRangeAt(0);
     const textBeforeCursor = this.getTextBeforeCursor(range);
 
-    // Find the nearest enabled mention trigger before the cursor
-    // ('@' for agents/users, '#' for entities/queries, '/' for skills) — whichever is closest wins
+    // Find the nearest active trigger char before the cursor — whichever is closest wins
     let triggerIndex = -1;
     let triggerChar = '@';
     for (const t of activeTriggers) {
@@ -338,15 +368,44 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
     this.mentionStartIndex = triggerIndex;
     this.activeTrigger = triggerChar;
 
-    // Get suggestions for the active trigger
-    this.mentionSuggestions = this.mentionAutocomplete.getSuggestions(this.mentionQuery, !!this.currentUser, triggerChar);
+    // Fetch suggestions from the provider(s) owning this trigger (async, race-guarded)
+    void this.fetchSuggestions(triggerChar, textAfterTrigger);
+  }
 
-    if (this.mentionSuggestions.length > 0) {
+  /**
+   * Routes the suggestion request to every active provider whose TriggerChar matches,
+   * concatenates their results in priority order, caps the merged list, and opens the
+   * dropdown. A monotonic sequence drops stale responses when the user keeps typing.
+   */
+  private async fetchSuggestions(triggerChar: string, query: string): Promise<void> {
+    const seq = ++this.suggestionRequestSeq;
+    const providers = this.activeProviders.filter((p) => p.TriggerChar === triggerChar);
+
+    const request: ComposerSuggestionRequest = {
+      Query: query,
+      MaxResults: MentionEditorComponent.MaxSuggestions,
+      ContextUser: this.currentUser ?? null,
+      Provider: this.Provider
+    };
+
+    const resultSets = await Promise.all(
+      providers.map((p) => p.GetSuggestions(request).catch(() => [] as MentionSuggestion[]))
+    );
+
+    if (seq !== this.suggestionRequestSeq) {
+      return; // superseded by a newer keystroke or an explicit close
+    }
+
+    const merged = resultSets.flat().slice(0, MentionEditorComponent.MaxSuggestions);
+    this.mentionSuggestions = merged;
+
+    if (merged.length > 0) {
       this.showMentionDropdown = true;
       this.positionMentionDropdown();
     } else {
       this.closeMentionDropdown();
     }
+    this.cdr.detectChanges();
   }
 
   /**
@@ -461,14 +520,12 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
     chip.setAttribute('data-mention-type', suggestion.type);
     chip.setAttribute('data-mention-name', suggestion.name);
 
-    // For agents, get configuration presets (AIEngine.Config() already called during app init)
-    let presets: MJAIAgentConfigurationEntity[] = [];
-    if (suggestion.type === 'agent') {
-      presets = AIEngineBase.Instance.GetAgentConfigurationPresets(suggestion.id, true);
-
-      // Store default preset
-      // IMPORTANT: Store the AIAgentConfiguration.ID (preset ID), not AIConfigurationID
-      // The backend mapping will convert preset ID -> AIConfigurationID
+    // Configuration presets ride along on the suggestion itself (supplied by the trigger
+    // provider — e.g. the agent-mentions provider maps AI Agent Configuration presets in).
+    // The composer has no knowledge of what a preset IS; it just stores the default's
+    // ID/Name on the chip and offers a picker when there are 2+.
+    const presets: MentionSuggestionPreset[] = suggestion.presets ?? [];
+    if (presets.length > 0) {
       const defaultPreset = presets.find(p => p.IsDefault) || presets[0];
       if (defaultPreset) {
         chip.setAttribute('data-preset-id', defaultPreset.ID || '');
@@ -559,8 +616,8 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
     const text = document.createTextNode(suggestion.displayName);
     chip.appendChild(text);
 
-    // Add dropdown if 2+ presets for agents
-    if (suggestion.type === 'agent' && presets.length >= 2) {
+    // Add dropdown when the suggestion carries 2+ presets
+    if (presets.length >= 2) {
       this.addConfigurationDropdown(chip, presets);
     }
 
@@ -568,9 +625,9 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
   }
 
   /**
-   * Add configuration preset dropdown to agent chip
+   * Add configuration preset dropdown to a mention chip
    */
-  private addConfigurationDropdown(chip: HTMLSpanElement, presets: MJAIAgentConfigurationEntity[]): void {
+  private addConfigurationDropdown(chip: HTMLSpanElement, presets: MentionSuggestionPreset[]): void {
     // Store default preset for comparison
     const defaultPreset = presets.find(p => p.IsDefault) || presets[0];
 
@@ -830,6 +887,8 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
    * Close mention dropdown
    */
   closeMentionDropdown(): void {
+    // Invalidate any in-flight suggestion fetch so a late response can't reopen the dropdown
+    this.suggestionRequestSeq++;
     this.showMentionDropdown = false;
     this.mentionSuggestions = [];
     this.mentionStartIndex = -1;

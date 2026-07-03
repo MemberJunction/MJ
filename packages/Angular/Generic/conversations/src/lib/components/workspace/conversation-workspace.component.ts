@@ -37,7 +37,8 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { ArtifactStateService } from '../../services/artifact-state.service';
 import { CollectionStateService } from '../../services/collection-state.service';
 import { ArtifactPermissionService } from '../../services/artifact-permission.service';
-import { MentionAutocompleteService, PendingAttachment } from '@memberjunction/ng-composer';
+import { PendingAttachment } from '@memberjunction/ng-composer';
+import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
 import { ConversationStreamingService } from '../../services/conversation-streaming.service';
 import { UICommandHandlerService } from '../../services/ui-command-handler.service';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -211,12 +212,13 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   public pendingArtifactVersionNumber: number | null = null;
 
   private engine = ConversationEngine.Instance;
+  // Shared AI mention/suggestion engine (BaseSingleton — same instance the composer plugins use)
+  private mentionAutocompleteService = MentionAutocompleteService.Instance;
 
   constructor(
     public artifactState: ArtifactStateService,
     public collectionState: CollectionStateService,
     private artifactPermissionService: ArtifactPermissionService,
-    private mentionAutocompleteService: MentionAutocompleteService,
     private notificationService: MJNotificationService,
     private streamingService: ConversationStreamingService,
     private uiCommandHandler: UICommandHandlerService,

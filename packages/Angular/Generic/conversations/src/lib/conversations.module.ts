@@ -24,6 +24,10 @@ import { ResourcePermissionsModule } from '@memberjunction/ng-resource-permissio
 // Composer (mention editor + dropdown + message input box) — extracted to @memberjunction/ng-composer
 import { ComposerModule } from '@memberjunction/ng-composer';
 
+// AI-aware composer wrapper (agent/record/skill trigger plugins built in)
+import { AiComposerComponent } from './components/composer/ai-composer.component';
+import { LoadComposerPlugins } from './composer-plugins/load-composer-plugins';
+
 // Components
 import { MessageItemComponent } from './components/message/message-item.component';
 import { MessageListComponent } from './components/message/message-list.component';
@@ -113,12 +117,17 @@ LoadClientContextChannel();
 // Whiteboard ARTIFACT VIEWER plugin — resolved by the artifact plugin host via the
 // ClassFactory (keyed by the artifact type's DriverClass), same tree-shaking concern.
 LoadWhiteboardArtifactViewer();
+// Composer trigger-provider PLUGINS ('@' agent mentions, '#' record mentions, '/' skill
+// commands) — resolved via ClassFactory discovery by any mj-mention-editor without an
+// explicit provider list; the static call defeats tree-shaking of their @RegisterClass.
+LoadComposerPlugins();
 
 // Export all components (excluding standalone components)
 const COMPONENTS = [
   MessageItemComponent,
   MessageListComponent,
   MessageInputComponent,
+  AiComposerComponent,
   ActionableCommandsComponent,
   ConversationMessageRatingComponent,
   ConversationWorkspaceComponent,

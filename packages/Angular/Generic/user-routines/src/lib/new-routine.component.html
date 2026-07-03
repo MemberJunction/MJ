@@ -42,14 +42,16 @@
 
       <div class="editor-field">
         <label class="editor-label" for="routine-message">Message sent on each run</label>
-        <!-- Composer mention editor: '#' entity/query mentions + '/' skill commands enabled;
-             '@' agent mentions OFF — the routine's agent is fixed by the picker above. -->
+        <!-- Composer mention editor in DISCOVERY mode: trigger providers are ClassFactory-
+             discovered (ng-conversations registers '@' agent / '#' record / '/' skill plugins
+             when loaded). '@' agent mentions are excluded — the routine's agent is fixed by
+             the picker above. With no providers registered this degrades gracefully to a
+             plain text editor. -->
         <mj-mention-editor id="routine-message"
           [(ngModel)]="InitialMessage"
           placeholder="The message the routine sends to the agent each time it runs"
-          [enableAgentMentions]="false"
-          [enableEntityMentions]="true"
-          [enableSkillCommands]="true"
+          [ExcludedTriggerKeys]="['agent-mentions']"
+          [Provider]="Provider"
           [enableAttachments]="false"
           [autoFocus]="false"
           [currentUser]="ProviderToUse.CurrentUser"></mj-mention-editor>

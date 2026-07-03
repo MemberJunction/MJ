@@ -15,7 +15,9 @@ import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-da
 import { GenerateAndApplyConversationName } from '../../services/conversation-naming';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { ExecuteAgentResult, AgentExecutionProgressCallback, AgentResponseForm, ActionableCommand, AutomaticCommand, ConversationUtility } from '@memberjunction/ai-core-plus';
-import { MentionAutocompleteService, MentionSuggestion, PendingAttachment, MessageInputBoxComponent } from '@memberjunction/ng-composer';
+import { PendingAttachment } from '@memberjunction/ng-composer';
+import { AiComposerComponent } from '../composer/ai-composer.component';
+import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
 import { MentionParserService } from '../../services/mention-parser.service';
 import { ConversationAttachmentService } from '../../services/conversation-attachment.service';
 import { Mention, MentionParseResult } from '../../models/conversation-state.model';
@@ -256,7 +258,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   @Output() emptyStateSubmit = new EventEmitter<{text: string; attachments: PendingAttachment[]}>(); // Emitted when in emptyStateMode
   @Output() uploadStateChanged = new EventEmitter<{isUploading: boolean; message: string}>(); // Emits when attachment upload state changes
 
-  @ViewChild('inputBox') inputBox!: MessageInputBoxComponent;
+  @ViewChild('inputBox') inputBox!: AiComposerComponent;
 
   public messageText: string = '';
   public isSending: boolean = false;
@@ -275,6 +277,8 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   private pendingAttachments: PendingAttachment[] = [];
 
   private engine = ConversationEngine.Instance;
+  // Shared AI mention/suggestion engine (BaseSingleton — same instance the composer plugins use)
+  private mentionAutocomplete = MentionAutocompleteService.Instance;
 
   constructor(
     private dialogService: DialogService,
@@ -284,7 +288,6 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     private activeTasks: ActiveTasksService,
     private streamingService: ConversationStreamingService,
     private mentionParser: MentionParserService,
-    private mentionAutocomplete: MentionAutocompleteService,
     private attachmentService: ConversationAttachmentService,
     private bridge: ConversationBridgeService,
     private realtimeSession: RealtimeSessionService

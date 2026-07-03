@@ -21,7 +21,7 @@ import { FormResponseUtils } from '@memberjunction/ng-forms';
 import { MentionParserService } from '../../services/mention-parser.service';
 import { PlanModePreference } from '../../utils/plan-mode-preference';
 import { MarkdownService } from '@memberjunction/ng-markdown';
-import { MentionAutocompleteService } from '@memberjunction/ng-composer';
+import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
 import { UICommandHandlerService } from '../../services/ui-command-handler.service';
 import { ConversationAgentService } from '../../services/conversation-agent.service';
 import {
@@ -168,10 +168,12 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   private _cachedDisplayMessage: string = '';
   private _cachedMessageText: string = '';
 
+  // Shared AI mention/suggestion engine (BaseSingleton — same instance the composer plugins use)
+  private mentionAutocomplete = MentionAutocompleteService.Instance;
+
   constructor(
     private cdRef: ChangeDetectorRef,
     private mentionParser: MentionParserService,
-    private mentionAutocomplete: MentionAutocompleteService,
     private uiCommandHandler: UICommandHandlerService,
     private agentService: ConversationAgentService,
     private markdownService: MarkdownService

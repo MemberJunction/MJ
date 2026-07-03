@@ -4,7 +4,8 @@ import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { ResourceData, MJEnvironmentEntityExtended, MJConversationEntity, MJUserSettingEntity, UserInfoEngine, ConversationEngine } from '@memberjunction/core-entities';
 import { ConversationChatAreaComponent, ConversationListComponent, ConversationStreamingService, ActiveTasksService, UICommandHandlerService, ConversationBridgeService } from '@memberjunction/ng-conversations';
-import { MentionAutocompleteService, PendingAttachment } from '@memberjunction/ng-composer';
+import { PendingAttachment } from '@memberjunction/ng-composer';
+import { MentionAutocompleteService } from '@memberjunction/ng-conversations';
 import { ActionableCommand, OpenResourceCommand } from '@memberjunction/ai-core-plus';
 import { NavigationRequest } from '@memberjunction/ng-artifacts';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
@@ -307,8 +308,10 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
 
   private engine = ConversationEngine.Instance;
 
+  // Shared AI mention/suggestion engine (BaseSingleton — same instance the composer plugins use)
+  private mentionAutocompleteService = MentionAutocompleteService.Instance;
+
   constructor(
-    private mentionAutocompleteService: MentionAutocompleteService,
     private cdr: ChangeDetectorRef,
     private streamingService: ConversationStreamingService,
     private activeTasksService: ActiveTasksService,

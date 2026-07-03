@@ -7,7 +7,7 @@ import {
   OnDestroy,
   HostListener
 } from '@angular/core';
-import { MentionSuggestion } from '../../services/mention-autocomplete.service';
+import { MentionSuggestion } from '../../composer-trigger-provider';
 
 /**
  * Dropdown component for @mention autocomplete

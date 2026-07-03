@@ -9,7 +9,8 @@ import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { AgentStateService } from '../../services/agent-state.service';
 import { ConversationAgentService } from '../../services/conversation-agent.service';
 import { ActiveTasksService } from '../../services/active-tasks.service';
-import { MentionAutocompleteService, PendingAttachment } from '@memberjunction/ng-composer';
+import { PendingAttachment } from '@memberjunction/ng-composer';
+import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
 import { ArtifactPermissionService } from '../../services/artifact-permission.service';
 import { ConversationAttachmentService } from '../../services/conversation-attachment.service';
 import { MJResourcePermissionShareAdapter, ResourceShareContext } from '@memberjunction/ng-resource-permissions';
@@ -715,12 +716,14 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     return this.RealtimeSession.CurrentAgentName;
   }
 
+  // Shared AI mention/suggestion engine (BaseSingleton — same instance the composer plugins use)
+  private mentionAutocompleteService = MentionAutocompleteService.Instance;
+
   constructor(
     private agentStateService: AgentStateService,
     private conversationAgentService: ConversationAgentService,
     private activeTasks: ActiveTasksService,
     private cdr: ChangeDetectorRef,
-    private mentionAutocompleteService: MentionAutocompleteService,
     private artifactPermissionService: ArtifactPermissionService,
     private attachmentService: ConversationAttachmentService,
     private streamingService: ConversationStreamingService,
@@ -894,7 +897,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     // This prevents race conditions and ensures agents are fully loaded.
 
     // Fallback: If workspace didn't initialize (shouldn't happen), initialize now
-    if (!this.mentionAutocompleteService['isInitialized']) {
+    if (!this.mentionAutocompleteService.IsInitialized) {
       console.warn('⚠️ Mention autocomplete not initialized by workspace, initializing now...');
       await this.mentionAutocompleteService.initialize(this.currentUser);
     }

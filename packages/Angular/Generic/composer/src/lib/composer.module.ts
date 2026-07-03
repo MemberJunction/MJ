@@ -12,8 +12,10 @@ import { MessageInputBoxComponent } from './components/message/message-input-box
  * Module providing the generic message-composer components.
  *
  * Components:
- * - `<mj-mention-editor>` — ContentEditable editor with @agent / #entity / "/skill" mention
- *   chips, attachment support, and ControlValueAccessor (works with `[(ngModel)]`)
+ * - `<mj-mention-editor>` — ContentEditable editor with pluggable mention/command trigger
+ *   chips (see `ComposerTriggerProvider`), attachment support, and ControlValueAccessor
+ *   (works with `[(ngModel)]`). With no trigger providers supplied/registered it behaves
+ *   as a plain text editor.
  * - `<mj-mention-dropdown>` — Autocomplete dropdown for mention suggestions
  * - `<mj-message-input-box>` — Send-button wrapper around the mention editor
  *
