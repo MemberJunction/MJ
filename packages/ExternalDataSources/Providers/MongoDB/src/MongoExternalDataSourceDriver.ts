@@ -95,10 +95,16 @@ export class MongoExternalDataSourceDriver extends BaseExternalDataSourceDriver<
     // Secure-by-default: refuse plaintext to a non-local host unless explicitly opted in. TLS is
     // encoded in the URI (mongodb+srv:// always uses TLS; tls=true / ssl=true) or set via config.tls.
     const tlsEnabled = config.tls === true || /^mongodb\+srv:\/\//i.test(url) || /[?&](tls|ssl)=true/i.test(url);
-    const effectiveHost = config.uri
-      ? (config.uri.replace(/^mongodb(\+srv)?:\/\//i, '').split(/[/?]/)[0].split('@').pop() ?? '').split(',')[0].split(':')[0]
-      : config.host;
-    this.assertSecureTransport({ host: effectiveHost, tlsEnabled, allowInsecure: config.allowInsecureTransport, dataSourceName: dataSource.Name });
+    // A URI can list MULTIPLE replica-set seed hosts (host1,host2,...); checking only the first would let
+    // a `localhost,evil.com` seed list slip a plaintext remote past the gate. Classify EVERY seed and
+    // surface the weakest link (a non-local host if any) so assertSecureTransport rejects it.
+    const authority = config.uri
+      ? (config.uri.replace(/^mongodb(\+srv)?:\/\//i, '').split(/[/?]/)[0].split('@').pop() ?? '')
+      : (config.host ?? '');
+    const stripPort = (h: string) => (h.startsWith('[') ? h.slice(0, h.indexOf(']') + 1) : h.split(':')[0]);
+    const seedHosts = authority.split(',').map((h) => stripPort(h.trim())).filter(Boolean);
+    const gateHost = seedHosts.find((h) => !this.isLocalHost(h)) ?? seedHosts[0] ?? config.host;
+    this.assertSecureTransport({ host: gateHost, tlsEnabled, allowInsecure: config.allowInsecureTransport, dataSourceName: dataSource.Name });
 
     const options: MongoClientOptions = {};
     if (config.tls === true) {
@@ -174,6 +180,12 @@ export class MongoExternalDataSourceDriver extends BaseExternalDataSourceDriver<
     primaryKeys: readonly ExternalQueryParameter[],
     contextUser?: UserInfo,
   ): Promise<TRow | null> {
+    // Defense in depth (matches the SQL drivers' buildPrimaryKeyWhere): an empty key set would make
+    // filter={} and findOne return an ARBITRARY document. The router guards this before calling, but a
+    // direct caller must fail closed rather than silently return the wrong record.
+    if (primaryKeys.length === 0) {
+      throw new Error("MongoDB LoadSingle requires at least one primary-key value.");
+    }
     const db = await this.getConnection(dataSource, contextUser);
     const filter: Record<string, unknown> = {};
     for (const pk of primaryKeys) {

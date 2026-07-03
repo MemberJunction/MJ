@@ -104,31 +104,52 @@ export class OracleExternalDataSourceDriver extends BaseSqlExternalDataSourceDri
   }
 
   /**
-   * Derive the effective (host, tlsEnabled) the secure-transport gate should inspect. When
-   * ConnectionConfig supplies an explicit `connectString` — the documented way to point Oracle at a
-   * remote host — the gate must inspect THAT, not the unused `config.host`, or a plaintext remote
-   * connect string would silently bypass the check. Recognizes Easy-Connect (`tcps://host:port/svc`)
-   * and TNS (`(ADDRESS=(PROTOCOL=TCPS)(HOST=host)...))`) forms; TCPS ⇒ encrypted. Falls back to
-   * config.host/ssl when no connectString is set. An unparseable host yields '' so the gate fails
-   * closed (treated as non-local) unless TLS or allowInsecureTransport is present.
+   * Derive the effective (host, tlsEnabled) the secure-transport gate should inspect from the actual
+   * connect target. When ConnectionConfig supplies an explicit `connectString` — the documented way to
+   * point Oracle at a remote host — the gate must inspect THAT, not the unused `config.host`.
+   *
+   * Multi-address awareness (security): a single "TCPS appears somewhere" / "first HOST=" heuristic is
+   * defeatable by ordinary RAC/failover descriptors (a plaintext `(PROTOCOL=TCP)` address listed before
+   * a `(PROTOCOL=TCPS)` one) and by decoy tokens. This inspects EVERY network address and surfaces the
+   * WEAKEST link: if any plaintext-TCP address targets a non-local host, we return that remote host with
+   * tlsEnabled=false so the gate rejects it (unless allowInsecureTransport). Only when no plaintext-TCP
+   * address can reach a remote host is the connection treated as secure. Fails closed on anything we
+   * can't confidently decompose. Recognizes Easy-Connect (`tcps://host`) and TNS `(PROTOCOL=..)(HOST=..)`.
    */
   protected resolveTransportForGate(config: OracleConnectionConfig): { host: string; tlsEnabled: boolean } {
     if (!config.connectString) {
       return { host: config.host ?? '', tlsEnabled: !!config.ssl };
     }
-    const cs = config.connectString;
-    const tlsEnabled = /^\s*tcps:\/\//i.test(cs) || /PROTOCOL\s*=\s*tcps/i.test(cs);
-    let host = '';
-    const easyConnect = cs.match(/^\s*tcps?:\/\/([^:/]+)/i);
-    if (easyConnect) {
-      host = easyConnect[1];
-    } else {
-      const tns = cs.match(/HOST\s*=\s*([^)\s]+)/i);
-      if (tns) {
-        host = tns[1];
+    const cs = config.connectString.trim();
+    const stripBrackets = (h: string) => h.replace(/^\[|\]$/g, '');
+
+    // TNS descriptor: collect every network host + whether ANY address is plaintext TCP (not TCPS).
+    // (IPC/BEQ addresses carry no HOST and are local, so they don't factor into remote-plaintext risk.)
+    if (cs.includes('(')) {
+      const hosts = [...cs.matchAll(/HOST\s*=\s*([^)\s]+)/gi)].map((m) => stripBrackets(m[1]));
+      const hasPlaintextTcp = /PROTOCOL\s*=\s*tcp\b/i.test(cs); // \b excludes tcps
+      if (hosts.length === 0) {
+        // No network host parsed. A plaintext TCP address declared without a resolvable host → fail
+        // closed (force allowInsecureTransport); otherwise (IPC/BEQ local) treat as secure.
+        return hasPlaintextTcp ? { host: '<unresolved-remote>', tlsEnabled: false } : { host: '', tlsEnabled: true };
       }
+      const remotePlaintextHost = hasPlaintextTcp ? hosts.find((h) => !this.isLocalHost(h)) : undefined;
+      if (remotePlaintextHost) {
+        return { host: remotePlaintextHost, tlsEnabled: false }; // weakest link → gate rejects unless opted in
+      }
+      // Either all network addresses are TCPS, or every plaintext address is local — safe to pass.
+      return { host: hosts.find((h) => !this.isLocalHost(h)) ?? hosts[0], tlsEnabled: !hasPlaintextTcp };
     }
-    return { host, tlsEnabled };
+
+    // Easy-Connect form: [tcp(s)://]host[:port][/service]. NO scheme (or tcp://) ⇒ plaintext TCP by
+    // default — must NOT be treated as secure just because it lacks a descriptor.
+    const scheme = cs.match(/^(tcps?):\/\//i);
+    const withoutScheme = cs.replace(/^tcps?:\/\//i, '');
+    const hostMatch = withoutScheme.match(/^(\[[^\]]+\]|[^:/\s]+)/);
+    return {
+      host: hostMatch ? stripBrackets(hostMatch[1]) : '',
+      tlsEnabled: scheme ? scheme[1].toLowerCase() === 'tcps' : false,
+    };
   }
 
   protected async invalidateConnection(dataSourceId: string): Promise<void> {

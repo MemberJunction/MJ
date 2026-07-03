@@ -146,19 +146,29 @@ export abstract class BaseExternalDataSourceDriver<TConnection = unknown> {
     if (opts.tlsEnabled || opts.allowInsecure) {
       return;
     }
-    // Normalize and strip IPv6 brackets (e.g. "[::1]" -> "::1").
-    const host = (opts.host ?? '').trim().toLowerCase().replace(/^\[|\]$/g, '');
-    const isLocal =
-      host === 'localhost' ||
-      host.endsWith('.localhost') ||
-      host === '::1' ||
-      /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host); // 127.0.0.0/8 loopback range
-    if (!isLocal) {
+    if (!this.isLocalHost(opts.host)) {
+      const host = (opts.host ?? '').trim().toLowerCase().replace(/^\[|\]$/g, '');
       throw new Error(
         `Refusing to connect to external data source '${opts.dataSourceName}' at '${host || '<unspecified host>'}' over an unencrypted connection. ` +
           `Enable TLS in ConnectionConfig, or set "allowInsecureTransport": true to explicitly accept a plaintext connection.`,
       );
     }
+  }
+
+  /**
+   * True when a host refers to the local machine (loopback) — the only case where a plaintext
+   * connection is accepted by {@link assertSecureTransport}. Normalizes case and strips IPv6 brackets
+   * (`[::1]` → `::1`). Shared so multi-address / multi-host connection strings (Oracle TNS descriptors,
+   * MongoDB replica-set seed lists) can classify EACH host consistently with the single-host gate.
+   */
+  protected isLocalHost(host: string | undefined): boolean {
+    const h = (host ?? '').trim().toLowerCase().replace(/^\[|\]$/g, '');
+    return (
+      h === 'localhost' ||
+      h.endsWith('.localhost') ||
+      h === '::1' ||
+      /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(h) // 127.0.0.0/8 loopback range
+    );
   }
 
   /** Render an arbitrary thrown value as a human-readable message string. Shared by all drivers. */

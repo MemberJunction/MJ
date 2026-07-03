@@ -123,8 +123,45 @@ describe('OracleExternalDataSourceDriver — SQL building', () => {
       expect(d.transport({ connectString: cs })).toEqual({ host: 'tns-plain', tlsEnabled: false });
     });
 
-    it('yields an empty host (gate fails closed) for an unparseable plaintext connectString', () => {
-      expect(d.transport({ connectString: 'remote:1521/svc' })).toEqual({ host: '', tlsEnabled: false });
+    it('treats a bare Easy-Connect (no scheme) as plaintext and extracts the host — Oracle defaults to TCP', () => {
+      expect(d.transport({ connectString: 'remote:1521/svc' })).toEqual({ host: 'remote', tlsEnabled: false });
+    });
+
+    // --- multi-address / decoy defenses (the round-3 hardening) ---
+
+    it('rejects a RAC/failover descriptor whose FIRST address is plaintext-remote even if a later one is TCPS', () => {
+      // Oracle dials in order → the plaintext TCP address goes first → credentials in cleartext to a remote host.
+      const cs = '(DESCRIPTION=(ADDRESS_LIST=' +
+        '(ADDRESS=(PROTOCOL=TCP)(HOST=evil.remote.com)(PORT=1521))' +
+        '(ADDRESS=(PROTOCOL=TCPS)(HOST=evil.remote.com)(PORT=2484)))' +
+        '(CONNECT_DATA=(SERVICE_NAME=x)))';
+      expect(d.transport({ connectString: cs })).toEqual({ host: 'evil.remote.com', tlsEnabled: false });
+    });
+
+    it('is not fooled by a decoy TCPS token when the real address is plaintext TCP', () => {
+      const cs = '(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=evil.com)(PORT=1521))(CONNECT_DATA=(SERVICE_NAME=x))(X=PROTOCOL=TCPS))';
+      expect(d.transport({ connectString: cs })).toEqual({ host: 'evil.com', tlsEnabled: false });
+    });
+
+    it('surfaces the remote plaintext host even when a localhost decoy address is listed first', () => {
+      const cs = '(DESCRIPTION=' +
+        '(ADDRESS=(PROTOCOL=TCP)(HOST=localhost)(PORT=1521))' +
+        '(ADDRESS=(PROTOCOL=TCP)(HOST=evil.com)(PORT=1521))' +
+        '(CONNECT_DATA=(SERVICE_NAME=x)))';
+      expect(d.transport({ connectString: cs })).toEqual({ host: 'evil.com', tlsEnabled: false });
+    });
+
+    it('passes a genuine all-TCPS multi-address descriptor', () => {
+      const cs = '(DESCRIPTION=(ADDRESS_LIST=' +
+        '(ADDRESS=(PROTOCOL=TCPS)(HOST=a.oraclecloud.com)(PORT=2484))' +
+        '(ADDRESS=(PROTOCOL=TCPS)(HOST=b.oraclecloud.com)(PORT=2484)))' +
+        '(CONNECT_DATA=(SERVICE_NAME=x)))';
+      expect(d.transport({ connectString: cs })).toEqual({ host: 'a.oraclecloud.com', tlsEnabled: true });
+    });
+
+    it('passes a local-only plaintext descriptor (dev)', () => {
+      const cs = '(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=localhost)(PORT=1521))(CONNECT_DATA=(SERVICE_NAME=x)))';
+      expect(d.transport({ connectString: cs })).toEqual({ host: 'localhost', tlsEnabled: false });
     });
   });
 });
