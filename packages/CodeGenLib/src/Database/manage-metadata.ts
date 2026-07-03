@@ -1630,10 +1630,16 @@ export class ManageMetadataBase {
             // create/update each remote column. Use the real PK info from introspection; fall back
             // to "first column is the PK" when the remote reported none (e.g. a view).
             const anyPk = eeFields.some(f => f.IsPrimaryKey);
+            // How many columns make up the PK? Introspected PK count when present, else 1 (first-column
+            // fallback). A composite PK (>1) means no single column is unique on its own (M4).
+            const primaryKeyColumnCount = anyPk ? eeFields.filter(f => f.IsPrimaryKey).length : 1;
+            const singleColumnPrimaryKey = primaryKeyColumnCount === 1;
             for (let i = 0; i < eeFields.length; i++) {
                const ef = eeFields[i];
                const makePrimaryKey = ef.IsPrimaryKey || (!anyPk && i === 0);
-               const {success, updatedField} = await this.manageSingleVirtualEntityField(pool, externalEntity, ef, i + 1, makePrimaryKey);
+               // reconcilePrimaryKey=true: introspection is authoritative, so sync PK/Unique flags in BOTH
+               // directions (set AND clear) — this clears a stale PK column when the remote PK moves (H5).
+               const {success, updatedField} = await this.manageSingleVirtualEntityField(pool, externalEntity, ef, i + 1, makePrimaryKey, singleColumnPrimaryKey, true);
                bUpdated = bUpdated || updatedField;
                if (!success) {
                   logError(`Error managing external entity field ${ef.FieldName} for external entity ${externalEntity.Name}`);
@@ -1677,17 +1683,19 @@ export class ManageMetadataBase {
       md: Metadata,
    ): Promise<boolean> {
       const relationships = obj.Relationships ?? [];
-      if (relationships.length === 0) {
-         return false;
-      }
       const dsID = externalEntity.ExternalDataSourceID;
+      const entity = md.EntityByName(externalEntity.Name); // read current field FK metadata (prior-run state)
       const sqlStatements: string[] = [];
+      // Every single-column FK column we saw in introspection this run — used below to detect FKs that
+      // were previously set but have since been DROPPED remotely, so we can clear their soft-FK metadata.
+      const introspectedFkColumns = new Set<string>();
       for (const rel of relationships) {
          if (rel.Columns.length !== 1) {
             logStatus(`      ⚠ external FK ${externalEntity.Name}.${rel.Name ?? '(unnamed)'}: composite key (${rel.Columns.length} columns) — skipped (baseline supports single-column FKs)`);
             continue;
          }
          const { Column: fkColumn, ReferencedColumn: refColumn } = rel.Columns[0];
+         introspectedFkColumns.add(fkColumn.trim().toLowerCase());
          // Resolve the referenced object to an imported external entity in the SAME data source
          // (match ExternalObjectName, falling back to BaseTable/Name — mirrors how this entity's
          // own object is resolved above).
@@ -1699,6 +1707,16 @@ export class ManageMetadataBase {
             logStatus(`      ⚠ external FK ${externalEntity.Name}.${fkColumn} → '${rel.ReferencedObject}': referenced entity not imported — skipped`);
             continue;
          }
+         // Change detection (M5): skip the UPDATE when the field already carries the exact desired FK
+         // metadata — otherwise every CodeGen run re-UPDATEs the row, bumping __mj_UpdatedAt and logging
+         // a spurious change even though nothing changed.
+         const field = entity?.Fields.find(f => f.Name.trim().toLowerCase() === fkColumn.trim().toLowerCase());
+         const alreadySet = !!field && field.IsSoftForeignKey === true &&
+            !!field.RelatedEntityID && UUIDsEqual(field.RelatedEntityID, relatedEntity.ID) &&
+            (field.RelatedEntityFieldName ?? '').trim() === refColumn.trim();
+         if (alreadySet) {
+            continue;
+         }
          sqlStatements.push(`UPDATE ${this.qs(mj_core_schema(), 'EntityField')}
                          SET RelatedEntityID='${relatedEntity.ID}',
                              RelatedEntityFieldName='${refColumn.replace(/'/g, "''")}',
@@ -1706,6 +1724,25 @@ export class ManageMetadataBase {
                          WHERE EntityID='${externalEntity.ID}' AND Name='${fkColumn.replace(/'/g, "''")}'`);
          logStatus(`      ✓ external FK ${externalEntity.Name}.${fkColumn} → ${relatedEntity.Name}.${refColumn}`);
       }
+
+      // Clear soft-FKs that THIS process previously set but whose remote FK has since been dropped (M5).
+      // Scope the clear narrowly: only fields flagged IsSoftForeignKey that point to an entity in the SAME
+      // external data source and whose column is no longer among the introspected FK columns. This leaves
+      // user-authored soft-FKs to MJ-DB entities untouched.
+      if (entity) {
+         for (const f of entity.Fields) {
+            if (f.IsSoftForeignKey === true && f.RelatedEntityID && !introspectedFkColumns.has(f.Name.trim().toLowerCase())) {
+               const relatedEntity = md.Entities.find(e => UUIDsEqual(e.ID, f.RelatedEntityID!));
+               if (relatedEntity?.ExternalDataSourceID && dsID && UUIDsEqual(relatedEntity.ExternalDataSourceID, dsID)) {
+                  sqlStatements.push(`UPDATE ${this.qs(mj_core_schema(), 'EntityField')}
+                            SET RelatedEntityID=NULL, RelatedEntityFieldName=NULL, IsSoftForeignKey=0
+                            WHERE ID='${f.ID}'`);
+                  logStatus(`      ⨯ external FK ${externalEntity.Name}.${f.Name} cleared (remote FK dropped)`);
+               }
+            }
+         }
+      }
+
       if (sqlStatements.length === 0) {
          return false;
       }
@@ -1772,9 +1809,17 @@ export class ManageMetadataBase {
       }
    }
 
-   protected async manageSingleVirtualEntityField(pool: CodeGenConnection, virtualEntity: any, veField: any, fieldSequence: number, makePrimaryKey: boolean): Promise<{success: boolean, updatedField: boolean, newFieldID: string | null}> {
+   protected async manageSingleVirtualEntityField(pool: CodeGenConnection, virtualEntity: any, veField: any, fieldSequence: number, makePrimaryKey: boolean, singleColumnPrimaryKey: boolean = true, reconcilePrimaryKey: boolean = false): Promise<{success: boolean, updatedField: boolean, newFieldID: string | null}> {
       // this protected checks to see if the field exists in the entity definition, and if not, adds it
       // if it exist it updates the entity field to match the view's data type and nullability attributes
+
+      // Desired PK/Unique flags for this field:
+      //  - IsPrimaryKey mirrors makePrimaryKey.
+      //  - IsUnique is true ONLY for a single-column PK. A column of a COMPOSITE key is not unique on its
+      //    own, so composite-key columns get IsUnique=false (M4). singleColumnPrimaryKey defaults true so
+      //    the virtual-entity caller (single first-column PK) keeps its prior behavior unchanged.
+      const wantPrimaryKey = makePrimaryKey;
+      const wantUnique = makePrimaryKey && singleColumnPrimaryKey;
 
       // first, get the entity definition
       const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
@@ -1784,11 +1829,17 @@ export class ManageMetadataBase {
       if (entity) {
          const field = entity.Fields.find(f => f.Name.trim().toLowerCase() === veField.FieldName.trim().toLowerCase());
          if (field) {
-            // have a match, so the field exists in the entity definition, now check to see if it needs to be updated.
-            // Only force an update for the PK flag when the field is NOT already a primary key — otherwise
-            // makePrimaryKey would re-UPDATE the row every CodeGen run (bumping __mj_UpdatedAt + logging a
-            // spurious change) even when nothing actually changed.
-            if ((makePrimaryKey && !field.IsPrimaryKey) ||
+            // Decide whether the PK/Unique flags need to change. In RECONCILE mode (external entities,
+            // whose introspected PK set is authoritative across ALL fields) we sync in BOTH directions —
+            // setting the flags when a column becomes a PK AND clearing them when it stops being one (H5:
+            // otherwise a stale PK column keeps IsPrimaryKey=1 when the remote PK moves, yielding duplicate
+            // PKs). In NON-reconcile mode (virtual entities, where makePrimaryKey is a one-time first-column
+            // bootstrap, not authoritative) we only SET on acquisition and never clear, to avoid wiping a
+            // legitimately-configured PK — and we avoid re-UPDATING an unchanged row every run.
+            const pkFlagsChanged = reconcilePrimaryKey
+               ? (field.IsPrimaryKey !== wantPrimaryKey || field.IsUnique !== wantUnique)
+               : (makePrimaryKey && !field.IsPrimaryKey);
+            if (pkFlagsChanged ||
                 field.Type.trim().toLowerCase() !== veField.Type.trim().toLowerCase() ||
                 field.Length !== veField.Length ||
                 field.AllowsNull !== veField.AllowsNull ||
@@ -1802,7 +1853,7 @@ export class ManageMetadataBase {
                                     Sequence=${fieldSequence},
                                     Type='${veField.Type}',
                                     AllowsNull=${this.boolLit(veField.AllowsNull)},
-                                    ${makePrimaryKey ? `IsPrimaryKey=${this.boolLit(true)},IsUnique=${this.boolLit(true)},` : ''}
+                                    ${pkFlagsChanged ? `IsPrimaryKey=${this.boolLit(wantPrimaryKey)},IsUnique=${this.boolLit(wantUnique)},` : ''}
                                     Length=${veField.Length},
                                     Precision=${veField.Precision},
                                     Scale=${veField.Scale}
@@ -1829,7 +1880,7 @@ export class ManageMetadataBase {
                                       ${q('__mj_CreatedAt')}, ${q('__mj_UpdatedAt')} )
                             VALUES (  '${newEntityFieldUUID}', '${entity.ID}', '${String(veField.FieldName).replace(/'/g, "''")}', '${veField.Type}', ${this.boolLit(veField.AllowsNull)},
                                        ${veField.Length}, ${veField.Precision}, ${veField.Scale},
-                                       ${safeSequence}, ${this.boolLit(makePrimaryKey)}, ${this.boolLit(makePrimaryKey)},
+                                       ${safeSequence}, ${this.boolLit(wantPrimaryKey)}, ${this.boolLit(wantUnique)},
                                        ${this.utcNow()}, ${this.utcNow()}
                                     )`;
             await this.LogSQLAndExecute(pool, sqlAdd, `SQL text to add virtual entity field ${veField.FieldName} for entity ${virtualEntity.Name}`);
