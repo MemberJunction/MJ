@@ -5,8 +5,10 @@
  * runs, and dashboards hit RunView/RunQuery. Every hook gates on the MJ
  * provider's `status === 'ready'` and returns `null`/idle until then.
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
 import { useMJ } from '@/providers/mj-provider';
+import { useEntityChange } from '@/hooks/useEntityChange';
 import {
     loadEntities, loadEntityRecords, loadRecordDetail,
     loadQueries, runQuery, loadDashboards, loadDashboard,
@@ -82,6 +84,15 @@ export function useEntityRecords(entityName: string | undefined) {
     }, [status, entityName]);
 
     useEffect(() => { void refresh(); }, [refresh]);
+
+    // Reactive: any save/delete of a record of this entity (e.g. an edit elsewhere
+    // in the app) refreshes the list in place — engine-agnostic, via MJ's global
+    // BaseEntity event bus.
+    const reactiveRefresh = useCallback(() => { void refresh(); }, [refresh]);
+    useEntityChange(entityName, reactiveRefresh);
+    // Backstop: also refetch when the screen regains focus.
+    useFocusEffect(reactiveRefresh);
+
     return { data, loading, error, refresh };
 }
 
@@ -99,26 +110,33 @@ export function useRecordDetail(entityName: string | undefined, recordId: string
     const [data, setData] = useState<RecordDetailLoad | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<Error | null>(null);
+    // Monotonic request token so a slow load can't overwrite a newer one.
+    const requestRef = useRef(0);
 
-    useEffect(() => {
+    const refresh = useCallback(async () => {
         if (status !== 'ready' || !entityName || !recordId) return;
-        let cancelled = false;
+        const token = ++requestRef.current;
         setLoading(true);
         setError(null);
-        (async () => {
-            try {
-                const d = await loadRecordDetail(entityName, recordId);
-                if (!cancelled) setData(d);
-            } catch (e) {
-                if (!cancelled) setError(e instanceof Error ? e : new Error(String(e)));
-            } finally {
-                if (!cancelled) setLoading(false);
-            }
-        })();
-        return () => { cancelled = true; };
+        try {
+            const d = await loadRecordDetail(entityName, recordId);
+            if (requestRef.current === token) setData(d);
+        } catch (e) {
+            if (requestRef.current === token) setError(e instanceof Error ? e : new Error(String(e)));
+        } finally {
+            if (requestRef.current === token) setLoading(false);
+        }
     }, [status, entityName, recordId]);
 
-    return { data, loading, error };
+    useEffect(() => { void refresh(); }, [refresh]);
+
+    // Reactive: a save/delete of this entity (e.g. after editing this record)
+    // re-reads the detail in place. Backstop: refetch on screen focus.
+    const reactiveRefresh = useCallback(() => { void refresh(); }, [refresh]);
+    useEntityChange(entityName, reactiveRefresh);
+    useFocusEffect(reactiveRefresh);
+
+    return { data, loading, error, refresh };
 }
 
 /**

@@ -97,13 +97,13 @@ function FieldEditor({ descriptor, value, hasError, disabled, onChange }: FieldR
         case 'dropdown':
             return <DropdownEditor descriptor={descriptor} value={asText(value)} hasError={hasError} disabled={disabled} onChange={onChange} />;
         case 'longtext':
-            return <StringEditor value={asText(value)} hasError={hasError} disabled={disabled} multiline onChange={(v) => onChange(descriptor.key, v)} />;
+            return <StringEditor value={asText(value)} hasError={hasError} disabled={disabled} multiline accessibilityLabel={descriptor.label} testID={`field-${descriptor.key}`} onChange={(v) => onChange(descriptor.key, v)} />;
         case 'number':
-            return <StringEditor value={asText(value)} hasError={hasError} disabled={disabled} numeric onChange={(v) => onChange(descriptor.key, v)} />;
+            return <StringEditor value={asText(value)} hasError={hasError} disabled={disabled} numeric accessibilityLabel={descriptor.label} testID={`field-${descriptor.key}`} onChange={(v) => onChange(descriptor.key, v)} />;
         case 'date':
-            return <StringEditor value={asText(value)} hasError={hasError} disabled={disabled} placeholder="YYYY-MM-DDTHH:mm:ssZ" onChange={(v) => onChange(descriptor.key, v)} />;
+            return <StringEditor value={asText(value)} hasError={hasError} disabled={disabled} placeholder="YYYY-MM-DDTHH:mm:ssZ" accessibilityLabel={descriptor.label} testID={`field-${descriptor.key}`} onChange={(v) => onChange(descriptor.key, v)} />;
         default:
-            return <StringEditor value={asText(value)} hasError={hasError} disabled={disabled} onChange={(v) => onChange(descriptor.key, v)} />;
+            return <StringEditor value={asText(value)} hasError={hasError} disabled={disabled} accessibilityLabel={descriptor.label} testID={`field-${descriptor.key}`} onChange={(v) => onChange(descriptor.key, v)} />;
     }
 }
 
@@ -115,11 +115,15 @@ type StringEditorProps = {
     multiline?: boolean;
     numeric?: boolean;
     placeholder?: string;
+    /** Accessibility label (the field's display name) for screen readers + tests. */
+    accessibilityLabel?: string;
+    /** Stable test id (`field-<fieldName>`) so E2E tools can target the input. */
+    testID?: string;
     onChange: (value: string) => void;
 };
 
 /** A single- or multi-line `TextInput` used by the text/number/date/longtext kinds. */
-function StringEditor({ value, hasError, disabled, multiline, numeric, placeholder, onChange }: StringEditorProps) {
+function StringEditor({ value, hasError, disabled, multiline, numeric, placeholder, accessibilityLabel, testID, onChange }: StringEditorProps) {
     return (
         <TextInput
             style={[styles.input, multiline && styles.inputMultiline, hasError && styles.inputError, disabled && styles.inputDisabled]}
@@ -131,6 +135,8 @@ function StringEditor({ value, hasError, disabled, multiline, numeric, placehold
             placeholder={placeholder}
             placeholderTextColor={Colors.ink3}
             autoCapitalize="none"
+            accessibilityLabel={accessibilityLabel}
+            testID={testID}
         />
     );
 }
