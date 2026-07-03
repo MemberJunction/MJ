@@ -1,6 +1,6 @@
-import { BaseEntity, EntitySaveOptions, ValidationErrorInfo, ValidationErrorType, ValidationResult } from '@memberjunction/core';
+import { BaseEntity, EntityDeleteOptions, EntitySaveOptions, RunView, ValidationErrorInfo, ValidationErrorType, ValidationResult } from '@memberjunction/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
-import { MJUserRoutineEntity } from '@memberjunction/core-entities';
+import { MJUserRoutineEntity, MJUserRoutineRecipientEntity, MJUserRoutineRunEntity } from '@memberjunction/core-entities';
 import { CronExpressionHelper, ComputeRoutineNextRunAt } from '@memberjunction/scheduling-engine';
 
 /**
@@ -46,12 +46,55 @@ export class MJUserRoutineEntityServer extends MJUserRoutineEntity {
     }
 
     /**
+     * FK cleanup before delete (see BASE_ENTITY_SERVER_PATTERNS): recipients and run
+     * bookkeeping rows hang off the routine via RoutineID, so they're removed first —
+     * otherwise deleting any routine that has ever run fails on the FK. The underlying
+     * Agent Run / Prompt Run / Action Execution Log records the runs LINK to are
+     * independent and remain — that's where the real telemetry/audit lives.
+     */
+    public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+        const deps = await this.deleteDependents();
+        if (!deps) {
+            return false;
+        }
+        return super.Delete(options);
+    }
+
+    /** Deletes recipient + run rows for this routine. Returns false (with LatestResult intact on the failing row) on the first failure. */
+    private async deleteDependents(): Promise<boolean> {
+        const rv = new RunView(this.RunViewProviderToUse);
+        const [recipients, runs] = await rv.RunViews(
+            [
+                { EntityName: 'MJ: User Routine Recipients', ExtraFilter: `RoutineID='${this.ID}'`, ResultType: 'entity_object' },
+                { EntityName: 'MJ: User Routine Runs', ExtraFilter: `RoutineID='${this.ID}'`, ResultType: 'entity_object' },
+            ],
+            this.ContextCurrentUser,
+        );
+        const rows: BaseEntity[] = [
+            ...((recipients.Success ? recipients.Results : []) as MJUserRoutineRecipientEntity[]),
+            ...((runs.Success ? runs.Results : []) as MJUserRoutineRunEntity[]),
+        ];
+        for (const row of rows) {
+            if (!(await row.Delete())) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
      * Recompute NextRunAt when the schedule changed or it was never computed — unless the
      * caller explicitly set NextRunAt on this save (dirty), which always wins (the
      * dispatcher's optimistic claim advances NextRunAt directly).
      */
     private applyNextRunAtIfNeeded(): void {
-        const explicitlySet = this.GetFieldByName('NextRunAt')?.Dirty === true;
+        // Only a dirty NON-NULL NextRunAt is an explicit claim/advance ("run now", the
+        // dispatcher's optimistic claim) and wins. A null can never be a claim — and the
+        // GraphQL create path marks every client-provided field dirty, including a
+        // client's untouched null, so a null-dirty NextRunAt must not suppress the
+        // initial computation (it previously left new UI-created routines unscheduled
+        // until the dispatcher's seeding sweep).
+        const explicitlySet = this.GetFieldByName('NextRunAt')?.Dirty === true && this.NextRunAt != null;
         if (explicitlySet) {
             return;
         }

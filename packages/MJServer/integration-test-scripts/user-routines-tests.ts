@@ -88,6 +88,10 @@ async function main(): Promise<void> {
     // Track fixtures for FK-safe teardown: notifications → runs (+ their action logs) → recipients → routines.
     const createdRoutineIds: string[] = [];
     const createdRecipientIds: string[] = [];
+    // Rows UR14's cascade-delete orphans from the run-row-based cleanup lookup:
+    // surviving action logs + the deleted runs' notification rows.
+    const orphanedActionLogIds: string[] = [];
+    const orphanedRunIds: string[] = [];
 
     /** Create a routine fixture with sensible defaults; overrides applied before Save. */
     const makeRoutine = async (
@@ -350,11 +354,42 @@ async function main(): Promise<void> {
             AssertEqual(notifications.Results.length, 0, 'no notification row for the unchanged second run');
         });
 
+        suite.Test('UR14: deleting a routine that has RUN cascades its run bookkeeping (recipients + runs) then the row — one Delete() call', async () => {
+            // routineDue has 2 run rows (UR11/UR13) and lives behind an FK — before the
+            // entity-server cascade this Delete() failed on the UserRoutineRun FK.
+            const runsBefore = await fetchRuns(routineDue.ID, user);
+            Assert(runsBefore.length >= 2, `precondition: the due routine must have run rows (got ${runsBefore.length})`);
+            const actionLogIds = runsBefore.map((r) => String(r.ActionExecutionLogID ?? '')).filter(Boolean);
+            orphanedActionLogIds.push(...actionLogIds);
+            orphanedRunIds.push(...runsBefore.map((r) => String(r.ID)));
+
+            Assert(await routineDue.Delete(), `routine delete failed: ${routineDue.LatestResult?.CompleteMessage}`);
+            AssertEqual((await fetchRuns(routineDue.ID, user)).length, 0, 'run bookkeeping rows must be gone with the routine');
+            const routineGone = await new RunView().RunView({
+                EntityName: 'MJ: User Routines',
+                ExtraFilter: `ID='${routineDue.ID}'`,
+                ResultType: 'simple',
+                BypassCache: true,
+            }, user);
+            AssertEqual(routineGone.Results.length, 0, 'the routine row itself must be gone');
+
+            // The LINKED execution records survive — that's where the real telemetry lives.
+            for (const logId of actionLogIds) {
+                const log = await new RunView().RunView({
+                    EntityName: 'MJ: Action Execution Logs',
+                    ExtraFilter: `ID='${logId}'`,
+                    ResultType: 'simple',
+                    BypassCache: true,
+                }, user);
+                AssertEqual(log.Results.length, 1, 'linked Action Execution Log must survive the routine delete');
+            }
+        });
+
         const failures = await suite.Run();
-        await cleanup(provider, user, createdRecipientIds, createdRoutineIds);
+        await cleanup(provider, user, createdRecipientIds, createdRoutineIds, orphanedActionLogIds, orphanedRunIds);
         process.exit(failures > 0 ? 1 : 0);
     } catch (error) {
-        await cleanup(provider, user, createdRecipientIds, createdRoutineIds);
+        await cleanup(provider, user, createdRecipientIds, createdRoutineIds, orphanedActionLogIds, orphanedRunIds);
         throw error;
     }
 }
@@ -368,6 +403,8 @@ async function cleanup(
     user: Awaited<ReturnType<typeof bootstrapAI>>['user'],
     recipientIds: string[],
     routineIds: string[],
+    orphanedActionLogIds: string[] = [],
+    orphanedRunIds: string[] = [],
 ): Promise<void> {
     const del = async (entityName: string, id: string) => {
         try {
@@ -375,6 +412,20 @@ async function cleanup(
             if (await e.Load(id)) await e.Delete();
         } catch { /* best-effort cleanup */ }
     };
+
+    // Rows UR14's cascade orphaned from the run-row lookup below: the surviving
+    // action logs, and the notification rows keyed to the already-deleted runs.
+    for (const logId of orphanedActionLogIds) await del('MJ: Action Execution Logs', logId);
+    for (const runId of orphanedRunIds) {
+        try {
+            await provider.ExecuteSQL(
+                `DELETE FROM [${provider.MJCoreSchemaName}].[UserNotification] WHERE ResourceConfiguration LIKE '%${runId}%'`,
+                [],
+                { isMutation: true, description: 'user-routines-tests: cleanup notifications for cascade-deleted runs' },
+                user
+            );
+        } catch { /* best-effort cleanup */ }
+    }
 
     for (const routineId of routineIds) {
         try {

@@ -100,6 +100,14 @@ interface RoutineExecutionSummary {
  */
 @RegisterClass(BaseScheduledJob, 'UserRoutineDispatcherDriver')
 export class UserRoutineDispatcherDriver extends BaseScheduledJob {
+    /**
+     * The dispatcher is a by-design 1-minute sweeper: each pass claims due routines and
+     * does bounded work, so the engine's high-frequency cron warning doesn't apply.
+     */
+    public override get IsHighFrequencyByDesign(): boolean {
+        return true;
+    }
+
     public async Execute(context: ScheduledJobExecutionContext): Promise<ScheduledJobResult> {
         const config = this.parseDispatcherConfiguration(context.Schedule);
         const maxConcurrent = config.MaxConcurrentRoutines ?? DEFAULT_MAX_CONCURRENT_ROUTINES;

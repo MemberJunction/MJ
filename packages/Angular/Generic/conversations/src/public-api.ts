@@ -42,6 +42,7 @@ export * from './lib/services/delegation-result-parser';
 export * from './lib/components/workspace/conversation-workspace.component';
 export * from './lib/components/navigation/conversation-navigation.component';
 export * from './lib/components/sidebar/conversation-sidebar.component';
+export * from './lib/components/sidebar/routines-section.component';
 export * from './lib/components/conversation/conversation-list.component';
 export * from './lib/components/conversation/conversation-chat-area.component';
 export * from './lib/components/conversation/conversation-empty-state.component';

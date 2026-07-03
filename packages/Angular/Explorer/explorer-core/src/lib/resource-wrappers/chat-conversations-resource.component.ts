@@ -52,6 +52,9 @@ import { Subject, takeUntil } from 'rxjs';
                 (unpinSidebarRequested)="unpinSidebar()"
                 (refreshRequested)="onRefreshRequested()">
               </mj-conversation-list>
+              <!-- Routines — pinned at the very bottom of the sidebar. Gated inside the
+                   section component by Read permission on 'MJ: User Routines'. -->
+              <mj-conversation-routines-section></mj-conversation-routines-section>
             }
           </div>
         }
@@ -121,9 +124,22 @@ import { Subject, takeUntil } from 'rxjs';
     .conversation-sidebar {
       flex-shrink: 0;
       border-right: 1px solid var(--mj-border-default);
-      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
       background: var(--mj-bg-surface-sunken);
       transition: width 0.3s ease;
+    }
+
+    /* Conversation list scrolls; the routines section stays pinned at the bottom */
+    .conversation-sidebar mj-conversation-list {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
+    }
+
+    .conversation-sidebar mj-conversation-routines-section {
+      flex-shrink: 0;
     }
 
     /* Disable transitions during initial load to prevent jarring animation */

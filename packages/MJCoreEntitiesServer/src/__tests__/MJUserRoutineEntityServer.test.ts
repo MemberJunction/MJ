@@ -75,9 +75,13 @@ vi.mock('@memberjunction/core-entities', () => {
         public TargetType: string | null = 'Action';
         public TargetID: string | null = 'AAAAAAAA-0000-0000-0000-000000000001';
         public NextRunAt: Date | null = null;
+        public ID = 'RRRRRRRR-0000-0000-0000-00000000000R';
         public IsSaved = false;
         public ContextCurrentUser: { ID: string; Type: string | null } | null = null;
         public SuperSaveCalled = false;
+        public SuperDeleteCalled = false;
+        public ProviderToUse: unknown = {};
+        public RunViewProviderToUse: unknown = {};
         private fieldState: Record<string, FieldState> = {};
         public SetFieldState(name: string, state: FieldState): void {
             this.fieldState[name] = state;
@@ -94,10 +98,15 @@ vi.mock('@memberjunction/core-entities', () => {
             this.SuperSaveCalled = true;
             return true;
         }
+        public async Delete(): Promise<boolean> {
+            this.SuperDeleteCalled = true;
+            return true;
+        }
     }
     return { MJUserRoutineEntity: MockMJUserRoutineEntity };
 });
 
+import { RunView } from '@memberjunction/core';
 import { MJUserRoutineEntityServer } from '../custom/MJUserRoutineEntityServer.server';
 
 /** The mock base's extra test hooks, layered over the subclass's typed surface. */
@@ -105,6 +114,7 @@ interface MockHooks {
     IsSaved: boolean;
     ContextCurrentUser: { ID: string; Type: string | null } | null;
     SuperSaveCalled: boolean;
+    SuperDeleteCalled: boolean;
     TargetID: string | null;
     SetFieldState(name: string, state: FieldState): void;
 }
@@ -232,6 +242,17 @@ describe('MJUserRoutineEntityServer.Save', () => {
         expect(e.NextRunAt!.getTime()).toBe(explicit.getTime());
     });
 
+    it('computes NextRunAt on create even when a NULL NextRunAt arrived dirty — the GraphQL create path marks every provided field dirty', async () => {
+        const e = makeEntity();
+        e.IsSaved = false;
+        e.NextRunAt = null;
+        e.SetFieldState('NextRunAt', { Dirty: true, OldValue: null }); // client sent its untouched null
+        const before = Date.now();
+        await e.Save();
+        expect(e.NextRunAt).not.toBeNull();
+        expect(e.NextRunAt!.getTime()).toBeGreaterThan(before);
+    });
+
     it('leaves NextRunAt untouched when nothing schedule-related changed', async () => {
         const e = makeEntity();
         const existing = new Date('2030-06-01T00:00:00.000Z');
@@ -247,5 +268,60 @@ describe('MJUserRoutineEntityServer.Save', () => {
         await e.Save();
         expect(e.NextRunAt).toBeNull();
         expect(e.SuperSaveCalled).toBe(true);
+    });
+});
+
+describe('MJUserRoutineEntityServer.Delete', () => {
+    /** A dependent row (recipient/run) whose Delete outcome is scripted. */
+    function dependent(deleteResult: boolean): { Delete: () => Promise<boolean>; DeleteCalls: () => number } {
+        let calls = 0;
+        return {
+            Delete: async () => {
+                calls++;
+                return deleteResult;
+            },
+            DeleteCalls: () => calls,
+        };
+    }
+
+    function stubDependents(recipients: Array<{ Delete(): Promise<boolean> }>, runs: Array<{ Delete(): Promise<boolean> }>): void {
+        vi.spyOn(RunView.prototype, 'RunViews').mockResolvedValue([
+            { Success: true, Results: recipients },
+            { Success: true, Results: runs },
+        ] as unknown as Awaited<ReturnType<RunView['RunViews']>>);
+    }
+
+    it('cascades recipients + run bookkeeping BEFORE the routine row (FK cleanup)', async () => {
+        const r1 = dependent(true);
+        const u1 = dependent(true);
+        const u2 = dependent(true);
+        stubDependents([r1], [u1, u2]);
+        const e = makeEntity();
+        const ok = await e.Delete();
+        expect(ok).toBe(true);
+        expect(r1.DeleteCalls()).toBe(1);
+        expect(u1.DeleteCalls()).toBe(1);
+        expect(u2.DeleteCalls()).toBe(1);
+        expect(e.SuperDeleteCalled).toBe(true);
+        vi.restoreAllMocks();
+    });
+
+    it('aborts (routine row untouched) when a dependent delete fails', async () => {
+        const failing = dependent(false);
+        stubDependents([], [failing]);
+        const e = makeEntity();
+        const ok = await e.Delete();
+        expect(ok).toBe(false);
+        expect(e.SuperDeleteCalled).toBe(false);
+        vi.restoreAllMocks();
+    });
+
+    it('deletes cleanly when there are no dependents at all', async () => {
+        stubDependents([], []);
+        const e = makeEntity();
+        const ok = await e.Delete();
+        expect(ok).toBe(true);
+        expect(e.SuperDeleteCalled).toBe(true);
+        vi.restoreAllMocks();
     });
 });

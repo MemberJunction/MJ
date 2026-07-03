@@ -2,7 +2,6 @@ import {
   BaseEngine,
   BaseEnginePropertyConfig,
   IMetadataProvider,
-  RunView,
   UserInfo,
 } from '@memberjunction/core';
 import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
@@ -13,12 +12,6 @@ import {
   MJUserRoutineRecipientEntity,
   MJUserRoutineRunEntity,
 } from '../generated/entity_subclasses';
-
-/**
- * Placeholder filter used when the current user has no routines yet — keeps the
- * dependent (recipients / runs) configs valid SQL while returning zero rows.
- */
-const NO_ROUTINES_FILTER = `RoutineID='00000000-0000-0000-0000-000000000000'`;
 
 /** Client-side cap applied by the {@link UserRoutineEngine.RecentRuns} getter. */
 const RECENT_RUNS_CAP = 500;
@@ -34,16 +27,13 @@ const RECENT_RUNS_CAP = 500;
  * `await UserRoutineEngine.Instance.Config(false, user, provider)` on entry
  * (a no-op once loaded).
  *
- * Per-user scoping follows the UserInfoEngine convention: on the client
- * (Network provider) the configs carry a per-user Filter so only the current
- * user's rows are transferred; on the server everything is loaded (one process
- * serves many users) and the public getters filter by the loaded user.
- *
- * Recipients and runs have no UserID column — they hang off UserRoutine via
- * RoutineID — so on the client their config Filter is a `RoutineID IN (...)`
- * list computed from the user's routine IDs at Config time. That filter is a
- * snapshot: after CREATING or DELETING a routine, call {@link Refresh} so the
- * dependent configs re-scope to the new routine set.
+ * All three configs load UNFILTERED (client and server alike) and the public
+ * getters scope to the loaded user. Unfiltered + unordered configs are the
+ * canonical BaseEngine shape: the engine maintains the arrays IN PLACE on
+ * save / delete / remote-invalidate entity events — no filter snapshot to go
+ * stale after creating or deleting a routine, and no full-refresh churn.
+ * Row-level visibility is the server's job (entity permissions / RLS), not a
+ * client-side Filter's.
  *
  * Usage:
  * ```typescript
@@ -88,75 +78,33 @@ export class UserRoutineEngine extends BaseEngine<UserRoutineEngine> {
       return;
     }
 
-    // Force refresh when the user changed (e.g., logout/login)
-    if (this._loadedForUserId && this._loadedForUserId !== userId) {
-      forceRefresh = true;
-    }
-
-    // Client (Network provider): per-user filters so only this user's rows transfer.
-    // Server (Database provider): load everything; getters filter per user.
-    const isClientSide = md.ProviderType === 'Network';
-    const routineFilter = isClientSide ? `UserID='${userId}'` : undefined;
-    const dependentFilter = isClientSide
-      ? await this.buildDependentFilter(userId, md, contextUser)
-      : undefined;
-
+    // Unfiltered + unordered on purpose: this is the canonical BaseEngine shape,
+    // so the engine maintains all three arrays in place on entity events (no
+    // stale filter snapshots, no full-refresh churn). The cache is user-agnostic;
+    // getters scope per user, so a user change needs no reload.
     const configs: Partial<BaseEnginePropertyConfig>[] = [
       {
         Type: 'entity',
         EntityName: 'MJ: User Routines',
         PropertyName: '_Routines',
         CacheLocal: true,
-        Filter: routineFilter,
-        OrderBy: 'Name ASC',
       },
       {
         Type: 'entity',
         EntityName: 'MJ: User Routine Recipients',
         PropertyName: '_Recipients',
         CacheLocal: true,
-        Filter: dependentFilter,
-        OrderBy: 'Sequence ASC',
       },
       {
         Type: 'entity',
         EntityName: 'MJ: User Routine Runs',
         PropertyName: '_Runs',
         CacheLocal: true,
-        Filter: dependentFilter,
-        OrderBy: 'StartedAt DESC',
       },
     ];
 
     await super.Load(configs, provider, forceRefresh, contextUser);
     this._loadedForUserId = userId;
-  }
-
-  /**
-   * Builds the client-side `RoutineID IN (...)` filter for the recipient/run configs
-   * from the user's current routine IDs (lightweight ID-only query).
-   */
-  private async buildDependentFilter(
-    userId: string,
-    provider: IMetadataProvider,
-    contextUser?: UserInfo,
-  ): Promise<string> {
-    try {
-      const rv = RunView.FromMetadataProvider(provider);
-      const result = await rv.RunView<{ ID: string }>(
-        {
-          EntityName: 'MJ: User Routines',
-          ExtraFilter: `UserID='${userId}'`,
-          Fields: ['ID'],
-          ResultType: 'simple',
-        },
-        contextUser,
-      );
-      const ids = result.Success ? (result.Results ?? []).map((r) => `'${r.ID}'`) : [];
-      return ids.length > 0 ? `RoutineID IN (${ids.join(',')})` : NO_ROUTINES_FILTER;
-    } catch {
-      return NO_ROUTINES_FILTER;
-    }
   }
 
   // ========================================================================
@@ -251,9 +199,9 @@ export class UserRoutineEngine extends BaseEngine<UserRoutineEngine> {
   }
 
   /**
-   * Force-refreshes all cached data. Call after CREATING or DELETING a routine so the
-   * dependent recipient/run configs re-scope to the new routine-ID set (their client-side
-   * Filter is a snapshot taken at Config time).
+   * Force-refreshes all cached data from the server. Rarely needed — the unfiltered
+   * configs are maintained in place on entity events — but useful as an explicit
+   * "pull latest" (e.g. the UI's refresh button picking up dispatcher-written runs).
    */
   public async Refresh(contextUser?: UserInfo): Promise<void> {
     await this.Config(true, contextUser);

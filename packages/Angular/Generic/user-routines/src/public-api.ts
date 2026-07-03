@@ -16,6 +16,7 @@ export * from './lib/routine-history.component';
 export * from './lib/user-routines-events';
 
 // Pure helpers (cron presets / descriptions, display + serialization utils, target catalog)
-export * from './lib/cron-utils';
+// NOTE: the pure cron helpers (BuildCronExpression, ParseCronExpression, ...)
+// moved to @memberjunction/global — import them from there.
 export * from './lib/routine-ui-helpers';
 export * from './lib/routine-target-catalog';

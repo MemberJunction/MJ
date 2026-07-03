@@ -6,7 +6,7 @@ import {
     IsPlausibleCronExpression,
     Ordinal,
     ParseCronExpression,
-} from '../lib/cron-utils';
+} from '../util/CronUtils';
 
 describe('cron-utils', () => {
     describe('BuildCronExpression', () => {

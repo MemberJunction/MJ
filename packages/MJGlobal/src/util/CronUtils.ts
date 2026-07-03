@@ -1,10 +1,13 @@
 /**
- * Pure cron helpers for User Routines.
+ * Pure, dependency-free cron helpers: friendly preset (hourly / daily / weekly /
+ * monthly) ↔ 5-field cron expression round-tripping, human-readable descriptions,
+ * and a lightweight plausibility check. Originally built for the User Routines
+ * editor; general-purpose for any schedule-editing UI.
  *
- * The editor exposes friendly presets (hourly / daily / weekly / monthly) that map to a
- * subset of standard 5-field cron expressions, plus an "advanced" escape hatch that
- * round-trips any raw expression untouched. These helpers are pure functions with no
- * Angular or MJ dependencies so they can be unit-tested in isolation.
+ * NOT a cron engine: for real validation, is-due checks, and next-occurrence math
+ * use `CronExpressionHelper` in `@memberjunction/scheduling-engine` (parser-backed;
+ * it can't live here without pulling cron-parser + core into MJGlobal).
+ * {@link IsPlausibleCronExpression} is only a UI pre-filter, not validation.
  */
 
 /** Which schedule preset a cron expression corresponds to (or 'advanced' when none). */

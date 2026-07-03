@@ -6,7 +6,7 @@ import { MJUserRoutineEntity, UserRoutineEngine } from '@memberjunction/core-ent
 import { NormalizeUUID } from '@memberjunction/global';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { MJConfirmService } from '@memberjunction/ng-ui-components';
-import { DescribeCronExpression } from './cron-utils';
+import { DescribeCronExpression } from '@memberjunction/global';
 import { FormatRelativeTime, RoutineChipVariant, RoutineStatusVariant, RunStatusVariant } from './routine-ui-helpers';
 import { LoadRoutineTargetCatalog } from './routine-target-catalog';
 import {
@@ -251,7 +251,7 @@ export class MyRoutinesListComponent extends BaseAngularComponent implements OnI
 
         const confirmed = await this.confirm.ConfirmDelete({
             title: 'Delete Routine',
-            message: `Delete '${routine.Name}'? Its run history records remain, but the routine will no longer run.`,
+            message: `Delete '${routine.Name}'? Its recipients and run bookkeeping are removed too — the underlying agent/prompt/action run records remain.`,
         });
         if (!confirmed) {
             return;
@@ -261,18 +261,8 @@ export class MyRoutinesListComponent extends BaseAngularComponent implements OnI
         this.cdr.markForCheck();
         try {
             const engine = this.engine();
-            // Recipients FK-reference the routine — remove them first
-            for (const recipient of engine.RecipientsForRoutine(routine.ID)) {
-                const deleted = await recipient.Delete();
-                if (!deleted) {
-                    this.notifications.CreateSimpleNotification(
-                        `Delete failed: ${recipient.LatestResult?.CompleteMessage ?? 'unknown error'}`,
-                        'error',
-                        6000
-                    );
-                    return;
-                }
-            }
+            // The server-side entity subclass cascades recipients + run bookkeeping
+            // before the routine row (FK cleanup) — one Delete() is the whole story.
             const deleted = await routine.Delete();
             if (!deleted) {
                 this.notifications.CreateSimpleNotification(
