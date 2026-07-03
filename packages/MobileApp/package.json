@@ -16,13 +16,14 @@
     "test:integration": "vitest run --config vitest.integration.config.ts"
   },
   "dependencies": {
+    "@babel/standalone": "^7.29.1",
+    "@expo/metro-config": "latest",
     "@memberjunction/core": "5.44.0",
     "@memberjunction/core-entities": "5.44.0",
     "@memberjunction/global": "5.44.0",
     "@memberjunction/graphql-dataprovider": "5.44.0",
     "@memberjunction/markdown-core": "5.44.0",
     "@memberjunction/react-runtime": "5.44.0",
-    "@babel/standalone": "^7.29.1",
     "expo": "~54.0.0",
     "expo-auth-session": "~7.0.0",
     "expo-clipboard": "~8.0.8",
@@ -33,6 +34,7 @@
     "expo-secure-store": "~15.0.0",
     "expo-status-bar": "~3.0.0",
     "expo-system-ui": "~6.0.0",
+    "expo-updates": "latest",
     "expo-web-browser": "~15.0.0",
     "graphql": "^16.11.0",
     "marked": "^17.0.1",
