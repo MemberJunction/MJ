@@ -47,12 +47,17 @@ export function mapExternalNativeTypeToMJ(nativeType: string): MappedFieldType {
   // so it still matches DATETIME_TYPES — and take the arguments from the first group.
   const argMatch = raw.match(/\(([^)]*)\)/);
   const base = raw.replace(/\([^)]*\)/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
-  const args = (argMatch?.[1] ?? '')
-    .split(',')
-    .map((s) => parseInt(s.trim(), 10))
-    .filter((n) => !Number.isNaN(n));
-  const arg1 = args.length > 0 ? args[0] : null;
-  const arg2 = args.length > 1 ? args[1] : null;
+  // Parse args POSITIONALLY — a non-numeric component (e.g. Oracle NUMBER(*,2) wildcard precision) must
+  // stay in its slot, not collapse. Filtering NaNs would slide the scale into the precision position
+  // (NUMBER(*,2) -> decimal(2,0), losing the scale). Non-numeric slots become null and fall back below.
+  const rawArgs = (argMatch?.[1] ?? '').split(',').map((s) => s.trim());
+  const toNum = (s: string | undefined): number | null => {
+    if (s == null || s === '') return null;
+    const n = parseInt(s, 10);
+    return Number.isNaN(n) ? null : n;
+  };
+  const arg1 = toNum(rawArgs[0]);
+  const arg2 = rawArgs.length > 1 ? toNum(rawArgs[1]) : null;
 
   const plain = (type: string): MappedFieldType => ({ Type: type, Length: null, Precision: null, Scale: null });
   const string = (len: number | null): MappedFieldType => ({ Type: 'nvarchar', Length: len ?? -1, Precision: null, Scale: null });

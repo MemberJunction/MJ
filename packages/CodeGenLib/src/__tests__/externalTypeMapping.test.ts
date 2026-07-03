@@ -30,6 +30,12 @@ describe('mapExternalNativeTypeToMJ', () => {
     expect(mapExternalNativeTypeToMJ('TIMESTAMP(6) WITH LOCAL TIME ZONE')).toEqual({ Type: 'datetimeoffset', Length: null, Precision: null, Scale: null });
   });
 
+  it('handles wildcard precision NUMBER(*,scale) positionally (scale must not slide into precision)', () => {
+    // '*' is non-numeric; it must keep its slot so the scale stays the scale (was collapsing to decimal(2,0)).
+    expect(mapExternalNativeTypeToMJ('NUMBER(*,2)')).toEqual({ Type: 'decimal', Length: null, Precision: 18, Scale: 2 });
+    expect(mapExternalNativeTypeToMJ('NUMBER(*,0)')).toEqual({ Type: 'decimal', Length: null, Precision: 18, Scale: 0 });
+  });
+
   it('maps common MongoDB types', () => {
     expect(mapExternalNativeTypeToMJ('ObjectId')).toEqual({ Type: 'nvarchar', Length: 24, Precision: null, Scale: null });
     expect(mapExternalNativeTypeToMJ('string')).toEqual({ Type: 'nvarchar', Length: -1, Precision: null, Scale: null });

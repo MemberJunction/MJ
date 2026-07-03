@@ -1470,8 +1470,11 @@ export class ManageMetadataBase {
    private _entityHasExternalDataSourceColumn: boolean | null = null;
    protected async entityHasExternalDataSourceColumn(pool: CodeGenConnection): Promise<boolean> {
       if (this._entityHasExternalDataSourceColumn === null) {
+         // Check the VIEW the gated queries actually read (vwEntities), not the base Entity table — a
+         // schema where the table has the column but the view wasn't refreshed to expose it would still
+         // throw. (Matches the PG guard in metadataSupportObjects.ts, which also checks the view.)
          const sql = `SELECT COUNT(*) AS ColExists FROM INFORMATION_SCHEMA.COLUMNS ` +
-                     `WHERE TABLE_SCHEMA = '${mj_core_schema()}' AND TABLE_NAME = 'Entity' AND COLUMN_NAME = 'ExternalDataSourceID'`;
+                     `WHERE TABLE_SCHEMA = '${mj_core_schema()}' AND TABLE_NAME = 'vwEntities' AND COLUMN_NAME = 'ExternalDataSourceID'`;
          const result = await this.runQuery(pool, sql);
          const row = (result.recordset?.[0] ?? {}) as Record<string, unknown>;
          const cnt = row.ColExists ?? row.colexists ?? 0;
@@ -1578,7 +1581,9 @@ export class ManageMetadataBase {
       try {
          descriptor = await router.IntrospectExternalSchema(externalEntity.ExternalDataSourceID, externalEntity.SchemaName || undefined, currentUser);
       } catch (e: unknown) {
-         logStatus(`   ⚠️  External entity ${externalEntity.Name}: remote schema introspection failed (${e instanceof Error ? e.message : String(e)}) — skipping this entity (left untouched); CodeGen run continues.`);
+         // Surface via logError (not logStatus) so a genuine driver bug isn't invisible in a green run —
+         // but still recover (success:true) so one unreachable remote source can't fail the whole run.
+         logError(`   ⚠️  External entity ${externalEntity.Name}: remote schema introspection failed (${e instanceof Error ? e.message : String(e)}) — skipping this entity (left untouched); CodeGen run continues.`);
          return {success: true, updatedEntity: false, relationshipsUpdated: false};
       }
       try {
