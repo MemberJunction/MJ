@@ -289,3 +289,31 @@
     overflow: auto;
     background: var(--mj-bg-surface);
 }
+
+/* Progressive-disclosure toggle between the basic path and the advanced sections */
+.editor-advanced-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px dashed var(--mj-border-default);
+    border-radius: var(--mj-radius-md, 8px);
+    background: transparent;
+    color: var(--mj-text-secondary);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    text-align: left;
+}
+
+.editor-advanced-toggle:hover {
+    background: var(--mj-bg-surface-hover);
+    color: var(--mj-text-primary);
+}
+
+.editor-advanced-toggle .editor-hint-inline {
+    font-weight: 400;
+    font-size: 11px;
+    color: var(--mj-text-muted);
+}

@@ -16,7 +16,6 @@ import { MentionAutocompleteService, MentionSuggestion } from '../../services/me
 import { UserInfo } from '@memberjunction/core';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { MJAIAgentConfigurationEntity } from '@memberjunction/core-entities';
-import { ChatMessageContentBlock } from '@memberjunction/ai';
 import { UUIDsEqual } from '@memberjunction/global';
 
 /**
@@ -72,7 +71,16 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
   @Input() placeholder: string = 'Type @ to mention agents or users, # for entities...';
   @Input() disabled: boolean = false;
   @Input() currentUser?: UserInfo;
+  /** Master switch for all mention/command triggers. When false the granular toggles are moot. */
   @Input() enableMentions: boolean = true;
+  /** Enables the '@' trigger (agent/user mentions). Only effective while enableMentions is true. */
+  @Input() enableAgentMentions: boolean = true;
+  /** Enables the '#' trigger (entity + query mentions). Only effective while enableMentions is true. */
+  @Input() enableEntityMentions: boolean = true;
+  /** Enables the '/' trigger (skill commands). Only effective while enableMentions is true. */
+  @Input() enableSkillCommands: boolean = true;
+  /** Auto-focus the editor after view init (the composer default). Disable when embedded in forms. */
+  @Input() autoFocus: boolean = true;
 
   // Attachment settings
   @Input() enableAttachments: boolean = true;
@@ -99,12 +107,29 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
 
   private mentionStartIndex: number = -1;
   private mentionQuery: string = '';
-  /** Mention trigger characters: '@' for agents/users, '#' for entities */
-  private static readonly MENTION_TRIGGERS = ['@', '#', '/'];
   /** The trigger char that opened the current mention dropdown */
   private activeTrigger: string = '@';
+
+  /**
+   * Active mention trigger characters, computed from the master enableMentions switch and the
+   * granular per-trigger toggles: '@' = agent/user mentions, '#' = entity/query mentions,
+   * '/' = skill commands.
+   */
+  private get mentionTriggers(): string[] {
+    if (!this.enableMentions) {
+      return [];
+    }
+    const triggers: string[] = [];
+    if (this.enableAgentMentions) triggers.push('@');
+    if (this.enableEntityMentions) triggers.push('#');
+    if (this.enableSkillCommands) triggers.push('/');
+    return triggers;
+  }
+
   private onChange: (value: string) => void = () => {};
   public onTouched: () => void = () => {};
+  /** Value written via writeValue() before the view (editorRef) exists — applied in ngAfterViewInit. */
+  private pendingWriteValue: string | null = null;
 
   constructor(
     private mentionAutocomplete: MentionAutocompleteService,
@@ -118,10 +143,19 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
   }
 
   ngAfterViewInit(): void {
+    // Apply any value written through the ControlValueAccessor before the view existed
+    // (NgModel calls writeValue during directive init, before this component's view is ready)
+    if (this.pendingWriteValue !== null) {
+      this.setEditorContent(this.pendingWriteValue);
+      this.pendingWriteValue = null;
+    }
+
     // Auto-focus the editor
-    setTimeout(() => {
-      this.editorRef?.nativeElement?.focus();
-    }, 100);
+    if (this.autoFocus) {
+      setTimeout(() => {
+        this.editorRef?.nativeElement?.focus();
+      }, 100);
+    }
   }
 
   /**
@@ -266,14 +300,20 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0) return;
 
+    const activeTriggers = this.mentionTriggers;
+    if (activeTriggers.length === 0) {
+      this.closeMentionDropdown();
+      return;
+    }
+
     const range = selection.getRangeAt(0);
     const textBeforeCursor = this.getTextBeforeCursor(range);
 
-    // Find the nearest mention trigger before the cursor
-    // ('@' for agents/users, '#' for entities) — whichever is closest wins
+    // Find the nearest enabled mention trigger before the cursor
+    // ('@' for agents/users, '#' for entities/queries, '/' for skills) — whichever is closest wins
     let triggerIndex = -1;
     let triggerChar = '@';
-    for (const t of MentionEditorComponent.MENTION_TRIGGERS) {
+    for (const t of activeTriggers) {
       const idx = textBeforeCursor.lastIndexOf(t);
       if (idx > triggerIndex) {
         triggerIndex = idx;
@@ -818,7 +858,7 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
         if (element.classList.contains('mention-chip')) {
           const name = element.getAttribute('data-mention-name') || '';
           const mentionType = element.getAttribute('data-mention-type');
-          const prefix = mentionType === 'entity' || mentionType === 'query' ? '#' : '@';
+          const prefix = mentionType === 'entity' || mentionType === 'query' ? '#' : mentionType === 'skill' ? '/' : '@';
           // Use quoted format if name has spaces
           text += name.includes(' ') ? `${prefix}"${name}"` : `${prefix}${name}`;
         } else if (element.tagName === 'BR') {
@@ -854,7 +894,7 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
         if (element.classList.contains('mention-chip')) {
           const name = element.getAttribute('data-mention-name') || '';
           const mentionType = element.getAttribute('data-mention-type');
-          const prefix = mentionType === 'entity' || mentionType === 'query' ? '#' : '@';
+          const prefix = mentionType === 'entity' || mentionType === 'query' ? '#' : mentionType === 'skill' ? '/' : '@';
           text += name.includes(' ') ? `${prefix}"${name}"` : `${prefix}${name}`;
         } else {
           text += this.getNodeText(element);
@@ -879,10 +919,16 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
 
   // ControlValueAccessor implementation
   writeValue(value: string): void {
+    const editor = this.editorRef?.nativeElement;
+    if (!editor) {
+      // View not created yet — buffer the value; ngAfterViewInit applies it
+      this.pendingWriteValue = value ?? '';
+      return;
+    }
     if (value) {
       this.setEditorContent(value);
-    } else if (this.editorRef?.nativeElement) {
-      this.editorRef.nativeElement.textContent = '';
+    } else {
+      editor.textContent = '';
     }
   }
 

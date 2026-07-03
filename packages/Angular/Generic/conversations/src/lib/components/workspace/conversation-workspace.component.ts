@@ -37,7 +37,7 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { ArtifactStateService } from '../../services/artifact-state.service';
 import { CollectionStateService } from '../../services/collection-state.service';
 import { ArtifactPermissionService } from '../../services/artifact-permission.service';
-import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
+import { MentionAutocompleteService, PendingAttachment } from '@memberjunction/ng-composer';
 import { ConversationStreamingService } from '../../services/conversation-streaming.service';
 import { UICommandHandlerService } from '../../services/ui-command-handler.service';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -47,7 +47,6 @@ import { Subject, takeUntil } from 'rxjs';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { ActionableCommand, AutomaticCommand } from '@memberjunction/ai-core-plus';
 import { NavigationRequest } from '@memberjunction/ng-artifacts';
-import { PendingAttachment } from '../mention/mention-editor.component';
 
 /**
  * Top-level workspace component for conversations

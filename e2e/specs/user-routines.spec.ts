@@ -24,8 +24,8 @@
  *
  * SELECTORS:
  *   Stable class hooks that ship with the components:
- *     .crs-section/.crs-header/.crs-add/.crs-row-name        (sidebar section)
- *     .routine-editor, #routine-name/#routine-message/#routine-cron,
+ *     .crs-section/.crs-header/.crs-add/.crs-count           (sidebar section)
+ *     .routine-editor, #routine-name/#routine-message .mention-editor/#routine-cron,
  *     .editor-segment, mj-tree-dropdown [role=combobox] + .tree-node-label (editor + picker)
  *     .routine-card + [title="..."] action buttons            (list)
  *     .history-row/.history-notified                          (history)
@@ -166,8 +166,9 @@ test.describe.serial('User Routines — conversations surface', () => {
     // The trigger displays the selection once picked.
     await expect(trigger).toContainText(AGENT_NAME, { timeout: 15_000 });
 
+    // #routine-message is now the <mj-mention-editor> host — fill its inner contenteditable.
     await editor
-      .locator('#routine-message')
+      .locator('#routine-message .mention-editor')
       .fill('Say hi in one short sentence. This is an automated e2e heartbeat — keep it brief.');
 
     // Advanced (cron) frequency → raw every-minute expression.
@@ -182,14 +183,11 @@ test.describe.serial('User Routines — conversations surface', () => {
     await expect(card).toBeVisible({ timeout: 30_000 });
 
     try {
-      // The compact sidebar section reflects the new routine reactively (same
-      // engine instance → BaseEntity save event → ObserveProperty emission).
-      // The unpinned sidebar may have auto-collapsed behind the slide-in; the
-      // section (and its rows) still render inside it once expanded again, so
-      // assert against the DOM without requiring visibility here.
-      await expect(page.locator('.crs-row-name', { hasText: 'Sage says hi' }).first()).toBeAttached({
-        timeout: 30_000,
-      });
+      // The compact sidebar section reflects the new Active routine reactively
+      // (same engine instance → BaseEntity save event → ObserveProperty emission):
+      // the header badge shows the active count. The unpinned sidebar may have
+      // auto-collapsed behind the slide-in, so assert attachment, not visibility.
+      await expect(page.locator('.crs-count').first()).toBeAttached({ timeout: 30_000 });
 
       // ── Live dispatcher: poll (via the list's force-refresh) until the card's
       //    Last-Run chip reports Success. Nothing is stubbed — the real MJAPI

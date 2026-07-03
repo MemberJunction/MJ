@@ -46,6 +46,7 @@
     "@memberjunction/ng-artifacts": "5.44.0",
     "@memberjunction/ng-base-types": "5.44.0",
     "@memberjunction/ng-code-editor": "5.44.0",
+    "@memberjunction/ng-composer": "5.44.0",
     "@memberjunction/ng-container-directives": "5.44.0",
     "@memberjunction/ng-forms": "5.44.0",
     "@memberjunction/ng-markdown": "5.44.0",

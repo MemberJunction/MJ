@@ -4,34 +4,13 @@ import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJUserRoutineEntity, UserRoutineEngine } from '@memberjunction/core-entities';
-import { NormalizeUUID } from '@memberjunction/global';
-import { ConversationOpenedEventArgs, FormatRelativeTime, HistoryRecordOpenedEventArgs, LoadRoutineTargetCatalog } from '@memberjunction/ng-user-routines';
-
-/** Maximum routine rows shown in the compact sidebar section. */
-const MAX_SIDEBAR_ROUTINES = 4;
-
-/** How often the time-relative summaries ("Next in 27m") re-render. */
-const SUMMARY_REFRESH_MS = 30_000;
+import { ConversationOpenedEventArgs, HistoryRecordOpenedEventArgs } from '@memberjunction/ng-user-routines';
 
 /**
- * Snapshot view-model for one sidebar row. Time-relative text is PRECOMPUTED here
- * (not called from the template) — a template call like FormatRelativeTime(...) can
- * change between check passes at a minute boundary and throw NG0100; the snapshot
- * is stable within a pass and refreshed on a timer between passes.
- */
-interface RoutineRowVM {
-    Routine: MJUserRoutineEntity;
-    Summary: string;
-    Icon: string;
-    DotClass: string;
-}
-
-/**
- * Compact "Routines" section pinned at the very bottom of the conversations left
- * sidebar: a header (mark + count), the few most relevant routines (status dot,
- * agent icon, name, next-run / last-result one-liner), and a "+" affordance.
- * Clicking the header or a row opens the full User Routines slide-in; "+" opens
- * it straight on the New Routine editor.
+ * Compact "Routines" entry pinned at the very bottom of the conversations left
+ * sidebar: a single header row — mark, "Routines", the ACTIVE routine count, a "+"
+ * (straight into the New Routine editor) and a details chevron. No routine rows —
+ * the full command-center slide-in is one click away and owns all detail.
  *
  * Visibility gates (both must pass):
  *  1. `ShowRoutines` — host opt-out input bubbled from the top-level conversations
@@ -67,10 +46,11 @@ export class RoutinesSectionComponent extends BaseAngularComponent implements On
 
     /** True when the current user may read routines (permission gate). */
     public CanRead = false;
-    /** Snapshot rows for the compact view (stable within a CD pass — see RoutineRowVM). */
-    public TopRoutines: RoutineRowVM[] = [];
-    /** Total routine count for the header badge. */
+    /** Number of Active routines — the header badge. */
+    public ActiveCount = 0;
+    /** Total routines of any status (for the header tooltip). */
     public TotalCount = 0;
+
     /**
      * A run history row's linked execution record (Agent Run / Prompt Run / Action Log)
      * was clicked. Same shape as the chat area's openEntityRecord — the host (Explorer
@@ -92,14 +72,19 @@ export class RoutinesSectionComponent extends BaseAngularComponent implements On
     /** Whether the slide-in opens straight on the New Routine editor. */
     public SlideInNewRoutine = false;
 
-    public readonly RelativeTime = FormatRelativeTime;
-
-    private agentIconByID = new Map<string, string>();
     private initialized = false;
 
     /** Section renders only when the opt-out AND permission gates both pass. */
     public get IsVisible(): boolean {
         return this._showRoutines && this.CanRead;
+    }
+
+    /** Header tooltip: active/total breakdown. */
+    public get HeaderTitle(): string {
+        if (this.TotalCount === 0) {
+            return 'Routines — none yet, click + to create one';
+        }
+        return `Routines — ${this.ActiveCount} active of ${this.TotalCount}. Click to open.`;
     }
 
     async ngOnInit(): Promise<void> {
@@ -109,27 +94,13 @@ export class RoutinesSectionComponent extends BaseAngularComponent implements On
     }
 
     ngOnDestroy(): void {
-        if (this.summaryTimer != null) {
-            clearInterval(this.summaryTimer);
-        }
         this.destroy$.next();
         this.destroy$.complete();
     }
 
-    private summaryTimer: ReturnType<typeof setInterval> | null = null;
-
-    /** Opens the slide-in on the routines list (header click). */
+    /** Opens the slide-in on the routines list (header / details click). */
     public OpenRoutines(): void {
         this.SlideInRoutineID = null;
-        this.SlideInNewRoutine = false;
-        this.SlideInVisible = true;
-        this.cdr.markForCheck();
-    }
-
-    /** Opens the slide-in on one routine's history (row click). */
-    public OpenRoutine(routine: MJUserRoutineEntity, event: Event): void {
-        event.stopPropagation();
-        this.SlideInRoutineID = routine.ID;
         this.SlideInNewRoutine = false;
         this.SlideInVisible = true;
         this.cdr.markForCheck();
@@ -147,7 +118,6 @@ export class RoutinesSectionComponent extends BaseAngularComponent implements On
     /** Opens the routine's conversation in the host chat surface (closing the slide-in). */
     public OnConversationOpened(args: ConversationOpenedEventArgs): void {
         this.OnSlideInClosed();
-        this.SlideInVisible = false;
         this.openConversation.emit(args.ConversationID);
     }
 
@@ -161,32 +131,6 @@ export class RoutinesSectionComponent extends BaseAngularComponent implements On
         this.SlideInRoutineID = null;
         this.SlideInNewRoutine = false;
         this.cdr.markForCheck();
-    }
-
-    /** Status dot CSS class for a routine. */
-    public StatusDotClass(routine: MJUserRoutineEntity): string {
-        switch (routine.Status) {
-            case 'Active': return 'crs-dot crs-dot--active';
-            case 'Paused': return 'crs-dot crs-dot--paused';
-            default: return 'crs-dot crs-dot--disabled';
-        }
-    }
-
-    /** The agent's own IconClass, falling back to the standard robot mark. */
-    public AgentIcon(routine: MJUserRoutineEntity): string {
-        return this.agentIconByID.get(NormalizeUUID(routine.TargetID)) ?? 'fa-solid fa-robot';
-    }
-
-    /** One-liner under the routine name: next run, else last result, else unscheduled. */
-    public RoutineSummary(routine: MJUserRoutineEntity): string {
-        if (routine.Status === 'Active' && routine.NextRunAt) {
-            return `Next ${FormatRelativeTime(routine.NextRunAt)}`;
-        }
-        if (routine.LastRunAt) {
-            const status = routine.LastRunStatus ? ` · ${routine.LastRunStatus}` : '';
-            return `Last ${FormatRelativeTime(routine.LastRunAt)}${status}`;
-        }
-        return routine.Status === 'Active' ? 'Not yet scheduled' : routine.Status;
     }
 
     // ---------------------------------------------------------------
@@ -211,56 +155,23 @@ export class RoutinesSectionComponent extends BaseAngularComponent implements On
 
         try {
             const engine = UserRoutineEngine.GetProviderInstance<UserRoutineEngine>(p, UserRoutineEngine) as UserRoutineEngine;
-            const [, catalog] = await Promise.all([
-                engine.Config(false, p.CurrentUser, p),
-                LoadRoutineTargetCatalog(p),
-            ]);
-            this.agentIconByID = catalog.IconByID;
+            await engine.Config(false, p.CurrentUser, p);
             engine.Routines$.pipe(takeUntil(this.destroy$)).subscribe(() => {
-                this.rebuildRows(engine);
+                this.rebuildCounts(engine);
             });
-            this.rebuildRows(engine);
+            this.rebuildCounts(engine);
         } catch (e) {
             console.error('[RoutinesSection] Failed to load routines:', e);
-            this.TopRoutines = [];
+            this.ActiveCount = 0;
             this.TotalCount = 0;
         }
         this.cdr.markForCheck();
     }
 
-    /**
-     * Picks the most relevant routines for the compact view: Active first (soonest
-     * NextRunAt at the top, unscheduled last), then Paused, then Disabled.
-     */
-    private rebuildRows(engine: UserRoutineEngine): void {
+    private rebuildCounts(engine: UserRoutineEngine): void {
         const routines = engine.Routines;
         this.TotalCount = routines.length;
-        const statusRank = (r: MJUserRoutineEntity): number =>
-            r.Status === 'Active' ? 0 : r.Status === 'Paused' ? 1 : 2;
-        this.TopRoutines = [...routines]
-            .sort((a, b) => {
-                const rank = statusRank(a) - statusRank(b);
-                if (rank !== 0) {
-                    return rank;
-                }
-                const aNext = a.NextRunAt ? new Date(a.NextRunAt).getTime() : Number.MAX_SAFE_INTEGER;
-                const bNext = b.NextRunAt ? new Date(b.NextRunAt).getTime() : Number.MAX_SAFE_INTEGER;
-                return aNext - bNext;
-            })
-            .slice(0, MAX_SIDEBAR_ROUTINES)
-            .map((r) => ({
-                Routine: r,
-                Summary: this.RoutineSummary(r),
-                Icon: this.AgentIcon(r),
-                DotClass: this.StatusDotClass(r),
-            }));
-        // Keep the relative-time snapshots fresh between change-detection passes.
-        if (this.summaryTimer == null && this.TopRoutines.length > 0) {
-            this.summaryTimer = setInterval(() => {
-                this.TopRoutines = this.TopRoutines.map((row) => ({ ...row, Summary: this.RoutineSummary(row.Routine) }));
-                this.cdr.markForCheck();
-            }, SUMMARY_REFRESH_MS);
-        }
+        this.ActiveCount = routines.filter((r: MJUserRoutineEntity) => r.Status === 'Active').length;
         this.cdr.markForCheck();
     }
 }

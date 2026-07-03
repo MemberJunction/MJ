@@ -18,7 +18,7 @@ import { MentionSuggestion } from '../../services/mention-autocomplete.service';
   templateUrl: './mention-dropdown.component.html',
   styleUrls: [
     './mention-dropdown.component.css',
-    '../../styles/custom-agent-icons.css'
+    './custom-agent-icons.css'
   ]
 })
 export class MentionDropdownComponent implements OnInit, OnDestroy {

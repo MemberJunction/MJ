@@ -2,7 +2,7 @@ import { ChangeDetectorRef, Component, EventEmitter, Input, OnDestroy, Output, i
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJUserRoutineRunEntity, UserRoutineEngine } from '@memberjunction/core-entities';
 import { FormatDuration, FormatRelativeTime, RunStatusVariant } from './routine-ui-helpers';
-import { HistoryRecordOpenedEventArgs } from './user-routines-events';
+import { ConversationOpenedEventArgs, HistoryRecordOpenedEventArgs } from './user-routines-events';
 
 /** The linked execution record behind a run. */
 export interface RoutineRunLink {
@@ -49,6 +49,8 @@ export class RoutineHistoryComponent extends BaseAngularComponent implements OnD
 
     /** The user asked to open the linked execution record — the host owns navigation. */
     @Output() HistoryRecordOpened = new EventEmitter<HistoryRecordOpenedEventArgs>();
+    /** The routine's dedicated conversation was requested from a run row. */
+    @Output() ConversationOpened = new EventEmitter<ConversationOpenedEventArgs>();
 
     public Runs: MJUserRoutineRunEntity[] = [];
     public IsLoading = false;
@@ -123,6 +125,25 @@ export class RoutineHistoryComponent extends BaseAngularComponent implements OnD
             return { EntityName: 'MJ: Action Execution Logs', RecordID: run.ActionExecutionLogID, Label: 'Action log' };
         }
         return null;
+    }
+
+    /** The routine's conversation ID, when it has one (agent runs in conversation mode). */
+    public get RoutineConversationID(): string | null {
+        return this.routine()?.ConversationID ?? null;
+    }
+
+    /** Raises ConversationOpened so the host can present the routine's thread. */
+    public OpenConversation(): void {
+        const routine = this.routine();
+        if (routine?.ConversationID) {
+            this.ConversationOpened.emit(new ConversationOpenedEventArgs(routine.ConversationID, routine));
+        }
+    }
+
+    private routine() {
+        const p = this.ProviderToUse;
+        const engine = UserRoutineEngine.GetProviderInstance<UserRoutineEngine>(p, UserRoutineEngine) as UserRoutineEngine;
+        return this._routineID ? (engine.GetRoutineByID(this._routineID) ?? null) : null;
     }
 
     public OpenLink(run: MJUserRoutineRunEntity): void {

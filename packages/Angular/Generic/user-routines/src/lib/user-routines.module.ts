@@ -17,6 +17,7 @@ import {
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
 import { NgTreesModule } from '@memberjunction/ng-trees';
+import { ComposerModule } from '@memberjunction/ng-composer';
 
 import { MyRoutinesListComponent } from './my-routines-list.component';
 import { NewRoutineComponent } from './new-routine.component';
@@ -66,6 +67,7 @@ import { UserRoutinesSlideInComponent } from './user-routines-slide-in.component
         SharedGenericModule,
         CodeEditorModule,
         NgTreesModule,
+        ComposerModule,
     ],
     exports: [
         MyRoutinesListComponent,

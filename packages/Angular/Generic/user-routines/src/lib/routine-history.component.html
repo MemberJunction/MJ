@@ -27,6 +27,12 @@
               <i class="fa-solid fa-bell"></i>
             </span>
           }
+          @if (RoutineConversationID) {
+            <button mjButton variant="outline" size="sm" title="Open this routine's conversation (all runs appear as turns)"
+              (click)="OpenConversation()">
+              <i class="fa-solid fa-comments"></i> Conversation
+            </button>
+          }
           @if (LinkFor(run); as link) {
             <button mjButton variant="outline" size="sm" [title]="'Open the linked ' + link.Label + ' record'"
               (click)="OpenLink(run)">

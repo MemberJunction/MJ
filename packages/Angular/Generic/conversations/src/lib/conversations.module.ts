@@ -21,15 +21,15 @@ import { MarkdownModule } from '@memberjunction/ng-markdown';
 // Resource permissions (generic share dialog)
 import { ResourcePermissionsModule } from '@memberjunction/ng-resource-permissions';
 
+// Composer (mention editor + dropdown + message input box) — extracted to @memberjunction/ng-composer
+import { ComposerModule } from '@memberjunction/ng-composer';
+
 // Components
 import { MessageItemComponent } from './components/message/message-item.component';
 import { MessageListComponent } from './components/message/message-list.component';
 import { MessageInputComponent } from './components/message/message-input.component';
-import { MessageInputBoxComponent } from './components/message/message-input-box.component';
 import { DynamicFormsModule } from '@memberjunction/ng-forms';
 import { ActionableCommandsComponent } from './components/message/actionable-commands.component';
-import { MentionDropdownComponent } from './components/mention/mention-dropdown.component';
-import { MentionEditorComponent } from './components/mention/mention-editor.component';
 import { ConversationMessageRatingComponent } from './components/message/conversation-message-rating.component';
 import { ConversationWorkspaceComponent } from './components/workspace/conversation-workspace.component';
 import { ConversationNavigationComponent } from './components/navigation/conversation-navigation.component';
@@ -119,10 +119,7 @@ const COMPONENTS = [
   MessageItemComponent,
   MessageListComponent,
   MessageInputComponent,
-  MessageInputBoxComponent,
   ActionableCommandsComponent,
-  MentionDropdownComponent,
-  MentionEditorComponent,
   ConversationMessageRatingComponent,
   ConversationWorkspaceComponent,
   ConversationNavigationComponent,
@@ -188,6 +185,7 @@ const COMPONENTS = [
     TestingModule,
     SharedGenericModule,
     UserRoutinesModule,
+    ComposerModule,
     MarkdownModule,
     DynamicFormsModule,
     ResourcePermissionsModule,
@@ -216,6 +214,9 @@ const COMPONENTS = [
   exports: [
     ...COMPONENTS,
     SearchShortcutDirective,
+    // Composer components (mj-mention-editor / mj-mention-dropdown / mj-message-input-box)
+    // remain available to consumers of this module's template surface
+    ComposerModule,
     // Standalone components
     TasksFullViewComponent,
     // PR 2c — Widget extension surface

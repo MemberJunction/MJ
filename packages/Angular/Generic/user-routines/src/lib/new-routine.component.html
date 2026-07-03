@@ -15,23 +15,12 @@
       </mj-alert>
     }
 
-    <!-- ======================= Basics ======================= -->
+    <!-- ═══════════ BASICS (the 80% path: name, agent, message, schedule) ═══════════ -->
     <section class="editor-section">
-      <h3 class="editor-section-title"><i class="fa-solid fa-circle-info"></i> Basics</h3>
       <div class="editor-field">
         <label class="editor-label" for="routine-name">Name <span class="editor-required">*</span></label>
         <input id="routine-name" class="mj-input" type="text" [(ngModel)]="Name" placeholder="e.g. Morning membership digest" />
       </div>
-      <div class="editor-field">
-        <label class="editor-label" for="routine-description">Description</label>
-        <textarea id="routine-description" class="mj-textarea" rows="2" [(ngModel)]="Description"
-          placeholder="What does this routine do?"></textarea>
-      </div>
-    </section>
-
-    <!-- ======================= Agent ======================= -->
-    <section class="editor-section">
-      <h3 class="editor-section-title"><i class="fa-solid fa-robot"></i> Agent</h3>
 
       <div class="editor-field">
         <label class="editor-label">Which agent should this routine run? <span class="editor-required">*</span></label>
@@ -53,60 +42,17 @@
 
       <div class="editor-field">
         <label class="editor-label" for="routine-message">Message sent on each run</label>
-        <textarea id="routine-message" class="mj-textarea" rows="3" [(ngModel)]="InitialMessage"
-          placeholder="The message the routine sends to the agent each time it runs"></textarea>
-      </div>
-
-      <div class="editor-field">
-        <label class="editor-label">Starting payload (JSON, optional)</label>
-        <div class="editor-code">
-          <mj-code-editor [(ngModel)]="StartingPayloadText" language="json"
-            placeholder='{ "example": true }'></mj-code-editor>
-        </div>
-        <div class="editor-hint">Passed to the agent on each run. Leave blank for none.</div>
-      </div>
-
-      @if (SkillOptions.length > 0) {
-        <div class="editor-field">
-          <label class="editor-label">Pre-activate skills (optional)</label>
-          <div class="editor-skills">
-            @for (skill of SkillOptions; track skill.ID) {
-              <button type="button" class="editor-skill-chip"
-                [class.editor-skill-chip--selected]="IsSkillSelected(skill.ID)"
-                [title]="skill.Description ?? skill.Name"
-                (click)="ToggleSkill(skill.ID)">
-                <i [class]="skill.IconClass || 'fa-solid fa-wand-magic-sparkles'"></i>
-                {{ skill.Name }}
-                @if (IsSkillSelected(skill.ID)) {
-                  <i class="fa-solid fa-check editor-skill-check"></i>
-                }
-              </button>
-            }
-          </div>
-          <div class="editor-hint">Selected skills start every run with their instructions and tools in effect (subject to the agent's skill gates).</div>
-        </div>
-      }
-    </section>
-
-    <!-- ======================= Schedule ======================= -->
-    <section class="editor-section">
-      <h3 class="editor-section-title"><i class="fa-solid fa-business-time"></i> Schedule</h3>
-
-      <div class="editor-field">
-        <label class="editor-label">Routine type</label>
-        <div class="editor-segmented" role="radiogroup" aria-label="Routine type">
-          <button type="button" class="editor-segment"
-            [class.editor-segment--active]="RoutineType === 'Scheduled'"
-            (click)="RoutineType = 'Scheduled'">
-            <i class="fa-solid fa-clock"></i> Scheduled
-          </button>
-          <button type="button" class="editor-segment"
-            [class.editor-segment--active]="RoutineType === 'Monitoring'"
-            (click)="RoutineType = 'Monitoring'">
-            <i class="fa-solid fa-eye"></i> Monitoring
-          </button>
-        </div>
-        <div class="editor-hint">{{ RoutineTypeHelp }}</div>
+        <!-- Composer mention editor: '#' entity/query mentions + '/' skill commands enabled;
+             '@' agent mentions OFF — the routine's agent is fixed by the picker above. -->
+        <mj-mention-editor id="routine-message"
+          [(ngModel)]="InitialMessage"
+          placeholder="The message the routine sends to the agent each time it runs"
+          [enableAgentMentions]="false"
+          [enableEntityMentions]="true"
+          [enableSkillCommands]="true"
+          [enableAttachments]="false"
+          [autoFocus]="false"
+          [currentUser]="ProviderToUse.CurrentUser"></mj-mention-editor>
       </div>
 
       <div class="editor-field">
@@ -168,81 +114,146 @@
           <i class="fa-solid fa-calendar-check"></i> {{ SchedulePreview || 'No schedule yet' }}
         </div>
       </div>
-
-      <div class="editor-field">
-        <label class="editor-label">Timezone</label>
-        <mj-combobox
-          [Data]="TimezoneOptions"
-          [ValuePrimitive]="true"
-          Placeholder="Select an IANA timezone..."
-          [(ngModel)]="Timezone">
-        </mj-combobox>
-      </div>
-
-      <div class="editor-field-row">
-        <div class="editor-field">
-          <label class="editor-label" for="routine-startat">Active from (optional)</label>
-          <input id="routine-startat" class="mj-input" type="datetime-local" [(ngModel)]="StartAtLocal" />
-        </div>
-        <div class="editor-field">
-          <label class="editor-label" for="routine-endat">Active until (optional)</label>
-          <input id="routine-endat" class="mj-input" type="datetime-local" [(ngModel)]="EndAtLocal" />
-        </div>
-      </div>
     </section>
 
-    <!-- ======================= Notifications ======================= -->
-    <section class="editor-section">
-      <h3 class="editor-section-title"><i class="fa-solid fa-bell"></i> Notifications</h3>
+    <!-- ═══════════ ADVANCED (progressive disclosure — collapsed by default) ═══════════ -->
+    <button type="button" class="editor-advanced-toggle" (click)="ShowAdvanced = !ShowAdvanced"
+      [attr.aria-expanded]="ShowAdvanced">
+      <i class="fa-solid" [class.fa-chevron-right]="!ShowAdvanced" [class.fa-chevron-down]="ShowAdvanced"></i>
+      Advanced options
+      <span class="editor-hint-inline">description · monitoring · timezone · window · payload · skills · notifications</span>
+    </button>
 
-      <div class="editor-field">
-        <label class="editor-label">Notify me</label>
-        <mj-dropdown [Data]="NotifyConditionOptions" TextField="text" ValueField="value"
-          [ValuePrimitive]="true" [(ngModel)]="NotifyCondition"></mj-dropdown>
-      </div>
-
-      <div class="editor-field editor-field--inline editor-switches">
-        <mj-switch [(ngModel)]="NotifyViaInApp" OnLabel="In-app" OffLabel="In-app"></mj-switch>
-        <mj-switch [(ngModel)]="NotifyViaEmail" OnLabel="Email" OffLabel="Email"></mj-switch>
-      </div>
-
-      <div class="editor-field">
-        <div class="editor-recipients-header">
-          <label class="editor-label">Additional recipients</label>
-          <button mjButton variant="outline" size="sm" (click)="AddRecipient()">
-            <i class="fa-solid fa-plus"></i> Add recipient
-          </button>
+    @if (ShowAdvanced) {
+      <section class="editor-section">
+        <h3 class="editor-section-title"><i class="fa-solid fa-circle-info"></i> Details</h3>
+        <div class="editor-field">
+          <label class="editor-label" for="routine-description">Description</label>
+          <textarea id="routine-description" class="mj-textarea" rows="2" [(ngModel)]="Description"
+            placeholder="What does this routine do?"></textarea>
         </div>
-        @if (Recipients.length === 0) {
-          <div class="editor-hint">Only you (the owner) will be notified.</div>
-        }
-        @for (row of Recipients; track $index; let i = $index; let first = $first; let last = $last) {
-          <div class="editor-recipient-row">
-            <div class="editor-recipient-order">
-              <button mjButton variant="icon" size="sm" title="Move up" [disabled]="first" (click)="MoveRecipient(i, -1)">
-                <i class="fa-solid fa-chevron-up"></i>
-              </button>
-              <button mjButton variant="icon" size="sm" title="Move down" [disabled]="last" (click)="MoveRecipient(i, 1)">
-                <i class="fa-solid fa-chevron-down"></i>
-              </button>
-            </div>
-            <mj-dropdown class="editor-recipient-mode" [Data]="RecipientModeOptions" TextField="text" ValueField="value"
-              [ValuePrimitive]="true" [(ngModel)]="row.Mode" (ngModelChange)="OnRecipientModeChange(row)"></mj-dropdown>
-            @if (row.Mode === 'user') {
-              <mj-combobox class="editor-recipient-target" [Data]="UserOptions" TextField="Name" ValueField="ID"
-                [ValuePrimitive]="true" Placeholder="Select a user..." [(ngModel)]="row.UserID"></mj-combobox>
-            } @else {
-              <input class="mj-input editor-recipient-target" type="email" placeholder="name@example.com" [(ngModel)]="row.Email" />
-            }
-            <mj-dropdown class="editor-recipient-channel" [Data]="ChannelOptions" TextField="text" ValueField="value"
-              [ValuePrimitive]="true" [(ngModel)]="row.Channel"></mj-dropdown>
-            <button mjButton variant="icon" size="sm" title="Remove recipient" (click)="RemoveRecipient(i)">
-              <i class="fa-solid fa-trash-can"></i>
+
+        <div class="editor-field">
+          <label class="editor-label">Routine type</label>
+          <div class="editor-segmented" role="radiogroup" aria-label="Routine type">
+            <button type="button" class="editor-segment"
+              [class.editor-segment--active]="RoutineType === 'Scheduled'"
+              (click)="RoutineType = 'Scheduled'">
+              <i class="fa-solid fa-clock"></i> Scheduled
+            </button>
+            <button type="button" class="editor-segment"
+              [class.editor-segment--active]="RoutineType === 'Monitoring'"
+              (click)="RoutineType = 'Monitoring'">
+              <i class="fa-solid fa-eye"></i> Monitoring
             </button>
           </div>
+          <div class="editor-hint">{{ RoutineTypeHelp }}</div>
+        </div>
+
+        <div class="editor-field">
+          <label class="editor-label">Timezone</label>
+          <mj-combobox
+            [Data]="TimezoneOptions"
+            [ValuePrimitive]="true"
+            Placeholder="Select an IANA timezone..."
+            [(ngModel)]="Timezone">
+          </mj-combobox>
+        </div>
+
+        <div class="editor-field-row">
+          <div class="editor-field">
+            <label class="editor-label" for="routine-startat">Active from (optional)</label>
+            <input id="routine-startat" class="mj-input" type="datetime-local" [(ngModel)]="StartAtLocal" />
+          </div>
+          <div class="editor-field">
+            <label class="editor-label" for="routine-endat">Active until (optional)</label>
+            <input id="routine-endat" class="mj-input" type="datetime-local" [(ngModel)]="EndAtLocal" />
+          </div>
+        </div>
+
+        <div class="editor-field">
+          <label class="editor-label">Starting payload (JSON, optional)</label>
+          <div class="editor-code">
+            <mj-code-editor [(ngModel)]="StartingPayloadText" language="json"
+              placeholder='{ "example": true }'></mj-code-editor>
+          </div>
+          <div class="editor-hint">Passed to the agent on each run. Leave blank for none.</div>
+        </div>
+
+        @if (SkillOptions.length > 0) {
+          <div class="editor-field">
+            <label class="editor-label">Pre-activate skills (optional)</label>
+            <div class="editor-skills">
+              @for (skill of SkillOptions; track skill.ID) {
+                <button type="button" class="editor-skill-chip"
+                  [class.editor-skill-chip--selected]="IsSkillSelected(skill.ID)"
+                  [title]="skill.Description ?? skill.Name"
+                  (click)="ToggleSkill(skill.ID)">
+                  <i [class]="skill.IconClass || 'fa-solid fa-wand-magic-sparkles'"></i>
+                  {{ skill.Name }}
+                  @if (IsSkillSelected(skill.ID)) {
+                    <i class="fa-solid fa-check editor-skill-check"></i>
+                  }
+                </button>
+              }
+            </div>
+            <div class="editor-hint">Selected skills start every run with their instructions and tools in effect (subject to the agent's skill gates).</div>
+          </div>
         }
-      </div>
-    </section>
+      </section>
+
+      <section class="editor-section">
+        <h3 class="editor-section-title"><i class="fa-solid fa-bell"></i> Notifications</h3>
+
+        <div class="editor-field">
+          <label class="editor-label">Notify me</label>
+          <mj-dropdown [Data]="NotifyConditionOptions" TextField="text" ValueField="value"
+            [ValuePrimitive]="true" [(ngModel)]="NotifyCondition"></mj-dropdown>
+        </div>
+
+        <div class="editor-field editor-field--inline editor-switches">
+          <mj-switch [(ngModel)]="NotifyViaInApp" OnLabel="In-app" OffLabel="In-app"></mj-switch>
+          <mj-switch [(ngModel)]="NotifyViaEmail" OnLabel="Email" OffLabel="Email"></mj-switch>
+        </div>
+
+        <div class="editor-field">
+          <div class="editor-recipients-header">
+            <label class="editor-label">Additional recipients</label>
+            <button mjButton variant="outline" size="sm" (click)="AddRecipient()">
+              <i class="fa-solid fa-plus"></i> Add recipient
+            </button>
+          </div>
+          @if (Recipients.length === 0) {
+            <div class="editor-hint">Only you (the owner) will be notified.</div>
+          }
+          @for (row of Recipients; track $index; let i = $index; let first = $first; let last = $last) {
+            <div class="editor-recipient-row">
+              <div class="editor-recipient-order">
+                <button mjButton variant="icon" size="sm" title="Move up" [disabled]="first" (click)="MoveRecipient(i, -1)">
+                  <i class="fa-solid fa-chevron-up"></i>
+                </button>
+                <button mjButton variant="icon" size="sm" title="Move down" [disabled]="last" (click)="MoveRecipient(i, 1)">
+                  <i class="fa-solid fa-chevron-down"></i>
+                </button>
+              </div>
+              <mj-dropdown class="editor-recipient-mode" [Data]="RecipientModeOptions" TextField="text" ValueField="value"
+                [ValuePrimitive]="true" [(ngModel)]="row.Mode" (ngModelChange)="OnRecipientModeChange(row)"></mj-dropdown>
+              @if (row.Mode === 'user') {
+                <mj-combobox class="editor-recipient-target" [Data]="UserOptions" TextField="Name" ValueField="ID"
+                  [ValuePrimitive]="true" Placeholder="Select a user..." [(ngModel)]="row.UserID"></mj-combobox>
+              } @else {
+                <input class="mj-input editor-recipient-target" type="email" placeholder="name@example.com" [(ngModel)]="row.Email" />
+              }
+              <mj-dropdown class="editor-recipient-channel" [Data]="ChannelOptions" TextField="text" ValueField="value"
+                [ValuePrimitive]="true" [(ngModel)]="row.Channel"></mj-dropdown>
+              <button mjButton variant="icon" size="sm" title="Remove recipient" (click)="RemoveRecipient(i)">
+                <i class="fa-solid fa-trash-can"></i>
+              </button>
+            </div>
+          }
+        </div>
+      </section>
+    }
 
     <!-- ======================= Footer (confirm LEFT, cancel RIGHT) ======================= -->
     <div class="editor-footer">

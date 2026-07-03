@@ -31,7 +31,14 @@ export class MessageInputBoxComponent {
   @Input() disabled: boolean = false;
   @Input() value: string = '';
   @Input() showCharacterCount: boolean = false;
+  /** Master switch for all mention/command triggers (pass-through to the mention editor). */
   @Input() enableMentions: boolean = true;
+  /** Enables the '@' trigger (agent/user mentions) — pass-through to the mention editor. */
+  @Input() enableAgentMentions: boolean = true;
+  /** Enables the '#' trigger (entity + query mentions) — pass-through to the mention editor. */
+  @Input() enableEntityMentions: boolean = true;
+  /** Enables the '/' trigger (skill commands) — pass-through to the mention editor. */
+  @Input() enableSkillCommands: boolean = true;
   @Input() currentUser?: UserInfo;
   @Input() rows: number = 3;
 

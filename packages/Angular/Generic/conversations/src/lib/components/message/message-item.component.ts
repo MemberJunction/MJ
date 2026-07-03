@@ -21,7 +21,7 @@ import { FormResponseUtils } from '@memberjunction/ng-forms';
 import { MentionParserService } from '../../services/mention-parser.service';
 import { PlanModePreference } from '../../utils/plan-mode-preference';
 import { MarkdownService } from '@memberjunction/ng-markdown';
-import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
+import { MentionAutocompleteService } from '@memberjunction/ng-composer';
 import { UICommandHandlerService } from '../../services/ui-command-handler.service';
 import { ConversationAgentService } from '../../services/conversation-agent.service';
 import {

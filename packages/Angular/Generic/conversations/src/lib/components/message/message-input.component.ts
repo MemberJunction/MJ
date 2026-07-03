@@ -15,12 +15,11 @@ import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-da
 import { GenerateAndApplyConversationName } from '../../services/conversation-naming';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { ExecuteAgentResult, AgentExecutionProgressCallback, AgentResponseForm, ActionableCommand, AutomaticCommand, ConversationUtility } from '@memberjunction/ai-core-plus';
-import { MentionAutocompleteService, MentionSuggestion } from '../../services/mention-autocomplete.service';
+import { MentionAutocompleteService, MentionSuggestion, PendingAttachment, MessageInputBoxComponent } from '@memberjunction/ng-composer';
 import { MentionParserService } from '../../services/mention-parser.service';
 import { ConversationAttachmentService } from '../../services/conversation-attachment.service';
 import { Mention, MentionParseResult } from '../../models/conversation-state.model';
 import { PlanModePreference } from '../../utils/plan-mode-preference';
-import { PendingAttachment } from '../mention/mention-editor.component';
 import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ConversationBridgeService } from '../../services/conversation-bridge.service';
@@ -33,7 +32,6 @@ import {
   PairingsAllowTarget
 } from '../../services/realtime-pairing';
 import { Subscription } from 'rxjs';
-import { MessageInputBoxComponent } from './message-input-box.component';
 import { UUIDsEqual, CleanAndParseJSON } from '@memberjunction/global';
 
 @Component({

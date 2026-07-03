@@ -708,7 +708,9 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
             if (!template) {
                 return fallback;
             }
-            const content = template.GetHighestPriorityContent();
+            // In-app messages prefer the compact Text (Markdown) body when the template
+            // provides one — the HTML body is email-styled and belongs to the email channel.
+            const content = template.GetHighestPriorityContent('Text') ?? template.GetHighestPriorityContent();
             if (!content) {
                 return fallback;
             }

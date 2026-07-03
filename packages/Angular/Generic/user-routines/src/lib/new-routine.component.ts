@@ -130,6 +130,13 @@ export class NewRoutineComponent extends BaseAngularComponent implements OnInit 
     // ---------------------------------------------------------------
     // Options / status
     // ---------------------------------------------------------------
+    /**
+     * Progressive disclosure: the basic view (name / agent / message / frequency)
+     * covers the 80% path; everything else lives behind this toggle. Auto-expands
+     * when editing a routine that already uses advanced settings.
+     */
+    public ShowAdvanced = false;
+
     public Catalog: RoutineTargetCatalog | null = null;
     public UserOptions: UserOption[] = [];
     public TimezoneOptions: string[] = GetTimezoneOptions();
@@ -397,6 +404,21 @@ export class NewRoutineComponent extends BaseAngularComponent implements OnInit 
         return UserRoutineEngine.GetProviderInstance<UserRoutineEngine>(this.ProviderToUse, UserRoutineEngine) as UserRoutineEngine;
     }
 
+    /** True when the loaded routine differs from the basic-path defaults in any advanced field. */
+    private usesAdvancedSettings(): boolean {
+        return this.Description.trim().length > 0
+            || this.RoutineType === 'Monitoring'
+            || this.StartingPayloadText.trim().length > 0
+            || this.SelectedSkillIDs.length > 0
+            || this.Timezone !== GetLocalTimezone()
+            || this.StartAtLocal.trim().length > 0
+            || this.EndAtLocal.trim().length > 0
+            || this.NotifyCondition !== 'Always'
+            || !this.NotifyViaInApp
+            || this.NotifyViaEmail
+            || this.Recipients.length > 0;
+    }
+
     private async reload(): Promise<void> {
         this.IsLoading = true;
         this.ValidationErrors = [];
@@ -412,8 +434,10 @@ export class NewRoutineComponent extends BaseAngularComponent implements OnInit 
             this.buildAgentTreeConfig(p);
             if (this._routineID) {
                 await this.loadExisting(this._routineID);
+                this.ShowAdvanced = this.usesAdvancedSettings();
             } else {
                 this.resetForNew();
+                this.ShowAdvanced = false;
             }
             if (this.Recipients.some((r) => r.Mode === 'user')) {
                 await this.ensureUserOptions();
