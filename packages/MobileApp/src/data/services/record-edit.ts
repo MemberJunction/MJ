@@ -349,6 +349,11 @@ export async function loadRecordForEdit(
 /** Apply the edited form values back onto the live entity via `Set`. */
 function applyEdits(load: RecordEditLoad, values: Record<string, FieldValue>): void {
     for (const d of load.descriptors) {
+        // Only write fields the user actually changed (compare against the initial
+        // load values, mirroring buildOfflineChanges). Re-setting every editable
+        // field marks untouched fields dirty and can round-trip a value into a form
+        // the entity rejects at Validate()/Save() time — which silently blocked saves.
+        if (values[d.key] === load.values[d.key]) continue;
         load.record.Set(d.key, entityValueFromForm(values[d.key], d.kind));
     }
 }
