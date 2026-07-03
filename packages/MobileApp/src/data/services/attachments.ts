@@ -283,7 +283,7 @@ export async function persistAttachment(
     att: CapturedAttachment,
     contextUser?: UserInfo,
 ): Promise<{ id: string } | null> {
-    const md = new Metadata();
+    const md = new Metadata();  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
     const currentUser = contextUser ?? md.CurrentUser;
 
     const providerId = await resolveActiveStorageProviderId(currentUser);

@@ -107,7 +107,7 @@ export async function sendMessage(args: {
     contextUser?: UserInfo;
 }): Promise<SendResult> {
     const { conversationId, text, agentId, onProgress, contextUser } = args;
-    const md = new Metadata();
+    const md = new Metadata();  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
     const currentUser = contextUser ?? md.CurrentUser;
 
     // 1. Create + save the user message
@@ -236,7 +236,7 @@ export async function createConversation(
     name: string,
     contextUser?: UserInfo,
 ): Promise<{ id: string } | null> {
-    const md = new Metadata();
+    const md = new Metadata();  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
     const currentUser = contextUser ?? md.CurrentUser;
     const conv = await md.GetEntityObject<MJConversationEntity>('MJ: Conversations', currentUser);
     conv.NewRecord();

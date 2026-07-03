@@ -115,7 +115,7 @@ export async function getExpoPushToken(): Promise<string | null> {
  * @returns `true` when the token was saved.
  */
 export async function registerDeviceToken(token: string, contextUser?: UserInfo): Promise<boolean> {
-    const md = new Metadata();
+    const md = new Metadata();  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
     const currentUser = contextUser ?? md.CurrentUser;
     if (!currentUser?.ID) {
         console.warn('[notifications] no current user; cannot register device token');
@@ -145,7 +145,7 @@ export async function unregisterDeviceToken(contextUser?: UserInfo): Promise<boo
     } catch (e) {
         console.log('[notifications] unregisterForNotificationsAsync no-op:', errText(e));
     }
-    const md = new Metadata();
+    const md = new Metadata();  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
     const currentUser = contextUser ?? md.CurrentUser;
     if (!currentUser?.ID) return true;
     const existing = await loadTokenSetting(currentUser);

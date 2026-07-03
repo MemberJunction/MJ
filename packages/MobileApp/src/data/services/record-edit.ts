@@ -324,7 +324,7 @@ export async function loadRecordForEdit(
     recordId: string,
     contextUser?: UserInfo,
 ): Promise<RecordEditLoad | null> {
-    const md = new Metadata();
+    const md = new Metadata();  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
     const entity = md.EntityByName(entityName);
     if (!entity) return null;
 

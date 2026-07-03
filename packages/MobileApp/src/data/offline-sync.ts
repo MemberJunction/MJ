@@ -82,7 +82,7 @@ type EntryOutcome = 'synced' | 'dropped' | 'offline';
  */
 async function replayEntry(entry: OfflineMutation): Promise<EntryOutcome> {
     try {
-        const record = await loadTarget(new Metadata(), entry);
+        const record = await loadTarget(new Metadata(), entry);  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
         if (!record) {
             // The row is gone (deleted since queuing) — nothing to replay against.
             console.error(`[offline-sync] dropping ${entry.entityName} ${entry.primaryKey}: record not found`);
