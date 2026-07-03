@@ -2123,22 +2123,27 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     continue;
                 }
 
+                // Read-permission gate for EVERY entity (external + local) up front. This must run before
+                // the external routing below: external entities are served from the server cache on a hit
+                // WITHOUT re-entering InternalRunView, so if the CanRead check only lived on the cache-miss
+                // path a user lacking permission could receive rows another user warmed into the cache.
+                try {
+                    this.CheckUserReadPermissions(entityInfo.Name, user);
+                } catch (e) {
+                    errorResults.push({ viewIndex: i, status: 'error', errorMessage: e instanceof Error ? e.message : String(e) });
+                    continue;
+                }
+
                 // External-data-source entities can't participate in DB-side cache validation
                 // (no MJ base view / __mj_UpdatedAt to COUNT/MAX against). Route them to the
                 // standard execution path, which dispatches to the external driver and TTL-caches
-                // correctly via runFullQueryAndCacheResult (permissions are still enforced there
-                // by InternalRunView). Mirrors the AfterKey bypass above.
+                // correctly via runFullQueryAndCacheResult. Mirrors the AfterKey bypass above.
                 if (entityInfo.ExternalDataSourceID) {
                     itemsWithoutCacheCheck.push({ index: i, item });
                     continue;
                 }
 
-                try {
-                    this.CheckUserReadPermissions(entityInfo.Name, user);
-                    itemsNeedingValidation.push({ index: i, item, entityInfo });
-                } catch (e) {
-                    errorResults.push({ viewIndex: i, status: 'error', errorMessage: e instanceof Error ? e.message : String(e) });
-                }
+                itemsNeedingValidation.push({ index: i, item, entityInfo });
             }
 
             // Phase 1: Check server's LocalCacheManager first (zero DB hits)
@@ -3315,14 +3320,23 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
         const externalResult = await router.RunQueryExternal(externalDataSourceID, query.ID, query.Name, finalSQL, params, contextUser, this);
         const checked = this.warnIfExternalQueryFieldsMissing(query, externalResult);
+        if (!checked.Success) {
+            return checked;
+        }
 
-        if (cacheable && fingerprint && checked.Success) {
+        // The external router returns the FULL result set (drivers don't apply Query paging), so honor
+        // StartRow/MaxRows here in-memory — otherwise every "page" returned the entire set (StartRow was
+        // silently ignored). The fingerprint already varies by __startRow/__maxRows, so we cache the
+        // per-page slice; TotalRowCount carries the full count.
+        const { paginatedResult, totalRowCount } = this.applyQueryPagination(checked.Results as Record<string, unknown>[], params);
+
+        if (cacheable && fingerprint) {
             // Fire-and-forget store with the data source's TTL (ms).
             LocalCacheManager.Instance.SetRunQueryResult(
-                fingerprint, query.Name, checked.Results, '', checked.TotalRowCount, query.ID, ttlSeconds * 1000,
+                fingerprint, query.Name, paginatedResult, '', totalRowCount, query.ID, ttlSeconds * 1000,
             ).catch(e => LogError(`External RunQuery cache write failed: ${e}`));
         }
-        return checked;
+        return { ...checked, Results: paginatedResult as RunQueryResult['Results'], RowCount: paginatedResult.length, TotalRowCount: totalRowCount };
     }
 
     protected warnIfExternalQueryFieldsMissing(query: MJQueryEntityExtended, result: RunQueryResult): RunQueryResult {
@@ -3699,6 +3713,16 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
                     const relEntityInfo = this.EntityByName(relInfo.RelatedEntity);
                     if (!relEntityInfo) continue;
+
+                    // The related entity may itself be external-data-source-backed (no local base view to
+                    // query). Running the SELECT below against the local DB would fail (view doesn't exist)
+                    // and abort the whole parent-record load. Loading external relationships isn't supported
+                    // in this pass, so skip with a warning rather than throw. (Consistent with external
+                    // records not auto-loading their own relationships.)
+                    if (relEntityInfo.ExternalDataSourceID) {
+                        LogStatus(`[GenericDatabaseProvider] Skipping relationship '${rel}' on '${entityInfo.Name}': related entity '${relEntityInfo.Name}' is external-data-source-backed (relationship loading not supported for external entities).`);
+                        continue;
+                    }
 
                     const quotes = entity.FirstPrimaryKey.NeedsQuotes ? "'" : '';
                     const pkValue = ret[entity.FirstPrimaryKey.Name];
