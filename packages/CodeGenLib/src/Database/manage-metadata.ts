@@ -1809,17 +1809,40 @@ export class ManageMetadataBase {
       }
    }
 
+   /**
+    * Desired PK/Unique flags for a virtual/external entity field. IsPrimaryKey mirrors makePrimaryKey;
+    * IsUnique is true ONLY for a SINGLE-column PK — a column of a COMPOSITE key is not unique on its own,
+    * so composite-key columns get IsUnique=false (M4). Pure function so the rule is unit-tested.
+    */
+   protected resolvePrimaryKeyFlags(makePrimaryKey: boolean, singleColumnPrimaryKey: boolean): { wantPrimaryKey: boolean; wantUnique: boolean } {
+      return { wantPrimaryKey: makePrimaryKey, wantUnique: makePrimaryKey && singleColumnPrimaryKey };
+   }
+
+   /**
+    * Whether a field's PK/Unique flags need to change. In RECONCILE mode (external entities, whose
+    * introspected PK set is authoritative across ALL fields) we sync in BOTH directions — setting the
+    * flags when a column becomes a PK AND clearing them when it stops being one (H5: otherwise a stale PK
+    * column keeps IsPrimaryKey=1 when the remote PK moves, yielding duplicate PKs). In NON-reconcile mode
+    * (virtual entities, where makePrimaryKey is a one-time first-column bootstrap, not authoritative) we
+    * only SET on acquisition and never clear — avoiding wiping a legitimately-configured PK, and avoiding
+    * a spurious UPDATE (+ __mj_UpdatedAt bump) every run when nothing changed. Pure function; unit-tested.
+    */
+   protected primaryKeyFlagsChanged(
+      current: { isPrimaryKey: boolean; isUnique: boolean },
+      want: { wantPrimaryKey: boolean; wantUnique: boolean },
+      makePrimaryKey: boolean,
+      reconcile: boolean,
+   ): boolean {
+      return reconcile
+         ? (current.isPrimaryKey !== want.wantPrimaryKey || current.isUnique !== want.wantUnique)
+         : (makePrimaryKey && !current.isPrimaryKey);
+   }
+
    protected async manageSingleVirtualEntityField(pool: CodeGenConnection, virtualEntity: any, veField: any, fieldSequence: number, makePrimaryKey: boolean, singleColumnPrimaryKey: boolean = true, reconcilePrimaryKey: boolean = false): Promise<{success: boolean, updatedField: boolean, newFieldID: string | null}> {
       // this protected checks to see if the field exists in the entity definition, and if not, adds it
       // if it exist it updates the entity field to match the view's data type and nullability attributes
 
-      // Desired PK/Unique flags for this field:
-      //  - IsPrimaryKey mirrors makePrimaryKey.
-      //  - IsUnique is true ONLY for a single-column PK. A column of a COMPOSITE key is not unique on its
-      //    own, so composite-key columns get IsUnique=false (M4). singleColumnPrimaryKey defaults true so
-      //    the virtual-entity caller (single first-column PK) keeps its prior behavior unchanged.
-      const wantPrimaryKey = makePrimaryKey;
-      const wantUnique = makePrimaryKey && singleColumnPrimaryKey;
+      const { wantPrimaryKey, wantUnique } = this.resolvePrimaryKeyFlags(makePrimaryKey, singleColumnPrimaryKey);
 
       // first, get the entity definition
       const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
@@ -1836,9 +1859,9 @@ export class ManageMetadataBase {
             // PKs). In NON-reconcile mode (virtual entities, where makePrimaryKey is a one-time first-column
             // bootstrap, not authoritative) we only SET on acquisition and never clear, to avoid wiping a
             // legitimately-configured PK — and we avoid re-UPDATING an unchanged row every run.
-            const pkFlagsChanged = reconcilePrimaryKey
-               ? (field.IsPrimaryKey !== wantPrimaryKey || field.IsUnique !== wantUnique)
-               : (makePrimaryKey && !field.IsPrimaryKey);
+            const pkFlagsChanged = this.primaryKeyFlagsChanged(
+               { isPrimaryKey: field.IsPrimaryKey, isUnique: field.IsUnique },
+               { wantPrimaryKey, wantUnique }, makePrimaryKey, reconcilePrimaryKey);
             if (pkFlagsChanged ||
                 field.Type.trim().toLowerCase() !== veField.Type.trim().toLowerCase() ||
                 field.Length !== veField.Length ||

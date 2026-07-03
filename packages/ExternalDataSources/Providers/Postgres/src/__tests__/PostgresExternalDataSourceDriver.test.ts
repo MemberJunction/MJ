@@ -40,6 +40,19 @@ class CachingTestDriver extends PostgresExternalDataSourceDriver {
       await (await p).end().catch(() => {});
     }
   }
+  // Expose the connection-identity guard surface (real shipped code) for the H1 race test.
+  public peek(id: string) {
+    return this.peekConnection(id);
+  }
+  public invalidate(id: string, expected?: unknown) {
+    return this.invalidateConnection(id, expected);
+  }
+  public setPool(id: string, pool: Promise<unknown>) {
+    (this as unknown as { pools: Map<string, unknown> }).pools.set(id, pool);
+  }
+  public poolFor(id: string) {
+    return (this as unknown as { pools: Map<string, unknown> }).pools.get(id);
+  }
 }
 
 const localSource = (id: string): MJExternalDataSourceEntity =>
@@ -194,5 +207,59 @@ describe('PostgresExternalDataSourceDriver — connection caching', () => {
     expect(res.success).toBe(false);
     expect(res.errorMessage).toMatch(/read-only/i);
     expect(driver.poolCount()).toBe(0); // screen threw before getConnection — nothing connected
+  });
+});
+
+describe('PostgresExternalDataSourceDriver — connection identity guard (H1 concurrency race)', () => {
+  // Fake pool with the pg `.end()` surface; records which pool ids were closed.
+  const makePool = (id: number, closed: number[]) =>
+    Promise.resolve({ id, end: async () => { closed.push(id); } }) as unknown as Promise<unknown>;
+
+  it('does NOT evict a pool a concurrent request already reconnected (deterministic race replay)', async () => {
+    const d = new CachingTestDriver();
+    const closed: number[] = [];
+    const p1 = makePool(1, closed);
+    const p2 = makePool(2, closed);
+    d.setPool('s', p1);
+
+    // Two concurrent reads both captured p1 as the connection they're operating on (peekConnection).
+    const identityA = d.peek('s');
+    const identityB = d.peek('s');
+    expect(identityA).toBe(p1);
+    expect(identityB).toBe(p1);
+
+    // Request A hits an auth error, evicts p1 (its identity still matches) and reconnects p2.
+    await d.invalidate('s', identityA);
+    expect(d.poolFor('s')).toBeUndefined();
+    d.setPool('s', p2);
+
+    // Request B's eviction fires LATE with the now-stale p1 identity — the guard must skip it,
+    // leaving the fresh p2 intact (without the guard, p2 would be wrongly closed -> reconnect churn).
+    await d.invalidate('s', identityB);
+    expect(d.poolFor('s')).toBe(p2);
+
+    await Promise.resolve();
+    expect(closed).toEqual([1]); // only the genuinely-stale p1 was closed; p2 survived
+  });
+
+  it('evicts unconditionally when no identity is supplied (explicit ClearCache / CloseConnection path)', async () => {
+    const d = new CachingTestDriver();
+    const closed: number[] = [];
+    d.setPool('s', makePool(1, closed));
+    await d.invalidate('s'); // no expectedIdentity
+    expect(d.poolFor('s')).toBeUndefined();
+    await Promise.resolve();
+    expect(closed).toEqual([1]);
+  });
+
+  it('evicts when the supplied identity still matches the cached pool', async () => {
+    const d = new CachingTestDriver();
+    const closed: number[] = [];
+    const p1 = makePool(1, closed);
+    d.setPool('s', p1);
+    await d.invalidate('s', p1);
+    expect(d.poolFor('s')).toBeUndefined();
+    await Promise.resolve();
+    expect(closed).toEqual([1]);
   });
 });

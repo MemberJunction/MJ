@@ -35,8 +35,16 @@ class TestExternalDriver extends BaseExternalDataSourceDriver<{ fake: true }> {
 
   /** Tracks invalidateConnection calls so tests can assert self-heal behavior. */
   public invalidateCalls: string[] = [];
-  protected async invalidateConnection(dataSourceId: string): Promise<void> {
+  /** Records the (id, expectedIdentity) pairs so tests can assert the identity guard is threaded through. */
+  public invalidateArgs: Array<{ id: string; expected: unknown }> = [];
+  /** Optional stub identity returned by peekConnection so we can assert withConnectionRetry forwards it. */
+  public peekIdentity: unknown = undefined;
+  protected peekConnection(_dataSourceId: string): unknown {
+    return this.peekIdentity;
+  }
+  protected async invalidateConnection(dataSourceId: string, expectedIdentity?: unknown): Promise<void> {
     this.invalidateCalls.push(dataSourceId);
+    this.invalidateArgs.push({ id: dataSourceId, expected: expectedIdentity });
   }
 
   // Public passthroughs to the protected helpers under test.
@@ -176,6 +184,16 @@ describe('BaseExternalDataSourceDriver', () => {
         .rejects.toThrow(/authentication failed/);
       expect(calls).toBe(2); // original attempt + exactly one retry
       expect(d.invalidateCalls).toEqual(['ds-1']);
+    });
+
+    it('forwards the peekConnection identity to invalidateConnection (H1 identity guard)', async () => {
+      const d = new TestExternalDriver();
+      const sentinel = { pool: 'the-one-that-failed' };
+      d.peekIdentity = sentinel; // stand-in for the cached connection the op is about to use
+      await d.exposeWithConnectionRetry(ds, async () => { throw new Error('authentication failed'); }).catch(() => {});
+      // The eviction must target the SAME connection identity the failing op observed, so a concurrent
+      // request's fresh reconnect isn't wrongly evicted.
+      expect(d.invalidateArgs).toEqual([{ id: 'ds-1', expected: sentinel }]);
     });
   });
 

@@ -15,6 +15,17 @@ class TestableManageMetadata extends ManageMetadataBase {
   public removeSQL(schema: string, existing: Array<{ ID: string; Name: string }>, introspected: string[]): string {
     return this.buildExternalFieldRemoveSQL(schema, existing, introspected);
   }
+  public wantFlags(makePrimaryKey: boolean, singleColumnPrimaryKey: boolean) {
+    return this.resolvePrimaryKeyFlags(makePrimaryKey, singleColumnPrimaryKey);
+  }
+  public flagsChanged(
+    current: { isPrimaryKey: boolean; isUnique: boolean },
+    want: { wantPrimaryKey: boolean; wantUnique: boolean },
+    makePrimaryKey: boolean,
+    reconcile: boolean,
+  ) {
+    return this.primaryKeyFlagsChanged(current, want, makePrimaryKey, reconcile);
+  }
 }
 
 describe('External-entity field sync — data-loss guards', () => {
@@ -70,6 +81,54 @@ describe('External-entity field sync — data-loss guards', () => {
       expect(sql).toContain("'ccc'");
       // ...which is why the guard short-circuits this path before it can run:
       expect(mm.isSyncable({ Columns: [] })).toBe(false);
+    });
+  });
+
+  describe('resolvePrimaryKeyFlags (composite-PK IsUnique, M4)', () => {
+    it('a single-column PK is both primary key and unique', () => {
+      expect(mm.wantFlags(true, true)).toEqual({ wantPrimaryKey: true, wantUnique: true });
+    });
+    it('a COMPOSITE-PK column is a primary key but NOT unique on its own (M4)', () => {
+      expect(mm.wantFlags(true, false)).toEqual({ wantPrimaryKey: true, wantUnique: false });
+    });
+    it('a non-PK column is neither', () => {
+      expect(mm.wantFlags(false, true)).toEqual({ wantPrimaryKey: false, wantUnique: false });
+      expect(mm.wantFlags(false, false)).toEqual({ wantPrimaryKey: false, wantUnique: false });
+    });
+  });
+
+  describe('primaryKeyFlagsChanged (H5 clear-then-set vs. no-churn)', () => {
+    const singlePk = { wantPrimaryKey: true, wantUnique: true };
+    const notPk = { wantPrimaryKey: false, wantUnique: false };
+    const compositePk = { wantPrimaryKey: true, wantUnique: false };
+
+    describe('reconcile mode (external — introspection authoritative)', () => {
+      it('acquires a PK: not-PK column that should become PK → change', () => {
+        expect(mm.flagsChanged({ isPrimaryKey: false, isUnique: false }, singlePk, true, true)).toBe(true);
+      });
+      it('CLEARS a stale PK: was PK but no longer should be → change (H5)', () => {
+        expect(mm.flagsChanged({ isPrimaryKey: true, isUnique: true }, notPk, false, true)).toBe(true);
+      });
+      it('corrects a composite column wrongly left IsUnique=true by the old code → change (M4 backfill)', () => {
+        expect(mm.flagsChanged({ isPrimaryKey: true, isUnique: true }, compositePk, true, true)).toBe(true);
+      });
+      it('no-op when the flags already match (no churn)', () => {
+        expect(mm.flagsChanged({ isPrimaryKey: true, isUnique: true }, singlePk, true, true)).toBe(false);
+        expect(mm.flagsChanged({ isPrimaryKey: true, isUnique: false }, compositePk, true, true)).toBe(false);
+        expect(mm.flagsChanged({ isPrimaryKey: false, isUnique: false }, notPk, false, true)).toBe(false);
+      });
+    });
+
+    describe('non-reconcile mode (virtual — one-time bootstrap, never clears)', () => {
+      it('sets a PK only on acquisition', () => {
+        expect(mm.flagsChanged({ isPrimaryKey: false, isUnique: false }, singlePk, true, false)).toBe(true);
+      });
+      it('NEVER clears an already-set PK, even when makePrimaryKey is false (protects configured PKs)', () => {
+        expect(mm.flagsChanged({ isPrimaryKey: true, isUnique: true }, notPk, false, false)).toBe(false);
+      });
+      it('does not re-update a column that is already the PK (no churn)', () => {
+        expect(mm.flagsChanged({ isPrimaryKey: true, isUnique: true }, singlePk, true, false)).toBe(false);
+      });
     });
   });
 });
