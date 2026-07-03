@@ -837,10 +837,16 @@ const tierNum = (t) => {
     return m ? parseInt(m[1], 10) : -1;
 };
 if (manifest.e2eTier) {
-    const required = tierNum(manifest.e2eTier);
+    // T8 is the LIVE read-only rung — credential-required. On a credential-free run the achievable
+    // ceiling is T7 (the highest NON-live rung); requiring T8 there is unsatisfiable-by-construction
+    // (a false negative), not a connector defect. When no credential is reachable (neither an opaque
+    // credentialReference NOR a read-only broker plan), cap the required tier at 7. Credentialed runs
+    // are unaffected (still require the full manifest tier).
+    const hasCreds = !!journal.credentialReference || (Array.isArray(journal.brokerPlans) && journal.brokerPlans.length > 0);
+    const required = hasCreds ? tierNum(manifest.e2eTier) : Math.min(tierNum(manifest.e2eTier), 7);
     const achieved = tierNum(ladder.achievedTier);
     if (required >= 0 && achieved < required) {
-        failures.push({ rule: 'e2e-tier-met', detail: `manifest.e2eTier=${manifest.e2eTier} but ladder achievedTier=${ladder.achievedTier ?? 'none'}` });
+        failures.push({ rule: 'e2e-tier-met', detail: `manifest.e2eTier=${manifest.e2eTier}${hasCreds ? '' : ` (capped to T${required} — credential-free ceiling; T8 is live-only)`} but ladder achievedTier=${ladder.achievedTier ?? 'none'}` });
     }
 }
 
@@ -908,7 +914,16 @@ if (!probe) {
 // P5 `capability-dishonest`: the brand study's WriteCapability is BINDING. A vendor whose study says
 // read-write/bidirectional with ZERO write-capable IOs emitted needs an explicit, evidenced scope
 // decision — never a silent pull-only ship (GZ #30: bidirectional vendor shipped read-only, green).
-const brandWrite = (journal.brand && journal.brand.WriteCapability) || null;
+const brandWriteRaw = (journal.brand && journal.brand.WriteCapability) || null;
+// WriteCapability arrives as EITHER a bare string OR an object { capability, notes } (the
+// vendor-brand-researcher schema). `String({...})` yields "[object Object]" — which never matches
+// the regex, silently killing this gate corpus-wide. Normalize to the capability string: read the
+// object's `capability`/`Capability` field; fall back to '' (gate stays off, safe) rather than
+// scanning `notes` free-text (which could false-positive on "not bidirectional"). A bare string
+// passes through unchanged, so no regression for plans that already emit a string.
+const brandWrite = brandWriteRaw && typeof brandWriteRaw === 'object'
+    ? String(brandWriteRaw.capability ?? brandWriteRaw.Capability ?? '')
+    : brandWriteRaw;
 if (brandWrite && /read-write|bidirectional/i.test(String(brandWrite))) {
     const writeIOs = Number.isInteger(journal.writeCapableIOCount) ? journal.writeCapableIOCount : null;
     const scopedOut = !!(journal.outOfScopeFamilies && JSON.stringify(journal.outOfScopeFamilies).match(/write/i)) || !!journal.writeScopeDecision;

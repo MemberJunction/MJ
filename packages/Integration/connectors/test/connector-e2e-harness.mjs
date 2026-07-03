@@ -366,15 +366,20 @@ export async function phaseWatermark({ gql, mock, ciid, maps, cfg }) {
     const reqs = mock.getRequests();
     // Connector-agnostic watermark-filter detection. Cover the dialects MJ connectors actually emit:
     //   • HubSpot REST   — `<field>_since=` / `?since=` / `modifiedsince=`
+    //   • Eventbrite REST — `changed_since=` (the vendor watermark param prefix is `changed`, not
+    //     one of the four originally hard-listed — so the alternation is now ANY `<field>_since=`)
     //   • iMIS / generic — `<field>=gt:<ts>` / `=gte:` (also URL-encoded `=gt%3A`)
     //   • OData          — `$filter=...gt...` (encoded `%24filter=`)
     //   • SOQL (Salesforce / Fonteva) — the watermark is INSIDE the `q=` param as a clause
     //     `WHERE <col> >= <datetime>` / `<col> > <datetime>` (URL-encoded `%3E%3D` / `%3E`). A
     //     SOQL connector that correctly server-side-filters on SystemModstamp would otherwise
     //     mis-fail C1, because its watermark is not a discrete `_since=`/`$filter=` query param.
-    // The original regex was REST-only; this generalizes it so any genuine server-side watermark
-    // filter — whatever the query dialect — is recognized. (Same class as the iMIS/OData fix.)
-    const SINCE = /(updated|created|deleted|modified)_since=|[?&]since=|=gte?[:%]|%24filter=|\$filter=|[?&](modifiedsince|updatedsince|since)=|(modstamp|modifieddate|createddate|lastmodified|systemmodstamp)(%20|\+|\s)*(%3e|>)(%3d|=)?(%20|\+|\s)*\d{4}/i;
+    // The original regex hard-listed four field-name prefixes (updated|created|deleted|modified),
+    // which silently mis-failed any vendor whose watermark param uses a different prefix (Eventbrite's
+    // `changed_since`). The `_since=` suffix is itself the unambiguous watermark tell, so match ANY
+    // `<field>_since=` — this generalizes it so any genuine server-side watermark filter — whatever the
+    // field name or query dialect — is recognized. (Same class as the iMIS/OData fix.)
+    const SINCE = /[a-z][a-z_]*_since=|[?&]since=|=gte?[:%]|%24filter=|\$filter=|[?&](modifiedsince|updatedsince|since)=|(modstamp|modifieddate|createddate|lastmodified|systemmodstamp)(%20|\+|\s)*(%3e|>)(%3d|=)?(%20|\+|\s)*\d{4}/i;
     // Body-based watermark filters: POST /search connectors (e.g. Neon, many CRMs) carry the *_since
     // criterion in the request BODY (a searchFields/criteria operator + date), NOT the query string —
     // the same class as the SOQL-in-`q=` exception above. So inspect r.body too: a Neon-style
@@ -1063,24 +1068,38 @@ export async function phaseBidirectional({ gql, mock, verify, ciid, maps, cfg })
 
     if (!extID) return steps; // cannot read-back/update/delete an unidentifiable record — stop loudly
 
+    // A connector that declares no update/delete capability for this object (create-only — no
+    // Update/DeleteAPIPath) correctly REFUSES the op with "not supported". That is a legitimate SKIP,
+    // not a RED (conventions: phaseBidirectional gates update/delete on the object's capability). We
+    // detect the refusal from the connector's own message rather than re-querying capability here.
+    const notSupported = (res) => res?.Success !== true && /not supported/i.test(String(res?.Message ?? res?.ErrorMessage ?? ''));
+
     // UPDATE
     if (wrt.UpdateAttributes) {
         const upd = (await gql(E2E_GQL.writeRecord, { ciid, objectName, operation: 'update', externalID: extID, attributes: JSON.stringify(wrt.UpdateAttributes) })).IntegrationWriteRecord;
-        steps.push(step('bidirectional.update', upd?.Success === true, { externalID: extID, statusCode: upd?.StatusCode, message: upd?.Message }));
-        const reqs = mock.getRequests?.() ?? [];
-        const updReq = reqs.find((r) => /put|patch|post/i.test(r.method) && r.path.includes(String(extID)));
-        steps.push(step('bidirectional.update-shape', !!updReq, { method: updReq?.method, path: updReq?.path, note: 'update targeted the record path with the new attributes' }));
+        if (notSupported(upd)) {
+            steps.push(step('bidirectional.update', true, { externalID: extID, skipReason: `create-only object: connector declares no update capability for "${objectName}" — correctly refused (SKIP, not a defect)` }));
+        } else {
+            steps.push(step('bidirectional.update', upd?.Success === true, { externalID: extID, statusCode: upd?.StatusCode, message: upd?.Message }));
+            const reqs = mock.getRequests?.() ?? [];
+            const updReq = reqs.find((r) => /put|patch|post/i.test(r.method) && r.path.includes(String(extID)));
+            steps.push(step('bidirectional.update-shape', !!updReq, { method: updReq?.method, path: updReq?.path, note: 'update targeted the record path with the new attributes' }));
+        }
     }
 
     // DELETE
     const del = (await gql(E2E_GQL.writeRecord, { ciid, objectName, operation: 'delete', externalID: extID, attributes: null })).IntegrationWriteRecord;
-    steps.push(step('bidirectional.delete', del?.Success === true, { externalID: extID, statusCode: del?.StatusCode, message: del?.Message }));
-    const reqsFinal = mock.getRequests?.() ?? [];
-    const delReq = reqsFinal.find((r) => /delete|post|put/i.test(r.method) && r.path.includes(String(extID)) && (wrt.DeleteMethodMatch ? r.method.toUpperCase() === wrt.DeleteMethodMatch.toUpperCase() : true));
-    steps.push(step('bidirectional.delete-shape', !!delReq, {
-        method: delReq?.method, path: delReq?.path,
-        note: 'delete used the metadata-driven verb against the record path (DeleteMethod is not assumed DELETE)',
-    }));
+    if (notSupported(del)) {
+        steps.push(step('bidirectional.delete', true, { externalID: extID, skipReason: `create-only object: connector declares no delete capability for "${objectName}" — correctly refused (SKIP, not a defect)` }));
+    } else {
+        steps.push(step('bidirectional.delete', del?.Success === true, { externalID: extID, statusCode: del?.StatusCode, message: del?.Message }));
+        const reqsFinal = mock.getRequests?.() ?? [];
+        const delReq = reqsFinal.find((r) => /delete|post|put/i.test(r.method) && r.path.includes(String(extID)) && (wrt.DeleteMethodMatch ? r.method.toUpperCase() === wrt.DeleteMethodMatch.toUpperCase() : true));
+        steps.push(step('bidirectional.delete-shape', !!delReq, {
+            method: delReq?.method, path: delReq?.path,
+            note: 'delete used the metadata-driven verb against the record path (DeleteMethod is not assumed DELETE)',
+        }));
+    }
 
     // entityMap referenced only for symmetry / future read-back-via-sync; kept to avoid a silent drop of the link.
     if (entityMap) steps.push(step('bidirectional.map-linked', true, { entityMapID: entityMap.entityMapID, note: 'write object maps to a known entity (sync read-back path available)' }));
@@ -1371,6 +1390,13 @@ export async function runConnectorE2E({ gql, db, mock }, cfg, allowWrite) {
         // this is what turns "path-lms 1/1 green" (1 of 84 DEPLOYED) into a LOUD failure. The HARNESS, not
         // a human, refuses to call a thin fixture all-object. Computed before the gate (needs an await).
         let deployedObjectCount = 0, syncableObjectCount = 0;
+        // GET-BY-ID objects: an APIPath whose LAST non-empty segment is a `{template var}` (e.g.
+        // `/media/{media_id}/`) is a single-record fetch, NOT a list endpoint — the vendor exposes no
+        // way to ENUMERATE it (unlike `/events/{event_id}/ticket_classes/`, a collection under a parent).
+        // Such an object is structurally NOT list-syncable in ANY mode, so a 0-row result is legitimate,
+        // not a fixture gap. This is a narrow, honest carve-out (last segment must be a var) — it never
+        // exempts a real list object, so a thin fixture still can't hide behind it.
+        const getByIdObjects = new Set();
         try {
             const pg = cfg.platform === 'postgresql';
             const sch = cfg.mjSchema || '__mj';
@@ -1378,6 +1404,7 @@ export async function runConnectorE2E({ gql, db, mock }, cfg, allowWrite) {
             const IOFt = pg ? `"${sch}"."IntegrationObjectField"` : `[${sch}].[IntegrationObjectField]`;
             const idC = pg ? '"IntegrationID"' : 'IntegrationID', stC = pg ? '"Status"' : 'Status';
             const ioId = pg ? '"ID"' : 'ID', fIoId = pg ? '"IntegrationObjectID"' : 'IntegrationObjectID', pkC = pg ? '"IsPrimaryKey"' : 'IsPrimaryKey';
+            const nmC = pg ? '"Name"' : 'Name', apC = pg ? '"APIPath"' : 'APIPath';
             const pkTrue = pg ? 'true' : '1';
             const dr = await db.rows(`SELECT COUNT(*) AS c FROM ${IOt} WHERE ${idC}='${cfg.integrationID}' AND ${stC}='Active'`);
             deployedObjectCount = Number((dr && dr[0] && (dr[0].c ?? dr[0].C)) || 0);
@@ -1386,6 +1413,14 @@ export async function runConnectorE2E({ gql, db, mock }, cfg, allowWrite) {
             // CodeGen doesn't create its entity — so it is EXCLUDED from the must-test denominator, NOT failed.
             const sr = await db.rows(`SELECT COUNT(DISTINCT io.${ioId}) AS c FROM ${IOt} io JOIN ${IOFt} f ON f.${fIoId}=io.${ioId} AND f.${pkC}=${pkTrue} WHERE io.${idC}='${cfg.integrationID}' AND io.${stC}='Active'`);
             syncableObjectCount = Number((sr && sr[0] && (sr[0].c ?? sr[0].C)) || 0);
+            // Detect get-by-id objects from their APIPath (last non-empty segment is a `{var}`).
+            const apRows = await db.rows(`SELECT ${nmC} AS nm, ${apC} AS ap FROM ${IOt} WHERE ${idC}='${cfg.integrationID}' AND ${stC}='Active'`);
+            for (const r of (apRows || [])) {
+                const nm = r.nm ?? r.NM, ap = String(r.ap ?? r.AP ?? '');
+                const segs = ap.split('/').filter(Boolean);
+                const last = segs[segs.length - 1] || '';
+                if (nm && /^\{[^}]+\}$/.test(last)) { getByIdObjects.add(nm); syncableObjectCount = Math.max(0, syncableObjectCount - 1); }
+            }
         } catch { /* count unavailable → gate degrades to the synced-rows check below */ }
 
         result.steps.coverage = (() => {
@@ -1400,6 +1435,8 @@ export async function runConnectorE2E({ gql, db, mock }, cfg, allowWrite) {
                     .filter(w => w && (w.code === 'ZERO_PARENTS' || w.code === 'SECOND_LAYER_EMPTY'))
                     .map(w => String(w.stage)))
                 : new Set();
+            // Get-by-id objects (no list endpoint) are legitimately un-list-syncable in BOTH modes.
+            for (const o of getByIdObjects) legitEmpty.add(o);
             const covered = comp.filter(c => (c.destRows || 0) > 0).map(c => c.object);
             const zeroReal = comp.filter(c => (c.destRows || 0) === 0 && !legitEmpty.has(c.object)).map(c => c.object);
             const zeroLegit = comp.filter(c => (c.destRows || 0) === 0 && legitEmpty.has(c.object)).map(c => c.object);

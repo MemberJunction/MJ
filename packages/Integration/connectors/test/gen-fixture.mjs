@@ -458,7 +458,14 @@ function mergeAllObjectDataRoutes(handM, rows, shape, envelopeKey) {
 export function buildFixtureFromRows(rows, cfgKey = 'BaseURL', envelopeKey = null) {
   // Wrap a synthetic row array in the connector's response envelope (`{[envelopeKey]: rows}`) when the
   // connector reads `body.<key>`; bare array otherwise. Centralized so route + delta bodies stay consistent.
-  const wrapBody = (arr) => (envelopeKey ? { [envelopeKey]: arr } : arr);
+  // Include a `pagination` envelope alongside the records. Some connectors' NormalizeResponse
+  // identify the records array as "the sole array-valued key BESIDES `pagination`" (e.g. Eventbrite's
+  // continuation-token scheme) — WITHOUT a pagination key they treat the whole body as ONE record,
+  // silently landing a single malformed row per object. Carrying a terminal (single-page, no-more,
+  // no-continuation) pagination is additive + harmless for connectors that read `body.<key>` directly.
+  const wrapBody = (arr) => (envelopeKey
+    ? { [envelopeKey]: arr, pagination: { object_count: (Array.isArray(arr) ? arr.length : 0), page_number: 1, page_size: (Array.isArray(arr) ? arr.length : 0), page_count: 1, has_more_items: false, continuation: null } }
+    : arr);
   // Inverse of wrapBody — get the row array back out of a (possibly enveloped) route Body so the
   // delta-candidate scan + delta-pass construction work identically for bare-array and enveloped fixtures.
   const unwrapBody = (b) => (Array.isArray(b) ? b : (b && envelopeKey && Array.isArray(b[envelopeKey]) ? b[envelopeKey] : []));
@@ -486,7 +493,29 @@ export function buildFixtureFromRows(rows, cfgKey = 'BaseURL', envelopeKey = nul
   const objs = [], routes = [], routeRows = [], bodyByDoor = new Map();
   for (const r of flatRows) {
     const body = [mkRowFor(r, 1), mkRowFor(r, 2), mkRowFor(r, 3)];
-    routes.push({ Path: r.apipath, Method: 'GET', Status: 200, Body: wrapBody(body) });
+    // Parent-scoped concrete routes (idempotency). A by-name nested child (Configuration.parentObjectName)
+    // whose apipath carries a parent template var (`/events/{event_id}/attendees/`) is fetched ONCE PER
+    // PARENT record, and the connector INJECTS that parent's id into each returned child. A single wildcard
+    // template returning the SAME children for every parent makes the injected id ping-pong across parents
+    // → the child's content-hash changes on every sync → redundant re-writes that fail
+    // idempotent.no-redundant-writes (while leaving row counts stable — a silent efficiency defect). Emit
+    // one CONCRETE route per parent id (a DISTINCT child each, scoped PK) so the injected id is STABLE, plus
+    // a wildcard fallback LAST (matchRoute literal-exact-matches the concrete first) so any un-enumerated
+    // parent id still lands a row (coverage never regresses). Parent ids are enumerated the SAME
+    // deterministic way the parent's own route builds them (mkRowFor), so they match what the connector
+    // fetched from the parent and then substitutes here.
+    const hasVar = /\{[^}]+\}/.test(String(r.apipath || ''));
+    const parentRow = (hasVar && r.parentObjectName) ? rows.find((x) => x.name === r.parentObjectName) : null;
+    if (parentRow && parentRow.pk) {
+      const parentIds = [...new Set([1, 2, 3].map((n) => mkRowFor(parentRow, n)[parentRow.pk]).filter((v) => v != null).map(String))];
+      parentIds.forEach((pid, pi) => {
+        const concretePath = String(r.apipath).replace(/\{[^}]+\}/g, pid);
+        routes.push({ Path: concretePath, Method: 'GET', Status: 200, Body: wrapBody([mkRowFor(r, pi + 1)]) });
+      });
+      routes.push({ Path: r.apipath, Method: 'GET', Status: 200, Body: wrapBody([mkRowFor(r, 1)]) });
+    } else {
+      routes.push({ Path: r.apipath, Method: 'GET', Status: 200, Body: wrapBody(body) });
+    }
     routeRows.push(r);
     objs.push({ Name: r.name, OrderingField: r.wm || r.pk });
     bodyByDoor.set(r.name, body);
@@ -524,10 +553,42 @@ export function buildFixtureFromRows(rows, cfgKey = 'BaseURL', envelopeKey = nul
       const childPaths = [ap.entryPath, ...(ap.alternativePaths || []), r.apipath]
         .filter((p) => p && !String(p).startsWith('('));
       const seenPaths = new Set();
+      // Parent-scoped concrete routes (idempotency fix). A connector that fetches a path-injected child
+      // per parent INJECTS the parent id (from the request path) into each returned child record. If a
+      // single wildcard template route returns the SAME children for EVERY parent, that injected id
+      // ping-pongs across parents — the child's content-hash changes on every sync → redundant re-writes
+      // that fail `idempotent.no-redundant-writes` (yet leave row counts stable, so it's a silent
+      // efficiency defect). Emitting one CONCRETE route per known parent id, each returning a DISTINCT
+      // child (scoped PK), makes the injected parent id STABLE per child → genuinely idempotent, and is
+      // also more realistic (each parent has its own children). The wildcard template is still appended
+      // as a FALLBACK so any un-enumerated parent id still answers (coverage can never regress); the
+      // mock's matchRoute literal-exact-matches the concrete route first (it breaks before reaching the
+      // template), so the fallback only fires for ids we didn't enumerate.
+      // Resolve the DISTINCT parent ids the connector will inject. The door may be a FLAT object OR
+      // itself an access-path object (multi-level hierarchy, e.g. Organization → Event → Attendee), so
+      // search ALL rows (not just flatRows) and enumerate the door's synthetic records the SAME way its
+      // own route does — mkRowFor(doorRow, n) is deterministic, so these ids match exactly what the
+      // connector fetched from the door and then substitutes into the child path.
+      const doorRow = rows.find((fr) => fr.name === ap.door);
+      const parentIds = doorRow
+        ? [...new Set([1, 2, 3].map((n) => { const pr = mkRowFor(doorRow, n); return pr[doorRow.pk] ?? pr.id; }).filter((v) => v != null).map(String))]
+        : null;
       for (const cp of childPaths) {
         if (seenPaths.has(cp)) continue;
         seenPaths.add(cp);
-        routes.push({ Path: cp, Method: 'GET', Status: 200, Body: wrapBody([mkRowFor(r, 1), mkRowFor(r, 2), mkRowFor(r, 3)]) });
+        const hasVar = /\{[^}]+\}/.test(cp);
+        if (parentIds && parentIds.length && hasVar) {
+          parentIds.forEach((parentId, pi) => {
+            const concretePath = cp.replace(/\{[^}]+\}/g, parentId);
+            // One DISTINCT child per parent (scoped PK) → the connector's injected parent id is stable.
+            routes.push({ Path: concretePath, Method: 'GET', Status: 200, Body: wrapBody([mkRowFor(r, pi + 1)]) });
+          });
+          // Wildcard fallback (last, so a concrete literal-exact match wins) — one record, so any
+          // un-enumerated parent id still lands a row (coverage can never regress).
+          routes.push({ Path: cp, Method: 'GET', Status: 200, Body: wrapBody([mkRowFor(r, 1)]) });
+        } else {
+          routes.push({ Path: cp, Method: 'GET', Status: 200, Body: wrapBody([mkRowFor(r, 1), mkRowFor(r, 2), mkRowFor(r, 3)]) });
+        }
       }
       routeRows.push(r);
     }
@@ -553,18 +614,24 @@ export function buildFixtureFromRows(rows, cfgKey = 'BaseURL', envelopeKey = nul
     if (/date|time|_links|link|url|json|fields|id$|^id$|code|status|type|guid|uuid/i.test(fn)) return false;
     return typeof body[0]?.[fn] === 'string';
   };
-  // Delta operates on objects with a TOP-LEVEL route (routeRows aligns 1:1 with routes); embedded-only
-  // access objects have no own route and are excluded from the delta candidate scan.
+  // Delta operates on objects with a TOP-LEVEL route; embedded-only access objects have no own route and
+  // are excluded from the delta candidate scan. NOTE: `routes` is NO LONGER 1:1 with `routeRows` — a
+  // parent-scoped flat row (Configuration.parentObjectName + template-var apipath) pushes SEVERAL routes
+  // (one concrete per parent + a wildcard) but only ONE routeRow, so `routes[i]` no longer corresponds to
+  // `routeRows[i]`. Look the row's representative route up BY PATH (its apipath) instead of by index —
+  // this is exact for delta-eligible rows (flat, non-template-var → a single route whose Path === apipath)
+  // and avoids the misalignment that pointed the Category delta at an unrelated object's route.
+  const routeForRow = (rr) => routes.find((rt) => rt.Path === rr.apipath) || routes[routeRows.indexOf(rr)];
   let pick = -1, updField = null;
   for (let i = 0; i < routeRows.length; i++) {
-    const rr = routeRows[i], body = unwrapBody(routes[i]?.Body);
+    const rr = routeRows[i], body = unwrapBody(routeForRow(rr)?.Body);
     if (!rr.pk || !Array.isArray(body) || body.length < 3 || String(rr.rawApiPath ?? rr.apipath ?? '').includes('{') || rr.accessPath) continue; // delta target must be FLAT (no parent chain to replay in the delta pass)
     const uf = rr.fields.map((f) => f.fn).find((fn) => isSafeScalarStr(body, fn, (rr.fields.find((x) => x.fn === fn) || {}).ft, rr.pk, rr.wm));
     if (uf) { pick = i; updField = uf; break; }
   }
   // Fallback: first PK-bearing object with any non-PK/non-wm string body value (excluding link/json names).
   if (pick < 0) for (let i = 0; i < routeRows.length; i++) {
-    const rr = routeRows[i], body = unwrapBody(routes[i]?.Body);
+    const rr = routeRows[i], body = unwrapBody(routeForRow(rr)?.Body);
     if (!rr.pk || !Array.isArray(body) || body.length < 3 || String(rr.rawApiPath ?? rr.apipath ?? '').includes('{') || rr.accessPath) continue; // delta target must be FLAT (no parent chain to replay in the delta pass)
     updField = Object.keys(body[0]).find((k) => k !== rr.pk && k !== rr.wm
       && typeof body[0][k] === 'string' && !/date|time|_links|link|url|json|fields/i.test(k)) || null;
@@ -577,7 +644,7 @@ export function buildFixtureFromRows(rows, cfgKey = 'BaseURL', envelopeKey = nul
   // parent chain the delta pass can't replay. Green connectors already picked above → never reach here.
   if (pick < 0) {
     for (let i = 0; i < routeRows.length; i++) {
-      const rr = routeRows[i], body = unwrapBody(routes[i]?.Body);
+      const rr = routeRows[i], body = unwrapBody(routeForRow(rr)?.Body);
       if (!rr.pk || !Array.isArray(body) || body.length < 3 || String(rr.rawApiPath ?? rr.apipath ?? '').includes('{')) continue;
       updField = rr.fields.map((f) => f.fn).find((fn) => isSafeScalarStr(body, fn, (rr.fields.find((x) => x.fn === fn) || {}).ft, rr.pk, rr.wm))
         || Object.keys(body[0]).find((k) => k !== rr.pk && k !== rr.wm && typeof body[0][k] === 'string' && !/date|time|_links|link|url|json|fields/i.test(k)) || null;
@@ -585,7 +652,7 @@ export function buildFixtureFromRows(rows, cfgKey = 'BaseURL', envelopeKey = nul
     }
   }
   if (pick < 0) pick = 0; // absolute last resort: first object, no update sub-assert
-  const first = routeRows[pick], r0 = routes[pick];
+  const first = routeRows[pick], r0 = routeForRow(first) || routes[pick];
   const r0Body = unwrapBody(r0.Body);
   const pk0 = first.pk;
   const NEW_VAL = 'updated-delta';
@@ -772,8 +839,17 @@ export async function regenerateFixturesFromDeployed({ db, platform, mjSchema = 
     // own route but MUST be carried so the door-embed logic nests it into its parent's records. Skipping it
     // (the old `startsWith('(')` filter) left the parent's nesting field a scalar → the nested grandchildren
     // (JudgeAssignment/Report, fetched per parent id) found no ids → 0 rows. Keep any object with a door.
-    let accessPath = null;
-    try { const j = JSON.parse(col(ioRow, 'cfg') || '{}'); accessPath = j.AccessPath || null; } catch { /* not JSON */ }
+    let accessPath = null, parentObjectName = null, parentObjectNames = null;
+    try {
+      const j = JSON.parse(col(ioRow, 'cfg') || '{}');
+      accessPath = j.AccessPath || null;
+      // parentObjectName(s) — the by-name nested-fetch config (an alternative to AccessPath). A child
+      // whose apipath carries a parent template var (`/events/{event_id}/attendees/`) is fetched once per
+      // parent record; the fixture must serve DISTINCT children per parent id so the connector's injected
+      // parent id is stable (idempotency). Carried onto the row for the flat-route parent-scoping below.
+      parentObjectName = typeof j.parentObjectName === 'string' ? j.parentObjectName : null;
+      parentObjectNames = (j.parentObjectNames && typeof j.parentObjectNames === 'object') ? j.parentObjectNames : null;
+    } catch { /* not JSON */ }
     const hasDoor = !!(accessPath && accessPath.door);
     // Skip only truly non-routable paths (embedded/parenthesized markers) THAT also have no access-path door.
     // TEMPLATE-VAR paths (`/{iD}/works`) ARE routable (wildcard-matched). by-iD/template-var connectors kept.
@@ -792,7 +868,7 @@ export async function regenerateFixturesFromDeployed({ db, platform, mjSchema = 
     // streaming PK ideation, else synthetic-PK / content-hash fallback (§4). The harness must NOT drop them
     // (requiring a hard PK was the bug that made neon's 24 soft-keyless objects show as untested).
     const apForRow = accessPath ? { ...accessPath, door: prefixed(accessPath.door), entryPath: prefixed(accessPath.entryPath), alternativePaths: (accessPath.alternativePaths || []).map(prefixed) } : accessPath;
-    rows.push({ name: col(ioRow, 'name'), apipath: prefixed(apipath), rawApiPath: apipath, wm: col(ioRow, 'wm') || null, pk, pkType, fields, accessPath: apForRow, rdk: col(ioRow, 'rdk') || null });
+    rows.push({ name: col(ioRow, 'name'), apipath: prefixed(apipath), rawApiPath: apipath, wm: col(ioRow, 'wm') || null, pk, pkType, fields, accessPath: apForRow, parentObjectName, parentObjectNames, rdk: col(ioRow, 'rdk') || null });
   }
   if (!rows.length) return { ok: false, reason: `no routable, PK-bearing deployed objects for integration ${integrationID}` };
 

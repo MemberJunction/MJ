@@ -115,6 +115,20 @@ try {
     generatedTreeClean = false;
 }
 
+// ── Intentional-branch-drift waiver (opt-in via --allow-generated-churn) ──────
+// The generated-tree gate exists to catch ACCIDENTAL churn that breaks MJAPI boot (GZ
+// #11/#19/#33). When a caller KNOWS the churn is intentional — e.g. pre-existing additive
+// regen from concurrent work on a feature branch — AND the build isolates its own DB/API so
+// it never consumes or mutates the shared generated tree (the HybridE2E primitive snapshots +
+// restores the generated dirs around its in-place codegen), the churn is RECORDED but does not
+// fail the gate. The churn stays in generatedChurn for audit; a boolean marks the waiver.
+let generatedChurnWaived = false;
+if (!generatedTreeClean && args['allow-generated-churn']) {
+    generatedChurnWaived = true;
+    generatedTreeClean = true;
+    notes.push(`generated-tree churn WAIVED via --allow-generated-churn (${generatedChurn.length} file(s)); caller asserts intentional drift + isolated infra + snapshot/restore. Churn recorded in generatedChurn for audit.`);
+}
+
 // ── 3. turbo-dist freshness ──────────────────────────────────────────
 function newestMtime(dir, ext) {
     let newest = 0;
@@ -163,6 +177,7 @@ const result = {
     migrationLevel: null,
     mjapiBootable,
     generatedTreeClean,
+    generatedChurnWaived,
     generatedChurn: generatedChurn.slice(0, 20),
     staleNestedDists,
     turboDistFresh,

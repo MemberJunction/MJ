@@ -192,6 +192,30 @@ function fromHTML(text) {
     return { format: 'spectaql-html', recordTypes: dedupeSorted([...names]), confidence: 'low' };
 }
 
+// ── API Blueprint / MSON (Apiary `.apib`) ──────────────────────────────────
+// Some vendors publish their machine-readable contract as an Apiary API Blueprint (MSON), not
+// OpenAPI/SDL (e.g. Eventbrite's v3 reference). The SYNCABLE universe here is the set of top-level
+// RESOURCE objects — one primary "## <X> Object" per "# Group <X>" section — NOT every MSON data
+// structure under "## Data Structures" (those include request/create payload variants, error shapes,
+// scalar-format aliases, and 100s of embedded value-objects that are fields of a parent, never
+// independently listable). Counting the resource roots (mirroring how fromOpenAPI counts schema roots
+// and fromPostman counts request-addressed resources) gives the real syncable count, so the emitted-IO
+// ratio reflects coverage of syncable tables — not a false "thin" against embedded value-objects.
+function fromAPIBlueprint(text) {
+    const isApib = /^FORMAT:\s*1A/mi.test(text) || (/^# Group /m.test(text) && /^## Data Structures/m.test(text));
+    if (!isApib) return null;
+    const names = new Set();
+    // Primary resource object per group: "## <Name> Object" headers.
+    let m;
+    const objRe = /^## ([A-Za-z0-9 /'-]+) Object\b/gm;
+    while ((m = objRe.exec(text)) !== null) {
+        const n = m[1].trim();
+        if (n && !isPlumbing(n)) names.add(n);
+    }
+    if (names.size === 0) return null;
+    return { format: 'api-blueprint', recordTypes: dedupeSorted([...names]), confidence: 'high' };
+}
+
 /**
  * Enumerate the record-type universe from a source's machine-readable model.
  * @param {string} sourceText raw text of an OpenAPI/Swagger doc, GraphQL SDL,
@@ -213,6 +237,7 @@ export function enumerateCatalog(sourceText) {
     }
     attempts.push(() => fromSDL(sourceText));
     attempts.push(() => fromXSD(sourceText));
+    attempts.push(() => fromAPIBlueprint(sourceText));
     attempts.push(() => fromOpenAPIYaml(sourceText));
     attempts.push(() => fromHTML(sourceText));
 
