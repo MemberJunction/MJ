@@ -35,28 +35,19 @@
 
       <div class="editor-field">
         <label class="editor-label">Which agent should this routine run? <span class="editor-required">*</span></label>
-        @if (TargetID) {
-          <div class="editor-selected-agent">
-            <i [class]="SelectedAgentIcon"></i>
-            <span class="editor-selected-agent-name">{{ SelectedAgentName || '(unknown agent)' }}</span>
-            <span class="editor-selected-agent-hint">selected</span>
-          </div>
+        @if (AgentTreeLeafConfig) {
+          <mj-tree-dropdown
+            [BranchConfig]="AgentTreeBranchConfig"
+            [LeafConfig]="AgentTreeLeafConfig"
+            DefaultExpansion="all"
+            SelectionMode="single"
+            SelectableTypes="leaf"
+            [Value]="SelectedAgentKey"
+            [Clearable]="false"
+            Placeholder="Select an agent..."
+            (AfterNodeSelect)="OnAgentNodeSelected($event)">
+          </mj-tree-dropdown>
         }
-        <div class="editor-agent-tree">
-          @if (AgentTreeLeafConfig) {
-            <mj-tree
-              [BranchConfig]="AgentTreeBranchConfig"
-              [LeafConfig]="AgentTreeLeafConfig"
-              DefaultExpansion="all"
-              SelectionMode="single"
-              SelectableTypes="leaf"
-              [SelectedIDs]="SelectedAgentIDs"
-              EmptyMessage="No schedulable agents found."
-              EmptyIcon="fa-solid fa-robot"
-              (AfterNodeSelect)="OnAgentNodeSelected($event)">
-            </mj-tree>
-          }
-        </div>
         <div class="editor-hint">Active agents only, grouped by category — realtime (voice) agents are interactive-only and can't be scheduled.</div>
       </div>
 

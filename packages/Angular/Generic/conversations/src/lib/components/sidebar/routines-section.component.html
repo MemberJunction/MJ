@@ -14,13 +14,13 @@
 
     @if (TopRoutines.length > 0) {
       <div class="crs-rows">
-        @for (routine of TopRoutines; track routine.ID) {
-          <button type="button" class="crs-row" [title]="routine.Name" (click)="OpenRoutine(routine, $event)">
-            <span [class]="StatusDotClass(routine)"></span>
-            <i class="crs-agent-icon" [class]="AgentIcon(routine)"></i>
+        @for (row of TopRoutines; track row.Routine.ID) {
+          <button type="button" class="crs-row" [title]="row.Routine.Name" (click)="OpenRoutine(row.Routine, $event)">
+            <span [class]="row.DotClass"></span>
+            <i class="crs-agent-icon" [class]="row.Icon"></i>
             <span class="crs-row-main">
-              <span class="crs-row-name">{{ routine.Name }}</span>
-              <span class="crs-row-summary">{{ RoutineSummary(routine) }}</span>
+              <span class="crs-row-name">{{ row.Routine.Name }}</span>
+              <span class="crs-row-summary">{{ row.Summary }}</span>
             </span>
           </button>
         }

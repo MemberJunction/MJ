@@ -26,7 +26,7 @@
  *   Stable class hooks that ship with the components:
  *     .crs-section/.crs-header/.crs-add/.crs-row-name        (sidebar section)
  *     .routine-editor, #routine-name/#routine-message/#routine-cron,
- *     .editor-segment, .tree-node-label                       (editor + picker)
+ *     .editor-segment, mj-tree-dropdown [role=combobox] + .tree-node-label (editor + picker)
  *     .routine-card + [title="..."] action buttons            (list)
  *     .history-row/.history-notified                          (history)
  *
@@ -153,11 +153,18 @@ test.describe.serial('User Routines — conversations surface', () => {
 
     await editor.locator('#routine-name').fill(ROUTINE_NAME);
 
-    // Agent picker: categorical tree, leaf = the agent. Wait for the catalog load.
-    const sageLeaf = editor.locator('.tree-node-label', { hasText: AGENT_NAME }).first();
+    // Agent picker: tree DROPDOWN (compact trigger) — open it, search, pick the leaf.
+    // Search (rather than scrolling the expanded catalog) mirrors real usage and keeps
+    // the target in the panel's viewport regardless of catalog size.
+    const trigger = editor.locator('mj-tree-dropdown [role="combobox"]').first();
+    await expect(trigger).toBeVisible({ timeout: 60_000 });
+    await trigger.click();
+    await page.locator('.tree-dropdown-search__input').fill(AGENT_NAME);
+    const sageLeaf = page.locator('.tree-node-label', { hasText: AGENT_NAME }).first();
     await expect(sageLeaf).toBeVisible({ timeout: 60_000 });
     await sageLeaf.click();
-    await expect(editor.locator('.editor-selected-agent-name')).toContainText(AGENT_NAME);
+    // The trigger displays the selection once picked.
+    await expect(trigger).toContainText(AGENT_NAME, { timeout: 15_000 });
 
     await editor
       .locator('#routine-message')

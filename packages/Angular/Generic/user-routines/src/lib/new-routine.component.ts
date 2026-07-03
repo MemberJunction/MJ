@@ -1,6 +1,6 @@
 import { ChangeDetectorRef, Component, EventEmitter, Input, OnInit, Output, inject } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { IMetadataProvider, RunView } from '@memberjunction/core';
+import { CompositeKey, IMetadataProvider, RunView } from '@memberjunction/core';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { MJUserRoutineEntity, MJUserRoutineRecipientEntity, UserRoutineEngine } from '@memberjunction/core-entities';
 import {
@@ -223,6 +223,11 @@ export class NewRoutineComponent extends BaseAngularComponent implements OnInit 
     }
 
     /** Handles agent selection from the category tree (leaf nodes only). */
+    /** The selected agent as a CompositeKey for the tree-dropdown's Value binding. */
+    public get SelectedAgentKey(): CompositeKey | null {
+        return this.TargetID ? CompositeKey.FromID(this.TargetID) : null;
+    }
+
     public OnAgentNodeSelected(args: AfterNodeSelectEventArgs): void {
         if (args.Node.Type === 'leaf') {
             this.TargetID = args.Node.ID;

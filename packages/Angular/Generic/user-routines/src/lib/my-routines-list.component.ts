@@ -154,7 +154,41 @@ export class MyRoutinesListComponent extends BaseAngularComponent implements OnI
         }
     }
 
+    /**
+     * Snapshot of the time-relative strings, keyed by routine ID. Templates must NOT
+     * call FormatRelativeTime directly — its value can change between check passes at
+     * a minute boundary (NG0100). Rebuilt on every data change and on a 30s timer.
+     */
+    private relativeText = new Map<string, { Last: string; Next: string }>();
+    private relativeTimer: ReturnType<typeof setInterval> | null = null;
+
+    /** Stable-within-a-pass "Last run" text for a routine. */
+    public LastRunText(routine: MJUserRoutineEntity): string {
+        return this.relativeText.get(routine.ID)?.Last ?? '';
+    }
+
+    /** Stable-within-a-pass "Next run" text for a routine. */
+    public NextRunText(routine: MJUserRoutineEntity): string {
+        return this.relativeText.get(routine.ID)?.Next ?? '';
+    }
+
+    private rebuildRelativeText(): void {
+        this.relativeText = new Map(this.Routines.map((r) => [r.ID, {
+            Last: r.LastRunAt ? FormatRelativeTime(r.LastRunAt) : '',
+            Next: r.NextRunAt ? FormatRelativeTime(r.NextRunAt) : '',
+        }]));
+        if (this.relativeTimer == null && this.Routines.length > 0) {
+            this.relativeTimer = setInterval(() => {
+                this.rebuildRelativeText();
+                this.cdr.markForCheck();
+            }, 30_000);
+        }
+    }
+
     ngOnDestroy(): void {
+        if (this.relativeTimer != null) {
+            clearInterval(this.relativeTimer);
+        }
         this.destroy$.next();
         this.destroy$.complete();
     }
@@ -342,6 +376,7 @@ export class MyRoutinesListComponent extends BaseAngularComponent implements OnI
     }
 
     private applyFilters(): void {
+        this.rebuildRelativeText();
         const search = this._searchText.trim().toLowerCase();
         this.FilteredRoutines = this.Routines.filter((r) => {
             if (this._statusFilter !== 'all' && r.Status !== this._statusFilter) {

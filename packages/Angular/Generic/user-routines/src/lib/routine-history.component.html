@@ -17,7 +17,7 @@
         <div class="history-row-main">
           <span [class]="ChipClass(run.Status)">{{ run.Status }}</span>
           <span class="history-started" [title]="(run.StartedAt | date: 'long') ?? ''">{{ run.StartedAt | date: 'medium' }}</span>
-          <span class="history-relative">{{ RelativeTime(run.StartedAt) }}</span>
+          <span class="history-relative">{{ StartedText(run) }}</span>
           @if (Duration(run.StartedAt, run.CompletedAt); as duration) {
             <span class="history-duration"><i class="fa-solid fa-stopwatch"></i> {{ duration }}</span>
           }

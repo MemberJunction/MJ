@@ -1,4 +1,4 @@
-import { ChangeDetectorRef, Component, EventEmitter, Input, Output, inject } from '@angular/core';
+import { ChangeDetectorRef, Component, EventEmitter, Input, OnDestroy, Output, inject } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJUserRoutineRunEntity, UserRoutineEngine } from '@memberjunction/core-entities';
 import { FormatDuration, FormatRelativeTime, RunStatusVariant } from './routine-ui-helpers';
@@ -25,7 +25,7 @@ export interface RoutineRunLink {
     templateUrl: './routine-history.component.html',
     styleUrls: ['./routine-history.component.css'],
 })
-export class RoutineHistoryComponent extends BaseAngularComponent {
+export class RoutineHistoryComponent extends BaseAngularComponent implements OnDestroy {
     private cdr = inject(ChangeDetectorRef);
 
     private _routineID: string | null = null;
@@ -55,6 +55,28 @@ export class RoutineHistoryComponent extends BaseAngularComponent {
     public LoadError: string | null = null;
 
     public readonly RelativeTime = FormatRelativeTime;
+
+    /**
+     * Snapshot of each run's relative "started" text (see NG0100 — time-relative
+     * values must not be computed inside the template). Rebuilt on load + 30s timer.
+     */
+    private startedText = new Map<string, string>();
+    private relativeTimer: ReturnType<typeof setInterval> | null = null;
+
+    /** Stable-within-a-pass relative "started" text for a run row. */
+    public StartedText(run: MJUserRoutineRunEntity): string {
+        return this.startedText.get(run.ID) ?? '';
+    }
+
+    private rebuildRelativeText(): void {
+        this.startedText = new Map(this.Runs.map((r) => [r.ID, FormatRelativeTime(r.StartedAt)]));
+        if (this.relativeTimer == null && this.Runs.length > 0) {
+            this.relativeTimer = setInterval(() => {
+                this.rebuildRelativeText();
+                this.cdr.markForCheck();
+            }, 30_000);
+        }
+    }
     public readonly Duration = FormatDuration;
     public readonly RunVariant = RunStatusVariant;
 
@@ -77,6 +99,7 @@ export class RoutineHistoryComponent extends BaseAngularComponent {
                 return; // a newer routine selection superseded this load
             }
             this.Runs = engine.RunsForRoutine(routineID, this.MaxRuns);
+            this.rebuildRelativeText();
         } catch (e) {
             this.Runs = [];
             this.LoadError = e instanceof Error ? e.message : 'Failed to load run history.';
@@ -114,5 +137,11 @@ export class RoutineHistoryComponent extends BaseAngularComponent {
 
     public ChipClass(status: string | null | undefined): string {
         return `history-chip history-chip--${RunStatusVariant(status)}`;
+    }
+
+    ngOnDestroy(): void {
+        if (this.relativeTimer != null) {
+            clearInterval(this.relativeTimer);
+        }
     }
 }

@@ -61,7 +61,7 @@
             <i class="fa-solid fa-backward-step"></i>
             <span>Last run:</span>
             @if (routine.LastRunAt) {
-              <span>{{ RelativeTime(routine.LastRunAt) }}</span>
+              <span>{{ LastRunText(routine) }}</span>
               @if (routine.LastRunStatus) {
                 <span [class]="ChipClass(LastRunVariant(routine.LastRunStatus))">{{ routine.LastRunStatus }}</span>
               }
@@ -73,7 +73,7 @@
             <i class="fa-solid fa-forward-step"></i>
             <span>Next run:</span>
             @if (routine.NextRunAt) {
-              <span>{{ RelativeTime(routine.NextRunAt) }}</span>
+              <span>{{ NextRunText(routine) }}</span>
             } @else {
               <span class="routine-meta-muted">not scheduled</span>
             }

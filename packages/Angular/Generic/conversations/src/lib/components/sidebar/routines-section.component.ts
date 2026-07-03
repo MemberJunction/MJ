@@ -10,6 +10,22 @@ import { ConversationOpenedEventArgs, FormatRelativeTime, HistoryRecordOpenedEve
 /** Maximum routine rows shown in the compact sidebar section. */
 const MAX_SIDEBAR_ROUTINES = 4;
 
+/** How often the time-relative summaries ("Next in 27m") re-render. */
+const SUMMARY_REFRESH_MS = 30_000;
+
+/**
+ * Snapshot view-model for one sidebar row. Time-relative text is PRECOMPUTED here
+ * (not called from the template) — a template call like FormatRelativeTime(...) can
+ * change between check passes at a minute boundary and throw NG0100; the snapshot
+ * is stable within a pass and refreshed on a timer between passes.
+ */
+interface RoutineRowVM {
+    Routine: MJUserRoutineEntity;
+    Summary: string;
+    Icon: string;
+    DotClass: string;
+}
+
 /**
  * Compact "Routines" section pinned at the very bottom of the conversations left
  * sidebar: a header (mark + count), the few most relevant routines (status dot,
@@ -51,8 +67,8 @@ export class RoutinesSectionComponent extends BaseAngularComponent implements On
 
     /** True when the current user may read routines (permission gate). */
     public CanRead = false;
-    /** The most relevant routines for the compact view. */
-    public TopRoutines: MJUserRoutineEntity[] = [];
+    /** Snapshot rows for the compact view (stable within a CD pass — see RoutineRowVM). */
+    public TopRoutines: RoutineRowVM[] = [];
     /** Total routine count for the header badge. */
     public TotalCount = 0;
     /**
@@ -93,9 +109,14 @@ export class RoutinesSectionComponent extends BaseAngularComponent implements On
     }
 
     ngOnDestroy(): void {
+        if (this.summaryTimer != null) {
+            clearInterval(this.summaryTimer);
+        }
         this.destroy$.next();
         this.destroy$.complete();
     }
+
+    private summaryTimer: ReturnType<typeof setInterval> | null = null;
 
     /** Opens the slide-in on the routines list (header click). */
     public OpenRoutines(): void {
@@ -226,7 +247,20 @@ export class RoutinesSectionComponent extends BaseAngularComponent implements On
                 const bNext = b.NextRunAt ? new Date(b.NextRunAt).getTime() : Number.MAX_SAFE_INTEGER;
                 return aNext - bNext;
             })
-            .slice(0, MAX_SIDEBAR_ROUTINES);
+            .slice(0, MAX_SIDEBAR_ROUTINES)
+            .map((r) => ({
+                Routine: r,
+                Summary: this.RoutineSummary(r),
+                Icon: this.AgentIcon(r),
+                DotClass: this.StatusDotClass(r),
+            }));
+        // Keep the relative-time snapshots fresh between change-detection passes.
+        if (this.summaryTimer == null && this.TopRoutines.length > 0) {
+            this.summaryTimer = setInterval(() => {
+                this.TopRoutines = this.TopRoutines.map((row) => ({ ...row, Summary: this.RoutineSummary(row.Routine) }));
+                this.cdr.markForCheck();
+            }, SUMMARY_REFRESH_MS);
+        }
         this.cdr.markForCheck();
     }
 }
