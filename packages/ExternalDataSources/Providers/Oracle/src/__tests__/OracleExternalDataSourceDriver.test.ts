@@ -22,6 +22,9 @@ class TestableOracleDriver extends OracleExternalDataSourceDriver {
   public transport(config: Parameters<OracleExternalDataSourceDriver['resolveTransportForGate']>[0]) {
     return this.resolveTransportForGate(config);
   }
+  public numAsString(precision: number | undefined, scale: number | undefined) {
+    return this.shouldFetchNumberAsString(precision, scale);
+  }
 }
 
 const ds = (over: Partial<MJExternalDataSourceEntity>): MJExternalDataSourceEntity =>
@@ -180,6 +183,28 @@ describe('OracleExternalDataSourceDriver — SQL building', () => {
         '(ADDRESS=(PROTOCOL=TCP)(HOST=evil.remote.com)(PORT=1521)))' +
         '(CONNECT_DATA=(SERVICE_NAME=x)))';
       expect(d.transport({ connectString: cs })).toEqual({ host: 'evil.remote.com', tlsEnabled: false });
+    });
+  });
+
+  describe('shouldFetchNumberAsString (NUMBER precision boundary)', () => {
+    it('keeps unconstrained NUMBER (precision 0 / scale -127, e.g. a bare `id NUMBER` PK) as a native number', () => {
+      expect(d.numAsString(0, -127)).toBe(false);
+      expect(d.numAsString(undefined, undefined)).toBe(false);
+    });
+    it('keeps small integers (precision <= 15, scale 0) as native numbers', () => {
+      expect(d.numAsString(10, 0)).toBe(false);
+      expect(d.numAsString(15, 0)).toBe(false); // max ~1e15 < 2^53, still exact
+    });
+    it('stringifies large-precision integers (precision > 15) that can exceed 2^53', () => {
+      expect(d.numAsString(16, 0)).toBe(true);
+      expect(d.numAsString(38, 0)).toBe(true);
+    });
+    it('stringifies any column with a fractional scale (decimals)', () => {
+      expect(d.numAsString(10, 2)).toBe(true);
+      expect(d.numAsString(20, 4)).toBe(true);
+    });
+    it('keeps a negative-scale NUMBER (rounds to tens/hundreds, integral) as a native number', () => {
+      expect(d.numAsString(10, -2)).toBe(false);
     });
   });
 });

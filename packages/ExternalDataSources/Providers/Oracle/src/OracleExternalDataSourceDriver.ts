@@ -317,15 +317,16 @@ export class OracleExternalDataSourceDriver extends BaseSqlExternalDataSourceDri
       const res = await conn.execute(sql, binds, {
         outFormat: oracledb.OUT_FORMAT_OBJECT,
         // Lossless numerics: oracledb returns NUMBER as a JS number (rounds past 2^53 / 15 sig digits).
-        // Fetch NUMBER as string EXCEPT for clearly-small integers (precision 1..15, scale 0) so large
-        // ids / high-scale decimals survive; small ints stay numeric. (Introspection reads only small
-        // catalog numbers, so this is safe there too.)
+        // Fetch a NUMBER column as string ONLY when it can actually overflow a JS number — i.e. it has a
+        // fractional scale (scale > 0, precision matters) or its precision exceeds 15 digits. Small
+        // integers AND unconstrained NUMBER columns (which oracledb reports as precision 0 / scale -127,
+        // e.g. a bare `id NUMBER` PK) stay native numbers — matching how the MySQL/Postgres/SQL Server
+        // drivers keep small integers numeric, and avoiding turning every plain integer id into a string.
+        // The residual risk (an UNCONSTRAINED NUMBER holding a > 2^53 value) is unavoidable at the column
+        // level; declaring the column's precision (NUMBER(38) etc.) opts it back into lossless strings.
         fetchTypeHandler: (metaData) => {
-          if (metaData.dbType === oracledb.DB_TYPE_NUMBER) {
-            const p = metaData.precision ?? 0;
-            const s = metaData.scale ?? 0;
-            const smallInteger = p > 0 && p <= 15 && s === 0;
-            if (!smallInteger) return { type: oracledb.STRING };
+          if (metaData.dbType === oracledb.DB_TYPE_NUMBER && this.shouldFetchNumberAsString(metaData.precision, metaData.scale)) {
+            return { type: oracledb.STRING };
           }
           return undefined;
         },
@@ -334,6 +335,19 @@ export class OracleExternalDataSourceDriver extends BaseSqlExternalDataSourceDri
     } finally {
       await conn.close();
     }
+  }
+
+  /**
+   * Decide whether an Oracle NUMBER column must be fetched as a string to survive the JS-number boundary.
+   * True only when the column can actually exceed a JS number's exact range: a fractional scale (scale > 0)
+   * or a precision beyond 15 digits (> 2^53). Small integers AND unconstrained NUMBER columns (oracledb
+   * reports precision 0 / scale -127 for a bare `NUMBER`, e.g. a plain `id NUMBER` PK) stay native numbers,
+   * consistent with the MySQL/Postgres/SQL Server drivers. Pure function so the boundary is unit-tested.
+   */
+  protected shouldFetchNumberAsString(precision: number | undefined, scale: number | undefined): boolean {
+    const p = precision ?? 0;
+    const s = scale ?? 0;
+    return s > 0 || p > 15;
   }
 
   /** Oracle 12c+ paging: ORDER BY + OFFSET m ROWS FETCH NEXT n ROWS ONLY (FETCH alone == FETCH FIRST). */
