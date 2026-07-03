@@ -1683,19 +1683,24 @@ export class ManageMetadataBase {
       md: Metadata,
    ): Promise<boolean> {
       const relationships = obj.Relationships ?? [];
+      // No introspected relationships → nothing to set. We deliberately do NOT try to "clear dropped FKs"
+      // here: introspection returning zero relationships is AMBIGUOUS — it happens for drivers that don't
+      // report FK metadata at all (MongoDB), and for low-privilege logins where the catalog FK views are
+      // permission-filtered to zero rows (SQL Server sys.foreign_keys). Clearing on that signal would wipe
+      // user-authored soft-FKs (which are indistinguishable from CodeGen-set ones — there is no marker),
+      // so we leave existing FK metadata untouched. (See the change-detection below for the no-churn set path.)
+      if (relationships.length === 0) {
+         return false;
+      }
       const dsID = externalEntity.ExternalDataSourceID;
       const entity = md.EntityByName(externalEntity.Name); // read current field FK metadata (prior-run state)
       const sqlStatements: string[] = [];
-      // Every single-column FK column we saw in introspection this run — used below to detect FKs that
-      // were previously set but have since been DROPPED remotely, so we can clear their soft-FK metadata.
-      const introspectedFkColumns = new Set<string>();
       for (const rel of relationships) {
          if (rel.Columns.length !== 1) {
             logStatus(`      ⚠ external FK ${externalEntity.Name}.${rel.Name ?? '(unnamed)'}: composite key (${rel.Columns.length} columns) — skipped (baseline supports single-column FKs)`);
             continue;
          }
          const { Column: fkColumn, ReferencedColumn: refColumn } = rel.Columns[0];
-         introspectedFkColumns.add(fkColumn.trim().toLowerCase());
          // Resolve the referenced object to an imported external entity in the SAME data source
          // (match ExternalObjectName, falling back to BaseTable/Name — mirrors how this entity's
          // own object is resolved above).
@@ -1723,24 +1728,6 @@ export class ManageMetadataBase {
                              IsSoftForeignKey=1
                          WHERE EntityID='${externalEntity.ID}' AND Name='${fkColumn.replace(/'/g, "''")}'`);
          logStatus(`      ✓ external FK ${externalEntity.Name}.${fkColumn} → ${relatedEntity.Name}.${refColumn}`);
-      }
-
-      // Clear soft-FKs that THIS process previously set but whose remote FK has since been dropped (M5).
-      // Scope the clear narrowly: only fields flagged IsSoftForeignKey that point to an entity in the SAME
-      // external data source and whose column is no longer among the introspected FK columns. This leaves
-      // user-authored soft-FKs to MJ-DB entities untouched.
-      if (entity) {
-         for (const f of entity.Fields) {
-            if (f.IsSoftForeignKey === true && f.RelatedEntityID && !introspectedFkColumns.has(f.Name.trim().toLowerCase())) {
-               const relatedEntity = md.Entities.find(e => UUIDsEqual(e.ID, f.RelatedEntityID!));
-               if (relatedEntity?.ExternalDataSourceID && dsID && UUIDsEqual(relatedEntity.ExternalDataSourceID, dsID)) {
-                  sqlStatements.push(`UPDATE ${this.qs(mj_core_schema(), 'EntityField')}
-                            SET RelatedEntityID=NULL, RelatedEntityFieldName=NULL, IsSoftForeignKey=0
-                            WHERE ID='${f.ID}'`);
-                  logStatus(`      ⨯ external FK ${externalEntity.Name}.${f.Name} cleared (remote FK dropped)`);
-               }
-            }
-         }
       }
 
       if (sqlStatements.length === 0) {
@@ -1833,9 +1820,17 @@ export class ManageMetadataBase {
       makePrimaryKey: boolean,
       reconcile: boolean,
    ): boolean {
-      return reconcile
-         ? (current.isPrimaryKey !== want.wantPrimaryKey || current.isUnique !== want.wantUnique)
-         : (makePrimaryKey && !current.isPrimaryKey);
+      if (!reconcile) {
+         return makePrimaryKey && !current.isPrimaryKey;
+      }
+      // Reconcile mode: sync PK status in both directions. IsUnique is managed ONLY in tandem with the
+      // primary key (when the field is, or is becoming, a PK) — we must NOT force IsUnique=0 on an
+      // ordinary non-PK column, which would silently wipe a legitimately-unique field (e.g. a user- or
+      // introspection-marked unique `email`) that has nothing to do with the primary key.
+      const pkStatusChanged = current.isPrimaryKey !== want.wantPrimaryKey;
+      const uniqueIsPkRelated = want.wantPrimaryKey || current.isPrimaryKey;
+      const uniqueChanged = uniqueIsPkRelated && current.isUnique !== want.wantUnique;
+      return pkStatusChanged || uniqueChanged;
    }
 
    protected async manageSingleVirtualEntityField(pool: CodeGenConnection, virtualEntity: any, veField: any, fieldSequence: number, makePrimaryKey: boolean, singleColumnPrimaryKey: boolean = true, reconcilePrimaryKey: boolean = false): Promise<{success: boolean, updatedField: boolean, newFieldID: string | null}> {

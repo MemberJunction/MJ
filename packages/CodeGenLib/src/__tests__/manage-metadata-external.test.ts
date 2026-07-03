@@ -117,6 +117,12 @@ describe('External-entity field sync — data-loss guards', () => {
         expect(mm.flagsChanged({ isPrimaryKey: true, isUnique: false }, compositePk, true, true)).toBe(false);
         expect(mm.flagsChanged({ isPrimaryKey: false, isUnique: false }, notPk, false, true)).toBe(false);
       });
+
+      it('does NOT wipe IsUnique on an ordinary non-PK column (unique email etc. is left alone)', () => {
+        // non-PK field that is unique for its own reason: wantPrimaryKey=false, and it is not currently a PK,
+        // so IsUnique is not PK-related → must NOT be flagged for change (no forced IsUnique=0).
+        expect(mm.flagsChanged({ isPrimaryKey: false, isUnique: true }, notPk, false, true)).toBe(false);
+      });
     });
 
     describe('non-reconcile mode (virtual — one-time bootstrap, never clears)', () => {
