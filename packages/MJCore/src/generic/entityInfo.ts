@@ -8,7 +8,7 @@ import { TypeScriptTypeFromSQLType, SQLFullType, SQLMaxLength, FormatValue, Code
 import { IsFixedWidthStringSQLType } from "@memberjunction/sql-dialect"
 import { LogError } from "./logging"
 import { CompositeKey } from "./compositeKey"
-import { WarningManager, SafeJSONParse, UUIDsEqual } from "@memberjunction/global"
+import { WarningManager, SafeJSONParse, UUIDsEqual, generatePluralName } from "@memberjunction/global"
 
 /**
  * Valid values for EntityField.ExtendedType.
@@ -1992,7 +1992,21 @@ export class EntityInfo extends BaseInfo {
     }
 
     /**
-     * Returns the EntityField object for the Field that has IsNameField set to true. If multiple fields have IsNameField on, the function will return the first field (by sequence) that matches. 
+     * Returns a business-user-friendly PLURAL of the entity's display name — e.g. "Contacts", "Companies",
+     * "Addresses". Derived from `DisplayNameOrName` via `generatePluralName`, so it respects a
+     * per-deployment `DisplayName` override (rename the entity's DisplayName to "Member" and this returns
+     * "Members") and handles irregular plurals and the common English rules (`-y → -ies`, `-s/ch/sh/x/z → -es`).
+     *
+     * This is the mechanism for surfacing the user's own domain nouns in place of the platform meta-noun
+     * "entity" on business-user surfaces (grid headers, empty states, counts). It is display-only — never
+     * use it as a lookup key. If the display name is already plural, `generatePluralName` returns it unchanged.
+     */
+    get DisplayNamePlural(): string {
+        return generatePluralName(this.DisplayNameOrName);
+    }
+
+    /**
+     * Returns the EntityField object for the Field that has IsNameField set to true. If multiple fields have IsNameField on, the function will return the first field (by sequence) that matches.
      * If no fields match, if there is a field called "Name", that is returned. If there is no field called "Name", null is returned.
      */
     get NameField(): EntityFieldInfo | null {

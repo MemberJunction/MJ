@@ -72,7 +72,7 @@
             <i [class]="displayIcon" class="entity-icon"></i>
           }
           <h2 class="entity-title">{{ displayTitle }}</h2>
-          <span class="record-count">{{ entities.length }} entities available</span>
+          <span class="record-count">{{ entities.length }} types of data</span>
         }
       </div>
 
@@ -127,7 +127,7 @@
         <div class="home-view-concept-d">
           @if (isLoadingEntities) {
             <div class="loading-state">
-              <mj-loading text="Loading entities..." size="medium"></mj-loading>
+              <mj-loading text="Getting your data ready..." size="medium"></mj-loading>
             </div>
           } @else {
             <div class="home-main-area" [class.panel-open]="state.quickAccessPanelOpen">
@@ -139,7 +139,7 @@
                     #filterInput
                     type="text"
                     class="search-hero-input"
-                    placeholder="Search entities..."
+                    placeholder="Search your data..."
                     [(ngModel)]="entityFilterText"
                   />
                   @if (entityFilterText) {
@@ -154,9 +154,9 @@
                 <!-- Meta row: entity count + All/Favorites pills -->
                 <div class="search-meta-row">
                   <span class="search-entity-count">
-                    {{ filteredEntityCount }} entities
+                    {{ filteredEntityCount }} types of data
                     @if (applicationCount > 0) {
-                      across {{ applicationCount }} applications
+                      across {{ applicationCount }} apps
                     }
                   </span>
                   <div class="pill-toggle">
@@ -164,7 +164,7 @@
                       class="pill-btn"
                       [class.active]="state.homeViewMode === 'all'"
                       (click)="setHomeViewMode('all')">
-                      All Entities
+                      All Data
                     </button>
                     <button
                       class="pill-btn"
@@ -257,13 +257,13 @@
                 <!-- No results -->
                 @if (filteredEntityCount === 0 && entities.length > 0) {
                   <mj-empty-state Variant="no-results"
-                    Title="No entities found"
+                    Title="No matches found"
                     [Message]="NoEntityResultsMessage" />
                 }
                 @if (entities.length === 0) {
                   <mj-empty-state Icon="fa-solid fa-database"
-                    Title="No Entities Available"
-                    Message="There are no entities configured for this application." />
+                    Title="Nothing here yet"
+                    Message="This app doesn't have any data set up yet. An administrator can add data for you to explore here." />
                 }
               </div>
             </div>
@@ -305,7 +305,7 @@
                 <mj-accordion-panel [Expanded]="isQuickAccessSectionExpanded('recentEntities')" (ExpandedChange)="toggleQuickAccessSection('recentEntities')">
                   <ng-template mjAccordionTitle>
                     <i class="fa-solid fa-table qa-section-icon"></i>
-                    <span>Recent Entities</span>
+                    <span>Recently Viewed</span>
                     <span class="mj-accordion-badge mj-accordion-badge--right">{{ quickAccessRecentEntities.length }}</span>
                   </ng-template>
                   @for (entity of quickAccessRecentEntities; track entity.ID) {
@@ -319,7 +319,7 @@
                     </div>
                   }
                   @if (quickAccessRecentEntities.length === 0) {
-                    <div class="qa-empty">No recent entities</div>
+                    <div class="qa-empty">Nothing viewed yet</div>
                   }
                 </mj-accordion-panel>
 
