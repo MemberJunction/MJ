@@ -24,7 +24,7 @@ export type EntityListItem = {
  * internal and that the current user can read. Sorted by display name.
  */
 export function loadEntities(): EntityListItem[] {
-    const md = new Metadata();
+    const md = new Metadata();  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
     return md.Entities
         .filter((e) => e.AllowUserSearchAPI !== false && !e.Name.startsWith('__'))
         .map((e) => ({
@@ -38,7 +38,7 @@ export function loadEntities(): EntityListItem[] {
 
 /** Total number of entities known to the metadata (all, unfiltered). */
 export function entityCount(): number {
-    return new Metadata().Entities.length;
+    return new Metadata().Entities.length;  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
 }
 
 /**
@@ -80,7 +80,7 @@ export async function loadEntityRecords(
     contextUser?: UserInfo,
     maxRows = 100,
 ): Promise<EntityRecordsLoad | null> {
-    const md = new Metadata();
+    const md = new Metadata();  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
     const entity = md.EntityByName(entityName);
     if (!entity) return null;
 
@@ -146,7 +146,7 @@ export async function loadRecordDetail(
     recordId: string,
     contextUser?: UserInfo,
 ): Promise<RecordDetailLoad | null> {
-    const md = new Metadata();
+    const md = new Metadata();  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
     const entityInfo = md.EntityByName(entityName);
     if (!entityInfo) return null;
 
@@ -191,7 +191,7 @@ export type QueryListItem = {
  * @returns The approved queries as {@link QueryListItem}s.
  */
 export function loadQueries(): QueryListItem[] {
-    const md = new Metadata();
+    const md = new Metadata();  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
     return md.Queries
         .filter((q) => q.Status === 'Approved')
         .map((q) => ({
@@ -205,7 +205,7 @@ export function loadQueries(): QueryListItem[] {
 
 /** Count of approved saved queries in metadata. */
 export function queryCount(): number {
-    return new Metadata().Queries.filter((q) => q.Status === 'Approved').length;
+    return new Metadata().Queries.filter((q) => q.Status === 'Approved').length;  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
 }
 
 /** Result of running a saved query: column names, row objects, count, and success/error. */
@@ -387,7 +387,7 @@ function parsePanels(uiConfigDetails: string): RawPanel[] {
  * @param contextUser Optional acting user (server-side scoping).
  */
 export async function loadDashboard(dashboardId: string, contextUser?: UserInfo): Promise<DashboardLoad | null> {
-    const md = new Metadata();
+    const md = new Metadata();  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
     const currentUser = contextUser ?? md.CurrentUser;
 
     const dashboard = await md.GetEntityObject<MJDashboardEntity>('MJ: Dashboards', currentUser);

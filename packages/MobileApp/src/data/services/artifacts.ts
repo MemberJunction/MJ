@@ -121,7 +121,7 @@ function classify(typeName: string, content: string): Classification {
  * @returns A {@link LoadedArtifact}, or `null` if the artifact can't be loaded.
  */
 export async function loadArtifact(artifactId: string, contextUser?: UserInfo): Promise<LoadedArtifact | null> {
-    const md = new Metadata();
+    const md = new Metadata();  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
     const currentUser = contextUser ?? md.CurrentUser;
 
     const artifact = await md.GetEntityObject<MJConversationArtifactEntity>('MJ: Conversation Artifacts', currentUser);
@@ -220,7 +220,7 @@ function quotedIdList(ids: string[]): string {
  * @param contextUser    Optional acting user (server-side scoping).
  */
 export async function loadConversationArtifacts(conversationId: string, contextUser?: UserInfo): Promise<ArtifactSummary[]> {
-    const md = new Metadata();
+    const md = new Metadata();  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
     const currentUser = contextUser ?? md.CurrentUser;
     const rv = new RunView();
 

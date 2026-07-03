@@ -16,3 +16,4 @@ export const ScrollView = 'ScrollView';
 export const Pressable = 'Pressable';
 export const StyleSheet = { create: <T>(styles: T): T => styles };
 export const Linking = { openURL: vi.fn(() => Promise.resolve(true)) };
+export const Platform = { OS: 'ios' as const };
