@@ -1,0 +1,115 @@
+{
+  "Vendor": "Eventbrite",
+  "AuditedAt": "2026-07-02T00:00:00.000Z",
+  "Sources": [
+    {
+      "URL": "https://jsapi.apiary.io/apis/eventbriteapiv3public/reference.apib",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "Description": "Eventbrite's official API v3 reference, published as an Apiary API Blueprint (MSON format). This is the vendor's own machine-readable contract for the entire v3 surface: 32 resource groups, 102 documented operations (GET/POST/PUT/DELETE with real paths), and 223 MSON Data Structure type definitions (request/response schemas). It is the credential-free ground truth the connector's IO/IOF catalog, per-operation CRUD columns, and pagination shape (cursor `continuation` token) are derived from. Fetched RAW via curl and saved whole to sources/eventbrite-v3-api-blueprint.apib (394,417 bytes, 6,932 lines) -- this is the artifact the extractor script parses, never a WebFetch summary.",
+      "CoversTaxonomies": [
+        "Attendees", "Balance", "Categories & Subcategories", "Discounts", "Display Settings",
+        "Event Capacity", "Event Description", "Event Schedule", "Event Search (deprecated)",
+        "Event Series", "Event Teams", "Events", "Formats", "Inventory Tiers", "Media",
+        "Online Event Page", "Orders", "Organization Members", "Organization Roles",
+        "Organizations", "Pricing", "Questions", "Reports", "Seat Map", "Structured Content",
+        "Text Overrides", "Ticket Buyer Settings", "Ticket Classes", "Ticket Groups", "Users",
+        "Venues", "Webhooks",
+        "Authentication & OAuth", "Errors & Status Codes", "Pagination Envelope", "Expansions",
+        "Basic Types & Date Formats", "API Switches", "Eventual Consistency"
+      ],
+      "AccessNotes": "Discovered via web search for 'Eventbrite API v3 · Apiary'. Confirmed identical byte-for-byte whether fetched from /reference.apib or /reference.apib (single canonical asset). This is the SAME content that backs the public-facing https://www.eventbrite.com/platform/api SPA (which is JS-rendered via window.__SERVER_DATA__ / client-side React Query fetch and does not expose its content to static curl/WebFetch -- the Apiary blueprint is the reachable machine-readable equivalent). Saved to sources/eventbrite-v3-api-blueprint.apib."
+    },
+    {
+      "URL": "https://www.eventbrite.com/platform/api",
+      "AccessStatus": "WebFetchBlocked",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "Description": "Eventbrite Platform API landing/reference page (vendor-owned, canonical URL). This is a React SPA -- static curl/WebFetch retrieves only the page shell (nav chrome, no endpoint content); the actual reference content is client-fetched at runtime. The content is understood to mirror the Apiary API Blueprint (same vendor, same v3 surface) but could not be independently verified byte-for-byte via static fetch. Ranked Tier 1 for authority (canonical vendor URL) but the Apiary blueprint is used as the operative machine-readable artifact since it is provably complete.",
+      "CoversTaxonomies": [],
+      "AccessNotes": "curl returned HTTP 200 but body is a JS shell with no endpoint content (confirmed via grep of window.__SERVER_DATA__ -- contains only page metadata, no reference.apib). WebFetch equally returned only the page title with no body. Retried via curl 2x, consistent JS-shell result both times. Not used as the parse source; the Apiary blueprint (identical vendor content, machine-readable) is used instead. Kept in SOURCES for citation/authority purposes only."
+    },
+    {
+      "URL": "https://www.eventbrite.com/platform/docs/introduction",
+      "AccessStatus": "WebFetchBlocked",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "Description": "Intro to APIs guide (vendor-owned). Same SPA rendering limitation as the main API reference page -- prose/tutorial content, not authoritative for object/field enumeration.",
+      "CoversTaxonomies": ["Authentication & OAuth"],
+      "AccessNotes": "HTTP 200, JS shell only (same SPA pattern as /platform/api). Content is guide-level prose duplicating what the Apiary blueprint's '## About our API' / '## Authentication' sections state in machine-readable form. Not used for extraction; cited for provenance/context only."
+    },
+    {
+      "URL": "https://www.eventbrite.com/platform/docs/api-basics",
+      "AccessStatus": "WebFetchBlocked",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "Description": "API Basics guide (vendor-owned) -- request/response conventions, auth, rate limits in prose form.",
+      "CoversTaxonomies": ["Authentication & OAuth", "Errors & Status Codes"],
+      "AccessNotes": "HTTP 200, JS shell only. Superseded for extraction purposes by the Apiary blueprint's equivalent machine-readable sections (## Authentication, ## Errors)."
+    },
+    {
+      "URL": "https://www.eventbrite.com/platform/docs/events",
+      "AccessStatus": "WebFetchBlocked",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "Description": "Getting Information on Events guide (vendor-owned) -- tutorial walkthrough of the Events endpoints with worked curl examples.",
+      "CoversTaxonomies": ["Events"],
+      "AccessNotes": "HTTP 200, JS shell only. Tier 2 (guide/tutorial, not primary reference)."
+    },
+    {
+      "URL": "https://www.eventbrite.com/platform/docs/create-events",
+      "AccessStatus": "WebFetchBlocked",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "Description": "Creating an Event guide (vendor-owned) -- write-path tutorial for POST /organizations/{organization_id}/events/.",
+      "CoversTaxonomies": ["Events"],
+      "AccessNotes": "HTTP 200, JS shell only. Tier 2 (guide/tutorial)."
+    },
+    {
+      "URL": "https://www.eventbrite.com/platform/docs/order-lookup",
+      "AccessStatus": "WebFetchBlocked",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "Description": "Finding Order Information guide (vendor-owned) -- tutorial on Order retrieval/lookup patterns.",
+      "CoversTaxonomies": ["Orders"],
+      "AccessNotes": "HTTP 200, JS shell only. Tier 2 (guide/tutorial)."
+    },
+    {
+      "URL": "https://www.eventbrite.com/platform/docs/ticket-classes",
+      "AccessStatus": "WebFetchBlocked",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "Description": "Working With Ticket Classes and Ticket Groups guide (vendor-owned).",
+      "CoversTaxonomies": ["Ticket Classes", "Ticket Groups"],
+      "AccessNotes": "HTTP 200, JS shell only. Tier 2 (guide/tutorial)."
+    },
+    {
+      "URL": "https://www.eventbrite.com/platform/docs/webhooks",
+      "AccessStatus": "WebFetchBlocked",
+      "SourceTier": 2,
+      "SourceCategory": "OfficialDocs",
+      "Description": "Using Webhooks guide (vendor-owned) -- explains the webhook `actions` trigger vocabulary (event.created, order.placed, attendee.updated, etc.) in narrative form; the same enum is captured machine-readably in the Apiary blueprint's Webhook/Create Webhook MSON definitions.",
+      "CoversTaxonomies": ["Webhooks"],
+      "AccessNotes": "HTTP 200, JS shell only. Tier 2 (guide). The authoritative trigger-action enum was extracted from the Apiary blueprint (line ~5696-5711), not this page."
+    },
+    {
+      "URL": "https://www.eventbrite.com/platform/docs/changelog",
+      "AccessStatus": "WebFetchBlocked",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "Description": "API Changelog (vendor-owned) -- deprecation notices. The Apiary blueprint cross-references this page inline for several deprecated endpoints (legacy /webhooks/ POST/GET, Event Search /events/search/).",
+      "CoversTaxonomies": [],
+      "AccessNotes": "HTTP 200, JS shell only. Not used for extraction; deprecation warnings were captured directly from inline blueprint annotations instead (each deprecated endpoint carries its own '> Warning:' block with an effective date)."
+    },
+    {
+      "URL": "https://www.postman.com/lunar-rocket-345152/documentation/12364351-445e34da-597f-4d7b-bf4b-58f987706f61",
+      "AccessStatus": "Reachable",
+      "SourceTier": 2,
+      "SourceCategory": "PostmanCollection",
+      "Description": "Community-published Postman collection for the Eventbrite API on the Postman API Network (OAuth 2.0 authorization configured; includes event retrieval and other v3 endpoints). NOT vendor-published/official -- it is a third-party documentation entry on Postman's public network. Useful as a secondary cross-check for endpoint shapes and a token-free way for downstream agents to browse request/response examples, but not treated as authoritative for hard constraints (PK/FK/required flags) given its non-vendor origin.",
+      "CoversTaxonomies": ["Events", "Attendees", "Orders (partial, per collection scope)"],
+      "AccessNotes": "HTTP 200. Confirmed reachable via curl. Not downloaded as a raw collection JSON (the page requires interactive Postman Network navigation to export collection.json; the documentation view itself is sufficient for secondary cross-referencing). Community/Tier-2 -- do not use for hard-constraint provenance; the Apiary API Blueprint is the Tier-1 machine-readable source of record."
+    }
+  ]
+}

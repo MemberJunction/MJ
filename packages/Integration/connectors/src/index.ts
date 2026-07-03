@@ -34,3 +34,6 @@ export { PheedLoopConnector } from './PheedLoopConnector.js';
 export { RhythmConnector, LoadRhythmConnector, type RhythmConnectionConfig } from './RhythmConnector.js';
 export { NoviConnector, LoadNoviConnector, type NoviConnectionConfig } from './NoviConnector.js';
 export { MemberSuiteConnector } from './MemberSuiteConnector.js';
+export { WhovaConnector } from './WhovaConnector.js';
+export { EventbriteConnector } from './EventbriteConnector.js';
+export { StripeConnector } from './StripeConnector.js';

@@ -1,0 +1,705 @@
+{
+  "format": "api-blueprint",
+  "recordTypes": [
+    "Address",
+    "Address Response",
+    "Answer",
+    "Artist Extended Data",
+    "Artist Image Response",
+    "Attendee",
+    "Attendee Address",
+    "Attendee Assigned Unit",
+    "Attendee Barcode",
+    "Attendee Profile",
+    "Attendee Search Order",
+    "Attendee Team",
+    "Base Question",
+    "Base Question Create",
+    "Basic Inventory Info",
+    "Bookmark Info",
+    "Campaign",
+    "Campaign Event Update",
+    "Campaign Invoice",
+    "Campaign Stats",
+    "Campaign Status",
+    "Campaign Template",
+    "Canned Question",
+    "Canned Question Choices",
+    "Canned Question Create",
+    "Capacity Tier",
+    "Capacity Tier Update",
+    "Category",
+    "Checkout Disqualification",
+    "Checkout Settings",
+    "Collection",
+    "Confirmation Message",
+    "Confirmation Message Update",
+    "Contact List",
+    "Contact List Item",
+    "Contact List Item Create",
+    "Contact List Preferences",
+    "Contact List Type",
+    "Continuation",
+    "Cost",
+    "Cost Component",
+    "Cost Component Discount",
+    "Cost Component Rule",
+    "Cost Detail",
+    "Cost Summary",
+    "Country",
+    "Create Structured Content Image Module Data",
+    "Create Structured Content Text Module Data",
+    "Create Structured Content Video Module Data",
+    "Create Webhook",
+    "Crop Mask",
+    "Crop Mask Coordinate",
+    "Cross Event Discount",
+    "Currency Cost",
+    "datetime-tz",
+    "datetime-tz-utc",
+    "Discount",
+    "Discount Base",
+    "Discount Create Error",
+    "Display Settings",
+    "Email Configuration",
+    "Error",
+    "ErrorWithoutDetail",
+    "Event",
+    "Event Campaign",
+    "Event Copy",
+    "Event Create",
+    "Event Listing Properties",
+    "Event Privacy Schedule Response",
+    "Event Sales Status",
+    "Event Series Date",
+    "Event Similarities",
+    "Event Team Creator Emails",
+    "Event Team Response",
+    "Event Texts Content",
+    "Event Texts Request Content",
+    "Event Texts Response",
+    "Event Ticket Buyer Settings",
+    "Event Update",
+    "eventbrite-image",
+    "External Identity",
+    "External Ticketing",
+    "Fee Rate",
+    "Format",
+    "Fulfillment Summary",
+    "Grant",
+    "Hold Response",
+    "Hold Update",
+    "htmltext",
+    "Ideal Bank",
+    "Image",
+    "Instructions",
+    "Instructions Update",
+    "Instrument Type",
+    "Inventory Tier",
+    "Inventory Tier Create",
+    "Inventory Tier Update",
+    "Inventory Tier Update Base",
+    "Item Type",
+    "local-datetime",
+    "Locale",
+    "Media Upload",
+    "Media Upload Post",
+    "Medium Labels",
+    "multipart-text",
+    "Music Properties",
+    "Offline Settings",
+    "Order",
+    "Order Balances",
+    "Order Cost Details",
+    "Organization",
+    "Organization Address Update",
+    "Organization Metadata Update",
+    "Organization Settings",
+    "Organization Settings Update",
+    "Organizer",
+    "Organizer Credit Information",
+    "Pagination",
+    "Payment Capability",
+    "Payment Constraint",
+    "Payment Constraint Create",
+    "Payment Method",
+    "Payment public key",
+    "Payment Type",
+    "Performer",
+    "Performer With Expanded Artist Extended Data",
+    "Plan Features",
+    "Pricing response for items",
+    "Product Feature",
+    "Product Feature Usage",
+    "Public Ticket Class",
+    "Question",
+    "Question Choices",
+    "Question Choices Create",
+    "Question Ticket Class",
+    "Question Ticket Class Create",
+    "Region",
+    "Report Data Attendees",
+    "Report Data Sales",
+    "Report Response Attendees",
+    "Report Response Sales",
+    "Report Totals Attendees",
+    "Report Totals Sales",
+    "Reserved Seating Hold Create",
+    "Reserved Seating Hold Update",
+    "Resource URIs",
+    "Role",
+    "S3 Email Schedule Item",
+    "S3 Email Schedule Item Create",
+    "Sales Ended Message",
+    "Sales Ended Message Update",
+    "Schedule",
+    "Schedule Item Status",
+    "ScheduleBase",
+    "Scheduled Email Report",
+    "Seasonal Banner",
+    "Seat Map",
+    "Social Media Link",
+    "Sponsor Offer Email",
+    "Structured Content Agenda Host",
+    "Structured Content Agenda Host Image",
+    "Structured Content Agenda Slot",
+    "Structured Content Agenda Tab",
+    "Structured Content Agenda Widget",
+    "Structured Content Agenda Widget data",
+    "Structured Content Create Image Module",
+    "Structured Content Create Text Module",
+    "Structured Content Create Video Module",
+    "Structured Content FAQ",
+    "Structured Content FAQs Widget",
+    "Structured Content FAQs Widget data",
+    "Structured Content Image Module",
+    "Structured Content Image Module Data",
+    "Structured Content Module Layout",
+    "Structured Content Page",
+    "Structured Content Page Access Type",
+    "Structured Content Purpose",
+    "Structured Content Text Alignment",
+    "Structured Content Text Module",
+    "Structured Content Text Module Data",
+    "Structured Content Video Module",
+    "Structured Content Video Module Data",
+    "StubEvent",
+    "Subcategory",
+    "Subscription Plan",
+    "Survey Info",
+    "Survey Info Update",
+    "Template Email Schedule Item",
+    "Text Overrides Request Content",
+    "Text Overrides Response Content",
+    "Theme",
+    "Theme Type",
+    "Theme Update",
+    "Ticket Availability",
+    "Ticket Buyer Settings",
+    "Ticket Buyer Settings Update",
+    "Ticket Class",
+    "Ticket Class Confirmation Settings",
+    "Ticket Class Cost",
+    "Ticket Class Create",
+    "Ticket Class For Sale Response",
+    "Ticket Class Response",
+    "Ticket Class Update",
+    "Ticket Group",
+    "Ticket Group Create",
+    "Ticket Rule Bulk Create Update",
+    "Ticket Rule Create Update",
+    "Ticket Rule Response",
+    "Ticket Rule Ticket",
+    "Ticket Variant For Sale Response",
+    "Timed Display",
+    "Timezone",
+    "Tracking Beacon",
+    "Triggers",
+    "Unit Location Image",
+    "Update External Ticketing",
+    "User",
+    "User Address",
+    "User Email",
+    "Venue Base",
+    "Venue Create",
+    "Venue Response",
+    "Webhook"
+  ],
+  "count": 223,
+  "fieldCount": 1801,
+  "confidence": "high",
+  "groups": [
+    "Attendee",
+    "Balance",
+    "Categories",
+    "Discount",
+    "Display Settings",
+    "Event",
+    "Event Capacity",
+    "Event Description",
+    "Event Schedule",
+    "Event Search",
+    "Event Series",
+    "Event Teams",
+    "Formats",
+    "Inventory Tiers",
+    "Media",
+    "Online Event Page",
+    "Order",
+    "Organization",
+    "Organization Roles",
+    "Organizations Members",
+    "Pricing",
+    "Questions",
+    "Reports",
+    "Seat Map",
+    "Structured Content",
+    "Texts Overrides",
+    "Ticket Buyer Settings",
+    "Ticket Class",
+    "Ticket Group",
+    "User",
+    "Venue",
+    "Webhooks"
+  ],
+  "groupCount": 32,
+  "groupObjects": [
+    "Attendee",
+    "Category",
+    "Discount",
+    "Display Settings",
+    "Event",
+    "Event Schedule",
+    "Event Series",
+    "Format",
+    "Has Digital Content",
+    "Inventory Tier",
+    "Media",
+    "Organization",
+    "Organization Member",
+    "Organization Role",
+    "Pricing",
+    "Questions",
+    "Report",
+    "Seat Map",
+    "Text Overrides",
+    "Ticket Buyer Settings",
+    "Ticket Class",
+    "Ticket Group",
+    "User",
+    "Venue",
+    "Webhook"
+  ],
+  "endpointCount": 102,
+  "endpoints": [
+    {
+      "method": "GET",
+      "path": "/events/{event_id}/attendees/{attendee_id}/"
+    },
+    {
+      "method": "GET",
+      "path": "/events/{event_id}/attendees/"
+    },
+    {
+      "method": "GET",
+      "path": "/organizations/{organization_id}/attendees/"
+    },
+    {
+      "method": "GET",
+      "path": "/balance/<public_organization_id>/events/<public_event_id>/"
+    },
+    {
+      "method": "GET",
+      "path": "/categories/{id}/"
+    },
+    {
+      "method": "GET",
+      "path": "/subcategories/{subcategory_id}/"
+    },
+    {
+      "method": "GET",
+      "path": "/categories/"
+    },
+    {
+      "method": "GET",
+      "path": "/subcategories/"
+    },
+    {
+      "method": "GET",
+      "path": "/discounts/{discount_id}/"
+    },
+    {
+      "method": "POST",
+      "path": "/organizations/{organization_id}/discounts/"
+    },
+    {
+      "method": "POST",
+      "path": "/discounts/{discount_id}/"
+    },
+    {
+      "method": "GET",
+      "path": "/organizations/{organization_id}/discounts/{?scope}"
+    },
+    {
+      "method": "DELETE",
+      "path": "/discounts/{discount_id}/"
+    },
+    {
+      "method": "GET",
+      "path": "/events/{event_id}/display_settings/"
+    },
+    {
+      "method": "POST",
+      "path": "/events/{event_id}/display_settings/"
+    },
+    {
+      "method": "GET",
+      "path": "/events/{event_id}/capacity_tier/"
+    },
+    {
+      "method": "POST",
+      "path": "/events/{event_id}/capacity_tier/"
+    },
+    {
+      "method": "GET",
+      "path": "/events/{event_id}/description/"
+    },
+    {
+      "method": "POST",
+      "path": "/events/{event_id}/schedules/"
+    },
+    {
+      "method": "GET",
+      "path": "/events/search/"
+    },
+    {
+      "method": "GET",
+      "path": "/series/{event_series_id}/"
+    },
+    {
+      "method": "GET",
+      "path": "/events/{event_id}/teams/"
+    },
+    {
+      "method": "GET",
+      "path": "/events/{event_id}/teams/{team_id}/"
+    },
+    {
+      "method": "GET",
+      "path": "/events/{event_id}/teams/{team_id}/attendees/"
+    },
+    {
+      "method": "POST",
+      "path": "/events/{event_id}/teams/create/"
+    },
+    {
+      "method": "POST",
+      "path": "/events/{event_id}/teams/{team_id}/check_password/"
+    },
+    {
+      "method": "GET",
+      "path": "/events/{event_id}/teams/search/?term={term}"
+    },
+    {
+      "method": "GET",
+      "path": "/events/{event_id}/"
+    },
+    {
+      "method": "POST",
+      "path": "/organizations/{organization_id}/events/"
+    },
+    {
+      "method": "POST",
+      "path": "/events/{event_id}/"
+    },
+    {
+      "method": "GET",
+      "path": "/venues/{venue_id}/events/"
+    },
+    {
+      "method": "GET",
+      "path": "/organizations/{organization_id}/events/"
+    },
+    {
+      "method": "GET",
+      "path": "/series/{event_series_id}/events/"
+    },
+    {
+      "method": "POST",
+      "path": "/events/{event_id}/publish/"
+    },
+    {
+      "method": "POST",
+      "path": "/events/{event_id}/unpublish/"
+    },
+    {
+      "method": "POST",
+      "path": "/events/{event_id}/copy/"
+    },
+    {
+      "method": "POST",
+      "path": "/events/{event_id}/cancel/"
+    },
+    {
+      "method": "DELETE",
+      "path": "/events/{event_id}/"
+    },
+    {
+      "method": "GET",
+      "path": "/formats/{format_id}/"
+    },
+    {
+      "method": "GET",
+      "path": "/formats/"
+    },
+    {
+      "method": "GET",
+      "path": "/events/{event_id}/inventory_tiers/{inventory_tier_id}/"
+    },
+    {
+      "method": "POST",
+      "path": "/events/{event_id}/inventory_tiers/"
+    },
+    {
+      "method": "POST",
+      "path": "/events/{event_id}/inventory_tiers/"
+    },
+    {
+      "method": "POST",
+      "path": "/events/{event_id}/inventory_tiers/{inventory_tier_id}/"
+    },
+    {
+      "method": "POST",
+      "path": "/events/{event_id}/inventory_tiers/"
+    },
+    {
+      "method": "GET",
+      "path": "/events/{event_id}/inventory_tiers/"
+    },
+    {
+      "method": "DELETE",
+      "path": "/events/{event_id}/inventory_tiers/{inventory_tier_id}/"
+    },
+    {
+      "method": "GET",
+      "path": "/media/{media_id}/{?width,height}"
+    },
+    {
+      "method": "POST",
+      "path": "/media/upload/"
+    },
+    {
+      "method": "GET",
+      "path": "/media/upload/"
+    },
+    {
+      "method": "GET",
+      "path": "/orders/{order_id}/"
+    },
+    {
+      "method": "GET",
+      "path": "/organizations/{organization_id}/orders/"
+    },
+    {
+      "method": "GET",
+      "path": "/events/{event_id}/orders/"
+    },
+    {
+      "method": "GET",
+      "path": "/users/{user_id}/orders/"
+    },
+    {
+      "method": "GET",
+      "path": "/organizations/{organization_id}/members/"
+    },
+    {
+      "method": "GET",
+      "path": "/organizations/{organization_id}/roles/"
+    },
+    {
+      "method": "GET",
+      "path": "/users/me/organizations/"
+    },
+    {
+      "method": "GET",
+      "path": "/users/{user_id}/organizations/"
+    },
+    {
+      "method": "POST",
+      "path": "/pricing/calculate_price_for_item/"
+    },
+    {
+      "method": "GET",
+      "path": "/pricing/fee_rates{?country,currency,plan,payment_type,channel,item_type}"
+    },
+    {
+      "method": "GET",
+      "path": "/events/{event_id}/canned_questions/"
+    },
+    {
+      "method": "GET",
+      "path": "/event/{event_id}/canned_questions/{question_id}"
+    },
+    {
+      "method": "POST",
+      "path": "/events/{event_id}/canned_questions/"
+    },
+    {
+      "method": "POST",
+      "path": "/event/{event_id}/canned_questions/{question_id}"
+    },
+    {
+      "method": "DELETE",
+      "path": "/event/{event_id}/canned_questions/{question_id}"
+    },
+    {
+      "method": "GET",
+      "path": "/events/{event_id}/questions/"
+    },
+    {
+      "method": "POST",
+      "path": "/events/{event_id}/questions/"
+    },
+    {
+      "method": "GET",
+      "path": "/events/{event_id}/questions/{question_id}/"
+    },
+    {
+      "method": "DELETE",
+      "path": "/events/{event_id}/questions/{question_id}/"
+    },
+    {
+      "method": "GET",
+      "path": "/reports/sales/"
+    },
+    {
+      "method": "GET",
+      "path": "/reports/attendees/"
+    },
+    {
+      "method": "GET",
+      "path": "/organizations/{organization_id}/seatmaps/{?venue_id,venue_name_filter}"
+    },
+    {
+      "method": "POST",
+      "path": "/events/{event_id}/seatmaps/"
+    },
+    {
+      "method": "GET",
+      "path": "/events/{id}/structured_content/"
+    },
+    {
+      "method": "GET",
+      "path": "/events/{id}/structured_content/edit/"
+    },
+    {
+      "method": "POST",
+      "path": "/events/{id}/structured_content/{version}/"
+    },
+    {
+      "method": "GET",
+      "path": "/organizations/{organization_id}/text_overrides/{?locale,event_id,venue_id,text_codes}"
+    },
+    {
+      "method": "POST",
+      "path": "/organizations/{organization_id}/text_overrides/"
+    },
+    {
+      "method": "GET",
+      "path": "/events/{event_id}/ticket_buyer_settings/"
+    },
+    {
+      "method": "POST",
+      "path": "/events/{event_id}/ticket_buyer_settings/"
+    },
+    {
+      "method": "GET",
+      "path": "/events/{event_id}/ticket_classes/{ticket_class_id}/"
+    },
+    {
+      "method": "POST",
+      "path": "/events/{event_id}/ticket_classes/"
+    },
+    {
+      "method": "POST",
+      "path": "/events/{event_id}/ticket_classes/{ticket_class_id}/"
+    },
+    {
+      "method": "GET",
+      "path": "/events/{event_id}/ticket_classes/"
+    },
+    {
+      "method": "GET",
+      "path": "/events/{event_id}/ticket_classes/for_sale/"
+    },
+    {
+      "method": "GET",
+      "path": "/ticket_groups/{ticket_group_id}/"
+    },
+    {
+      "method": "POST",
+      "path": "/organizations/{organization_id}/ticket_groups/"
+    },
+    {
+      "method": "POST",
+      "path": "/ticket_groups/{ticket_group_id}/"
+    },
+    {
+      "method": "POST",
+      "path": "/organizations/{organization_id}/events/{event_id}/ticket_classes/{ticket_class_id}/ticket_groups/"
+    },
+    {
+      "method": "GET",
+      "path": "/organizations/{organization_id}/ticket_groups/"
+    },
+    {
+      "method": "DELETE",
+      "path": "/ticket_groups/{ticket_group_id}/"
+    },
+    {
+      "method": "GET",
+      "path": "/users/{user_id}/"
+    },
+    {
+      "method": "GET",
+      "path": "/users/me/"
+    },
+    {
+      "method": "GET",
+      "path": "/venues/{venue_id}/"
+    },
+    {
+      "method": "POST",
+      "path": "/organizations/{organization_id}/venues/"
+    },
+    {
+      "method": "POST",
+      "path": "/venues/{venue_id}/"
+    },
+    {
+      "method": "GET",
+      "path": "/organizations/{organization_id}/venues/"
+    },
+    {
+      "method": "POST",
+      "path": "/organizations/{organization_id}/webhooks/"
+    },
+    {
+      "method": "POST",
+      "path": "/webhooks/"
+    },
+    {
+      "method": "GET",
+      "path": "/organizations/{organization_id}/webhooks/"
+    },
+    {
+      "method": "GET",
+      "path": "/webhooks/"
+    },
+    {
+      "method": "DELETE",
+      "path": "/webhooks/{id}/"
+    }
+  ],
+  "sourcePath": "sources/eventbrite-v3-api-blueprint.apib"
+}

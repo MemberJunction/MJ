@@ -1,0 +1,1 @@
+/Users/bcladmin/Projects/MemberJunction/MJ/packages/Integration/connectors/src/EventbriteConnector.ts
