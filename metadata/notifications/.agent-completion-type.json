@@ -11,7 +11,7 @@
     "Name": "Agent Completion",
     "Description": "Notifications sent when an AI agent completes a task and creates an artifact",
     "DefaultInApp": true,
-    "DefaultEmail": false,
+    "DefaultEmail": true,
     "DefaultSMS": false,
     "AllowUserPreference": true,
     "EmailTemplateID": "@lookup:MJ: Templates.Name=Agent Completion - Email",

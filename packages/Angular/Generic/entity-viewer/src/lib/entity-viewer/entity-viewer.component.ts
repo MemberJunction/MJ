@@ -717,7 +717,14 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
 
   /** Title shown in the "no records" empty state — varies with the active filter. */
   get NoRecordsTitle(): string {
-    return this.DebouncedFilterText ? 'No matching records' : 'No records found';
+    if (this.DebouncedFilterText) {
+      return 'No matching records';
+    }
+    // Prefer the entity's business-friendly plural ("No Contacts yet") over the
+    // generic "No records found" so the empty state speaks the user's own domain
+    // language. Falls back to "records" when no entity is in scope.
+    const plural = this.EffectiveEntity?.DisplayNamePlural;
+    return plural ? `No ${plural} yet` : 'No records found';
   }
 
   /** True when the "no records" empty state is the result of an active filter. */

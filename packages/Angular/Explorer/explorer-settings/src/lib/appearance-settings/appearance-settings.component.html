@@ -1,30 +1,36 @@
 <div class="appearance-settings">
   <h2 class="section-title">Appearance</h2>
-  <p class="section-description">Customize how MemberJunction looks and feels</p>
+  <p class="section-description">Choose how MemberJunction looks. Your choice is saved to your account, so it follows you on every device.</p>
 
-  <div class="coming-soon-banner">
-    <div class="banner-icon">
-      <i class="fa-solid fa-palette"></i>
-    </div>
-    <div class="banner-content">
-      <h3>Coming Soon</h3>
-      <p>We're working on bringing you more customization options.</p>
-    </div>
-  </div>
-
-  <div class="planned-features">
-    <h4 class="features-title">Planned Features</h4>
-    <div class="features-grid">
-      @for (feature of PlannedFeatures; track feature.title) {
-        <div class="feature-card">
-          <div class="feature-icon">
-            <i [class]="feature.icon"></i>
-          </div>
-          <div class="feature-info">
-            <span class="feature-title">{{ feature.title }}</span>
-            <span class="feature-desc">{{ feature.description }}</span>
-          </div>
-        </div>
+  <div class="theme-section">
+    <h4 class="features-title">Theme</h4>
+    <div class="theme-grid">
+      @for (option of ThemeOptions; track option.Id) {
+        <button
+          type="button"
+          class="theme-card"
+          [class.selected]="IsSelected(option.Id)"
+          (click)="SelectTheme(option.Id)">
+          <span class="theme-card-icon">
+            <i [class]="option.Icon"></i>
+          </span>
+          <span class="theme-card-info">
+            <span class="theme-card-name">{{ option.Name }}</span>
+            @if (option.Description) {
+              <span class="theme-card-desc">{{ option.Description }}</span>
+            }
+          </span>
+          @if (option.PreviewColors && option.PreviewColors.length > 0) {
+            <span class="theme-card-swatches">
+              @for (color of option.PreviewColors; track color) {
+                <span class="theme-swatch" [style.background]="color"></span>
+              }
+            </span>
+          }
+          @if (IsSelected(option.Id)) {
+            <span class="theme-card-check"><i class="fa-solid fa-circle-check"></i></span>
+          }
+        </button>
       }
     </div>
   </div>

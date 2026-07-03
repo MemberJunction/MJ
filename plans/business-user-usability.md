@@ -123,15 +123,19 @@ The durable version of this is **not** find-and-replace across templates. It is 
 
 ## 5. Roadmap
 
-### Phase 1 — Foundation: vocabulary + safe defaults (weeks, high leverage) — IN PROGRESS
+### Phase 1 — Foundation: vocabulary + safe defaults (weeks, high leverage) — LARGELY SHIPPED
 
 The multiplier. Everything else lands better once a user isn't tripping over "entities" and blank boxes on day one.
 
-- **1a. `EntityInfo.DisplayNamePlural`** — the plural mechanism, unit-tested. *(this PR)*
-- **1b. Data Explorer vocabulary** — translate the display strings on the default data-browsing app (Search placeholder, loading text, counts, empty states, "Recent Entities"). Bindings/classes/agent-tools untouched. *(this PR — the first, highest-visibility application)*
-- **1c. Safe defaults** — flip email/in-app notifications on for Agent Completion + Routine types; enable the Appearance/theme tab; ship default "try asking…" starter prompts in the chat empty state.
-- **1d. Sharing Center vocabulary** — humanize the permission-domain section labels.
-- **1e. First-run experience** — a lightweight tour over the shell (app switcher → search → Home pins → chat) and consistent teaching empty states. There is *none* today.
+- **1a. `EntityInfo.DisplayNamePlural`** — the plural mechanism, unit-tested. ✅ **Done** (commit 1).
+- **1b. Data Explorer vocabulary** — translate the display strings on the default data-browsing app (Search placeholder, loading text, counts, empty states, "Recent Entities"). Bindings/classes/agent-tools untouched. ✅ **Done** (commit 1).
+- **1b-ext. `DisplayNamePlural` wired into entity-viewer** — the grid / cards / data-grid "no records" empty states now read "No **Contacts** yet" instead of "No records found," using the entity's business-friendly plural with a graceful fallback. ✅ **Done** (commit 2).
+- **1c. Safe defaults** — ✅ **Partly done** (commit 2):
+  - **Notifications**: flipped `DefaultEmail` on for **Agent Completion** (it has an email template, so this is complete). **User Routine** was intentionally left off — it has *no* `EmailTemplateID`, so enabling email alone would be a broken default; in-app is already on. Authoring the routine email template + flipping it is Phase 2.
+  - **Theme**: the Appearance settings tab was a "Coming Soon" stub even though MJ's theming (`ThemeService`) is fully functional (light/dark/registered themes/system, already wired into the avatar menu). Rather than surface a dead-end, **built a real theme picker** in `AppearanceSettingsComponent` (registered themes + a System option, persisted per-user via `ThemeService.SetTheme`, reactively synced with the avatar switcher) and **enabled the tab**.
+  - **Chat starter prompts**: the `emptyState` slot default component shipped blank; added generic, deployment-agnostic default starter prompts (override-safe — a host binding `[]` still suppresses) and softened "Loading agents…" → "Getting your agents ready…".
+- **1d. Sharing Center vocabulary** — ✅ **Done** (commit 2). Humanized the permission-domain section headings ("Dashboard Permissions" → "Dashboards", "Access Control Rules" → "Rules", etc.) via a **display-only** label map. Critically, the underlying `DomainName` is a *lookup key* (drives Revoke resolution, audit-entity mapping, and icon selection) and was left untouched — only what the user reads changed.
+- **1e. First-run experience** — a lightweight tour over the shell (app switcher → search → Home pins → chat) and consistent teaching empty states. There is *none* today. **Not yet built** — this is genuinely new UI surface (a tour/coach-mark component) and is the remaining Phase 1 item.
 
 ### Phase 2 — Turn latent power into a product (the strategic bets)
 
@@ -147,13 +151,23 @@ The multiplier. Everything else lands better once a user isn't tripping over "en
 
 ---
 
-## 6. What's explicitly in vs. out for Phase 1 (this PR)
+## 6. What shipped in Phase 1
 
-**In:**
+**Commit 1 — plan + mechanism + first application:**
 - `EntityInfo.DisplayNamePlural` getter + unit tests (the plural mechanism).
-- Data Explorer display-string vocabulary cleanup (the first, most-visible application).
+- Data Explorer display-string vocabulary cleanup.
 
-**Out (later phases, tracked above):** notification defaults, theme tab, chat starter prompts, first-run tour, Sharing Center labels, the marketplace, the NL-authoring agent, the dashboard assembler. These are real feature work and are sequenced deliberately — not crammed into the foundation.
+**Commit 2 — the rest of the foundation (all built + verified: every touched package builds via `ngc`, every touched package's test suite passes, new tests added for the new behavior):**
+- `DisplayNamePlural` wired into the three entity-viewer empty states.
+- Notification default: Agent Completion email on (template-backed).
+- A real, functional theme picker + the enabled Appearance tab.
+- Chat empty-state default starter prompts + softened loading copy.
+- Sharing Center friendly headings (display-only, lookup keys preserved).
+
+**Still open (deliberately sequenced, not crammed in):** the first-run tour (Phase 1e — new UI surface), the User Routine email template (Phase 2), and all of Phase 2/3 (marketplace, NL-authoring agent, dashboard assembler, role-based onboarding). These are real feature work.
+
+### Verification note
+This work was verified in-environment: `@memberjunction/core` + the five touched Angular packages (`ng-entity-viewer`, `ng-resource-permissions`, `ng-conversations`, `ng-explorer-settings`, `ng-dashboards`) all build cleanly through the Angular compiler (which type-checks templates), and their vitest suites all pass (MJCore DisplayNamePlural 6; entity-viewer 101; resource-permissions 15 incl. 4 updated/new; conversations 863 + 3 new; explorer-settings 40). The metadata notification change is a declarative seed edit that takes effect on the next `mj sync push`.
 
 ---
 

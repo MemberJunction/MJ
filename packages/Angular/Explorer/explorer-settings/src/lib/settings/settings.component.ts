@@ -77,8 +77,7 @@ export class SettingsComponent extends BaseNavigationComponent implements OnInit
       id: 'appearance',
       label: 'Appearance',
       icon: 'fa-solid fa-palette',
-      description: 'Theme and display settings',
-      disabled: true
+      description: 'Theme and display settings'
     }
   ];
 
