@@ -1,0 +1,154 @@
+{
+  "Entries": [
+    {
+      "URL": "https://developer.sky.blackbaud.com/api",
+      "AccessedAt": "2026-07-02T15:47:38.557Z",
+      "UsedFor": "RENXT SKY API OpenAPI 2.0 specs (constituents/gifts/fundraising/prospects) — record-type + field enumeration",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.*",
+      "Excerpt": "Swagger 2.0 definitions + paths walked programmatically by extract-io-iof.ts"
+    },
+    {
+      "URL": "file://packages/Integration/engine/src/types.ts#L371-L374",
+      "AccessedAt": "2026-07-02T18:46:58.410Z",
+      "UsedFor": "Documenting that Blackbaud SKY API's incremental-sync request query param name (last_modified) differs from the response field name (date_modified) tracked for max-watermark, per SourceFieldInfo.IncrementalWatermarkField semantics (which names the response-observed field, not the request query-param name). Also cross-checked directly against 4 in-scope OpenAPI specs confirming both distinct names are present.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Configuration.IncrementalSyncNote",
+      "Excerpt": "SourceFieldInfo.IncrementalWatermarkField: \"Source field name that marks \\\"last changed\\\" for incremental sync. When introspecting a source whose docs (or describe response) name a watermark field, surface it here...\" (types.ts:367-374). OpenAPI specs (constituents.swagger.json etc.) declare request query param \"last_modified\" while response schemas across 10 in-scope specs (church-mgmt, constituents, fundraising, fenxt-gl, fenxt-payable, gifts, prospects, renxt-combined, renxt-reports, renxt-events, renxt-interactions) expose a distinct \"date_modified\" response field."
+    },
+    {
+      "URL": "https://developer.sky.blackbaud.com/apis",
+      "AccessedAt": "2026-07-02T19:30:44.507Z",
+      "UsedFor": "Parent-path / get-by-id resolution for IO 'constituent_consent'",
+      "SourceTier": 2,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.constituent_consent.Configuration",
+      "Excerpt": "constituents.swagger.json CommPrefApi.ConstituentConsentRead (no constituent_id) vs ConstituentConsentAdd; path /commpref/v1/constituents/{constituent_id}/consents"
+    },
+    {
+      "URL": "https://developer.sky.blackbaud.com/apis",
+      "AccessedAt": "2026-07-02T19:30:44.508Z",
+      "UsedFor": "Parent-path / get-by-id resolution for IO 'constituent_solicit_code'",
+      "SourceTier": 2,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.constituent_solicit_code.Configuration",
+      "Excerpt": "constituents.swagger.json CommPrefApi.ConstituentSolicitCodeRead vs ConstituentSolicitCodeAdd; path /commpref/v1/constituents/{constituent_id}/constituentsolicitcodes"
+    },
+    {
+      "URL": "https://developer.sky.blackbaud.com/apis",
+      "AccessedAt": "2026-07-02T19:30:44.508Z",
+      "UsedFor": "Parent-path / get-by-id resolution for IO 'fundraising_fundraiser_assignment'",
+      "SourceTier": 2,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.fundraising_fundraiser_assignment.Configuration",
+      "Excerpt": "constituents.swagger.json /fundraising/v1/fundraisers/{fundraiser_id}/assignments get param fundraiser_id: 'The system record ID of the fundraiser' (a Constituent role)"
+    },
+    {
+      "URL": "https://developer.sky.blackbaud.com/apis",
+      "AccessedAt": "2026-07-02T19:30:44.509Z",
+      "UsedFor": "Parent-path / get-by-id resolution for IO 'constituent_relationship'",
+      "SourceTier": 2,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.constituent_relationship.Configuration",
+      "Excerpt": "fundraising.swagger.json operationId ListFundConstituentRelationships, path .../relationships/constituents/fund/{fundId}; parent is FUND (inverse of IO name)"
+    },
+    {
+      "URL": "https://developer.sky.blackbaud.com/apis",
+      "AccessedAt": "2026-07-02T19:30:44.509Z",
+      "UsedFor": "Parent-path / get-by-id resolution for IO 'fund_relationship'",
+      "SourceTier": 2,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.fund_relationship.Configuration",
+      "Excerpt": "fundraising.swagger.json operationId ListConstituentFundRelationships, path .../relationships/funds/constituent/{constituentId}; parent is CONSTITUENT (inverse of IO name)"
+    },
+    {
+      "URL": "https://developer.sky.blackbaud.com/apis",
+      "AccessedAt": "2026-07-02T19:30:44.510Z",
+      "UsedFor": "Parent-path / get-by-id resolution for IO 'tax_declaration'",
+      "SourceTier": 2,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.tax_declaration.Configuration",
+      "Excerpt": "gifts.swagger.json NXTDataIntegrationApi.TaxDeclaration (Read, no constituent_id) vs NewTaxDeclaration; path /nxt-data-integration/v1/re/giftaid/constituents/{constituent_id}/taxdeclarations"
+    },
+    {
+      "URL": "https://developer.sky.blackbaud.com/apis",
+      "AccessedAt": "2026-07-02T19:30:44.510Z",
+      "UsedFor": "Parent-path / get-by-id resolution for IO 'tribute'",
+      "SourceTier": 2,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.tribute.Configuration",
+      "Excerpt": "gifts.swagger.json path /nxt-data-integration/v1/re/tribute/constituent/{constituentId}; tribute.constituent_record_id already FK to constituent"
+    },
+    {
+      "URL": "https://developer.sky.blackbaud.com/apis",
+      "AccessedAt": "2026-07-02T19:30:44.511Z",
+      "UsedFor": "Parent-path / get-by-id resolution for IO 'tribute_acknowledgee'",
+      "SourceTier": 2,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.tribute_acknowledgee.Configuration",
+      "Excerpt": "tribute_acknowledgee.tribute_id already FK to tribute; path var tributeId (camelCase) does not case-fold-match tribute_id (snake); Strategy A maps it"
+    },
+    {
+      "URL": "https://developer.sky.blackbaud.com/apis",
+      "AccessedAt": "2026-07-02T19:30:44.511Z",
+      "UsedFor": "Parent-path / get-by-id resolution for IO 'table_entry'",
+      "SourceTier": 2,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "io.table_entry.Configuration",
+      "Excerpt": "gifts.swagger.json path /nxt-data-integration/v1/re/codetables/{code_table_id}/tableentries; no code_table schema found in any in-scope spec (verified by schema-name scan)"
+    },
+    {
+      "URL": "https://developer.sky.blackbaud.com/api",
+      "AccessedAt": "2026-07-02T14:40:00.000Z",
+      "UsedFor": "Resolving Integration.CredentialTypeID: authoring a new 'Blackbaud SKY API' credential type modeling the vendor's documented dual-credential requirement (OAuth2 authorization-code confidential-application token pair via oauth2.sky.blackbaud.com AND a separate, always-required 'bb-api-subscription-key' header), since no existing credential type in metadata/credential-types/ models a second required header-secret alongside an OAuth2 token.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.CredentialTypeID",
+      "Excerpt": "SKY API requires TWO credential parts on every request: (1) OAuth 2.0 authorization-code flow access token in 'Authorization: Bearer <token>', and (2) a static SKY API subscription key in the 'Bb-Api-Subscription-Key' header. Both parts are REQUIRED on every call; missing the subscription key or the bearer token independently returns 401. OAuth endpoints (confirmed identically across all 4 in-scope OpenAPI specs' securityDefinitions.skyApiOAuth): authorizationUrl=https://oauth2.sky.blackbaud.com/authorization, tokenUrl=https://oauth2.sky.blackbaud.com/token."
+    },
+    {
+      "URL": "file://packages/Integration/connectors-registry/blackbaud/sources/openapi/constituents.swagger.json",
+      "AccessedAt": "2026-07-02T14:55:00.000Z",
+      "UsedFor": "Confirming Integration.NavigationBaseURL: the SKY API base host, identical across all in-scope OpenAPI specs' top-level 'host' field.",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.NavigationBaseURL",
+      "Excerpt": "\"host\": \"api.sky.blackbaud.com\", \"basePath\": \"/\", \"schemes\": [\"https\"] -- identical host declared in gifts.swagger.json, fundraising.swagger.json, and prospects.swagger.json."
+    },
+    {
+      "URL": "https://developer.sky.blackbaud.com/api",
+      "AccessedAt": "2026-07-02T14:55:00.000Z",
+      "UsedFor": "Confirming Integration.BatchMaxRequestCount (per-app rate-limit count): the vendor's own live docs state a hard rate limit of 10 calls per second for the Standard subscription tier (the tier used unless a customer/partner has an upgraded tier).",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.BatchMaxRequestCount",
+      "Excerpt": "\"Our rate limit is currently 10 calls per second\" (developer.blackbaud.com/skyapi/docs/basics, rendered 2026-06-29). Corroborated by the vendor's own error-response example: 429 -> {\"statusCode\": 429, \"message\": \"Rate limit is exceeded. Try again in 1 second.\"}, and by the prior BlackbaudConnector.ts implementation comment ('Rate limits: 10 calls/second hard limit')."
+    },
+    {
+      "URL": "https://developer.sky.blackbaud.com/api",
+      "AccessedAt": "2026-07-02T14:55:00.000Z",
+      "UsedFor": "Confirming Integration.BatchRequestWaitTime (per-app rate-limit window, seconds): the vendor's own live docs and 429 error example both express the rate-limit window as 1 second.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.BatchRequestWaitTime",
+      "Excerpt": "\"Our rate limit is currently 10 calls per second\" (developer.blackbaud.com/skyapi/docs/basics, rendered 2026-06-29); 429 error body: {\"statusCode\": 429, \"message\": \"Rate limit is exceeded. Try again in 1 second.\"}."
+    }
+  ]
+}

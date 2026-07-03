@@ -223,5 +223,1096 @@
         }
       ]
     }
+  ],
+  "blackbaud": [
+    {
+      "TableName": "constituent",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "gift",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "constituent_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "constituent",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "fundraising_appeal",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "fundraising_campaign",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "address",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "constituent_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "constituent",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "alias",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "constituent_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "constituent",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "appeal_attachment",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "appeal_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "fundraising_appeal",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "parent_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "fundraising_appeal",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "campaign_attachment",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "campaign_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "fundraising_campaign",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "parent_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "fundraising_campaign",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "constituent_appeal_2",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "constituent_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "constituent",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "constituent_attachment",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "constituent_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "constituent",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "parent_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "constituent",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "constituent_code",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "constituent_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "constituent",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "constituent_code_link",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "constituent_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "constituent",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "constituent_consent",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "constituent_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "constituent",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "constituent_fundraiser_assignment",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "appeal_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "fundraising_appeal",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "fund_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "fundraising_fund",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "campaign_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "fundraising_campaign",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "constituent_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "constituent",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "constituent_id_map",
+      "PrimaryKey": [
+        {
+          "FieldName": "constituent_id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "constituent_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "constituent",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "constituent_package",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "constituent_solicit_code",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "constituent_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "constituent",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "converted_constituent",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "country",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "education",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "constituent_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "constituent",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "email_address",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "constituent_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "constituent",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "fund_attachment",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "parent_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "fundraising_fund",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "fundraising_fund",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "fundraising_fundraiser_assignment",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "constituent_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "constituent",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "campaign_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "fundraising_campaign",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "appeal_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "fundraising_appeal",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "fund_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "fundraising_fund",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "fundraising_package",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "appeal_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "fundraising_appeal",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "gift_attachment",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "gift_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "gift",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "parent_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "gift",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "gift_batch",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "gift_id_map",
+      "PrimaryKey": [
+        {
+          "FieldName": "giftlookupid",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "giftlookupid",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "gift",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "gift_tribute",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "tribute_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "tribute",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "gift_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "gift",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "gift_tribute_acknowledgee",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "relationships_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "constituent",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "gift_tribute_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "gift_tribute",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "giving_summary",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "constituent_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "constituent",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "membership",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "constituent_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "constituent",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "name_format_configuration",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "note",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "constituent_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "constituent",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "online_presence",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "constituent_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "constituent",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "opportunity",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "campaign_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "fundraising_campaign",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "constituent_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "constituent",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "fund_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "fundraising_fund",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "opportunity_attachment",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "opportunity_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "opportunity",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "parent_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "opportunity",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "phone",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "constituent_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "constituent",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "rating",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "constituent_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "constituent",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "search_result",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "table_entry",
+      "PrimaryKey": [
+        {
+          "FieldName": "table_entries_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "tax_declaration",
+      "PrimaryKey": [
+        {
+          "FieldName": "declaration_id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "constituent_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "constituent",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "tribute",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "default_fund_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "fundraising_fund",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "constituent_record_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "constituent",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "tribute_acknowledgee",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "relationships_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "constituent",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "tribute_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "tribute",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "appeal_custom_field",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "appeal_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "fundraising_appeal",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "parent_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "fundraising_appeal",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "campaign_custom_field",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "campaign_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "fundraising_campaign",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "parent_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "fundraising_campaign",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "constituent_custom_field",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "constituent_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "constituent",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "parent_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "constituent",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "fund_custom_field",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "parent_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "fundraising_fund",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "gift_custom_field",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "gift_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "gift",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "parent_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "gift",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "opportunity_custom_field",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "opportunity_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "opportunity",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "parent_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "opportunity",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "relationship",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "constituent_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "constituent",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "relation_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "constituent",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "batch_gift",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "batch_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "gift_batch",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "constituent_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "constituent",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "constituent_appeal",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "constituent_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "constituent",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "constituent_campaign",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "constituent_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "constituent",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "constituent_fund",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "constituent_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "constituent",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "gift_split",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "gift_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "gift",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "campaign_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "fundraising_campaign",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "fund_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "fundraising_fund",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "package_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "fundraising_package",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "appeal_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "fundraising_appeal",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "membership_member",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "constituent_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "constituent",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "name_format",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "constituent_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "constituent",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "soft_credit",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "constituent_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "constituent",
+          "RelatedField": "id"
+        },
+        {
+          "FieldName": "gift_id",
+          "SchemaName": "blackbaud",
+          "RelatedTable": "gift",
+          "RelatedField": "id"
+        }
+      ]
+    }
   ]
 }

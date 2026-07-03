@@ -222,6 +222,11 @@ function buildWriteRoundTrip(cap, row) {
   const createPath = rowCol(cap, 'CreateAPIPath');
   if (!createPath) return null;
   const createMethod = String(rowCol(cap, 'CreateMethod') || 'POST').toUpperCase();
+  // Capability gating (symmetric to the harness UPDATE/DELETE cell gates): only exercise an operation the
+  // object actually declares. A create-only / no-delete object must SKIP its update/delete cell, not RED
+  // (connector-test-conventions: "gate the DELETE sub-cell on the object's deployed SupportsDelete/DeleteAPIPath").
+  const hasUpdate = truthyFlag(rowCol(cap, 'SupportsUpdate')) && !!rowCol(cap, 'UpdateAPIPath');
+  const hasDelete = truthyFlag(rowCol(cap, 'SupportsDelete')) && !!rowCol(cap, 'DeleteAPIPath');
   const updatePath = rowCol(cap, 'UpdateAPIPath') || `${createPath}/{id}`;
   const updateMethod = String(rowCol(cap, 'UpdateMethod') || 'PATCH').toUpperCase();
   const deletePath = rowCol(cap, 'DeleteAPIPath') || `${createPath}/{id}`;
@@ -238,16 +243,17 @@ function buildWriteRoundTrip(cap, row) {
   if (idLoc === 'header') headers.location = `${createPath}/${ID}`;
   const routes = [
     { Path: createPath, Method: createMethod, Status: 200, Body: createBody, Headers: headers },
-    { Path: updatePath, Method: updateMethod, Status: 200, Body: { ...createBody, ...(fld ? { [fld]: 'mock-updated' } : {}) } },
-    { Path: deletePath, Method: deleteMethod, Status: 200, Body: { id: ID, deleted: true } },
   ];
+  if (hasUpdate) routes.push({ Path: updatePath, Method: updateMethod, Status: 200, Body: { ...createBody, ...(fld ? { [fld]: 'mock-updated' } : {}) } });
+  if (hasDelete) routes.push({ Path: deletePath, Method: deleteMethod, Status: 200, Body: { id: ID, deleted: true } });
   const wrt = {
     Object: rowCol(cap, 'Name'), Routes: routes,
     CreateAttributes: fld ? { [fld]: 'mock-created' } : {},
     CreatePathMatch: String(createPath).split('/').filter(Boolean)[0] || null,
-    DeleteMethodMatch: deleteMethod,
+    SupportsUpdate: hasUpdate, SupportsDelete: hasDelete,
   };
-  if (fld) wrt.UpdateAttributes = { [fld]: 'mock-updated' };
+  if (hasDelete) wrt.DeleteMethodMatch = deleteMethod;
+  if (hasUpdate && fld) wrt.UpdateAttributes = { [fld]: 'mock-updated' };
   return wrt;
 }
 

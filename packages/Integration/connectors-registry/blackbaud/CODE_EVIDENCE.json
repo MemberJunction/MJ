@@ -1,0 +1,2143 @@
+{
+  "Entries": [
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.558Z",
+      "StructuredOutput": {
+        "APIPath": "/commpref/v1/consent/categories",
+        "SupportsWrite": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.consent_category"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.558Z",
+      "StructuredOutput": {
+        "APIPath": "/commpref/v1/consent/channels",
+        "SupportsWrite": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.consent_channel"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.558Z",
+      "StructuredOutput": {
+        "APIPath": "/commpref/v1/consent/sources",
+        "SupportsWrite": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.consent_source"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.558Z",
+      "StructuredOutput": {
+        "APIPath": "/commpref/v1/constituents/{constituent_id}/consents",
+        "SupportsWrite": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.constituent_consent"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.558Z",
+      "StructuredOutput": {
+        "APIPath": "/commpref/v1/constituents/{constituent_id}/constituentsolicitcodes",
+        "SupportsWrite": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.constituent_solicit_code"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.558Z",
+      "StructuredOutput": {
+        "APIPath": "/commpref/v1/solicitcodes",
+        "SupportsWrite": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.solicit_code"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.559Z",
+      "StructuredOutput": {
+        "APIPath": "/constituent/v1/constituents/{constituent_id}/addresses",
+        "SupportsWrite": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.address"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.559Z",
+      "StructuredOutput": {
+        "APIPath": "/constituent/v1/constituents/{constituent_id}/aliases",
+        "SupportsWrite": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.alias"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.559Z",
+      "StructuredOutput": {
+        "APIPath": null,
+        "SupportsWrite": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.constituent_appeal"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.559Z",
+      "StructuredOutput": {
+        "APIPath": null,
+        "SupportsWrite": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.constituent_campaign"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.559Z",
+      "StructuredOutput": {
+        "APIPath": "/constituent/v1/constituents",
+        "SupportsWrite": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.constituent"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.559Z",
+      "StructuredOutput": {
+        "APIPath": "/constituent/v1/constituents/{constituent_id}/appeals",
+        "SupportsWrite": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.constituent_appeal_2"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.559Z",
+      "StructuredOutput": {
+        "APIPath": "/constituent/v1/constituents/{constituent_id}/attachments",
+        "SupportsWrite": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.constituent_attachment"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.559Z",
+      "StructuredOutput": {
+        "APIPath": "/constituent/v1/constituents/{constituent_id}/constituentcodes",
+        "SupportsWrite": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.constituent_code"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.559Z",
+      "StructuredOutput": {
+        "APIPath": null,
+        "SupportsWrite": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.constituent_code_link"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.559Z",
+      "StructuredOutput": {
+        "APIPath": "/constituent/v1/constituents/{constituent_id}/customfields",
+        "SupportsWrite": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.constituent_custom_field"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.559Z",
+      "StructuredOutput": {
+        "APIPath": null,
+        "SupportsWrite": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.converted_constituent"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.559Z",
+      "StructuredOutput": {
+        "APIPath": "/constituent/v1/countries",
+        "SupportsWrite": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.country"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.559Z",
+      "StructuredOutput": {
+        "APIPath": "/constituent/v1/constituents/customfields/categories/details",
+        "SupportsWrite": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.constituent_custom_field_category"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.559Z",
+      "StructuredOutput": {
+        "APIPath": "/constituent/v1/constituents/{constituent_id}/educations",
+        "SupportsWrite": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.education"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.559Z",
+      "StructuredOutput": {
+        "APIPath": "/constituent/v1/constituents/{constituent_id}/emailaddresses",
+        "SupportsWrite": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.email_address"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.559Z",
+      "StructuredOutput": {
+        "APIPath": null,
+        "SupportsWrite": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.constituent_fund"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.559Z",
+      "StructuredOutput": {
+        "APIPath": "/constituent/v1/constituents/{constituent_id}/fundraiserassignments",
+        "SupportsWrite": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.constituent_fundraiser_assignment"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.559Z",
+      "StructuredOutput": {
+        "APIPath": "/constituent/v1/constituents/{constituent_id}/givingsummary/first",
+        "SupportsWrite": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.giving_summary"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.559Z",
+      "StructuredOutput": {
+        "APIPath": "/constituent/v1/constituents/{constituent_id}/givingsummary/lifetimegiving",
+        "SupportsWrite": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.lifetime_giving"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.559Z",
+      "StructuredOutput": {
+        "APIPath": "/constituent/v1/constituents/{constituent_id}/memberships",
+        "SupportsWrite": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.membership"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.559Z",
+      "StructuredOutput": {
+        "APIPath": null,
+        "SupportsWrite": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.membership_member"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.559Z",
+      "StructuredOutput": {
+        "APIPath": null,
+        "SupportsWrite": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.name_format"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.559Z",
+      "StructuredOutput": {
+        "APIPath": "/constituent/v1/nameformatconfigurations",
+        "SupportsWrite": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.name_format_configuration"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.559Z",
+      "StructuredOutput": {
+        "APIPath": "/constituent/v1/constituents/{constituent_id}/nameformats/summary",
+        "SupportsWrite": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.name_format_summary"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.559Z",
+      "StructuredOutput": {
+        "APIPath": null,
+        "SupportsWrite": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.non_constituent_conversion"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.559Z",
+      "StructuredOutput": {
+        "APIPath": "/constituent/v1/constituents/{constituent_id}/notes",
+        "SupportsWrite": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.note"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.559Z",
+      "StructuredOutput": {
+        "APIPath": "/constituent/v1/constituents/{constituent_id}/onlinepresences",
+        "SupportsWrite": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.online_presence"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.559Z",
+      "StructuredOutput": {
+        "APIPath": null,
+        "SupportsWrite": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.constituent_package"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.559Z",
+      "StructuredOutput": {
+        "APIPath": "/constituent/v1/constituents/{constituent_id}/phones",
+        "SupportsWrite": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.phone"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.559Z",
+      "StructuredOutput": {
+        "APIPath": "/constituent/v1/constituents/{constituent_id}/profilepicture",
+        "SupportsWrite": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.profile_picture"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.559Z",
+      "StructuredOutput": {
+        "APIPath": "/constituent/v1/constituents/{constituent_id}/prospectstatus",
+        "SupportsWrite": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.prospect_status"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.559Z",
+      "StructuredOutput": {
+        "APIPath": "/constituent/v1/constituents/{constituent_id}/ratings",
+        "SupportsWrite": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.rating"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.559Z",
+      "StructuredOutput": {
+        "APIPath": "/constituent/v1/ratings/categories",
+        "SupportsWrite": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.rating_category"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.559Z",
+      "StructuredOutput": {
+        "APIPath": "/constituent/v1/ratings/sources",
+        "SupportsWrite": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.rating_source"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.559Z",
+      "StructuredOutput": {
+        "APIPath": "/constituent/v1/constituents/{constituent_id}/relationships",
+        "SupportsWrite": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.relationship"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.559Z",
+      "StructuredOutput": {
+        "APIPath": "/constituent/v1/constituents/search",
+        "SupportsWrite": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.search_result"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.559Z",
+      "StructuredOutput": {
+        "APIPath": "/fundraising/v1/appeals",
+        "SupportsWrite": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.fundraising_appeal"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.559Z",
+      "StructuredOutput": {
+        "APIPath": "/fundraising/v1/appeals/{appeal_id}/attachments",
+        "SupportsWrite": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.appeal_attachment"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.559Z",
+      "StructuredOutput": {
+        "APIPath": "/fundraising/v1/appeals/{appeal_id}/customfields",
+        "SupportsWrite": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.appeal_custom_field"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.559Z",
+      "StructuredOutput": {
+        "APIPath": "/fundraising/v1/campaigns",
+        "SupportsWrite": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.fundraising_campaign"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.559Z",
+      "StructuredOutput": {
+        "APIPath": "/fundraising/v1/campaigns/{campaign_id}/attachments",
+        "SupportsWrite": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.campaign_attachment"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.559Z",
+      "StructuredOutput": {
+        "APIPath": "/fundraising/v1/campaigns/{campaign_id}/customfields",
+        "SupportsWrite": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.campaign_custom_field"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.559Z",
+      "StructuredOutput": {
+        "APIPath": "/fundraising/v1/appeals/customfields/categories",
+        "SupportsWrite": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.fundraising_custom_field_category"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.559Z",
+      "StructuredOutput": {
+        "APIPath": "/fundraising/v1/funds",
+        "SupportsWrite": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.fundraising_fund"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.559Z",
+      "StructuredOutput": {
+        "APIPath": "/fundraising/v1/funds/{fund_id}/attachments",
+        "SupportsWrite": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.fund_attachment"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.559Z",
+      "StructuredOutput": {
+        "APIPath": "/fundraising/v1/funds/{fund_id}/customfields",
+        "SupportsWrite": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.fund_custom_field"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.559Z",
+      "StructuredOutput": {
+        "APIPath": "/fundraising/v1/fundraisers/{fundraiser_id}/assignments",
+        "SupportsWrite": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.fundraising_fundraiser_assignment"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.560Z",
+      "StructuredOutput": {
+        "APIPath": "/fundraising/v1/packages",
+        "SupportsWrite": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.fundraising_package"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.560Z",
+      "StructuredOutput": {
+        "APIPath": null,
+        "SupportsWrite": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.acknowledgement"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.560Z",
+      "StructuredOutput": {
+        "APIPath": null,
+        "SupportsWrite": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.batch_gift"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.560Z",
+      "StructuredOutput": {
+        "APIPath": "/gift/v1/gifts/customfields/categories",
+        "SupportsWrite": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.gift_custom_field_category"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.560Z",
+      "StructuredOutput": {
+        "APIPath": "/gift/v1/gifts",
+        "SupportsWrite": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.gift"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.560Z",
+      "StructuredOutput": {
+        "APIPath": "/gift/v1/gifts/{gift_id}/attachments",
+        "SupportsWrite": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.gift_attachment"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.560Z",
+      "StructuredOutput": {
+        "APIPath": null,
+        "SupportsWrite": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.gift_batch_gift_error"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.560Z",
+      "StructuredOutput": {
+        "APIPath": "/gift/v1/gifts/{gift_id}/customfields",
+        "SupportsWrite": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.gift_custom_field"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.560Z",
+      "StructuredOutput": {
+        "APIPath": null,
+        "SupportsWrite": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.gift_fundraiser"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.560Z",
+      "StructuredOutput": {
+        "APIPath": null,
+        "SupportsWrite": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.gift_split"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.560Z",
+      "StructuredOutput": {
+        "APIPath": null,
+        "SupportsWrite": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.payment"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.560Z",
+      "StructuredOutput": {
+        "APIPath": null,
+        "SupportsWrite": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.receipt"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.560Z",
+      "StructuredOutput": {
+        "APIPath": null,
+        "SupportsWrite": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.soft_credit"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.560Z",
+      "StructuredOutput": {
+        "APIPath": null,
+        "SupportsWrite": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.create_batch"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.560Z",
+      "StructuredOutput": {
+        "APIPath": "/gift-batch/v1/giftbatches",
+        "SupportsWrite": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.gift_batch"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.560Z",
+      "StructuredOutput": {
+        "APIPath": "/nxt-data-integration/v1/re/constituentidmap/{constituent_id}",
+        "SupportsWrite": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.constituent_id_map"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.560Z",
+      "StructuredOutput": {
+        "APIPath": "/nxt-data-integration/v1/re/relationships/constituents/fund/{fundId}",
+        "SupportsWrite": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.constituent_relationship"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.560Z",
+      "StructuredOutput": {
+        "APIPath": "/nxt-data-integration/v1/re/relationships/funds/constituent/{constituentId}",
+        "SupportsWrite": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.fund_relationship"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.560Z",
+      "StructuredOutput": {
+        "APIPath": "/nxt-data-integration/v1/re/giftidmap/{giftlookupid}",
+        "SupportsWrite": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.gift_id_map"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.560Z",
+      "StructuredOutput": {
+        "APIPath": "/nxt-data-integration/v1/re/gifts/{gift_id}/notes",
+        "SupportsWrite": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.gift_note"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.560Z",
+      "StructuredOutput": {
+        "APIPath": null,
+        "SupportsWrite": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.gift_tribute"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.560Z",
+      "StructuredOutput": {
+        "APIPath": "/nxt-data-integration/v1/re/gifttribute/{gift_tribute_id}/acknowledgees",
+        "SupportsWrite": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.gift_tribute_acknowledgee"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.560Z",
+      "StructuredOutput": {
+        "APIPath": null,
+        "SupportsWrite": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.new_tax_declaration"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.560Z",
+      "StructuredOutput": {
+        "APIPath": "/nxt-data-integration/v1/re/codetables/{code_table_id}/tableentries",
+        "SupportsWrite": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.table_entry"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.560Z",
+      "StructuredOutput": {
+        "APIPath": "/nxt-data-integration/v1/re/giftaid/constituents/{constituent_id}/taxdeclarations",
+        "SupportsWrite": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.tax_declaration"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.560Z",
+      "StructuredOutput": {
+        "APIPath": "/nxt-data-integration/v1/re/tribute/constituent/{constituentId}",
+        "SupportsWrite": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.tribute"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.560Z",
+      "StructuredOutput": {
+        "APIPath": "/nxt-data-integration/v1/re/tribute/{tributeId}/acknowledgees",
+        "SupportsWrite": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.tribute_acknowledgee"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.560Z",
+      "StructuredOutput": {
+        "APIPath": "/opportunity/v1/opportunities/customfields/categories",
+        "SupportsWrite": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.opportunity_custom_field_category"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.560Z",
+      "StructuredOutput": {
+        "APIPath": null,
+        "SupportsWrite": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.fundraiser"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.560Z",
+      "StructuredOutput": {
+        "APIPath": "/opportunity/v1/opportunities",
+        "SupportsWrite": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.opportunity"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.560Z",
+      "StructuredOutput": {
+        "APIPath": "/opportunity/v1/opportunities/{opportunity_id}/attachments",
+        "SupportsWrite": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.opportunity_attachment"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-02T15:47:38.560Z",
+      "StructuredOutput": {
+        "APIPath": "/opportunity/v1/opportunities/{opportunity_id}/customfields",
+        "SupportsWrite": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.opportunity_custom_field"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1.ts",
+      "ScriptRunAt": "2026-07-02T16:21:06.636Z",
+      "StructuredOutput": {
+        "note": "GiftApi.GiftSplitRead.appeal_id.description: \"The system record ID of the appeal associated with the gift split.\" — Tier-1 FK to fundraising_appeal."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.gift_split.appeal_id.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1.ts",
+      "ScriptRunAt": "2026-07-02T16:21:06.636Z",
+      "StructuredOutput": {
+        "note": "GiftApi.GiftSplitRead.campaign_id.description: \"The system record ID of the campaign associated with the gift split.\" — Tier-1 FK to fundraising_campaign."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.gift_split.campaign_id.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1.ts",
+      "ScriptRunAt": "2026-07-02T16:21:06.636Z",
+      "StructuredOutput": {
+        "note": "GiftApi.GiftSplitRead.fund_id.description: \"The system record ID of the fund associated with the gift split.\" — Tier-1 FK to fundraising_fund."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.gift_split.fund_id.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1.ts",
+      "ScriptRunAt": "2026-07-02T16:21:06.636Z",
+      "StructuredOutput": {
+        "note": "GiftApi.GiftSplitRead.package_id.description: \"The system record ID of the package associated with the gift split.\" — Tier-1 FK to fundraising_package."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.gift_split.package_id.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1.ts",
+      "ScriptRunAt": "2026-07-02T16:21:06.636Z",
+      "StructuredOutput": {
+        "note": "GiftApi.SoftCreditRead.constituent_id.description: \"The system record ID of the constituent associated with the soft credit.\" — Tier-1 FK to constituent."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.soft_credit.constituent_id.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1.ts",
+      "ScriptRunAt": "2026-07-02T16:21:06.636Z",
+      "StructuredOutput": {
+        "note": "GiftApi.SoftCreditRead.gift_id.description: \"The system record ID of the gift associated with the soft credit.\" — Tier-1 FK to gift."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.soft_credit.gift_id.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1.ts",
+      "ScriptRunAt": "2026-07-02T16:21:06.636Z",
+      "StructuredOutput": {
+        "note": "GiftApi.GiftFundraiserRead.constituent_id.description: \"The constituent system record ID for the fundraiser associated with the gift.\" — Tier-1 FK to constituent."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.gift_fundraiser.constituent_id.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1.ts",
+      "ScriptRunAt": "2026-07-02T16:21:06.636Z",
+      "StructuredOutput": {
+        "note": "NXTDataIntegrationApi.ConstituentIdMap.system_record_id {x-ms-summary:\"ID\"} — vendor-designated identifier; PK."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.constituent_id_map.system_record_id.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1.ts",
+      "ScriptRunAt": "2026-07-02T16:21:06.636Z",
+      "StructuredOutput": {
+        "note": "NXTDataIntegrationApi.GiftIdMap.system_record_id {x-ms-summary:\"ID\"} — vendor-designated identifier; PK."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.gift_id_map.system_record_id.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1.ts",
+      "ScriptRunAt": "2026-07-02T16:21:06.636Z",
+      "StructuredOutput": {
+        "note": "NXTDataIntegrationApi.TableEntry.table_entries_id {x-ms-summary:\"ID\"} — vendor-designated identifier; PK."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.table_entry.table_entries_id.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1.ts",
+      "ScriptRunAt": "2026-07-02T16:21:06.636Z",
+      "StructuredOutput": {
+        "note": "NXTDataIntegrationApi.TaxDeclaration.declaration_id {x-ms-summary:\"ID\"} — vendor-designated identifier; PK."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.tax_declaration.declaration_id.IsPrimaryKey"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1.ts",
+      "ScriptRunAt": "2026-07-02T16:21:06.636Z",
+      "StructuredOutput": {
+        "note": "gifts.swagger.json POST /gift-batch/v1/giftbatches (operationId CreateGiftBatch) — gift_batch's own write path. Consolidated from phantom create_batch DTO IO per reviewer escalation."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.gift_batch.CreateAPIPath"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1.ts",
+      "ScriptRunAt": "2026-07-02T16:21:06.636Z",
+      "StructuredOutput": {
+        "note": "Deleted phantom create_batch IO (request-DTO for gift_batch, not a syncable record); its Create capability consolidated onto gift_batch. removed=true."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.create_batch"
+    },
+    {
+      "ScriptPath": "runs/connector-blackbaud-1782979459200-c323d976/scripts/apply-amendment.mjs",
+      "ScriptRunAt": "2026-07-02T17:14:27.227Z",
+      "StructuredOutput": {
+        "AmendmentRound": 2,
+        "FKEdgesSet": 41,
+        "AccessPathsSet": 2
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "amendment-round-2:FK+AccessPath"
+    },
+    {
+      "ScriptPath": "runs/connector-blackbaud-1782979459200-c323d976/scripts/apply-amendment.mjs",
+      "ScriptRunAt": "2026-07-02T17:15:05.273Z",
+      "StructuredOutput": {
+        "AmendmentRound": 2,
+        "FKEdgesSet": 41,
+        "AccessPathsSet": 2
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "amendment-round-2:FK+AccessPath"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "fundraising.swagger.json POST /nxt-data-integration/v1/re/appeals (body NXTDataIntegrationApi.AppealCreate, 200 → CreatedAppeal{id}); PATCH /nxt-data-integration/v1/re/appeals/{id} for update. Real Tier-1 endpoints in the in-scope nxt-data-integration namespace."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.fundraising_appeal.SupportsWrite"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "fundraising.swagger.json POST /nxt-data-integration/v1/re/campaigns (body CampaignCreate, 200 → CreatedCampaign{id}); PATCH .../{id}."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.fundraising_campaign.SupportsWrite"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "fundraising.swagger.json POST /nxt-data-integration/v1/re/funds (body FundCreate, 200 → CreatedFund{id}); PATCH .../{id}."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.fundraising_fund.SupportsWrite"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "fundraising.swagger.json POST /nxt-data-integration/v1/re/constitappeals (body ConstituentAppealCreate{constituent_id,appeal_description,...}, 200 → CreatedConstituentAppeal{id}); PATCH .../{id}. Identity confirmed: ConstituentAppealCreate is the constituent↔appeal association that /constituent/v1/constituents/{constituent_id}/appeals reads."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.constituent_appeal_2.SupportsWrite"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "constituents.swagger.json: /constituent/v1/constituents has ONLY a GET (no POST). Create is split across POST /constituent/v1/virtual/individuals and /constituent/v1/virtual/organizations. No generic create path is provable → SupportsCreate=false, split mechanism documented in Configuration. Read+Update retained as extracted."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.constituent.SupportsCreate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "sources/openapi/constituents.swagger.json: GET operation for this reference/lookup declares zero limit/offset/skip/page/cursor parameters → not paginated. SupportsPagination=false, PaginationType=None (matches dual-derive)."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.country.SupportsPagination"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "sources/openapi/constituents.swagger.json: GET operation for this reference/lookup declares zero limit/offset/skip/page/cursor parameters → not paginated. SupportsPagination=false, PaginationType=None (matches dual-derive)."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.constituent_custom_field_category.SupportsPagination"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "sources/openapi/gifts.swagger.json: GET operation for this reference/lookup declares zero limit/offset/skip/page/cursor parameters → not paginated. SupportsPagination=false, PaginationType=None (matches dual-derive)."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.gift_custom_field_category.SupportsPagination"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "sources/openapi/fundraising.swagger.json: GET operation for this reference/lookup declares zero limit/offset/skip/page/cursor parameters → not paginated. SupportsPagination=false, PaginationType=None (matches dual-derive)."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.fundraising_custom_field_category.SupportsPagination"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "sources/openapi/prospects.swagger.json: GET operation for this reference/lookup declares zero limit/offset/skip/page/cursor parameters → not paginated. SupportsPagination=false, PaginationType=None (matches dual-derive)."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.opportunity_custom_field_category.SupportsPagination"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "sources/openapi/constituents.swagger.json: GET operation for this reference/lookup declares zero limit/offset/skip/page/cursor parameters → not paginated. SupportsPagination=false, PaginationType=None (matches dual-derive)."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.name_format_configuration.SupportsPagination"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "sources/openapi/constituents.swagger.json: GET operation for this reference/lookup declares zero limit/offset/skip/page/cursor parameters → not paginated. SupportsPagination=false, PaginationType=None (matches dual-derive)."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.consent_category.SupportsPagination"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "sources/openapi/constituents.swagger.json: GET operation for this reference/lookup declares zero limit/offset/skip/page/cursor parameters → not paginated. SupportsPagination=false, PaginationType=None (matches dual-derive)."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.consent_channel.SupportsPagination"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "sources/openapi/constituents.swagger.json: GET operation for this reference/lookup declares zero limit/offset/skip/page/cursor parameters → not paginated. SupportsPagination=false, PaginationType=None (matches dual-derive)."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.consent_source.SupportsPagination"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "sources/openapi/constituents.swagger.json: GET operation for this reference/lookup declares zero limit/offset/skip/page/cursor parameters → not paginated. SupportsPagination=false, PaginationType=None (matches dual-derive)."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.solicit_code.SupportsPagination"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "sources/openapi/prospects.swagger.json: GET operation for this reference/lookup declares zero limit/offset/skip/page/cursor parameters → not paginated. SupportsPagination=false, PaginationType=None (matches dual-derive)."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.rating_category.SupportsPagination"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "sources/openapi/prospects.swagger.json: GET operation for this reference/lookup declares zero limit/offset/skip/page/cursor parameters → not paginated. SupportsPagination=false, PaginationType=None (matches dual-derive)."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.rating_source.SupportsPagination"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: CreateAPIPath=\"/commpref/v1/consent/consents\" + CreateMethod present (bijection-verified) → SupportsCreate=true. v5.42.x DeclaredIntent column is NOT NULL DEFAULT(0); undefined would silently drop the capability on push."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.constituent_consent.SupportsCreate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: CreateAPIPath=\"/commpref/v1/constituentsolicitcodes\" + CreateMethod present (bijection-verified) → SupportsCreate=true. v5.42.x DeclaredIntent column is NOT NULL DEFAULT(0); undefined would silently drop the capability on push."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.constituent_solicit_code.SupportsCreate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: UpdateAPIPath=\"/commpref/v1/constituentsolicitcodes/{constituent_solicit_code_id}\" + UpdateMethod present (bijection-verified) → SupportsUpdate=true. Same v5.42.x DeclaredIntent NOT NULL DEFAULT(0) rationale."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.constituent_solicit_code.SupportsUpdate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: CreateAPIPath=\"/constituent/v1/addresses\" + CreateMethod present (bijection-verified) → SupportsCreate=true. v5.42.x DeclaredIntent column is NOT NULL DEFAULT(0); undefined would silently drop the capability on push."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.address.SupportsCreate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: UpdateAPIPath=\"/constituent/v1/addresses/{address_id}\" + UpdateMethod present (bijection-verified) → SupportsUpdate=true. Same v5.42.x DeclaredIntent NOT NULL DEFAULT(0) rationale."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.address.SupportsUpdate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: CreateAPIPath=\"/constituent/v1/aliases\" + CreateMethod present (bijection-verified) → SupportsCreate=true. v5.42.x DeclaredIntent column is NOT NULL DEFAULT(0); undefined would silently drop the capability on push."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.alias.SupportsCreate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: UpdateAPIPath=\"/constituent/v1/aliases/{alias_id}\" + UpdateMethod present (bijection-verified) → SupportsUpdate=true. Same v5.42.x DeclaredIntent NOT NULL DEFAULT(0) rationale."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.alias.SupportsUpdate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: UpdateAPIPath=\"/constituent/v1/constituents/{constituent_id}\" + UpdateMethod present (bijection-verified) → SupportsUpdate=true. Same v5.42.x DeclaredIntent NOT NULL DEFAULT(0) rationale."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.constituent.SupportsUpdate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: CreateAPIPath=\"/constituent/v1/constituents/attachments\" + CreateMethod present (bijection-verified) → SupportsCreate=true. v5.42.x DeclaredIntent column is NOT NULL DEFAULT(0); undefined would silently drop the capability on push."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.constituent_attachment.SupportsCreate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: UpdateAPIPath=\"/constituent/v1/constituents/attachments/{attachment_id}\" + UpdateMethod present (bijection-verified) → SupportsUpdate=true. Same v5.42.x DeclaredIntent NOT NULL DEFAULT(0) rationale."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.constituent_attachment.SupportsUpdate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: CreateAPIPath=\"/constituent/v1/constituentcodes\" + CreateMethod present (bijection-verified) → SupportsCreate=true. v5.42.x DeclaredIntent column is NOT NULL DEFAULT(0); undefined would silently drop the capability on push."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.constituent_code.SupportsCreate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: UpdateAPIPath=\"/constituent/v1/constituentcodes/{constituent_code_id}\" + UpdateMethod present (bijection-verified) → SupportsUpdate=true. Same v5.42.x DeclaredIntent NOT NULL DEFAULT(0) rationale."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.constituent_code.SupportsUpdate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: CreateAPIPath=\"/constituent/v1/constituents/customfields\" + CreateMethod present (bijection-verified) → SupportsCreate=true. v5.42.x DeclaredIntent column is NOT NULL DEFAULT(0); undefined would silently drop the capability on push."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.constituent_custom_field.SupportsCreate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: UpdateAPIPath=\"/constituent/v1/constituents/customfields/{custom_field_id}\" + UpdateMethod present (bijection-verified) → SupportsUpdate=true. Same v5.42.x DeclaredIntent NOT NULL DEFAULT(0) rationale."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.constituent_custom_field.SupportsUpdate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: CreateAPIPath=\"/constituent/v1/educations\" + CreateMethod present (bijection-verified) → SupportsCreate=true. v5.42.x DeclaredIntent column is NOT NULL DEFAULT(0); undefined would silently drop the capability on push."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.education.SupportsCreate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: UpdateAPIPath=\"/constituent/v1/educations/{education_id}\" + UpdateMethod present (bijection-verified) → SupportsUpdate=true. Same v5.42.x DeclaredIntent NOT NULL DEFAULT(0) rationale."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.education.SupportsUpdate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: CreateAPIPath=\"/constituent/v1/emailaddresses\" + CreateMethod present (bijection-verified) → SupportsCreate=true. v5.42.x DeclaredIntent column is NOT NULL DEFAULT(0); undefined would silently drop the capability on push."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.email_address.SupportsCreate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: UpdateAPIPath=\"/constituent/v1/emailaddresses/{email_address_id}\" + UpdateMethod present (bijection-verified) → SupportsUpdate=true. Same v5.42.x DeclaredIntent NOT NULL DEFAULT(0) rationale."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.email_address.SupportsUpdate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: CreateAPIPath=\"/constituent/v1/nameformats\" + CreateMethod present (bijection-verified) → SupportsCreate=true. v5.42.x DeclaredIntent column is NOT NULL DEFAULT(0); undefined would silently drop the capability on push."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.name_format.SupportsCreate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: UpdateAPIPath=\"/constituent/v1/nameformats/{name_format_id}\" + UpdateMethod present (bijection-verified) → SupportsUpdate=true. Same v5.42.x DeclaredIntent NOT NULL DEFAULT(0) rationale."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.name_format.SupportsUpdate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: CreateAPIPath=\"/constituent/v1/constituents/convert/{non_constituent_id}\" + CreateMethod present (bijection-verified) → SupportsCreate=true. v5.42.x DeclaredIntent column is NOT NULL DEFAULT(0); undefined would silently drop the capability on push."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.non_constituent_conversion.SupportsCreate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: CreateAPIPath=\"/constituent/v1/notes\" + CreateMethod present (bijection-verified) → SupportsCreate=true. v5.42.x DeclaredIntent column is NOT NULL DEFAULT(0); undefined would silently drop the capability on push."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.note.SupportsCreate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: UpdateAPIPath=\"/constituent/v1/notes/{note_id}\" + UpdateMethod present (bijection-verified) → SupportsUpdate=true. Same v5.42.x DeclaredIntent NOT NULL DEFAULT(0) rationale."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.note.SupportsUpdate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: CreateAPIPath=\"/constituent/v1/onlinepresences\" + CreateMethod present (bijection-verified) → SupportsCreate=true. v5.42.x DeclaredIntent column is NOT NULL DEFAULT(0); undefined would silently drop the capability on push."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.online_presence.SupportsCreate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: UpdateAPIPath=\"/constituent/v1/onlinepresences/{online_presence_id}\" + UpdateMethod present (bijection-verified) → SupportsUpdate=true. Same v5.42.x DeclaredIntent NOT NULL DEFAULT(0) rationale."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.online_presence.SupportsUpdate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: CreateAPIPath=\"/constituent/v1/phones\" + CreateMethod present (bijection-verified) → SupportsCreate=true. v5.42.x DeclaredIntent column is NOT NULL DEFAULT(0); undefined would silently drop the capability on push."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.phone.SupportsCreate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: UpdateAPIPath=\"/constituent/v1/phones/{phone_id}\" + UpdateMethod present (bijection-verified) → SupportsUpdate=true. Same v5.42.x DeclaredIntent NOT NULL DEFAULT(0) rationale."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.phone.SupportsUpdate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: UpdateAPIPath=\"/constituent/v1/constituents/{constituent_id}/profilepicture\" + UpdateMethod present (bijection-verified) → SupportsUpdate=true. Same v5.42.x DeclaredIntent NOT NULL DEFAULT(0) rationale."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.profile_picture.SupportsUpdate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: CreateAPIPath=\"/constituent/v1/ratings\" + CreateMethod present (bijection-verified) → SupportsCreate=true. v5.42.x DeclaredIntent column is NOT NULL DEFAULT(0); undefined would silently drop the capability on push."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.rating.SupportsCreate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: UpdateAPIPath=\"/constituent/v1/relationships/{relationship_id}\" + UpdateMethod present (bijection-verified) → SupportsUpdate=true. Same v5.42.x DeclaredIntent NOT NULL DEFAULT(0) rationale."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.relationship.SupportsUpdate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: CreateAPIPath=\"/fundraising/v1/appeals/attachments\" + CreateMethod present (bijection-verified) → SupportsCreate=true. v5.42.x DeclaredIntent column is NOT NULL DEFAULT(0); undefined would silently drop the capability on push."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.appeal_attachment.SupportsCreate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: UpdateAPIPath=\"/fundraising/v1/appeals/attachments/{attachment_id}\" + UpdateMethod present (bijection-verified) → SupportsUpdate=true. Same v5.42.x DeclaredIntent NOT NULL DEFAULT(0) rationale."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.appeal_attachment.SupportsUpdate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: CreateAPIPath=\"/fundraising/v1/appeals/customfields\" + CreateMethod present (bijection-verified) → SupportsCreate=true. v5.42.x DeclaredIntent column is NOT NULL DEFAULT(0); undefined would silently drop the capability on push."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.appeal_custom_field.SupportsCreate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: UpdateAPIPath=\"/fundraising/v1/appeals/customfields/{custom_field_id}\" + UpdateMethod present (bijection-verified) → SupportsUpdate=true. Same v5.42.x DeclaredIntent NOT NULL DEFAULT(0) rationale."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.appeal_custom_field.SupportsUpdate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: CreateAPIPath=\"/fundraising/v1/campaigns/attachments\" + CreateMethod present (bijection-verified) → SupportsCreate=true. v5.42.x DeclaredIntent column is NOT NULL DEFAULT(0); undefined would silently drop the capability on push."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.campaign_attachment.SupportsCreate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: UpdateAPIPath=\"/fundraising/v1/campaigns/attachments/{attachment_id}\" + UpdateMethod present (bijection-verified) → SupportsUpdate=true. Same v5.42.x DeclaredIntent NOT NULL DEFAULT(0) rationale."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.campaign_attachment.SupportsUpdate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: CreateAPIPath=\"/fundraising/v1/campaigns/customfields\" + CreateMethod present (bijection-verified) → SupportsCreate=true. v5.42.x DeclaredIntent column is NOT NULL DEFAULT(0); undefined would silently drop the capability on push."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.campaign_custom_field.SupportsCreate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: UpdateAPIPath=\"/fundraising/v1/campaigns/customfields/{custom_field_id}\" + UpdateMethod present (bijection-verified) → SupportsUpdate=true. Same v5.42.x DeclaredIntent NOT NULL DEFAULT(0) rationale."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.campaign_custom_field.SupportsUpdate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: CreateAPIPath=\"/fundraising/v1/funds/attachments\" + CreateMethod present (bijection-verified) → SupportsCreate=true. v5.42.x DeclaredIntent column is NOT NULL DEFAULT(0); undefined would silently drop the capability on push."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.fund_attachment.SupportsCreate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: UpdateAPIPath=\"/fundraising/v1/funds/attachments/{attachment_id}\" + UpdateMethod present (bijection-verified) → SupportsUpdate=true. Same v5.42.x DeclaredIntent NOT NULL DEFAULT(0) rationale."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.fund_attachment.SupportsUpdate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: CreateAPIPath=\"/fundraising/v1/funds/customfields\" + CreateMethod present (bijection-verified) → SupportsCreate=true. v5.42.x DeclaredIntent column is NOT NULL DEFAULT(0); undefined would silently drop the capability on push."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.fund_custom_field.SupportsCreate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: UpdateAPIPath=\"/fundraising/v1/funds/customfields/{custom_field_id}\" + UpdateMethod present (bijection-verified) → SupportsUpdate=true. Same v5.42.x DeclaredIntent NOT NULL DEFAULT(0) rationale."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.fund_custom_field.SupportsUpdate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: CreateAPIPath=\"/fundraising/v1/fundraisers/assignments\" + CreateMethod present (bijection-verified) → SupportsCreate=true. v5.42.x DeclaredIntent column is NOT NULL DEFAULT(0); undefined would silently drop the capability on push."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.fundraising_fundraiser_assignment.SupportsCreate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: UpdateAPIPath=\"/gift/v1/giftacknowledgements/{acknowledgement_id}\" + UpdateMethod present (bijection-verified) → SupportsUpdate=true. Same v5.42.x DeclaredIntent NOT NULL DEFAULT(0) rationale."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.acknowledgement.SupportsUpdate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: CreateAPIPath=\"/gift/v1/gifts\" + CreateMethod present (bijection-verified) → SupportsCreate=true. v5.42.x DeclaredIntent column is NOT NULL DEFAULT(0); undefined would silently drop the capability on push."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.gift.SupportsCreate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: CreateAPIPath=\"/gift/v1/gifts/attachments\" + CreateMethod present (bijection-verified) → SupportsCreate=true. v5.42.x DeclaredIntent column is NOT NULL DEFAULT(0); undefined would silently drop the capability on push."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.gift_attachment.SupportsCreate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: UpdateAPIPath=\"/gift/v1/gifts/attachments/{attachment_id}\" + UpdateMethod present (bijection-verified) → SupportsUpdate=true. Same v5.42.x DeclaredIntent NOT NULL DEFAULT(0) rationale."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.gift_attachment.SupportsUpdate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: CreateAPIPath=\"/gift/v1/gifts/customfields\" + CreateMethod present (bijection-verified) → SupportsCreate=true. v5.42.x DeclaredIntent column is NOT NULL DEFAULT(0); undefined would silently drop the capability on push."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.gift_custom_field.SupportsCreate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: UpdateAPIPath=\"/gift/v1/gifts/customfields/{custom_field_id}\" + UpdateMethod present (bijection-verified) → SupportsUpdate=true. Same v5.42.x DeclaredIntent NOT NULL DEFAULT(0) rationale."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.gift_custom_field.SupportsUpdate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: UpdateAPIPath=\"/gift/v1/giftreceipts/{receipt_id}\" + UpdateMethod present (bijection-verified) → SupportsUpdate=true. Same v5.42.x DeclaredIntent NOT NULL DEFAULT(0) rationale."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.receipt.SupportsUpdate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: CreateAPIPath=\"/gift-batch/v1/giftbatches\" + CreateMethod present (bijection-verified) → SupportsCreate=true. v5.42.x DeclaredIntent column is NOT NULL DEFAULT(0); undefined would silently drop the capability on push."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.gift_batch.SupportsCreate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: CreateAPIPath=\"/nxt-data-integration/v1/re/gifts/notes\" + CreateMethod present (bijection-verified) → SupportsCreate=true. v5.42.x DeclaredIntent column is NOT NULL DEFAULT(0); undefined would silently drop the capability on push."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.gift_note.SupportsCreate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: UpdateAPIPath=\"/nxt-data-integration/v1/re/gifts/notes/{id}\" + UpdateMethod present (bijection-verified) → SupportsUpdate=true. Same v5.42.x DeclaredIntent NOT NULL DEFAULT(0) rationale."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.gift_note.SupportsUpdate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: CreateAPIPath=\"/nxt-data-integration/v1/re/gifttribute\" + CreateMethod present (bijection-verified) → SupportsCreate=true. v5.42.x DeclaredIntent column is NOT NULL DEFAULT(0); undefined would silently drop the capability on push."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.gift_tribute.SupportsCreate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: UpdateAPIPath=\"/nxt-data-integration/v1/re/gifttribute/{gift_tribute_id}\" + UpdateMethod present (bijection-verified) → SupportsUpdate=true. Same v5.42.x DeclaredIntent NOT NULL DEFAULT(0) rationale."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.gift_tribute.SupportsUpdate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: UpdateAPIPath=\"/nxt-data-integration/v1/re/gifttribute/acknowledgees/{gift_tribute_acknowledgee_id}\" + UpdateMethod present (bijection-verified) → SupportsUpdate=true. Same v5.42.x DeclaredIntent NOT NULL DEFAULT(0) rationale."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.gift_tribute_acknowledgee.SupportsUpdate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: CreateAPIPath=\"/nxt-data-integration/v1/re/giftaid/taxdeclarations\" + CreateMethod present (bijection-verified) → SupportsCreate=true. v5.42.x DeclaredIntent column is NOT NULL DEFAULT(0); undefined would silently drop the capability on push."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.new_tax_declaration.SupportsCreate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: UpdateAPIPath=\"/nxt-data-integration/v1/re/giftaid/taxdeclarations/{tax_declaration_id}\" + UpdateMethod present (bijection-verified) → SupportsUpdate=true. Same v5.42.x DeclaredIntent NOT NULL DEFAULT(0) rationale."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.tax_declaration.SupportsUpdate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: CreateAPIPath=\"/nxt-data-integration/v1/re/tribute\" + CreateMethod present (bijection-verified) → SupportsCreate=true. v5.42.x DeclaredIntent column is NOT NULL DEFAULT(0); undefined would silently drop the capability on push."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.tribute.SupportsCreate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: CreateAPIPath=\"/nxt-data-integration/v1/re/tribute/acknowledgee\" + CreateMethod present (bijection-verified) → SupportsCreate=true. v5.42.x DeclaredIntent column is NOT NULL DEFAULT(0); undefined would silently drop the capability on push."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.tribute_acknowledgee.SupportsCreate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: CreateAPIPath=\"/opportunity/v1/opportunities\" + CreateMethod present (bijection-verified) → SupportsCreate=true. v5.42.x DeclaredIntent column is NOT NULL DEFAULT(0); undefined would silently drop the capability on push."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.opportunity.SupportsCreate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: UpdateAPIPath=\"/opportunity/v1/opportunities/{opportunity_id}\" + UpdateMethod present (bijection-verified) → SupportsUpdate=true. Same v5.42.x DeclaredIntent NOT NULL DEFAULT(0) rationale."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.opportunity.SupportsUpdate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: CreateAPIPath=\"/opportunity/v1/opportunities/attachments\" + CreateMethod present (bijection-verified) → SupportsCreate=true. v5.42.x DeclaredIntent column is NOT NULL DEFAULT(0); undefined would silently drop the capability on push."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.opportunity_attachment.SupportsCreate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: UpdateAPIPath=\"/opportunity/v1/opportunities/attachments/{attachment_id}\" + UpdateMethod present (bijection-verified) → SupportsUpdate=true. Same v5.42.x DeclaredIntent NOT NULL DEFAULT(0) rationale."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.opportunity_attachment.SupportsUpdate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: CreateAPIPath=\"/opportunity/v1/opportunities/customfields\" + CreateMethod present (bijection-verified) → SupportsCreate=true. v5.42.x DeclaredIntent column is NOT NULL DEFAULT(0); undefined would silently drop the capability on push."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.opportunity_custom_field.SupportsCreate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round1-delta.ts",
+      "ScriptRunAt": "2026-07-02T18:08:09.097Z",
+      "StructuredOutput": {
+        "note": "Mechanical derive: UpdateAPIPath=\"/opportunity/v1/opportunities/customfields/{custom_field_id}\" + UpdateMethod present (bijection-verified) → SupportsUpdate=true. Same v5.42.x DeclaredIntent NOT NULL DEFAULT(0) rationale."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.opportunity_custom_field.SupportsUpdate"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round2-watermark.ts",
+      "ScriptRunAt": "2026-07-02T18:52:07.876Z",
+      "StructuredOutput": {
+        "note": "constituents.swagger.json#/definitions/ConstituentApi.ConstituentRead/properties/date_modified: response body field 'date_modified' (format date-time, \"the date when the record was last modified\") EXISTS; 'last_modified' is ABSENT from the same properties object (it is the request query-param name only, at #/paths/.../get/parameters). IncrementalWatermarkField is the RESPONSE-record field name the max-watermark tracker reads (engine/src/types.ts:371-374; WildApricotConnector.MaxWatermark → r[field]) → date_modified, not last_modified."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.constituent.IncrementalWatermarkField"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round2-watermark.ts",
+      "ScriptRunAt": "2026-07-02T18:52:07.876Z",
+      "StructuredOutput": {
+        "note": "fundraising.swagger.json#/definitions/FundraisingApi.AppealRead/properties/date_modified: response body field 'date_modified' (format date-time, \"the date when the record was last modified\") EXISTS; 'last_modified' is ABSENT from the same properties object (it is the request query-param name only, at #/paths/.../get/parameters). IncrementalWatermarkField is the RESPONSE-record field name the max-watermark tracker reads (engine/src/types.ts:371-374; WildApricotConnector.MaxWatermark → r[field]) → date_modified, not last_modified."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.fundraising_appeal.IncrementalWatermarkField"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round2-watermark.ts",
+      "ScriptRunAt": "2026-07-02T18:52:07.876Z",
+      "StructuredOutput": {
+        "note": "fundraising.swagger.json#/definitions/FundraisingApi.CampaignRead/properties/date_modified: response body field 'date_modified' (format date-time, \"the date when the record was last modified\") EXISTS; 'last_modified' is ABSENT from the same properties object (it is the request query-param name only, at #/paths/.../get/parameters). IncrementalWatermarkField is the RESPONSE-record field name the max-watermark tracker reads (engine/src/types.ts:371-374; WildApricotConnector.MaxWatermark → r[field]) → date_modified, not last_modified."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.fundraising_campaign.IncrementalWatermarkField"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round2-watermark.ts",
+      "ScriptRunAt": "2026-07-02T18:52:07.876Z",
+      "StructuredOutput": {
+        "note": "fundraising.swagger.json#/definitions/FundraisingApi.FundRead/properties/date_modified: response body field 'date_modified' (format date-time, \"the date when the record was last modified\") EXISTS; 'last_modified' is ABSENT from the same properties object (it is the request query-param name only, at #/paths/.../get/parameters). IncrementalWatermarkField is the RESPONSE-record field name the max-watermark tracker reads (engine/src/types.ts:371-374; WildApricotConnector.MaxWatermark → r[field]) → date_modified, not last_modified."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.fundraising_fund.IncrementalWatermarkField"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round2-watermark.ts",
+      "ScriptRunAt": "2026-07-02T18:52:07.876Z",
+      "StructuredOutput": {
+        "note": "fundraising.swagger.json#/definitions/FundraisingApi.PackageRead/properties/date_modified: response body field 'date_modified' (format date-time, \"the date when the record was last modified\") EXISTS; 'last_modified' is ABSENT from the same properties object (it is the request query-param name only, at #/paths/.../get/parameters). IncrementalWatermarkField is the RESPONSE-record field name the max-watermark tracker reads (engine/src/types.ts:371-374; WildApricotConnector.MaxWatermark → r[field]) → date_modified, not last_modified."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.fundraising_package.IncrementalWatermarkField"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round2-watermark.ts",
+      "ScriptRunAt": "2026-07-02T18:52:07.876Z",
+      "StructuredOutput": {
+        "note": "gifts.swagger.json#/definitions/GiftApi.GiftRead/properties/date_modified: response body field 'date_modified' (format date-time, \"the date when the record was last modified\") EXISTS; 'last_modified' is ABSENT from the same properties object (it is the request query-param name only, at #/paths/.../get/parameters). IncrementalWatermarkField is the RESPONSE-record field name the max-watermark tracker reads (engine/src/types.ts:371-374; WildApricotConnector.MaxWatermark → r[field]) → date_modified, not last_modified."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.gift.IncrementalWatermarkField"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round2-watermark.ts",
+      "ScriptRunAt": "2026-07-02T18:52:07.876Z",
+      "StructuredOutput": {
+        "note": "prospects.swagger.json#/definitions/OpportunityApi.OpportunityRead/properties/date_modified: response body field 'date_modified' (format date-time, \"the date when the record was last modified\") EXISTS; 'last_modified' is ABSENT from the same properties object (it is the request query-param name only, at #/paths/.../get/parameters). IncrementalWatermarkField is the RESPONSE-record field name the max-watermark tracker reads (engine/src/types.ts:371-374; WildApricotConnector.MaxWatermark → r[field]) → date_modified, not last_modified."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.opportunity.IncrementalWatermarkField"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round2-watermark.ts",
+      "ScriptRunAt": "2026-07-02T18:52:44.295Z",
+      "StructuredOutput": {
+        "note": "constituents.swagger.json#/definitions/ConstituentApi.ConstituentRead/properties/date_modified: response body field 'date_modified' (format date-time, \"the date when the record was last modified\") EXISTS; 'last_modified' is ABSENT from the same properties object (it is the request query-param name only, at #/paths/.../get/parameters). IncrementalWatermarkField is the RESPONSE-record field name the max-watermark tracker reads (engine/src/types.ts:371-374; WildApricotConnector.MaxWatermark → r[field]) → date_modified, not last_modified."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.constituent.IncrementalWatermarkField"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round2-watermark.ts",
+      "ScriptRunAt": "2026-07-02T18:52:44.295Z",
+      "StructuredOutput": {
+        "note": "fundraising.swagger.json#/definitions/FundraisingApi.AppealRead/properties/date_modified: response body field 'date_modified' (format date-time, \"the date when the record was last modified\") EXISTS; 'last_modified' is ABSENT from the same properties object (it is the request query-param name only, at #/paths/.../get/parameters). IncrementalWatermarkField is the RESPONSE-record field name the max-watermark tracker reads (engine/src/types.ts:371-374; WildApricotConnector.MaxWatermark → r[field]) → date_modified, not last_modified."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.fundraising_appeal.IncrementalWatermarkField"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round2-watermark.ts",
+      "ScriptRunAt": "2026-07-02T18:52:44.295Z",
+      "StructuredOutput": {
+        "note": "fundraising.swagger.json#/definitions/FundraisingApi.CampaignRead/properties/date_modified: response body field 'date_modified' (format date-time, \"the date when the record was last modified\") EXISTS; 'last_modified' is ABSENT from the same properties object (it is the request query-param name only, at #/paths/.../get/parameters). IncrementalWatermarkField is the RESPONSE-record field name the max-watermark tracker reads (engine/src/types.ts:371-374; WildApricotConnector.MaxWatermark → r[field]) → date_modified, not last_modified."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.fundraising_campaign.IncrementalWatermarkField"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round2-watermark.ts",
+      "ScriptRunAt": "2026-07-02T18:52:44.295Z",
+      "StructuredOutput": {
+        "note": "fundraising.swagger.json#/definitions/FundraisingApi.FundRead/properties/date_modified: response body field 'date_modified' (format date-time, \"the date when the record was last modified\") EXISTS; 'last_modified' is ABSENT from the same properties object (it is the request query-param name only, at #/paths/.../get/parameters). IncrementalWatermarkField is the RESPONSE-record field name the max-watermark tracker reads (engine/src/types.ts:371-374; WildApricotConnector.MaxWatermark → r[field]) → date_modified, not last_modified."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.fundraising_fund.IncrementalWatermarkField"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round2-watermark.ts",
+      "ScriptRunAt": "2026-07-02T18:52:44.295Z",
+      "StructuredOutput": {
+        "note": "fundraising.swagger.json#/definitions/FundraisingApi.PackageRead/properties/date_modified: response body field 'date_modified' (format date-time, \"the date when the record was last modified\") EXISTS; 'last_modified' is ABSENT from the same properties object (it is the request query-param name only, at #/paths/.../get/parameters). IncrementalWatermarkField is the RESPONSE-record field name the max-watermark tracker reads (engine/src/types.ts:371-374; WildApricotConnector.MaxWatermark → r[field]) → date_modified, not last_modified."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.fundraising_package.IncrementalWatermarkField"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round2-watermark.ts",
+      "ScriptRunAt": "2026-07-02T18:52:44.295Z",
+      "StructuredOutput": {
+        "note": "gifts.swagger.json#/definitions/GiftApi.GiftRead/properties/date_modified: response body field 'date_modified' (format date-time, \"the date when the record was last modified\") EXISTS; 'last_modified' is ABSENT from the same properties object (it is the request query-param name only, at #/paths/.../get/parameters). IncrementalWatermarkField is the RESPONSE-record field name the max-watermark tracker reads (engine/src/types.ts:371-374; WildApricotConnector.MaxWatermark → r[field]) → date_modified, not last_modified."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.gift.IncrementalWatermarkField"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-round2-watermark.ts",
+      "ScriptRunAt": "2026-07-02T18:52:44.295Z",
+      "StructuredOutput": {
+        "note": "prospects.swagger.json#/definitions/OpportunityApi.OpportunityRead/properties/date_modified: response body field 'date_modified' (format date-time, \"the date when the record was last modified\") EXISTS; 'last_modified' is ABSENT from the same properties object (it is the request query-param name only, at #/paths/.../get/parameters). IncrementalWatermarkField is the RESPONSE-record field name the max-watermark tracker reads (engine/src/types.ts:371-374; WildApricotConnector.MaxWatermark → r[field]) → date_modified, not last_modified."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.opportunity.IncrementalWatermarkField"
+    },
+    {
+      "ScriptPath": "runs/connector-blackbaud-1782979459200-c323d976/scripts/apply-amendment-round3.mjs",
+      "ScriptRunAt": "2026-07-02T19:30:44.506Z",
+      "StructuredOutput": {
+        "AmendmentRound": 3,
+        "IOConfigSet": 9,
+        "IOFFieldNameSet": 6,
+        "FlaggedObjects": [
+          "constituent_consent",
+          "constituent_solicit_code",
+          "fundraising_fundraiser_assignment",
+          "constituent_relationship",
+          "fund_relationship",
+          "tax_declaration",
+          "tribute",
+          "tribute_acknowledgee",
+          "table_entry",
+          "gift_fundraiser",
+          "gift_split",
+          "soft_credit"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "amendment-round-3:parent-path-resolution+FK-fieldname"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-probe-paths.ts",
+      "ScriptRunAt": "2026-07-02T20:33:02.054Z",
+      "StructuredOutput": {
+        "object": "constituent_package",
+        "kind": "toplevel",
+        "correctedAPIPath": "/fundraising/v1/packages",
+        "docsSource": "fundraising.swagger.json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.constituent_package.APIPath"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-probe-paths.ts",
+      "ScriptRunAt": "2026-07-02T20:33:02.054Z",
+      "StructuredOutput": {
+        "object": "search_result",
+        "kind": "search",
+        "correctedAPIPath": "/constituent/v1/constituents/search?search_text=*",
+        "docsSource": "constituents.swagger.json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.search_result.APIPath"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-probe-paths.ts",
+      "ScriptRunAt": "2026-07-02T20:33:02.054Z",
+      "StructuredOutput": {
+        "object": "constituent_appeal",
+        "kind": "parametric",
+        "correctedAPIPath": "/constituent/v1/constituents/{constituent_id}/givingsummary/first",
+        "docsSource": "gifts.swagger.json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.constituent_appeal.APIPath"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-probe-paths.ts",
+      "ScriptRunAt": "2026-07-02T20:33:02.054Z",
+      "StructuredOutput": {
+        "object": "constituent_campaign",
+        "kind": "parametric",
+        "correctedAPIPath": "/constituent/v1/constituents/{constituent_id}/givingsummary/first",
+        "docsSource": "gifts.swagger.json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.constituent_campaign.APIPath"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-probe-paths.ts",
+      "ScriptRunAt": "2026-07-02T20:33:02.054Z",
+      "StructuredOutput": {
+        "object": "constituent_fund",
+        "kind": "parametric",
+        "correctedAPIPath": "/constituent/v1/constituents/{constituent_id}/givingsummary/first",
+        "docsSource": "gifts.swagger.json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.constituent_fund.APIPath"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-probe-paths.ts",
+      "ScriptRunAt": "2026-07-02T20:33:02.054Z",
+      "StructuredOutput": {
+        "object": "constituent_code_link",
+        "kind": "parametric",
+        "correctedAPIPath": "/constituent/v1/constituents/{constituent_id}/constituentcodes",
+        "docsSource": "constituents.swagger.json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.constituent_code_link.APIPath"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-probe-paths.ts",
+      "ScriptRunAt": "2026-07-02T20:33:02.054Z",
+      "StructuredOutput": {
+        "object": "membership_member",
+        "kind": "parametric",
+        "correctedAPIPath": "/constituent/v1/constituents/{constituent_id}/memberships",
+        "docsSource": "constituents.swagger.json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.membership_member.APIPath"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-probe-paths.ts",
+      "ScriptRunAt": "2026-07-02T20:33:02.054Z",
+      "StructuredOutput": {
+        "object": "name_format",
+        "kind": "parametric",
+        "correctedAPIPath": "/constituent/v1/constituents/{constituent_id}/nameformats/summary",
+        "docsSource": "constituents.swagger.json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.name_format.APIPath"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-probe-paths.ts",
+      "ScriptRunAt": "2026-07-02T20:33:02.054Z",
+      "StructuredOutput": {
+        "object": "acknowledgement",
+        "kind": "parametric",
+        "correctedAPIPath": "/gift/v1/gifts/{gift_id}",
+        "docsSource": "gifts.swagger.json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.acknowledgement.APIPath"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-probe-paths.ts",
+      "ScriptRunAt": "2026-07-02T20:33:02.054Z",
+      "StructuredOutput": {
+        "object": "gift_fundraiser",
+        "kind": "parametric",
+        "correctedAPIPath": "/gift/v1/gifts/{gift_id}",
+        "docsSource": "gifts.swagger.json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.gift_fundraiser.APIPath"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-probe-paths.ts",
+      "ScriptRunAt": "2026-07-02T20:33:02.054Z",
+      "StructuredOutput": {
+        "object": "gift_split",
+        "kind": "parametric",
+        "correctedAPIPath": "/gift/v1/gifts/{gift_id}",
+        "docsSource": "gifts.swagger.json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.gift_split.APIPath"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-probe-paths.ts",
+      "ScriptRunAt": "2026-07-02T20:33:02.054Z",
+      "StructuredOutput": {
+        "object": "payment",
+        "kind": "parametric",
+        "correctedAPIPath": "/gift/v1/gifts/{gift_id}",
+        "docsSource": "gifts.swagger.json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.payment.APIPath"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-probe-paths.ts",
+      "ScriptRunAt": "2026-07-02T20:33:02.054Z",
+      "StructuredOutput": {
+        "object": "receipt",
+        "kind": "parametric",
+        "correctedAPIPath": "/gift/v1/gifts/{gift_id}",
+        "docsSource": "gifts.swagger.json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.receipt.APIPath"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-probe-paths.ts",
+      "ScriptRunAt": "2026-07-02T20:33:02.054Z",
+      "StructuredOutput": {
+        "object": "soft_credit",
+        "kind": "parametric",
+        "correctedAPIPath": "/gift/v1/gifts/{gift_id}",
+        "docsSource": "gifts.swagger.json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.soft_credit.APIPath"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-probe-paths.ts",
+      "ScriptRunAt": "2026-07-02T20:33:02.054Z",
+      "StructuredOutput": {
+        "object": "batch_gift",
+        "kind": "parametric",
+        "correctedAPIPath": "/gift-batch/v1/giftbatches/{batch_id}/gifts",
+        "docsSource": "gifts.swagger.json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.batch_gift.APIPath"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-probe-paths.ts",
+      "ScriptRunAt": "2026-07-02T20:33:02.054Z",
+      "StructuredOutput": {
+        "object": "gift_tribute",
+        "kind": "parametric",
+        "correctedAPIPath": "/nxt-data-integration/v1/re/gifttribute/gift/{gift_id}",
+        "docsSource": "gifts.swagger.json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.gift_tribute.APIPath"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-probe-paths.ts",
+      "ScriptRunAt": "2026-07-02T20:33:02.054Z",
+      "StructuredOutput": {
+        "object": "new_tax_declaration",
+        "kind": "parametric",
+        "correctedAPIPath": "/nxt-data-integration/v1/re/giftaid/constituents/{constituent_id}/taxdeclarations",
+        "docsSource": "gifts.swagger.json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.new_tax_declaration.APIPath"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-probe-paths.ts",
+      "ScriptRunAt": "2026-07-02T20:33:02.054Z",
+      "StructuredOutput": {
+        "object": "fundraiser",
+        "kind": "parametric",
+        "correctedAPIPath": "/opportunity/v1/opportunities/{opportunity_id}",
+        "docsSource": "prospects.swagger.json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.fundraiser.APIPath"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-probe-paths.ts",
+      "ScriptRunAt": "2026-07-02T20:33:02.054Z",
+      "StructuredOutput": {
+        "object": "converted_constituent",
+        "kind": "embedded",
+        "correctedAPIPath": null,
+        "docsSource": "constituents.swagger.json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.converted_constituent.APIPath"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-probe-paths.ts",
+      "ScriptRunAt": "2026-07-02T20:33:02.054Z",
+      "StructuredOutput": {
+        "object": "non_constituent_conversion",
+        "kind": "embedded",
+        "correctedAPIPath": null,
+        "docsSource": "constituents.swagger.json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.non_constituent_conversion.APIPath"
+    },
+    {
+      "ScriptPath": "packages/Integration/connectors-registry/blackbaud/scripts/amend-probe-paths.ts",
+      "ScriptRunAt": "2026-07-02T20:33:02.054Z",
+      "StructuredOutput": {
+        "object": "gift_batch_gift_error",
+        "kind": "embedded",
+        "correctedAPIPath": null,
+        "docsSource": "gifts.swagger.json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.gift_batch_gift_error.APIPath"
+    }
+  ]
+}

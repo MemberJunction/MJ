@@ -215,6 +215,45 @@ export function matchRoute(routes, urlPath, method, body, query = '') {
     return exact || prefix || suffix;
 }
 
+/** For a template-var route (`/x/{constituent_id}/y`) matched to a concrete urlPath (`/x/abc/y`), return
+ *  `{scope, varNames}` — the joined captured value(s) (`abc`) AND the var NAMES (`['constituent_id']`,
+ *  the parent-FK field names, which must NOT be suffixed). Null for non-template routes. */
+export function templateVarValues(routePath, urlPath) {
+    if (!routePath || !routePath.includes('{')) return null;
+    const rp = routePath.split('/'), up = (urlPath || '').split('/');
+    if (rp.length !== up.length) return null;
+    const vals = [], names = [];
+    for (let i = 0; i < rp.length; i++) { const m = /^\{(.*)\}$/.exec(rp[i]); if (m) { vals.push(up[i]); names.push(m[1].toLowerCase()); } }
+    return vals.length ? { scope: vals.join('__'), varNames: names } : null;
+}
+
+/** Deep-clone `body` and suffix every record's OWN identity field with `__<scope>` so parent-scoped
+ *  children are unique per parent (a static fixture returns the same children for every parent). Suffixes
+ *  `id` PLUS any `*_id` own-key field (e.g. `declaration_id`) — but NEVER the parent-FK fields (the captured
+ *  template vars like `constituent_id`, which must stay the real parent value so the FK still resolves).
+ *  Clones (never mutates the shared fixture); idempotent across the pagination loop's repeated hits. */
+export function suffixRecordIdentity(body, scope, varNames = []) {
+    const suffix = `__${scope}`;
+    const isOwnKey = (k) => {
+        const lk = k.toLowerCase();
+        if (varNames.includes(lk)) return false;              // parent-FK / template var → leave intact
+        return lk === 'id' || lk.endsWith('_id') || lk === 'system_record_id';
+    };
+    const walk = (v) => {
+        if (Array.isArray(v)) return v.map(walk);
+        if (v && typeof v === 'object') {
+            const out = {};
+            for (const [k, val] of Object.entries(v)) {
+                if (isOwnKey(k) && typeof val === 'string' && val.length > 0 && !val.endsWith(suffix)) out[k] = val + suffix;
+                else out[k] = walk(val);
+            }
+            return out;
+        }
+        return v;
+    };
+    return walk(body);
+}
+
 /** Write the matched route (or a 404) onto a Node ServerResponse.
  *  `originUrl` (when provided) replaces the `{{MOCK_ORIGIN}}` placeholder in the served body with
  *  the mock's own dynamic origin — so a fixture can echo back a URL the connector then calls
@@ -249,7 +288,16 @@ function serveRoute(routes, urlPath, method, res, body, originUrl, query = '', f
 
     res.statusCode = route.Status || 200;
     for (const [k, v] of Object.entries(route.Headers || {})) res.setHeader(k, v);
-    let out = typeof route.Body === 'string' ? route.Body : JSON.stringify(route.Body == null ? [] : route.Body);
+    // PARENT-SCOPED UNIQUENESS: a template-var route (`/constituents/{constituent_id}/addresses`) is fetched
+    // by the connector once PER PARENT, but a static fixture returns the SAME child bodies for every parent —
+    // so the same child `id` lands under N parents and collides onto one row (identity is the child's own id).
+    // Real APIs return DISTINCT children per parent; mirror that by suffixing each returned record's identity
+    // field with the captured parent-var value, so children are unique per parent (single-PK, no collision,
+    // idempotent). Generic across connectors; a no-op for non-template routes.
+    let respBody = route.Body;
+    const tv = templateVarValues(route.Path, urlPath);
+    if (tv && respBody != null && typeof respBody !== 'string') respBody = suffixRecordIdentity(respBody, tv.scope, tv.varNames);
+    let out = typeof respBody === 'string' ? respBody : JSON.stringify(respBody == null ? [] : respBody);
     if (originUrl) out = out.split('{{MOCK_ORIGIN}}').join(originUrl);
     res.end(out);
 }

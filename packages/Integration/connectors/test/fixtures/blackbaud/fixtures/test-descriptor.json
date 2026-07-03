@@ -1,0 +1,8 @@
+{
+  "expandToAllObjects": true,
+  "credentials": {
+    "SubscriptionKey": "mock-subscription-key",
+    "AccessToken": "mock-access-token",
+    "ApiBaseUrl": "{{MOCK_ORIGIN}}"
+  }
+}

@@ -1072,15 +1072,24 @@ export async function phaseBidirectional({ gql, mock, verify, ciid, maps, cfg })
         steps.push(step('bidirectional.update-shape', !!updReq, { method: updReq?.method, path: updReq?.path, note: 'update targeted the record path with the new attributes' }));
     }
 
-    // DELETE
-    const del = (await gql(E2E_GQL.writeRecord, { ciid, objectName, operation: 'delete', externalID: extID, attributes: null })).IntegrationWriteRecord;
-    steps.push(step('bidirectional.delete', del?.Success === true, { externalID: extID, statusCode: del?.StatusCode, message: del?.Message }));
-    const reqsFinal = mock.getRequests?.() ?? [];
-    const delReq = reqsFinal.find((r) => /delete|post|put/i.test(r.method) && r.path.includes(String(extID)) && (wrt.DeleteMethodMatch ? r.method.toUpperCase() === wrt.DeleteMethodMatch.toUpperCase() : true));
-    steps.push(step('bidirectional.delete-shape', !!delReq, {
-        method: delReq?.method, path: delReq?.path,
-        note: 'delete used the metadata-driven verb against the record path (DeleteMethod is not assumed DELETE)',
-    }));
+    // DELETE — gated on the object's DEPLOYED delete capability (connector-test-conventions: "gate the DELETE
+    // sub-cell on the object's deployed SupportsDelete/DeleteAPIPath; a create-only object correctly refuses
+    // delete and must SKIP, not RED"). wrt.SupportsDelete is set by buildWriteRoundTrip from the deployed
+    // SupportsDelete + DeleteAPIPath; a read-primary connector with no delete path SKIPS this cell.
+    if (!wrt.SupportsDelete) {
+        const skip = { object: objectName, skipReason: `object declares no delete capability (SupportsDelete=false / no DeleteAPIPath) — a create/update-only object correctly refuses delete; cell SKIPPED, not failed.` };
+        steps.push(step('bidirectional.delete', true, skip));
+        steps.push(step('bidirectional.delete-shape', true, skip));
+    } else {
+        const del = (await gql(E2E_GQL.writeRecord, { ciid, objectName, operation: 'delete', externalID: extID, attributes: null })).IntegrationWriteRecord;
+        steps.push(step('bidirectional.delete', del?.Success === true, { externalID: extID, statusCode: del?.StatusCode, message: del?.Message }));
+        const reqsFinal = mock.getRequests?.() ?? [];
+        const delReq = reqsFinal.find((r) => /delete|post|put/i.test(r.method) && r.path.includes(String(extID)) && (wrt.DeleteMethodMatch ? r.method.toUpperCase() === wrt.DeleteMethodMatch.toUpperCase() : true));
+        steps.push(step('bidirectional.delete-shape', !!delReq, {
+            method: delReq?.method, path: delReq?.path,
+            note: 'delete used the metadata-driven verb against the record path (DeleteMethod is not assumed DELETE)',
+        }));
+    }
 
     // entityMap referenced only for symmetry / future read-back-via-sync; kept to avoid a silent drop of the link.
     if (entityMap) steps.push(step('bidirectional.map-linked', true, { entityMapID: entityMap.entityMapID, note: 'write object maps to a known entity (sync read-back path available)' }));

@@ -1,0 +1,62 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "title": "Blackbaud SKY API",
+  "description": "Blackbaud SKY API (Raiser's Edge NXT) dual-credential authentication: an OAuth2 authorization-code-flow confidential-application token pair PLUS a separate, always-required SKY API subscription key header. Both parts are independently required on every call -- missing either returns 401.",
+  "properties": {
+    "ClientID": {
+      "type": "string",
+      "title": "Client ID",
+      "description": "OAuth2 confidential-application Client ID, issued when the application is registered at developer.sky.blackbaud.com.",
+      "isSecret": false,
+      "order": 0
+    },
+    "ClientSecret": {
+      "type": "string",
+      "title": "Client Secret",
+      "description": "OAuth2 confidential-application Client Secret. Required to exchange an authorization code (or refresh token) for an access token, and required for the API to ever return a refresh_token in the token response.",
+      "isSecret": true,
+      "order": 1
+    },
+    "AuthorizationURL": {
+      "type": "string",
+      "title": "Authorization URL",
+      "description": "OAuth2 authorization-code endpoint. Confirmed identical across all in-scope SKY API OpenAPI specs' securityDefinitions.skyApiOAuth.",
+      "format": "uri",
+      "const": "https://oauth2.sky.blackbaud.com/authorization",
+      "isSecret": false,
+      "order": 2
+    },
+    "TokenURL": {
+      "type": "string",
+      "title": "Token URL",
+      "description": "OAuth2 token endpoint, used both for the initial authorization-code exchange and for subsequent refresh_token exchanges.",
+      "format": "uri",
+      "const": "https://oauth2.sky.blackbaud.com/token",
+      "isSecret": false,
+      "order": 3
+    },
+    "RefreshToken": {
+      "type": "string",
+      "title": "Refresh Token",
+      "description": "OAuth2 refresh token obtained from the initial authorization-code exchange (only issued when ClientSecret is present, i.e. confidential/server-side app flow). Uses a sliding 365-day expiration by default -- Blackbaud issues a NEW refresh_token on every refresh unless the token request sets preserve_refresh_token=true.",
+      "isSecret": true,
+      "order": 4
+    },
+    "AccessToken": {
+      "type": "string",
+      "title": "Access Token",
+      "description": "OAuth2 access token for temporary direct access (short-lived -- expires after 60 minutes per the vendor's own tutorial sample, expires_in: 3599). Not recommended for production; prefer RefreshToken so the connector can mint new access tokens automatically.",
+      "isSecret": true,
+      "order": 5
+    },
+    "SubscriptionKey": {
+      "type": "string",
+      "title": "SKY API Subscription Key",
+      "description": "Static per-app SKY API subscription key (primary or secondary, both equally functional), obtained from the developer's My Subscriptions page after subscribing to a SKY API product tier. Sent on EVERY request as the 'bb-api-subscription-key' header -- this is a SECOND, independent credential part alongside the OAuth2 bearer token, not a substitute for it. Missing this header returns 401 even with a valid access token.",
+      "isSecret": true,
+      "order": 6
+    }
+  },
+  "required": ["ClientID", "ClientSecret", "TokenURL", "SubscriptionKey"]
+}

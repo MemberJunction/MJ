@@ -1,0 +1,1 @@
+/Users/bcladmin/Projects/MemberJunction/MJ/.claude/worktrees/blackbaud/packages/Integration/connectors/src/BlackbaudConnector.ts

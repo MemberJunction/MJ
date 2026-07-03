@@ -1,0 +1,3767 @@
+{
+  "Transport": "http",
+  "ConfigUrlKey": "ApiBaseUrl",
+  "Configuration": {
+    "ApiBaseUrl": "{{MOCK_ORIGIN}}",
+    "ClientId": "mock-client",
+    "ClientSecret": "mock-secret",
+    "Username": "mock-user@example.com",
+    "Password": "mock-pass",
+    "RefreshToken": "mock-refresh-token",
+    "AdminEmail": "mock-admin@example.com",
+    "Token": "mock-token",
+    "AccessToken": "mock-access-token",
+    "apiKey": "mock-token",
+    "APIKey": "mock-token",
+    "ApiKey": "mock-token",
+    "ApiSecret": "mock-api-secret",
+    "apiSecret": "mock-api-secret",
+    "Secret": "mock-secret",
+    "AppKey": "mock-app-key",
+    "AppSecret": "mock-app-secret",
+    "PrivateToken": "mock-private-token",
+    "PublicKey": "mock-public-key",
+    "TokenURL": "http://127.0.0.1:9/token",
+    "TokenEndpoint": "http://127.0.0.1:9/token",
+    "TokenUrl": "http://127.0.0.1:9/token",
+    "LoginUrl": "http://127.0.0.1:9",
+    "InstanceURL": "http://127.0.0.1:9",
+    "InstanceUrl": "http://127.0.0.1:9",
+    "HostBaseURL": "http://127.0.0.1:9",
+    "AccountID": "mock-account",
+    "Subdomain": "mock",
+    "Scope": "all",
+    "Scopes": "all",
+    "OrgID": "mock-org",
+    "orgId": "mock-org",
+    "ClientKey": "mock-client-key",
+    "applicationId": "mock-app-id",
+    "applicationSecret": "mock-app-secret",
+    "AuthFlow": "client_credentials",
+    "PrivateKey": "-----BEGIN PRIVATE KEY-----\nMIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQDmQcln2pQ/dZX+\nrdKuBa3VF/Kvo6DRZpw7Ffxc2SptzeihCCz5q6BqK5xM8RXx75m2ScwOt8SpYIB9\nRa5dm7PfCBfxtHtMeA0BhD4+EJe0A4gLaa4/tM11I2xvfWEQpLhbOdgSgb0vIYPW\n1FrPBp8Nde2pzpYT5NMw9+o+GrLDk2O+mi8ijflSQI7Q0CeQEROz7zQscfkH/45E\n1ZewxQnySnfJDLKbNV3rNuwRYi53rHew6AH6dUjtEKJb+KsG5/vQYYfM6CWzGi6n\naX3eeOf6WxS2GMbeAn1JRByagpqHpa2H4L3lEzLpmTbi0PtPmKEifgWOkMCFVt7E\n7Vv4rldFAgMBAAECggEABVJVP/vim+oxIpxh13kfdg1Xo+I5lUgJ1FPDFreY2MYp\nhOSWJYRnRgzmpTXtNpToYzjRaTBWGz61DtrNbNxsYSXkEnIEEisJdz+B221cFDer\nV+2EBB+USrYcNiIaXDLHuqlblRHqjWxONROIsGrhbNjiOp/LrX9cYjADT0F5YDZn\nRmNAt2UecHgJc2GhZXeTSXGnNB+pavaa0PPtaEygEJ8sCBs5YKIvtuJUBz563vcM\nfNS4/GPq0V//3r/ZNH2ALkejt6kbBmfctEwop48Z0r+lmYiD36iBp/nHUp0xiLd9\nWxvgpAry9rIghY3YdYf1Q//K8Y6DjO3S3Qk44SU3AQKBgQD+OcwDbSt2QoPCHGo4\n1K8Lecv4Tf8ztCMW4T8twAZJFNe2nXE/Fotbk2HYT2WpmAJSpKP6IxsS7K7FSYz3\nqEcUfxlA4EvqbRIR1M8Ku8DVZeJWxlIaFB+5bEZ1SVA72D8JZH6PgIWluqzZPAFB\nN1Sst+UXdgy1NQy0oGmNsRFDzwKBgQDn3Sq3bha1f1GohXRy8No+I6s8sgU26X2+\nOW8HbFhhx/GEcn5a+pjS1pXv4uoiJo0qs7khy0GOWLHg45hT/QthuIYi/HifaZmd\neMRuAA5fydtjJUcc/BM4ED3FrGCKwbTwUZj77Wk2Xr0slChmmDHnlBvQHwewI+Nw\na3x/AaA0qwKBgFwSJI/tHrtytXM8hT/Vzxtx3ewsm0tnZvnnU9FG5T/ce49Yj+YQ\nTSI6S0pi3ue/9L9nfzedNTXyYA11aMdcu3lx2nyDfxsEq3Gnx+AURW9DuehBZQSq\n2x51V0Ms7RDvbU0Ch0+DdWOjKux17eJnnpP6+c44Y7vQ3awhGHlHcoBDAoGAXUQv\nvJ1B8TwHotwb3WhYwYojhUSuqEn/1JbRvJCudJay5e4QOZR4CMdchKQoPhh3zGeC\n3r8d3Z573tRuH8q321UYT9Zyxtz5d8huazkGjy1pXFZQZq5XJMQTtQIDy4zjtY99\nFEmJet9dBSOLpMkvudFv5qW0t/uXr07tQ0FqKgUCgYB3hNutKGwKwEHxtxnb7dA3\nhb4xn9Bd7vQuv2Td1sQVlPTcqCrJTb/CetSb9I8QR+jOeShF2iTtzDXbQhmnfQID\n1iihXjL03cR1tzUv0nb0UBbg3yrySBXoR+KOXybVVb+KE3DlsuB6B8nRhuE6u/cN\nZukUhlInr3rnVucvqIWnLA==\n-----END PRIVATE KEY-----\n",
+    "ConsumerKey": "mock-consumer",
+    "ConsumerSecret": "mock-consumer-secret",
+    "TokenId": "mock-token-id",
+    "TokenSecret": "mock-token-secret",
+    "TokenID": "mock-token-id",
+    "TenantId": "mock-tenant-id",
+    "TenantID": "mock-tenant-id",
+    "tenantId": "mock-tenant-id",
+    "Tenant": "mock-tenant",
+    "SubscriptionKey": "mock-subscription-key"
+  },
+  "Routes": [
+    {
+      "Path": "/constituent/v1/constituents/{constituent_id}/addresses",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "id": "address-1",
+          "type": "standard",
+          "country": "US",
+          "address_lines": "101 Test St",
+          "city": "Boston",
+          "state": "MA",
+          "postal_code": "02101",
+          "suburb": "suburb 1",
+          "county": "county 1",
+          "formatted_address": "101 Test St",
+          "information_source": "information_source 1",
+          "region": "region 1",
+          "cart": "cart 1",
+          "lot": "lot 1",
+          "dpc": "dpc 1",
+          "start": "start 1",
+          "end": "end 1",
+          "preferred": "preferred 1",
+          "inactive": true,
+          "do_not_mail": "do_not_mail 1",
+          "seasonal_start": "[]",
+          "seasonal_end": "[]",
+          "date_added": "date_added 1",
+          "date_modified": "date_modified 1"
+        },
+        {
+          "id": "address-2",
+          "type": "premium",
+          "country": "US",
+          "address_lines": "102 Test St",
+          "city": "New York",
+          "state": "NY",
+          "postal_code": "02102",
+          "suburb": "suburb 2",
+          "county": "county 2",
+          "formatted_address": "102 Test St",
+          "information_source": "information_source 2",
+          "region": "region 2",
+          "cart": "cart 2",
+          "lot": "lot 2",
+          "dpc": "dpc 2",
+          "start": "start 2",
+          "end": "end 2",
+          "preferred": "preferred 2",
+          "inactive": false,
+          "do_not_mail": "do_not_mail 2",
+          "seasonal_start": "[]",
+          "seasonal_end": "[]",
+          "date_added": "date_added 2",
+          "date_modified": "date_modified 2"
+        },
+        {
+          "id": "address-3",
+          "type": "basic",
+          "country": "US",
+          "address_lines": "103 Test St",
+          "city": "San Francisco",
+          "state": "CA",
+          "postal_code": "02103",
+          "suburb": "suburb 3",
+          "county": "county 3",
+          "formatted_address": "103 Test St",
+          "information_source": "information_source 3",
+          "region": "region 3",
+          "cart": "cart 3",
+          "lot": "lot 3",
+          "dpc": "dpc 3",
+          "start": "start 3",
+          "end": "end 3",
+          "preferred": "preferred 3",
+          "inactive": true,
+          "do_not_mail": "do_not_mail 3",
+          "seasonal_start": "[]",
+          "seasonal_end": "[]",
+          "date_added": "date_added 3",
+          "date_modified": "date_modified 3"
+        }
+      ]
+    },
+    {
+      "Path": "/constituent/v1/constituents/{constituent_id}/aliases",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "id": "alias-1",
+          "name": "Alex Rivera",
+          "type": "standard"
+        },
+        {
+          "id": "alias-2",
+          "name": "Jordan Chen",
+          "type": "premium"
+        },
+        {
+          "id": "alias-3",
+          "name": "Taylor Patel",
+          "type": "basic"
+        }
+      ]
+    },
+    {
+      "Path": "/fundraising/v1/appeals/{appeal_id}/attachments",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "id": "appeal_attachment-1",
+          "parent_id": "parent_id-1",
+          "type": "standard",
+          "name": "Alex Rivera",
+          "date": "date 1",
+          "url": "https://example.com/url/1",
+          "file_name": "file_name 1",
+          "file_id": "file_id-1",
+          "thumbnail_id": "thumbnail_id-1",
+          "thumbnail_url": "https://example.com/thumbnail_url/1",
+          "content_type": "Sample content_type 1",
+          "file_size": "file_size 1",
+          "tags": "[]"
+        },
+        {
+          "id": "appeal_attachment-2",
+          "parent_id": "parent_id-2",
+          "type": "premium",
+          "name": "Jordan Chen",
+          "date": "date 2",
+          "url": "https://example.com/url/2",
+          "file_name": "file_name 2",
+          "file_id": "file_id-2",
+          "thumbnail_id": "thumbnail_id-2",
+          "thumbnail_url": "https://example.com/thumbnail_url/2",
+          "content_type": "Sample content_type 2",
+          "file_size": "file_size 2",
+          "tags": "[]"
+        },
+        {
+          "id": "appeal_attachment-3",
+          "parent_id": "parent_id-3",
+          "type": "basic",
+          "name": "Taylor Patel",
+          "date": "date 3",
+          "url": "https://example.com/url/3",
+          "file_name": "file_name 3",
+          "file_id": "file_id-3",
+          "thumbnail_id": "thumbnail_id-3",
+          "thumbnail_url": "https://example.com/thumbnail_url/3",
+          "content_type": "Sample content_type 3",
+          "file_size": "file_size 3",
+          "tags": "[]"
+        }
+      ]
+    },
+    {
+      "Path": "/fundraising/v1/campaigns/{campaign_id}/attachments",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "id": "campaign_attachment-1",
+          "parent_id": "parent_id-1",
+          "type": "standard",
+          "name": "Alex Rivera",
+          "date": "date 1",
+          "url": "https://example.com/url/1",
+          "file_name": "file_name 1",
+          "file_id": "file_id-1",
+          "thumbnail_id": "thumbnail_id-1",
+          "thumbnail_url": "https://example.com/thumbnail_url/1",
+          "content_type": "Sample content_type 1",
+          "file_size": "file_size 1",
+          "tags": "[]"
+        },
+        {
+          "id": "campaign_attachment-2",
+          "parent_id": "parent_id-2",
+          "type": "premium",
+          "name": "Jordan Chen",
+          "date": "date 2",
+          "url": "https://example.com/url/2",
+          "file_name": "file_name 2",
+          "file_id": "file_id-2",
+          "thumbnail_id": "thumbnail_id-2",
+          "thumbnail_url": "https://example.com/thumbnail_url/2",
+          "content_type": "Sample content_type 2",
+          "file_size": "file_size 2",
+          "tags": "[]"
+        },
+        {
+          "id": "campaign_attachment-3",
+          "parent_id": "parent_id-3",
+          "type": "basic",
+          "name": "Taylor Patel",
+          "date": "date 3",
+          "url": "https://example.com/url/3",
+          "file_name": "file_name 3",
+          "file_id": "file_id-3",
+          "thumbnail_id": "thumbnail_id-3",
+          "thumbnail_url": "https://example.com/thumbnail_url/3",
+          "content_type": "Sample content_type 3",
+          "file_size": "file_size 3",
+          "tags": "[]"
+        }
+      ]
+    },
+    {
+      "Path": "/commpref/v1/consent/categories",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "description": "Sample description 1",
+          "inactive": true,
+          "sequence": "sequence 1"
+        },
+        {
+          "description": "Sample description 2",
+          "inactive": false,
+          "sequence": "sequence 2"
+        },
+        {
+          "description": "Sample description 3",
+          "inactive": true,
+          "sequence": "sequence 3"
+        }
+      ]
+    },
+    {
+      "Path": "/commpref/v1/consent/channels",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "description": "Sample description 1"
+        },
+        {
+          "description": "Sample description 2"
+        },
+        {
+          "description": "Sample description 3"
+        }
+      ]
+    },
+    {
+      "Path": "/commpref/v1/consent/sources",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "description": "Sample description 1",
+          "inactive": true,
+          "sequence": "sequence 1"
+        },
+        {
+          "description": "Sample description 2",
+          "inactive": false,
+          "sequence": "sequence 2"
+        },
+        {
+          "description": "Sample description 3",
+          "inactive": true,
+          "sequence": "sequence 3"
+        }
+      ]
+    },
+    {
+      "Path": "/constituent/v1/constituents",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "id": "constituent-1",
+          "type": "standard",
+          "title": "Sample Title 1",
+          "first": "first 1",
+          "last": "last 1",
+          "name": "Alex Rivera",
+          "preferred_name": "preferred_name 1",
+          "suffix": "suffix 1",
+          "lookup_id": "lookup_id-1",
+          "email": "user1@example.com",
+          "phone": "555-0101",
+          "online_presence": "[]",
+          "address": "101 Test St",
+          "gender": "gender 1",
+          "middle": "middle 1",
+          "former_name": "former_name 1",
+          "title_2": "Sample Title 1",
+          "suffix_2": "suffix_2 1",
+          "marital_status": "active",
+          "gives_anonymously": "gives_anonymously 1",
+          "requests_no_email": "user1@example.com",
+          "is_solicitor": "is_solicitor 1",
+          "no_valid_address": "101 Test St",
+          "inactive": true,
+          "birthdate": "[]",
+          "birthplace": "birthplace 1",
+          "ethnicity": "ethnicity 1",
+          "target": "target 1",
+          "income": "income 1",
+          "receipt_type": "receipt_type 1",
+          "religion": "religion 1",
+          "industry": "industry 1",
+          "num_employees": "num_employees 1",
+          "matches_gifts": "matches_gifts 1",
+          "matching_gift_factor": "matching_gift_factor 1",
+          "matching_gift_per_gift_min": "[]",
+          "matching_gift_per_gift_max": "[]",
+          "matching_gift_total_min": "[]",
+          "matching_gift_total_max": "[]",
+          "matching_gift_notes": "Sample matching_gift_notes 1",
+          "age": "age 1",
+          "deceased": "deceased 1",
+          "deceased_date": "[]",
+          "fundraiser_status": "active",
+          "is_memorial": "is_memorial 1",
+          "spouse": "[]",
+          "date_added": "date_added 1",
+          "date_modified": "2026-06-11T00:00:00Z"
+        },
+        {
+          "id": "constituent-2",
+          "type": "premium",
+          "title": "Sample Title 2",
+          "first": "first 2",
+          "last": "last 2",
+          "name": "Jordan Chen",
+          "preferred_name": "preferred_name 2",
+          "suffix": "suffix 2",
+          "lookup_id": "lookup_id-2",
+          "email": "user2@example.com",
+          "phone": "555-0102",
+          "online_presence": "[]",
+          "address": "102 Test St",
+          "gender": "gender 2",
+          "middle": "middle 2",
+          "former_name": "former_name 2",
+          "title_2": "Sample Title 2",
+          "suffix_2": "suffix_2 2",
+          "marital_status": "pending",
+          "gives_anonymously": "gives_anonymously 2",
+          "requests_no_email": "user2@example.com",
+          "is_solicitor": "is_solicitor 2",
+          "no_valid_address": "102 Test St",
+          "inactive": false,
+          "birthdate": "[]",
+          "birthplace": "birthplace 2",
+          "ethnicity": "ethnicity 2",
+          "target": "target 2",
+          "income": "income 2",
+          "receipt_type": "receipt_type 2",
+          "religion": "religion 2",
+          "industry": "industry 2",
+          "num_employees": "num_employees 2",
+          "matches_gifts": "matches_gifts 2",
+          "matching_gift_factor": "matching_gift_factor 2",
+          "matching_gift_per_gift_min": "[]",
+          "matching_gift_per_gift_max": "[]",
+          "matching_gift_total_min": "[]",
+          "matching_gift_total_max": "[]",
+          "matching_gift_notes": "Sample matching_gift_notes 2",
+          "age": "age 2",
+          "deceased": "deceased 2",
+          "deceased_date": "[]",
+          "fundraiser_status": "pending",
+          "is_memorial": "is_memorial 2",
+          "spouse": "[]",
+          "date_added": "date_added 2",
+          "date_modified": "2026-06-12T00:00:00Z"
+        },
+        {
+          "id": "constituent-3",
+          "type": "basic",
+          "title": "Sample Title 3",
+          "first": "first 3",
+          "last": "last 3",
+          "name": "Taylor Patel",
+          "preferred_name": "preferred_name 3",
+          "suffix": "suffix 3",
+          "lookup_id": "lookup_id-3",
+          "email": "user3@example.com",
+          "phone": "555-0103",
+          "online_presence": "[]",
+          "address": "103 Test St",
+          "gender": "gender 3",
+          "middle": "middle 3",
+          "former_name": "former_name 3",
+          "title_2": "Sample Title 3",
+          "suffix_2": "suffix_2 3",
+          "marital_status": "completed",
+          "gives_anonymously": "gives_anonymously 3",
+          "requests_no_email": "user3@example.com",
+          "is_solicitor": "is_solicitor 3",
+          "no_valid_address": "103 Test St",
+          "inactive": true,
+          "birthdate": "[]",
+          "birthplace": "birthplace 3",
+          "ethnicity": "ethnicity 3",
+          "target": "target 3",
+          "income": "income 3",
+          "receipt_type": "receipt_type 3",
+          "religion": "religion 3",
+          "industry": "industry 3",
+          "num_employees": "num_employees 3",
+          "matches_gifts": "matches_gifts 3",
+          "matching_gift_factor": "matching_gift_factor 3",
+          "matching_gift_per_gift_min": "[]",
+          "matching_gift_per_gift_max": "[]",
+          "matching_gift_total_min": "[]",
+          "matching_gift_total_max": "[]",
+          "matching_gift_notes": "Sample matching_gift_notes 3",
+          "age": "age 3",
+          "deceased": "deceased 3",
+          "deceased_date": "[]",
+          "fundraiser_status": "completed",
+          "is_memorial": "is_memorial 3",
+          "spouse": "[]",
+          "date_added": "date_added 3",
+          "date_modified": "2026-06-13T00:00:00Z"
+        }
+      ]
+    },
+    {
+      "Path": "/constituent/v1/constituents/{constituent_id}/appeals",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "id": "constituent_appeal_2-1",
+          "appeal": "[]",
+          "package": "[]",
+          "date": "date 1",
+          "response": "response 1",
+          "marketing_segment": "marketing_segment 1",
+          "marketing_source_code": "marketing_source_code-1",
+          "mailing_id": "mailing_id-1",
+          "finder_number": "finder_number 1",
+          "comments": "Sample comments 1"
+        },
+        {
+          "id": "constituent_appeal_2-2",
+          "appeal": "[]",
+          "package": "[]",
+          "date": "date 2",
+          "response": "response 2",
+          "marketing_segment": "marketing_segment 2",
+          "marketing_source_code": "marketing_source_code-2",
+          "mailing_id": "mailing_id-2",
+          "finder_number": "finder_number 2",
+          "comments": "Sample comments 2"
+        },
+        {
+          "id": "constituent_appeal_2-3",
+          "appeal": "[]",
+          "package": "[]",
+          "date": "date 3",
+          "response": "response 3",
+          "marketing_segment": "marketing_segment 3",
+          "marketing_source_code": "marketing_source_code-3",
+          "mailing_id": "mailing_id-3",
+          "finder_number": "finder_number 3",
+          "comments": "Sample comments 3"
+        }
+      ]
+    },
+    {
+      "Path": "/constituent/v1/constituents/{constituent_id}/attachments",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "id": "constituent_attachment-1",
+          "parent_id": "parent_id-1",
+          "type": "standard",
+          "name": "Alex Rivera",
+          "date": "date 1",
+          "url": "https://example.com/url/1",
+          "file_name": "file_name 1",
+          "file_id": "file_id-1",
+          "thumbnail_id": "thumbnail_id-1",
+          "thumbnail_url": "https://example.com/thumbnail_url/1",
+          "content_type": "Sample content_type 1",
+          "file_size": "file_size 1",
+          "tags": "[]"
+        },
+        {
+          "id": "constituent_attachment-2",
+          "parent_id": "parent_id-2",
+          "type": "premium",
+          "name": "Jordan Chen",
+          "date": "date 2",
+          "url": "https://example.com/url/2",
+          "file_name": "file_name 2",
+          "file_id": "file_id-2",
+          "thumbnail_id": "thumbnail_id-2",
+          "thumbnail_url": "https://example.com/thumbnail_url/2",
+          "content_type": "Sample content_type 2",
+          "file_size": "file_size 2",
+          "tags": "[]"
+        },
+        {
+          "id": "constituent_attachment-3",
+          "parent_id": "parent_id-3",
+          "type": "basic",
+          "name": "Taylor Patel",
+          "date": "date 3",
+          "url": "https://example.com/url/3",
+          "file_name": "file_name 3",
+          "file_id": "file_id-3",
+          "thumbnail_id": "thumbnail_id-3",
+          "thumbnail_url": "https://example.com/thumbnail_url/3",
+          "content_type": "Sample content_type 3",
+          "file_size": "file_size 3",
+          "tags": "[]"
+        }
+      ]
+    },
+    {
+      "Path": "/constituent/v1/constituents/{constituent_id}/constituentcodes",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "value": [
+          {
+            "id": "cc-1",
+            "description": "Board Member",
+            "constituent_id": "1001"
+          },
+          {
+            "id": "cc-2",
+            "description": "Volunteer",
+            "constituent_id": "1002"
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/constituent/v1/constituents/{constituent_id}/constituentcodes",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "value": [
+          {
+            "id": "cc-1",
+            "description": "Board Member",
+            "constituent_id": "1001"
+          },
+          {
+            "id": "cc-2",
+            "description": "Volunteer",
+            "constituent_id": "1002"
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/commpref/v1/constituents/{constituent_id}/consents",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "id": "constituent_consent-1",
+          "channel": "channel 1",
+          "category": "standard",
+          "source": "source 1",
+          "constituent_consent_response": "constituent_consent_response 1",
+          "consent_date": "consent_date 1",
+          "consent_statement": "consent_statement 1",
+          "privacy_notice": "privacy_notice 1",
+          "date_added": "date_added 1",
+          "user_name": "user_name 1"
+        },
+        {
+          "id": "constituent_consent-2",
+          "channel": "channel 2",
+          "category": "premium",
+          "source": "source 2",
+          "constituent_consent_response": "constituent_consent_response 2",
+          "consent_date": "consent_date 2",
+          "consent_statement": "consent_statement 2",
+          "privacy_notice": "privacy_notice 2",
+          "date_added": "date_added 2",
+          "user_name": "user_name 2"
+        },
+        {
+          "id": "constituent_consent-3",
+          "channel": "channel 3",
+          "category": "basic",
+          "source": "source 3",
+          "constituent_consent_response": "constituent_consent_response 3",
+          "consent_date": "consent_date 3",
+          "consent_statement": "consent_statement 3",
+          "privacy_notice": "privacy_notice 3",
+          "date_added": "date_added 3",
+          "user_name": "user_name 3"
+        }
+      ]
+    },
+    {
+      "Path": "/constituent/v1/constituents/{constituent_id}/fundraiserassignments",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "id": "constituent_fundraiser_assignment-1",
+          "constituent_id": "constituent_id-1",
+          "fundraiser_id": "fundraiser_id-1",
+          "type": "standard",
+          "amount": "[]",
+          "campaign_id": "campaign_id-1",
+          "fund_id": "fund_id-1",
+          "appeal_id": "appeal_id-1",
+          "start": "start 1",
+          "end": "end 1"
+        },
+        {
+          "id": "constituent_fundraiser_assignment-2",
+          "constituent_id": "constituent_id-2",
+          "fundraiser_id": "fundraiser_id-2",
+          "type": "premium",
+          "amount": "[]",
+          "campaign_id": "campaign_id-2",
+          "fund_id": "fund_id-2",
+          "appeal_id": "appeal_id-2",
+          "start": "start 2",
+          "end": "end 2"
+        },
+        {
+          "id": "constituent_fundraiser_assignment-3",
+          "constituent_id": "constituent_id-3",
+          "fundraiser_id": "fundraiser_id-3",
+          "type": "basic",
+          "amount": "[]",
+          "campaign_id": "campaign_id-3",
+          "fund_id": "fund_id-3",
+          "appeal_id": "appeal_id-3",
+          "start": "start 3",
+          "end": "end 3"
+        }
+      ]
+    },
+    {
+      "Path": "/nxt-data-integration/v1/re/constituentidmap/{constituent_id}",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "id": "cmap-1",
+        "constituent_id": "1001",
+        "lookup_id": "LKP-1001"
+      }
+    },
+    {
+      "Path": "/fundraising/v1/packages",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "id": "constituent_package-1",
+          "description": "Sample description 1"
+        },
+        {
+          "id": "constituent_package-2",
+          "description": "Sample description 2"
+        },
+        {
+          "id": "constituent_package-3",
+          "description": "Sample description 3"
+        }
+      ]
+    },
+    {
+      "Path": "/commpref/v1/constituents/{constituent_id}/constituentsolicitcodes",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "id": "constituent_solicit_code-1",
+          "solicit_code": "solicit_code-1",
+          "start_date": "start_date 1",
+          "end_date": "end_date 1"
+        },
+        {
+          "id": "constituent_solicit_code-2",
+          "solicit_code": "solicit_code-2",
+          "start_date": "start_date 2",
+          "end_date": "end_date 2"
+        },
+        {
+          "id": "constituent_solicit_code-3",
+          "solicit_code": "solicit_code-3",
+          "start_date": "start_date 3",
+          "end_date": "end_date 3"
+        }
+      ]
+    },
+    {
+      "Path": "/constituent/v1/constituents",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "id": "converted_constituent-1"
+        },
+        {
+          "id": "converted_constituent-2"
+        },
+        {
+          "id": "converted_constituent-3"
+        }
+      ]
+    },
+    {
+      "Path": "/constituent/v1/countries",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "id": "country-1",
+          "abbreviation": "abbreviation 1",
+          "name": "Alex Rivera"
+        },
+        {
+          "id": "country-2",
+          "abbreviation": "abbreviation 2",
+          "name": "Jordan Chen"
+        },
+        {
+          "id": "country-3",
+          "abbreviation": "abbreviation 3",
+          "name": "Taylor Patel"
+        }
+      ]
+    },
+    {
+      "Path": "/constituent/v1/constituents/{constituent_id}/educations",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "id": "education-1",
+          "constituent_id": "constituent_id-1",
+          "school": "school 1",
+          "type": "standard",
+          "class_of": "class_of 1",
+          "status": "active",
+          "date_entered": "[]",
+          "date_left": "[]",
+          "date_graduated": "[]",
+          "degree": "degree 1",
+          "gpa": "gpa 1",
+          "majors": "[]",
+          "minors": "[]",
+          "primary": "primary 1",
+          "campus": "campus 1",
+          "social_organization": "Acme Corp",
+          "known_name": "known_name 1",
+          "class_of_degree": "class_of_degree 1",
+          "department": "department 1",
+          "faculty": "faculty 1",
+          "registration_number": "registration_number 1",
+          "subject_of_study": "Sample Title 1",
+          "date_added": "date_added 1",
+          "date_modified": "date_modified 1"
+        },
+        {
+          "id": "education-2",
+          "constituent_id": "constituent_id-2",
+          "school": "school 2",
+          "type": "premium",
+          "class_of": "class_of 2",
+          "status": "pending",
+          "date_entered": "[]",
+          "date_left": "[]",
+          "date_graduated": "[]",
+          "degree": "degree 2",
+          "gpa": "gpa 2",
+          "majors": "[]",
+          "minors": "[]",
+          "primary": "primary 2",
+          "campus": "campus 2",
+          "social_organization": "Globex LLC",
+          "known_name": "known_name 2",
+          "class_of_degree": "class_of_degree 2",
+          "department": "department 2",
+          "faculty": "faculty 2",
+          "registration_number": "registration_number 2",
+          "subject_of_study": "Sample Title 2",
+          "date_added": "date_added 2",
+          "date_modified": "date_modified 2"
+        },
+        {
+          "id": "education-3",
+          "constituent_id": "constituent_id-3",
+          "school": "school 3",
+          "type": "basic",
+          "class_of": "class_of 3",
+          "status": "completed",
+          "date_entered": "[]",
+          "date_left": "[]",
+          "date_graduated": "[]",
+          "degree": "degree 3",
+          "gpa": "gpa 3",
+          "majors": "[]",
+          "minors": "[]",
+          "primary": "primary 3",
+          "campus": "campus 3",
+          "social_organization": "Initech",
+          "known_name": "known_name 3",
+          "class_of_degree": "class_of_degree 3",
+          "department": "department 3",
+          "faculty": "faculty 3",
+          "registration_number": "registration_number 3",
+          "subject_of_study": "Sample Title 3",
+          "date_added": "date_added 3",
+          "date_modified": "date_modified 3"
+        }
+      ]
+    },
+    {
+      "Path": "/constituent/v1/constituents/{constituent_id}/emailaddresses",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "id": "email_address-1",
+          "constituent_id": "constituent_id-1",
+          "type": "standard",
+          "address": "101 Test St",
+          "primary": "primary 1",
+          "do_not_email": "user1@example.com",
+          "inactive": true,
+          "date_added": "date_added 1",
+          "date_modified": "date_modified 1"
+        },
+        {
+          "id": "email_address-2",
+          "constituent_id": "constituent_id-2",
+          "type": "premium",
+          "address": "102 Test St",
+          "primary": "primary 2",
+          "do_not_email": "user2@example.com",
+          "inactive": false,
+          "date_added": "date_added 2",
+          "date_modified": "date_modified 2"
+        },
+        {
+          "id": "email_address-3",
+          "constituent_id": "constituent_id-3",
+          "type": "basic",
+          "address": "103 Test St",
+          "primary": "primary 3",
+          "do_not_email": "user3@example.com",
+          "inactive": true,
+          "date_added": "date_added 3",
+          "date_modified": "date_modified 3"
+        }
+      ]
+    },
+    {
+      "Path": "/fundraising/v1/funds/{fund_id}/attachments",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "id": "fund_attachment-1",
+          "parent_id": "parent_id-1",
+          "type": "standard",
+          "name": "Alex Rivera",
+          "date": "date 1",
+          "url": "https://example.com/url/1",
+          "file_name": "file_name 1",
+          "file_id": "file_id-1",
+          "thumbnail_id": "thumbnail_id-1",
+          "thumbnail_url": "https://example.com/thumbnail_url/1",
+          "content_type": "Sample content_type 1",
+          "file_size": "file_size 1",
+          "tags": "[]"
+        },
+        {
+          "id": "fund_attachment-2",
+          "parent_id": "parent_id-2",
+          "type": "premium",
+          "name": "Jordan Chen",
+          "date": "date 2",
+          "url": "https://example.com/url/2",
+          "file_name": "file_name 2",
+          "file_id": "file_id-2",
+          "thumbnail_id": "thumbnail_id-2",
+          "thumbnail_url": "https://example.com/thumbnail_url/2",
+          "content_type": "Sample content_type 2",
+          "file_size": "file_size 2",
+          "tags": "[]"
+        },
+        {
+          "id": "fund_attachment-3",
+          "parent_id": "parent_id-3",
+          "type": "basic",
+          "name": "Taylor Patel",
+          "date": "date 3",
+          "url": "https://example.com/url/3",
+          "file_name": "file_name 3",
+          "file_id": "file_id-3",
+          "thumbnail_id": "thumbnail_id-3",
+          "thumbnail_url": "https://example.com/thumbnail_url/3",
+          "content_type": "Sample content_type 3",
+          "file_size": "file_size 3",
+          "tags": "[]"
+        }
+      ]
+    },
+    {
+      "Path": "/fundraising/v1/appeals",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "id": "fundraising_appeal-1",
+          "category": "standard",
+          "date_added": "date_added 1",
+          "date_modified": "2026-06-11T00:00:00Z",
+          "description": "Sample description 1",
+          "end_date": "end_date 1",
+          "goal": "[]",
+          "inactive": true,
+          "lookup_id": "lookup_id-1",
+          "start_date": "start_date 1"
+        },
+        {
+          "id": "fundraising_appeal-2",
+          "category": "premium",
+          "date_added": "date_added 2",
+          "date_modified": "2026-06-12T00:00:00Z",
+          "description": "Sample description 2",
+          "end_date": "end_date 2",
+          "goal": "[]",
+          "inactive": false,
+          "lookup_id": "lookup_id-2",
+          "start_date": "start_date 2"
+        },
+        {
+          "id": "fundraising_appeal-3",
+          "category": "basic",
+          "date_added": "date_added 3",
+          "date_modified": "2026-06-13T00:00:00Z",
+          "description": "Sample description 3",
+          "end_date": "end_date 3",
+          "goal": "[]",
+          "inactive": true,
+          "lookup_id": "lookup_id-3",
+          "start_date": "start_date 3"
+        }
+      ]
+    },
+    {
+      "Path": "/fundraising/v1/campaigns",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "id": "fundraising_campaign-1",
+          "category": "standard",
+          "date_added": "date_added 1",
+          "date_modified": "2026-06-11T00:00:00Z",
+          "description": "Sample description 1",
+          "end_date": "end_date 1",
+          "goal": "[]",
+          "inactive": true,
+          "lookup_id": "lookup_id-1",
+          "start_date": "start_date 1"
+        },
+        {
+          "id": "fundraising_campaign-2",
+          "category": "premium",
+          "date_added": "date_added 2",
+          "date_modified": "2026-06-12T00:00:00Z",
+          "description": "Sample description 2",
+          "end_date": "end_date 2",
+          "goal": "[]",
+          "inactive": false,
+          "lookup_id": "lookup_id-2",
+          "start_date": "start_date 2"
+        },
+        {
+          "id": "fundraising_campaign-3",
+          "category": "basic",
+          "date_added": "date_added 3",
+          "date_modified": "2026-06-13T00:00:00Z",
+          "description": "Sample description 3",
+          "end_date": "end_date 3",
+          "goal": "[]",
+          "inactive": true,
+          "lookup_id": "lookup_id-3",
+          "start_date": "start_date 3"
+        }
+      ]
+    },
+    {
+      "Path": "/fundraising/v1/funds",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "id": "fundraising_fund-1",
+          "category": "standard",
+          "date_added": "date_added 1",
+          "date_modified": "2026-06-11T00:00:00Z",
+          "description": "Sample description 1",
+          "end_date": "end_date 1",
+          "goal": "[]",
+          "inactive": true,
+          "lookup_id": "lookup_id-1",
+          "start_date": "start_date 1",
+          "type": "standard"
+        },
+        {
+          "id": "fundraising_fund-2",
+          "category": "premium",
+          "date_added": "date_added 2",
+          "date_modified": "2026-06-12T00:00:00Z",
+          "description": "Sample description 2",
+          "end_date": "end_date 2",
+          "goal": "[]",
+          "inactive": false,
+          "lookup_id": "lookup_id-2",
+          "start_date": "start_date 2",
+          "type": "premium"
+        },
+        {
+          "id": "fundraising_fund-3",
+          "category": "basic",
+          "date_added": "date_added 3",
+          "date_modified": "2026-06-13T00:00:00Z",
+          "description": "Sample description 3",
+          "end_date": "end_date 3",
+          "goal": "[]",
+          "inactive": true,
+          "lookup_id": "lookup_id-3",
+          "start_date": "start_date 3",
+          "type": "basic"
+        }
+      ]
+    },
+    {
+      "Path": "/fundraising/v1/fundraisers/{fundraiser_id}/assignments",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "id": "fundraising_fundraiser_assignment-1",
+          "constituent_id": "constituent_id-1",
+          "type": "standard",
+          "start": "start 1",
+          "end": "end 1",
+          "amount": "[]",
+          "campaign_id": "campaign_id-1",
+          "fund_id": "fund_id-1",
+          "appeal_id": "appeal_id-1"
+        },
+        {
+          "id": "fundraising_fundraiser_assignment-2",
+          "constituent_id": "constituent_id-2",
+          "type": "premium",
+          "start": "start 2",
+          "end": "end 2",
+          "amount": "[]",
+          "campaign_id": "campaign_id-2",
+          "fund_id": "fund_id-2",
+          "appeal_id": "appeal_id-2"
+        },
+        {
+          "id": "fundraising_fundraiser_assignment-3",
+          "constituent_id": "constituent_id-3",
+          "type": "basic",
+          "start": "start 3",
+          "end": "end 3",
+          "amount": "[]",
+          "campaign_id": "campaign_id-3",
+          "fund_id": "fund_id-3",
+          "appeal_id": "appeal_id-3"
+        }
+      ]
+    },
+    {
+      "Path": "/fundraising/v1/packages",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "id": "fundraising_package-1",
+          "appeal_id": "appeal_id-1",
+          "category": "standard",
+          "date_added": "date_added 1",
+          "date_modified": "2026-06-11T00:00:00Z",
+          "default_gift_amount": "[]",
+          "description": "Sample description 1",
+          "end": "end 1",
+          "goal": "[]",
+          "inactive": true,
+          "lookup_id": "lookup_id-1",
+          "notes": "Sample notes 1",
+          "recipient_count": "recipient_count 1",
+          "start": "start 1"
+        },
+        {
+          "id": "fundraising_package-2",
+          "appeal_id": "appeal_id-2",
+          "category": "premium",
+          "date_added": "date_added 2",
+          "date_modified": "2026-06-12T00:00:00Z",
+          "default_gift_amount": "[]",
+          "description": "Sample description 2",
+          "end": "end 2",
+          "goal": "[]",
+          "inactive": false,
+          "lookup_id": "lookup_id-2",
+          "notes": "Sample notes 2",
+          "recipient_count": "recipient_count 2",
+          "start": "start 2"
+        },
+        {
+          "id": "fundraising_package-3",
+          "appeal_id": "appeal_id-3",
+          "category": "basic",
+          "date_added": "date_added 3",
+          "date_modified": "2026-06-13T00:00:00Z",
+          "default_gift_amount": "[]",
+          "description": "Sample description 3",
+          "end": "end 3",
+          "goal": "[]",
+          "inactive": true,
+          "lookup_id": "lookup_id-3",
+          "notes": "Sample notes 3",
+          "recipient_count": "recipient_count 3",
+          "start": "start 3"
+        }
+      ]
+    },
+    {
+      "Path": "/gift/v1/gifts",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "id": "gift-1",
+          "constituent_id": "constituent_id-1",
+          "type": "standard",
+          "subtype": "subtype 1",
+          "date": "date 1",
+          "amount": "[]",
+          "balance": "[]",
+          "batch_number": "batch_number 1",
+          "gift_status": "active",
+          "is_anonymous": "is_anonymous 1",
+          "constituency": "constituency 1",
+          "lookup_id": "lookup_id-1",
+          "origin": "origin 1",
+          "post_status": "active",
+          "post_date": "post_date 1",
+          "reference": "reference 1",
+          "recurring_gift_status_date": "active",
+          "recurring_gift_schedule": "[]",
+          "gift_aid_amount": "[]",
+          "gift_aid_qualification_status": "active",
+          "gift_code": "gift_code-1",
+          "gift_splits": "[]",
+          "fundraisers": "[]",
+          "soft_credits": "[]",
+          "receipts": "[]",
+          "acknowledgements": "[]",
+          "payments": "[]",
+          "linked_gifts": "https://example.com/linked_gifts/1",
+          "date_added": "date_added 1",
+          "date_modified": "2026-06-11T00:00:00Z"
+        },
+        {
+          "id": "gift-2",
+          "constituent_id": "constituent_id-2",
+          "type": "premium",
+          "subtype": "subtype 2",
+          "date": "date 2",
+          "amount": "[]",
+          "balance": "[]",
+          "batch_number": "batch_number 2",
+          "gift_status": "pending",
+          "is_anonymous": "is_anonymous 2",
+          "constituency": "constituency 2",
+          "lookup_id": "lookup_id-2",
+          "origin": "origin 2",
+          "post_status": "pending",
+          "post_date": "post_date 2",
+          "reference": "reference 2",
+          "recurring_gift_status_date": "pending",
+          "recurring_gift_schedule": "[]",
+          "gift_aid_amount": "[]",
+          "gift_aid_qualification_status": "pending",
+          "gift_code": "gift_code-2",
+          "gift_splits": "[]",
+          "fundraisers": "[]",
+          "soft_credits": "[]",
+          "receipts": "[]",
+          "acknowledgements": "[]",
+          "payments": "[]",
+          "linked_gifts": "https://example.com/linked_gifts/2",
+          "date_added": "date_added 2",
+          "date_modified": "2026-06-12T00:00:00Z"
+        },
+        {
+          "id": "gift-3",
+          "constituent_id": "constituent_id-3",
+          "type": "basic",
+          "subtype": "subtype 3",
+          "date": "date 3",
+          "amount": "[]",
+          "balance": "[]",
+          "batch_number": "batch_number 3",
+          "gift_status": "completed",
+          "is_anonymous": "is_anonymous 3",
+          "constituency": "constituency 3",
+          "lookup_id": "lookup_id-3",
+          "origin": "origin 3",
+          "post_status": "completed",
+          "post_date": "post_date 3",
+          "reference": "reference 3",
+          "recurring_gift_status_date": "completed",
+          "recurring_gift_schedule": "[]",
+          "gift_aid_amount": "[]",
+          "gift_aid_qualification_status": "completed",
+          "gift_code": "gift_code-3",
+          "gift_splits": "[]",
+          "fundraisers": "[]",
+          "soft_credits": "[]",
+          "receipts": "[]",
+          "acknowledgements": "[]",
+          "payments": "[]",
+          "linked_gifts": "https://example.com/linked_gifts/3",
+          "date_added": "date_added 3",
+          "date_modified": "2026-06-13T00:00:00Z"
+        }
+      ]
+    },
+    {
+      "Path": "/gift/v1/gifts/{gift_id}/attachments",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "id": "gift_attachment-1",
+          "parent_id": "parent_id-1",
+          "type": "standard",
+          "name": "Alex Rivera",
+          "date": "date 1",
+          "url": "https://example.com/url/1",
+          "file_name": "file_name 1",
+          "file_id": "file_id-1",
+          "thumbnail_id": "thumbnail_id-1",
+          "thumbnail_url": "https://example.com/thumbnail_url/1",
+          "content_type": "Sample content_type 1",
+          "file_size": "file_size 1",
+          "tags": "[]"
+        },
+        {
+          "id": "gift_attachment-2",
+          "parent_id": "parent_id-2",
+          "type": "premium",
+          "name": "Jordan Chen",
+          "date": "date 2",
+          "url": "https://example.com/url/2",
+          "file_name": "file_name 2",
+          "file_id": "file_id-2",
+          "thumbnail_id": "thumbnail_id-2",
+          "thumbnail_url": "https://example.com/thumbnail_url/2",
+          "content_type": "Sample content_type 2",
+          "file_size": "file_size 2",
+          "tags": "[]"
+        },
+        {
+          "id": "gift_attachment-3",
+          "parent_id": "parent_id-3",
+          "type": "basic",
+          "name": "Taylor Patel",
+          "date": "date 3",
+          "url": "https://example.com/url/3",
+          "file_name": "file_name 3",
+          "file_id": "file_id-3",
+          "thumbnail_id": "thumbnail_id-3",
+          "thumbnail_url": "https://example.com/thumbnail_url/3",
+          "content_type": "Sample content_type 3",
+          "file_size": "file_size 3",
+          "tags": "[]"
+        }
+      ]
+    },
+    {
+      "Path": "/gift-batch/v1/giftbatches",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "id": "gift_batch-1",
+          "batch_description": "Sample batch_description 1",
+          "batch_number": "batch_number 1",
+          "projected_number_of_gifts": "projected_number_of_gifts 1",
+          "number_of_gifts": "number_of_gifts 1",
+          "projected_amount": "projected_amount 1",
+          "actual_amount": "actual_amount 1",
+          "has_exceptions": "has_exceptions 1",
+          "is_approved": "is_approved 1",
+          "created_by": "created_by 1",
+          "created_on": "created_on 1"
+        },
+        {
+          "id": "gift_batch-2",
+          "batch_description": "Sample batch_description 2",
+          "batch_number": "batch_number 2",
+          "projected_number_of_gifts": "projected_number_of_gifts 2",
+          "number_of_gifts": "number_of_gifts 2",
+          "projected_amount": "projected_amount 2",
+          "actual_amount": "actual_amount 2",
+          "has_exceptions": "has_exceptions 2",
+          "is_approved": "is_approved 2",
+          "created_by": "created_by 2",
+          "created_on": "created_on 2"
+        },
+        {
+          "id": "gift_batch-3",
+          "batch_description": "Sample batch_description 3",
+          "batch_number": "batch_number 3",
+          "projected_number_of_gifts": "projected_number_of_gifts 3",
+          "number_of_gifts": "number_of_gifts 3",
+          "projected_amount": "projected_amount 3",
+          "actual_amount": "actual_amount 3",
+          "has_exceptions": "has_exceptions 3",
+          "is_approved": "is_approved 3",
+          "created_by": "created_by 3",
+          "created_on": "created_on 3"
+        }
+      ]
+    },
+    {
+      "Path": "/gift/v1/giftbatches",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "affected_field": "affected_field 1",
+          "batch_id": "batch_id-1",
+          "exception_error_code": "exception_error_code-1",
+          "exception_error_message": "Sample exception_error_message 1",
+          "exception_error_name": "exception_error_name 1",
+          "gift_id": "gift_id-1",
+          "lookup_id": "lookup_id-1"
+        },
+        {
+          "affected_field": "affected_field 2",
+          "batch_id": "batch_id-2",
+          "exception_error_code": "exception_error_code-2",
+          "exception_error_message": "Sample exception_error_message 2",
+          "exception_error_name": "exception_error_name 2",
+          "gift_id": "gift_id-2",
+          "lookup_id": "lookup_id-2"
+        },
+        {
+          "affected_field": "affected_field 3",
+          "batch_id": "batch_id-3",
+          "exception_error_code": "exception_error_code-3",
+          "exception_error_message": "Sample exception_error_message 3",
+          "exception_error_name": "exception_error_name 3",
+          "gift_id": "gift_id-3",
+          "lookup_id": "lookup_id-3"
+        }
+      ]
+    },
+    {
+      "Path": "/nxt-data-integration/v1/re/giftidmap/{giftlookupid}",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "id": "gmap-1",
+        "gift_id": "2001",
+        "lookup_id": "GLKP-2001"
+      }
+    },
+    {
+      "Path": "/nxt-data-integration/v1/re/gifts/{gift_id}/notes",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "gift_id": "gift_id-1",
+          "type": "standard",
+          "date": "[]",
+          "summary": "Sample summary 1",
+          "text": "text 1",
+          "author": "author 1"
+        },
+        {
+          "gift_id": "gift_id-2",
+          "type": "premium",
+          "date": "[]",
+          "summary": "Sample summary 2",
+          "text": "text 2",
+          "author": "author 2"
+        },
+        {
+          "gift_id": "gift_id-3",
+          "type": "basic",
+          "date": "[]",
+          "summary": "Sample summary 3",
+          "text": "text 3",
+          "author": "author 3"
+        }
+      ]
+    },
+    {
+      "Path": "/nxt-data-integration/v1/re/gifttribute/gift/{gift_id}",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "id": "gift_tribute-1",
+          "gift_id": "gift_id-1",
+          "tribute_id": "tribute_id-1",
+          "tribute_type": "tribute_type 1",
+          "acknowledge": "acknowledge 1",
+          "sequence": "sequence 1"
+        },
+        {
+          "id": "gift_tribute-2",
+          "gift_id": "gift_id-2",
+          "tribute_id": "tribute_id-2",
+          "tribute_type": "tribute_type 2",
+          "acknowledge": "acknowledge 2",
+          "sequence": "sequence 2"
+        },
+        {
+          "id": "gift_tribute-3",
+          "gift_id": "gift_id-3",
+          "tribute_id": "tribute_id-3",
+          "tribute_type": "tribute_type 3",
+          "acknowledge": "acknowledge 3",
+          "sequence": "sequence 3"
+        }
+      ]
+    },
+    {
+      "Path": "/nxt-data-integration/v1/re/gifttribute/{gift_tribute_id}/acknowledgees",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "id": "gift_tribute_acknowledgee-1",
+          "gift_tribute_id": "gift_tribute_id-1",
+          "self_acknowledge": "self_acknowledge 1",
+          "relationships_id": "relationships_id-1",
+          "letter": "letter 1",
+          "letter_date": "letter_date 1"
+        },
+        {
+          "id": "gift_tribute_acknowledgee-2",
+          "gift_tribute_id": "gift_tribute_id-2",
+          "self_acknowledge": "self_acknowledge 2",
+          "relationships_id": "relationships_id-2",
+          "letter": "letter 2",
+          "letter_date": "letter_date 2"
+        },
+        {
+          "id": "gift_tribute_acknowledgee-3",
+          "gift_tribute_id": "gift_tribute_id-3",
+          "self_acknowledge": "self_acknowledge 3",
+          "relationships_id": "relationships_id-3",
+          "letter": "letter 3",
+          "letter_date": "letter_date 3"
+        }
+      ]
+    },
+    {
+      "Path": "/constituent/v1/constituents/{constituent_id}/givingsummary/first",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "id": "gs-1",
+        "date": "2026-06-01",
+        "appeals": [
+          {
+            "id": "ap-1",
+            "appeal_id": "3001",
+            "description": "Annual",
+            "amount": 100
+          },
+          {
+            "id": "ap-2",
+            "appeal_id": "3002",
+            "description": "Schol",
+            "amount": 200
+          }
+        ],
+        "campaigns": [
+          {
+            "id": "cm-1",
+            "campaign_id": "4001",
+            "description": "Spring",
+            "amount": 100
+          },
+          {
+            "id": "cm-2",
+            "campaign_id": "4002",
+            "description": "Summer",
+            "amount": 200
+          }
+        ],
+        "funds": [
+          {
+            "id": "fn-1",
+            "fund_id": "5001",
+            "description": "General",
+            "amount": 100
+          },
+          {
+            "id": "fn-2",
+            "fund_id": "5002",
+            "description": "Endow",
+            "amount": 200
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/constituent/v1/constituents/{constituent_id}/givingsummary/lifetimegiving",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "consecutive_years_given": "consecutive_years_given 1",
+          "total_years_given": "total_years_given 1",
+          "total_giving": "[]",
+          "total_pledge_balance": "[]",
+          "total_received_giving": "[]",
+          "total_committed_matching_gifts": "[]",
+          "total_received_matching_gifts": "[]",
+          "total_soft_credits": "[]"
+        },
+        {
+          "consecutive_years_given": "consecutive_years_given 2",
+          "total_years_given": "total_years_given 2",
+          "total_giving": "[]",
+          "total_pledge_balance": "[]",
+          "total_received_giving": "[]",
+          "total_committed_matching_gifts": "[]",
+          "total_received_matching_gifts": "[]",
+          "total_soft_credits": "[]"
+        },
+        {
+          "consecutive_years_given": "consecutive_years_given 3",
+          "total_years_given": "total_years_given 3",
+          "total_giving": "[]",
+          "total_pledge_balance": "[]",
+          "total_received_giving": "[]",
+          "total_committed_matching_gifts": "[]",
+          "total_received_matching_gifts": "[]",
+          "total_soft_credits": "[]"
+        }
+      ]
+    },
+    {
+      "Path": "/constituent/v1/constituents/{constituent_id}/memberships",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "id": "membership-1",
+          "constituent_id": "constituent_id-1",
+          "program": "program 1",
+          "category": "standard",
+          "subcategory": "standard",
+          "standing": "standing 1",
+          "expires": "expires 1",
+          "joined": "joined 1",
+          "dues": "[]",
+          "members": "[]",
+          "date_added": "date_added 1",
+          "date_modified": "date_modified 1"
+        },
+        {
+          "id": "membership-2",
+          "constituent_id": "constituent_id-2",
+          "program": "program 2",
+          "category": "premium",
+          "subcategory": "premium",
+          "standing": "standing 2",
+          "expires": "expires 2",
+          "joined": "joined 2",
+          "dues": "[]",
+          "members": "[]",
+          "date_added": "date_added 2",
+          "date_modified": "date_modified 2"
+        },
+        {
+          "id": "membership-3",
+          "constituent_id": "constituent_id-3",
+          "program": "program 3",
+          "category": "basic",
+          "subcategory": "basic",
+          "standing": "standing 3",
+          "expires": "expires 3",
+          "joined": "joined 3",
+          "dues": "[]",
+          "members": "[]",
+          "date_added": "date_added 3",
+          "date_modified": "date_modified 3"
+        }
+      ]
+    },
+    {
+      "Path": "/constituent/v1/nameformatconfigurations",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "id": "name_format_configuration-1",
+          "format": "format 1"
+        },
+        {
+          "id": "name_format_configuration-2",
+          "format": "format 2"
+        },
+        {
+          "id": "name_format_configuration-3",
+          "format": "format 3"
+        }
+      ]
+    },
+    {
+      "Path": "/constituent/v1/constituents/{constituent_id}/nameformats/summary",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "id": "nfs-1",
+        "additional_name_formats": [
+          {
+            "id": "nf-1",
+            "name": "Formal 1",
+            "format": "formal"
+          },
+          {
+            "id": "nf-2",
+            "name": "Informal 2",
+            "format": "informal"
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/nxt-data-integration/v1/re/giftaid/constituents/{constituent_id}/taxdeclarations",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "constituent_id": "constituent_id-1",
+          "declaration_starts": "declaration_starts 1",
+          "declaration_ends": "declaration_ends 1",
+          "declaration_made": "declaration_made 1",
+          "declaration_indicator": "declaration_indicator 1",
+          "declaration_source": "declaration_source 1",
+          "confirmation_sent": "confirmation_sent 1",
+          "confirmation_returned": "confirmation_returned 1",
+          "constituent_pays_tax": "constituent_pays_tax 1",
+          "tax_payer_status": "active",
+          "tax_notes": "Sample tax_notes 1",
+          "sequence": "sequence 1",
+          "declaration_id": "tax_declaration-1"
+        },
+        {
+          "constituent_id": "constituent_id-2",
+          "declaration_starts": "declaration_starts 2",
+          "declaration_ends": "declaration_ends 2",
+          "declaration_made": "declaration_made 2",
+          "declaration_indicator": "declaration_indicator 2",
+          "declaration_source": "declaration_source 2",
+          "confirmation_sent": "confirmation_sent 2",
+          "confirmation_returned": "confirmation_returned 2",
+          "constituent_pays_tax": "constituent_pays_tax 2",
+          "tax_payer_status": "pending",
+          "tax_notes": "Sample tax_notes 2",
+          "sequence": "sequence 2",
+          "declaration_id": "tax_declaration-2"
+        },
+        {
+          "constituent_id": "constituent_id-3",
+          "declaration_starts": "declaration_starts 3",
+          "declaration_ends": "declaration_ends 3",
+          "declaration_made": "declaration_made 3",
+          "declaration_indicator": "declaration_indicator 3",
+          "declaration_source": "declaration_source 3",
+          "confirmation_sent": "confirmation_sent 3",
+          "confirmation_returned": "confirmation_returned 3",
+          "constituent_pays_tax": "constituent_pays_tax 3",
+          "tax_payer_status": "completed",
+          "tax_notes": "Sample tax_notes 3",
+          "sequence": "sequence 3",
+          "declaration_id": "tax_declaration-3"
+        }
+      ]
+    },
+    {
+      "Path": "/constituent/v1/constituents/convert",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "constituent_codes": "[]"
+        },
+        {
+          "constituent_codes": "[]"
+        },
+        {
+          "constituent_codes": "[]"
+        }
+      ]
+    },
+    {
+      "Path": "/constituent/v1/constituents/{constituent_id}/notes",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "id": "note-1",
+          "constituent_id": "constituent_id-1",
+          "type": "standard",
+          "date": "[]",
+          "summary": "Sample summary 1",
+          "text": "text 1",
+          "date_added": "date_added 1",
+          "date_modified": "date_modified 1"
+        },
+        {
+          "id": "note-2",
+          "constituent_id": "constituent_id-2",
+          "type": "premium",
+          "date": "[]",
+          "summary": "Sample summary 2",
+          "text": "text 2",
+          "date_added": "date_added 2",
+          "date_modified": "date_modified 2"
+        },
+        {
+          "id": "note-3",
+          "constituent_id": "constituent_id-3",
+          "type": "basic",
+          "date": "[]",
+          "summary": "Sample summary 3",
+          "text": "text 3",
+          "date_added": "date_added 3",
+          "date_modified": "date_modified 3"
+        }
+      ]
+    },
+    {
+      "Path": "/constituent/v1/constituents/{constituent_id}/onlinepresences",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "id": "online_presence-1",
+          "constituent_id": "constituent_id-1",
+          "type": "standard",
+          "address": "101 Test St",
+          "primary": "primary 1",
+          "inactive": true,
+          "date_added": "date_added 1",
+          "date_modified": "date_modified 1"
+        },
+        {
+          "id": "online_presence-2",
+          "constituent_id": "constituent_id-2",
+          "type": "premium",
+          "address": "102 Test St",
+          "primary": "primary 2",
+          "inactive": false,
+          "date_added": "date_added 2",
+          "date_modified": "date_modified 2"
+        },
+        {
+          "id": "online_presence-3",
+          "constituent_id": "constituent_id-3",
+          "type": "basic",
+          "address": "103 Test St",
+          "primary": "primary 3",
+          "inactive": true,
+          "date_added": "date_added 3",
+          "date_modified": "date_modified 3"
+        }
+      ]
+    },
+    {
+      "Path": "/opportunity/v1/opportunities",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "id": "opportunity-1",
+          "constituent_id": "constituent_id-1",
+          "purpose": "purpose 1",
+          "name": "Alex Rivera",
+          "status": "active",
+          "deadline": "deadline 1",
+          "ask_date": "ask_date 1",
+          "ask_amount": "[]",
+          "expected_date": "expected_date 1",
+          "expected_amount": "[]",
+          "funded_date": "funded_date 1",
+          "funded_amount": "[]",
+          "campaign_id": "campaign_id-1",
+          "fund_id": "fund_id-1",
+          "fundraisers": "[]",
+          "inactive": true,
+          "linked_gifts": "https://example.com/linked_gifts/1",
+          "date_added": "date_added 1",
+          "date_modified": "2026-06-11T00:00:00Z"
+        },
+        {
+          "id": "opportunity-2",
+          "constituent_id": "constituent_id-2",
+          "purpose": "purpose 2",
+          "name": "Jordan Chen",
+          "status": "pending",
+          "deadline": "deadline 2",
+          "ask_date": "ask_date 2",
+          "ask_amount": "[]",
+          "expected_date": "expected_date 2",
+          "expected_amount": "[]",
+          "funded_date": "funded_date 2",
+          "funded_amount": "[]",
+          "campaign_id": "campaign_id-2",
+          "fund_id": "fund_id-2",
+          "fundraisers": "[]",
+          "inactive": false,
+          "linked_gifts": "https://example.com/linked_gifts/2",
+          "date_added": "date_added 2",
+          "date_modified": "2026-06-12T00:00:00Z"
+        },
+        {
+          "id": "opportunity-3",
+          "constituent_id": "constituent_id-3",
+          "purpose": "purpose 3",
+          "name": "Taylor Patel",
+          "status": "completed",
+          "deadline": "deadline 3",
+          "ask_date": "ask_date 3",
+          "ask_amount": "[]",
+          "expected_date": "expected_date 3",
+          "expected_amount": "[]",
+          "funded_date": "funded_date 3",
+          "funded_amount": "[]",
+          "campaign_id": "campaign_id-3",
+          "fund_id": "fund_id-3",
+          "fundraisers": "[]",
+          "inactive": true,
+          "linked_gifts": "https://example.com/linked_gifts/3",
+          "date_added": "date_added 3",
+          "date_modified": "2026-06-13T00:00:00Z"
+        }
+      ]
+    },
+    {
+      "Path": "/opportunity/v1/opportunities/{opportunity_id}/attachments",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "id": "opportunity_attachment-1",
+          "parent_id": "parent_id-1",
+          "type": "standard",
+          "name": "Alex Rivera",
+          "date": "date 1",
+          "url": "https://example.com/url/1",
+          "file_name": "file_name 1",
+          "file_id": "file_id-1",
+          "thumbnail_id": "thumbnail_id-1",
+          "thumbnail_url": "https://example.com/thumbnail_url/1",
+          "content_type": "Sample content_type 1",
+          "file_size": "file_size 1",
+          "tags": "[]"
+        },
+        {
+          "id": "opportunity_attachment-2",
+          "parent_id": "parent_id-2",
+          "type": "premium",
+          "name": "Jordan Chen",
+          "date": "date 2",
+          "url": "https://example.com/url/2",
+          "file_name": "file_name 2",
+          "file_id": "file_id-2",
+          "thumbnail_id": "thumbnail_id-2",
+          "thumbnail_url": "https://example.com/thumbnail_url/2",
+          "content_type": "Sample content_type 2",
+          "file_size": "file_size 2",
+          "tags": "[]"
+        },
+        {
+          "id": "opportunity_attachment-3",
+          "parent_id": "parent_id-3",
+          "type": "basic",
+          "name": "Taylor Patel",
+          "date": "date 3",
+          "url": "https://example.com/url/3",
+          "file_name": "file_name 3",
+          "file_id": "file_id-3",
+          "thumbnail_id": "thumbnail_id-3",
+          "thumbnail_url": "https://example.com/thumbnail_url/3",
+          "content_type": "Sample content_type 3",
+          "file_size": "file_size 3",
+          "tags": "[]"
+        }
+      ]
+    },
+    {
+      "Path": "/constituent/v1/constituents/{constituent_id}/phones",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "id": "phone-1",
+          "constituent_id": "constituent_id-1",
+          "type": "standard",
+          "number": "number 1",
+          "primary": "primary 1",
+          "do_not_call": "do_not_call 1",
+          "inactive": true,
+          "date_added": "date_added 1",
+          "date_modified": "date_modified 1"
+        },
+        {
+          "id": "phone-2",
+          "constituent_id": "constituent_id-2",
+          "type": "premium",
+          "number": "number 2",
+          "primary": "primary 2",
+          "do_not_call": "do_not_call 2",
+          "inactive": false,
+          "date_added": "date_added 2",
+          "date_modified": "date_modified 2"
+        },
+        {
+          "id": "phone-3",
+          "constituent_id": "constituent_id-3",
+          "type": "basic",
+          "number": "number 3",
+          "primary": "primary 3",
+          "do_not_call": "do_not_call 3",
+          "inactive": true,
+          "date_added": "date_added 3",
+          "date_modified": "date_modified 3"
+        }
+      ]
+    },
+    {
+      "Path": "/constituent/v1/constituents/{constituent_id}/profilepicture",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "constituent_id": "constituent_id-1",
+          "url": "https://example.com/url/1",
+          "thumbnail_url": "https://example.com/thumbnail_url/1"
+        },
+        {
+          "constituent_id": "constituent_id-2",
+          "url": "https://example.com/url/2",
+          "thumbnail_url": "https://example.com/thumbnail_url/2"
+        },
+        {
+          "constituent_id": "constituent_id-3",
+          "url": "https://example.com/url/3",
+          "thumbnail_url": "https://example.com/thumbnail_url/3"
+        }
+      ]
+    },
+    {
+      "Path": "/constituent/v1/constituents/{constituent_id}/prospectstatus",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "status": "active",
+          "days_elapsed": "days_elapsed 1",
+          "start": "start 1",
+          "comments": "Sample comments 1"
+        },
+        {
+          "status": "pending",
+          "days_elapsed": "days_elapsed 2",
+          "start": "start 2",
+          "comments": "Sample comments 2"
+        },
+        {
+          "status": "completed",
+          "days_elapsed": "days_elapsed 3",
+          "start": "start 3",
+          "comments": "Sample comments 3"
+        }
+      ]
+    },
+    {
+      "Path": "/constituent/v1/constituents/{constituent_id}/ratings",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "id": "rating-1",
+          "constituent_id": "constituent_id-1",
+          "source": "source 1",
+          "category": "standard",
+          "date": "date 1",
+          "value": "value 1",
+          "comment": "Sample comment 1",
+          "inactive": true,
+          "type": "standard"
+        },
+        {
+          "id": "rating-2",
+          "constituent_id": "constituent_id-2",
+          "source": "source 2",
+          "category": "premium",
+          "date": "date 2",
+          "value": "value 2",
+          "comment": "Sample comment 2",
+          "inactive": false,
+          "type": "premium"
+        },
+        {
+          "id": "rating-3",
+          "constituent_id": "constituent_id-3",
+          "source": "source 3",
+          "category": "basic",
+          "date": "date 3",
+          "value": "value 3",
+          "comment": "Sample comment 3",
+          "inactive": true,
+          "type": "basic"
+        }
+      ]
+    },
+    {
+      "Path": "/constituent/v1/ratings/categories",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "inactive": true,
+          "name": "Alex Rivera",
+          "source_name": "source_name 1",
+          "type": "standard"
+        },
+        {
+          "inactive": false,
+          "name": "Jordan Chen",
+          "source_name": "source_name 2",
+          "type": "premium"
+        },
+        {
+          "inactive": true,
+          "name": "Taylor Patel",
+          "source_name": "source_name 3",
+          "type": "basic"
+        }
+      ]
+    },
+    {
+      "Path": "/constituent/v1/ratings/sources",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "inactive": true,
+          "name": "Alex Rivera"
+        },
+        {
+          "inactive": false,
+          "name": "Jordan Chen"
+        },
+        {
+          "inactive": true,
+          "name": "Taylor Patel"
+        }
+      ]
+    },
+    {
+      "Path": "/constituent/v1/constituents/search?search_text=*",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "id": "search_result-1",
+          "name": "Alex Rivera",
+          "address": "101 Test St",
+          "deceased": "deceased 1",
+          "email": "user1@example.com",
+          "fundraiser_status": "active",
+          "inactive": true,
+          "lookup_id": "lookup_id-1"
+        },
+        {
+          "id": "search_result-2",
+          "name": "Jordan Chen",
+          "address": "102 Test St",
+          "deceased": "deceased 2",
+          "email": "user2@example.com",
+          "fundraiser_status": "pending",
+          "inactive": false,
+          "lookup_id": "lookup_id-2"
+        },
+        {
+          "id": "search_result-3",
+          "name": "Taylor Patel",
+          "address": "103 Test St",
+          "deceased": "deceased 3",
+          "email": "user3@example.com",
+          "fundraiser_status": "completed",
+          "inactive": true,
+          "lookup_id": "lookup_id-3"
+        }
+      ]
+    },
+    {
+      "Path": "/commpref/v1/solicitcodes",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "description": "Sample description 1"
+        },
+        {
+          "description": "Sample description 2"
+        },
+        {
+          "description": "Sample description 3"
+        }
+      ]
+    },
+    {
+      "Path": "/nxt-data-integration/v1/re/codetables/{code_table_id}/tableentries",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "table_entries_id": "table_entry-1",
+          "long_description": "Sample long_description 1"
+        },
+        {
+          "table_entries_id": "table_entry-2",
+          "long_description": "Sample long_description 2"
+        },
+        {
+          "table_entries_id": "table_entry-3",
+          "long_description": "Sample long_description 3"
+        }
+      ]
+    },
+    {
+      "Path": "/nxt-data-integration/v1/re/giftaid/constituents/{constituent_id}/taxdeclarations",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "declaration_id": "tax_declaration-1",
+          "declaration_starts": "declaration_starts 1",
+          "declaration_ends": "declaration_ends 1",
+          "declaration_made": "declaration_made 1",
+          "declaration_indicator_id": "declaration_indicator_id-1",
+          "declaration_indicator": "declaration_indicator 1",
+          "declaration_source_id": "declaration_source_id-1",
+          "declaration_source": "declaration_source 1",
+          "confirmation_sent": "confirmation_sent 1",
+          "confirmation_returned": "confirmation_returned 1",
+          "constituent_pays_tax": "constituent_pays_tax 1",
+          "tax_payer_status_id": "active",
+          "tax_payer_status": "active",
+          "tax_notes": "Sample tax_notes 1",
+          "sequence": "sequence 1"
+        },
+        {
+          "declaration_id": "tax_declaration-2",
+          "declaration_starts": "declaration_starts 2",
+          "declaration_ends": "declaration_ends 2",
+          "declaration_made": "declaration_made 2",
+          "declaration_indicator_id": "declaration_indicator_id-2",
+          "declaration_indicator": "declaration_indicator 2",
+          "declaration_source_id": "declaration_source_id-2",
+          "declaration_source": "declaration_source 2",
+          "confirmation_sent": "confirmation_sent 2",
+          "confirmation_returned": "confirmation_returned 2",
+          "constituent_pays_tax": "constituent_pays_tax 2",
+          "tax_payer_status_id": "pending",
+          "tax_payer_status": "pending",
+          "tax_notes": "Sample tax_notes 2",
+          "sequence": "sequence 2"
+        },
+        {
+          "declaration_id": "tax_declaration-3",
+          "declaration_starts": "declaration_starts 3",
+          "declaration_ends": "declaration_ends 3",
+          "declaration_made": "declaration_made 3",
+          "declaration_indicator_id": "declaration_indicator_id-3",
+          "declaration_indicator": "declaration_indicator 3",
+          "declaration_source_id": "declaration_source_id-3",
+          "declaration_source": "declaration_source 3",
+          "confirmation_sent": "confirmation_sent 3",
+          "confirmation_returned": "confirmation_returned 3",
+          "constituent_pays_tax": "constituent_pays_tax 3",
+          "tax_payer_status_id": "completed",
+          "tax_payer_status": "completed",
+          "tax_notes": "Sample tax_notes 3",
+          "sequence": "sequence 3"
+        }
+      ]
+    },
+    {
+      "Path": "/nxt-data-integration/v1/re/tribute/constituent/{constituentId}",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "id": "tribute-1",
+          "constituent_record_id": "constituent_record_id-1",
+          "tribute_type_name": "tribute_type_name 1",
+          "tribute_type_id": "tribute_type_id-1",
+          "description": "Sample description 1",
+          "start_date": "[]",
+          "end_date": "[]",
+          "default_fund_id": "default_fund_id-1",
+          "notes": "Sample notes 1",
+          "is_active": true,
+          "sequence": "sequence 1",
+          "date_added": "date_added 1",
+          "date_modified": "date_modified 1"
+        },
+        {
+          "id": "tribute-2",
+          "constituent_record_id": "constituent_record_id-2",
+          "tribute_type_name": "tribute_type_name 2",
+          "tribute_type_id": "tribute_type_id-2",
+          "description": "Sample description 2",
+          "start_date": "[]",
+          "end_date": "[]",
+          "default_fund_id": "default_fund_id-2",
+          "notes": "Sample notes 2",
+          "is_active": false,
+          "sequence": "sequence 2",
+          "date_added": "date_added 2",
+          "date_modified": "date_modified 2"
+        },
+        {
+          "id": "tribute-3",
+          "constituent_record_id": "constituent_record_id-3",
+          "tribute_type_name": "tribute_type_name 3",
+          "tribute_type_id": "tribute_type_id-3",
+          "description": "Sample description 3",
+          "start_date": "[]",
+          "end_date": "[]",
+          "default_fund_id": "default_fund_id-3",
+          "notes": "Sample notes 3",
+          "is_active": true,
+          "sequence": "sequence 3",
+          "date_added": "date_added 3",
+          "date_modified": "date_modified 3"
+        }
+      ]
+    },
+    {
+      "Path": "/nxt-data-integration/v1/re/tribute/{tributeId}/acknowledgees",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "id": "tribute_acknowledgee-1",
+          "tribute_id": "tribute_id-1",
+          "relationships_id": "relationships_id-1",
+          "letter": "letter 1",
+          "sequence": "sequence 1"
+        },
+        {
+          "id": "tribute_acknowledgee-2",
+          "tribute_id": "tribute_id-2",
+          "relationships_id": "relationships_id-2",
+          "letter": "letter 2",
+          "sequence": "sequence 2"
+        },
+        {
+          "id": "tribute_acknowledgee-3",
+          "tribute_id": "tribute_id-3",
+          "relationships_id": "relationships_id-3",
+          "letter": "letter 3",
+          "sequence": "sequence 3"
+        }
+      ]
+    },
+    {
+      "Path": "/fundraising/v1/appeals/{appeal_id}/customfields",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "id": "appeal_custom_field-1",
+          "parent_id": "parent_id-1",
+          "category": "standard",
+          "type": "standard",
+          "value": "value 1",
+          "text_value": "text_value 1",
+          "number_value": "number_value 1",
+          "date_value": "date_value 1",
+          "currency_value": "USD",
+          "boolean_value": "boolean_value 1",
+          "codetableentry_value": "codetableentry_value 1",
+          "constituentid_value": "constituentid_value 1",
+          "fuzzydate_value": "[]",
+          "date": "date 1",
+          "comment": "Sample comment 1",
+          "date_added": "date_added 1",
+          "date_modified": "date_modified 1"
+        },
+        {
+          "id": "appeal_custom_field-2",
+          "parent_id": "parent_id-2",
+          "category": "premium",
+          "type": "premium",
+          "value": "value 2",
+          "text_value": "text_value 2",
+          "number_value": "number_value 2",
+          "date_value": "date_value 2",
+          "currency_value": "USD",
+          "boolean_value": "boolean_value 2",
+          "codetableentry_value": "codetableentry_value 2",
+          "constituentid_value": "constituentid_value 2",
+          "fuzzydate_value": "[]",
+          "date": "date 2",
+          "comment": "Sample comment 2",
+          "date_added": "date_added 2",
+          "date_modified": "date_modified 2"
+        },
+        {
+          "id": "appeal_custom_field-3",
+          "parent_id": "parent_id-3",
+          "category": "basic",
+          "type": "basic",
+          "value": "value 3",
+          "text_value": "text_value 3",
+          "number_value": "number_value 3",
+          "date_value": "date_value 3",
+          "currency_value": "USD",
+          "boolean_value": "boolean_value 3",
+          "codetableentry_value": "codetableentry_value 3",
+          "constituentid_value": "constituentid_value 3",
+          "fuzzydate_value": "[]",
+          "date": "date 3",
+          "comment": "Sample comment 3",
+          "date_added": "date_added 3",
+          "date_modified": "date_modified 3"
+        }
+      ]
+    },
+    {
+      "Path": "/fundraising/v1/campaigns/{campaign_id}/customfields",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "id": "campaign_custom_field-1",
+          "parent_id": "parent_id-1",
+          "category": "standard",
+          "type": "standard",
+          "value": "value 1",
+          "text_value": "text_value 1",
+          "number_value": "number_value 1",
+          "date_value": "date_value 1",
+          "currency_value": "USD",
+          "boolean_value": "boolean_value 1",
+          "codetableentry_value": "codetableentry_value 1",
+          "constituentid_value": "constituentid_value 1",
+          "fuzzydate_value": "[]",
+          "date": "date 1",
+          "comment": "Sample comment 1",
+          "date_added": "date_added 1",
+          "date_modified": "date_modified 1"
+        },
+        {
+          "id": "campaign_custom_field-2",
+          "parent_id": "parent_id-2",
+          "category": "premium",
+          "type": "premium",
+          "value": "value 2",
+          "text_value": "text_value 2",
+          "number_value": "number_value 2",
+          "date_value": "date_value 2",
+          "currency_value": "USD",
+          "boolean_value": "boolean_value 2",
+          "codetableentry_value": "codetableentry_value 2",
+          "constituentid_value": "constituentid_value 2",
+          "fuzzydate_value": "[]",
+          "date": "date 2",
+          "comment": "Sample comment 2",
+          "date_added": "date_added 2",
+          "date_modified": "date_modified 2"
+        },
+        {
+          "id": "campaign_custom_field-3",
+          "parent_id": "parent_id-3",
+          "category": "basic",
+          "type": "basic",
+          "value": "value 3",
+          "text_value": "text_value 3",
+          "number_value": "number_value 3",
+          "date_value": "date_value 3",
+          "currency_value": "USD",
+          "boolean_value": "boolean_value 3",
+          "codetableentry_value": "codetableentry_value 3",
+          "constituentid_value": "constituentid_value 3",
+          "fuzzydate_value": "[]",
+          "date": "date 3",
+          "comment": "Sample comment 3",
+          "date_added": "date_added 3",
+          "date_modified": "date_modified 3"
+        }
+      ]
+    },
+    {
+      "Path": "/constituent/v1/constituents/{constituent_id}/customfields",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "id": "constituent_custom_field-1",
+          "parent_id": "parent_id-1",
+          "category": "standard",
+          "type": "standard",
+          "value": "value 1",
+          "text_value": "text_value 1",
+          "number_value": "number_value 1",
+          "date_value": "date_value 1",
+          "currency_value": "USD",
+          "boolean_value": "boolean_value 1",
+          "codetableentry_value": "codetableentry_value 1",
+          "constituentid_value": "constituentid_value 1",
+          "fuzzydate_value": "[]",
+          "date": "date 1",
+          "comment": "Sample comment 1",
+          "date_added": "date_added 1",
+          "date_modified": "date_modified 1"
+        },
+        {
+          "id": "constituent_custom_field-2",
+          "parent_id": "parent_id-2",
+          "category": "premium",
+          "type": "premium",
+          "value": "value 2",
+          "text_value": "text_value 2",
+          "number_value": "number_value 2",
+          "date_value": "date_value 2",
+          "currency_value": "USD",
+          "boolean_value": "boolean_value 2",
+          "codetableentry_value": "codetableentry_value 2",
+          "constituentid_value": "constituentid_value 2",
+          "fuzzydate_value": "[]",
+          "date": "date 2",
+          "comment": "Sample comment 2",
+          "date_added": "date_added 2",
+          "date_modified": "date_modified 2"
+        },
+        {
+          "id": "constituent_custom_field-3",
+          "parent_id": "parent_id-3",
+          "category": "basic",
+          "type": "basic",
+          "value": "value 3",
+          "text_value": "text_value 3",
+          "number_value": "number_value 3",
+          "date_value": "date_value 3",
+          "currency_value": "USD",
+          "boolean_value": "boolean_value 3",
+          "codetableentry_value": "codetableentry_value 3",
+          "constituentid_value": "constituentid_value 3",
+          "fuzzydate_value": "[]",
+          "date": "date 3",
+          "comment": "Sample comment 3",
+          "date_added": "date_added 3",
+          "date_modified": "date_modified 3"
+        }
+      ]
+    },
+    {
+      "Path": "/constituent/v1/constituents/customfields/categories/details",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "name": "Alex Rivera",
+          "type": "standard"
+        },
+        {
+          "name": "Jordan Chen",
+          "type": "premium"
+        },
+        {
+          "name": "Taylor Patel",
+          "type": "basic"
+        }
+      ]
+    },
+    {
+      "Path": "/nxt-data-integration/v1/re/relationships/constituents/fund/{fundId}",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "relation_id": "relation_id-1",
+          "relation_description": "Sample relation_description 1",
+          "relationship_type": "relationship_type 1",
+          "reciprocal_relationship_type": "reciprocal_relationship_type 1",
+          "date_from": "date_from 1",
+          "date_to": "date_to 1",
+          "notes": "Sample notes 1"
+        },
+        {
+          "relation_id": "relation_id-2",
+          "relation_description": "Sample relation_description 2",
+          "relationship_type": "relationship_type 2",
+          "reciprocal_relationship_type": "reciprocal_relationship_type 2",
+          "date_from": "date_from 2",
+          "date_to": "date_to 2",
+          "notes": "Sample notes 2"
+        },
+        {
+          "relation_id": "relation_id-3",
+          "relation_description": "Sample relation_description 3",
+          "relationship_type": "relationship_type 3",
+          "reciprocal_relationship_type": "reciprocal_relationship_type 3",
+          "date_from": "date_from 3",
+          "date_to": "date_to 3",
+          "notes": "Sample notes 3"
+        }
+      ]
+    },
+    {
+      "Path": "/fundraising/v1/funds/{fund_id}/customfields",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "id": "fund_custom_field-1",
+          "parent_id": "parent_id-1",
+          "category": "standard",
+          "type": "standard",
+          "value": "value 1",
+          "text_value": "text_value 1",
+          "number_value": "number_value 1",
+          "date_value": "date_value 1",
+          "currency_value": "USD",
+          "boolean_value": "boolean_value 1",
+          "codetableentry_value": "codetableentry_value 1",
+          "constituentid_value": "constituentid_value 1",
+          "fuzzydate_value": "[]",
+          "date": "date 1",
+          "comment": "Sample comment 1",
+          "date_added": "date_added 1",
+          "date_modified": "date_modified 1"
+        },
+        {
+          "id": "fund_custom_field-2",
+          "parent_id": "parent_id-2",
+          "category": "premium",
+          "type": "premium",
+          "value": "value 2",
+          "text_value": "text_value 2",
+          "number_value": "number_value 2",
+          "date_value": "date_value 2",
+          "currency_value": "USD",
+          "boolean_value": "boolean_value 2",
+          "codetableentry_value": "codetableentry_value 2",
+          "constituentid_value": "constituentid_value 2",
+          "fuzzydate_value": "[]",
+          "date": "date 2",
+          "comment": "Sample comment 2",
+          "date_added": "date_added 2",
+          "date_modified": "date_modified 2"
+        },
+        {
+          "id": "fund_custom_field-3",
+          "parent_id": "parent_id-3",
+          "category": "basic",
+          "type": "basic",
+          "value": "value 3",
+          "text_value": "text_value 3",
+          "number_value": "number_value 3",
+          "date_value": "date_value 3",
+          "currency_value": "USD",
+          "boolean_value": "boolean_value 3",
+          "codetableentry_value": "codetableentry_value 3",
+          "constituentid_value": "constituentid_value 3",
+          "fuzzydate_value": "[]",
+          "date": "date 3",
+          "comment": "Sample comment 3",
+          "date_added": "date_added 3",
+          "date_modified": "date_modified 3"
+        }
+      ]
+    },
+    {
+      "Path": "/nxt-data-integration/v1/re/relationships/funds/constituent/{constituentId}",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "relation_id": "relation_id-1",
+          "relation_description": "Sample relation_description 1",
+          "relationship_type": "relationship_type 1",
+          "reciprocal_relationship_type": "reciprocal_relationship_type 1",
+          "date_from": "date_from 1",
+          "date_to": "date_to 1",
+          "notes": "Sample notes 1"
+        },
+        {
+          "relation_id": "relation_id-2",
+          "relation_description": "Sample relation_description 2",
+          "relationship_type": "relationship_type 2",
+          "reciprocal_relationship_type": "reciprocal_relationship_type 2",
+          "date_from": "date_from 2",
+          "date_to": "date_to 2",
+          "notes": "Sample notes 2"
+        },
+        {
+          "relation_id": "relation_id-3",
+          "relation_description": "Sample relation_description 3",
+          "relationship_type": "relationship_type 3",
+          "reciprocal_relationship_type": "reciprocal_relationship_type 3",
+          "date_from": "date_from 3",
+          "date_to": "date_to 3",
+          "notes": "Sample notes 3"
+        }
+      ]
+    },
+    {
+      "Path": "/fundraising/v1/appeals/customfields/categories",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "name": "Alex Rivera",
+          "type": "standard"
+        },
+        {
+          "name": "Jordan Chen",
+          "type": "premium"
+        },
+        {
+          "name": "Taylor Patel",
+          "type": "basic"
+        }
+      ]
+    },
+    {
+      "Path": "/gift/v1/gifts/{gift_id}/customfields",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "id": "gift_custom_field-1",
+          "parent_id": "parent_id-1",
+          "category": "standard",
+          "type": "standard",
+          "value": "value 1",
+          "text_value": "text_value 1",
+          "number_value": "number_value 1",
+          "date_value": "date_value 1",
+          "currency_value": "USD",
+          "boolean_value": "boolean_value 1",
+          "codetableentry_value": "codetableentry_value 1",
+          "constituentid_value": "constituentid_value 1",
+          "fuzzydate_value": "[]",
+          "date": "date 1",
+          "comment": "Sample comment 1",
+          "date_added": "date_added 1",
+          "date_modified": "date_modified 1"
+        },
+        {
+          "id": "gift_custom_field-2",
+          "parent_id": "parent_id-2",
+          "category": "premium",
+          "type": "premium",
+          "value": "value 2",
+          "text_value": "text_value 2",
+          "number_value": "number_value 2",
+          "date_value": "date_value 2",
+          "currency_value": "USD",
+          "boolean_value": "boolean_value 2",
+          "codetableentry_value": "codetableentry_value 2",
+          "constituentid_value": "constituentid_value 2",
+          "fuzzydate_value": "[]",
+          "date": "date 2",
+          "comment": "Sample comment 2",
+          "date_added": "date_added 2",
+          "date_modified": "date_modified 2"
+        },
+        {
+          "id": "gift_custom_field-3",
+          "parent_id": "parent_id-3",
+          "category": "basic",
+          "type": "basic",
+          "value": "value 3",
+          "text_value": "text_value 3",
+          "number_value": "number_value 3",
+          "date_value": "date_value 3",
+          "currency_value": "USD",
+          "boolean_value": "boolean_value 3",
+          "codetableentry_value": "codetableentry_value 3",
+          "constituentid_value": "constituentid_value 3",
+          "fuzzydate_value": "[]",
+          "date": "date 3",
+          "comment": "Sample comment 3",
+          "date_added": "date_added 3",
+          "date_modified": "date_modified 3"
+        }
+      ]
+    },
+    {
+      "Path": "/gift/v1/gifts/customfields/categories",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "name": "Alex Rivera",
+          "type": "standard"
+        },
+        {
+          "name": "Jordan Chen",
+          "type": "premium"
+        },
+        {
+          "name": "Taylor Patel",
+          "type": "basic"
+        }
+      ]
+    },
+    {
+      "Path": "/opportunity/v1/opportunities/{opportunity_id}/customfields",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "id": "opportunity_custom_field-1",
+          "parent_id": "parent_id-1",
+          "category": "standard",
+          "type": "standard",
+          "value": "value 1",
+          "text_value": "text_value 1",
+          "number_value": "number_value 1",
+          "date_value": "date_value 1",
+          "currency_value": "USD",
+          "boolean_value": "boolean_value 1",
+          "codetableentry_value": "codetableentry_value 1",
+          "constituentid_value": "constituentid_value 1",
+          "fuzzydate_value": "[]",
+          "date": "date 1",
+          "comment": "Sample comment 1",
+          "date_added": "date_added 1",
+          "date_modified": "date_modified 1"
+        },
+        {
+          "id": "opportunity_custom_field-2",
+          "parent_id": "parent_id-2",
+          "category": "premium",
+          "type": "premium",
+          "value": "value 2",
+          "text_value": "text_value 2",
+          "number_value": "number_value 2",
+          "date_value": "date_value 2",
+          "currency_value": "USD",
+          "boolean_value": "boolean_value 2",
+          "codetableentry_value": "codetableentry_value 2",
+          "constituentid_value": "constituentid_value 2",
+          "fuzzydate_value": "[]",
+          "date": "date 2",
+          "comment": "Sample comment 2",
+          "date_added": "date_added 2",
+          "date_modified": "date_modified 2"
+        },
+        {
+          "id": "opportunity_custom_field-3",
+          "parent_id": "parent_id-3",
+          "category": "basic",
+          "type": "basic",
+          "value": "value 3",
+          "text_value": "text_value 3",
+          "number_value": "number_value 3",
+          "date_value": "date_value 3",
+          "currency_value": "USD",
+          "boolean_value": "boolean_value 3",
+          "codetableentry_value": "codetableentry_value 3",
+          "constituentid_value": "constituentid_value 3",
+          "fuzzydate_value": "[]",
+          "date": "date 3",
+          "comment": "Sample comment 3",
+          "date_added": "date_added 3",
+          "date_modified": "date_modified 3"
+        }
+      ]
+    },
+    {
+      "Path": "/opportunity/v1/opportunities/customfields/categories",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "name": "Alex Rivera",
+          "type": "standard"
+        },
+        {
+          "name": "Jordan Chen",
+          "type": "premium"
+        },
+        {
+          "name": "Taylor Patel",
+          "type": "basic"
+        }
+      ]
+    },
+    {
+      "Path": "/constituent/v1/constituents/{constituent_id}/relationships",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "id": "relationship-1",
+          "constituent_id": "constituent_id-1",
+          "relation_id": "relation_id-1",
+          "reciprocal_relationship_id": "reciprocal_relationship_id-1",
+          "name": "Alex Rivera",
+          "type": "standard",
+          "reciprocal_type": "reciprocal_type 1",
+          "start": "[]",
+          "end": "[]",
+          "is_spouse": "is_spouse 1",
+          "is_constituent_head_of_household": "is_constituent_head_of_household 1",
+          "is_spouse_head_of_household": "is_spouse_head_of_household 1",
+          "comment": "Sample comment 1",
+          "is_organization_contact": "Acme Corp",
+          "is_primary_business": "Acme Corp",
+          "organization_contact_type": "Acme Corp",
+          "position": "position 1",
+          "date_added": "date_added 1",
+          "date_modified": "date_modified 1"
+        },
+        {
+          "id": "relationship-2",
+          "constituent_id": "constituent_id-2",
+          "relation_id": "relation_id-2",
+          "reciprocal_relationship_id": "reciprocal_relationship_id-2",
+          "name": "Jordan Chen",
+          "type": "premium",
+          "reciprocal_type": "reciprocal_type 2",
+          "start": "[]",
+          "end": "[]",
+          "is_spouse": "is_spouse 2",
+          "is_constituent_head_of_household": "is_constituent_head_of_household 2",
+          "is_spouse_head_of_household": "is_spouse_head_of_household 2",
+          "comment": "Sample comment 2",
+          "is_organization_contact": "Globex LLC",
+          "is_primary_business": "Globex LLC",
+          "organization_contact_type": "Globex LLC",
+          "position": "position 2",
+          "date_added": "date_added 2",
+          "date_modified": "date_modified 2"
+        },
+        {
+          "id": "relationship-3",
+          "constituent_id": "constituent_id-3",
+          "relation_id": "relation_id-3",
+          "reciprocal_relationship_id": "reciprocal_relationship_id-3",
+          "name": "Taylor Patel",
+          "type": "basic",
+          "reciprocal_type": "reciprocal_type 3",
+          "start": "[]",
+          "end": "[]",
+          "is_spouse": "is_spouse 3",
+          "is_constituent_head_of_household": "is_constituent_head_of_household 3",
+          "is_spouse_head_of_household": "is_spouse_head_of_household 3",
+          "comment": "Sample comment 3",
+          "is_organization_contact": "Initech",
+          "is_primary_business": "Initech",
+          "organization_contact_type": "Initech",
+          "position": "position 3",
+          "date_added": "date_added 3",
+          "date_modified": "date_modified 3"
+        }
+      ]
+    },
+    {
+      "Path": "/gift/v1/gifts/{gift_id}",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "id": "2001",
+        "constituent_id": "1001",
+        "amount": 5000,
+        "gift_type": "Donation",
+        "gift_splits": [
+          {
+            "id": "gs-1",
+            "gift_id": "2001",
+            "amount": 2500,
+            "fund_id": "5001"
+          },
+          {
+            "id": "gs-2",
+            "gift_id": "2001",
+            "amount": 2500,
+            "fund_id": "5002"
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/gift-batch/v1/giftbatches/{batch_id}/gifts",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "id": "batch-1",
+        "batch_id": "batch-1",
+        "gifts": [
+          {
+            "id": "bg-1",
+            "batch_id": "batch-1",
+            "constituent_id": "1001",
+            "amount": 500
+          },
+          {
+            "id": "bg-2",
+            "batch_id": "batch-1",
+            "constituent_id": "1002",
+            "amount": 750
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/constituent/v1/constituents/{constituent_id}/givingsummary/first",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "id": "gs-1",
+        "date": "2026-06-01",
+        "appeals": [
+          {
+            "id": "ap-1",
+            "appeal_id": "3001",
+            "description": "Annual",
+            "amount": 100
+          },
+          {
+            "id": "ap-2",
+            "appeal_id": "3002",
+            "description": "Schol",
+            "amount": 200
+          }
+        ],
+        "campaigns": [
+          {
+            "id": "cm-1",
+            "campaign_id": "4001",
+            "description": "Spring",
+            "amount": 100
+          },
+          {
+            "id": "cm-2",
+            "campaign_id": "4002",
+            "description": "Summer",
+            "amount": 200
+          }
+        ],
+        "funds": [
+          {
+            "id": "fn-1",
+            "fund_id": "5001",
+            "description": "General",
+            "amount": 100
+          },
+          {
+            "id": "fn-2",
+            "fund_id": "5002",
+            "description": "Endow",
+            "amount": 200
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/constituent/v1/constituents/{constituent_id}/givingsummary/first",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "id": "gs-1",
+        "date": "2026-06-01",
+        "appeals": [
+          {
+            "id": "ap-1",
+            "appeal_id": "3001",
+            "description": "Annual",
+            "amount": 100
+          },
+          {
+            "id": "ap-2",
+            "appeal_id": "3002",
+            "description": "Schol",
+            "amount": 200
+          }
+        ],
+        "campaigns": [
+          {
+            "id": "cm-1",
+            "campaign_id": "4001",
+            "description": "Spring",
+            "amount": 100
+          },
+          {
+            "id": "cm-2",
+            "campaign_id": "4002",
+            "description": "Summer",
+            "amount": 200
+          }
+        ],
+        "funds": [
+          {
+            "id": "fn-1",
+            "fund_id": "5001",
+            "description": "General",
+            "amount": 100
+          },
+          {
+            "id": "fn-2",
+            "fund_id": "5002",
+            "description": "Endow",
+            "amount": 200
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/constituent/v1/constituents/{constituent_id}/givingsummary/first",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "id": "gs-1",
+        "date": "2026-06-01",
+        "appeals": [
+          {
+            "id": "ap-1",
+            "appeal_id": "3001",
+            "description": "Annual",
+            "amount": 100
+          },
+          {
+            "id": "ap-2",
+            "appeal_id": "3002",
+            "description": "Schol",
+            "amount": 200
+          }
+        ],
+        "campaigns": [
+          {
+            "id": "cm-1",
+            "campaign_id": "4001",
+            "description": "Spring",
+            "amount": 100
+          },
+          {
+            "id": "cm-2",
+            "campaign_id": "4002",
+            "description": "Summer",
+            "amount": 200
+          }
+        ],
+        "funds": [
+          {
+            "id": "fn-1",
+            "fund_id": "5001",
+            "description": "General",
+            "amount": 100
+          },
+          {
+            "id": "fn-2",
+            "fund_id": "5002",
+            "description": "Endow",
+            "amount": 200
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/opportunity/v1/opportunities/{opportunity_id}",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "constituent_id": "constituent_id-1",
+          "credit_amount": "[]"
+        },
+        {
+          "constituent_id": "constituent_id-2",
+          "credit_amount": "[]"
+        },
+        {
+          "constituent_id": "constituent_id-3",
+          "credit_amount": "[]"
+        }
+      ]
+    },
+    {
+      "Path": "/gift/v1/gifts/{gift_id}",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "id": "2001",
+        "constituent_id": "1001",
+        "amount": 5000,
+        "gift_type": "Donation",
+        "gift_splits": [
+          {
+            "id": "gs-1",
+            "gift_id": "2001",
+            "amount": 2500,
+            "fund_id": "5001"
+          },
+          {
+            "id": "gs-2",
+            "gift_id": "2001",
+            "amount": 2500,
+            "fund_id": "5002"
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/gift/v1/gifts/{gift_id}",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "id": "2001",
+        "constituent_id": "1001",
+        "amount": 5000,
+        "gift_type": "Donation",
+        "gift_splits": [
+          {
+            "id": "gs-1",
+            "gift_id": "2001",
+            "amount": 2500,
+            "fund_id": "5001"
+          },
+          {
+            "id": "gs-2",
+            "gift_id": "2001",
+            "amount": 2500,
+            "fund_id": "5002"
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/constituent/v1/constituents/{constituent_id}/memberships",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "id": "membership_member-1",
+          "constituent_id": "constituent_id-1",
+          "primary": "primary 1"
+        },
+        {
+          "id": "membership_member-2",
+          "constituent_id": "constituent_id-2",
+          "primary": "primary 2"
+        },
+        {
+          "id": "membership_member-3",
+          "constituent_id": "constituent_id-3",
+          "primary": "primary 3"
+        }
+      ]
+    },
+    {
+      "Path": "/constituent/v1/constituents/{constituent_id}/nameformats/summary",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "id": "nfs-1",
+        "additional_name_formats": [
+          {
+            "id": "nf-1",
+            "name": "Formal 1",
+            "format": "formal"
+          },
+          {
+            "id": "nf-2",
+            "name": "Informal 2",
+            "format": "informal"
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/gift/v1/gifts/{gift_id}",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "id": "2001",
+        "constituent_id": "1001",
+        "amount": 5000,
+        "gift_type": "Donation",
+        "gift_splits": [
+          {
+            "id": "gs-1",
+            "gift_id": "2001",
+            "amount": 2500,
+            "fund_id": "5001"
+          },
+          {
+            "id": "gs-2",
+            "gift_id": "2001",
+            "amount": 2500,
+            "fund_id": "5002"
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/gift/v1/gifts/{gift_id}",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "id": "2001",
+        "constituent_id": "1001",
+        "amount": 5000,
+        "gift_type": "Donation",
+        "gift_splits": [
+          {
+            "id": "gs-1",
+            "gift_id": "2001",
+            "amount": 2500,
+            "fund_id": "5001"
+          },
+          {
+            "id": "gs-2",
+            "gift_id": "2001",
+            "amount": 2500,
+            "fund_id": "5002"
+          }
+        ]
+      }
+    },
+    {
+      "Path": "/gift/v1/gifts/{gift_id}",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "id": "2001",
+        "constituent_id": "1001",
+        "amount": 5000,
+        "gift_type": "Donation",
+        "gift_splits": [
+          {
+            "id": "gs-1",
+            "gift_id": "2001",
+            "amount": 2500,
+            "fund_id": "5001"
+          },
+          {
+            "id": "gs-2",
+            "gift_id": "2001",
+            "amount": 2500,
+            "fund_id": "5002"
+          }
+        ]
+      }
+    }
+  ],
+  "Objects": [
+    {
+      "Name": "address",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "alias",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "appeal_attachment",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "campaign_attachment",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "constituent",
+      "OrderingField": "date_modified"
+    },
+    {
+      "Name": "constituent_appeal_2",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "constituent_attachment",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "constituent_code",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "constituent_code_link",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "constituent_consent",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "constituent_fundraiser_assignment",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "constituent_id_map",
+      "OrderingField": "system_record_id"
+    },
+    {
+      "Name": "constituent_package",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "constituent_solicit_code",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "converted_constituent",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "country",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "education",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "email_address",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "fund_attachment",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "fundraising_appeal",
+      "OrderingField": "date_modified"
+    },
+    {
+      "Name": "fundraising_campaign",
+      "OrderingField": "date_modified"
+    },
+    {
+      "Name": "fundraising_fund",
+      "OrderingField": "date_modified"
+    },
+    {
+      "Name": "fundraising_fundraiser_assignment",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "fundraising_package",
+      "OrderingField": "date_modified"
+    },
+    {
+      "Name": "gift",
+      "OrderingField": "date_modified"
+    },
+    {
+      "Name": "gift_attachment",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "gift_batch",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "gift_id_map",
+      "OrderingField": "system_record_id"
+    },
+    {
+      "Name": "gift_tribute",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "gift_tribute_acknowledgee",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "giving_summary",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "membership",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "name_format_configuration",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "note",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "online_presence",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "opportunity",
+      "OrderingField": "date_modified"
+    },
+    {
+      "Name": "opportunity_attachment",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "phone",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "rating",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "search_result",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "tax_declaration",
+      "OrderingField": "declaration_id"
+    },
+    {
+      "Name": "tribute",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "tribute_acknowledgee",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "appeal_custom_field",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "campaign_custom_field",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "constituent_custom_field",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "fund_custom_field",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "gift_custom_field",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "opportunity_custom_field",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "relationship",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "batch_gift",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "constituent_appeal",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "constituent_campaign",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "constituent_fund",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "gift_split",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "membership_member",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "name_format",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "soft_credit",
+      "OrderingField": "id"
+    }
+  ],
+  "DeltaPasses": [
+    {
+      "Object": "constituent",
+      "Routes": [
+        {
+          "Path": "/constituent/v1/constituents",
+          "Method": "GET",
+          "Status": 200,
+          "Body": [
+            {
+              "id": "constituent-1",
+              "type": "standard",
+              "title": "updated-delta",
+              "first": "first 1",
+              "last": "last 1",
+              "name": "Alex Rivera",
+              "preferred_name": "preferred_name 1",
+              "suffix": "suffix 1",
+              "lookup_id": "lookup_id-1",
+              "email": "user1@example.com",
+              "phone": "555-0101",
+              "online_presence": "[]",
+              "address": "101 Test St",
+              "gender": "gender 1",
+              "middle": "middle 1",
+              "former_name": "former_name 1",
+              "title_2": "Sample Title 1",
+              "suffix_2": "suffix_2 1",
+              "marital_status": "active",
+              "gives_anonymously": "gives_anonymously 1",
+              "requests_no_email": "user1@example.com",
+              "is_solicitor": "is_solicitor 1",
+              "no_valid_address": "101 Test St",
+              "inactive": true,
+              "birthdate": "[]",
+              "birthplace": "birthplace 1",
+              "ethnicity": "ethnicity 1",
+              "target": "target 1",
+              "income": "income 1",
+              "receipt_type": "receipt_type 1",
+              "religion": "religion 1",
+              "industry": "industry 1",
+              "num_employees": "num_employees 1",
+              "matches_gifts": "matches_gifts 1",
+              "matching_gift_factor": "matching_gift_factor 1",
+              "matching_gift_per_gift_min": "[]",
+              "matching_gift_per_gift_max": "[]",
+              "matching_gift_total_min": "[]",
+              "matching_gift_total_max": "[]",
+              "matching_gift_notes": "Sample matching_gift_notes 1",
+              "age": "age 1",
+              "deceased": "deceased 1",
+              "deceased_date": "[]",
+              "fundraiser_status": "active",
+              "is_memorial": "is_memorial 1",
+              "spouse": "[]",
+              "date_added": "date_added 1",
+              "date_modified": "2026-06-11T00:00:00Z"
+            },
+            {
+              "id": "constituent-2",
+              "type": "premium",
+              "title": "Sample Title 2",
+              "first": "first 2",
+              "last": "last 2",
+              "name": "Jordan Chen",
+              "preferred_name": "preferred_name 2",
+              "suffix": "suffix 2",
+              "lookup_id": "lookup_id-2",
+              "email": "user2@example.com",
+              "phone": "555-0102",
+              "online_presence": "[]",
+              "address": "102 Test St",
+              "gender": "gender 2",
+              "middle": "middle 2",
+              "former_name": "former_name 2",
+              "title_2": "Sample Title 2",
+              "suffix_2": "suffix_2 2",
+              "marital_status": "pending",
+              "gives_anonymously": "gives_anonymously 2",
+              "requests_no_email": "user2@example.com",
+              "is_solicitor": "is_solicitor 2",
+              "no_valid_address": "102 Test St",
+              "inactive": false,
+              "birthdate": "[]",
+              "birthplace": "birthplace 2",
+              "ethnicity": "ethnicity 2",
+              "target": "target 2",
+              "income": "income 2",
+              "receipt_type": "receipt_type 2",
+              "religion": "religion 2",
+              "industry": "industry 2",
+              "num_employees": "num_employees 2",
+              "matches_gifts": "matches_gifts 2",
+              "matching_gift_factor": "matching_gift_factor 2",
+              "matching_gift_per_gift_min": "[]",
+              "matching_gift_per_gift_max": "[]",
+              "matching_gift_total_min": "[]",
+              "matching_gift_total_max": "[]",
+              "matching_gift_notes": "Sample matching_gift_notes 2",
+              "age": "age 2",
+              "deceased": "deceased 2",
+              "deceased_date": "[]",
+              "fundraiser_status": "pending",
+              "is_memorial": "is_memorial 2",
+              "spouse": "[]",
+              "date_added": "date_added 2",
+              "date_modified": "2026-06-12T00:00:00Z"
+            }
+          ]
+        }
+      ],
+      "ExpectedPresent": [
+        "constituent-1",
+        "constituent-2"
+      ],
+      "ExpectedDeletes": [
+        "constituent-3"
+      ],
+      "ExpectedUpdates": [
+        {
+          "ExternalID": "constituent-1",
+          "Field": "title",
+          "Value": "updated-delta"
+        }
+      ]
+    }
+  ],
+  "Lifecycle": {
+    "supportsDiscovery": false,
+    "supportsFieldDiscovery": false,
+    "authoritativeDiscovery": false,
+    "supportsCustomColumns": true,
+    "incrementalStrategy": "watermark",
+    "supportsWrite": true,
+    "writeRoundTrip": {
+      "Object": "fundraising_campaign",
+      "Routes": [
+        {
+          "Path": "/nxt-data-integration/v1/re/campaigns",
+          "Method": "POST",
+          "Status": 200,
+          "Body": {
+            "id": "mock-wr-id-1",
+            "ID": "mock-wr-id-1",
+            "Id": "mock-wr-id-1",
+            "externalID": "mock-wr-id-1",
+            "ExternalID": "mock-wr-id-1",
+            "category": "mock-created"
+          },
+          "Headers": {
+            "content-type": "application/json"
+          }
+        },
+        {
+          "Path": "/nxt-data-integration/v1/re/campaigns/{id}",
+          "Method": "PATCH",
+          "Status": 200,
+          "Body": {
+            "id": "mock-wr-id-1",
+            "ID": "mock-wr-id-1",
+            "Id": "mock-wr-id-1",
+            "externalID": "mock-wr-id-1",
+            "ExternalID": "mock-wr-id-1",
+            "category": "mock-updated"
+          }
+        },
+        {
+          "Path": "/nxt-data-integration/v1/re/campaigns/{id}",
+          "Method": "DELETE",
+          "Status": 200,
+          "Body": {
+            "id": "mock-wr-id-1",
+            "deleted": true
+          }
+        }
+      ],
+      "CreateAttributes": {
+        "category": "mock-created"
+      },
+      "CreatePathMatch": "nxt-data-integration",
+      "DeleteMethodMatch": "DELETE",
+      "UpdateAttributes": {
+        "category": "mock-updated"
+      }
+    },
+    "supportsScheduling": true,
+    "connectionTestable": true,
+    "derivedFromMetadata": true,
+    "sourceClass": "BlackbaudConnector"
+  }
+}
