@@ -74,16 +74,14 @@ test.describe.serial('Unified command palette', () => {
     await openPalette(page);
     await page.locator('.ob-input').fill('/');
     await expect(page.locator('.ob-mode-badge')).toHaveText(/command/i, { timeout: 15_000 });
-    const firstApp = page.locator('.ob-row').first();
-    await expect(firstApp).toBeVisible({ timeout: 30_000 });
-    const label = (await firstApp.locator('.ob-rname').textContent()) ?? '';
-    await page.keyboard.press('Enter');
+    await expect(page.locator('.ob-row').first()).toBeVisible({ timeout: 30_000 });
+    // Deterministic target: Chat is present for every test user (visible on Home).
+    await page.locator('.ob-input').fill('/chat');
+    const chatRow = page.locator('.ob-row', { hasText: 'Open Chat' }).first();
+    await expect(chatRow).toBeVisible({ timeout: 30_000 });
+    await chatRow.click();
     await expect(page.locator('.omnibar-palette')).toBeHidden();
-    // The app switch reflects in the URL (app route) — loose assertion by app name slug.
-    const slug = label.replace(/^Open\s+/i, '').trim().split(/\s+/)[0]?.toLowerCase() ?? '';
-    if (slug.length > 2) {
-      await expect(page).toHaveURL(new RegExp(slug, 'i'), { timeout: 30_000 });
-    }
+    await expect(page).toHaveURL(/chat/i, { timeout: 30_000 });
   });
 
   test('@ lists agents (tolerant when plugin absent)', async ({ page }) => {

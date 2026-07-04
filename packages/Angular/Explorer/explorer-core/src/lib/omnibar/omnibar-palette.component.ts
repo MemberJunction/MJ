@@ -404,16 +404,16 @@ export class OmnibarPaletteComponent implements OnDestroy {
         const rows: OmnibarRow[] = [];
         try {
             const recentSearches = this.search.RecentSearches$.value.slice(0, 3);
-            for (const term of recentSearches) {
+            for (const recent of recentSearches) {
                 rows.push({
                     Suggestion: {
                         type: 'search',
-                        id: `recent-search:${term}`,
-                        name: term,
-                        displayName: term,
+                        id: `recent-search:${recent.Query}`,
+                        name: recent.Query,
+                        displayName: recent.Query,
                         description: 'Recent search',
                         icon: 'fa-solid fa-clock-rotate-left',
-                        data: { nav: { kind: 'search', query: term } },
+                        data: { nav: { kind: 'search', query: recent.Query } },
                     },
                     GroupLabel: null,
                     ScorePercent: null,
