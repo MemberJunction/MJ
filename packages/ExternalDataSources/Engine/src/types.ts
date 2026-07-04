@@ -90,3 +90,14 @@ export interface ExternalQueryResult<TRow extends ExternalRow = ExternalRow> {
   errorMessage?: string;
   executionTimeMs: number;
 }
+
+/**
+ * Strip credentials from any connection-string-like `scheme://user:pass@host` embedded in a message.
+ * Driver SDKs (notably MongoDB) echo the connection URI in their errors; a URI with inline credentials
+ * (e.g. `mongodb://user:pass@host`) would otherwise leak into logs and API error responses. Redacts the
+ * entire userinfo portion, leaving the host intact. Shared by the base driver and the read router so
+ * every external-read error surface redacts identically.
+ */
+export function redactConnectionSecrets(message: string): string {
+  return message.replace(/([a-z][a-z0-9+.-]*:\/\/)[^@/\s]+@/gi, '$1***@');
+}

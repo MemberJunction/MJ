@@ -115,7 +115,14 @@ export class MongoExternalDataSourceDriver extends BaseExternalDataSourceDriver<
       options.authSource = config.authSource ?? 'admin';
     }
     const client = new MongoClient(url, options);
-    await client.connect();
+    try {
+      await client.connect();
+    } catch (e) {
+      // Release the client's topology/monitoring resources on a failed connect — the cache only evicts
+      // the rejected promise, it can't close a client it never received. Close is best-effort; rethrow original.
+      await client.close().catch(() => { /* best-effort */ });
+      throw e;
+    }
     return client;
   }
 

@@ -120,10 +120,14 @@ export class ExternalDataSourceRouter extends BaseSingleton<ExternalDataSourceRo
    * ConnectionConfig, CredentialID, schema, TTL) and the `Status !== 'Active'` gate are frozen at first
    * resolve — so disabling or reconfiguring an already-used source would silently no-op until restart.
    *
-   * Uses the same MJGlobal → BaseEntity event channel that every BaseEngine consumes for cache
-   * invalidation, so it also honors cross-server `remote-invalidate` events (an edit on one server
-   * evicts the cache on the others). Subscribed lazily on first Resolve — before anything is cached,
-   * there is nothing to invalidate. Process-lifetime subscription (no unsubscribe needed on a singleton).
+   * Uses the same MJGlobal -> BaseEntity event channel that every BaseEngine consumes for cache
+   * invalidation. SCOPE: this fully covers SINGLE-process invalidation — a local save/delete of a source
+   * on this instance evicts its cached driver. It does NOT yet provide cross-instance invalidation: on the
+   * SERVER, `remote-invalidate` MJGlobal BaseEntity events aren't raised (that channel is browser-side
+   * today), so an edit on one MJAPI instance won't evict another instance's cache until that instance
+   * restarts (multi-instance invalidation is a documented follow-up). The remote-invalidate branch in
+   * handleEntityChange is kept because it's correct IF such an event ever arrives. Subscribed lazily on
+   * first Resolve — before anything is cached there's nothing to invalidate. Process-lifetime subscription.
    */
   private ensureCacheInvalidationSubscription(): void {
     if (this.cacheInvalidationSubscribed) {
@@ -144,6 +148,9 @@ export class ExternalDataSourceRouter extends BaseSingleton<ExternalDataSourceRo
    * `remote-invalidate` events don't carry the resolved BaseEntity, so they conservatively evict all.
    */
   protected async handleEntityChange(event: BaseEntityEvent): Promise<void> {
+    if (!event) {
+      return; // defensive: match providerBase's guard — a malformed event must not throw in the handler
+    }
     const entityName = (event.baseEntity?.EntityInfo?.Name ?? event.entityName ?? '').toLowerCase().trim();
     if (entityName === EXTERNAL_DATA_SOURCE_TYPE_ENTITY) {
       await this.ClearCache();

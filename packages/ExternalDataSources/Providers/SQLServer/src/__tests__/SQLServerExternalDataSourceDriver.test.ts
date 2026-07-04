@@ -24,6 +24,19 @@ class TestableSQLServerDriver extends SQLServerExternalDataSourceDriver {
   public selCast(target: string, params: ExternalViewParams, columns: Parameters<TestableSQLServerDriver['buildSelectSqlCastAware']>[2]) {
     return this.buildSelectSqlCastAware(target, params, columns);
   }
+  // Expose the connection-identity guard surface (real shipped code) for the H1 race test.
+  public peek(id: string) {
+    return this.peekConnection(id);
+  }
+  public invalidate(id: string, expected?: unknown) {
+    return this.invalidateConnection(id, expected);
+  }
+  public setPool(id: string, pool: Promise<unknown>) {
+    (this as unknown as { pools: Map<string, unknown> }).pools.set(id, pool);
+  }
+  public poolFor(id: string) {
+    return (this as unknown as { pools: Map<string, unknown> }).pools.get(id);
+  }
 }
 
 const ds = (over: Partial<MJExternalDataSourceEntity>): MJExternalDataSourceEntity =>
@@ -134,6 +147,50 @@ describe('SQLServerExternalDataSourceDriver — SQL building', () => {
     });
     it('still screens a malicious filter clause', () => {
       expect(() => d.selCast('[s].[t]', { objectName: 't', filter: 'x); DROP TABLE t; --' }, cols)).toThrow();
+    });
+  });
+
+  describe('connection identity guard (H1 concurrency race)', () => {
+    // Fake mssql pool with the `.close()` surface; records which pool ids were closed.
+    const makePool = (id: number, closed: number[]) =>
+      Promise.resolve({ id, close: async () => { closed.push(id); } }) as unknown as Promise<unknown>;
+
+    it('does NOT evict a pool a concurrent request already reconnected (deterministic race replay)', async () => {
+      const d = new TestableSQLServerDriver();
+      const closed: number[] = [];
+      const p1 = makePool(1, closed);
+      const p2 = makePool(2, closed);
+      d.setPool('s', p1);
+      const idA = d.peek('s');
+      const idB = d.peek('s');
+      expect(idA).toBe(p1);
+      expect(idB).toBe(p1);
+      await d.invalidate('s', idA);       // request A evicts p1 and reconnects p2
+      expect(d.poolFor('s')).toBeUndefined();
+      d.setPool('s', p2);
+      await d.invalidate('s', idB);       // request B's stale eviction must be a no-op
+      expect(d.poolFor('s')).toBe(p2);    // fresh p2 survives
+      await Promise.resolve();
+      expect(closed).toEqual([1]);        // only the genuinely-stale p1 closed
+    });
+
+    it('evicts unconditionally when no identity is supplied (explicit ClearCache path)', async () => {
+      const d = new TestableSQLServerDriver();
+      const closed: number[] = [];
+      d.setPool('s', makePool(1, closed));
+      await d.invalidate('s');
+      expect(d.poolFor('s')).toBeUndefined();
+      await Promise.resolve();
+      expect(closed).toEqual([1]);
+    });
+
+    it('evicts when the supplied identity still matches', async () => {
+      const d = new TestableSQLServerDriver();
+      const closed: number[] = [];
+      const p1 = makePool(1, closed);
+      d.setPool('s', p1);
+      await d.invalidate('s', p1);
+      expect(d.poolFor('s')).toBeUndefined();
     });
   });
 });

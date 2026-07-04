@@ -8,6 +8,7 @@ import {
   ExternalQueryParameter,
   ExternalQueryResult,
   ExternalRow,
+  redactConnectionSecrets,
 } from "./types";
 
 /**
@@ -187,7 +188,7 @@ export abstract class BaseExternalDataSourceDriver<TConnection = unknown> {
    * logs and API error responses. Redacts the entire userinfo portion, leaving the host intact.
    */
   protected redactConnectionSecrets(message: string): string {
-    return message.replace(/([a-z][a-z0-9+.-]*:\/\/)[^@/\s]+@/gi, '$1***@');
+    return redactConnectionSecrets(message);
   }
 
   /**

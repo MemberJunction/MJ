@@ -101,7 +101,7 @@ export class SQLServerExternalDataSourceDriver extends BaseSqlExternalDataSource
     // Secure-by-default: refuse plaintext to a non-local host unless explicitly opted in.
     this.assertSecureTransport({ host: config.server ?? config.host, tlsEnabled: !!config.ssl, allowInsecure: config.allowInsecureTransport, dataSourceName: dataSource.Name });
     const cred = await this.resolveCredential<SQLServerCredentialValues>(dataSource, contextUser);
-    const pool = await new sql.ConnectionPool({
+    const pool = new sql.ConnectionPool({
       server: config.server ?? config.host ?? 'localhost',
       port: config.port,
       database: dataSource.DefaultDatabase ?? config.database,
@@ -114,7 +114,15 @@ export class SQLServerExternalDataSourceDriver extends BaseSqlExternalDataSource
         ...(config.instanceName ? { instanceName: config.instanceName } : {}),
       },
       pool: { max: config.maxPoolSize ?? 5 },
-    }).connect();
+    });
+    try {
+      await pool.connect();
+    } catch (e) {
+      // Release the pool on a failed connect — the cache only evicts the rejected promise, it can't
+      // close a pool it never received. Close is best-effort; rethrow the original error.
+      await pool.close().catch(() => { /* best-effort */ });
+      throw e;
+    }
     return pool;
   }
 

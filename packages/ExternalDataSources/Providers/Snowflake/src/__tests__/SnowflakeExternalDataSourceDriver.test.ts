@@ -27,6 +27,19 @@ class TestableSnowflakeDriver extends SnowflakeExternalDataSourceDriver {
   public selCast(target: string, params: ExternalViewParams, columns: Parameters<TestableSnowflakeDriver['buildSelectSqlCastAware']>[2]) {
     return this.buildSelectSqlCastAware(target, params, columns);
   }
+  // Expose the connection-identity guard surface (real shipped code) for the H1 race test.
+  public peek(id: string) {
+    return this.peekConnection(id);
+  }
+  public invalidate(id: string, expected?: unknown) {
+    return this.invalidateConnection(id, expected);
+  }
+  public setPool(id: string, pool: Promise<unknown>) {
+    (this as unknown as { pools: Map<string, unknown> }).pools.set(id, pool);
+  }
+  public poolFor(id: string) {
+    return (this as unknown as { pools: Map<string, unknown> }).pools.get(id);
+  }
 }
 
 const ds = (over: Partial<MJExternalDataSourceEntity>): MJExternalDataSourceEntity =>
@@ -124,6 +137,10 @@ describe('SnowflakeExternalDataSourceDriver — isAuthError (credential-rotation
     expect(d.authErr(new Error("SQL compilation error: Object 'FOO' does not exist"))).toBe(false);
     expect(d.authErr({ code: '000904' })).toBe(false);
   });
+});
+
+describe('SnowflakeExternalDataSourceDriver — cast-aware projection', () => {
+  const d = new TestableSnowflakeDriver();
 
   describe('buildCastAwareProjection (precision-safe NUMBER, native FLOAT)', () => {
     const cols = [
@@ -151,5 +168,40 @@ describe('SnowflakeExternalDataSourceDriver — isAuthError (credential-rotation
       const sqlText = d.selCast('"S"."T"', { objectName: 'T', maxRows: 5, offset: 10, orderBy: '"ID"' }, cols);
       expect(sqlText).toBe('SELECT CAST("ID" AS VARCHAR) AS "ID", "TXT" FROM "S"."T" ORDER BY "ID" LIMIT 5 OFFSET 10');
     });
+  });
+});
+
+describe('SnowflakeExternalDataSourceDriver — connection identity guard (H1 concurrency race)', () => {
+  // Fake generic-pool with the drain()+clear() surface; clear() records the closed id.
+  const makePool = (id: number, closed: number[]) =>
+    Promise.resolve({ id, drain: async () => {}, clear: async () => { closed.push(id); } }) as unknown as Promise<unknown>;
+
+  it('does NOT evict a pool a concurrent request already reconnected (deterministic race replay)', async () => {
+    const d = new TestableSnowflakeDriver();
+    const closed: number[] = [];
+    const p1 = makePool(1, closed);
+    const p2 = makePool(2, closed);
+    d.setPool('s', p1);
+    const idA = d.peek('s');
+    const idB = d.peek('s');
+    expect(idA).toBe(p1);
+    expect(idB).toBe(p1);
+    await d.invalidate('s', idA);
+    expect(d.poolFor('s')).toBeUndefined();
+    d.setPool('s', p2);
+    await d.invalidate('s', idB);      // stale eviction must be a no-op
+    expect(d.poolFor('s')).toBe(p2);
+    await Promise.resolve();
+    expect(closed).toEqual([1]);
+  });
+
+  it('evicts unconditionally when no identity is supplied', async () => {
+    const d = new TestableSnowflakeDriver();
+    const closed: number[] = [];
+    d.setPool('s', makePool(1, closed));
+    await d.invalidate('s');
+    expect(d.poolFor('s')).toBeUndefined();
+    await Promise.resolve();
+    expect(closed).toEqual([1]);
   });
 });
