@@ -133,7 +133,7 @@ describe('OmnibarCommandProvider', () => {
         { ID: 'a2', Name: 'Chat', Description: 'Conversations', Icon: '', Color: '', GetNavItems: async () => [{ Label: 'Conversations', Icon: '' }] },
     ];
     const context = {
-        Apps: { AllApplications: of(apps) } as never,
+        Apps: { Applications: of(apps) } as never, // installed-apps stream (the provider deliberately ignores AllApplications)
         PaletteService: { GetRecentApps: async () => ['a2'] } as never,
     };
 

@@ -25,8 +25,18 @@ import type { Page } from '@playwright/test';
 
 async function gotoHome(page: Page): Promise<void> {
   await page.goto('/', { waitUntil: 'domcontentloaded' });
+  // The persistent profile's IndexedDB metadata cache can go stale after bundle
+  // rebuilds — the shell then offers a "Taking longer than expected → Reset" card.
+  // Click it once; Reset clears the local cache and reloads clean.
+  const reset = page.getByRole('button', { name: /reset/i });
+  try {
+    await reset.waitFor({ timeout: 20_000 });
+    await reset.click();
+  } catch {
+    // no recovery card — normal boot
+  }
   // Shell header present = app booted past the loading screen.
-  await expect(page.locator('.shell-omnibar-affordance, .shell-search-bar').first()).toBeVisible({ timeout: 90_000 });
+  await expect(page.locator('.shell-omnibar-affordance, .shell-search-bar').first()).toBeVisible({ timeout: 120_000 });
 }
 
 async function openPalette(page: Page): Promise<void> {
@@ -60,13 +70,18 @@ test.describe.serial('Unified command palette', () => {
     await expect(page.locator('.omnibar-palette')).toBeHidden();
   });
 
-  test('# switches to Jump-to-Record mode and lists entities', async ({ page }) => {
+  test('# lists entities and Enter on an entity opens its list view', async ({ page }) => {
     await gotoHome(page);
     await openPalette(page);
-    await page.locator('.ob-input').fill('#user');
+    await page.locator('.ob-input').fill('#users');
     await expect(page.locator('.ob-mode-badge')).toHaveText(/record/i, { timeout: 15_000 });
     await expect(page.locator('.ob-group-label', { hasText: 'Entities' })).toBeVisible({ timeout: 30_000 });
-    await page.keyboard.press('Escape');
+    const usersEntity = page.locator('.ob-row', { hasText: 'Users' }).first();
+    await expect(usersEntity).toBeVisible({ timeout: 15_000 });
+    await usersEntity.click();
+    await expect(page.locator('.omnibar-palette')).toBeHidden();
+    // Entity selection opens the entity's dynamic list view in a tab.
+    await expect(page.locator('.tab-label, [class*="tab"]', { hasText: 'Users' }).first()).toBeVisible({ timeout: 30_000 });
   });
 
   test('/ switches to Commands mode and Enter switches app', async ({ page }) => {
@@ -84,18 +99,19 @@ test.describe.serial('Unified command palette', () => {
     await expect(page).toHaveURL(/chat/i, { timeout: 30_000 });
   });
 
-  test('@ lists agents (tolerant when plugin absent)', async ({ page }) => {
+  test('@ agent selection opens Chat with the composer pre-addressed + focused', async ({ page }) => {
     await gotoHome(page);
     await openPalette(page);
-    await page.locator('.ob-input').fill('@');
+    await page.locator('.ob-input').fill('@sage');
     await expect(page.locator('.ob-mode-badge')).toHaveText(/agent/i, { timeout: 15_000 });
-    // Agents come from the conversations composer plugin; environments without it
-    // legitimately show none — assert the mode switch, and rows only if present.
-    const rows = page.locator('.ob-row');
-    const count = await rows.count().catch(() => 0);
-    if (count > 0) {
-      await expect(rows.first().locator('.ob-rsub')).toContainText(/pre-addressed/i);
-    }
-    await page.keyboard.press('Escape');
+    const sageRow = page.locator('.ob-row', { hasText: 'Sage' }).first();
+    await expect(sageRow).toBeVisible({ timeout: 30_000 });
+    await sageRow.click();
+    await expect(page.locator('.omnibar-palette')).toBeHidden();
+    await expect(page).toHaveURL(/chat/i, { timeout: 30_000 });
+    // The composer draft is PREFILLED (not sent) with the @mention, and focused.
+    const composer = page.locator('mj-mention-editor [contenteditable="true"]').first();
+    await expect(composer).toContainText('@Sage', { timeout: 30_000 });
+    await expect(composer).toBeFocused({ timeout: 15_000 });
   });
 });

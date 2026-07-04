@@ -253,16 +253,14 @@ export class OmnibarPaletteComponent implements OnDestroy {
     public Execute(suggestion: MentionSuggestion): void {
         const nav = GetOmnibarNavPayload(suggestion);
         if (!nav) {
-            // Entity suggestion ('#' mode): drill in — re-seed the query, stay open.
-            const entityName = suggestion.data?.['entityName'];
-            if (typeof entityName === 'string') {
-                this.SeedTrigger(`#${entityName.toLowerCase()} `);
-            }
-            return;
+            return; // foreign suggestion with no navigation — nothing to execute
         }
         switch (nav.kind) {
             case 'record':
                 this.navigation.OpenEntityRecord(nav.entityName, CompositeKey.FromID(nav.recordId));
+                break;
+            case 'entity-list':
+                this.navigation.OpenDynamicView(nav.entityName);
                 break;
             case 'search':
                 this.openFullSearch(nav.query);
@@ -294,7 +292,7 @@ export class OmnibarPaletteComponent implements OnDestroy {
 
     /** '@' selection: switch to the Chat app pre-addressed to the agent. */
     private async openAgentChat(agentName: string): Promise<void> {
-        const apps = await firstValueFrom(this.appManager.AllApplications).catch(() => []);
+        const apps = await firstValueFrom(this.appManager.Applications).catch(() => []);
         const chat = apps.find((a) => a.Name.trim().toLowerCase() === 'chat');
         if (chat) {
             await this.navigation.SwitchToApp(chat.ID, undefined, { agent: agentName });

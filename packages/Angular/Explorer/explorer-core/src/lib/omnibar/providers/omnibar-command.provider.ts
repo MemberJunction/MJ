@@ -58,7 +58,9 @@ export class OmnibarCommandProvider extends OmnibarProvider {
             return [];
         }
         try {
-            return await firstValueFrom(manager.AllApplications);
+            // Applications (NOT AllApplications): the user's INSTALLED apps only —
+            // system-wide apps the user hasn't installed would no-op on SwitchToApp.
+            return await firstValueFrom(manager.Applications);
         } catch {
             return [];
         }

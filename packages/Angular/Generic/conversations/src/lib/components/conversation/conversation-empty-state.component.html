@@ -53,6 +53,8 @@
     <!-- Message Input (using full mj-message-input in empty state mode) -->
     <div class="message-input-wrapper">
       <mj-message-input
+        [initialDraft]="initialDraft"
+        (initialDraftApplied)="initialDraftApplied.emit()"
         [placeholder]="overlayMode ? 'Type a message...' : 'Type your message to start a new conversation...'"
         [disabled]="disabled"
         [currentUser]="currentUser"

@@ -16,6 +16,7 @@ export type OmnibarNavPayload =
     | { kind: 'search'; query: string; scopeIDs?: string[] }
     | { kind: 'app'; appId: string; appName: string }
     | { kind: 'nav'; appId: string; navItemName: string }
+    | { kind: 'entity-list'; entityName: string }
     | { kind: 'agent'; agentName: string }
     | { kind: 'file'; fileName: string; rawMetadata?: string };
 

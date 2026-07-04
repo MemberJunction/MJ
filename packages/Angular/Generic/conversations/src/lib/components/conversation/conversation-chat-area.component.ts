@@ -510,6 +510,23 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
   @ViewChild('scrollContainer') private scrollContainer!: ElementRef;
   @ViewChildren('messageInput') private messageInputComponents!: QueryList<MessageInputComponent>;
+
+  /**
+   * Prefill the composer with draft text (NOT sent — unlike pendingMessage) and focus
+   * it. Targets the empty-state input for new/unsaved conversations, else the active
+   * conversation's cached input. Emits composerDraftConsumed once applied. Retries
+   * briefly because the target input mounts asynchronously (config params can arrive
+   * before the first render).
+   */
+  @Input() composerDraft: string | null = null;
+
+  @Output() composerDraftConsumed = new EventEmitter<void>();
+
+  /** The empty-state input applied the staged draft — clear + inform the host. */
+  public OnComposerDraftApplied(): void {
+    this.composerDraft = null;
+    this.composerDraftConsumed.emit();
+  }
   @ViewChild(ArtifactViewerPanelComponent) private artifactViewerComponent?: ArtifactViewerPanelComponent;
   @ViewChild(ConversationEmptyStateComponent) private emptyStateComponent?: ConversationEmptyStateComponent;
 

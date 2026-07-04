@@ -261,6 +261,45 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   @ViewChild('inputBox') inputBox!: AiComposerComponent;
 
   public messageText: string = '';
+
+  /**
+   * Prefills the composer with draft text WITHOUT sending (unlike pendingMessage,
+   * which auto-sends) and focuses the input — e.g. the omnibar's '@agent' flow
+   * lands in chat with '@AgentName ' staged so the user just types their ask.
+   */
+  /**
+   * Draft text to stage in the composer when this input mounts (NOT sent — unlike
+   * pendingMessage). Applied once per distinct value, view-readiness-proof: if the
+   * view isn't up yet, ngAfterViewInit applies it. Emits initialDraftApplied so the
+   * host can clear its pending state.
+   */
+  @Input()
+  set initialDraft(value: string | null) {
+    if (value && value !== this.appliedInitialDraft) {
+      this.appliedInitialDraft = value;
+      if (this.inputBox) {
+        this.SetDraft(value, true);
+        this.initialDraftApplied.emit();
+      } else {
+        this.pendingInitialDraft = value;
+      }
+    }
+  }
+  get initialDraft(): string | null {
+    return this.appliedInitialDraft;
+  }
+  private appliedInitialDraft: string | null = null;
+  private pendingInitialDraft: string | null = null;
+
+  @Output() initialDraftApplied = new EventEmitter<void>();
+
+  public SetDraft(text: string, focus: boolean = true): void {
+    this.messageText = text;
+    if (focus) {
+      // The composer mounts/binds on the next tick after messageText flows down.
+      setTimeout(() => this.inputBox?.focus(), 50);
+    }
+  }
   public isSending: boolean = false;
   public isProcessing: boolean = false; // True when waiting for agent/naming response
   public processingMessage: string = 'AI is responding...'; // Message shown during processing
@@ -335,6 +374,15 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   }
 
   ngAfterViewInit() {
+    if (this.pendingInitialDraft) {
+      const draft = this.pendingInitialDraft;
+      this.pendingInitialDraft = null;
+      // next tick — the composer's own view finishes mounting first
+      setTimeout(() => {
+        this.SetDraft(draft, true);
+        this.initialDraftApplied.emit();
+      }, 50);
+    }
     // Focus input on initial load
     this.focusInput();
 

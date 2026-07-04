@@ -188,6 +188,8 @@
         } @else {
           <mj-conversation-empty-state
             [currentUser]="currentUser"
+            [initialDraft]="composerDraft"
+            (initialDraftApplied)="OnComposerDraftApplied()"
             [disabled]="isProcessing"
             [showSidebarToggle]="showSidebarToggle"
             [overlayMode]="overlayMode"
@@ -211,7 +213,10 @@
           <div class="chat-input-container">
             <div class="message-input-container-wrapper">
               <mj-message-input
+                #emptyStateInput
                 [emptyStateMode]="true"
+                [initialDraft]="composerDraft"
+                (initialDraftApplied)="OnComposerDraftApplied()"
                 [currentUser]="currentUser"
                 [disabled]="isProcessing"
                 [enableAttachments]="enableAttachments && allowAttachments"

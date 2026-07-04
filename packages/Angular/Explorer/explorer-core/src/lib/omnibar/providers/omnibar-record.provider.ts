@@ -27,7 +27,13 @@ export class OmnibarRecordProvider extends OmnibarProvider {
         const matches = this.matchEntities(md.Entities, query);
         const suggestions: MentionSuggestion[] = matches.slice(0, 4).map((e) => this.entitySuggestion(e));
         if (matches.length > 0 && query.length > 0) {
-            suggestions.push(...await this.recordSuggestions(matches[0], query, request));
+            // Record term = the query MINUS the matched entity name when the query leads
+            // with it ('#mj: ai agents amanda' → term 'amanda'); an exact entity-name
+            // query lists the entity's top records (empty term = browse).
+            const best = matches[0];
+            const bestName = best.Name.toLowerCase();
+            const term = query.startsWith(bestName) ? query.substring(bestName.length).trim() : query;
+            suggestions.push(...await this.recordSuggestions(best, term, request));
         }
         return suggestions.slice(0, request.MaxResults);
     }
@@ -49,31 +55,32 @@ export class OmnibarRecordProvider extends OmnibarProvider {
     }
 
     private entitySuggestion(entity: EntityInfo): MentionSuggestion {
-        // Selecting an entity re-seeds the palette query rather than navigating —
-        // handled by the palette via the absent nav payload + type 'entity'.
+        // Enter/click on an entity row NAVIGATES: opens the entity's dynamic list view.
+        // Drilling into records happens by TYPING ('#<entity name> <record term>').
+        const nav: OmnibarNavPayload = { kind: 'entity-list', entityName: entity.Name };
         return {
             type: 'entity',
             id: entity.ID,
             name: entity.Name,
             displayName: entity.Name,
-            description: entity.Description ? entity.Description.substring(0, 120) : 'Entity',
+            description: entity.Description ? entity.Description.substring(0, 120) : 'Entity — open list view',
             icon: entity.Icon || 'fa-solid fa-table',
-            data: { group: 'Entities', entityName: entity.Name },
+            data: { [OMNIBAR_NAV_KEY]: nav, group: 'Entities', entityName: entity.Name },
         };
     }
 
     /** Top records of one entity whose name field matches the query. Fail-soft. */
-    private async recordSuggestions(entity: EntityInfo, query: string, request: ComposerSuggestionRequest): Promise<MentionSuggestion[]> {
+    private async recordSuggestions(entity: EntityInfo, term: string, request: ComposerSuggestionRequest): Promise<MentionSuggestion[]> {
         const nameField = entity.NameField;
         if (!nameField) {
             return [];
         }
         try {
-            const escaped = query.replace(/'/g, "''");
+            const escaped = term.replace(/'/g, "''");
             const rv = request.Provider ? RunView.FromMetadataProvider(request.Provider) : new RunView();
             const result = await rv.RunView<Record<string, unknown>>({
                 EntityName: entity.Name,
-                ExtraFilter: `${nameField.Name} LIKE '%${escaped}%'`,
+                ExtraFilter: escaped.length > 0 ? `${nameField.Name} LIKE '%${escaped}%'` : '',
                 Fields: [entity.FirstPrimaryKey.Name, nameField.Name],
                 OrderBy: nameField.Name,
                 MaxRows: MAX_RECORD_ROWS,

@@ -37,6 +37,10 @@ export class ConversationEmptyStateComponent {
 
   @ViewChild(MessageInputComponent) private messageInput?: MessageInputComponent;
 
+  /** Draft staged into the composer on mount (see MessageInputComponent.initialDraft). */
+  @Input() initialDraft: string | null = null;
+  @Output() initialDraftApplied = new EventEmitter<void>();
+
   @Output() messageSent = new EventEmitter<{text: string; attachments: PendingAttachment[]}>();
   @Output() sidebarToggleClicked = new EventEmitter<void>();
 

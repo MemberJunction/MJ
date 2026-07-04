@@ -95,7 +95,9 @@ import { Subject, takeUntil } from 'rxjs';
               (pendingMessageRequested)="onPendingMessageRequested($event)"
               (artifactLinkClicked)="onArtifactLinkClicked($event)"
               (openEntityRecord)="onOpenEntityRecord($event)"
-              (navigationRequest)="onNavigationRequest($event)">
+              (navigationRequest)="onNavigationRequest($event)"
+              [composerDraft]="pendingComposerDraft"
+              (composerDraftConsumed)="onComposerDraftConsumed()">
             </mj-conversation-chat-area>
           }
         </div>
@@ -459,15 +461,24 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
    * form the composer's agent-mention provider recognizes.
    */
   private applyAgentParam(agentName: string | null | undefined): void {
-    if (!agentName) {
+    if (!agentName || agentName === this.lastAppliedAgentParam) {
       return;
     }
+    this.lastAppliedAgentParam = agentName;
     const mention = agentName.includes(' ') ? `@"${agentName}" ` : `@${agentName} `;
     this.isNewUnsavedConversation = true;
     this.selectedConversationId = null;
     this.selectedConversation = null;
-    this.pendingMessageToSend = mention;
+    // DRAFT prefill (composerDraft) — pendingMessage would AUTO-SEND, which is wrong here.
+    this.pendingComposerDraft = mention;
     this.cdr.detectChanges();
+  }
+
+  public pendingComposerDraft: string | null = null;
+  private lastAppliedAgentParam: string | null = null;
+
+  public onComposerDraftConsumed(): void {
+    this.pendingComposerDraft = null;
   }
 
   private applyConfigurationParams(): void {
