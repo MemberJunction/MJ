@@ -53,4 +53,55 @@ describe('ExternalDataSourceRouter', () => {
     await expect(router.Resolve(id, undefined, countingProvider)).rejects.toThrow('boom');
     expect(lookups).toBe(2);
   });
+
+  describe('entity-change cache invalidation (no restart needed)', () => {
+    // Reach the private cache + handler the same way the existing tests reach internals.
+    type RouterInternals = {
+      driverCache: Map<string, Promise<{ driver: { CloseConnection: (id: string) => Promise<void> } }>>;
+      handleEntityChange: (event: unknown) => Promise<void>;
+    };
+    const internals = () => ExternalDataSourceRouter.Instance as unknown as RouterInternals;
+    const seed = (id: string) =>
+      internals().driverCache.set(id, Promise.resolve({ driver: { CloseConnection: async () => {} } }));
+    const has = (id: string) => internals().driverCache.has(id);
+
+    const A = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+    const B = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
+
+    it('evicts ONLY the changed source on a local save/delete', async () => {
+      seed(A); seed(B);
+      await internals().handleEntityChange({
+        type: 'save',
+        baseEntity: { EntityInfo: { Name: 'MJ: External Data Sources' }, ID: A },
+      });
+      expect(has(A)).toBe(false); // the edited source is re-resolved next use
+      expect(has(B)).toBe(true);  // unrelated source untouched
+    });
+
+    it('evicts ALL sources when the Type changes (DriverClass etc. can affect every source of that type)', async () => {
+      seed(A); seed(B);
+      await internals().handleEntityChange({
+        type: 'save',
+        baseEntity: { EntityInfo: { Name: 'MJ: External Data Source Types' } },
+      });
+      expect(has(A)).toBe(false);
+      expect(has(B)).toBe(false);
+    });
+
+    it('evicts ALL on a cross-server remote-invalidate (no baseEntity to target a single source)', async () => {
+      seed(A); seed(B);
+      await internals().handleEntityChange({ type: 'remote-invalidate', entityName: 'MJ: External Data Sources' });
+      expect(has(A)).toBe(false);
+      expect(has(B)).toBe(false);
+    });
+
+    it('ignores changes to unrelated entities', async () => {
+      seed(A);
+      await internals().handleEntityChange({
+        type: 'save',
+        baseEntity: { EntityInfo: { Name: 'Users' }, ID: 'x' },
+      });
+      expect(has(A)).toBe(true);
+    });
+  });
 });

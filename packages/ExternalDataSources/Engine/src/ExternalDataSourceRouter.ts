@@ -1,7 +1,11 @@
-import { BaseSingleton, MJGlobal } from "@memberjunction/global";
-import { IMetadataProvider, Metadata, UserInfo } from "@memberjunction/core";
+import { BaseSingleton, MJEventType, MJGlobal } from "@memberjunction/global";
+import { BaseEntity, BaseEntityEvent, IMetadataProvider, LogError, Metadata, UserInfo } from "@memberjunction/core";
 import { MJExternalDataSourceEntity, MJExternalDataSourceTypeEntity } from "@memberjunction/core-entities";
 import { BaseExternalDataSourceDriver } from "./BaseExternalDataSourceDriver";
+
+/** Entity names whose changes must invalidate the resolved-driver cache. Lower-cased for comparison. */
+const EXTERNAL_DATA_SOURCE_ENTITY = 'mj: external data sources';
+const EXTERNAL_DATA_SOURCE_TYPE_ENTITY = 'mj: external data source types';
 
 /** A fully-resolved external data source: its instance row, its type row, and a live driver. */
 export interface ResolvedExternalDataSource {
@@ -30,6 +34,9 @@ export class ExternalDataSourceRouter extends BaseSingleton<ExternalDataSourceRo
   // ClearCache only ever sees the winner. Same cold-start race fix as the per-driver connection cache.
   private driverCache = new Map<string, Promise<ResolvedExternalDataSource>>();
 
+  // Guards one-time subscription to the entity-change event stream (see ensureCacheInvalidationSubscription).
+  private cacheInvalidationSubscribed = false;
+
   protected constructor() {
     super();
   }
@@ -48,6 +55,7 @@ export class ExternalDataSourceRouter extends BaseSingleton<ExternalDataSourceRo
     contextUser?: UserInfo,
     provider?: IMetadataProvider,
   ): Promise<ResolvedExternalDataSource> {
+    this.ensureCacheInvalidationSubscription();
     const existing = this.driverCache.get(dataSourceId);
     if (existing) {
       return existing;
@@ -104,6 +112,50 @@ export class ExternalDataSourceRouter extends BaseSingleton<ExternalDataSourceRo
     )!;
 
     return { dataSource, dataSourceType, driver };
+  }
+
+  /**
+   * Subscribe (once) to the framework's entity-change event stream so edits to an external data source
+   * take effect WITHOUT a process restart. Without this, `createResolved`'s snapshot of the row (Status,
+   * ConnectionConfig, CredentialID, schema, TTL) and the `Status !== 'Active'` gate are frozen at first
+   * resolve — so disabling or reconfiguring an already-used source would silently no-op until restart.
+   *
+   * Uses the same MJGlobal → BaseEntity event channel that every BaseEngine consumes for cache
+   * invalidation, so it also honors cross-server `remote-invalidate` events (an edit on one server
+   * evicts the cache on the others). Subscribed lazily on first Resolve — before anything is cached,
+   * there is nothing to invalidate. Process-lifetime subscription (no unsubscribe needed on a singleton).
+   */
+  private ensureCacheInvalidationSubscription(): void {
+    if (this.cacheInvalidationSubscribed) {
+      return;
+    }
+    this.cacheInvalidationSubscribed = true;
+    MJGlobal.Instance.GetEventListener(false).subscribe((event) => {
+      if (event.event === MJEventType.ComponentEvent && event.eventCode === BaseEntity.BaseEventCode) {
+        this.handleEntityChange(event.args as BaseEntityEvent).catch((e) => LogError(e));
+      }
+    });
+  }
+
+  /**
+   * Evict cached resolutions in response to a change to an External Data Source (or its Type). A change
+   * to the data-source row evicts that one source (local save/delete carries the record); a Type change
+   * (e.g. DriverClass) can affect every source of that type, so it evicts all. Cross-server
+   * `remote-invalidate` events don't carry the resolved BaseEntity, so they conservatively evict all.
+   */
+  protected async handleEntityChange(event: BaseEntityEvent): Promise<void> {
+    const entityName = (event.baseEntity?.EntityInfo?.Name ?? event.entityName ?? '').toLowerCase().trim();
+    if (entityName === EXTERNAL_DATA_SOURCE_TYPE_ENTITY) {
+      await this.ClearCache();
+      return;
+    }
+    if (entityName === EXTERNAL_DATA_SOURCE_ENTITY) {
+      // Local save/delete carries the row (evict just that source); remote-invalidate does not — evict all.
+      const id = event.type !== 'remote-invalidate'
+        ? (event.baseEntity as MJExternalDataSourceEntity | undefined)?.ID
+        : undefined;
+      await (id ? this.ClearCache(id) : this.ClearCache());
+    }
   }
 
   /**
