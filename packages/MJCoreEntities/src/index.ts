@@ -30,6 +30,7 @@ export * from './engines/dashboards';
 export * from './engines/EncryptionEngineBase';
 export * from './engines/RemoteOperationEngineBase';
 export * from './engines/UserInfoEngine';
+export * from './engines/UserRoutineEngine';
 export * from './engines/ApplicationSettingEngine';
 export * from './engines/UserViewEngine';
 export * from './engines/FileStorageEngine';

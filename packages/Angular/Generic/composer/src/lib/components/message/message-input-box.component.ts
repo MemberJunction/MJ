@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, ViewChild } from '@angular/core';
-import { UserInfo } from '@memberjunction/core';
-import { MentionSuggestion } from '../../services/mention-autocomplete.service';
+import { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import { ComposerTriggerProvider, MentionSuggestion } from '../../composer-trigger-provider';
 import { MentionEditorComponent, PendingAttachment } from '../mention/mention-editor.component';
 
 /**
@@ -31,7 +31,14 @@ export class MessageInputBoxComponent {
   @Input() disabled: boolean = false;
   @Input() value: string = '';
   @Input() showCharacterCount: boolean = false;
+  /** Master switch for all mention/command triggers (pass-through to the mention editor). */
   @Input() enableMentions: boolean = true;
+  /** Explicit trigger-provider list (pass-through to the mention editor; explicit list wins over discovery). */
+  @Input() TriggerProviders: ComposerTriggerProvider[] | null = null;
+  /** Discovery-mode filter: provider Keys to skip (pass-through to the mention editor). */
+  @Input() ExcludedTriggerKeys: string[] = [];
+  /** Optional metadata provider scoping this composer (pass-through to the mention editor). */
+  @Input() Provider: IMetadataProvider | null = null;
   @Input() currentUser?: UserInfo;
   @Input() rows: number = 3;
 

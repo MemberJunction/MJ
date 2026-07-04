@@ -1,0 +1,29 @@
+{
+  "fields": {
+    "Name": "Routines",
+    "Description": "Schedule AI agents to run for you on a cron cadence — with monitoring, change detection, run history, and in-app or email notifications.",
+    "Icon": "fa-solid fa-business-time",
+    "DefaultForNewUser": false,
+    "DefaultSequence": 1020,
+    "Color": "#0ea5e9",
+    "DefaultNavItems": [
+      {
+        "Label": "My Routines",
+        "Icon": "fa-solid fa-business-time",
+        "ResourceType": "Custom",
+        "DriverClass": "UserRoutines",
+        "isDefault": true
+      }
+    ]
+  },
+  "relatedEntities": {
+    "MJ: Application Entities": []
+  },
+  "primaryKey": {
+    "ID": "EFC4850B-D3A4-4081-9BFF-2E490EC50544"
+  },
+  "sync": {
+    "lastModified": "2026-07-02T23:39:07.730Z",
+    "checksum": "ae98137c7874eaf2009d2f3ad00ec764ce14671ccdae106d3a6048e420b35f24"
+  }
+}
