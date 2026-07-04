@@ -86,6 +86,18 @@ export class SQLCodeGenBase {
      */
     protected orderedEntitiesForDeleteSPRegeneration: string[] = [];
 
+    /**
+     * Deterministic-logging buffer. Per-entity SQL is generated + executed CONCURRENTLY within a
+     * batch (see generateAndExecuteEntitySQLToSeparateFiles), so appending it to the migration log
+     * live — as it did — interleaves the entities in whichever order their async chains happen to
+     * resolve, making the generated CodeGen_Run migration non-deterministic run-to-run. When this
+     * buffer is non-null, logSQLForNewOrModifiedEntity captures each entity's log lines here
+     * (keyed by Entity ID) instead of writing them immediately; the batch loop then flushes the
+     * buffer in stable entity-Name order after Promise.all. Execution timing is unaffected — only
+     * the log write is deferred — so parallelism (and speed) is preserved.
+     */
+    protected orderedLogBuffer: Map<string, Array<{ sql: string; description: string }>> | null = null;
+
     public async manageSQLScriptsAndExecution(pool: CodeGenConnection, entities: EntityInfo[], directory: string, currentUser: UserInfo): Promise<boolean> {
         try {
             // Build list of entities qualified for forced regeneration if entityWhereClause is provided
@@ -594,6 +606,11 @@ export class SQLCodeGenBase {
                 options.entities.map(e => `${e.SchemaName}.${e.BaseView}`)
             );
 
+            // Enable deterministic per-entity log buffering for the batched generation below.
+            // Each batch's entities generate + execute concurrently, so their migration-log lines
+            // are captured per-entity and flushed in stable Name order after each Promise.all —
+            // making the generated CodeGen_Run migration byte-identical run-to-run.
+            this.orderedLogBuffer = new Map();
             for (let i = 0; i < totalEntities; i += options.batchSize) {
                 const batch = options.entities.slice(i, i + options.batchSize);
                 const promises = batch.map(async (e) => {
@@ -621,7 +638,20 @@ export class SQLCodeGenBase {
                         failedEntities.push(entity);
                     files.push(...result.Files); // add the files to the main files array
                 });
+
+                // Flush this batch's buffered SQL to the migration log in stable entity-Name order,
+                // so the concurrent (interleaved) generation above yields a deterministic migration.
+                const flushOrder = [...batch].sort((a, b) => a.Name.localeCompare(b.Name));
+                for (const e of flushOrder) {
+                    const entries = this.orderedLogBuffer.get(e.ID);
+                    if (entries) {
+                        for (const entry of entries)
+                            SQLLogging.appendToSQLLogFile(entry.sql, entry.description);
+                        this.orderedLogBuffer.delete(e.ID);
+                    }
+                }
             }
+            this.orderedLogBuffer = null;
 
             // Batch summary — makes the full failure scope visible in one pass instead of
             // forcing the operator to bisect across individually-logged per-entity errors.
@@ -637,6 +667,7 @@ export class SQLCodeGenBase {
             return {Success: failedEntities.length === 0, Files: files};
         }
         catch (err) {
+            this.orderedLogBuffer = null; // don't leak buffering state to later calls on error
             logError(err as string);
             return {Success: false, Files: files};
         }
@@ -964,7 +995,18 @@ export class SQLCodeGenBase {
         }
 
         if (shouldLog) {
-            SQLLogging.appendToSQLLogFile(sql, description);
+            if (this.orderedLogBuffer) {
+                // Deterministic-logging mode: defer the migration-log write into a per-entity
+                // buffer (flushed in stable Name order by the batch loop). See orderedLogBuffer.
+                let entries = this.orderedLogBuffer.get(entity.ID);
+                if (!entries) {
+                    entries = [];
+                    this.orderedLogBuffer.set(entity.ID, entries);
+                }
+                entries.push({ sql, description });
+            } else {
+                SQLLogging.appendToSQLLogFile(sql, description);
+            }
             TempBatchFile.appendToTempBatchFile(sql, entity.SchemaName);
         }
 
@@ -1839,8 +1881,19 @@ export class SQLCodeGenBase {
                             // first update the actul field in the metadata object so it can be used from this point forward
                             // and it also reflects what the DB will hold
                             ef.RelatedEntityNameFieldMap = ef._RelatedEntityNameFieldMap;
-                            // then update the database itself
-                            await manageMD.updateEntityFieldRelatedEntityNameFieldMap(pool, ef.ID, ef.RelatedEntityNameFieldMap);
+                            // then update the database itself. When deterministic-log buffering is
+                            // active (concurrent batch generation), defer this EXEC's log line into
+                            // the per-entity buffer (keyed by EntityID) so it flushes in stable Name
+                            // order with the rest of the entity's SQL instead of interleaving.
+                            const buf = this.orderedLogBuffer;
+                            await manageMD.updateEntityFieldRelatedEntityNameFieldMap(pool, ef.ID, ef.RelatedEntityNameFieldMap,
+                                buf
+                                    ? (sql, description) => {
+                                        let entries = buf.get(ef.EntityID);
+                                        if (!entries) { entries = []; buf.set(ef.EntityID, entries); }
+                                        entries.push({ sql, description });
+                                      }
+                                    : undefined);
                         }
                     }
                 }

@@ -2243,7 +2243,7 @@ export class ManageMetadataBase {
                              RelatedEntityID IS NOT NULL AND
                              IsVirtual = ${this.boolLit(false)} AND
                              EntityID NOT IN (SELECT ID FROM ${this.qs(mj_core_schema(), 'Entity')} WHERE SchemaName IN (${excludeSchemas.map(s => `'${s}'`).join(',')}))
-                       ORDER BY RelatedEntityID`;
+                       ORDER BY RelatedEntity, Entity, Name`;
          const entityFieldsResult = await this.runQuery(pool, sSQL);
          const entityFields = entityFieldsResult.recordset;
 
@@ -2449,7 +2449,7 @@ export class ManageMetadataBase {
                              RelatedEntityID IS NOT NULL AND
                              IsVirtual = ${this.boolLit(false)} AND
                              EntityID NOT IN (SELECT ID FROM ${this.qs(mj_core_schema(), 'Entity')} WHERE SchemaName IN (${excludeSchemas.map(s => `'${s}'`).join(',')}))
-                       ORDER BY RelatedEntityID`;
+                       ORDER BY RelatedEntity, Entity, Name`;
          const entityFieldsResult = await this.runQuery(pool, sSQL);
          const entityFields = entityFieldsResult.recordset;
 
@@ -3079,7 +3079,8 @@ export class ManageMetadataBase {
                               WHERE
                                  VirtualEntity = ${this.boolLit(false)} AND
                                  TrackRecordChanges = ${this.boolLit(true)} AND
-                                 SchemaName NOT IN (${excludeSchemas.map(s => `'${s}'`).join(',')})`;
+                                 SchemaName NOT IN (${excludeSchemas.map(s => `'${s}'`).join(',')})
+                              ORDER BY ${this.qi('Name')}`;
          const entitiesResult = await this.runQuery(pool, sqlEntities);
       const entities = entitiesResult.recordset;
          let overallResult = true;
@@ -3517,11 +3518,21 @@ export class ManageMetadataBase {
     * @param relatedEntityNameFieldMap
     * @returns
     */
-   public async updateEntityFieldRelatedEntityNameFieldMap(pool: CodeGenConnection, entityFieldID: string, relatedEntityNameFieldMap: string): Promise<boolean> {
+   public async updateEntityFieldRelatedEntityNameFieldMap(pool: CodeGenConnection, entityFieldID: string, relatedEntityNameFieldMap: string, deferLog?: (sql: string, description: string) => void): Promise<boolean> {
       try   {
          const sSQL = this.dbProvider.callRoutineSQL(mj_core_schema(), 'spUpdateEntityFieldRelatedEntityNameFieldMap', [`'${entityFieldID}'`, `'${relatedEntityNameFieldMap}'`], ['EntityFieldID', 'RelatedEntityNameFieldMap']);
-
-         await this.LogSQLAndExecute(pool, sSQL, `SQL text to update entity field related entity name field map for entity field ID ${entityFieldID}`);
+         const description = `SQL text to update entity field related entity name field map for entity field ID ${entityFieldID}`;
+         if (deferLog) {
+            // Called from the CONCURRENT per-entity base-view generation. Execute now (the DB update
+            // is order-independent) but defer the migration-log line so the caller can emit it in a
+            // deterministic (entity-Name) order — otherwise these EXECs interleave across entities and
+            // make the generated migration non-deterministic. Mirrors LogSQLAndExecute's qsql-quoting.
+            const q = this.qsql(sSQL);
+            await pool.query(q);
+            deferLog(q, description);
+         } else {
+            await this.LogSQLAndExecute(pool, sSQL, description);
+         }
          return true;
       }
       catch (e) {
@@ -3736,7 +3747,7 @@ export class ManageMetadataBase {
          // for the field and sync that up with the EntityFieldValue table. If it is not a simple series of OR statements, we will not be able to parse it and we'll
          // just ignore it.
          const filter = this.dbProvider.getCheckConstraintsSchemaFilter(excludeSchemas);
-         const sSQL = `SELECT * FROM ${this.qs(mj_core_schema(), 'vwEntityFieldsWithCheckConstraints')}${filter}`
+         const sSQL = `SELECT * FROM ${this.qs(mj_core_schema(), 'vwEntityFieldsWithCheckConstraints')}${filter} ORDER BY EntityName, ColumnName`
          const resultResult = await this.runQuery(pool, sSQL);
          const result = resultResult.recordset;
 
@@ -4101,7 +4112,7 @@ export class ManageMetadataBase {
 
    protected async createNewEntities(pool: CodeGenConnection, currentUser: UserInfo): Promise<boolean> {
       try   {
-         const sSQL = `SELECT * FROM ${this.qs(mj_core_schema(), 'vwSQLTablesAndEntities')} WHERE ${this.qi('EntityID')} IS NULL ` + this.createExcludeTablesAndSchemasFilter('');
+         const sSQL = `SELECT * FROM ${this.qs(mj_core_schema(), 'vwSQLTablesAndEntities')} WHERE ${this.qi('EntityID')} IS NULL ` + this.createExcludeTablesAndSchemasFilter('') + ` ORDER BY ${this.qi('SchemaName')}, ${this.qi('TableName')}`;
          const newEntitiesResult = await this.runQuery(pool, sSQL);
       const newEntities = newEntitiesResult.recordset;
 

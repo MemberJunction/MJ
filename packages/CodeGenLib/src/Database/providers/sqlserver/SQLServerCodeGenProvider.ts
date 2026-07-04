@@ -1473,7 +1473,7 @@ NumberedRows AS (
    SELECT *
    FROM NumberedRows
    WHERE rn = 1
-   ORDER BY EntityID, Sequence;
+   ORDER BY EntityName, Sequence, FieldName;
 `;
     }
 
