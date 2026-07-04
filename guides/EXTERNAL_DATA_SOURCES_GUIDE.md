@@ -43,7 +43,7 @@ Remote system
 Key points:
 - The **router contract** lives in `@memberjunction/core` (abstract `ExternalDataSourceReadRouter`); the concrete engine lives in the server-only `@memberjunction/external-data-sources`. This keeps driver SDKs out of `core` and the browser bundle.
 - Dispatch happens inside `GenericDatabaseProvider` for `RunView`, `RunQuery`, and single-record `Load`, guarded by a null `ExternalDataSourceID` check. Browser/Explorer reads route externally transparently (they flow through the same provider).
-- External entities generate to extend **`ReadOnlyExternalBaseEntity`** (CodeGen), and CodeGen **skips** SQL-object generation (sprocs/views/indexes) and **GraphQL mutations** for them.
+- External entities generate to extend **`ReadOnlyExternalBaseEntity`** (CodeGen), and CodeGen **skips** SQL-object generation (sprocs/views/indexes) for them. GraphQL mutations are governed by the entity's `Allow*API` flags (not by external-ness): with them set to `0` — the required read-only setup — no Create/Update/Delete mutations are generated; if a flag is left on, the mutation **is** generated but rejects at runtime via `ReadOnlyExternalBaseEntity`.
 
 ---
 
@@ -59,7 +59,7 @@ Key points:
 
 `ExternalDataSource` (entity `MJ: External Data Sources`) is one configured connection:
 - `TypeID` → the type above
-- `CredentialID` → an `MJ: Credentials` record (secrets are encrypted at rest by `CredentialEngine`; **never** put secrets in `ConnectionConfig`)
+- `CredentialID` → an `MJ: Credentials` record (secrets are encrypted at rest by `CredentialEngine`; **never** put secrets in `ConnectionConfig`). Create this record via the **Credentials dashboard** (`@memberjunction/ng-credentials`) — the secret is encrypted on save, so it cannot be hand-entered through the generic entity form.
 - `DefaultSchema` / `DefaultDatabase` → schema/namespace/dbName on the remote side
 - `ConnectionConfig` → JSON blob of **non-secret** driver config (host, port, Snowflake account/warehouse, Mongo URI, SSL flag, pool size, …)
 - `DefaultCacheTTLSeconds` → how long external reads are cached (default 300; `0` disables caching for this source)
@@ -79,19 +79,20 @@ Key points:
 ## Behavior & guarantees
 
 ### Read-only
-External entities extend `ReadOnlyExternalBaseEntity`: `Save()`/`Delete()` short-circuit (no remote write), return `false`, and populate `LatestResult` with a clear message. CodeGen also omits the Create/Update/Delete GraphQL mutations for external entities.
+External entities extend `ReadOnlyExternalBaseEntity`: `Save()`/`Delete()` short-circuit (no remote write), return `false`, and populate `LatestResult` with a clear message. CodeGen omits the Create/Update/Delete GraphQL mutations when the entity's `Allow*API` flags are `0` (the required read-only setup); if a flag is left on, the mutation is generated but rejects at runtime via the same base class — so external entities are never writable regardless.
 
 ### Caching (TTL)
 Remote data can't be event-invalidated (no `BaseEntity` save/delete events fire for it), so external reads are cached **time-bounded** by the data source's `DefaultCacheTTLSeconds`:
-- `RunView` results are cached via `LocalCacheManager` with a TTL (an external read cached *without* a TTL is refused outright — a fail-safe against serving stale data forever).
-- `RunQuery` results are cached with the same TTL.
+- Caching applies to the **client smart-cache path** (`RunViewsWithCacheCheck`, which Explorer grids use) and to `RunQuery`: results are stored in `LocalCacheManager` with the source's TTL (an external read cached *without* a TTL is refused outright — a fail-safe against serving stale data forever).
+- **Plain server-side `RunView`/`RunViews`** — e.g. `new RunView().RunView(...)` from Actions, agents, or scheduled jobs — do **not** currently cache external results; each call reads the remote. (Server-side external `RunView` caching is a planned follow-up.)
 - A `DefaultCacheTTLSeconds` of `0` disables caching for the source.
 
-Set a **generous TTL on warehouse sources** (e.g. Snowflake) where per-query cost matters.
+The TTL primarily benefits Explorer grid reads. If a metered warehouse (e.g. Snowflake) is read in **server-side loops** (agents/jobs), be aware those reads are *not* yet cached — bound cost via the query itself and a least-privilege credential rather than relying on the TTL.
 
 ### Security
 - **Credentials** are resolved and decrypted through `CredentialEngine`; nothing secret lives in code or `ConnectionConfig`.
-- **Row-Level Security is never silently bypassed.** A remote system can't enforce MJ's RLS WHERE clauses, so if RLS would filter a user's rows, the external read is **refused** with a clear error. Users exempt from RLS pass through. Do **not** back an RLS-protected entity with an external data source.
+- **Row-Level Security is never silently bypassed on entity reads.** A remote system can't enforce MJ's RLS WHERE clauses, so if RLS would filter a user's rows, the external `RunView`/`Load` is **refused** with a clear error. Users exempt from RLS pass through. Do **not** back an RLS-protected entity with an external data source.
+  - **Caveat — the Query path:** an external MJ **Query** (`RunQuery`) runs admin-authored SQL and does **not** apply per-entity RLS. Don't expose a Query over an RLS-protected external entity if per-user row scoping is required; rely on a least-privilege source credential.
 - **Filter injection** is guarded: the single-record `Load` primary-key filter single-quote-escapes values. `ExtraFilter` is passed to the remote dialect with the same trust model as a normal MJ `RunView` `ExtraFilter`.
 - **Connectivity tests require auth** (e.g. the Mongo driver uses `listCollections`, not a pre-auth `ping`).
 
