@@ -135,6 +135,22 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   get ShowSearchPreview(): boolean {
       return InstanceConfigEngine.Instance.GetBoolean('Shell.SearchBar.EnablePreview', true);
   }
+  /**
+   * Feature flag: the unified Ctrl+K command palette (omnibar). ON = the header
+   * shows the palette affordance and Ctrl+K / Ctrl+/ open the palette; OFF = the
+   * legacy trio (search composite + app command palette + search popup) behaves
+   * exactly as before. Flip via the 'Shell.Omnibar.Enabled' Instance Config row.
+   */
+  get UseOmnibar(): boolean {
+      return InstanceConfigEngine.Instance.GetBoolean('Shell.Omnibar.Enabled', true);
+  }
+
+  @ViewChild('omnibarPalette') omnibarPalette?: { Open(initialQuery?: string): void };
+
+  /** Header affordance click → open the palette. */
+  OpenOmnibar(initialQuery = ''): void {
+      this.omnibarPalette?.Open(initialQuery);
+  }
 
   // Tab container reference for thumbnail capture
   @ViewChild(TabContainerComponent) tabContainerRef!: TabContainerComponent;
@@ -2468,11 +2484,15 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
     const isCtrlOrCmd = isMac ? event.metaKey : event.ctrlKey;
 
-    // Cmd+/ or Ctrl+/ opens command palette
+    // Cmd+/ or Ctrl+/ opens the palette (omnibar '/' mode when enabled, legacy otherwise)
     if (isCtrlOrCmd && event.key === '/') {
       event.preventDefault();
       event.stopPropagation();
-      this.commandPaletteService.Open();
+      if (this.UseOmnibar) {
+        this.OpenOmnibar('/');
+      } else {
+        this.commandPaletteService.Open();
+      }
     }
   }
 
@@ -2590,6 +2610,10 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
    * Toggle search popup visibility
    */
   toggleSearch(): void {
+    if (this.UseOmnibar) {
+      this.OpenOmnibar();
+      return;
+    }
     this.isSearchOpen = !this.isSearchOpen;
 
     // Focus on search input when opened
@@ -2654,7 +2678,9 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       if (isCtrlOrCmd && event.key === 'k') {
           event.preventDefault();
           event.stopPropagation();
-          if (this.shellSearchComposite?.Focus) {
+          if (this.UseOmnibar) {
+              this.OpenOmnibar();
+          } else if (this.shellSearchComposite?.Focus) {
               this.shellSearchComposite.Focus();
           }
       }

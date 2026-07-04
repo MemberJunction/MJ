@@ -452,12 +452,31 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
    * The shell populates queryParams from the URL, and nav params come from cross-resource linking.
    * Sets state synchronously so child components see values immediately.
    */
+  /**
+   * The omnibar's '@' mode lands here with ?agent=<AgentName>: start a NEW
+   * conversation with the composer pre-addressed to that agent. The mention chip
+   * itself is typed by the user's send; prefilling '@"Name" ' is the plain-text
+   * form the composer's agent-mention provider recognizes.
+   */
+  private applyAgentParam(agentName: string | null | undefined): void {
+    if (!agentName) {
+      return;
+    }
+    const mention = agentName.includes(' ') ? `@"${agentName}" ` : `@${agentName} `;
+    this.isNewUnsavedConversation = true;
+    this.selectedConversationId = null;
+    this.selectedConversation = null;
+    this.pendingMessageToSend = mention;
+    this.cdr.detectChanges();
+  }
+
   private applyConfigurationParams(): void {
     const config = this.Data?.Configuration;
     if (!config) return;
 
     // Check queryParams first (shell populates these from the URL for deep-linking)
     const qp = config['queryParams'] as Record<string, string> | undefined;
+    this.applyAgentParam(qp?.['agent']);
     const conversationId = qp?.['conversationId'] || (config.conversationId as string);
     const artifactId = qp?.['artifactId'] || (config.artifactId as string);
     const versionNumber = qp?.['versionNumber'] ? parseInt(qp['versionNumber'], 10)
@@ -512,6 +531,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
    * was already open instead of the pinned one.
    */
   protected override OnQueryParamsChanged(params: Record<string, string>, _source: 'popstate' | 'deeplink'): void {
+    this.applyAgentParam(params['agent']);
     const realtimeSessionId = params['realtimeSessionId'] || null;
     if (realtimeSessionId) {
       this.pendingRealtimeSessionId = realtimeSessionId;

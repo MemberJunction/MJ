@@ -46,21 +46,31 @@
       </mj-app-nav>
     }
 
-    <!-- Universal Search Bar -->
+    <!-- Universal Search Bar — omnibar palette (flag ON) or legacy composite (flag OFF) -->
     @if (ShowSearchBar) {
-      <div class="shell-search-bar desktop-only">
-        <mj-search-composite
-          #shellSearchComposite
-          Placeholder="Search everything..."
-          [ShowShortcutHint]="true"
-          [EnablePreview]="ShowSearchPreview"
-          [EnableRecent]="true"
-          [MaxPreviewResults]="8"
-          (ResultSelected)="OnSearchResultSelected($event)"
-          (SearchSubmitted)="OnSearchSubmitted($event)"
-          (SeeAllRequested)="OnSeeAllSearch($event)">
-        </mj-search-composite>
-      </div>
+      @if (UseOmnibar) {
+        <div class="shell-search-bar desktop-only">
+          <button type="button" class="shell-omnibar-affordance" (click)="OpenOmnibar()" title="Search everything (Ctrl+K)">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <span>Search everything...</span>
+            <kbd class="shell-omnibar-kbd">Ctrl+K</kbd>
+          </button>
+        </div>
+      } @else {
+        <div class="shell-search-bar desktop-only">
+          <mj-search-composite
+            #shellSearchComposite
+            Placeholder="Search everything..."
+            [ShowShortcutHint]="true"
+            [EnablePreview]="ShowSearchPreview"
+            [EnableRecent]="true"
+            [MaxPreviewResults]="8"
+            (ResultSelected)="OnSearchResultSelected($event)"
+            (SearchSubmitted)="OnSearchSubmitted($event)"
+            (SeeAllRequested)="OnSeeAllSearch($event)">
+          </mj-search-composite>
+        </div>
+      }
     }
     <!-- Spacer -->
     <div class="spacer"></div>
@@ -316,6 +326,9 @@
 
 <!-- Command Palette -->
 <mj-command-palette (AppSelected)="onAppSwitch($event)"></mj-command-palette>
+
+<!-- Unified command palette (Shell.Omnibar.Enabled) -->
+<mj-omnibar-palette #omnibarPalette></mj-omnibar-palette>
 
 <!-- Pin Progress Overlay -->
 @if (PinProgressVisible) {

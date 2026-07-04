@@ -1,0 +1,252 @@
+/* ── Unified command palette (design source: plans/composer-adoption/mockups/omnibar-command-palette.html) ── */
+
+.omnibar-overlay {
+    position: fixed;
+    inset: 0;
+    background: var(--mj-bg-overlay);
+    z-index: 1400;
+}
+
+.omnibar-palette {
+    position: fixed;
+    left: 50%;
+    top: 96px;
+    transform: translateX(-50%);
+    width: min(680px, 92vw);
+    background: var(--mj-bg-surface-elevated);
+    border: 1px solid var(--mj-border-default);
+    border-radius: 16px;
+    box-shadow: var(--mj-shadow-lg, 0 20px 60px color-mix(in srgb, var(--mj-text-primary) 22%, transparent));
+    z-index: 1401;
+    overflow: hidden;
+    animation: ob-pop .13s ease-out;
+}
+
+@keyframes ob-pop {
+    from { opacity: 0; transform: translateX(-50%) scale(.985) translateY(-4px); }
+    to { opacity: 1; transform: translateX(-50%) scale(1); }
+}
+
+.ob-input-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 15px 18px;
+    border-bottom: 1px solid var(--mj-border-subtle);
+}
+
+.ob-lead {
+    color: var(--mj-text-muted);
+    font-size: 15px;
+    width: 18px;
+    text-align: center;
+}
+
+.ob-lead--trigger { color: var(--mj-brand-primary); }
+.ob-lead b { font-family: ui-monospace, monospace; }
+
+.ob-input {
+    flex: 1;
+    border: none;
+    outline: none;
+    background: transparent;
+    font-size: 16px;
+    color: var(--mj-text-primary);
+    font-family: inherit;
+}
+
+.ob-input::placeholder { color: var(--mj-text-muted); }
+
+.ob-mode-badge {
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: .4px;
+    text-transform: uppercase;
+    padding: 3px 9px;
+    border-radius: var(--mj-radius-full, 999px);
+    background: color-mix(in srgb, var(--mj-brand-primary) 14%, transparent);
+    color: var(--mj-brand-primary);
+    white-space: nowrap;
+}
+
+.ob-kbd {
+    font-family: inherit;
+    font-size: 10.5px;
+    font-weight: 600;
+    color: var(--mj-text-muted);
+    background: var(--mj-bg-surface);
+    border: 1px solid var(--mj-border-strong);
+    border-bottom-width: 2px;
+    border-radius: 5px;
+    padding: 1.5px 6px;
+}
+
+.ob-scopes {
+    display: flex;
+    gap: 6px;
+    padding: 9px 18px;
+    border-bottom: 1px solid var(--mj-border-subtle);
+    flex-wrap: wrap;
+}
+
+.ob-scope {
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: var(--mj-radius-full, 999px);
+    border: 1px solid var(--mj-border-default);
+    color: var(--mj-text-secondary);
+    cursor: pointer;
+    background: transparent;
+}
+
+.ob-scope--on {
+    background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
+    border-color: var(--mj-brand-primary);
+    color: var(--mj-brand-primary);
+    font-weight: 600;
+}
+
+.ob-body {
+    max-height: 430px;
+    overflow-y: auto;
+    padding: 6px 0;
+}
+
+.ob-loading,
+.ob-empty {
+    padding: 18px;
+    text-align: center;
+    color: var(--mj-text-muted);
+    font-size: 13px;
+}
+
+.ob-group-label {
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: .6px;
+    text-transform: uppercase;
+    color: var(--mj-text-muted);
+    padding: 10px 18px 5px;
+}
+
+.ob-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 9px 18px;
+    cursor: pointer;
+}
+
+.ob-row--sel {
+    background: color-mix(in srgb, var(--mj-brand-primary) 9%, transparent);
+    box-shadow: inset 3px 0 0 var(--mj-brand-primary);
+}
+
+.ob-ric {
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    flex-shrink: 0;
+    background: var(--mj-bg-surface-sunken);
+    color: var(--mj-text-secondary);
+}
+
+.ob-row--sel .ob-ric {
+    background: color-mix(in srgb, var(--mj-brand-primary) 16%, transparent);
+    color: var(--mj-brand-primary);
+}
+
+.ob-rmain { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+
+.ob-rname {
+    font-size: 13.5px;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--mj-text-primary);
+}
+
+.ob-rsub {
+    font-size: 11.5px;
+    color: var(--mj-text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-top: 1px;
+}
+
+.ob-raux { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+
+.ob-rtype {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: var(--mj-radius-full, 999px);
+    background: var(--mj-bg-surface-sunken);
+    color: var(--mj-text-muted);
+    text-transform: capitalize;
+}
+
+.ob-score {
+    width: 52px;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--mj-bg-surface-sunken);
+    overflow: hidden;
+}
+
+.ob-score i { display: block; height: 100%; background: var(--mj-brand-primary); }
+
+.ob-go {
+    font-size: 11px;
+    color: var(--mj-text-muted);
+    opacity: 0;
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.ob-row--sel .ob-go { opacity: 1; }
+
+.ob-hintbar { display: flex; gap: 8px; padding: 12px 18px; flex-wrap: wrap; }
+
+.ob-hint-chip {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 9px 13px;
+    border: 1px dashed var(--mj-border-strong);
+    border-radius: 10px;
+    cursor: pointer;
+    background: transparent;
+}
+
+.ob-hint-chip:hover {
+    border-color: var(--mj-brand-primary);
+    background: color-mix(in srgb, var(--mj-brand-primary) 6%, transparent);
+}
+
+.ob-hint-chip b { font-family: ui-monospace, monospace; color: var(--mj-brand-primary); font-size: 14px; }
+.ob-hint-chip span { font-size: 12px; color: var(--mj-text-secondary); }
+
+.ob-foot {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 10px 18px;
+    border-top: 1px solid var(--mj-border-subtle);
+    background: var(--mj-bg-surface-card);
+    font-size: 11.5px;
+    color: var(--mj-text-muted);
+}
+
+.ob-k { display: flex; align-items: center; gap: 5px; }
+
+.ob-reg { margin-left: auto; display: flex; align-items: center; gap: 6px; font-size: 10.5px; }
+.ob-reg i { color: var(--mj-brand-primary); }
+.ob-reg code { font-family: ui-monospace, monospace; font-size: 10px; }
