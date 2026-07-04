@@ -57,8 +57,8 @@ export class MJAIPromptRunEntityServer extends MJAIPromptRunEntityExtended {
         
         // Check if CompletedAt was just set (either new record or just changed)
         // For existing records, check if any fields have changed
-        const f = this.Fields.find(f => f.Name === 'CompletedAt');
-        const completedAtChanged = !this.IsSaved || f.Dirty;
+        const f = this.GetFieldByName('CompletedAt');
+        const completedAtChanged = !this.IsSaved || f?.Dirty;
         
         if (!completedAtChanged) {
             return false;
