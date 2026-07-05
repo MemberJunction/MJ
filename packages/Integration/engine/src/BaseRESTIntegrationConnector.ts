@@ -601,7 +601,17 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         // AfterKeyValue, so the engine loops to completion), fetch them CONCURRENTLY up to the engine's
         // MaxConcurrency, and gate each on the engine's adaptive AIMD bucket (RateLimitAcquire/Report).
         const top = resolutions[0];
-        const allParentIDs = this.SortIdsStable(await this.LoadParentIDs(top.parentObjectID, ctx.ContextUser, []));
+        let allParentIDs = this.SortIdsStable(await this.LoadParentIDs(top.parentObjectID, ctx.ContextUser, []));
+        // DISCOVERY-ONLY fallback (§sample-discover per entity): at discovery the DB holds no synced
+        // parent rows yet, so LoadParentIDs returns []. Rather than emit ZERO_PARENTS and leave this
+        // template-var CHILD with zero sampled fields (no widths / PK / custom-column stats), live-sample
+        // a bounded page of the parent — "sync-like fetch, no DB work" — so the child yields
+        // representative records for field-stat accumulation. Gated on ctx.DiscoverySampleParents, which
+        // ONLY DiscoverFieldsViaFetch sets; a real sync never takes this branch, so ZERO_PARENTS stays
+        // correct on the sync path (an unsynced parent still means "sync the parent first").
+        if (allParentIDs.length === 0 && ctx.DiscoverySampleParents) {
+            allParentIDs = this.SortIdsStable(await this.SampleParentIDsForDiscovery(top.parentObjectID, ctx));
+        }
         if (allParentIDs.length === 0) {
             const parentObj = IntegrationEngineBase.Instance.GetIntegrationObjectByID(top.parentObjectID);
             return { Records: [], HasMore: false, Warnings: [{
@@ -645,6 +655,67 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
      */
     protected TemplateVarParentBatchSize(): number {
         return 10;
+    }
+
+    /**
+     * DISCOVERY-ONLY (§sample-discover per entity): how many parent records to live-sample so a
+     * template-var child can be field-sampled at discovery. Small on purpose — a few parents are enough
+     * to yield representative child records for width/PK/custom-column stats without walking the whole
+     * parent set. Override higher only if a vendor's child shape varies materially by parent.
+     */
+    protected DiscoverySampleParentCount(): number {
+        return 3;
+    }
+
+    /**
+     * DISCOVERY-ONLY: recursion cap for multi-level template chains (a parent that is itself a
+     * template-var child). Bounds the parent-of-parent live-sampling so a malformed metadata cycle
+     * cannot loop unboundedly. The per-call PARENT_CYCLE guard already stops a single-object cycle;
+     * this bounds the cross-object discovery recursion.
+     */
+    protected DiscoverySampleMaxDepth(): number {
+        return 4;
+    }
+
+    /**
+     * DISCOVERY-ONLY fallback used by {@link FetchWithTemplateVars} when no parent rows are synced yet:
+     * live-fetch a bounded page of the parent object and return its primary-key values, so a template-var
+     * CHILD can be sampled for field stats at discovery ("sync-like fetch, no DB work"). Returns the same
+     * kind of value {@link LoadParentIDs} would (the parent PK column value used to substitute the child's
+     * template var). NEVER invoked on the sync path — the caller gates it on `ctx.DiscoverySampleParents`.
+     */
+    private async SampleParentIDsForDiscovery(parentObjectID: string, ctx: FetchContext): Promise<string[]> {
+        const depth = ctx.DiscoverySampleDepth ?? 0;
+        if (depth >= this.DiscoverySampleMaxDepth()) return [];
+        const parentObj = IntegrationEngineBase.Instance.GetIntegrationObjectByID(parentObjectID);
+        if (!parentObj) return [];
+        const parentFields = this.GetCachedFields(parentObj.ID);
+        const pkField = parentFields.find(fld => fld.IsPrimaryKey);
+        if (!pkField) return [];   // no PK → nothing to substitute into the child template var
+
+        const cap = Math.max(1, this.DiscoverySampleParentCount());
+        // A fresh full-fetch context for the parent: bounded, discovery-flagged (so the parent, if it is
+        // ITSELF a template-var child, recurses one level deeper), and reset of all pagination/keyset state.
+        const parentCtx: FetchContext = {
+            ...ctx,
+            ObjectName: parentObj.Name,
+            WatermarkValue: null,
+            BatchSize: Math.min(ctx.BatchSize, cap),
+            CurrentPage: undefined,
+            CurrentOffset: undefined,
+            CurrentCursor: undefined,
+            AfterKeyValue: null,
+            DiscoverySampleParents: true,
+            DiscoverySampleDepth: depth + 1,
+        };
+        const batch = await this.FetchChanges(parentCtx);
+        const ids: string[] = [];
+        for (const rec of batch.Records) {
+            const v = rec.Fields?.[pkField.Name];
+            if (v != null && String(v) !== '') ids.push(String(v));
+            if (ids.length >= cap) break;
+        }
+        return ids;
     }
 
     /** Stable total order over ID strings — numeric when ALL are integer-like, else lexical. */

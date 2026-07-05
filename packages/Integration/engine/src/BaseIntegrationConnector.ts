@@ -150,6 +150,21 @@ export interface FetchContext {
     RateLimitAcquire?: () => Promise<void>;
     RateLimitReport?: (throttledErr?: unknown) => void;
     MaxConcurrency?: number;
+    /**
+     * DISCOVERY-ONLY flag (§sample-discover per entity). Set by `DiscoverFieldsViaFetch` so that a
+     * template-var CHILD sampled at discovery — when the DB holds no synced parent rows yet — can
+     * live-sample a bounded page of its parent instead of yielding zero records (which would leave the
+     * child with no sampled field stats). A real sync NEVER sets this, so the `ZERO_PARENTS` guard is
+     * unchanged on the sync path. Opt-in + back-compat: undefined ≡ current behavior.
+     */
+    DiscoverySampleParents?: boolean;
+    /**
+     * Recursion depth of the discovery parent-sampling fallback, so a multi-level template chain
+     * (`/orgs/{OrgId}/profiles/{ProfileId}/events`) that samples parents-of-parents cannot loop
+     * unboundedly. Incremented per level; capped by `DiscoverySampleMaxDepth()`. Internal to the
+     * discovery fallback — callers leave it undefined (≡ 0).
+     */
+    DiscoverySampleDepth?: number;
 }
 
 /**
@@ -652,6 +667,7 @@ export abstract class BaseIntegrationConnector {
                 WatermarkValue: null,   // FULL fetch — discovery wants breadth, not the incremental delta
                 BatchSize: batchSize,
                 ContextUser: contextUser,
+                DiscoverySampleParents: true,   // §sample-discover: let a template-var child live-sample its parent (no synced rows exist at discovery)
             };
             let yielded = 0;
             for (;;) {
