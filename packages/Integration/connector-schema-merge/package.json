@@ -1,0 +1,32 @@
+{
+  "name": "@memberjunction/connector-schema-merge",
+  "type": "module",
+  "version": "5.43.0",
+  "description": "Never-shrink field-schema union for integration connectors. mergeDeclaredWithSampledFields augments a connector's DECLARED (docs/spec) field set with fields observed by live SAMPLING (DiscoverFieldsViaFetch) — declared attributes stay authoritative, sampled fields fill gaps + add columns the docs didn't declare, and capacity attributes (MaxLength/Precision/Scale) take the max so a column is never sized smaller than either source. Connector-agnostic, dependency-light.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@memberjunction/integration-engine": "5.43.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "tsc-alias": "^1.8.16",
+    "vitest": "^4.0.18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  },
+  "license": "ISC",
+  "publishConfig": {
+    "access": "public"
+  }
+}

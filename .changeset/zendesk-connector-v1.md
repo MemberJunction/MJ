@@ -1,0 +1,5 @@
+---
+"@memberjunction/integration-connectors": minor
+---
+
+Add the Zendesk connector — a REST/JSON `BaseRESTIntegrationConnector` for the Zendesk Support API (`api/v2`, per-tenant `https://{subdomain}.zendesk.com`, Basic email/token auth) across 99 objects (tickets, users, organizations, help center, community, custom objects + parent-templated children, talk/chat/routing, audit/tracking). Cursor + offset pagination, Incremental Export watermark sync, read + write (create/update/delete), full-record pass-through, and a config-driven base-URL override for testability. Wires the never-shrink sample-union in `IntrospectSchema` (`@memberjunction/connector-schema-merge`) so tenant custom columns are captured, and bounds every string column with an inferred length. Verified with a full-lifecycle GENUINE-GREEN-MOCK e2e (2 consecutive all-green runs: forward sync + coverage over every object, delta CRUD, idempotent, custom-column capture, pagination, watermark/content-hash, bidirectional writes) and 34 unit tests. `custom_objects` idempotency is predicated on framework `MJ#3047` (reserved-word-PK content-hash bracket fix).

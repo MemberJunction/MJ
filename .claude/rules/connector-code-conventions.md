@@ -193,6 +193,37 @@ The universal sync engine consumes a set of OPTIONAL connector hooks on `BaseInt
 
 None of these gate shipping a connector — they're the difference between a connector that technically works and one that syncs cleanly under real volume on both SQL Server and Postgres targets.
 
+## Sample-union field enrichment (REQUIRED — the connector standard)
+
+Declared (docs/spec) metadata is authoritative but incomplete: it misses a tenant's **custom / undeclared columns** (custom ticket/user/organization fields, custom-object attributes, per-account extensions). The connector standard closes that gap by UNIONing the declared field set with what a live read actually returns — **never-shrink, declared-wins, capacities widened** — via `mergeDeclaredWithSampledFields` from **`@memberjunction/connector-schema-merge`** (add the dep).
+
+**Wire it in `IntrospectSchema`** — a fresh override if the connector has none, or augment its existing one before `return`:
+
+```typescript
+import { mergeDeclaredWithSampledFields } from '@memberjunction/connector-schema-merge';
+
+public override async IntrospectSchema(
+    companyIntegration: MJCompanyIntegrationEntity,
+    contextUser: UserInfo,
+): Promise<SourceSchemaInfo> {
+    const info = await super.IntrospectSchema(companyIntegration, contextUser);
+    await Promise.all(info.Objects.map(async (obj) => {
+        try {
+            const sampled = await this.DiscoverFieldsViaFetch(companyIntegration, obj.ExternalName, contextUser);
+            obj.Fields = mergeDeclaredWithSampledFields(obj.Fields, sampled); // SourceFieldInfo[] × ExternalFieldSchema[]
+        } catch { /* best-effort — a sample failure leaves the declared fields as-is */ }
+    }));
+    return info;
+}
+```
+
+Rules that make this a **standard**, not a per-connector flourish:
+- **Override `IntrospectSchema`, NEVER `DiscoverFields`.** `DiscoverFieldsViaFetch` falls back to `DiscoverFields` on a read failure — overriding `DiscoverFields` to call `DiscoverFieldsViaFetch` is an INFINITE RECURSION. Always wire at the `IntrospectSchema` layer.
+- **The two inputs are different engine shapes on purpose.** The declared side is the persisted `SourceFieldInfo` (`SourceType`) that `IntrospectSchema` returns; the sampled side is the `ExternalFieldSchema` (`DataType`) that `DiscoverFieldsViaFetch` returns. `mergeDeclaredWithSampledFields` maps sampled → `SourceFieldInfo` internally and returns one `SourceFieldInfo[]` — pass both directly, do NOT hand-map.
+- **Connector-agnostic.** No connector-specific field logic in the wiring — the same eight lines drop into every connector. No base-class change, no re-parenting; the helper is `max(declared, sampled)` never-shrink.
+- **Best-effort + parallel.** A per-object sample failure must leave that object's declared fields untouched (the `try/catch` per object). Discovery budgets are already bounded by `DiscoverFieldsViaFetch` (time/record caps).
+- **Skip ONLY** when the connector is genuinely schema-less (a file-feed with no field shape) or already self-sampling in its own discovery — otherwise the wiring is required so a tenant's customs reach the schema.
+
 ## Connector creation pipeline (D1)
 
 The canonical flow connector → integration is `IntegrationConnectorCreationPipeline` from `@memberjunction/integration-engine`:
