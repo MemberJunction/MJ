@@ -697,11 +697,14 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
             ...ctx,
             ObjectName: parentObj.Name,
             WatermarkValue: null,
-            // inherits ctx.BatchSize (the one consumer-decided discovery sample size) via the spread above
-            CurrentPage: undefined,
-            CurrentOffset: undefined,
-            CurrentCursor: undefined,
-            AfterKeyValue: null,
+            // inherits ctx.BatchSize (the one consumer-decided discovery sample size) via the spread above.
+            // RESUME the parent stream from where the child left off (ctx.AfterKeyValue = the last parent
+            // this child already walked), so successive DiscoverFieldsViaFetch calls pull the NEXT page of
+            // parents — never re-fetch page one, never bulk. Unlike SYNC (which walks ALL parents via the
+            // DAG), discovery is RECORD-CONSTRAINED: the child's readPathStream stops at its own T records,
+            // so we pull only as many parent pages as the child needs — a million-row parent is streamed
+            // and cut off early. (A page-based parent with no stable key advances via its own pagination.)
+            AfterKeyValue: ctx.AfterKeyValue ?? null,
             DiscoverySampleParents: true,
             DiscoverySampleDepth: depth + 1,
         };
