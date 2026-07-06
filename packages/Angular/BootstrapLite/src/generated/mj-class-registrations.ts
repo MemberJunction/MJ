@@ -26,7 +26,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (401 classes)
+// @memberjunction/core-entities (403 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -249,6 +249,8 @@ import {
     MJExperimentSessionEntity,
     MJExperimentSessionIterationEntity,
     MJExplorerNavigationItemEntity,
+    MJExternalDataSourceEntity,
+    MJExternalDataSourceTypeEntity,
     MJFileCategoryEntity,
     MJFileEntity,
     MJFileEntityRecordLinkEntity,
@@ -808,6 +810,8 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJExperimentSessionEntity,
     MJExperimentSessionIterationEntity,
     MJExplorerNavigationItemEntity,
+    MJExternalDataSourceEntity,
+    MJExternalDataSourceTypeEntity,
     MJFileCategoryEntity,
     MJFileEntity,
     MJFileEntityRecordLinkEntity,
@@ -1081,7 +1085,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 495;
+export const CLASS_REGISTRATIONS_COUNT = 497;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
