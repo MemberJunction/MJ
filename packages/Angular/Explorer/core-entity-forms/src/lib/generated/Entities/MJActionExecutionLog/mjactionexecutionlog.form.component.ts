@@ -20,7 +20,8 @@ export class MJActionExecutionLogFormComponent extends BaseFormComponent {
             { sectionKey: 'associatedEntities', sectionName: 'Associated Entities', isExpanded: true },
             { sectionKey: 'executionDetails', sectionName: 'Execution Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJProcessRunDetails', sectionName: 'Process Run Details', isExpanded: false }
+            { sectionKey: 'mJProcessRunDetails', sectionName: 'Process Run Details', isExpanded: false },
+            { sectionKey: 'mJUserRoutineRuns', sectionName: 'User Routine Runs', isExpanded: false }
         ]);
     }
 }

@@ -1076,6 +1076,68 @@ import {
     AutotagWebsite,
 } from '@memberjunction/content-autotagging';
 
+// @memberjunction/database-designer-core (4 classes)
+import {
+    DatabaseDesignerAgent,
+    DatabaseDesignerSchemaBuilder,
+    DatabaseDesignerSchemaDesigner,
+    DatabaseDesignerSchemaValidator,
+} from '@memberjunction/database-designer-core';
+
+// @memberjunction/database-designer-actions (5 classes)
+import {
+    CreateEntityAction,
+    DescribeEntityAction,
+    ListMyEntitiesAction,
+    ModifyEntityAction,
+    ValidateEntitySchemaAction,
+} from '@memberjunction/database-designer-actions';
+
+// @memberjunction/messaging-adapters (2 classes)
+import {
+    SlackMessagingExtension,
+    TeamsMessagingExtension,
+} from '@memberjunction/messaging-adapters';
+
+// @memberjunction/record-set-processor (5 classes)
+import {
+    RecordProcessCancelRunServerOperation,
+    RecordProcessGetRunStatusServerOperation,
+    RecordProcessPauseRunServerOperation,
+    RecordProcessResumeRunServerOperation,
+    RecordProcessRunNowServerOperation,
+} from '@memberjunction/record-set-processor';
+
+// @memberjunction/predictive-studio (16 classes)
+import {
+    MLModelInferenceProcessor,
+    MLModelScoreEnricher,
+    PredictiveStudioControlExperimentSessionServerOperation,
+    PredictiveStudioCreateScoringProcessServerOperation,
+    PredictiveStudioModelDevAgent,
+    PredictiveStudioPipelineBuilderAgent,
+    PredictiveStudioPromoteModelAction,
+    PredictiveStudioPromoteModelServerOperation,
+    PredictiveStudioRunExperimentAction,
+    PredictiveStudioRunFeaturePipelineServerOperation,
+    PredictiveStudioScheduleModelScoringAction,
+    PredictiveStudioScoreRecordSetAction,
+    PredictiveStudioScoreRecordSetServerOperation,
+    PredictiveStudioStartExperimentSessionServerOperation,
+    PredictiveStudioTrainModelAction,
+    PredictiveStudioTrainModelServerOperation,
+} from '@memberjunction/predictive-studio';
+
+// @memberjunction/scheduling-engine (6 classes)
+import {
+    ActionScheduledJobDriver,
+    AgentRunSweepScheduledJobDriver,
+    AgentScheduledJobDriver,
+    IntegrationDiscoveryScheduledJobDriver,
+    IntegrationSyncScheduledJobDriver,
+    RecordProcessScheduledJobDriver,
+} from '@memberjunction/scheduling-engine';
+
 // @memberjunction/core-entities-server (32 classes)
 import {
     MJAIAgentCoAgentEntityServer,
@@ -1120,38 +1182,6 @@ import {
     SQLServerCodeGenProvider,
     TimelineRelatedEntityGenerator,
 } from '@memberjunction/codegen-lib';
-
-// @memberjunction/database-designer-core (4 classes)
-import {
-    DatabaseDesignerAgent,
-    DatabaseDesignerSchemaBuilder,
-    DatabaseDesignerSchemaDesigner,
-    DatabaseDesignerSchemaValidator,
-} from '@memberjunction/database-designer-core';
-
-// @memberjunction/database-designer-actions (5 classes)
-import {
-    CreateEntityAction,
-    DescribeEntityAction,
-    ListMyEntitiesAction,
-    ModifyEntityAction,
-    ValidateEntitySchemaAction,
-} from '@memberjunction/database-designer-actions';
-
-// @memberjunction/messaging-adapters (2 classes)
-import {
-    SlackMessagingExtension,
-    TeamsMessagingExtension,
-} from '@memberjunction/messaging-adapters';
-
-// @memberjunction/record-set-processor (5 classes)
-import {
-    RecordProcessCancelRunServerOperation,
-    RecordProcessGetRunStatusServerOperation,
-    RecordProcessPauseRunServerOperation,
-    RecordProcessResumeRunServerOperation,
-    RecordProcessRunNowServerOperation,
-} from '@memberjunction/record-set-processor';
 
 // @memberjunction/core-actions (142 classes)
 import {
@@ -1303,36 +1333,6 @@ import {
 import {
     AutotagAndVectorizeContentAction,
 } from '@memberjunction/actions-content-autotag';
-
-// @memberjunction/predictive-studio (16 classes)
-import {
-    MLModelInferenceProcessor,
-    MLModelScoreEnricher,
-    PredictiveStudioControlExperimentSessionServerOperation,
-    PredictiveStudioCreateScoringProcessServerOperation,
-    PredictiveStudioModelDevAgent,
-    PredictiveStudioPipelineBuilderAgent,
-    PredictiveStudioPromoteModelAction,
-    PredictiveStudioPromoteModelServerOperation,
-    PredictiveStudioRunExperimentAction,
-    PredictiveStudioRunFeaturePipelineServerOperation,
-    PredictiveStudioScheduleModelScoringAction,
-    PredictiveStudioScoreRecordSetAction,
-    PredictiveStudioScoreRecordSetServerOperation,
-    PredictiveStudioStartExperimentSessionServerOperation,
-    PredictiveStudioTrainModelAction,
-    PredictiveStudioTrainModelServerOperation,
-} from '@memberjunction/predictive-studio';
-
-// @memberjunction/scheduling-engine (6 classes)
-import {
-    ActionScheduledJobDriver,
-    AgentRunSweepScheduledJobDriver,
-    AgentScheduledJobDriver,
-    IntegrationDiscoveryScheduledJobDriver,
-    IntegrationSyncScheduledJobDriver,
-    RecordProcessScheduledJobDriver,
-} from '@memberjunction/scheduling-engine';
 
 // @memberjunction/testing-engine (1 classes)
 import {
@@ -2092,6 +2092,44 @@ export const CLASS_REGISTRATIONS: any[] = [
     AutotagLocalFileSystem,
     AutotagRSSFeed,
     AutotagWebsite,
+    DatabaseDesignerAgent,
+    DatabaseDesignerSchemaBuilder,
+    DatabaseDesignerSchemaDesigner,
+    DatabaseDesignerSchemaValidator,
+    CreateEntityAction,
+    DescribeEntityAction,
+    ListMyEntitiesAction,
+    ModifyEntityAction,
+    ValidateEntitySchemaAction,
+    SlackMessagingExtension,
+    TeamsMessagingExtension,
+    RecordProcessCancelRunServerOperation,
+    RecordProcessGetRunStatusServerOperation,
+    RecordProcessPauseRunServerOperation,
+    RecordProcessResumeRunServerOperation,
+    RecordProcessRunNowServerOperation,
+    MLModelInferenceProcessor,
+    MLModelScoreEnricher,
+    PredictiveStudioControlExperimentSessionServerOperation,
+    PredictiveStudioCreateScoringProcessServerOperation,
+    PredictiveStudioModelDevAgent,
+    PredictiveStudioPipelineBuilderAgent,
+    PredictiveStudioPromoteModelAction,
+    PredictiveStudioPromoteModelServerOperation,
+    PredictiveStudioRunExperimentAction,
+    PredictiveStudioRunFeaturePipelineServerOperation,
+    PredictiveStudioScheduleModelScoringAction,
+    PredictiveStudioScoreRecordSetAction,
+    PredictiveStudioScoreRecordSetServerOperation,
+    PredictiveStudioStartExperimentSessionServerOperation,
+    PredictiveStudioTrainModelAction,
+    PredictiveStudioTrainModelServerOperation,
+    ActionScheduledJobDriver,
+    AgentRunSweepScheduledJobDriver,
+    AgentScheduledJobDriver,
+    IntegrationDiscoveryScheduledJobDriver,
+    IntegrationSyncScheduledJobDriver,
+    RecordProcessScheduledJobDriver,
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
     MJAIAgentExampleEntityServer,
@@ -2129,22 +2167,6 @@ export const CLASS_REGISTRATIONS: any[] = [
     PostgreSQLCodeGenProvider,
     SQLServerCodeGenProvider,
     TimelineRelatedEntityGenerator,
-    DatabaseDesignerAgent,
-    DatabaseDesignerSchemaBuilder,
-    DatabaseDesignerSchemaDesigner,
-    DatabaseDesignerSchemaValidator,
-    CreateEntityAction,
-    DescribeEntityAction,
-    ListMyEntitiesAction,
-    ModifyEntityAction,
-    ValidateEntitySchemaAction,
-    SlackMessagingExtension,
-    TeamsMessagingExtension,
-    RecordProcessCancelRunServerOperation,
-    RecordProcessGetRunStatusServerOperation,
-    RecordProcessPauseRunServerOperation,
-    RecordProcessResumeRunServerOperation,
-    RecordProcessRunNowServerOperation,
     APIRateLimiterAction,
     ActionSmithAgent,
     ActivateInteractiveFormVersionAction,
@@ -2288,28 +2310,6 @@ export const CLASS_REGISTRATIONS: any[] = [
     WriteEntityFieldsAction,
     XMLParserAction,
     AutotagAndVectorizeContentAction,
-    MLModelInferenceProcessor,
-    MLModelScoreEnricher,
-    PredictiveStudioControlExperimentSessionServerOperation,
-    PredictiveStudioCreateScoringProcessServerOperation,
-    PredictiveStudioModelDevAgent,
-    PredictiveStudioPipelineBuilderAgent,
-    PredictiveStudioPromoteModelAction,
-    PredictiveStudioPromoteModelServerOperation,
-    PredictiveStudioRunExperimentAction,
-    PredictiveStudioRunFeaturePipelineServerOperation,
-    PredictiveStudioScheduleModelScoringAction,
-    PredictiveStudioScoreRecordSetAction,
-    PredictiveStudioScoreRecordSetServerOperation,
-    PredictiveStudioStartExperimentSessionServerOperation,
-    PredictiveStudioTrainModelAction,
-    PredictiveStudioTrainModelServerOperation,
-    ActionScheduledJobDriver,
-    AgentRunSweepScheduledJobDriver,
-    AgentScheduledJobDriver,
-    IntegrationDiscoveryScheduledJobDriver,
-    IntegrationSyncScheduledJobDriver,
-    RecordProcessScheduledJobDriver,
     AgentEvalDriver,
     ComputerUseAction,
     ComputerUseTestDriver,
@@ -2410,16 +2410,16 @@ export const CLASS_REGISTRATIONS_PACKAGES = [
     '@memberjunction/ai-agent-manager',
     '@memberjunction/ai-form-builder',
     '@memberjunction/content-autotagging',
-    '@memberjunction/core-entities-server',
-    '@memberjunction/codegen-lib',
     '@memberjunction/database-designer-core',
     '@memberjunction/database-designer-actions',
     '@memberjunction/messaging-adapters',
     '@memberjunction/record-set-processor',
-    '@memberjunction/core-actions',
-    '@memberjunction/actions-content-autotag',
     '@memberjunction/predictive-studio',
     '@memberjunction/scheduling-engine',
+    '@memberjunction/core-entities-server',
+    '@memberjunction/codegen-lib',
+    '@memberjunction/core-actions',
+    '@memberjunction/actions-content-autotag',
     '@memberjunction/testing-engine',
     '@memberjunction/computer-use-engine',
     '@memberjunction/server',

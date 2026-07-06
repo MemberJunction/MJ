@@ -7,4 +7,5 @@ export * from './BaseScheduledJob';
 export * from './ScheduledJobEngine';
 export * from './CronExpressionHelper';
 export * from './NotificationManager';
+export * from './UserRoutineProcessor';
 export * from './drivers';

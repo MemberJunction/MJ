@@ -1,0 +1,20 @@
+[
+  {
+    "entity": "MJ: Scheduled Job Types",
+    "fields": {
+      "Name": "User Routine Dispatcher",
+      "Description": "Sweeps MJ: User Routines for due routines (Status=Active, inside the StartAt/EndAt activation window, NextRunAt passed) and executes each one's target — Agent, Action, or Prompt — with bounded concurrency and per-routine error isolation. Each execution is recorded in MJ: User Routine Runs (telemetry lives on the linked Agent Run / Prompt Run / Action Execution Log), the routine's LastRunAt/LastRunStatus/LastResultHash are updated, and the owner + recipients are notified per the routine's NotifyCondition (Always / OnSuccess / OnFailure / OnChange via result hashing) through the MJ template + notification stack. Routines with a NULL NextRunAt are seeded (next occurrence computed) without running. Optional Configuration: { \"MaxConcurrentRoutines\": <number> } (default 3).",
+      "DriverClass": "UserRoutineDispatcherDriver",
+      "DomainRunEntity": "MJ: User Routine Runs",
+      "DomainRunEntityFKey": null,
+      "NotificationsAvailable": true
+    },
+    "primaryKey": {
+      "ID": "C15849E1-7537-4C03-B5B1-003E7103D789"
+    },
+    "sync": {
+      "lastModified": "2026-07-02T23:25:39.795Z",
+      "checksum": "ff9bdd07cc9fc541dcc1ffdd9304fd7a22f7fcde2683d2a1355cd396b5428aa3"
+    }
+  }
+]

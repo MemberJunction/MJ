@@ -1,0 +1,53 @@
+{
+  "expo": {
+    "name": "MJ Mobile",
+    "slug": "mj-mobile",
+    "scheme": "mjmobile",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "bundleIdentifier": "org.memberjunction.mobile",
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "MJ Mobile uses your microphone for voice conversations with agents.",
+        "NSCameraUsageDescription": "MJ Mobile uses the camera to capture photos to attach to conversations and records.",
+        "NSFaceIDUsageDescription": "MJ Mobile uses Face ID to unlock the app.",
+        "NSPhotoLibraryUsageDescription": "MJ Mobile accesses your photo library to attach images to conversations and records.",
+        "NSPhotoLibraryAddUsageDescription": "MJ Mobile saves images you export to your photo library."
+      }
+    },
+    "android": {
+      "package": "org.memberjunction.mobile",
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.CAMERA",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.READ_MEDIA_IMAGES"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-audio",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "MJ Mobile accesses your photos to attach images to conversations and records.",
+          "cameraPermission": "MJ Mobile uses the camera to capture photos to attach to conversations and records."
+        }
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "MJ Mobile uses Face ID to unlock the app."
+        }
+      ],
+      "expo-notifications"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
