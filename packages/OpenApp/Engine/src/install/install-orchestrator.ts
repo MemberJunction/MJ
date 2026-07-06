@@ -290,7 +290,7 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
     await SetAppStatus(context.ContextUser, createdAppId!, finalStatus);
     if (finalStatus !== 'Active') {
       // Array-agnostic by AppName — sweeps both the server and client arrays.
-      ToggleServerDynamicPackages(context.RepoRoot, manifest.name, false);
+      ToggleServerDynamicPackages(context.RepoRoot, manifest.name, false, context.ServerPackagePath);
     }
 
     // Step 16: Execute hooks
@@ -825,8 +825,8 @@ export async function RemoveApp(options: RemoveOptions, context: OrchestratorCon
     });
 
     await Promise.all([
-      Promise.resolve(RemoveServerDynamicPackages(context.RepoRoot, options.AppName)),
-      Promise.resolve(manifest.schema ? RemoveEntityPackageMapping(context.RepoRoot, manifest.schema.name) : undefined),
+      Promise.resolve(RemoveServerDynamicPackages(context.RepoRoot, options.AppName, context.ServerPackagePath)),
+      Promise.resolve(manifest.schema ? RemoveEntityPackageMapping(context.RepoRoot, manifest.schema.name, context.ServerPackagePath) : undefined),
       Promise.resolve(HandleAngularPrebundleExcludeRemoval(manifest, otherManifests, context)),
       Promise.resolve(
         RemoveAppPackages({
@@ -912,7 +912,7 @@ export async function DisableApp(appName: string, context: OrchestratorContext):
     return BuildFailureResult('Install', appName, '', 'Config', startTime, `App '${appName}' is not installed`);
   }
 
-  const toggle = ToggleServerDynamicPackages(context.RepoRoot, appName, false);
+  const toggle = ToggleServerDynamicPackages(context.RepoRoot, appName, false, context.ServerPackagePath);
   if (!toggle.Success) {
     // Don't flip the DB status when the config edit failed — that desyncs the DB
     // from mj.config.cjs and would report success on a half-applied disable (B25).
@@ -940,7 +940,7 @@ export async function EnableApp(appName: string, context: OrchestratorContext): 
     return BuildFailureResult('Install', appName, '', 'Config', startTime, `App '${appName}' is not installed`);
   }
 
-  const toggle = ToggleServerDynamicPackages(context.RepoRoot, appName, true);
+  const toggle = ToggleServerDynamicPackages(context.RepoRoot, appName, true, context.ServerPackagePath);
   if (!toggle.Success) {
     return BuildFailureResult('Install', appName, app.Version, 'Config', startTime, toggle.ErrorMessage ?? 'Failed to update dynamicPackages.server in mj.config.cjs');
   }
@@ -1413,7 +1413,7 @@ async function HandlePackageInstallation(
 function HandleServerConfig(manifest: MJAppManifest, context: OrchestratorContext): InternalResult {
   context.Callbacks?.OnProgress?.('Config', 'Updating server config...');
 
-  const dynamicResult = AddServerDynamicPackages(context.RepoRoot, manifest);
+  const dynamicResult = AddServerDynamicPackages(context.RepoRoot, manifest, context.ServerPackagePath);
   if (!dynamicResult.Success) {
     return { Success: false, ErrorMessage: dynamicResult.ErrorMessage };
   }
@@ -1423,13 +1423,13 @@ function HandleServerConfig(manifest: MJAppManifest, context: OrchestratorContex
   // side-effect import in the class-registrations manifest MJExplorer already imports —
   // so the client load path lives in distributed packages, not a bespoke MJExplorer file.
   // Runs on both install and upgrade (both call HandleServerConfig); idempotent per entry.
-  const clientResult = AddClientDynamicPackages(context.RepoRoot, manifest);
+  const clientResult = AddClientDynamicPackages(context.RepoRoot, manifest, context.ServerPackagePath);
   if (!clientResult.Success) {
     return { Success: false, ErrorMessage: clientResult.ErrorMessage };
   }
 
   // Add entityPackageName mapping so CodeGen resolves per-schema imports correctly
-  const entityResult = AddEntityPackageMapping(context.RepoRoot, manifest);
+  const entityResult = AddEntityPackageMapping(context.RepoRoot, manifest, context.ServerPackagePath);
   if (!entityResult.Success) {
     return { Success: false, ErrorMessage: entityResult.ErrorMessage };
   }
