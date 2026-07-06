@@ -711,10 +711,9 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         // The parent's addressing-key field is NOT presupposed. It is resolved from, in order:
         // (1) METADATA — a declared PK, if the parent already declares one;
         // (2) DISCOVERY-VIA-FETCH — the value-statistic PK classifier run over the rows FETCH just
-        //     returned (the same pick-key-from-stats the engine uses everywhere);
-        // (3) a conventional identity name AS A FAIR FALLBACK — but only when such a field is ACTUALLY
-        //     present in the fetched data (never an assumed name for a field that isn't there).
-        // If none resolves, the parent is genuinely keyless → adjourn (return []).
+        //     returned (the same pick-key-from-stats the engine uses everywhere).
+        // If neither yields a key, the parent is genuinely keyless → adjourn (return []). No field name
+        // is ever assumed.
         const keyField = await this.ResolveParentKeyField(parentObj, batch.Records);
         if (!keyField) return [];
 
