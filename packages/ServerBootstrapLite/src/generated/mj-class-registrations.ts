@@ -182,7 +182,7 @@ import {
     ZhipuLLM,
 } from '@memberjunction/ai-zhipu';
 
-// @memberjunction/core-entities (401 classes)
+// @memberjunction/core-entities (404 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -345,6 +345,7 @@ import {
     MJConversationDetailEntityExtended,
     MJConversationDetailRatingEntity,
     MJConversationEntity,
+    MJConversationWidgetInstanceEntity,
     MJCountryEntity,
     MJCredentialCategoryEntity,
     MJCredentialEntity,
@@ -405,6 +406,8 @@ import {
     MJExperimentSessionEntity,
     MJExperimentSessionIterationEntity,
     MJExplorerNavigationItemEntity,
+    MJExternalDataSourceEntity,
+    MJExternalDataSourceTypeEntity,
     MJFileCategoryEntity,
     MJFileEntity,
     MJFileEntityRecordLinkEntity,
@@ -1352,6 +1355,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJConversationDetailEntityExtended,
     MJConversationDetailRatingEntity,
     MJConversationEntity,
+    MJConversationWidgetInstanceEntity,
     MJCountryEntity,
     MJCredentialCategoryEntity,
     MJCredentialEntity,
@@ -1412,6 +1416,8 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJExperimentSessionEntity,
     MJExperimentSessionIterationEntity,
     MJExplorerNavigationItemEntity,
+    MJExternalDataSourceEntity,
+    MJExternalDataSourceTypeEntity,
     MJFileCategoryEntity,
     MJFileEntity,
     MJFileEntityRecordLinkEntity,
@@ -2017,7 +2023,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 867;
+export const CLASS_REGISTRATIONS_COUNT = 870;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

@@ -459,6 +459,31 @@
         }
     </mj-collapsible-panel>
 
+    <!-- Conversation Widget Instances Section -->
+    <mj-collapsible-panel
+        SectionKey="mJConversationWidgetInstances"
+        SectionName="Conversation Widget Instances"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJConversationWidgetInstances')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Conversation Widget Instances','GuestRoleID')"
+                [NewRecordValues]="NewRecordValues('MJ: Conversation Widget Instances')"
+                [AllowLoad]="IsSectionExpanded('mJConversationWidgetInstances')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJConversationWidgetInstances', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-related" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
 </mj-record-form-container>
         
