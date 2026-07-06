@@ -689,13 +689,11 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         if (depth >= this.DiscoverySampleMaxDepth()) return [];
         const parentObj = IntegrationEngineBase.Instance.GetIntegrationObjectByID(parentObjectID);
         if (!parentObj) return [];
-        const parentFields = this.GetCachedFields(parentObj.ID);
-        const pkField = parentFields.find(fld => fld.IsPrimaryKey);
-        if (!pkField) return [];   // no PK → nothing to substitute into the child template var
 
         const cap = Math.max(1, this.DiscoverySampleParentCount());
-        // A fresh full-fetch context for the parent: bounded, discovery-flagged (so the parent, if it is
-        // ITSELF a template-var child, recurses one level deeper), and reset of all pagination/keyset state.
+        // FETCH the parent's OWN records first — recursively: if the parent is ITSELF a template-var
+        // child, FetchChanges resolves ITS parents the same way (depth-capped). No SQL here (it is an
+        // HTTP fetch), so this is dialect-agnostic — identical on SQL Server and Postgres.
         const parentCtx: FetchContext = {
             ...ctx,
             ObjectName: parentObj.Name,
@@ -709,13 +707,51 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
             DiscoverySampleDepth: depth + 1,
         };
         const batch = await this.FetchChanges(parentCtx);
+        if (batch.Records.length === 0) return [];
+
+        // The parent's addressing-key field is NOT presupposed. It is resolved from, in order:
+        // (1) METADATA — a declared PK, if the parent already declares one;
+        // (2) DISCOVERY-VIA-FETCH — the value-statistic PK classifier run over the rows FETCH just
+        //     returned (the same pick-key-from-stats the engine uses everywhere);
+        // (3) a conventional identity name AS A FAIR FALLBACK — but only when such a field is ACTUALLY
+        //     present in the fetched data (never an assumed name for a field that isn't there).
+        // If none resolves, the parent is genuinely keyless → adjourn (return []).
+        const keyField = await this.ResolveParentKeyField(parentObj, batch.Records);
+        if (!keyField) return [];
+
         const ids: string[] = [];
         for (const rec of batch.Records) {
-            const v = rec.Fields?.[pkField.Name];
+            const v = rec.Fields?.[keyField];
             if (v != null && String(v) !== '') ids.push(String(v));
             if (ids.length >= cap) break;
         }
         return ids;
+    }
+
+    /**
+     * Resolves the parent's addressing-key FIELD NAME for discovery-time sampling, without presupposing
+     * it: (1) a declared PK in metadata; else (2) the value-statistic classifier over the fetched rows;
+     * else (3) a conventional identity name that is actually present in the data. Returns null when the
+     * parent is genuinely keyless (→ the caller adjourns). No name is ever assumed for an absent field.
+     */
+    private async ResolveParentKeyField(parentObj: MJIntegrationObjectEntity, records: ExternalRecord[]): Promise<string | null> {
+        // (1) metadata: a declared PK sticks.
+        const declared = this.GetCachedFields(parentObj.ID).find(f => f.IsPrimaryKey);
+        if (declared) return declared.Name;
+        // (2) discovery via fetch: let the value-statistic classifier pick the key from the fetched rows.
+        try {
+            const fields = await this.DiscoverFieldsViaStream(records.map(r => r.Fields), { ReadOnly: true });
+            const classified = fields.find(f => f.IsPrimaryKey);
+            if (classified) return classified.Name;
+        } catch { /* classifier abstains on a thin/ambiguous sample → fall through */ }
+        // (3) fair fallback: a conventional identity name — but ONLY if that field is present in the data.
+        const firstFields = records[0]?.Fields ?? {};
+        const byLower = new Map(Object.keys(firstFields).map(k => [k.toLowerCase(), k]));
+        for (const conventional of ['id', 'key', 'guid', 'uuid']) {
+            const actual = byLower.get(conventional);
+            if (actual) return actual;
+        }
+        return null;   // genuinely keyless → adjourn
     }
 
     /** Stable total order over ID strings — numeric when ALL are integer-like, else lexical. */

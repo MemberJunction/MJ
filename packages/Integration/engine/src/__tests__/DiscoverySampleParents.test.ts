@@ -26,14 +26,24 @@ const FIELDS: Record<string, MJIntegrationObjectFieldEntity[]> = {
         f({ Name: 'id', IsPrimaryKey: true, Status: 'Active', Sequence: 1 }),
         f({ Name: 'OrgId', RelatedIntegrationObjectID: 'objOrg', Status: 'Active', Sequence: 2 }),
     ],
+    // Keyless parent: declares NO IsPrimaryKey. Its key must be resolved from the FETCHED rows (classifier
+    // / conventional-present fallback), never presupposed.
+    objOrgKeyless: [f({ Name: 'id', Status: 'Active', Sequence: 1 })],
+    objEventsKL: [
+        f({ Name: 'evId', IsPrimaryKey: true, Status: 'Active', Sequence: 1 }),
+        f({ Name: 'id', RelatedIntegrationObjectID: 'objOrgKeyless', Status: 'Active', Sequence: 2 }),
+    ],
 };
 const objOrg = { ID: 'objOrg', Name: 'Orgs', APIPath: '/orgs', SupportsPagination: false, PaginationType: 'None', ResponseDataKey: null } as unknown as MJIntegrationObjectEntity;
 const objEvents = { ID: 'objEvents', Name: 'events', APIPath: '/orgs/{OrgId}/events', SupportsPagination: false, PaginationType: 'None', ResponseDataKey: null } as unknown as MJIntegrationObjectEntity;
-const OBJ_BY_ID: Record<string, MJIntegrationObjectEntity> = { objOrg, objEvents };
-const OBJ_BY_NAME: Record<string, MJIntegrationObjectEntity> = { Orgs: objOrg, events: objEvents };
+const objOrgKeyless = { ID: 'objOrgKeyless', Name: 'OrgsKL', APIPath: '/orgskl', SupportsPagination: false, PaginationType: 'None', ResponseDataKey: null } as unknown as MJIntegrationObjectEntity;
+const objEventsKL = { ID: 'objEventsKL', Name: 'eventsKL', APIPath: '/orgskl/{id}/events', SupportsPagination: false, PaginationType: 'None', ResponseDataKey: null } as unknown as MJIntegrationObjectEntity;
+const OBJ_BY_ID: Record<string, MJIntegrationObjectEntity> = { objOrg, objEvents, objOrgKeyless, objEventsKL };
+const OBJ_BY_NAME: Record<string, MJIntegrationObjectEntity> = { Orgs: objOrg, events: objEvents, OrgsKL: objOrgKeyless, eventsKL: objEventsKL };
 
-/** How many parent Orgs the (mock) vendor returns from GET /orgs. Varied per test. */
+/** Parent rows the (mock) vendor returns. Varied per test. */
 let orgRows: Array<{ OrgId: string }> = [];
+let keylessOrgRows: Array<{ id: string }> = [];
 
 class TestConnector extends BaseRESTIntegrationConnector {
     public urls: string[] = [];
@@ -53,6 +63,9 @@ class TestConnector extends BaseRESTIntegrationConnector {
         if (path === '/orgs') return { Status: 200, Body: orgRows, Headers: {} } as RESTResponse;
         const m = /^\/orgs\/([^/]+)\/events$/.exec(path);
         if (m) return { Status: 200, Body: [{ id: `e-${m[1]}` }], Headers: {} } as RESTResponse;
+        if (path === '/orgskl') return { Status: 200, Body: keylessOrgRows, Headers: {} } as RESTResponse;
+        const mkl = /^\/orgskl\/([^/]+)\/events$/.exec(path);
+        if (mkl) return { Status: 200, Body: [{ evId: `e-${mkl[1]}` }], Headers: {} } as RESTResponse;
         return { Status: 404, Body: [], Headers: {} } as RESTResponse;
     }
     protected NormalizeResponse(body: unknown): Record<string, unknown>[] { return Array.isArray(body) ? body as Record<string, unknown>[] : []; }
@@ -73,11 +86,12 @@ const childPaths = (c: TestConnector) => c.urls.map(u => u.replace('https://api.
 describe('BaseRESTIntegrationConnector — discovery-time parent sampling (§sample-discover per entity)', () => {
     beforeEach(() => {
         orgRows = [{ OrgId: 'org1' }, { OrgId: 'org2' }, { OrgId: 'org3' }];
+        keylessOrgRows = [{ id: 'kl1' }, { id: 'kl2' }];
         vi.spyOn(IntegrationEngineBase, 'Instance', 'get').mockReturnValue({
             GetIntegrationObjectByID: (id: string) => OBJ_BY_ID[id],
             GetIntegrationObject: (_int: string, name: string) => OBJ_BY_NAME[name],
             GetIntegrationObjectFields: (id: string) => FIELDS[id] ?? [],
-            GetActiveIntegrationObjects: () => [objOrg, objEvents],
+            GetActiveIntegrationObjects: () => [objOrg, objEvents, objOrgKeyless, objEventsKL],
         } as unknown as IntegrationEngineBase);
     });
 
@@ -110,6 +124,18 @@ describe('BaseRESTIntegrationConnector — discovery-time parent sampling (§sam
             expect(result.Records.length).toBe(3);
             // Each child record carries the resolved parent FK (tagged during iteration) + its own PK.
             expect(result.Records[0].Fields.OrgId).toBeDefined();
+        });
+
+        it('resolves a keyless parent\'s key from the FETCHED rows (no declared PK) — not presupposed', async () => {
+            // OrgsKL declares no IsPrimaryKey. The key must come from the rows fetch returned — the
+            // value-statistic classifier / conventional-present fallback picks 'id' (which IS in the data),
+            // never an assumed name. So a keyless parent's child still samples.
+            const c = new TestConnector();
+            const result = await c.FetchChanges({ ...childCtx(), ObjectName: 'eventsKL', DiscoverySampleParents: true });
+            expect(c.urls.filter(u => u.endsWith('/orgskl')).length).toBe(1);   // keyless parent WAS fetched
+            const kids = c.urls.map(u => u.replace('https://api.test', '')).filter(p => p.startsWith('/orgskl/')).sort();
+            expect(kids).toEqual(['/orgskl/kl1/events', '/orgskl/kl2/events']);   // child sampled via key from fetched rows
+            expect(result.Records.length).toBe(2);
         });
 
         it('bounds the live parent sample to DiscoverySampleParentCount (default 3)', async () => {
