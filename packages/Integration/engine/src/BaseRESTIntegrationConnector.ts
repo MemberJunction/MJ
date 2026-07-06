@@ -669,9 +669,9 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
     }
 
     /**
-     * REST override (§sample-discover): a SINGLE-template-var CHILD is sampled with the recursive,
-     * record-constrained {@link StreamRecordsForDiscovery}. Flat objects and multi-var-in-one-path
-     * children fall back to the generic FetchChanges loop (the latter is handled by DescendTemplateVars).
+     * REST override (§sample-discover): ANY template-var CHILD (single- or multi-var) is sampled with the
+     * recursive, record-constrained {@link StreamRecordsForDiscovery}. Flat objects fall back to the
+     * generic FetchChanges loop.
      */
     protected override async *DiscoverySampleRecordStream(
         companyIntegration: MJCompanyIntegrationEntity,
@@ -681,7 +681,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         maxRecords: number,
     ): AsyncGenerator<Record<string, unknown>> {
         const obj = this.GetCachedObject(companyIntegration.IntegrationID, objectName);
-        if (this.DetectTemplateVars(obj.APIPath).length !== 1) {
+        if (this.DetectTemplateVars(obj.APIPath).length === 0) {
             yield* super.DiscoverySampleRecordStream(companyIntegration, objectName, contextUser, batchSize, maxRecords);
             return;
         }
@@ -733,75 +733,56 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
             return;
         }
 
-        // CHILD (single template var): stream the parent recursively, classify its key, fetch children.
+        // CHILD (single template var): stream the PARENT recursively via this SAME routine — so a
+        // grandparent is sampled identically (uniform to all depths). Classify the parent's key from its
+        // own rows (declared PK → value-statistic classifier → adjourn — never a guessed name), then fetch
+        // children under each parent row.
+        //
+        // NO local cap. The ONLY bound is the leaf consumer's fill-to-`target`. Because each level pulls
+        // its parent LAZILY (the for-await below suspends between parents), that demand propagates up the
+        // WHOLE chain: when a parent's children run out and the leaf still needs more, the loop pulls the
+        // next parent — which lazily pulls the next grandparent, and so on to the highest ancestor. That is
+        // where the "fill to N" completion actually happens — at the top of the dependency chain, not
+        // locally. (Composition / multi-var is deferred — a future optimization.)
         const parentInfo = this.ResolveParentForVar(obj, fields, templateVars[0], companyIntegration.IntegrationID);
         if (!parentInfo) return;
         const parentObj = IntegrationEngineBase.Instance.GetIntegrationObjectByID(parentInfo.parentObjectID);
         if (!parentObj) return;
 
         let parentKey: string | null = this.GetCachedFields(parentObj.ID).find(f => f.IsPrimaryKey)?.Name ?? null;
-        let childCount = 0;
-        let parentCount = 0;
-        const buffer: ExternalRecord[] = [];   // parent rows awaiting child-fetch until the key is classified
+        const buffer: ExternalRecord[] = [];   // parent rows awaiting descent until the key is classified
 
         const fetchChildren = async function* (this: BaseRESTIntegrationConnector, key: string, parentRec: ExternalRecord): AsyncGenerator<ExternalRecord> {
             const idVal = parentRec.Fields?.[key];
             if (idVal == null || String(idVal) === '') return;
-            yield* this.FetchChildRecordsUnderParent(companyIntegration, contextUser, auth, baseURL, obj, fields, parentInfo, String(idVal), pkFieldNames);
+            const path = this.SubstituteTemplateVars(obj.APIPath, parentInfo.templateVar, String(idVal));
+            const fullURL = this.BuildFullURL(baseURL, path);
+            const ctx: FetchContext = { CompanyIntegration: companyIntegration, ObjectName: obj.Name, WatermarkValue: null, BatchSize: target, ContextUser: contextUser };
+            const result = await this.FetchWithPagination(auth, fullURL, obj, ctx);
+            for (const r of result.Records) {
+                r[parentInfo.fkFieldName] = String(idVal);   // tag the resolved parent FK onto the child row
+                const transformed = this.applyTransformPreservingKeys(r, obj, fields);
+                yield this.ToExternalRecord(transformed, obj.Name, pkFieldNames);
+            }
         }.bind(this);
 
         for await (const parentRec of this.StreamRecordsForDiscovery(companyIntegration, parentInfo.parentObjectID, contextUser, target, depth + 1)) {
-            parentCount++;
-            if (!parentKey) {
-                buffer.push(parentRec);
-                if (buffer.length >= target) {
-                    parentKey = await this.ResolveParentKeyField(parentObj, buffer);
-                    if (!parentKey) return;   // parent genuinely keyless → adjourn
-                    for (const bp of buffer) {
-                        if (childCount >= target) break;
-                        for await (const c of fetchChildren(parentKey, bp)) { yield c; if (++childCount >= target) break; }
-                    }
-                    buffer.length = 0;
-                }
-            } else if (childCount < target) {
-                for await (const c of fetchChildren(parentKey, parentRec)) { yield c; if (++childCount >= target) break; }
+            if (parentKey) { yield* fetchChildren(parentKey, parentRec); continue; }
+            // Key not declared: buffer up to `target` parent rows, classify the key from them, then flush.
+            // This buffer pulls `target` parents up the chain (recursively resolving THEIR parents) — the
+            // "resolve N at the highest dependency" step — bounded by `target`, never the parent's total.
+            buffer.push(parentRec);
+            if (buffer.length >= target) {
+                parentKey = await this.ResolveParentKeyField(parentObj, buffer);
+                if (!parentKey) return;   // parent genuinely keyless → adjourn
+                for (const bp of buffer) yield* fetchChildren(parentKey, bp);
+                buffer.length = 0;
             }
-            // Both consistency targets met: the child has ~target rows AND the parent has been sampled to
-            // ~target (so its key was classified on a consistent sample). Extra parents were analysis-only.
-            if (childCount >= target && parentCount >= target) return;
         }
-        // Parent stream ended before target rows: classify on whatever we buffered, then flush children.
+        // Parent stream ended before `target`: classify on whatever we buffered, then flush its children.
         if (!parentKey && buffer.length > 0) {
             parentKey = await this.ResolveParentKeyField(parentObj, buffer);
-            if (parentKey) {
-                for (const bp of buffer) {
-                    if (childCount >= target) break;
-                    for await (const c of fetchChildren(parentKey, bp)) { yield c; if (++childCount >= target) break; }
-                }
-            }
-        }
-    }
-
-    /** Fetches (paginated) the child records under ONE parent id, tagged with the resolved FK. */
-    private async *FetchChildRecordsUnderParent(
-        companyIntegration: MJCompanyIntegrationEntity,
-        contextUser: UserInfo,
-        auth: RESTAuthContext,
-        baseURL: string,
-        obj: MJIntegrationObjectEntity,
-        fields: MJIntegrationObjectFieldEntity[],
-        parentInfo: ResolvedTemplateVar,
-        parentIdValue: string,
-        pkFieldNames: string[],
-    ): AsyncGenerator<ExternalRecord> {
-        const path = this.SubstituteTemplateVars(obj.APIPath, parentInfo.templateVar, parentIdValue);
-        const fullURL = this.BuildFullURL(baseURL, path);
-        const ctx: FetchContext = { CompanyIntegration: companyIntegration, ObjectName: obj.Name, WatermarkValue: null, BatchSize: 100, ContextUser: contextUser };
-        const result = await this.FetchWithPagination(auth, fullURL, obj, ctx);
-        for (const r of result.Records) {
-            r[parentInfo.fkFieldName] = parentIdValue;   // tag the resolved FK value onto the child row
-            const transformed = this.applyTransformPreservingKeys(r, obj, fields);
-            yield this.ToExternalRecord(transformed, obj.Name, pkFieldNames);
+            if (parentKey) for (const bp of buffer) yield* fetchChildren(parentKey, bp);
         }
     }
 
