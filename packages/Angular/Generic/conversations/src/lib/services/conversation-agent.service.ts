@@ -253,6 +253,29 @@ export class ConversationAgentService {
   }
 
   /**
+   * Surfaces a warning toast when the user requested skills (via /skill mentions) that the
+   * target agent cannot activate — the server drops such requests, and without this the
+   * refusal is invisible to the user. Client-side check uses the agent gate only (the server
+   * additionally intersects with the user's Run permission).
+   */
+  private warnOnUnacceptedSkills(agent: MJAIAgentEntityExtended, requestedSkillIDs: string[]): void {
+    const allowed = AIEngineBase.Instance.GetSkillsForAgent(agent);
+    const dropped = requestedSkillIDs.filter(id => !allowed.some(s => UUIDsEqual(s.ID, id)));
+    if (dropped.length === 0) return;
+    const names = dropped.map(
+      id => AIEngineBase.Instance.Skills.find(s => UUIDsEqual(s.ID, id))?.Name ?? 'requested skill'
+    );
+    const reason = agent.AcceptsSkills === 'None'
+      ? `${agent.Name} doesn't accept skills`
+      : `${agent.Name} can't activate ${names.length === 1 ? 'this skill' : 'these skills'}`;
+    MJNotificationService.Instance?.CreateSimpleNotification(
+      `${reason} — ${names.join(', ')} won't be used for this run.`,
+      'warning',
+      6000
+    );
+  }
+
+  /**
    * Invoke a sub-agent based on Sage Agent's payload.
    * This is called when Sage decides to delegate to a specialist agent.
    *
@@ -287,6 +310,10 @@ export class ConversationAgentService {
         console.warn(`${errorMsg}`);
         MJNotificationService.Instance?.CreateSimpleNotification(errorMsg, 'error', 5000);
         return null;
+      }
+
+      if (requestedSkillIDs?.length) {
+        this.warnOnUnacceptedSkills(agent, requestedSkillIDs);
       }
 
       console.log(`Invoking sub-agent: ${agentName}`, { reasoning, hasPayload: !!payload, hasConfigPreset: !!agentConfigurationPresetId });

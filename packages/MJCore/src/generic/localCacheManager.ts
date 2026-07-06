@@ -1310,7 +1310,8 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         maxUpdatedAt: string,
         aggregateResults?: AggregateResult[],
         totalRowCount?: number,
-        provider?: IMetadataProvider
+        provider?: IMetadataProvider,
+        ttlMs?: number
     ): Promise<void> {
         if (!this._storageProvider || !this._config.enabled) return;
 
@@ -1346,6 +1347,15 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                 const entity = md.EntityByName(params.EntityName);
                 if (entity && !this.IsCachingEnabledForEntity(entity)) {
                     LogStatusEx({ message: `[CACHE-WRITE-GATE] Skipping cache write for non-cacheable entity "${params.EntityName}" (AllowCaching=false)`, verboseOnly: true });
+                    return;
+                }
+                // External-data-source entities have no BaseEntity events to invalidate their
+                // cache (their data changes on the remote system), so an entry written without a
+                // TTL would serve stale data forever. Require an explicit TTL for them — the
+                // provider passes ttlMs from the data source's DefaultCacheTTLSeconds. Without
+                // one, skip the write entirely (fail-safe against the stale-forever hazard).
+                if (entity?.ExternalDataSourceID && !ttlMs) {
+                    LogStatusEx({ message: `[CACHE-WRITE-GATE] Skipping cache write for external entity "${params.EntityName}" — no TTL provided (would never invalidate)`, verboseOnly: true });
                     return;
                 }
             } catch (err) {
@@ -1409,7 +1419,8 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                 accessCount: 1,
                 sizeBytes,
                 maxUpdatedAt,
-                rowCount: results.length  // Registry still tracks this for display/stats, derived from actual results
+                rowCount: results.length,  // Registry still tracks this for display/stats, derived from actual results
+                expiresAt: ttlMs ? Date.now() + ttlMs : undefined  // time-based expiry (external entities); undefined => event-invalidated (MJ-DB entities)
             });
 
             // Maintain entity→fingerprint reverse index for universal cache invalidation
@@ -1502,6 +1513,16 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         parsed: CachedRunViewData | null | undefined
     ): CachedRunViewResult | null {
         if (!parsed) {
+            this._stats.misses++;
+            return null;
+        }
+
+        // TTL expiry — external-data-source entries carry an expiresAt (time-based, since their
+        // remote data changes can't be observed via BaseEntity events); MJ-DB entries don't and
+        // fall through to the normal event-invalidated path.
+        const registryEntry = this._registry.get(fingerprint);
+        if (registryEntry?.expiresAt && Date.now() > registryEntry.expiresAt) {
+            this.InvalidateRunViewResult(fingerprint).catch(() => {});
             this._stats.misses++;
             return null;
         }

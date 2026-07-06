@@ -187,6 +187,12 @@ export interface LoopAgentResponse<P = any> {
          */
         skills?: Array<{
             name: string;
+            /**
+             * Brief (one sentence) rationale for why you are activating this skill — what the
+             * current task needs that the skill provides. Recorded in the run's audit trail
+             * (AIAgentRunStep.Skills) so humans can review why capabilities were expanded.
+             */
+            reason?: string;
         }>;
 
         /**

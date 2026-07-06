@@ -185,6 +185,22 @@
   font-size: 11px;
 }
 
+/* Plan Mode chip — shown next to the status badge when AIAgentRun.PlanMode = 1 */
+.plan-mode-badge {
+  padding: 6px 16px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+  color: var(--mj-brand-primary);
+  border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 30%, transparent);
+}
+
 .header-actions {
   display: flex;
   gap: 8px;

@@ -19,7 +19,7 @@ export class MJConversationDetailEntityServer extends MJConversationDetailEntity
         // Only check for message changes on existing records (not new records)
         if (!this.IsSaved) {
             // Check if the Message field is dirty (has been modified)
-            const messageField = this.Fields.find(f => f.Name === 'Message');
+            const messageField = this.GetFieldByName('Message');
             if (messageField && messageField.Dirty && messageField.OldValue !== undefined) {
                 // Message has been changed on an existing record - set the flag
                 this.OriginalMessageChanged = true;

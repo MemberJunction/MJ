@@ -709,6 +709,41 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     }
 
     /**
+     * Resolves the subset of {@link GetSkillsForAgent} that the agent may **self-activate** —
+     * i.e. the skills eligible to appear in the agent's prompt catalog and to be activated by an
+     * agent-initiated `Skill` step, without an explicit user request.
+     *
+     * Self-activation is governed by the **double activation gate** (added in v5.45), on top of
+     * all availability gates enforced by {@link GetSkillsForAgent}:
+     *
+     * - **`agent.SkillActivationMode === 'Auto'`** — the agent side of the gate. The default is
+     *   `'RequestedOnly'`, meaning the agent's prompt catalog is empty and skills only enter its
+     *   runs via explicit user requests (`/skill` mentions → `ExecuteAgentParams.requestedSkillIDs`).
+     * - **`skill.ActivationMode === 'Auto'`** — the skill side. The default is `'RequestedOnly'`,
+     *   meaning the skill never appears in ANY agent's catalog regardless of agent posture.
+     *
+     * Auto × Auto is the deliberately-configured "super agent" posture — an agent that may expand
+     * its own tool surface at runtime. Because both defaults are `'RequestedOnly'`, that posture
+     * always requires two explicit opt-ins and can never arise accidentally ("skill leakage").
+     *
+     * The **requested path is NOT gated by ActivationMode** — a user's explicit `/skill` request
+     * for a `RequestedOnly` skill is honored (subject to the availability gates); use
+     * {@link GetSkillsForAgent} for that path.
+     *
+     * @param agent - The agent to resolve the self-activatable catalog for.
+     * @param user - Optional user; when present, additionally filters to skills the user can Run
+     *               (same semantics as {@link GetSkillsForAgent}).
+     * @returns Active skills the agent may self-activate (empty when either side of the double
+     *          gate is 'RequestedOnly', or when no availability gate passes).
+     */
+    public GetAutoActivatableSkillsForAgent(agent: MJAIAgentEntityExtended, user?: UserInfo): MJAISkillEntity[] {
+        if (!agent || agent.SkillActivationMode !== 'Auto') {
+            return [];
+        }
+        return this.GetSkillsForAgent(agent, user).filter(s => s.ActivationMode === 'Auto');
+    }
+
+    /**
      * Returns the ActionIDs bundled into a skill (via "MJ: AI Skill Actions"). Callers resolve
      * the full `MJActionEntity` objects from their own Action cache (e.g. `ActionEngineServer`)
      * to avoid a cross-package dependency here.
