@@ -1,0 +1,25 @@
+# Interactive-component artifact E2E: deep-link to the interactive-demo harness,
+# which compiles an agent-authored React component on-device (react-runtime +
+# Babel + the web-primitive->RN shim), and verify it is actually interactive by
+# tapping the compiled <button> and asserting the useState counter advances.
+appId: org.memberjunction.mobile
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "Conversations"
+    timeout: 30000
+- openLink: "mjmobile:///interactive-demo"
+# iOS may show a "Open in MJ Mobile?" confirmation for the custom scheme.
+- runFlow:
+    when:
+      visible: "Open"
+    commands:
+      - tapOn: "Open"
+# Lazy-loads the 3 MB compiler on first render, so wait generously.
+- extendedWaitUntil:
+    visible: "Count: 0"
+    timeout: 30000
+- tapOn: "Increment"
+- assertVisible: "Count: 1"
+- tapOn: "Increment"
+- assertVisible: "Count: 2"

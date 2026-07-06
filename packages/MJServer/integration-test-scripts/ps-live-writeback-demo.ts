@@ -324,7 +324,12 @@ async function main(): Promise<void> {
     banner('1. RESOLVE ENTITIES + ALGORITHM');
     const membership = md.EntityByName('Memberships');
     console.log(`  Memberships entity: ${membership?.Name} (${membership?.ID})`);
-    if (!membership) throw new Error('Memberships entity not found — is AssociationDemo loaded?');
+    if (!membership) {
+      // Honor the suite's skip contract (see run-all.ts): missing AssociationDemo is an
+      // environment condition, not a failure — mirror the sibling ps-live scripts.
+      console.log('  SKIP: Memberships entity not found — is AssociationDemo loaded? (exiting 0)');
+      process.exit(0);
+    }
     // Sanity-check the throwaway prediction columns exist on the entity metadata.
     const hasClassCol = membership.Fields.some((f) => f.Name === CLASS_COLUMN);
     const hasScoreCol = membership.Fields.some((f) => f.Name === SCORE_COLUMN);

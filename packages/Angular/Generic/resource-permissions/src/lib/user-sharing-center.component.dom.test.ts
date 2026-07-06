@@ -76,7 +76,8 @@ describe('UserSharingCenterComponent (DOM, data-bound)', () => {
       c.SharedWithMe = [group({ Rows: [permission(), permission({ SourceRecordID: 'perm2' })] })];
     });
     expect(text(f, '.group-name')).toBe('Dashboard Permissions');
-    expect(text(f, '.count')).toBe('2');
+    // The per-group row count now renders as the accordion title's badge.
+    expect(text(f, '.mj-accordion-badge')).toBe('2');
   });
 
   it('renders one row per permission in an expanded group', () => {
@@ -99,7 +100,9 @@ describe('UserSharingCenterComponent (DOM, data-bound)', () => {
       c.SharedWithMe = [group({ Expanded: false })];
     });
     expect(query(f, '.rows')).toBeNull();
-    click(f, '.group-header');
+    // Each domain group is an <mj-accordion-panel>; its header toggle emits ExpandedChange,
+    // wired to OnGroupExpandedChange, which flips group.Expanded and lazily renders the rows body.
+    click(f, '.mj-accordion-header');
     f.detectChanges();
     expect(query(f, '.rows')).not.toBeNull();
   });

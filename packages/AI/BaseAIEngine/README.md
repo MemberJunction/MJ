@@ -238,6 +238,19 @@ const agents = await AIEngineBase.Instance.GetAccessibleAgents(user, 'run');
 | `EffectiveAgentPermissions` | Complete permission set for a user/agent combination |
 | `AICredentialBindingEntityExtended` | Extended credential binding entity |
 
+## Skill Gating
+
+`AIEngineBase` is the single source of truth for which skills an agent may use, via two methods with distinct purposes:
+
+| Method | Question it answers | Gates applied |
+|---|---|---|
+| `GetSkillsForAgent(agent, user?)` | May this agent+user use this skill at all? (**availability**) | `AIAgent.AcceptsSkills` (None/All/Limited) × `AISkill.Status='Active'` × per-grant `MJ: AI Agent Skills.Status` (Limited only) × user Run permission (when `user` supplied) |
+| `GetAutoActivatableSkillsForAgent(agent, user?)` | May this agent **self-activate** this skill? (**trigger**) | Everything above **plus the double activation gate**: `AIAgent.SkillActivationMode === 'Auto'` AND `AISkill.ActivationMode === 'Auto'` (both default `'RequestedOnly'`) |
+
+Use the availability set for the user-requested path (`/skill` mentions → `ExecuteAgentParams.requestedSkillIDs`) and for pickers/tooling; use the auto set for anything the *agent* triggers on its own judgment (the prompt catalog, `Skill`-step validation). Because both `ActivationMode` defaults are `RequestedOnly`, the Auto × Auto "super agent" posture is always a deliberate double opt-in.
+
+Bundle membership is resolved by ID via `GetSkillActionIDs(skillID)` / `GetSkillSubAgentIDs(skillID)`; skill permission rows are cached on `SkillPermissions` and evaluated by `AISkillPermissionHelper` (open-by-default). Full architecture: [Agent Skills & Plan Mode Guide](../../../guides/AGENT_SKILLS_AND_PLAN_MODE_GUIDE.md).
+
 ## Dependencies
 
 - `@memberjunction/core` -- BaseEngine, Metadata, RunView

@@ -7,8 +7,10 @@
     </div>
   }
 
-  <!-- Message Input Box (mic + Plan Mode buttons live in its in-composer toolbar) -->
-  <mj-message-input-box
+  <!-- AI composer (mic + Plan Mode buttons live in its in-composer toolbar): wraps the
+       generic mj-message-input-box with the '@' agent / '#' record / '/' skill trigger
+       plugins built in — all three on by default, preserving the standard chat behavior. -->
+  <mj-ai-composer
     #inputBox
     [placeholder]="placeholder"
     [disabled]="disabled || isProcessing"
@@ -19,6 +21,7 @@
     [maxAttachmentSizeBytes]="maxAttachmentSizeBytes"
     [acceptedFileTypes]="acceptedFileTypes"
     [currentUser]="currentUser"
+    [Provider]="Provider"
     [rows]="3"
     [enableRealtime]="true"
     [voiceActive]="voiceActive"
@@ -32,7 +35,7 @@
     (voiceRequested)="onStartRealtime()"
     (voiceOptionsRequested)="onRealtimeOptions()"
     (planModeToggle)="TogglePlanMode()">
-  </mj-message-input-box>
+  </mj-ai-composer>
 
   <!-- Voice agent/co-agent/model picker — shown when starting a call on a conversation
        with NO prior agent participation, or on demand via the caret next to the phone

@@ -3,7 +3,9 @@ import { Metadata, CompositeKey } from '@memberjunction/core';
 import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { ResourceData, MJEnvironmentEntityExtended, MJConversationEntity, MJUserSettingEntity, UserInfoEngine, ConversationEngine } from '@memberjunction/core-entities';
-import { ConversationChatAreaComponent, ConversationListComponent, MentionAutocompleteService, ConversationStreamingService, ActiveTasksService, PendingAttachment, UICommandHandlerService, ConversationBridgeService } from '@memberjunction/ng-conversations';
+import { ConversationChatAreaComponent, ConversationListComponent, ConversationStreamingService, ActiveTasksService, UICommandHandlerService, ConversationBridgeService } from '@memberjunction/ng-conversations';
+import { PendingAttachment } from '@memberjunction/ng-composer';
+import { MentionAutocompleteService } from '@memberjunction/ng-conversations';
 import { ActionableCommand, OpenResourceCommand } from '@memberjunction/ai-core-plus';
 import { NavigationRequest } from '@memberjunction/ng-artifacts';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
@@ -52,6 +54,12 @@ import { Subject, takeUntil } from 'rxjs';
                 (unpinSidebarRequested)="unpinSidebar()"
                 (refreshRequested)="onRefreshRequested()">
               </mj-conversation-list>
+              <!-- Routines — pinned at the very bottom of the sidebar. Gated inside the
+                   section component by Read permission on 'MJ: User Routines'. -->
+              <mj-conversation-routines-section
+                (openEntityRecord)="onOpenEntityRecord($event)"
+                (openConversation)="onConversationSelected($event)">
+              </mj-conversation-routines-section>
             }
           </div>
         }
@@ -121,9 +129,22 @@ import { Subject, takeUntil } from 'rxjs';
     .conversation-sidebar {
       flex-shrink: 0;
       border-right: 1px solid var(--mj-border-default);
-      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
       background: var(--mj-bg-surface-sunken);
       transition: width 0.3s ease;
+    }
+
+    /* Conversation list scrolls; the routines section stays pinned at the bottom */
+    .conversation-sidebar mj-conversation-list {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
+    }
+
+    .conversation-sidebar mj-conversation-routines-section {
+      flex-shrink: 0;
     }
 
     /* Disable transitions during initial load to prevent jarring animation */
@@ -287,8 +308,10 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
 
   private engine = ConversationEngine.Instance;
 
+  // Shared AI mention/suggestion engine (BaseSingleton — same instance the composer plugins use)
+  private mentionAutocompleteService = MentionAutocompleteService.Instance;
+
   constructor(
-    private mentionAutocompleteService: MentionAutocompleteService,
     private cdr: ChangeDetectorRef,
     private streamingService: ConversationStreamingService,
     private activeTasksService: ActiveTasksService,

@@ -259,6 +259,8 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
     public get AgentSkills(): MJAIAgentSkillEntity[] { return this.Base.AgentSkills; }
     public get SkillPermissions(): MJAISkillPermissionEntity[] { return this.Base.SkillPermissions; }
     public GetSkillsForAgent(agent: MJAIAgentEntityExtended, user?: UserInfo): MJAISkillEntity[] { return this.Base.GetSkillsForAgent(agent, user); }
+    /** Double-gated self-activation set — see {@link AIEngineBase.GetAutoActivatableSkillsForAgent}. */
+    public GetAutoActivatableSkillsForAgent(agent: MJAIAgentEntityExtended, user?: UserInfo): MJAISkillEntity[] { return this.Base.GetAutoActivatableSkillsForAgent(agent, user); }
     public GetSkillActionIDs(skillID: string): string[] { return this.Base.GetSkillActionIDs(skillID); }
     public GetSkillSubAgentIDs(skillID: string): string[] { return this.Base.GetSkillSubAgentIDs(skillID); }
     public get AgentConfigurations(): MJAIAgentConfigurationEntity[] { return this.Base.AgentConfigurations; }
