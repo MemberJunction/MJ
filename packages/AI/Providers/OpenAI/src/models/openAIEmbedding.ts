@@ -24,7 +24,8 @@ export class OpenAIEmbedding extends BaseEmbeddings {
     public async EmbedText(params: EmbedTextParams): Promise<EmbedTextResult> {
         let body: OpenAI.Embeddings.EmbeddingCreateParams = {
             input: params.text,
-            model: params.model || "text-embedding-3-small"
+            model: params.model || "text-embedding-3-small",
+            ...(params.dimensions ? { dimensions: params.dimensions } : {}),
         }
 
         try{
@@ -55,7 +56,8 @@ export class OpenAIEmbedding extends BaseEmbeddings {
     public async EmbedTexts(params: EmbedTextsParams): Promise<EmbedTextsResult> {
         let body: OpenAI.Embeddings.EmbeddingCreateParams = {
             input: params.texts,
-            model: params.model || "text-embedding-3-small"
+            model: params.model || "text-embedding-3-small",
+            ...(params.dimensions ? { dimensions: params.dimensions } : {}),
         }
 
         try{

@@ -56,8 +56,8 @@ export abstract class VectorDBBase {
      */
     abstract QueryIndex(params: QueryOptions, contextUser?: UserInfo): BaseResponse | Promise<BaseResponse>;
 
-    abstract CreateRecord(record: VectorRecord, indexName?: string): BaseResponse | Promise<BaseResponse>;
-    abstract CreateRecords(records: VectorRecord[], indexName?: string): BaseResponse  | Promise<BaseResponse>;
+    abstract CreateRecord(record: VectorRecord, indexName?: string, providerConfig?: Record<string, unknown>): BaseResponse | Promise<BaseResponse>;
+    abstract CreateRecords(records: VectorRecord[], indexName?: string, providerConfig?: Record<string, unknown>): BaseResponse  | Promise<BaseResponse>;
     abstract GetRecord(param: BaseRequestParams): BaseResponse  | Promise<BaseResponse>;
     abstract GetRecords(params: BaseRequestParams): BaseResponse  | Promise<BaseResponse>;
     abstract UpdateRecord(record: UpdateOptions): BaseResponse  | Promise<BaseResponse>;

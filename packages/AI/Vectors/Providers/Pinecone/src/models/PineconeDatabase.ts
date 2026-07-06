@@ -133,11 +133,23 @@ export class PineconeDatabase extends VectorDBBase {
             // 'id' as "query by record ID" which is mutually exclusive with 'vector'
             const indexId = 'id' in params ? (params as { id: string }).id : undefined;
             let index: Index = this.GetIndex(indexId ? { id: indexId } : undefined).data;
-            const queryParams = { ...params };
+
+            const queryParams: Record<string, unknown> = { ...params };
             if (indexId && 'vector' in queryParams) {
-                delete (queryParams as Record<string, unknown>)['id'];
+                delete queryParams['id'];
             }
-            let result: QueryResponse = await index.query(queryParams);
+
+            // providerConfig is an MJ-level opaque blob (from QueryParamsBase) that
+            // Pinecone's SDK does not accept in the query body — extract, strip, then
+            // read driver-specific keys from it.
+            const providerConfig = queryParams['providerConfig'] as Record<string, unknown> | undefined;
+            delete queryParams['providerConfig'];
+            const namespace = typeof providerConfig?.['namespace'] === 'string'
+                ? providerConfig['namespace'] as string
+                : undefined;
+
+            const target = namespace ? index.namespace(namespace) : index;
+            const result: QueryResponse = await target.query(queryParams as Parameters<typeof target.query>[0]);
             return this.wrapSuccessResponse(result);
         }
         catch(ex){
@@ -146,10 +158,10 @@ export class PineconeDatabase extends VectorDBBase {
         }
     }
 
-    public async CreateRecord(params: VectorRecord): Promise<BaseResponse> {
+    public async CreateRecord(params: VectorRecord, indexName?: string, providerConfig?: Record<string, unknown>): Promise<BaseResponse> {
         try{
             let records: VectorRecord[] = [params];
-            let result = await this.CreateRecords(records);
+            let result = await this.CreateRecords(records, indexName, providerConfig);
             return this.wrapSuccessResponse(result);
         }
         catch(ex){
@@ -158,10 +170,36 @@ export class PineconeDatabase extends VectorDBBase {
         }
     }
 
-    public async CreateRecords(records: VectorRecord[], indexName?: string): Promise<BaseResponse> {
+    public async CreateRecords(records: VectorRecord[], indexName?: string, providerConfig?: Record<string, unknown>): Promise<BaseResponse> {
         try{
-            const index: Index = await this.GetIndex(indexName ? { id: indexName } : undefined).data;
-            let result = await index.upsert(records);
+            const index: Index = this.GetIndex(indexName ? { id: indexName } : undefined).data;
+            const namespaceField = typeof providerConfig?.['namespaceField'] === 'string'
+                ? providerConfig['namespaceField'] as string : undefined;
+
+            if (namespaceField) {
+                // Group records by the namespace value stored in their metadata, then
+                // upsert each group into its own Pinecone namespace. This is the
+                // multi-tenant ingestion path: one batch may contain vectors for
+                // different organizations, each routed to their own namespace.
+                const groups = new Map<string, VectorRecord[]>();
+                for (const record of records) {
+                    const ns = String((record.metadata as Record<string, unknown>)?.[namespaceField] ?? '');
+                    const existing = groups.get(ns);
+                    if (existing) { existing.push(record); } else { groups.set(ns, [record]); }
+                }
+                for (const [ns, groupRecords] of groups) {
+                    const target = ns ? index.namespace(ns) : index;
+                    await target.upsert(groupRecords);
+                }
+                return this.wrapSuccessResponse(null);
+            }
+
+            // Single-namespace path: use an explicit namespace if provided, or
+            // fall back to the index default (no namespace routing).
+            const directNamespace = typeof providerConfig?.['namespace'] === 'string'
+                ? providerConfig['namespace'] as string : undefined;
+            const target = directNamespace ? index.namespace(directNamespace) : index;
+            const result = await target.upsert(records);
             return this.wrapSuccessResponse(result);
         }
         catch(ex){

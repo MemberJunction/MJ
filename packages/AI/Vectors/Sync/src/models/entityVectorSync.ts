@@ -126,12 +126,18 @@ export class EntityVectorSyncer extends VectorBase {
     const vectorCreator = this.createVectorCreator(
       template, templateContent, obj.embedding, obj.embeddingModelAPIName, delayTimeMS,
       params.VectorizeBatchCount || pipelineConfig?.vectorizeBatchSize,
-      pipelineConfig?.maxConcurrentEmbeddings
+      pipelineConfig?.maxConcurrentEmbeddings,
+      vectorIndexEntity.Dimensions ?? undefined
     );
+
+    // Parse the VectorIndex's ProviderConfig (opaque JSON blob) so Pinecone and
+    // other drivers can read driver-specific settings (e.g. namespaceField).
+    const vectorIndexProviderConfig = this.parseProviderConfig(vectorIndexEntity.ProviderConfig);
 
     const vectorUpserter = this.createVectorUpserter(
       entityDocument, templateContent, obj.vectorDB, vectorIndexEntity.Name, delayTimeMS,
-      params.UpsertBatchCount || pipelineConfig?.upsertBatchSize
+      params.UpsertBatchCount || pipelineConfig?.upsertBatchSize,
+      vectorIndexProviderConfig
     );
 
     const erdUpserter = new AsyncBatchTransform<EmbeddingData, undefined, EmbeddingData>({
@@ -293,13 +299,14 @@ export class EntityVectorSyncer extends VectorBase {
     embeddingModelAPIName: string,
     delayTimeMS: number,
     batchSize?: number,
-    concurrencyLimit?: number
+    concurrencyLimit?: number,
+    embeddingDimensions?: number
   ): AsyncBatchTransform<Record<string, unknown>, undefined, EmbeddingData> {
     return new AsyncBatchTransform<Record<string, unknown>, undefined, EmbeddingData>({
       batchSize: batchSize || 50,
       concurrencyLimit: concurrencyLimit ?? 2,
       processBatch: (batch: Record<string, unknown>[]): Promise<EmbeddingData[]> =>
-        this.renderAndEmbedBatch(batch, template, templateContent, embedding, embeddingModelAPIName, delayTimeMS),
+        this.renderAndEmbedBatch(batch, template, templateContent, embedding, embeddingModelAPIName, delayTimeMS, embeddingDimensions),
     });
   }
 
@@ -314,13 +321,14 @@ export class EntityVectorSyncer extends VectorBase {
     vectorDB: VectorDBBase,
     indexName: string,
     delayTimeMS: number,
-    batchSize?: number
+    batchSize?: number,
+    providerConfig?: Record<string, unknown>
   ): AsyncBatchTransform<EmbeddingData, undefined, EmbeddingData> {
     return new AsyncBatchTransform<EmbeddingData, undefined, EmbeddingData>({
       batchSize: batchSize || 50,
       concurrencyLimit: 2,
       processBatch: (batch: EmbeddingData[]): Promise<EmbeddingData[]> =>
-        this.upsertBatchToVectorDB(batch, entityDocument, templateContent, vectorDB, indexName, delayTimeMS),
+        this.upsertBatchToVectorDB(batch, entityDocument, templateContent, vectorDB, indexName, delayTimeMS, providerConfig),
     });
   }
 
@@ -335,7 +343,8 @@ export class EntityVectorSyncer extends VectorBase {
     templateContent: MJTemplateContentEntity,
     embedding: BaseEmbeddings,
     embeddingModelAPIName: string,
-    delayTimeMS: number
+    delayTimeMS: number,
+    embeddingDimensions?: number
   ): Promise<EmbeddingData[]> {
     TemplateEngineServer.Instance.SetupNunjucks();
     const validEntries: { text: string; record: Record<string, unknown> }[] = [];
@@ -358,7 +367,7 @@ export class EntityVectorSyncer extends VectorBase {
       return [];
     }
 
-    const embeddings: EmbedTextsResult = await embedding.EmbedTexts({ texts: validEntries.map(e => e.text), model: embeddingModelAPIName });
+    const embeddings: EmbedTextsResult = await embedding.EmbedTexts({ texts: validEntries.map(e => e.text), model: embeddingModelAPIName, dimensions: embeddingDimensions });
     await new Promise<void>((resolve) => setTimeout(resolve, delayTimeMS));
 
     return embeddings.vectors.map((vector: number[], index: number) => ({
@@ -379,6 +388,23 @@ export class EntityVectorSyncer extends VectorBase {
    */
   /** Default max chars for large text fields (nvarchar(MAX) or MaxLength > 5000) in vector metadata */
   private static readonly DEFAULT_LARGE_FIELD_TRUNCATION = 1000;
+
+  /**
+   * Parse a provider config JSON string into a plain object.
+   * Returns undefined if the value is null/empty or invalid JSON.
+   */
+  private parseProviderConfig(raw: string | null | undefined): Record<string, unknown> | undefined {
+    if (!raw) return undefined;
+    try {
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+          ? parsed as Record<string, unknown>
+          : undefined;
+    } catch {
+      LogError(`Invalid JSON in VectorIndex.ProviderConfig, ignoring`);
+      return undefined;
+    }
+  }
 
   /**
    * Parse the EntityDocumentConfiguration JSON from an entity document.
@@ -460,7 +486,8 @@ export class EntityVectorSyncer extends VectorBase {
     templateContent: MJTemplateContentEntity,
     vectorDB: VectorDBBase,
     indexName: string,
-    delayTimeMS: number
+    delayTimeMS: number,
+    providerConfig?: Record<string, unknown>
   ): Promise<EmbeddingData[]> {
     // Short-circuit for read-only providers (e.g. SimpleVectorServiceProvider,
     // which reads vectors directly from MJ: Entity Record Documents.VectorJSON
@@ -520,6 +547,15 @@ export class EntityVectorSyncer extends VectorBase {
         }
       }
 
+      // If the provider config specifies a namespaceField, inject that field's value
+      // from the source record into the metadata so the vector DB driver can use it
+      // for namespace routing (e.g. Pinecone groups records by this field).
+      const namespaceField = typeof providerConfig?.['namespaceField'] === 'string'
+          ? providerConfig['namespaceField'] as string : undefined;
+      if (namespaceField && record[namespaceField] != null) {
+        metadata[namespaceField] = String(record[namespaceField]);
+      }
+
       return {
         id: vectorId,
         values: embeddingItem.Vector,
@@ -527,7 +563,7 @@ export class EntityVectorSyncer extends VectorBase {
       };
     });
 
-    const response: BaseResponse = await vectorDB.CreateRecords(vectorRecords, indexName);
+    const response: BaseResponse = await vectorDB.CreateRecords(vectorRecords, indexName, providerConfig);
     if (!response.success) {
       const message = response.message || 'Unknown vector database error';
       LogError('Unable to save records to vector database', undefined, message);
