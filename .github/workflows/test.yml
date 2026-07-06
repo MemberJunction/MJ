@@ -5,6 +5,7 @@ on:
   pull_request:
     branches: [next]
     paths:
+      - 'package.json'
       - 'package-lock.json'
       - 'packages/**'
       - 'vitest.*'
@@ -21,9 +22,13 @@ on:
 
 # Cancel superseded runs for the same ref (e.g. when a PR is pushed again), so CI doesn't
 # keep churning the whole suite for commits that are already out of date.
+# EXCEPTION: push (merge to next) events get a per-commit group and are NEVER cancelled —
+# every merge's full-suite backstop must run to completion. `github.ref` is the same string
+# (refs/heads/next) for every merge, so a shared, cancellable group would let a later merge
+# kill an earlier merge's backstop mid-run, defeating the whole point of the backstop.
 concurrency:
-  group: unit-tests-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: unit-tests-${{ github.workflow }}-${{ github.ref }}${{ github.event_name == 'push' && format('-{0}', github.sha) || '' }}
+  cancel-in-progress: ${{ github.event_name != 'push' }}
 
 jobs:
   test:
@@ -76,9 +81,11 @@ jobs:
       # Decide what to run:
       #  - pull_request: only packages changed since the base branch PLUS everything that
       #    depends on them (turbo's `...[ref]` package-dependency selection).
-      #  - a change to a ROOT/global file (lockfile, turbo.json, root vitest/tsconfig, this
-      #    workflow) can affect every package but lives in no package dir, so turbo's filter
-      #    would select nothing — fall back to the FULL suite in that case.
+      #  - a change to a ROOT/global file (root package.json, lockfile, turbo.json, root
+      #    vitest/tsconfig, this workflow) can affect every package but lives in no package
+      #    dir, so turbo's filter would select nothing — fall back to the FULL suite there.
+      #    (Root package.json matters: editing `workspaces` globs or root `scripts` reshapes
+      #    the whole build without necessarily touching package-lock.json.)
       #  - push to next / schedule / manual dispatch: always FULL (the backstop).
       - name: Determine test scope
         run: |
@@ -86,7 +93,7 @@ jobs:
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             git fetch --no-tags origin "${{ github.base_ref }}"
             CHANGED="$(git diff --name-only "origin/${{ github.base_ref }}...HEAD")"
-            if echo "$CHANGED" | grep -qE '^(package-lock\.json|turbo\.json|vitest\.[^/]+|tsconfig[^/]*\.json|\.github/workflows/test\.yml)$'; then
+            if echo "$CHANGED" | grep -qE '^(package\.json|package-lock\.json|turbo\.json|vitest\.[^/]+|tsconfig[^/]*\.json|\.github/workflows/test\.yml)$'; then
               echo "Root/global change detected — running the FULL suite."
             else
               FILTER="--filter=...[origin/${{ github.base_ref }}]"
