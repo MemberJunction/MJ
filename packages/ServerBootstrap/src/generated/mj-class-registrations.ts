@@ -188,7 +188,7 @@ import {
     MagicLinkProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (399 classes)
+// @memberjunction/core-entities (404 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -412,6 +412,8 @@ import {
     MJExperimentSessionEntity,
     MJExperimentSessionIterationEntity,
     MJExplorerNavigationItemEntity,
+    MJExternalDataSourceEntity,
+    MJExternalDataSourceTypeEntity,
     MJFileCategoryEntity,
     MJFileEntity,
     MJFileEntityRecordLinkEntity,
@@ -569,6 +571,9 @@ import {
     MJUserNotificationTypeEntity,
     MJUserRecordLogEntity,
     MJUserRoleEntity,
+    MJUserRoutineEntity,
+    MJUserRoutineRecipientEntity,
+    MJUserRoutineRunEntity,
     MJUserSettingEntity,
     MJUserViewCategoryEntity,
     MJUserViewEntity,
@@ -1630,6 +1635,8 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJExperimentSessionEntity,
     MJExperimentSessionIterationEntity,
     MJExplorerNavigationItemEntity,
+    MJExternalDataSourceEntity,
+    MJExternalDataSourceTypeEntity,
     MJFileCategoryEntity,
     MJFileEntity,
     MJFileEntityRecordLinkEntity,
@@ -1787,6 +1794,9 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJUserNotificationTypeEntity,
     MJUserRecordLogEntity,
     MJUserRoleEntity,
+    MJUserRoutineEntity,
+    MJUserRoutineRecipientEntity,
+    MJUserRoutineRunEntity,
     MJUserSettingEntity,
     MJUserViewCategoryEntity,
     MJUserViewEntity,
@@ -2323,7 +2333,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 958;
+export const CLASS_REGISTRATIONS_COUNT = 963;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
