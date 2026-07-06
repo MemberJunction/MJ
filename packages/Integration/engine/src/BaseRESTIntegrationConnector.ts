@@ -601,7 +601,17 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         // AfterKeyValue, so the engine loops to completion), fetch them CONCURRENTLY up to the engine's
         // MaxConcurrency, and gate each on the engine's adaptive AIMD bucket (RateLimitAcquire/Report).
         const top = resolutions[0];
-        const allParentIDs = this.SortIdsStable(await this.LoadParentIDs(top.parentObjectID, ctx.ContextUser, []));
+        let allParentIDs = this.SortIdsStable(await this.LoadParentIDs(top.parentObjectID, ctx.ContextUser, []));
+        // DISCOVERY-ONLY fallback (§sample-discover per entity): at discovery the DB holds no synced
+        // parent rows yet, so LoadParentIDs returns []. Rather than emit ZERO_PARENTS and leave this
+        // template-var CHILD with zero sampled fields (no widths / PK / custom-column stats), live-sample
+        // a bounded page of the parent — "sync-like fetch, no DB work" — so the child yields
+        // representative records for field-stat accumulation. Gated on ctx.DiscoverySampleParents, which
+        // ONLY DiscoverFieldsViaFetch sets; a real sync never takes this branch, so ZERO_PARENTS stays
+        // correct on the sync path (an unsynced parent still means "sync the parent first").
+        if (allParentIDs.length === 0 && ctx.DiscoverySampleParents) {
+            allParentIDs = this.SortIdsStable(await this.SampleParentIDsForDiscovery(top.parentObjectID, ctx));
+        }
         if (allParentIDs.length === 0) {
             const parentObj = IntegrationEngineBase.Instance.GetIntegrationObjectByID(top.parentObjectID);
             return { Records: [], HasMore: false, Warnings: [{
@@ -645,6 +655,236 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
      */
     protected TemplateVarParentBatchSize(): number {
         return 10;
+    }
+
+    /**
+     * DISCOVERY-ONLY: last-resort SAFETY bound on the recursion depth for multi-level template chains (a
+     * parent that is itself a template-var child), so a malformed metadata cycle cannot loop unboundedly.
+     * This is only the fallback when the consumer sets no `discoverySampleMaxDepth` in Configuration and
+     * no env override is present — the consumer decides the real value. A recursion cap MUST have some
+     * bound, so a conservative default remains here; override the getter to change the fallback.
+     */
+    protected DiscoverySampleMaxDepth(): number {
+        return 4;
+    }
+
+    /**
+     * REST override (§sample-discover): ANY template-var CHILD (single- or multi-var) is sampled with the
+     * recursive, record-constrained {@link StreamRecordsForDiscovery}. Flat objects fall back to the
+     * generic FetchChanges loop.
+     */
+    protected override async *DiscoverySampleRecordStream(
+        companyIntegration: MJCompanyIntegrationEntity,
+        objectName: string,
+        contextUser: UserInfo,
+        batchSize: number,
+        maxRecords: number,
+    ): AsyncGenerator<Record<string, unknown>> {
+        const obj = this.GetCachedObject(companyIntegration.IntegrationID, objectName);
+        if (this.DetectTemplateVars(obj.APIPath).length === 0) {
+            yield* super.DiscoverySampleRecordStream(companyIntegration, objectName, contextUser, batchSize, maxRecords);
+            return;
+        }
+        let yielded = 0;
+        for await (const rec of this.StreamRecordsForDiscovery(companyIntegration, obj.ID, contextUser, maxRecords, 0)) {
+            yield rec.Fields;
+            if (++yielded >= maxRecords) return;
+        }
+    }
+
+    /**
+     * DISCOVERY-ONLY recursive lazy sampler. Yields records of `objectID` for field/PK analysis by
+     * STREAMING — never bulk. A top-level object paginates its endpoint directly. A template-var CHILD
+     * streams its PARENT (recursively, via this same routine), classifies the parent's key from the
+     * parent's own ~`target` rows (declared PK → value-statistic classifier → adjourn — never a guessed
+     * name), and fetches children under parent rows until the child has `target`. Parent rows beyond what
+     * the child needs are analysis-only — they keep the parent's key classified on a CONSISTENT ~`target`
+     * sample; if the child needs MORE parents than `target`, it keeps streaming, so the parent count may
+     * be over OR under `target`. Record-constrained (unlike sync, which walks ALL rows via the DAG): a
+     * million-row ancestor is streamed and cut off early. Pure HTTP — no SQL, dialect-agnostic.
+     */
+    private async *StreamRecordsForDiscovery(
+        companyIntegration: MJCompanyIntegrationEntity,
+        objectID: string,
+        contextUser: UserInfo,
+        target: number,
+        depth: number,
+    ): AsyncGenerator<ExternalRecord> {
+        const maxDepth = this.ReadDiscoveryConfig(companyIntegration)
+            .int('discoverySampleMaxDepth', 'MJ_INTEGRATION_DISCOVERY_SAMPLE_MAX_DEPTH', this.DiscoverySampleMaxDepth());
+        if (depth > maxDepth) return;
+        const obj = IntegrationEngineBase.Instance.GetIntegrationObjectByID(objectID);
+        if (!obj) return;
+        const fields = this.GetCachedFields(obj.ID);
+        const auth = await this.Authenticate(companyIntegration, contextUser);
+        const baseURL = this.GetBaseURL(companyIntegration, auth);
+        const templateVars = this.DetectTemplateVars(obj.APIPath);
+        const pkFieldNames = this.FindPrimaryKeyFieldNames(fields);
+
+        // TOP-LEVEL: paginate the flat endpoint lazily; the caller stops pulling at its own target.
+        if (templateVars.length === 0) {
+            let pageCtx: FetchContext = { CompanyIntegration: companyIntegration, ObjectName: obj.Name, WatermarkValue: null, BatchSize: target, ContextUser: contextUser };
+            for (let guard = 0; guard < 100_000; guard++) {
+                const batch = await this.FetchFlat(auth, baseURL, obj, fields, pageCtx);
+                for (const rec of batch.Records) yield rec;
+                if (!batch.HasMore) return;
+                pageCtx = { ...pageCtx, CurrentPage: batch.NextPage, CurrentOffset: batch.NextOffset, CurrentCursor: batch.NextCursor };
+            }
+            return;
+        }
+
+        // CHILD (single template var): stream the PARENT recursively via this SAME routine — so a
+        // grandparent is sampled identically (uniform to all depths). Classify the parent's key from its
+        // own rows (declared PK → value-statistic classifier → adjourn — never a guessed name), then fetch
+        // children under each parent row.
+        //
+        // NO local cap. The ONLY bound is the leaf consumer's fill-to-`target`. Because each level pulls
+        // its parent LAZILY (the for-await below suspends between parents), that demand propagates up the
+        // WHOLE chain: when a parent's children run out and the leaf still needs more, the loop pulls the
+        // next parent — which lazily pulls the next grandparent, and so on to the highest ancestor. That is
+        // where the "fill to N" completion actually happens — at the top of the dependency chain, not
+        // locally. (Composition / multi-var is deferred — a future optimization.)
+        const parentInfo = this.ResolveParentForVar(obj, fields, templateVars[0], companyIntegration.IntegrationID);
+        if (!parentInfo) return;
+        const parentObj = IntegrationEngineBase.Instance.GetIntegrationObjectByID(parentInfo.parentObjectID);
+        if (!parentObj) return;
+
+        let parentKey: string | null = this.GetCachedFields(parentObj.ID).find(f => f.IsPrimaryKey)?.Name ?? null;
+        const buffer: ExternalRecord[] = [];   // parent rows awaiting descent until the key is classified
+
+        const fetchChildren = async function* (this: BaseRESTIntegrationConnector, key: string, parentRec: ExternalRecord): AsyncGenerator<ExternalRecord> {
+            const idVal = parentRec.Fields?.[key];
+            if (idVal == null || String(idVal) === '') return;
+            const path = this.SubstituteTemplateVars(obj.APIPath, parentInfo.templateVar, String(idVal));
+            const fullURL = this.BuildFullURL(baseURL, path);
+            const ctx: FetchContext = { CompanyIntegration: companyIntegration, ObjectName: obj.Name, WatermarkValue: null, BatchSize: target, ContextUser: contextUser };
+            const result = await this.FetchWithPagination(auth, fullURL, obj, ctx);
+            for (const r of result.Records) {
+                r[parentInfo.fkFieldName] = String(idVal);   // tag the resolved parent FK onto the child row
+                const transformed = this.applyTransformPreservingKeys(r, obj, fields);
+                yield this.ToExternalRecord(transformed, obj.Name, pkFieldNames);
+            }
+        }.bind(this);
+
+        for await (const parentRec of this.StreamRecordsForDiscovery(companyIntegration, parentInfo.parentObjectID, contextUser, target, depth + 1)) {
+            if (parentKey) { yield* fetchChildren(parentKey, parentRec); continue; }
+            // Key not declared: buffer up to `target` parent rows, classify the key from them, then flush.
+            // This buffer pulls `target` parents up the chain (recursively resolving THEIR parents) — the
+            // "resolve N at the highest dependency" step — bounded by `target`, never the parent's total.
+            buffer.push(parentRec);
+            if (buffer.length >= target) {
+                parentKey = await this.ResolveParentKeyField(parentObj, buffer);
+                if (!parentKey) return;   // parent genuinely keyless → adjourn
+                for (const bp of buffer) yield* fetchChildren(parentKey, bp);
+                buffer.length = 0;
+            }
+        }
+        // Parent stream ended before `target`: classify on whatever we buffered, then flush its children.
+        if (!parentKey && buffer.length > 0) {
+            parentKey = await this.ResolveParentKeyField(parentObj, buffer);
+            if (parentKey) for (const bp of buffer) yield* fetchChildren(parentKey, bp);
+        }
+    }
+
+    /**
+     * DISCOVERY-ONLY fallback used by {@link FetchWithTemplateVars} when no parent rows are synced yet:
+     * live-fetch a bounded page of the parent object and return its primary-key values, so a template-var
+     * CHILD can be sampled for field stats at discovery ("sync-like fetch, no DB work"). Returns the same
+     * kind of value {@link LoadParentIDs} would (the parent PK column value used to substitute the child's
+     * template var). NEVER invoked on the sync path — the caller gates it on `ctx.DiscoverySampleParents`.
+     */
+    private async SampleParentIDsForDiscovery(parentObjectID: string, ctx: FetchContext): Promise<string[]> {
+        // The recursion depth cap is CONSUMER-decided (per-connection Configuration → operator env), not a
+        // hardcoded value the connector imposes.
+        const maxDepth = this.ReadDiscoveryConfig(ctx.CompanyIntegration)
+            .int('discoverySampleMaxDepth', 'MJ_INTEGRATION_DISCOVERY_SAMPLE_MAX_DEPTH', this.DiscoverySampleMaxDepth());
+        const depth = ctx.DiscoverySampleDepth ?? 0;
+        if (depth >= maxDepth) return [];
+        const parentObj = IntegrationEngineBase.Instance.GetIntegrationObjectByID(parentObjectID);
+        if (!parentObj) return [];
+
+        // ONE sample-size value, consumer-decided: the parent is sampled to the SAME discovery size the
+        // child targets — `ctx.BatchSize`, set from the consumer's discovery config. Nothing hardcoded
+        // here. We return ALL fetched parent IDs; the child then WALKS them (the DiscoverFieldsViaFetch
+        // loop keyset-resumes over parents) and stops when the CHILD hits its own target. So the fetched
+        // parents split naturally into two parts: those used WITH children (walked) and those WITHOUT
+        // (the remainder — they served only the parent's own key classification).
+        // The fetch is recursive (a parent that is itself a child resolves ITS parents the same way) and
+        // pure HTTP — no SQL — so it is dialect-agnostic (identical on SQL Server and Postgres).
+        const parentCtx: FetchContext = {
+            ...ctx,
+            ObjectName: parentObj.Name,
+            WatermarkValue: null,
+            // inherits ctx.BatchSize (the one consumer-decided discovery sample size) via the spread above.
+            // RESUME the parent stream from where the child left off (ctx.AfterKeyValue = the last parent
+            // this child already walked), so successive DiscoverFieldsViaFetch calls pull the NEXT page of
+            // parents — never re-fetch page one, never bulk. Unlike SYNC (which walks ALL parents via the
+            // DAG), discovery is RECORD-CONSTRAINED: the child's readPathStream stops at its own T records,
+            // so we pull only as many parent pages as the child needs — a million-row parent is streamed
+            // and cut off early. (A page-based parent with no stable key advances via its own pagination.)
+            AfterKeyValue: ctx.AfterKeyValue ?? null,
+            DiscoverySampleParents: true,
+            DiscoverySampleDepth: depth + 1,
+        };
+        const batch = await this.FetchChanges(parentCtx);
+        if (batch.Records.length === 0) return [];
+
+        // The parent's addressing-key field is NOT presupposed. It is resolved from, in order:
+        // (1) METADATA — a declared PK, if the parent already declares one;
+        // (2) DISCOVERY-VIA-FETCH — the value-statistic PK classifier run over the rows FETCH just
+        //     returned (the same pick-key-from-stats the engine uses everywhere).
+        // If neither yields a key, the parent is genuinely keyless → adjourn (return []). No field name
+        // is ever assumed.
+        const keyField = await this.ResolveParentKeyField(parentObj, batch.Records);
+        if (!keyField) return [];
+
+        // Classification ran over the full parent sample above. Return EVERY parent ID from it — the
+        // caller walks them (bounded per call by TemplateVarParentBatchSize, keyset-resumed across calls)
+        // and the DiscoverFieldsViaFetch loop stops once the CHILD reaches its own record target. So the
+        // child consumes as many of these parents as it needs, and no more.
+        const ids: string[] = [];
+        for (const rec of batch.Records) {
+            const v = rec.Fields?.[keyField];
+            if (v != null && String(v) !== '') ids.push(String(v));
+        }
+        return ids;
+    }
+
+    /**
+     * Resolves the parent's addressing-key FIELD NAME for discovery-time sampling, without presupposing
+     * it: (1) a declared PK in metadata; else (2) the value-statistic classifier over the fetched rows;
+     * else (3) a conventional identity name that is actually present in the data. Returns null when the
+     * parent is genuinely keyless (→ the caller adjourns). No name is ever assumed for an absent field.
+     */
+    private async ResolveParentKeyField(parentObj: MJIntegrationObjectEntity, records: ExternalRecord[]): Promise<string | null> {
+        // (1) metadata: a declared PK sticks.
+        const declared = this.GetCachedFields(parentObj.ID).find(f => f.IsPrimaryKey);
+        if (declared) return declared.Name;
+        // (2) discovery via fetch: let the value-statistic classifier pick the key from the fetched rows.
+        try {
+            const fields = await this.DiscoverFieldsViaStream(records.map(r => r.Fields), { ReadOnly: true });
+            const classified = fields.find(f => f.IsPrimaryKey);
+            if (classified) return classified.Name;
+        } catch { /* classifier abstains on a thin/ambiguous sample → adjourn */ }
+        // No name is ever assumed. If neither declared metadata nor the value-statistic classifier over the
+        // fetched rows yields a key, the parent is genuinely keyless → adjourn (its child is caught on the
+        // first real sync). We do NOT guess a conventional identity name.
+        return null;
+    }
+
+    /** Reads the discovery knob precedence — per-connection Configuration (int) → operator env → default. */
+    private ReadDiscoveryConfig(ci: MJCompanyIntegrationEntity): { int: (cfgKey: string, envKey: string, def: number) => number } {
+        let cfg: Record<string, unknown> = {};
+        try { if (ci.Configuration) cfg = JSON.parse(ci.Configuration) as Record<string, unknown>; } catch { /* malformed → env/default */ }
+        const asInt = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? Math.floor(v) : undefined);
+        return {
+            int: (cfgKey, envKey, def) => {
+                const fromCfg = asInt(cfg[cfgKey]);
+                if (fromCfg != null) return fromCfg;
+                const fromEnv = parseInt(process.env[envKey] ?? '', 10);
+                return Number.isFinite(fromEnv) && fromEnv > 0 ? fromEnv : def;
+            },
+        };
     }
 
     /** Stable total order over ID strings — numeric when ALL are integer-like, else lexical. */

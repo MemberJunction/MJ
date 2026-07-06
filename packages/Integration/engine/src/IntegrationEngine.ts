@@ -43,8 +43,9 @@ import { MatchEngine } from './MatchEngine.js';
 import { WatermarkService } from './WatermarkService.js';
 import { SyncLogger } from './SyncLogger.js';
 import { CONTENT_HASH_COLUMN, computeContentHashWithOverflow, contentHashBasis } from './ContentHash.js';
+import { buildContentHashPrefetchFilter } from './prefetchFilter.js';
 import { serializeKeyValue } from './KeySerialization.js';
-import { CUSTOM_OVERFLOW_COLUMN, hasUnmappedFields } from './CustomOverflow.js';
+import { CUSTOM_OVERFLOW_COLUMN, reconcileOverflowValue } from './CustomOverflow.js';
 import { partitionRecords, partitionRollupHash, diffPartitions, partitionKeyForIdentity } from './HashDiff.js';
 import { RateLimiter } from './RateLimiter.js';
 import { AdaptiveConcurrencyController, RunAdaptive } from './AdaptiveConcurrency.js';
@@ -3460,21 +3461,13 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
 
         try {
             const rv = new RunView();
-            let extraFilter: string;
-            if (pkNames.length === 1) {
-                // Single-PK fast path: WHERE pk IN (...).
-                const escaped = ids.map(id => `'${String(id).replace(/'/g, "''")}'`).join(',');
-                extraFilter = `${pkNames[0]} IN (${escaped})`;
-            } else {
-                // Composite-PK: each MatchedMJRecordID is "v1|v2|..." in PrimaryKeys order. Build
-                // an OR of per-record (pk1='v1' AND pk2='v2') clauses — bounded by batch size.
-                // Plain (unbracketed) identifiers → dialect-agnostic (SS brackets break Postgres).
-                extraFilter = ids.map(mid => {
-                    const parts = String(mid).split('|');
-                    return '(' + pkNames.map((name, i) =>
-                        `${name} = '${String(parts[i] ?? '').replace(/'/g, "''")}'`).join(' AND ') + ')';
-                }).join(' OR ');
-            }
+            // MJ#3047: quote the PK identifier(s) via the provider's dialect. A reserved-word PK column
+            // (e.g. Zendesk `custom_objects.key`) otherwise produces `WHERE key IN (...)`, which throws
+            // and — because this method is best-effort — silently disables the content-hash idempotent
+            // skip, re-writing every unchanged record each sync. Dialect-aware (SS `[key]`, PG `"key"`)
+            // so it stays valid on both targets (does NOT reintroduce the SS-brackets-break-PG problem).
+            const dialect = (this.ProviderToUse as DatabaseProviderBase).Dialect;
+            const extraFilter = buildContentHashPrefetchFilter(pkNames, ids, dialect);
             const res = await rv.RunView<Record<string, string>>({
                 EntityName: entityName,
                 Fields: [...pkNames, CONTENT_HASH_COLUMN],
@@ -3781,8 +3774,13 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // Only written when there ARE extras; when empty, this is the signal that no post-sync RSU
         // promotion is needed for this row. Backend staging only — never user-facing metadata until
         // a key is promoted to a real column. No-op on tables predating the column. See CustomOverflow.
-        if (hasField(CUSTOM_OVERFLOW_COLUMN) && hasUnmappedFields(record.UnmappedFields)) {
-            entity.Set(CUSTOM_OVERFLOW_COLUMN, JSON.stringify(record.UnmappedFields));
+        // U4 — reconcile the overflow to THIS record's CURRENT unmapped keys on every write, so a key
+        // that vanished from the source is evicted the next time its row is synced instead of sticking
+        // around forever (which also lets it be phantom-promoted, U3). reconcileOverflowValue returns
+        // null when there are no extras, clearing a prior overflow; it stays byte-identical for a
+        // customs-free row (Set(null) on an already-null column is a no-op under dirty tracking).
+        if (hasField(CUSTOM_OVERFLOW_COLUMN)) {
+            entity.Set(CUSTOM_OVERFLOW_COLUMN, reconcileOverflowValue(record.UnmappedFields));
         }
 
         // ── Per-record sync ledger (plan §2.5) ───────────────────────────────────────

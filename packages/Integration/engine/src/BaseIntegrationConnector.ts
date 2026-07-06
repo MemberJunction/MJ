@@ -150,6 +150,21 @@ export interface FetchContext {
     RateLimitAcquire?: () => Promise<void>;
     RateLimitReport?: (throttledErr?: unknown) => void;
     MaxConcurrency?: number;
+    /**
+     * DISCOVERY-ONLY flag (§sample-discover per entity). Set by `DiscoverFieldsViaFetch` so that a
+     * template-var CHILD sampled at discovery — when the DB holds no synced parent rows yet — can
+     * live-sample a bounded page of its parent instead of yielding zero records (which would leave the
+     * child with no sampled field stats). A real sync NEVER sets this, so the `ZERO_PARENTS` guard is
+     * unchanged on the sync path. Opt-in + back-compat: undefined ≡ current behavior.
+     */
+    DiscoverySampleParents?: boolean;
+    /**
+     * Recursion depth of the discovery parent-sampling fallback, so a multi-level template chain
+     * (`/orgs/{OrgId}/profiles/{ProfileId}/events`) that samples parents-of-parents cannot loop
+     * unboundedly. Incremented per level; capped by `DiscoverySampleMaxDepth()`. Internal to the
+     * discovery fallback — callers leave it undefined (≡ 0).
+     */
+    DiscoverySampleDepth?: number;
 }
 
 /**
@@ -644,42 +659,55 @@ export abstract class BaseIntegrationConnector {
         // `discoveryMaxRecords` knob. Sampling itself is the FALLBACK path — used only when the source lacks a
         // describe endpoint that yields pk+type+columns; a describe-capable connector returns here-unused.
         const maxRecords = opts.MaxRecords ?? envInt('MJ_INTEGRATION_DISCOVERY_MAX_RECORDS', 500);
-        const self = this;
-        async function* readPathStream(): AsyncGenerator<Record<string, unknown>> {
-            let ctx: FetchContext = {
-                CompanyIntegration: companyIntegration,
-                ObjectName: objectName,
-                WatermarkValue: null,   // FULL fetch — discovery wants breadth, not the incremental delta
-                BatchSize: batchSize,
-                ContextUser: contextUser,
-            };
-            let yielded = 0;
-            for (;;) {
-                const batch = await self.FetchChanges(ctx);
-                for (const rec of batch.Records) {
-                    yield rec.Fields;
-                    if (++yielded >= maxRecords) return;
-                }
-                if (!batch.HasMore) break;
-                ctx = {
-                    ...ctx,
-                    WatermarkValue: null,
-                    CurrentPage: batch.NextPage,
-                    CurrentOffset: batch.NextOffset,
-                    CurrentCursor: batch.NextCursor,
-                    AfterKeyValue: batch.NextAfterKeyValue ?? ctx.AfterKeyValue,
-                };
-            }
-        }
         try {
-            return await this.DiscoverFieldsViaStream(readPathStream(), {
-                Discovery: { TimeBudgetMs: timeBudgetMs },
-                ReadOnly: true,
-            });
+            return await this.DiscoverFieldsViaStream(
+                this.DiscoverySampleRecordStream(companyIntegration, objectName, contextUser, batchSize, maxRecords),
+                { Discovery: { TimeBudgetMs: timeBudgetMs }, ReadOnly: true },
+            );
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             console.warn(`[DiscoverFieldsViaFetch] read-path discovery failed for "${objectName}" (${msg}); falling back to single-sample DiscoverFields.`);
             return this.DiscoverFields(companyIntegration, objectName, contextUser);
+        }
+    }
+
+    /**
+     * The record source `DiscoverFieldsViaFetch` streams for field/PK inference. Default: loop
+     * `FetchChanges` (full fetch), yielding each record's fields until `maxRecords`. A protocol subclass
+     * (e.g. REST) overrides this to sample a template-var CHILD with the correct record-constrained,
+     * recursive stream. Yields plain field maps; the caller stops it at `maxRecords`.
+     */
+    protected async *DiscoverySampleRecordStream(
+        companyIntegration: MJCompanyIntegrationEntity,
+        objectName: string,
+        contextUser: UserInfo,
+        batchSize: number,
+        maxRecords: number,
+    ): AsyncGenerator<Record<string, unknown>> {
+        let ctx: FetchContext = {
+            CompanyIntegration: companyIntegration,
+            ObjectName: objectName,
+            WatermarkValue: null,   // FULL fetch — discovery wants breadth, not the incremental delta
+            BatchSize: batchSize,
+            ContextUser: contextUser,
+            DiscoverySampleParents: true,
+        };
+        let yielded = 0;
+        for (;;) {
+            const batch = await this.FetchChanges(ctx);
+            for (const rec of batch.Records) {
+                yield rec.Fields;
+                if (++yielded >= maxRecords) return;
+            }
+            if (!batch.HasMore) break;
+            ctx = {
+                ...ctx,
+                WatermarkValue: null,
+                CurrentPage: batch.NextPage,
+                CurrentOffset: batch.NextOffset,
+                CurrentCursor: batch.NextCursor,
+                AfterKeyValue: batch.NextAfterKeyValue ?? ctx.AfterKeyValue,
+            };
         }
     }
 
