@@ -5,6 +5,7 @@
 
 import os from 'os';
 import { v4 as uuidv4 } from 'uuid';
+import { Subscription } from 'rxjs';
 import {
     UserInfo,
     Metadata,
@@ -64,6 +65,20 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
     private pollingTimer?: NodeJS.Timeout;
     private isPolling: boolean = false;
     private hasInitialized: boolean = false;
+
+    /**
+     * Subscription to the base engine's {@link SchedulingEngineBase.JobsChanged$}. Created
+     * once (lifetime of the engine) so an activation that arrives after boot — when polling
+     * was suspended because there were zero active jobs — can wake the poll timer. Torn down
+     * only on full service shutdown; the internal "all jobs removed" stop keeps it alive.
+     */
+    private _jobsChangedSubscription?: Subscription;
+
+    /**
+     * The user context polling was started with. Retained so the {@link JobsChanged$} handler
+     * can restart polling with the same (system) user after a boot-time suspension.
+     */
+    private _pollingContextUser?: UserInfo;
 
     /** Job IDs we have already warned about for sub-threshold run frequency. */
     private highFrequencyWarnedJobIds: Set<string> = new Set();
@@ -300,12 +315,19 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
         // Order: Config first (so this.ScheduledJobs is populated), then
         // initializeNextRunTimes / cleanupStaleLocks / permission probe.
         await this.Config(false, contextUser);
+
+        // Retain the context user and subscribe to job-change notifications BEFORE the
+        // zero-jobs early-return below, so that if polling is suspended at boot (no active
+        // jobs), a later activation still fires JobsChanged$ and wakes the timer.
+        this._pollingContextUser = contextUser;
+        this.ensureJobChangeSubscription();
+
         await this.initializeNextRunTimes(contextUser);
         await this.cleanupStaleLocks(contextUser);
         await this.probeLockSprocPermissions();
 
         if (this.ScheduledJobs.length === 0) {
-            console.log(`📅 Scheduled Jobs: No active jobs found, polling not started`);
+            console.log(`📅 Scheduled Jobs: No active jobs found, polling not started (will auto-start when a job is activated)`);
             return;
         }
 
@@ -370,6 +392,14 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
      * @param opts.maxWaitMs - Bound the wait (only meaningful with waitForInflight)
      */
     public async StopPolling(opts?: { waitForInflight?: boolean; maxWaitMs?: number }): Promise<void> {
+        // Full service shutdown (ScheduledJobsService.Stop passes waitForInflight) releases the
+        // job-change listener. The internal "all jobs removed" stop passes NO opts and
+        // deliberately keeps the subscription alive so a later activation re-wakes polling.
+        // This runs before the isPolling guard so an already-suspended engine still tears down.
+        if (opts?.waitForInflight) {
+            this.releaseJobChangeSubscription();
+        }
+
         if (!this.isPolling) return;
 
         // Order matters: block new dispatches BEFORE snapshotting inflight.
@@ -435,6 +465,52 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
         if (!this.isPolling && this.ScheduledJobs.length > 0) {
             console.log(`📅 Scheduled Jobs: Jobs detected, starting polling`);
             this.StartPolling(contextUser);
+        }
+    }
+
+    /**
+     * Subscribe once (engine lifetime) to the base engine's job-change notifications.
+     * Idempotent — repeated calls (e.g. a restart via {@link OnJobChanged}/{@link onBaseJobsChanged})
+     * are no-ops while the subscription is live.
+     */
+    private ensureJobChangeSubscription(): void {
+        if (this._jobsChangedSubscription) {
+            return;
+        }
+        this._jobsChangedSubscription = this.Base.JobsChanged$.subscribe(() => {
+            // Fire-and-forget; onBaseJobsChanged owns its error handling.
+            void this.onBaseJobsChanged();
+        });
+    }
+
+    /**
+     * Tear down the job-change subscription. Called only on full service shutdown.
+     */
+    private releaseJobChangeSubscription(): void {
+        if (this._jobsChangedSubscription) {
+            this._jobsChangedSubscription.unsubscribe();
+            this._jobsChangedSubscription = undefined;
+        }
+    }
+
+    /**
+     * React to a change in the active scheduled-job set (surfaced by the base engine after
+     * it has reconciled and Active-filtered {@link ScheduledJobs}). Recomputes the polling
+     * cadence and — if polling is currently suspended but active jobs now exist — restarts it.
+     *
+     * Cannot recurse: {@link StartPolling} calls `Config(false)`, a no-op once metadata is
+     * loaded, so it emits no further change events; and it short-circuits when already polling.
+     */
+    private async onBaseJobsChanged(): Promise<void> {
+        try {
+            this.UpdatePollingInterval();
+
+            if (!this.isPolling && this.ScheduledJobs.length > 0 && this._pollingContextUser) {
+                console.log(`📅 Scheduled Jobs: Job activated, starting polling`);
+                await this.StartPolling(this._pollingContextUser);
+            }
+        } catch (error) {
+            this.logError('Error handling scheduled job change notification', error);
         }
     }
 
