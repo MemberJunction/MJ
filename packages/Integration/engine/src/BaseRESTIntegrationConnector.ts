@@ -669,6 +669,143 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
     }
 
     /**
+     * REST override (§sample-discover): a SINGLE-template-var CHILD is sampled with the recursive,
+     * record-constrained {@link StreamRecordsForDiscovery}. Flat objects and multi-var-in-one-path
+     * children fall back to the generic FetchChanges loop (the latter is handled by DescendTemplateVars).
+     */
+    protected override async *DiscoverySampleRecordStream(
+        companyIntegration: MJCompanyIntegrationEntity,
+        objectName: string,
+        contextUser: UserInfo,
+        batchSize: number,
+        maxRecords: number,
+    ): AsyncGenerator<Record<string, unknown>> {
+        const obj = this.GetCachedObject(companyIntegration.IntegrationID, objectName);
+        if (this.DetectTemplateVars(obj.APIPath).length !== 1) {
+            yield* super.DiscoverySampleRecordStream(companyIntegration, objectName, contextUser, batchSize, maxRecords);
+            return;
+        }
+        let yielded = 0;
+        for await (const rec of this.StreamRecordsForDiscovery(companyIntegration, obj.ID, contextUser, maxRecords, 0)) {
+            yield rec.Fields;
+            if (++yielded >= maxRecords) return;
+        }
+    }
+
+    /**
+     * DISCOVERY-ONLY recursive lazy sampler. Yields records of `objectID` for field/PK analysis by
+     * STREAMING — never bulk. A top-level object paginates its endpoint directly. A template-var CHILD
+     * streams its PARENT (recursively, via this same routine), classifies the parent's key from the
+     * parent's own ~`target` rows (declared PK → value-statistic classifier → adjourn — never a guessed
+     * name), and fetches children under parent rows until the child has `target`. Parent rows beyond what
+     * the child needs are analysis-only — they keep the parent's key classified on a CONSISTENT ~`target`
+     * sample; if the child needs MORE parents than `target`, it keeps streaming, so the parent count may
+     * be over OR under `target`. Record-constrained (unlike sync, which walks ALL rows via the DAG): a
+     * million-row ancestor is streamed and cut off early. Pure HTTP — no SQL, dialect-agnostic.
+     */
+    private async *StreamRecordsForDiscovery(
+        companyIntegration: MJCompanyIntegrationEntity,
+        objectID: string,
+        contextUser: UserInfo,
+        target: number,
+        depth: number,
+    ): AsyncGenerator<ExternalRecord> {
+        const maxDepth = this.ReadDiscoveryConfig(companyIntegration)
+            .int('discoverySampleMaxDepth', 'MJ_INTEGRATION_DISCOVERY_SAMPLE_MAX_DEPTH', this.DiscoverySampleMaxDepth());
+        if (depth > maxDepth) return;
+        const obj = IntegrationEngineBase.Instance.GetIntegrationObjectByID(objectID);
+        if (!obj) return;
+        const fields = this.GetCachedFields(obj.ID);
+        const auth = await this.Authenticate(companyIntegration, contextUser);
+        const baseURL = this.GetBaseURL(companyIntegration, auth);
+        const templateVars = this.DetectTemplateVars(obj.APIPath);
+        const pkFieldNames = this.FindPrimaryKeyFieldNames(fields);
+
+        // TOP-LEVEL: paginate the flat endpoint lazily; the caller stops pulling at its own target.
+        if (templateVars.length === 0) {
+            let pageCtx: FetchContext = { CompanyIntegration: companyIntegration, ObjectName: obj.Name, WatermarkValue: null, BatchSize: target, ContextUser: contextUser };
+            for (let guard = 0; guard < 100_000; guard++) {
+                const batch = await this.FetchFlat(auth, baseURL, obj, fields, pageCtx);
+                for (const rec of batch.Records) yield rec;
+                if (!batch.HasMore) return;
+                pageCtx = { ...pageCtx, CurrentPage: batch.NextPage, CurrentOffset: batch.NextOffset, CurrentCursor: batch.NextCursor };
+            }
+            return;
+        }
+
+        // CHILD (single template var): stream the parent recursively, classify its key, fetch children.
+        const parentInfo = this.ResolveParentForVar(obj, fields, templateVars[0], companyIntegration.IntegrationID);
+        if (!parentInfo) return;
+        const parentObj = IntegrationEngineBase.Instance.GetIntegrationObjectByID(parentInfo.parentObjectID);
+        if (!parentObj) return;
+
+        let parentKey: string | null = this.GetCachedFields(parentObj.ID).find(f => f.IsPrimaryKey)?.Name ?? null;
+        let childCount = 0;
+        let parentCount = 0;
+        const buffer: ExternalRecord[] = [];   // parent rows awaiting child-fetch until the key is classified
+
+        const fetchChildren = async function* (this: BaseRESTIntegrationConnector, key: string, parentRec: ExternalRecord): AsyncGenerator<ExternalRecord> {
+            const idVal = parentRec.Fields?.[key];
+            if (idVal == null || String(idVal) === '') return;
+            yield* this.FetchChildRecordsUnderParent(companyIntegration, contextUser, auth, baseURL, obj, fields, parentInfo, String(idVal), pkFieldNames);
+        }.bind(this);
+
+        for await (const parentRec of this.StreamRecordsForDiscovery(companyIntegration, parentInfo.parentObjectID, contextUser, target, depth + 1)) {
+            parentCount++;
+            if (!parentKey) {
+                buffer.push(parentRec);
+                if (buffer.length >= target) {
+                    parentKey = await this.ResolveParentKeyField(parentObj, buffer);
+                    if (!parentKey) return;   // parent genuinely keyless → adjourn
+                    for (const bp of buffer) {
+                        if (childCount >= target) break;
+                        for await (const c of fetchChildren(parentKey, bp)) { yield c; if (++childCount >= target) break; }
+                    }
+                    buffer.length = 0;
+                }
+            } else if (childCount < target) {
+                for await (const c of fetchChildren(parentKey, parentRec)) { yield c; if (++childCount >= target) break; }
+            }
+            // Both consistency targets met: the child has ~target rows AND the parent has been sampled to
+            // ~target (so its key was classified on a consistent sample). Extra parents were analysis-only.
+            if (childCount >= target && parentCount >= target) return;
+        }
+        // Parent stream ended before target rows: classify on whatever we buffered, then flush children.
+        if (!parentKey && buffer.length > 0) {
+            parentKey = await this.ResolveParentKeyField(parentObj, buffer);
+            if (parentKey) {
+                for (const bp of buffer) {
+                    if (childCount >= target) break;
+                    for await (const c of fetchChildren(parentKey, bp)) { yield c; if (++childCount >= target) break; }
+                }
+            }
+        }
+    }
+
+    /** Fetches (paginated) the child records under ONE parent id, tagged with the resolved FK. */
+    private async *FetchChildRecordsUnderParent(
+        companyIntegration: MJCompanyIntegrationEntity,
+        contextUser: UserInfo,
+        auth: RESTAuthContext,
+        baseURL: string,
+        obj: MJIntegrationObjectEntity,
+        fields: MJIntegrationObjectFieldEntity[],
+        parentInfo: ResolvedTemplateVar,
+        parentIdValue: string,
+        pkFieldNames: string[],
+    ): AsyncGenerator<ExternalRecord> {
+        const path = this.SubstituteTemplateVars(obj.APIPath, parentInfo.templateVar, parentIdValue);
+        const fullURL = this.BuildFullURL(baseURL, path);
+        const ctx: FetchContext = { CompanyIntegration: companyIntegration, ObjectName: obj.Name, WatermarkValue: null, BatchSize: 100, ContextUser: contextUser };
+        const result = await this.FetchWithPagination(auth, fullURL, obj, ctx);
+        for (const r of result.Records) {
+            r[parentInfo.fkFieldName] = parentIdValue;   // tag the resolved FK value onto the child row
+            const transformed = this.applyTransformPreservingKeys(r, obj, fields);
+            yield this.ToExternalRecord(transformed, obj.Name, pkFieldNames);
+        }
+    }
+
+    /**
      * DISCOVERY-ONLY fallback used by {@link FetchWithTemplateVars} when no parent rows are synced yet:
      * live-fetch a bounded page of the parent object and return its primary-key values, so a template-var
      * CHILD can be sampled for field stats at discovery ("sync-like fetch, no DB work"). Returns the same

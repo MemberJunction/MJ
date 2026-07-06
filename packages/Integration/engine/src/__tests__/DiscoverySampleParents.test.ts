@@ -157,5 +157,17 @@ describe('BaseRESTIntegrationConnector — discovery-time parent sampling (§sam
             expect(names).toContain('id');
             expect(names).toContain('OrgId');
         });
+
+        it('the recursive sampler is RECORD-CONSTRAINED: streams parents only until the child hits its target', async () => {
+            // 5 parents, 1 child each. With a target of 2, StreamRecordsForDiscovery must fetch children
+            // under only ~2 parents and STOP — it must NOT walk all 5. (Sync walks everything via the DAG;
+            // discovery is record-constrained, so a million-row parent is streamed and cut off early.)
+            orgRows = [{ OrgId: 'o1' }, { OrgId: 'o2' }, { OrgId: 'o3' }, { OrgId: 'o4' }, { OrgId: 'o5' }];
+            const c = new TestConnector();
+            const ci = { IntegrationID: 'int1' } as unknown as MJCompanyIntegrationEntity;
+            await c.DiscoverFieldsViaFetch(ci, 'events', {} as UserInfo, { MaxRecords: 2 });
+            const kids = c.urls.map(u => u.replace('https://api.test', '')).filter(p => p.endsWith('/events'));
+            expect(kids.length).toBe(2);   // stopped at the target — did NOT fetch under all 5 parents
+        });
     });
 });

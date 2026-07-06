@@ -659,43 +659,55 @@ export abstract class BaseIntegrationConnector {
         // `discoveryMaxRecords` knob. Sampling itself is the FALLBACK path — used only when the source lacks a
         // describe endpoint that yields pk+type+columns; a describe-capable connector returns here-unused.
         const maxRecords = opts.MaxRecords ?? envInt('MJ_INTEGRATION_DISCOVERY_MAX_RECORDS', 500);
-        const self = this;
-        async function* readPathStream(): AsyncGenerator<Record<string, unknown>> {
-            let ctx: FetchContext = {
-                CompanyIntegration: companyIntegration,
-                ObjectName: objectName,
-                WatermarkValue: null,   // FULL fetch — discovery wants breadth, not the incremental delta
-                BatchSize: batchSize,
-                ContextUser: contextUser,
-                DiscoverySampleParents: true,   // §sample-discover: let a template-var child live-sample its parent (no synced rows exist at discovery)
-            };
-            let yielded = 0;
-            for (;;) {
-                const batch = await self.FetchChanges(ctx);
-                for (const rec of batch.Records) {
-                    yield rec.Fields;
-                    if (++yielded >= maxRecords) return;
-                }
-                if (!batch.HasMore) break;
-                ctx = {
-                    ...ctx,
-                    WatermarkValue: null,
-                    CurrentPage: batch.NextPage,
-                    CurrentOffset: batch.NextOffset,
-                    CurrentCursor: batch.NextCursor,
-                    AfterKeyValue: batch.NextAfterKeyValue ?? ctx.AfterKeyValue,
-                };
-            }
-        }
         try {
-            return await this.DiscoverFieldsViaStream(readPathStream(), {
-                Discovery: { TimeBudgetMs: timeBudgetMs },
-                ReadOnly: true,
-            });
+            return await this.DiscoverFieldsViaStream(
+                this.DiscoverySampleRecordStream(companyIntegration, objectName, contextUser, batchSize, maxRecords),
+                { Discovery: { TimeBudgetMs: timeBudgetMs }, ReadOnly: true },
+            );
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             console.warn(`[DiscoverFieldsViaFetch] read-path discovery failed for "${objectName}" (${msg}); falling back to single-sample DiscoverFields.`);
             return this.DiscoverFields(companyIntegration, objectName, contextUser);
+        }
+    }
+
+    /**
+     * The record source `DiscoverFieldsViaFetch` streams for field/PK inference. Default: loop
+     * `FetchChanges` (full fetch), yielding each record's fields until `maxRecords`. A protocol subclass
+     * (e.g. REST) overrides this to sample a template-var CHILD with the correct record-constrained,
+     * recursive stream. Yields plain field maps; the caller stops it at `maxRecords`.
+     */
+    protected async *DiscoverySampleRecordStream(
+        companyIntegration: MJCompanyIntegrationEntity,
+        objectName: string,
+        contextUser: UserInfo,
+        batchSize: number,
+        maxRecords: number,
+    ): AsyncGenerator<Record<string, unknown>> {
+        let ctx: FetchContext = {
+            CompanyIntegration: companyIntegration,
+            ObjectName: objectName,
+            WatermarkValue: null,   // FULL fetch — discovery wants breadth, not the incremental delta
+            BatchSize: batchSize,
+            ContextUser: contextUser,
+            DiscoverySampleParents: true,
+        };
+        let yielded = 0;
+        for (;;) {
+            const batch = await this.FetchChanges(ctx);
+            for (const rec of batch.Records) {
+                yield rec.Fields;
+                if (++yielded >= maxRecords) return;
+            }
+            if (!batch.HasMore) break;
+            ctx = {
+                ...ctx,
+                WatermarkValue: null,
+                CurrentPage: batch.NextPage,
+                CurrentOffset: batch.NextOffset,
+                CurrentCursor: batch.NextCursor,
+                AfterKeyValue: batch.NextAfterKeyValue ?? ctx.AfterKeyValue,
+            };
         }
     }
 
