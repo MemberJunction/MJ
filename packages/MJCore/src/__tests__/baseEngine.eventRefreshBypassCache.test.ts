@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { BaseEngine, BaseEnginePropertyConfig } from '../generic/baseEngine';
 import { BaseEntity, BaseEntityEvent } from '../generic/baseEntity';
 import { UserInfo } from '../generic/securityInfo';
@@ -13,11 +13,15 @@ import { UserInfo } from '../generic/securityInfo';
  * '_UserApplications') re-synced the PRE-write snapshot and the UI trailed by one op until
  * a full page reload repopulated the cache.
  *
- * Fix: an event-triggered full refresh reads with BypassCache=true. Reading through a
- * cache immediately after the write that changed the data is exactly the hazard, so the
- * "data just changed, re-read" path must go to the source of truth.
+ * Fix: EVERY event-triggered full refresh reads with BypassCache=true — reading through a
+ * cache immediately after the write that changed the data is the hazard, so the "data just
+ * changed, re-read" path must go to the source of truth. There are three such sites, all
+ * covered: the debounced local-event path (ProcessEntityEvents), the remote-invalidate
+ * fallback (HandleRemoteInvalidateEvent), and the bounded retry (scheduleEventRefreshRetry).
+ * The retry matters especially: if it read through the cache it could "succeed" with stale
+ * data and silently reinstate the bug.
  *
- * This is distinct from (and complementary to) the ordering guard in
+ * Distinct from (and complementary to) the ordering guard in
  * baseEngine.concurrentRefresh.test.ts: BypassCache makes each event refresh read fresh;
  * the generation guard makes the latest-initiated fresh read win when several overlap.
  */
@@ -25,6 +29,8 @@ class TestEngine extends BaseEngine<TestEngine> {
     public _items: BaseEntity[] = [];
     /** bypassCache value captured for each LoadSingleConfig invocation, in order. */
     public bypassCacheArgs: boolean[] = [];
+    /** Outcome per LoadSingleConfig invocation (shifted per call); defaults to success. */
+    public LoadResults: boolean[] = [];
 
     public async Config(_forceRefresh?: boolean, _contextUser?: UserInfo): Promise<void> {
         // no-op — configs are injected via SetConfigsForTest
@@ -38,17 +44,18 @@ class TestEngine extends BaseEngine<TestEngine> {
         await this.ProcessEntityEvents(events);
     }
 
-    // Stub the real refresh (needs a provider); capture bypassCache and record success in the
-    // data map the way HandleSingleViewResult does so configLoadedSuccessfully() sees it.
+    // Stub the real refresh (needs a provider); capture bypassCache and record the outcome in
+    // the data map the way HandleSingleViewResult does so configLoadedSuccessfully() sees it.
     protected override async LoadSingleConfig(
         config: BaseEnginePropertyConfig,
         _contextUser: UserInfo,
         bypassCache: boolean = false,
     ): Promise<void> {
         this.bypassCacheArgs.push(bypassCache);
+        const ok = this.LoadResults.length > 0 ? (this.LoadResults.shift() as boolean) : true;
         (this as unknown as {
             _dataMap: Map<string, { entityName?: string; data: unknown[]; loadedSuccessfully: boolean }>;
-        })._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: this._items, loadedSuccessfully: true });
+        })._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: this._items, loadedSuccessfully: ok });
     }
 }
 
@@ -75,6 +82,10 @@ function makeFilteredConfig(): BaseEnginePropertyConfig {
     });
 }
 
+afterEach(() => {
+    vi.useRealTimers();
+});
+
 describe('BaseEngine event-triggered refresh bypasses the cache', () => {
     it('passes bypassCache=true to LoadSingleConfig on an event-driven full refresh', async () => {
         const engine = new TestEngine();
@@ -93,6 +104,21 @@ describe('BaseEngine event-triggered refresh bypasses the cache', () => {
         await engine.ProcessEntityEventsForTest([updateEvent(makeItem('a'))]);
         await engine.ProcessEntityEventsForTest([updateEvent(makeItem('b'))]);
 
+        expect(engine.bypassCacheArgs).toEqual([true, true]);
+    });
+
+    it('the bounded retry ALSO bypasses the cache (a transient failure must not "succeed" on stale data)', async () => {
+        vi.useFakeTimers();
+        const engine = new TestEngine();
+        engine.SetConfigsForTest([makeFilteredConfig()]);
+        engine.LoadResults = [false, true]; // initial event refresh fails transiently, retry succeeds
+
+        await engine.ProcessEntityEventsForTest([updateEvent(makeItem('a'))]);
+        expect(engine.bypassCacheArgs).toEqual([true]); // initial refresh bypassed
+
+        await vi.advanceTimersByTimeAsync(2000); // scheduleEventRefreshRetry fires (2s * attempt 1)
+
+        // Both the initial refresh AND the retry must have bypassed the cache.
         expect(engine.bypassCacheArgs).toEqual([true, true]);
     });
 });

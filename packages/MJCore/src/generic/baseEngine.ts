@@ -827,10 +827,13 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 // Fall through to server fetch if direct delete failed
             }
 
-            // Fallback: re-fetch from server (missing data or apply failure)
+            // Fallback: re-fetch from server (missing data or apply failure). Bypass the cache
+            // for the same reason as the local-event path: this fetch runs BECAUSE a
+            // (cross-server) write signaled the cache stale, so reading back through it would
+            // re-sync the pre-write snapshot.
             let refreshCount = 0;
             for (const config of matchingConfigs) {
-                await this.LoadSingleConfig(config, this._contextUser);
+                await this.LoadSingleConfig(config, this._contextUser, /*bypassCache*/ true);
                 if (!this.configLoadedSuccessfully(config.PropertyName)) {
                     // Same one-shot hazard as the debounced path: the invalidation event is
                     // consumed, so a transient failure here needs a bounded retry too.
@@ -1278,7 +1281,10 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         const timer = setTimeout(async () => {
             this._eventRefreshRetryTimers.delete(key);
             try {
-                await this.LoadSingleConfig(config, this._contextUser);
+                // Bypass the cache: this retries an event-triggered refresh, so the cache is
+                // still the stale copy the original write invalidated — reading through it
+                // could "succeed" with stale data and reinstate the one-operation-behind bug.
+                await this.LoadSingleConfig(config, this._contextUser, /*bypassCache*/ true);
                 if (this.configLoadedSuccessfully(key)) {
                     await this.AdditionalLoading(this._contextUser);
                 } else {
