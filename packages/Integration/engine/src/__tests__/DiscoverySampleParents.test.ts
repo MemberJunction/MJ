@@ -26,8 +26,7 @@ const FIELDS: Record<string, MJIntegrationObjectFieldEntity[]> = {
         f({ Name: 'id', IsPrimaryKey: true, Status: 'Active', Sequence: 1 }),
         f({ Name: 'OrgId', RelatedIntegrationObjectID: 'objOrg', Status: 'Active', Sequence: 2 }),
     ],
-    // Keyless parent: declares NO IsPrimaryKey. Its key must be resolved from the FETCHED rows (classifier
-    // / conventional-present fallback), never presupposed.
+    // Keyless parent: declares NO IsPrimaryKey. Its key must be resolved from the FETCHED rows (the value-statistic classifier over the fetched rows), never presupposed.
     objOrgKeyless: [f({ Name: 'id', Status: 'Active', Sequence: 1 })],
     objEventsKL: [
         f({ Name: 'evId', IsPrimaryKey: true, Status: 'Active', Sequence: 1 }),
@@ -128,7 +127,7 @@ describe('BaseRESTIntegrationConnector — discovery-time parent sampling (§sam
 
         it('resolves a keyless parent\'s key from the FETCHED rows (no declared PK) — not presupposed', async () => {
             // OrgsKL declares no IsPrimaryKey. The key must come from the rows fetch returned — the
-            // value-statistic classifier / conventional-present fallback picks 'id' (which IS in the data),
+            // value-statistic classifier over the fetched rows picks 'id',
             // never an assumed name. So a keyless parent's child still samples.
             const c = new TestConnector();
             const result = await c.FetchChanges({ ...childCtx(), ObjectName: 'eventsKL', DiscoverySampleParents: true });

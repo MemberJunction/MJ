@@ -658,26 +658,11 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
     }
 
     /**
-     * DISCOVERY-ONLY: the per-object row-sample TARGET — how many rows every table aims to sample at
-     * discovery (uniformly), enough for the value-statistic PK classifier to determine a key + give
-     * representative field stats. Defaults to ~50 (a page may return fewer, which is fine).
-     *
-     * For a template-var CHILD, this doubles as the pool of PARENT rows we fetch: we sample this many
-     * parents (to classify the PARENT's key) and the child then ACCUMULATES its own records by WALKING
-     * those parents — the {@link DiscoverFieldsViaFetch} loop keyset-resumes over them — until the child
-     * reaches its own record target or the pool is exhausted. So the child uses "some or all" of the
-     * sampled parents; there is deliberately NO fixed "N parents per child" cap. Raise this if a vendor's
-     * children are so sparse that ~50 parents don't yield a representative child sample.
-     */
-    protected DiscoveryParentSampleSize(): number {
-        return 50;
-    }
-
-    /**
-     * DISCOVERY-ONLY: recursion cap for multi-level template chains (a parent that is itself a
-     * template-var child). Bounds the parent-of-parent live-sampling so a malformed metadata cycle
-     * cannot loop unboundedly. The per-call PARENT_CYCLE guard already stops a single-object cycle;
-     * this bounds the cross-object discovery recursion.
+     * DISCOVERY-ONLY: last-resort SAFETY bound on the recursion depth for multi-level template chains (a
+     * parent that is itself a template-var child), so a malformed metadata cycle cannot loop unboundedly.
+     * This is only the fallback when the consumer sets no `discoverySampleMaxDepth` in Configuration and
+     * no env override is present — the consumer decides the real value. A recursion cap MUST have some
+     * bound, so a conservative default remains here; override the getter to change the fallback.
      */
     protected DiscoverySampleMaxDepth(): number {
         return 4;
@@ -691,24 +676,28 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
      * template var). NEVER invoked on the sync path — the caller gates it on `ctx.DiscoverySampleParents`.
      */
     private async SampleParentIDsForDiscovery(parentObjectID: string, ctx: FetchContext): Promise<string[]> {
+        // The recursion depth cap is CONSUMER-decided (per-connection Configuration → operator env), not a
+        // hardcoded value the connector imposes.
+        const maxDepth = this.ReadDiscoveryConfig(ctx.CompanyIntegration)
+            .int('discoverySampleMaxDepth', 'MJ_INTEGRATION_DISCOVERY_SAMPLE_MAX_DEPTH', this.DiscoverySampleMaxDepth());
         const depth = ctx.DiscoverySampleDepth ?? 0;
-        if (depth >= this.DiscoverySampleMaxDepth()) return [];
+        if (depth >= maxDepth) return [];
         const parentObj = IntegrationEngineBase.Instance.GetIntegrationObjectByID(parentObjectID);
         if (!parentObj) return [];
 
-        // Fetch a real sample of the parent (~50) to classify ITS key. We return ALL of these parent IDs —
-        // the child then WALKS them (the DiscoverFieldsViaFetch loop keyset-resumes over parents) and
-        // stops when the CHILD hits its own record target, so it uses "some or all" of them. There is NO
-        // fixed "N parents per child" cap here — the child's target drives how many parents get walked.
-        const parentSampleSize = Math.max(1, this.DiscoveryParentSampleSize());   // ~50 parent rows fetched + the walk pool
-        // FETCH the parent's OWN records first — recursively: if the parent is ITSELF a template-var
-        // child, FetchChanges resolves ITS parents the same way (depth-capped). No SQL here (it is an
-        // HTTP fetch), so this is dialect-agnostic — identical on SQL Server and Postgres.
+        // ONE sample-size value, consumer-decided: the parent is sampled to the SAME discovery size the
+        // child targets — `ctx.BatchSize`, set from the consumer's discovery config. Nothing hardcoded
+        // here. We return ALL fetched parent IDs; the child then WALKS them (the DiscoverFieldsViaFetch
+        // loop keyset-resumes over parents) and stops when the CHILD hits its own target. So the fetched
+        // parents split naturally into two parts: those used WITH children (walked) and those WITHOUT
+        // (the remainder — they served only the parent's own key classification).
+        // The fetch is recursive (a parent that is itself a child resolves ITS parents the same way) and
+        // pure HTTP — no SQL — so it is dialect-agnostic (identical on SQL Server and Postgres).
         const parentCtx: FetchContext = {
             ...ctx,
             ObjectName: parentObj.Name,
             WatermarkValue: null,
-            BatchSize: Math.min(ctx.BatchSize, parentSampleSize),
+            // inherits ctx.BatchSize (the one consumer-decided discovery sample size) via the spread above
             CurrentPage: undefined,
             CurrentOffset: undefined,
             CurrentCursor: undefined,
@@ -756,15 +745,26 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
             const fields = await this.DiscoverFieldsViaStream(records.map(r => r.Fields), { ReadOnly: true });
             const classified = fields.find(f => f.IsPrimaryKey);
             if (classified) return classified.Name;
-        } catch { /* classifier abstains on a thin/ambiguous sample → fall through */ }
-        // (3) fair fallback: a conventional identity name — but ONLY if that field is present in the data.
-        const firstFields = records[0]?.Fields ?? {};
-        const byLower = new Map(Object.keys(firstFields).map(k => [k.toLowerCase(), k]));
-        for (const conventional of ['id', 'key', 'guid', 'uuid']) {
-            const actual = byLower.get(conventional);
-            if (actual) return actual;
-        }
-        return null;   // genuinely keyless → adjourn
+        } catch { /* classifier abstains on a thin/ambiguous sample → adjourn */ }
+        // No name is ever assumed. If neither declared metadata nor the value-statistic classifier over the
+        // fetched rows yields a key, the parent is genuinely keyless → adjourn (its child is caught on the
+        // first real sync). We do NOT guess a conventional identity name.
+        return null;
+    }
+
+    /** Reads the discovery knob precedence — per-connection Configuration (int) → operator env → default. */
+    private ReadDiscoveryConfig(ci: MJCompanyIntegrationEntity): { int: (cfgKey: string, envKey: string, def: number) => number } {
+        let cfg: Record<string, unknown> = {};
+        try { if (ci.Configuration) cfg = JSON.parse(ci.Configuration) as Record<string, unknown>; } catch { /* malformed → env/default */ }
+        const asInt = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? Math.floor(v) : undefined);
+        return {
+            int: (cfgKey, envKey, def) => {
+                const fromCfg = asInt(cfg[cfgKey]);
+                if (fromCfg != null) return fromCfg;
+                const fromEnv = parseInt(process.env[envKey] ?? '', 10);
+                return Number.isFinite(fromEnv) && fromEnv > 0 ? fromEnv : def;
+            },
+        };
     }
 
     /** Stable total order over ID strings — numeric when ALL are integer-like, else lexical. */
