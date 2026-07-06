@@ -2455,13 +2455,6 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     /**
-     * Builds a primary-key WHERE filter for an external single-record Load. Plain (unquoted)
-     * identifiers — each driver applies its own dialect quoting. Quoted values are single-quote-
-     * escaped (doubled) to prevent SQL injection / broken filters from a value containing a quote
-     * (standard SQL escaping that every external SQL driver and the Mongo filter translator
-     * understand); null values become "IS NULL".
-     */
-    /**
      * Rejects RunView params an external data source can't honor, rather than silently dropping
      * them. Most important is AfterKey (keyset pagination): the external read path only supports
      * offset paging, so a silently-dropped AfterKey would return the same page on every call — an
