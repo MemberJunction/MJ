@@ -498,12 +498,15 @@ import {
     MJWorkOSProvider,
 } from '@memberjunction/ng-auth-services';
 
-// @memberjunction/ng-conversations (5 classes)
+// @memberjunction/ng-conversations (8 classes)
 import {
+    AgentMentionProvider,
     ClientContextChannel,
     RealtimeMediaChannel,
     RealtimeWhiteboardChannel,
+    RecordMentionProvider,
     RemoteBrowserChannel,
+    SkillCommandProvider,
     WhiteboardArtifactViewerComponent,
 } from '@memberjunction/ng-conversations';
 
@@ -1027,10 +1030,13 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJMagicLinkProvider,
     MJOktaProvider,
     MJWorkOSProvider,
+    AgentMentionProvider,
     ClientContextChannel,
     RealtimeMediaChannel,
     RealtimeWhiteboardChannel,
+    RecordMentionProvider,
     RemoteBrowserChannel,
+    SkillCommandProvider,
     WhiteboardArtifactViewerComponent,
     RecordProcessRunnerUXComponent,
     CardsViewType,
@@ -1081,7 +1087,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 495;
+export const CLASS_REGISTRATIONS_COUNT = 498;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

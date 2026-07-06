@@ -941,7 +941,7 @@ import {
     PredictiveStudioTrainModelServerOperation,
 } from '@memberjunction/predictive-studio';
 
-// @memberjunction/scheduling-engine (6 classes)
+// @memberjunction/scheduling-engine (7 classes)
 import {
     ActionScheduledJobDriver,
     AgentRunSweepScheduledJobDriver,
@@ -949,9 +949,10 @@ import {
     IntegrationDiscoveryScheduledJobDriver,
     IntegrationSyncScheduledJobDriver,
     RecordProcessScheduledJobDriver,
+    UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (32 classes)
+// @memberjunction/core-entities-server (34 classes)
 import {
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -983,6 +984,8 @@ import {
     MJTagEntityServer,
     MJTagScopeEntityServer,
     MJTemplateContentEntityServer,
+    MJUserRoutineEntityServer,
+    MJUserRoutineRecipientEntityServer,
     MJUserViewEntityServer,
     MJVectorIndexEntityServer,
 } from '@memberjunction/core-entities-server';
@@ -1836,6 +1839,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     IntegrationDiscoveryScheduledJobDriver,
     IntegrationSyncScheduledJobDriver,
     RecordProcessScheduledJobDriver,
+    UserRoutineDispatcherDriver,
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
     MJAIAgentExampleEntityServer,
@@ -1866,6 +1870,8 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJTagEntityServer,
     MJTagScopeEntityServer,
     MJTemplateContentEntityServer,
+    MJUserRoutineEntityServer,
+    MJUserRoutineRecipientEntityServer,
     MJUserViewEntityServer,
     MJVectorIndexEntityServer,
     APIRateLimiterAction,
@@ -2017,7 +2023,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 867;
+export const CLASS_REGISTRATIONS_COUNT = 870;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
