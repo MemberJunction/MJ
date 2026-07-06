@@ -105,6 +105,8 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
   @Output() attachmentsChanged = new EventEmitter<PendingAttachment[]>();
   @Output() attachmentError = new EventEmitter<string>();
   @Output() attachmentClicked = new EventEmitter<PendingAttachment>();
+  /** Fires when the contenteditable loses focus (hosts persist drafts on this). */
+  @Output() editorBlurred = new EventEmitter<void>();
 
   // Pending attachments state
   public pendingAttachments: PendingAttachment[] = [];
@@ -237,6 +239,7 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
   onBlur(): void {
     // Call form control touched callback
     this.onTouched();
+    this.editorBlurred.emit();
 
     // Close dropdown when editor loses focus
     // Use setTimeout to allow mousedown events on dropdown to fire first
@@ -484,6 +487,30 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
    *
    * @returns false when the editor view isn't mounted yet — callers may retry.
    */
+  /** Focuses the editor and places the caret at the very end of its content. */
+  public FocusCaretAtEnd(): boolean {
+    const editor = this.editorRef?.nativeElement;
+    if (!editor) {
+      return false;
+    }
+    editor.focus();
+    const selection = window.getSelection();
+    if (selection) {
+      const range = document.createRange();
+      range.selectNodeContents(editor);
+      range.collapse(false);
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+    return true;
+  }
+
+  /** True when keyboard focus currently sits inside this editor. */
+  public get HasFocus(): boolean {
+    const editor = this.editorRef?.nativeElement;
+    return !!editor && (editor === document.activeElement || editor.contains(document.activeElement));
+  }
+
   public InsertMention(suggestion: MentionSuggestion, focus: boolean = true): boolean {
     const editor = this.editorRef?.nativeElement;
     if (!editor) {
@@ -1008,13 +1035,120 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
   /**
    * Set editor content from plain text (for programmatic updates)
    */
+  /**
+   * Renders a value into the editor, REHYDRATING any serialized mention tokens
+   * (the `@{"type":…,"id":…,"name":…}` format produced by
+   * {@link getPlainTextWithJsonMentions}) back into real chips — so persisted
+   * drafts and any host-written serialized value round-trip losslessly. Plain
+   * strings (no tokens) take the fast path.
+   */
   private setEditorContent(text: string): void {
     const editor = this.editorRef?.nativeElement;
     if (!editor) return;
 
-    // For now, just set as plain text
-    // TODO: Parse @mentions and render as chips
-    editor.textContent = text;
+    const segments = MentionEditorComponent.ParseSerializedMentions(text);
+    if (segments.every((seg) => typeof seg === 'string')) {
+      editor.textContent = text;
+      return;
+    }
+    editor.textContent = '';
+    for (const seg of segments) {
+      if (typeof seg === 'string') {
+        if (seg.length > 0) {
+          editor.appendChild(document.createTextNode(seg));
+        }
+      } else {
+        const chip = this.createMentionChip(seg.suggestion);
+        if (seg.configId) {
+          chip.setAttribute('data-preset-id', seg.configId);
+        }
+        if (seg.config) {
+          chip.setAttribute('data-preset-name', seg.config);
+        }
+        editor.appendChild(chip);
+      }
+    }
+  }
+
+  /**
+   * Splits text containing serialized mention tokens into plain-string segments and
+   * parsed mention segments. Token = '@' followed by a JSON object with at least
+   * {type,id,name}; brace matching is string-aware so names containing braces or
+   * escaped quotes parse correctly. Malformed candidates stay as literal text.
+   */
+  public static ParseSerializedMentions(
+    text: string
+  ): Array<string | { suggestion: MentionSuggestion; configId?: string; config?: string }> {
+    const segments: Array<string | { suggestion: MentionSuggestion; configId?: string; config?: string }> = [];
+    let cursor = 0;
+    let searchFrom = 0;
+    while (true) {
+      const start = text.indexOf('@{', searchFrom);
+      if (start === -1) {
+        break;
+      }
+      const end = MentionEditorComponent.findJsonEnd(text, start + 1);
+      if (end === -1) {
+        searchFrom = start + 2;
+        continue;
+      }
+      const candidate = text.substring(start + 1, end + 1);
+      let parsed: { type?: string; id?: string; name?: string; configId?: string; config?: string } | null = null;
+      try {
+        parsed = JSON.parse(candidate);
+      } catch {
+        parsed = null;
+      }
+      if (!parsed || typeof parsed.type !== 'string' || typeof parsed.id !== 'string' || typeof parsed.name !== 'string') {
+        searchFrom = start + 2; // not a mention token — keep scanning past it
+        continue;
+      }
+      if (start > cursor) {
+        segments.push(text.substring(cursor, start));
+      }
+      segments.push({
+        suggestion: { type: parsed.type, id: parsed.id, name: parsed.name, displayName: parsed.name },
+        configId: parsed.configId,
+        config: parsed.config,
+      });
+      cursor = end + 1;
+      searchFrom = cursor;
+    }
+    if (cursor < text.length) {
+      segments.push(text.substring(cursor));
+    }
+    if (segments.length === 0) {
+      segments.push(text);
+    }
+    return segments;
+  }
+
+  /** Index of the matching closing brace for the object starting at `openIndex` ('{'), string-aware. -1 when unbalanced. */
+  private static findJsonEnd(text: string, openIndex: number): number {
+    let depth = 0;
+    let inString = false;
+    for (let i = openIndex; i < text.length; i++) {
+      const ch = text[i];
+      if (inString) {
+        if (ch === '\\') {
+          i++; // skip escaped char
+        } else if (ch === '"') {
+          inString = false;
+        }
+        continue;
+      }
+      if (ch === '"') {
+        inString = true;
+      } else if (ch === '{') {
+        depth++;
+      } else if (ch === '}') {
+        depth--;
+        if (depth === 0) {
+          return i;
+        }
+      }
+    }
+    return -1;
   }
 
   // ControlValueAccessor implementation

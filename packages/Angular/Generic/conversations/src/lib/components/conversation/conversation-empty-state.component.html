@@ -55,6 +55,8 @@
       <mj-message-input
         [initialDraft]="initialDraft"
         (initialDraftApplied)="initialDraftApplied.emit()"
+        (DraftStateChanged)="DraftStateChanged.emit($event)"
+        (ComposerBlurred)="ComposerBlurred.emit()"
         [placeholder]="overlayMode ? 'Type a message...' : 'Type your message to start a new conversation...'"
         [disabled]="disabled"
         [currentUser]="currentUser"

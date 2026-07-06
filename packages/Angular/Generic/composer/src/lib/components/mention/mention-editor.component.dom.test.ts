@@ -295,3 +295,74 @@ describe('InsertMention (programmatic resolved chip)', () => {
         expect(range.startOffset).toBe(editor.childNodes.length);
     });
 });
+
+describe('ParseSerializedMentions + writeValue rehydration', () => {
+    function mount(): ComponentFixture<MentionEditorComponent> {
+        const user = new UserInfo();
+        user.ID = 'u-rehydrate';
+        user.Name = 'Rehydrate Tester';
+        return renderComponentFixture(MentionEditorComponent, {
+            imports: [CommonModule, MJEmptyStateComponent],
+            declarations: [MentionEditorComponent, MentionDropdownComponent],
+            inputs: { currentUser: user },
+        });
+    }
+
+    it('passes plain text through untouched', () => {
+        const segs = MentionEditorComponent.ParseSerializedMentions('just some text');
+        expect(segs).toEqual(['just some text']);
+    });
+
+    it('parses a mention token with surrounding text', () => {
+        const segs = MentionEditorComponent.ParseSerializedMentions(
+            'ask @{"type":"agent","id":"a1","name":"Sage"} about renewals');
+        expect(segs).toHaveLength(3);
+        expect(segs[0]).toBe('ask ');
+        expect((segs[1] as { suggestion: MentionSuggestion }).suggestion.name).toBe('Sage');
+        expect(segs[2]).toBe(' about renewals');
+    });
+
+    it('carries configuration preset fields', () => {
+        const segs = MentionEditorComponent.ParseSerializedMentions(
+            '@{"type":"agent","id":"a1","name":"Sage","configId":"c9","config":"High Power"} ');
+        const seg = segs[0] as { configId?: string; config?: string };
+        expect(seg.configId).toBe('c9');
+        expect(seg.config).toBe('High Power');
+    });
+
+    it('leaves malformed candidates as literal text', () => {
+        const segs = MentionEditorComponent.ParseSerializedMentions('email me @{not json} ok');
+        expect(segs.every((s) => typeof s === 'string')).toBe(true);
+        expect(segs.join('')).toBe('email me @{not json} ok');
+    });
+
+    it('handles braces inside quoted names (string-aware brace matching)', () => {
+        const segs = MentionEditorComponent.ParseSerializedMentions(
+            '@{"type":"entity","id":"e1","name":"Weird {Braces} Entity"} tail');
+        expect((segs[0] as { suggestion: MentionSuggestion }).suggestion.name).toBe('Weird {Braces} Entity');
+        expect(segs[1]).toBe(' tail');
+    });
+
+    it('writeValue rehydrates a serialized draft into a real chip + text', () => {
+        const fixture = mount();
+        fixture.detectChanges();
+        fixture.componentInstance.writeValue('@{"type":"agent","id":"a1","name":"Sage","configId":"c9","config":"Fast"} summarize renewals');
+        fixture.detectChanges();
+        const editor = fixture.componentInstance.editorRef.nativeElement;
+        const chip = editor.querySelector('.mention-chip') as HTMLElement;
+        expect(chip).toBeTruthy();
+        expect(chip.getAttribute('data-mention-name')).toBe('Sage');
+        expect(chip.getAttribute('data-preset-id')).toBe('c9');
+        expect(editor.textContent).toContain('summarize renewals');
+    });
+
+    it('writeValue keeps the plain-text fast path for token-free strings', () => {
+        const fixture = mount();
+        fixture.detectChanges();
+        fixture.componentInstance.writeValue('nothing fancy here');
+        fixture.detectChanges();
+        const editor = fixture.componentInstance.editorRef.nativeElement;
+        expect(editor.querySelector('.mention-chip')).toBeNull();
+        expect(editor.textContent).toBe('nothing fancy here');
+    });
+});

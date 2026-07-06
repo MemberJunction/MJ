@@ -2474,9 +2474,12 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
    */
   @HostListener('document:keydown', ['$event'])
   handleGlobalKeyboardShortcuts(event: KeyboardEvent): void {
-    // Skip if user is typing in an input/textarea
+    // Skip if user is typing in an input/textarea — EXCEPT when the omnibar is on:
+    // a modal palette is summonable from anywhere (incl. the chat composer), like
+    // Slack/Linear. The legacy path keeps the guard (its binding steals focus).
     const target = event.target as HTMLElement;
-    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+    const inEditable = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+    if (inEditable && !this.UseOmnibar) {
       return;
     }
 
@@ -2672,7 +2675,11 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   @HostListener('document:keydown', ['$event'])
   OnGlobalKeydown(event: KeyboardEvent): void {
       const target = event.target as HTMLElement;
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return;
+      const inEditable = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+      // Omnibar mode: Ctrl/Cmd+K summons the modal palette from anywhere, even while
+      // typing (it's an explicit chord, not a plain keystroke). Legacy mode keeps the
+      // guard — focusing the header search box mid-typing would be hostile.
+      if (inEditable && !this.UseOmnibar) return;
       const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
       const isCtrlOrCmd = isMac ? event.metaKey : event.ctrlKey;
       if (isCtrlOrCmd && event.key === 'k') {

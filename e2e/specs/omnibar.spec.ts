@@ -111,12 +111,32 @@ test.describe.serial('Unified command palette', () => {
     await expect(page).toHaveURL(/chat/i, { timeout: 30_000 });
     // The composer is pre-addressed with a RESOLVED mention PILL (not raw text) —
     // identical to typing '@sage' and picking from the dropdown — and focused.
-    const composer = page.locator('mj-mention-editor [contenteditable="true"]').first();
+    const composer = page.locator('mj-mention-editor [contenteditable="true"]:visible').first();
     const chip = composer.locator('.mention-chip[data-mention-type="agent"][data-mention-name="Sage"]');
     await expect(chip).toBeVisible({ timeout: 30_000 });
     await expect(composer).toBeFocused({ timeout: 15_000 });
     // Typing lands AFTER the pill (caret placed past the trailing space).
     await page.keyboard.type('hello');
     await expect(composer).toContainText('hello');
+  });
+
+  test('re-tagging via the omnibar REPLACES the un-sent draft (no pill stacking)', async ({ page }) => {
+    await gotoHome(page);
+    await openPalette(page);
+    await page.locator('.ob-input').fill('@sage');
+    await page.locator('.ob-row', { hasText: 'Sage' }).first().click();
+    // Scope to the VISIBLE composer — cached per-conversation inputs from earlier
+    // tests remain in the DOM ([hidden]-toggled) and would confuse .first().
+    const composer = page.locator('mj-mention-editor [contenteditable="true"]:visible').first();
+    await expect(composer.locator('.mention-chip')).toHaveCount(1, { timeout: 30_000 });
+    // Abandon the draft, summon the palette again, tag again.
+    await openPalette(page);
+    await page.locator('.ob-input').fill('@sage');
+    await page.locator('.ob-row', { hasText: 'Sage' }).first().click();
+    await expect(page.locator('.omnibar-palette')).toBeHidden();
+    // Still exactly ONE pill — the previous un-sent draft was replaced, not stacked.
+    await page.waitForTimeout(2_000);
+    await expect(composer.locator('.mention-chip')).toHaveCount(1);
+    await expect(composer.locator('.mention-chip[data-mention-name="Sage"]')).toBeVisible();
   });
 });

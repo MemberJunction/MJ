@@ -188,8 +188,10 @@
         } @else {
           <mj-conversation-empty-state
             [currentUser]="currentUser"
-            [initialDraft]="composerDraft"
+            [initialDraft]="GetInitialDraftFor(null)"
             (initialDraftApplied)="OnComposerDraftApplied()"
+            (DraftStateChanged)="OnDraftStateChanged(null, $event)"
+            (ComposerBlurred)="OnComposerBlurred()"
             [disabled]="isProcessing"
             [showSidebarToggle]="showSidebarToggle"
             [overlayMode]="overlayMode"
@@ -215,8 +217,10 @@
               <mj-message-input
                 #emptyStateInput
                 [emptyStateMode]="true"
-                [initialDraft]="composerDraft"
+                [initialDraft]="GetInitialDraftFor(null)"
                 (initialDraftApplied)="OnComposerDraftApplied()"
+            (DraftStateChanged)="OnDraftStateChanged(null, $event)"
+            (ComposerBlurred)="OnComposerBlurred()"
                 [currentUser]="currentUser"
                 [disabled]="isProcessing"
                 [enableAttachments]="enableAttachments && allowAttachments"
@@ -298,6 +302,9 @@
                   <mj-message-input
                     #messageInput
                     [hidden]="inputRef.conversationId !== conversationId"
+                    [initialDraft]="GetInitialDraftFor(inputRef.conversationId)"
+                    (DraftStateChanged)="OnDraftStateChanged(inputRef.conversationId, $event)"
+                    (ComposerBlurred)="OnComposerBlurred()"
                     [conversationId]="inputRef.conversationId"
                     [conversationName]="inputRef.conversationName"
                     [currentUser]="currentUser"

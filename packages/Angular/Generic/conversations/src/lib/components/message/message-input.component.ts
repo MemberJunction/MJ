@@ -294,6 +294,28 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   @Output() initialDraftApplied = new EventEmitter<void>();
 
   /**
+   * Live draft-state signal: fires on every composer value change with the
+   * SERIALIZED content (mention pills encoded via getPlainTextWithJsonMentions,
+   * so hosts can persist drafts losslessly). Empty string = draft cleared.
+   */
+  @Output() DraftStateChanged = new EventEmitter<string>();
+
+  /** The composer lost focus — hosts flush persisted drafts on this. */
+  @Output() ComposerBlurred = new EventEmitter<void>();
+
+  /** Handles the composer's value stream: keeps messageText in sync + emits draft state. */
+  public OnComposerValueChanged(value: string): void {
+    this.messageText = value;
+    this.DraftStateChanged.emit(this.GetSerializedDraft());
+  }
+
+  /** Current composer content in the lossless serialized form ('' when empty). */
+  public GetSerializedDraft(): string {
+    const serialized = this.inputBox?.getPlainTextWithJsonMentions() ?? this.messageText ?? '';
+    return serialized.trim().length === 0 ? '' : serialized;
+  }
+
+  /**
    * Pre-addresses the composer to an agent as a RESOLVED mention pill (+ trailing
    * space, caret after, focused) — identical to the user typing '@agent' and picking
    * it from the dropdown. Resolves the agent through MentionAutocompleteService so
@@ -302,12 +324,20 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    *
    * @returns false while the composer view isn't mounted yet — callers may retry.
    */
-  public async InsertAgentMention(agentName: string, focus: boolean = true): Promise<boolean> {
+  public async InsertAgentMention(agentName: string, focus: boolean = true, clearExisting: boolean = true): Promise<boolean> {
     if (!this.inputBox) {
+      console.log(`[Omnibar→Chat] InsertAgentMention('${agentName}'): input box not mounted yet — caller will retry`);
       return false;
+    }
+    if (clearExisting) {
+      // Pre-addressing REPLACES any un-sent draft (tagging agent B after agent A
+      // must not stack pills).
+      this.inputBox.mentionEditor?.clear();
+      this.messageText = '';
     }
     try {
       if (!this.mentionAutocomplete.IsInitialized && this.currentUser) {
+        console.log(`[Omnibar→Chat] InsertAgentMention('${agentName}'): initializing mention autocomplete…`);
         await this.mentionAutocomplete.initialize(this.currentUser);
       }
       const wanted = agentName.trim().toLowerCase();
@@ -315,14 +345,40 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         .getSuggestions(agentName, false, '@')
         .find(s => s.type === 'agent' && s.name.trim().toLowerCase() === wanted);
       if (suggestion) {
-        return this.inputBox.InsertMention(suggestion, focus);
+        const inserted = this.inputBox.InsertMention(suggestion, focus);
+        console.log(`[Omnibar→Chat] InsertAgentMention('${agentName}'): resolved to pill (id=${suggestion.id}) — insert ${inserted ? 'OK' : 'FAILED (editor view not ready)'}`);
+        if (inserted) {
+          if (focus) {
+            this.scheduleFocusReassert(agentName);
+          }
+          return true;
+        }
+        return false; // editor view not mounted — caller retries
       }
-    } catch {
-      // resolution is best-effort — fall through to the plain-text draft
+      console.warn(`[Omnibar→Chat] InsertAgentMention('${agentName}'): agent NOT found in autocomplete (initialized=${this.mentionAutocomplete.IsInitialized}) — falling back to plain text`);
+    } catch (e) {
+      console.warn(`[Omnibar→Chat] InsertAgentMention('${agentName}'): resolution error — falling back to plain text`, e);
     }
     const mention = agentName.includes(' ') ? `@"${agentName}" ` : `@${agentName} `;
     this.SetDraft(mention, focus);
     return true;
+  }
+
+  /**
+   * The insert happens mid-tab-mount; late-arriving chat UI (lists, empty-state
+   * autofocus, tab chrome) can steal focus AFTER we set it. Re-assert at settle
+   * points — only when focus genuinely left the editor, so we never fight the user.
+   */
+  private scheduleFocusReassert(context: string): void {
+    for (const delay of [300, 900, 1800]) {
+      setTimeout(() => {
+        const editor = this.inputBox?.mentionEditor;
+        if (editor && !editor.HasFocus) {
+          const ok = editor.FocusCaretAtEnd();
+          console.log(`[Omnibar→Chat] focus re-assert (+${delay}ms) for '${context}': ${ok ? 'refocused' : 'editor gone'}`);
+        }
+      }, delay);
+    }
   }
 
   public SetDraft(text: string, focus: boolean = true): void {

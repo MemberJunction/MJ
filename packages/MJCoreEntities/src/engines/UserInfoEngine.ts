@@ -368,7 +368,20 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
         setting.Value = value;
       }
 
-      const saved = await setting.Save();
+      let saved = await setting.Save();
+      if (!saved && setting.IsSaved) {
+        // The cached entity's underlying row no longer exists (deleted from another
+        // session/device, or out-of-band) — the UPDATE matched nothing. Recover by
+        // recreating the setting instead of failing the write.
+        console.warn(`UserInfoEngine.SetSetting: update for '${settingKey}' matched no row — recreating`);
+        this._UserSettings = this._UserSettings.filter((s) => !UUIDsEqual(s.ID, setting!.ID));
+        setting = await md.GetEntityObject<MJUserSettingEntity>('MJ: User Settings', contextUser);
+        setting.NewRecord();
+        setting.UserID = userId;
+        setting.Setting = settingKey;
+        setting.Value = value;
+        saved = await setting.Save();
+      }
       if (saved) {
         // If it was a new record, add to cache
         if (!this._UserSettings.some((s) => UUIDsEqual(s.ID, setting!.ID))) {
@@ -376,7 +389,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
         }
         return true;
       } else {
-        console.error('UserInfoEngine.SetSetting: Failed to save:', setting.LatestResult?.Message);
+        console.error('UserInfoEngine.SetSetting: Failed to save:', setting.LatestResult?.CompleteMessage);
         return false;
       }
     } catch (error) {

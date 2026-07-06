@@ -40,6 +40,10 @@ export class ConversationEmptyStateComponent {
   /** Draft staged into the composer on mount (see MessageInputComponent.initialDraft). */
   @Input() initialDraft: string | null = null;
   @Output() initialDraftApplied = new EventEmitter<void>();
+  /** Forwarded from the inner composer — serialized draft on every value change. */
+  @Output() DraftStateChanged = new EventEmitter<string>();
+  /** Forwarded from the inner composer — persist-drafts save point. */
+  @Output() ComposerBlurred = new EventEmitter<void>();
 
   @Output() messageSent = new EventEmitter<{text: string; attachments: PendingAttachment[]}>();
   @Output() sidebarToggleClicked = new EventEmitter<void>();

@@ -295,7 +295,15 @@ export class OmnibarPaletteComponent implements OnDestroy {
         const apps = await firstValueFrom(this.appManager.Applications).catch(() => []);
         const chat = apps.find((a) => a.Name.trim().toLowerCase() === 'chat');
         if (chat) {
-            await this.navigation.SwitchToApp(chat.ID, undefined, { agent: agentName });
+            // agentReq is a one-shot request nonce: the chat wrapper applies each
+            // agent|nonce instruction exactly once, so URL↔tab-config sync echoes
+            // of an already-consumed param can never re-stage the pre-address (and
+            // wipe an in-progress composer draft), while a genuine re-tag of the
+            // SAME agent still applies because it carries a fresh nonce.
+            await this.navigation.SwitchToApp(chat.ID, undefined, {
+                agent: agentName,
+                agentReq: Date.now().toString(36),
+            });
         }
     }
 

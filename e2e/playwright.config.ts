@@ -52,6 +52,13 @@ const USER_DATA_DIR =
   process.env.PW_USER_DATA_DIR ?? path.resolve(__dirname, '..', '.playwright-cli', 'profile');
 
 export default defineConfig({
+  /**
+   * ONE worker, always: every spec runs against the same live MJ instance AND the
+   * same signed-in user, so parallel workers cross-contaminate server-side state —
+   * persisted composer drafts (mj.chat.drafts.v1), workspace tabs, notifications.
+   * Parallelism here caused reload-restore tests to read another worker's writes.
+   */
+  workers: 1,
   testDir: path.resolve(__dirname, 'specs'),
   testMatch: '**/*.spec.ts',
   // The Explorer + agent UI can take a moment on first paint; be generous but bounded.
