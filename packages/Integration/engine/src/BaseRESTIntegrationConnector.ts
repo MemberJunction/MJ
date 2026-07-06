@@ -658,23 +658,16 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
     }
 
     /**
-     * DISCOVERY-ONLY: how many of the fetched parents we then fetch CHILDREN under (for the child's own
-     * field/width/custom-column stats). Small on purpose — a few parents yield representative child
-     * records. Independent of {@link DiscoveryParentSampleSize} (the parent-rows fetched for the parent's
-     * OWN key classification): the "extra" parent rows serve classification only, not child fetches.
-     * Override higher — up to fetching children under EVERY sampled parent — if a vendor's child shape
-     * varies materially by parent.
-     */
-    protected DiscoverySampleParentCount(): number {
-        return 3;
-    }
-
-    /**
-     * DISCOVERY-ONLY: how many PARENT rows to fetch when the parent's key isn't already declared — enough
-     * for the value-statistic PK classifier to actually determine the key (and for the parent's own field
-     * stats). Defaults to ~50, the classifier's rows-needed floor; a page may return fewer and that is
-     * fine. Deliberately DECOUPLED from {@link DiscoverySampleParentCount} (how many children we then
-     * sample): we fetch a real sample to classify the parent, but only iterate a few for the child.
+     * DISCOVERY-ONLY: the per-object row-sample TARGET — how many rows every table aims to sample at
+     * discovery (uniformly), enough for the value-statistic PK classifier to determine a key + give
+     * representative field stats. Defaults to ~50 (a page may return fewer, which is fine).
+     *
+     * For a template-var CHILD, this doubles as the pool of PARENT rows we fetch: we sample this many
+     * parents (to classify the PARENT's key) and the child then ACCUMULATES its own records by WALKING
+     * those parents — the {@link DiscoverFieldsViaFetch} loop keyset-resumes over them — until the child
+     * reaches its own record target or the pool is exhausted. So the child uses "some or all" of the
+     * sampled parents; there is deliberately NO fixed "N parents per child" cap. Raise this if a vendor's
+     * children are so sparse that ~50 parents don't yield a representative child sample.
      */
     protected DiscoveryParentSampleSize(): number {
         return 50;
@@ -703,11 +696,11 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         const parentObj = IntegrationEngineBase.Instance.GetIntegrationObjectByID(parentObjectID);
         if (!parentObj) return [];
 
-        // TWO independent sizes: fetch a real sample of the parent (for key classification + parent field
-        // stats), but only iterate a few of those for CHILD sampling. The remaining parent rows serve
-        // classification only — they are not tied to any child fetch.
-        const parentSampleSize = Math.max(1, this.DiscoveryParentSampleSize());   // ~50 rows fetched from the parent
-        const childIterCount = Math.max(1, this.DiscoverySampleParentCount());    // how many parents we fetch children under
+        // Fetch a real sample of the parent (~50) to classify ITS key. We return ALL of these parent IDs —
+        // the child then WALKS them (the DiscoverFieldsViaFetch loop keyset-resumes over parents) and
+        // stops when the CHILD hits its own record target, so it uses "some or all" of them. There is NO
+        // fixed "N parents per child" cap here — the child's target drives how many parents get walked.
+        const parentSampleSize = Math.max(1, this.DiscoveryParentSampleSize());   // ~50 parent rows fetched + the walk pool
         // FETCH the parent's OWN records first — recursively: if the parent is ITSELF a template-var
         // child, FetchChanges resolves ITS parents the same way (depth-capped). No SQL here (it is an
         // HTTP fetch), so this is dialect-agnostic — identical on SQL Server and Postgres.
@@ -736,14 +729,14 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         const keyField = await this.ResolveParentKeyField(parentObj, batch.Records);
         if (!keyField) return [];
 
-        // Classification ran over the FULL parent sample above; here we return only childIterCount IDs —
-        // the caller fetches children under exactly these. (Override DiscoverySampleParentCount higher —
-        // e.g. to parentSampleSize — to fetch children under every sampled parent.)
+        // Classification ran over the full parent sample above. Return EVERY parent ID from it — the
+        // caller walks them (bounded per call by TemplateVarParentBatchSize, keyset-resumed across calls)
+        // and the DiscoverFieldsViaFetch loop stops once the CHILD reaches its own record target. So the
+        // child consumes as many of these parents as it needs, and no more.
         const ids: string[] = [];
         for (const rec of batch.Records) {
             const v = rec.Fields?.[keyField];
             if (v != null && String(v) !== '') ids.push(String(v));
-            if (ids.length >= childIterCount) break;
         }
         return ids;
     }

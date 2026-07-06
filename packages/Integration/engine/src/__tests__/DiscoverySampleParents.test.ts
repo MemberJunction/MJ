@@ -138,12 +138,14 @@ describe('BaseRESTIntegrationConnector — discovery-time parent sampling (§sam
             expect(result.Records.length).toBe(2);
         });
 
-        it('bounds the live parent sample to DiscoverySampleParentCount (default 3)', async () => {
+        it('walks parents until the CHILD target — no fixed "N parents per child" cap', async () => {
             orgRows = [{ OrgId: 'o1' }, { OrgId: 'o2' }, { OrgId: 'o3' }, { OrgId: 'o4' }, { OrgId: 'o5' }];
             const c = new TestConnector();
+            // Each org yields 1 child here, so reaching the child's record target requires walking ALL 5
+            // parents — the child accumulates across as many parents as it takes (bounded by the parent
+            // sample size), NOT a fixed count of parents.
             await c.FetchChanges(childCtx({ DiscoverySampleParents: true }));
-            // 5 parents available, but discovery only needs a few to sample the child's fields.
-            expect(childPaths(c).length).toBe(3);
+            expect(childPaths(c).length).toBe(5);
         });
 
         it('DiscoverFieldsViaFetch surfaces a template-var child\'s fields at discovery on an empty DB', async () => {
