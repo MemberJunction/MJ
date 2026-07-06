@@ -14,3 +14,5 @@ Flexible data grid component with its own simplified API. Accepts **data via pro
 - Need automatic caching and pagination logic → **Use EntityDataGrid instead**
 
 **Key difference from EntityDataGrid**: DataGrid is data-agnostic and passive (you pass data in). EntityDataGrid is entity-aware and active (it loads data via RunView). Choose DataGrid when you need control over data loading, EntityDataGrid for automatic entity record loading with smart caching.
+
+**Row keys**: DataGrid assigns each row's React key using this priority: `row.key` → `entityPrimaryKeys` (joined with `_`) → `row.ID` → `row.id` → `index`. When `entityPrimaryKeys` is provided, the primary key fields are used to build a unique key per row. For client-side joins where the output `ID` may not be unique, provide `entityPrimaryKeys` pointing to the field(s) that uniquely identify each row.
