@@ -11,7 +11,7 @@ import { SharedService } from '@memberjunction/ng-shared';
 import { ChatMessage } from '@memberjunction/ai';
 import { Subject, Subscription } from 'rxjs';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { ParseJSONRecursive, ParseJSONOptions, UUIDsEqual } from '@memberjunction/global';
+import { ParseJSONRecursive, ParseJSONOptions, UUIDsEqual, EscapeHTML } from '@memberjunction/global';
 
 /**
  * Supported modes for the test harness
@@ -2693,9 +2693,7 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
         let html = content;
         
         // Escape HTML first
-        html = html.replace(/&/g, '&amp;')
-                   .replace(/</g, '&lt;')
-                   .replace(/>/g, '&gt;');
+        html = EscapeHTML(html);
         
         // Code blocks with language support
         html = html.replace(/```(\w+)?\n([\s\S]*?)```/g, (match, lang, code) => {
@@ -2800,12 +2798,7 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
      * Escapes HTML content for use in attributes
      */
     private escapeHtmlAttribute(text: string): string {
-        return text
-            .replace(/&/g, '&amp;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#39;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;');
+        return EscapeHTML(text);
     }
 
     /**
@@ -2946,9 +2939,7 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
     }
 
     private escapeHtml(text: string): string {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
+        return EscapeHTML(text);
     }
 
     /**
