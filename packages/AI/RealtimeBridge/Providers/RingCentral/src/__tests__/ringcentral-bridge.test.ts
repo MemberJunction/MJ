@@ -8,6 +8,9 @@ import {
     DIRECTION_CONFIG_KEY,
     FROM_NUMBER_CONFIG_KEY,
     INBOUND_CALL_ID_CONFIG_KEY,
+    INBOUND_SAMPLE_RATE_CONFIG_KEY,
+    OUTBOUND_SAMPLE_RATE_CONFIG_KEY,
+    TELEPHONY_SAMPLE_RATE,
 } from '@memberjunction/ai-bridge-base';
 import { RingCentralBridge } from '../ringcentral-bridge';
 import { RingCentralCallSdk } from '../ringcentral-call-sdk';
@@ -93,7 +96,14 @@ function ctx(
         Features: features,
         ProviderName: 'RingCentral',
         Address: address,
-        Configuration: { [FROM_NUMBER_CONFIG_KEY]: '+15559876543', ...config },
+        // Pin both legs to the telephony-native rate so the audio round-trip is a byte
+        // passthrough (resampling is covered separately in the Base suite). Callers can override.
+        Configuration: {
+            [FROM_NUMBER_CONFIG_KEY]: '+15559876543',
+            [INBOUND_SAMPLE_RATE_CONFIG_KEY]: TELEPHONY_SAMPLE_RATE,
+            [OUTBOUND_SAMPLE_RATE_CONFIG_KEY]: TELEPHONY_SAMPLE_RATE,
+            ...config,
+        },
     };
 }
 

@@ -330,9 +330,175 @@ const magicLinkSchema = z.object({
   explorerUrl: z.string().optional(),
 }).passthrough();
 
+/**
+ * Public web widget config (plans/realtime/bridges-and-widget/public-web-widget.md).
+ * The widget REUSES the magic-link RS256 key + `anonymous-embed` synthesis, so it
+ * shares the magic-link `audience`/issuer/JWKS by default — the same auth provider
+ * validates both. When `enabled`, the server ensures the magic-link key manager is
+ * initialized and the provider registered even if `magicLink.enabled` is false.
+ */
+const widgetSchema = z.object({
+  /** Master switch. When false, the /widget routes are not mounted. */
+  enabled: zodBooleanWithTransforms().default(false),
+  /**
+   * Which signing mechanism the widget reuses. Only `magic-link` is supported today
+   * (shares MagicLinkKeyManager + the magic-link auth provider). Recorded so a future
+   * dedicated widget key is a config flip, not a code change.
+   */
+  signingReuse: z.enum(['magic-link']).optional().default('magic-link'),
+  /**
+   * Audience claim for minted guest JWTs. MUST equal the magic-link audience so the
+   * auto-registered `magic-link` auth provider validates widget tokens.
+   */
+  audience: z.string().optional().default('mj-magic-link'),
+  /** Email of the shared Anonymous principal used in guest claims (resolves the synthesized guest user). */
+  anonymousEmail: z.string().optional().default('anonymous@magic-link.local'),
+  /** Fallback session-token TTL (minutes) when a widget instance does not set its own. */
+  defaultSessionTtlMinutes: z.coerce.number().optional().default(15),
+  /** Fallback mint rate-limit (per IP per window) when a widget instance does not set its own. */
+  defaultRateLimitPerMinute: z.coerce.number().optional().default(30),
+  /** Rate-limit window (ms) for the public /widget/session endpoints. Default 60s. */
+  rateLimitWindowMs: z.coerce.number().optional().default(60_000),
+  /** Server-wide default hard ceiling (minutes) on a voice session when an instance omits one (W4). */
+  voiceDefaultMaxSessionMinutes: z.coerce.number().optional().default(10),
+  /** Email/name of the internal user whose context READS widget config at mint time (falls back to system/Owner). */
+  contextUserForLookup: z.string().optional(),
+  /**
+   * Host-identity public keys (PEM), keyed by widget PublicKey, for the `host-identity` auth
+   * strategy (D1). The host signs a short-lived RS256 assertion; the mint verifies it against
+   * the key here. INTERIM location — production should store the host key per widget instance
+   * (a HostPublicKey column on WidgetInstance, pending a migration). When a widget's strategy is
+   * HostIdentity and no key is configured here, host mints fail closed.
+   */
+  hostPublicKeys: z.record(z.string(), z.string()).optional().default({}),
+  /**
+   * Returning-visitor identity-resolution target (RV4). When a visitor verifies (magic-link upgrade)
+   * or a host asserts their identity, their email is resolved to a record `(entityName, recordId)`
+   * and prior anonymous memory is merged onto that polymorphic pair. Deployment-configurable so the
+   * resolved record need NOT be an MJ User — point it at any entity that carries the visitor's email
+   * (e.g. a CRM `Persons` table). Defaults to the core `Users` entity keyed by `Email`.
+   */
+  identityResolution: z.object({
+    entityName: z.string().optional().default('Users'),
+    emailField: z.string().optional().default('Email'),
+  }).optional(),
+}).passthrough();
+
+/**
+ * Telephony bridge config (plans/realtime/bridges-and-widget/telephony-vendor-bindings.md).
+ * Holds the per-vendor credentials + public stream URL the MJAPI telephony ingress wires onto
+ * the already-stubbed native SDK seams. Credentials resolve here from `mj.config.cjs` / env —
+ * never inlined in code. When `twilio` is omitted, the Twilio telephony routes are not mounted.
+ */
+const twilioTelephonySchema = z.object({
+  /** Twilio Account SID (`AC…`). */
+  accountSid: z.string(),
+  /** Account auth token — REST auth (when no API key pair) AND the HMAC key for X-Twilio-Signature verification. */
+  authToken: z.string().optional(),
+  /** API Key SID (`SK…`) — preferred over the auth token for REST auth when paired with apiKeySecret. */
+  apiKeySid: z.string().optional(),
+  /** API Key secret — paired with apiKeySid. */
+  apiKeySecret: z.string().optional(),
+  /** The publicly reachable `wss://…/telephony/twilio/media` URL Twilio's <Connect><Stream> connects to. */
+  streamPublicUrl: z.string(),
+  /** Optional shared secret gating the public webhook/WSS endpoints (defense-in-depth beyond signature verification). */
+  webhookSigningSecret: z.string().optional(),
+  /** Optional status-callback URL Twilio posts call lifecycle events to. */
+  statusCallbackUrl: z.string().optional(),
+}).passthrough();
+
+/**
+ * Vonage Voice + WebSocket-media telephony binding. Voice-API auth is application-scoped
+ * (application id + RSA private key) with an optional account API key pair for key-scoped ops;
+ * signatureSecret is the HMAC key for signed-request `sig` AND HS256 webhook-JWT verification.
+ * When `vonage` is omitted, the Vonage telephony routes are not mounted.
+ */
+const vonageTelephonySchema = z.object({
+  /** Vonage Application ID (UUID) — the JWT-auth identity for the Voice API. */
+  applicationId: z.string().optional(),
+  /** The application's RSA private key (PEM) used to sign Voice-API JWTs. */
+  privateKey: z.string().optional(),
+  /** Account API key — used for key-scoped operations when no application credential pair is supplied. */
+  apiKey: z.string().optional(),
+  /** Account API secret — paired with apiKey. */
+  apiSecret: z.string().optional(),
+  /** The publicly reachable `wss://…/telephony/vonage/media` URL the call's connect NCCO opens. */
+  mediaPublicUrl: z.string(),
+  /** Vonage account signature secret — HMAC key for signed-request `sig` AND HS256 webhook-JWT verification. */
+  signatureSecret: z.string().optional(),
+  /** Optional event-webhook URL Vonage posts call lifecycle events to (passed on outbound createCall). */
+  eventUrl: z.string().optional(),
+}).passthrough();
+
+/**
+ * RingCentral telephony binding: **SIP device credentials** for the headless softphone (the
+ * `ringcentral-softphone` SIP/RTP path — the only RingCentral product that carries bidirectional call
+ * audio; the WebSocket "Call Streaming" product is receive-only). These come from a RingCentral
+ * "Other Phone" (BYO-device) registration's SIP info, resolved here from `mj.config.cjs` / env — never
+ * inlined. When `ringcentral` is omitted, the RingCentral softphone is not started.
+ *
+ * Unlike Twilio/Vonage, there is NO public HTTP webhook or media WSS: the softphone is an outbound SIP
+ * registration that receives inbound INVITEs directly over its own SIP/TLS connection. So this block has
+ * no signing secret or public URL — just the SIP device creds + codec.
+ */
+const ringcentralTelephonySchema = z.object({
+  /** SIP domain (e.g. `sip.ringcentral.com`). */
+  sipDomain: z.string(),
+  /** SIP outbound proxy (`host:port`, e.g. `sip10.ringcentral.com:5096`). */
+  sipOutboundProxy: z.string(),
+  /** SIP auth username (the device's phone number / extension). */
+  sipUsername: z.string(),
+  /** SIP auth password (resolved upstream — never inlined). */
+  sipPassword: z.string(),
+  /** SIP authorization id (the device's RingCentral authorization id). */
+  sipAuthorizationId: z.string(),
+  /** Codec to negotiate. Defaults to `OPUS/16000` (clean wideband PCM16 — the least-friction realtime path). */
+  codec: z.enum(['OPUS/16000', 'OPUS/48000/2', 'PCMU/8000']).optional(),
+  /** Skip TLS cert validation (sandbox/test only — never in production). */
+  ignoreTlsCertErrors: zodBooleanWithTransforms().optional().default(false),
+}).passthrough();
+
+/**
+ * Teams meetings bridge config (plans/realtime/bridges-and-widget/meeting-vendor-bindings-teams-slack.md M1).
+ * Holds the bot credentials + Graph webhook shared secret + ACS audio rate the MJAPI meetings ingress wires
+ * onto the Teams binding seams. Credentials resolve here from `mj.config.cjs` / env — never inlined in code.
+ * When `teams` is omitted (or disabled), the Teams meetings routes are not mounted.
+ */
+const teamsMeetingsSchema = z.object({
+  /** Master switch for the Teams meetings ingress. */
+  enabled: zodBooleanWithTransforms().default(false),
+  /** The bot's Azure AD application (client) id (resolved upstream; carried for diagnostics). */
+  appId: z.string().optional(),
+  /** The Azure tenant id the bot operates in. */
+  tenantId: z.string().optional(),
+  /** A pre-resolved OAuth bearer / application token for the bot's Graph calls (resolved upstream — never inline). */
+  botAccessToken: z.string().optional(),
+  /** The shared secret set as `clientState` on the Graph subscription; gates the change-notification webhook. */
+  notificationClientState: z.string().optional(),
+  /** The ACS application-hosted-media PCM sample rate (Hz) the audio plane negotiates. Defaults to 16000. */
+  acsSampleRate: z.coerce.number().optional().default(16000),
+  /** The realtime model's PCM16 sample rate (Hz) the binding resamples to/from. Defaults to 16000. */
+  modelSampleRate: z.coerce.number().optional().default(16000),
+}).passthrough();
+
+const telephonySchema = z.object({
+  /** Master switch. When false (or when no vendor block is present), telephony routes are not mounted. */
+  enabled: zodBooleanWithTransforms().default(false),
+  /** Twilio Programmable Voice + Media Streams binding. */
+  twilio: twilioTelephonySchema.optional(),
+  /** Vonage Voice + WebSocket-media binding. */
+  vonage: vonageTelephonySchema.optional(),
+  /** RingCentral Call Control + media-stream binding. */
+  ringcentral: ringcentralTelephonySchema.optional(),
+  /** Microsoft Teams meetings (Graph cloud-communications + ACS application-hosted media) binding. */
+  teams: teamsMeetingsSchema.optional(),
+}).passthrough();
+
 const configInfoSchema = z.object({
   userHandling: userHandlingInfoSchema,
   magicLink: magicLinkSchema.optional().default({}),
+  widget: widgetSchema.optional().default({}),
+  telephony: telephonySchema.optional().default({}),
   databaseSettings: databaseSettingsInfoSchema,
   viewingSystem: viewingSystemInfoSchema.optional(),
   restApiOptions: restApiOptionsSchema.optional().default({}),
@@ -384,6 +550,12 @@ const configInfoSchema = z.object({
 
 export type UserHandlingInfo = z.infer<typeof userHandlingInfoSchema>;
 export type MagicLinkConfig = z.infer<typeof magicLinkSchema>;
+export type WidgetConfig = z.infer<typeof widgetSchema>;
+export type TelephonyConfig = z.infer<typeof telephonySchema>;
+export type TwilioTelephonyConfig = z.infer<typeof twilioTelephonySchema>;
+export type VonageTelephonyConfig = z.infer<typeof vonageTelephonySchema>;
+export type RingCentralTelephonyConfig = z.infer<typeof ringcentralTelephonySchema>;
+export type TeamsMeetingsConfig = z.infer<typeof teamsMeetingsSchema>;
 export type DatabaseSettingsInfo = z.infer<typeof databaseSettingsInfoSchema>;
 export type ViewingSystemSettingsInfo = z.infer<typeof viewingSystemInfoSchema>;
 export type RESTApiOptions = z.infer<typeof restApiOptionsSchema>;
