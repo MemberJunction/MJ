@@ -1948,22 +1948,3 @@ app-duplicate-detection-resource {
 
 /* ══════ Merge Warning Banner (inline, non-blocking) ══════ */
 
-.merge-warning-banner {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 16px;
-    margin-bottom: 12px;
-    border-radius: 6px;
-    background: var(--mj-status-warning-bg);
-    color: var(--mj-status-warning-text);
-    border: 1px solid var(--mj-status-warning-border);
-    font-size: 13px;
-    font-weight: 500;
-    flex-shrink: 0;
-}
-
-.merge-warning-banner i {
-    font-size: 14px;
-    flex-shrink: 0;
-}

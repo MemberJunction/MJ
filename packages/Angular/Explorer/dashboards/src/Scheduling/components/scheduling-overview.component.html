@@ -153,20 +153,15 @@
                   Title="No active alerts" />
               }
               @for (alert of Alerts; track alert) {
-                <div class="alert-item" [ngClass]="'alert-' + alert.severity">
-                  <i [class]="GetAlertIcon(alert.severity)" class="alert-icon"></i>
-                  <div class="alert-content">
-                    <div class="alert-title">{{alert.title}}</div>
-                    <div class="alert-message">{{alert.message}}</div>
-                  </div>
+                <mj-alert Size="sm" [Title]="alert.title"
+                  [Variant]="alert.severity === 'error' ? 'error' : 'warning'">
+                  {{alert.message}}
                   @if (alert.type === 'stale-lock' && alert.jobId) {
-                    <button
-                      class="alert-action-btn"
-                      (click)="ReleaseLock(alert.jobId!)">
+                    <button mjButton variant="danger" size="sm" actions (click)="ReleaseLock(alert.jobId!)">
                       Release
                     </button>
                   }
-                </div>
+                </mj-alert>
               }
             </div>
           </div>

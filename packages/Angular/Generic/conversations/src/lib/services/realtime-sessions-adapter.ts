@@ -73,7 +73,7 @@ export class RealtimeSessionsAdapter implements ISessionsAdapter {
         //
         // We ALSO synthesize session-channel:open events for each initial
         // channel listed in channelNames. Reason: RealtimeSessionService's
-        // StartVoiceSession calls startChannels() (which emits to
+        // StartRealtimeSession calls startChannels() (which emits to
         // ActiveChannels$) BEFORE mintSession() resolves and sets
         // agentSessionId. By the time our ActiveChannels$ diff handler runs for
         // that first emission, CurrentAgentSessionId is still null and the

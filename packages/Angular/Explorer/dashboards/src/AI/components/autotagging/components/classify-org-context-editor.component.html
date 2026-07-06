@@ -1,14 +1,12 @@
-<div class="cls-org-ctx">
-    <button class="cls-org-ctx-head" (click)="Toggle()">
+<mj-accordion-panel Size="sm" [FlushBody]="true" [Expanded]="Expanded" (ExpandedChange)="onExpandedChange($event)">
+    <ng-template mjAccordionTitle>
         <i class="fa-solid fa-building"></i>
-        <span class="cls-org-ctx-title">Organization domain context</span>
+        <span>Organization domain context</span>
         @if (HasUnsavedChanges) {
-            <span class="cls-org-ctx-dirty">Unsaved</span>
+            <span class="mj-accordion-badge mj-accordion-badge--warning mj-accordion-badge--right">Unsaved</span>
         }
-        <i class="fa-solid" [class.fa-chevron-down]="!Expanded" [class.fa-chevron-up]="Expanded"></i>
-    </button>
-
-    @if (Expanded) {
+    </ng-template>
+    <ng-template mjAccordionBody>
         <div class="cls-org-ctx-body">
             @if (IsLoading) {
                 <mj-loading text="Loading org context…" size="small"></mj-loading>
@@ -29,5 +27,5 @@
                 </div>
             }
         </div>
-    }
-</div>
+    </ng-template>
+</mj-accordion-panel>

@@ -181,6 +181,15 @@ logic lives exactly once: pure evaluation in `@memberjunction/global` (`FieldTra
 `@memberjunction/core` (`EntityFieldRules` — validation, type coercion, lookup resolution, `ApplyToEntity({DryRun})`
 with Record Changes versioning).
 
+> **⚠️ `Infer` (AI Prompt) is NOT ML inference.** The **`Infer`** work type above runs an **AI Prompt** per record
+> (an LLM call → inferred values). It is unrelated to *predictive-model* scoring. **Predictive Studio** adds a
+> separate **`ML Model`** work type (`MLModelInferenceProcessor`, registered on the ClassFactory via
+> `@RegisterClass(MLModelInferenceProcessor, 'ML Model')` — see the
+> [Predictive Studio Guide](PREDICTIVE_STUDIO_GUIDE.md)) that runs a **trained ML model** through the Python
+> sidecar. It plugs in *without forking this substrate* (it registers externally rather than editing
+> `buildProcessor`), and like the other work types it write-backs via `WriteBackProcessor` when an `OutputMapping`
+> is set. When you mean "run a trained model over a record set," you want **`ML Model`**, not **`Infer`**.
+
 ---
 
 ## 5. Scopes — *which records to run over*

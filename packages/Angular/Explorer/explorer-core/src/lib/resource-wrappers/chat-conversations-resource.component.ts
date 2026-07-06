@@ -3,7 +3,9 @@ import { Metadata, CompositeKey } from '@memberjunction/core';
 import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { ResourceData, MJEnvironmentEntityExtended, MJConversationEntity, MJUserSettingEntity, UserInfoEngine, ConversationEngine } from '@memberjunction/core-entities';
-import { ConversationChatAreaComponent, ConversationListComponent, MentionAutocompleteService, ConversationStreamingService, ActiveTasksService, PendingAttachment, UICommandHandlerService, ConversationBridgeService } from '@memberjunction/ng-conversations';
+import { ConversationChatAreaComponent, ConversationListComponent, ConversationStreamingService, ActiveTasksService, UICommandHandlerService, ConversationBridgeService } from '@memberjunction/ng-conversations';
+import { PendingAttachment } from '@memberjunction/ng-composer';
+import { MentionAutocompleteService } from '@memberjunction/ng-conversations';
 import { ActionableCommand, OpenResourceCommand } from '@memberjunction/ai-core-plus';
 import { NavigationRequest } from '@memberjunction/ng-artifacts';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
@@ -52,6 +54,12 @@ import { Subject, takeUntil } from 'rxjs';
                 (unpinSidebarRequested)="unpinSidebar()"
                 (refreshRequested)="onRefreshRequested()">
               </mj-conversation-list>
+              <!-- Routines — pinned at the very bottom of the sidebar. Gated inside the
+                   section component by Read permission on 'MJ: User Routines'. -->
+              <mj-conversation-routines-section
+                (openEntityRecord)="onOpenEntityRecord($event)"
+                (openConversation)="onConversationSelected($event)">
+              </mj-conversation-routines-section>
             }
           </div>
         }
@@ -74,6 +82,7 @@ import { Subject, takeUntil } from 'rxjs';
               [pendingMessage]="pendingMessageToSend"
               [pendingAttachments]="pendingAttachmentsToSend"
               [pendingArtifactId]="pendingArtifactId"
+              [pendingArtifactConversationId]="pendingArtifactConversationId"
               [pendingArtifactVersionNumber]="pendingArtifactVersionNumber"
               [showSidebarToggle]="isSidebarCollapsed && isSidebarSettingsLoaded"
               (sidebarToggleClicked)="expandSidebar()"
@@ -120,9 +129,22 @@ import { Subject, takeUntil } from 'rxjs';
     .conversation-sidebar {
       flex-shrink: 0;
       border-right: 1px solid var(--mj-border-default);
-      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
       background: var(--mj-bg-surface-sunken);
       transition: width 0.3s ease;
+    }
+
+    /* Conversation list scrolls; the routines section stays pinned at the bottom */
+    .conversation-sidebar mj-conversation-list {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
+    }
+
+    .conversation-sidebar mj-conversation-routines-section {
+      flex-shrink: 0;
     }
 
     /* Disable transitions during initial load to prevent jarring animation */
@@ -266,13 +288,14 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
 
   // Pending navigation state
   public pendingArtifactId: string | null = null;
+  public pendingArtifactConversationId: string | null = null;
   /**
    * A pending request to open the REALTIME SESSION REVIEW overlay (deep link /
    * cross-resource nav with `realtimeSessionId`, e.g. the AI Agent Session form's
    * "open session" pill). Applied once after the chat area renders — this is also the
    * reference example for invoking an EXISTING realtime session programmatically:
    * `await chatArea.OpenRealtimeSessionReview(agentSessionId)` (a NEW session starts
-   * through the composer's phone button / `RealtimeSessionService.StartVoiceSession`).
+   * through the composer's phone button / `RealtimeSessionService.StartRealtimeSession`).
    */
   public pendingRealtimeSessionId: string | null = null;
   public pendingArtifactVersionNumber: number | null = null;
@@ -285,8 +308,10 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
 
   private engine = ConversationEngine.Instance;
 
+  // Shared AI mention/suggestion engine (BaseSingleton — same instance the composer plugins use)
+  private mentionAutocompleteService = MentionAutocompleteService.Instance;
+
   constructor(
-    private mentionAutocompleteService: MentionAutocompleteService,
     private cdr: ChangeDetectorRef,
     private streamingService: ConversationStreamingService,
     private activeTasksService: ActiveTasksService,
@@ -336,7 +361,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     // open:url commands are handled directly by the service; open:resource needs NavigationService.
     this.uiCommandHandler.actionableCommandRequested
       .pipe(takeUntil(this.destroy$))
-      .subscribe(command => this.handleActionableCommand(command));
+      .subscribe(request => this.handleActionableCommand(request.command));
 
     // Subscribe to bridge switch events so the overlay can hand off a conversation to this workspace
     this.bridge.SwitchEvent$
@@ -441,6 +466,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     // Set pending artifact if provided
     if (artifactId) {
       this.pendingArtifactId = artifactId;
+      this.pendingArtifactConversationId = conversationId || null;
       this.pendingArtifactVersionNumber = versionNumber;
     }
 
@@ -497,6 +523,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
 
     // Reflect any artifact intent so the chat area can open it.
     this.pendingArtifactId = artifactId;
+    this.pendingArtifactConversationId = artifactId ? conversationId : null;
     this.pendingArtifactVersionNumber = versionNumber;
 
     if (conversationId && conversationId !== this.selectedConversationId) {
@@ -572,8 +599,9 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     // (the live-tested "stuck overlay" bug).
     queryParams['realtimeSessionId'] = null;
 
-    // Use NavigationService to update query params properly
-    this.navigationService.UpdateActiveTabQueryParams(queryParams);
+    // Use the resource-scoped helper so a cached conversation component cannot
+    // write conversation params onto a tab that has since been reused for a record.
+    this.UpdateQueryParams(queryParams);
   }
 
   /**
@@ -953,6 +981,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
    */
   onPendingArtifactConsumed(): void {
     this.pendingArtifactId = null;
+    this.pendingArtifactConversationId = null;
     this.pendingArtifactVersionNumber = null;
     // Update URL to remove artifact params
     this.updateUrl();

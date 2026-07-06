@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>MJ Mobile — Phase 1 Visual Spec</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    --bg: #f5f3ee;
+    --surface: #ffffff;
+    --ink: #0f1115;
+    --ink-2: #4a4f5a;
+    --ink-3: #828894;
+    --line: #e6e3da;
+    --brand: #264FAF;
+    --positive: #1a8a5f;
+    --warn: #b87a1f;
+    --shadow-card: 0 1px 3px rgba(13,13,16,0.06), 0 24px 50px rgba(13,13,16,0.08);
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Inter", system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+  }
+  .container { max-width: 1480px; margin: 0 auto; padding: 56px 32px 96px; }
+
+  header.hero { margin-bottom: 40px; max-width: 920px; }
+  .eyebrow { font-size: 12px; font-weight: 700; color: var(--brand); letter-spacing: 0.16em; text-transform: uppercase; margin-bottom: 14px; }
+  h1 { font-size: 48px; line-height: 1.05; letter-spacing: -0.025em; font-weight: 700; margin: 0 0 18px; }
+  h1 .light { font-weight: 400; color: var(--ink-2); }
+  .lede { font-size: 18px; line-height: 1.55; color: var(--ink-2); max-width: 760px; }
+  .meta { display: flex; gap: 22px; margin-top: 22px; font-size: 13px; color: var(--ink-3); }
+  .meta a { color: var(--brand); text-decoration: none; font-weight: 600; }
+  .meta a:hover { text-decoration: underline; }
+
+  .toc {
+    margin: 24px 0 48px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 22px 26px;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 24px;
+  }
+  .toc h3 {
+    margin: 0 0 8px;
+    font-size: 11px; font-weight: 700;
+    color: var(--ink-3);
+    letter-spacing: 0.1em; text-transform: uppercase;
+  }
+  .toc ul { padding: 0; margin: 0; list-style: none; }
+  .toc li { padding: 4px 0; font-size: 13.5px; }
+  .toc a { color: var(--ink); text-decoration: none; font-weight: 500; }
+  .toc a:hover { color: var(--brand); }
+
+  .flow {
+    margin-bottom: 64px;
+  }
+  .flow-head {
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 28px;
+    display: flex; align-items: flex-end; justify-content: space-between;
+    gap: 32px;
+  }
+  .flow-head h2 {
+    margin: 0; font-size: 30px; font-weight: 700; letter-spacing: -0.02em;
+  }
+  .flow-head .subtitle {
+    margin-top: 4px; font-size: 14px; color: var(--ink-2);
+    max-width: 600px; line-height: 1.55;
+  }
+  .flow-head .pill {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 10.5px; font-weight: 700;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .pill.primary { background: rgba(38,79,175,0.10); color: var(--brand); }
+  .pill.secondary { background: rgba(26,138,95,0.10); color: var(--positive); }
+  .pill.support { background: rgba(184,122,31,0.10); color: var(--warn); }
+
+  .screens {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 28px;
+  }
+  .screen-card {
+    background: var(--surface);
+    border-radius: 22px;
+    padding: 22px 22px 26px;
+    border: 1px solid var(--line);
+    box-shadow: var(--shadow-card);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  .screen-card:hover { transform: translateY(-2px); }
+  .screen-title { font-size: 12px; font-weight: 700; color: var(--brand); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 6px; }
+  .screen-name { font-size: 18px; font-weight: 600; letter-spacing: -0.01em; margin-bottom: 10px; }
+  .screen-desc { font-size: 12.5px; color: var(--ink-3); line-height: 1.55; margin-bottom: 16px; min-height: 70px; }
+  .frame-wrap {
+    border-radius: 16px;
+    overflow: hidden;
+    background: #e8e6df;
+    aspect-ratio: 393 / 852;
+  }
+  .frame-wrap iframe {
+    border: none;
+    transform-origin: 0 0;
+    transform: scale(0.78);
+    width: 128.2%;
+    height: 128.2%;
+  }
+  .screen-actions {
+    margin-top: 14px;
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 12px;
+  }
+  .screen-actions a {
+    color: var(--brand); text-decoration: none; font-weight: 600;
+    display: inline-flex; align-items: center; gap: 4px;
+  }
+  .screen-actions a:hover { text-decoration: underline; }
+  .screen-tags {
+    display: inline-flex; gap: 5px;
+    font-size: 10.5px;
+  }
+  .screen-tag {
+    background: #f1efe9; color: var(--ink-2);
+    padding: 2px 7px; border-radius: 5px;
+    font-weight: 600; letter-spacing: 0.02em;
+  }
+
+  .flow-notes {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 18px 22px;
+    margin-top: 22px;
+    font-size: 13.5px;
+    line-height: 1.6;
+    color: var(--ink-2);
+  }
+  .flow-notes strong { color: var(--ink); }
+  .flow-notes code { background: #f1efe9; padding: 1px 5px; border-radius: 4px; font-size: 12.5px; }
+
+  .footer-call {
+    margin-top: 60px; padding: 32px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+  }
+  .footer-call h3 { margin: 0 0 12px; font-size: 22px; font-weight: 700; letter-spacing: -0.015em; }
+  .footer-call p { margin: 0 0 10px; color: var(--ink-2); font-size: 14px; line-height: 1.6; }
+
+  @media (max-width: 1100px) { .screens { grid-template-columns: 1fr 1fr; } .toc { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 760px) {
+    .container { padding: 32px 20px; }
+    h1 { font-size: 34px; }
+    .screens { grid-template-columns: 1fr; }
+    .toc { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header class="hero">
+    <div class="eyebrow">MemberJunction Mobile · Phase 1 Visual Spec</div>
+    <h1>Implementation handoff. <span class="light">Every screen, full resolution, with notes.</span></h1>
+    <p class="lede">
+      Phase 1 of the MJ mobile app. Native iOS &amp; Android via React Native (Expo). Chat is primary — a first-class multi-agent conversation experience with artifacts, designed-for voice. Data Explorer is read-only secondary. This page is the visual contract: the architecture plan, design tokens, data sources, and interaction notes live in <a href="README.md">README.md</a>. Deviations should be discussed and reflected back into both.
+    </p>
+    <div class="meta">
+      <span>2026-05-19</span>
+      <span>·</span>
+      <a href="README.md">Architecture &amp; UX plan</a>
+      <span>·</span>
+      <span>Branch: <code>an-mobile-app-dev</code></span>
+    </div>
+  </header>
+
+  <nav class="toc">
+    <div>
+      <h3>A · Auth</h3>
+      <ul>
+        <li><a href="#login">Sign in</a></li>
+      </ul>
+    </div>
+    <div>
+      <h3>B · Conversation (primary)</h3>
+      <ul>
+        <li><a href="#conversation-list">Conversation list (drawer)</a></li>
+        <li><a href="#new-conversation">New conversation</a></li>
+        <li><a href="#chat-thread">Chat thread (hero)</a></li>
+        <li><a href="#voice-mode">Voice mode</a></li>
+        <li><a href="#artifacts-dock">Artifacts dock open</a></li>
+        <li><a href="#artifact-detail">Artifact detail</a></li>
+      </ul>
+    </div>
+    <div>
+      <h3>C · Data Explorer</h3>
+      <ul>
+        <li><a href="#explorer-home">Explorer hub</a></li>
+        <li><a href="#entity-records">Entity records</a></li>
+        <li><a href="#record-detail">Record detail</a></li>
+        <li><a href="#query-run">Query results</a></li>
+        <li><a href="#dashboard-view">Dashboard view</a></li>
+      </ul>
+    </div>
+    <div>
+      <h3>D · Profile</h3>
+      <ul>
+        <li><a href="#profile">Profile &amp; settings</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- AUTH -->
+  <section class="flow" id="flow-auth">
+    <div class="flow-head">
+      <div>
+        <span class="pill support">A · Authentication</span>
+        <h2>Sign in</h2>
+        <div class="subtitle">Single-screen sign-in. Email + SSO (passkey, Google, Apple). Reuses existing MJ OAuth providers via <code>expo-auth-session</code>; tokens stored in <code>expo-secure-store</code>.</div>
+      </div>
+    </div>
+    <div class="screens">
+      <div class="screen-card" id="login">
+        <div class="screen-title">A1</div>
+        <div class="screen-name">Login</div>
+        <div class="screen-desc">Logo + tagline, email field, SSO options (passkey/Google/Apple). After auth, lands on the active conversation (or empty state if first launch).</div>
+        <div class="frame-wrap"><iframe src="html/login.html"></iframe></div>
+        <div class="screen-actions">
+          <a href="html/login.html" target="_blank">Open full size →</a>
+          <span class="screen-tags"><span class="screen-tag">expo-auth-session</span></span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CONVERSATION -->
+  <section class="flow" id="flow-chat">
+    <div class="flow-head">
+      <div>
+        <span class="pill primary">B · Conversation (primary surface)</span>
+        <h2>Chat with agents</h2>
+        <div class="subtitle">The reason this app exists. Multi-agent conversations, inline artifacts, designed-for voice. The drawer is the global nav root.</div>
+      </div>
+    </div>
+    <div class="screens">
+      <div class="screen-card" id="conversation-list">
+        <div class="screen-title">B1 · Drawer / nav root</div>
+        <div class="screen-name">Conversation list</div>
+        <div class="screen-desc">Opens via hamburger or edge-swipe from any conversation. Sectioned by Pinned / Today / Yesterday. Avatar stack on each row shows participating agents. Footer rows link to Data Explorer + Profile.</div>
+        <div class="frame-wrap"><iframe src="html/conversation-list.html"></iframe></div>
+        <div class="screen-actions">
+          <a href="html/conversation-list.html" target="_blank">Open full size →</a>
+          <span class="screen-tags"><span class="screen-tag">RunView</span><span class="screen-tag">Conversation</span></span>
+        </div>
+      </div>
+      <div class="screen-card" id="new-conversation">
+        <div class="screen-title">B2 · Start flow</div>
+        <div class="screen-name">New conversation</div>
+        <div class="screen-desc">Composer-first with suggested prompts and agent rail. Default: Skip routes to the right agent. <code>@mention</code> targets a specific agent. Mic enters voice mode.</div>
+        <div class="frame-wrap"><iframe src="html/new-conversation.html"></iframe></div>
+        <div class="screen-actions">
+          <a href="html/new-conversation.html" target="_blank">Open full size →</a>
+          <span class="screen-tags"><span class="screen-tag">AI Agents</span></span>
+        </div>
+      </div>
+      <div class="screen-card" id="chat-thread">
+        <div class="screen-title">B3 · Hero</div>
+        <div class="screen-name">Chat thread</div>
+        <div class="screen-desc">Multi-agent thread with Skip + Research. Step indicators show agent work. Inline artifact card. Action chips. Collapsed artifact-dock handle above composer (~32px). No "Skip ▼" — conversation is multi-agent.</div>
+        <div class="frame-wrap"><iframe src="html/chat-thread.html"></iframe></div>
+        <div class="screen-actions">
+          <a href="html/chat-thread.html" target="_blank">Open full size →</a>
+          <span class="screen-tags"><span class="screen-tag">streaming</span><span class="screen-tag">artifacts</span></span>
+        </div>
+      </div>
+      <div class="screen-card" id="voice-mode">
+        <div class="screen-title">B4 · Voice (Phase 2 wiring)</div>
+        <div class="screen-name">Voice mode</div>
+        <div class="screen-desc">Fullscreen takeover. Animated orb, waveform, live transcript card. Phase 1 ships the visual scaffold; Phase 2 wires <code>expo-av</code> + Whisper. The chat thread already has a conversation context, so voice doesn't need an agent picker.</div>
+        <div class="frame-wrap"><iframe src="html/voice-mode.html"></iframe></div>
+        <div class="screen-actions">
+          <a href="html/voice-mode.html" target="_blank">Open full size →</a>
+          <span class="screen-tags"><span class="screen-tag">expo-av</span><span class="screen-tag">Whisper</span></span>
+        </div>
+      </div>
+      <div class="screen-card" id="artifacts-dock">
+        <div class="screen-title">B5 · Artifact dock</div>
+        <div class="screen-name">Artifacts dock open</div>
+        <div class="screen-desc">Bottom sheet revealed by tapping/dragging the collapsed handle. All artifacts in this conversation. Filter by agent or type. Tap a card to open the artifact detail. Snaps at half- and full-screen.</div>
+        <div class="frame-wrap"><iframe src="html/artifacts-dock-open.html"></iframe></div>
+        <div class="screen-actions">
+          <a href="html/artifacts-dock-open.html" target="_blank">Open full size →</a>
+          <span class="screen-tags"><span class="screen-tag">bottom sheet</span></span>
+        </div>
+      </div>
+      <div class="screen-card" id="artifact-detail">
+        <div class="screen-title">B6 · Single artifact</div>
+        <div class="screen-name">Artifact detail</div>
+        <div class="screen-desc">Shown here: data-table case (the simplest type). Tabs (Data / Chart / JSON), version selector, summary KPIs, sticky bottom bar. Other types render differently — see <a href="README.md#43-artifact-rendering--types-and-the-interactive-component-path">README §4.3</a> for the full per-type plan, including the <strong>Interactive Component</strong> path that reuses <code>@memberjunction/react-runtime</code>.</div>
+        <div class="frame-wrap"><iframe src="html/artifact-detail.html"></iframe></div>
+        <div class="screen-actions">
+          <a href="html/artifact-detail.html" target="_blank">Open full size →</a>
+          <span class="screen-tags"><span class="screen-tag">react-runtime</span><span class="screen-tag">MJArtifactType</span></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="flow-notes">
+      <strong>Key conversation patterns:</strong> Top nav is conversation-centric (title + participating-agent avatar stack), never agent-centric. <code>@mention</code> brings any agent into the thread mid-conversation. The artifact dock is collapsed to a thin handle by default — gives back ~56px of thread space vs. always-expanded — and pulses briefly when a new artifact arrives. Voice mode is a peer to text but visually distinct; it's the same conversation, just spoken.
+    </div>
+  </section>
+
+  <!-- DATA EXPLORER -->
+  <section class="flow" id="flow-explorer">
+    <div class="flow-head">
+      <div>
+        <span class="pill secondary">C · Data Explorer (secondary)</span>
+        <h2>Browse, query, view</h2>
+        <div class="subtitle">Read-only surfaces for Phase 1. Entities, Queries, Dashboards. Every screen ends with an "Ask Skip about this" CTA that bridges back to chat with the current context attached.</div>
+      </div>
+    </div>
+    <div class="screens">
+      <div class="screen-card" id="explorer-home">
+        <div class="screen-title">C1 · Hub</div>
+        <div class="screen-name">Data Explorer home</div>
+        <div class="screen-desc">Three tiles (Entities / Queries / Dashboards) over a recently-viewed list. Search at top spans all three resource types. Dashboard tile carries an honest "may not render optimally on mobile" caveat.</div>
+        <div class="frame-wrap"><iframe src="html/explorer-home.html"></iframe></div>
+        <div class="screen-actions">
+          <a href="html/explorer-home.html" target="_blank">Open full size →</a>
+          <span class="screen-tags"><span class="screen-tag">Metadata</span></span>
+        </div>
+      </div>
+      <div class="screen-card" id="entity-records">
+        <div class="screen-title">C2 · Browse</div>
+        <div class="screen-name">Entity records</div>
+        <div class="screen-desc">Cards, never grids. Filter chips persist locally. Sort menu. FAB at bottom right says "Ask Skip about these" — opens a new conversation with the active RunView params as context.</div>
+        <div class="frame-wrap"><iframe src="html/entity-records.html"></iframe></div>
+        <div class="screen-actions">
+          <a href="html/entity-records.html" target="_blank">Open full size →</a>
+          <span class="screen-tags"><span class="screen-tag">RunView</span></span>
+        </div>
+      </div>
+      <div class="screen-card" id="record-detail">
+        <div class="screen-title">C3 · Drill-in</div>
+        <div class="screen-name">Record detail</div>
+        <div class="screen-desc">Read-only. Hero card with the most important field huge. Sections: Key details / Owner / Related (counts that drill further). Sticky "Ask Skip about this opportunity" bar at the bottom.</div>
+        <div class="frame-wrap"><iframe src="html/record-detail.html"></iframe></div>
+        <div class="screen-actions">
+          <a href="html/record-detail.html" target="_blank">Open full size →</a>
+          <span class="screen-tags"><span class="screen-tag">GetEntityObject</span></span>
+        </div>
+      </div>
+      <div class="screen-card" id="query-run">
+        <div class="screen-title">C4 · Queries</div>
+        <div class="screen-name">Query results</div>
+        <div class="screen-desc">Compact param card at top (chips for active values + Edit/Re-run). Result cards ranked by risk. Risk meter at bottom of each card. Sticky "Ask Skip about these accounts" CTA.</div>
+        <div class="frame-wrap"><iframe src="html/query-run.html"></iframe></div>
+        <div class="screen-actions">
+          <a href="html/query-run.html" target="_blank">Open full size →</a>
+          <span class="screen-tags"><span class="screen-tag">RunQuery</span></span>
+        </div>
+      </div>
+      <div class="screen-card" id="dashboard-view">
+        <div class="screen-title">C5 · Dashboards</div>
+        <div class="screen-name">Dashboard view</div>
+        <div class="screen-desc">Best-effort render of an existing dashboard. Mobile notice banner at top. Native renderers for KPI grids, line charts, and lists. Desktop-only parts fall back to a stub card with "Open on desktop." Honest about the limitation.</div>
+        <div class="frame-wrap"><iframe src="html/dashboard-view.html"></iframe></div>
+        <div class="screen-actions">
+          <a href="html/dashboard-view.html" target="_blank">Open full size →</a>
+          <span class="screen-tags"><span class="screen-tag">DashboardViewer</span></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="flow-notes">
+      <strong>The "Ask Skip" bridge:</strong> every Explorer surface ends with a CTA that opens a new conversation seeded with the current context (record reference, query name + params, dashboard reference). This is the bridge that makes Data Explorer relevant on mobile — without it, a phone-sized record view is just a worse desktop view. With it, the user lands on a record, sees something interesting, and immediately can have a conversation about it.
+    </div>
+  </section>
+
+  <!-- PROFILE -->
+  <section class="flow" id="flow-profile">
+    <div class="flow-head">
+      <div>
+        <span class="pill support">D · Profile</span>
+        <h2>Profile &amp; settings</h2>
+        <div class="subtitle">Identity, preferences, account, sign-out. Some toggles (voice responses, push notifications, biometric lock) are visible in Phase 1 but inert until Phase 2 wires them.</div>
+      </div>
+    </div>
+    <div class="screens">
+      <div class="screen-card" id="profile">
+        <div class="screen-title">D1</div>
+        <div class="screen-name">Profile &amp; settings</div>
+        <div class="screen-desc">Hero with avatar + org pill. Preferences (default agent, appearance, voice, push). Account (Face ID, workspace, help). Sign out. Footer shows app version.</div>
+        <div class="frame-wrap"><iframe src="html/profile.html"></iframe></div>
+        <div class="screen-actions">
+          <a href="html/profile.html" target="_blank">Open full size →</a>
+          <span class="screen-tags"><span class="screen-tag">UserPreference</span></span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="footer-call">
+    <h3>For the implementing agent</h3>
+    <p>Mockups are the design contract. Pixel match isn't required, but proportions, spacing, color tokens, and interaction patterns are. Use the same design tokens listed in <a href="README.md">README.md §4.1</a> as React Native theme constants from day one. Build the chat surface first — it's the differentiator and the highest-value workflow. Don't ship Data Explorer until chat feels great.</p>
+    <p>The artifact dock collapsed-handle pattern (Part 4.2 §B) is one of the more subtle pieces — make sure that lands. It's the difference between artifacts feeling like first-class citizens and them feeling like a distraction.</p>
+    <p>For artifact rendering, <strong>read <a href="README.md#43-artifact-rendering--types-and-the-interactive-component-path">README §4.3</a> first</strong>. Two architectural decisions there worth flagging:</p>
+    <ul style="margin: 0 0 10px; padding-left: 22px; color: var(--ink-2); font-size: 14px; line-height: 1.6;">
+      <li><strong>Interactive Component artifacts</strong> reuse <code>@memberjunction/react-runtime</code> directly — that package is platform-agnostic by design; we don't need the Angular bridge (<code>ng-react</code>). Phase 1 ships a "View on desktop" stub; Phase 2 wires the full runtime with an RN adapter for <code>ReactRootManager</code>.</li>
+      <li><strong>Markdown</strong> is <em>not</em> a stock library install. <code>@memberjunction/ng-markdown</code> ships Prism, Mermaid, and custom extensions (code-copy, collapsible headings, SVG). We extract a new <code>@memberjunction/markdown-core</code> that owns parsing + extensions + AST output; the Angular and RN renderers become thin consumers. Avoids the divergence trap.</li>
+    </ul>
+  </div>
+</div>
+</body>
+</html>

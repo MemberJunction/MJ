@@ -1,6 +1,8 @@
 import type { Type } from '@angular/core';
+import type { Observable } from 'rxjs';
 import { IMetadataProvider } from '@memberjunction/core';
 import { JSONValue, RealtimeToolDefinition } from '@memberjunction/ai';
+import type { AppContextSnapshot } from '@memberjunction/ai-core-plus';
 
 /**
  * Host services handed to a {@link BaseRealtimeChannelClient} at {@link BaseRealtimeChannelClient.Initialize}.
@@ -102,6 +104,32 @@ export interface RealtimeChannelContext {
    * @returns The operation's `data` payload, or `null` on any failure / when no session is live.
    */
   ExecuteServerAction<TResult>(query: string, variables: Record<string, JSONValue>): Promise<TResult | null>;
+
+  /**
+   * OPTIONAL — the live app-context stream (where the user is, what they see, and the available
+   * client-tool + agent manifest), pushed by the host (Explorer) at session start and on subsequent
+   * changes. The headless `ClientContextChannel` subscribes to this and streams deltas to the model
+   * via {@link SendContextNote}. Absent on hosts that don't supply app context (e.g. custom apps);
+   * channels must read it null-safely.
+   */
+  AppContext$?: Observable<AppContextSnapshot | null>;
+
+  /**
+   * OPTIONAL — executes a host-registered surface CLIENT TOOL by name (the handlers the host wired
+   * from the active surface's `SetAgentClientTools`). The headless `ClientContextChannel`'s
+   * `ContextTool` proxy routes the model's `{ action, params }` here so a surface tool runs in the
+   * browser with no server round-trip. Best-effort and tolerant — resolves to a structured result
+   * (never throws); `Success: false` for an unknown tool or a thrown handler. Absent on hosts that
+   * register no client tools.
+   *
+   * @param name The client-tool name (the model's `action`).
+   * @param params The tool parameters (the model's `params`).
+   * @returns A structured result the channel serializes back to the model.
+   */
+  ExecuteClientTool?(
+    name: string,
+    params: Record<string, unknown>
+  ): Promise<{ Success: boolean; Result?: unknown; ErrorMessage?: string }>;
 }
 
 /**

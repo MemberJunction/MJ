@@ -37,6 +37,7 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { ArtifactStateService } from '../../services/artifact-state.service';
 import { CollectionStateService } from '../../services/collection-state.service';
 import { ArtifactPermissionService } from '../../services/artifact-permission.service';
+import { PendingAttachment } from '@memberjunction/ng-composer';
 import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
 import { ConversationStreamingService } from '../../services/conversation-streaming.service';
 import { UICommandHandlerService } from '../../services/ui-command-handler.service';
@@ -47,7 +48,6 @@ import { Subject, takeUntil } from 'rxjs';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { ActionableCommand, AutomaticCommand } from '@memberjunction/ai-core-plus';
 import { NavigationRequest } from '@memberjunction/ng-artifacts';
-import { PendingAttachment } from '../mention/mention-editor.component';
 
 /**
  * Top-level workspace component for conversations
@@ -71,6 +71,13 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   @Input() currentUser!: UserInfo;
   @Input() activeContext?: 'library' | 'task';
   @Input() contextItemId?: string;
+  /**
+   * Show the Routines section at the very bottom of the left sidebar. Default true;
+   * hosts that don't want routines (or embed a reduced chat surface) set false.
+   * The section additionally hides itself when the current user lacks Read
+   * permission on 'MJ: User Routines'.
+   */
+  @Input() ShowRoutines: boolean = true;
 
   // Navigation properties for external control (deep linking from URL)
   @Input() set activeTabInput(value: 'conversations' | 'collections' | 'tasks' | undefined) {
@@ -196,16 +203,22 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   public isNewUnsavedConversation: boolean = false;
   public pendingMessageToSend: string | null = null;
   public pendingAttachmentsToSend: PendingAttachment[] | null = null;
+  /** The conversation pendingMessageToSend is destined for — bound to the chat-area so the
+   *  auto-send reaches only that conversation's input, even if the user swaps conversations
+   *  during the async send window (prevents the message bleeding into the swapped-to conversation). */
+  public pendingMessageConversationId: string | null = null;
   public pendingArtifactId: string | null = null;
+  public pendingArtifactConversationId: string | null = null;
   public pendingArtifactVersionNumber: number | null = null;
 
   private engine = ConversationEngine.Instance;
+  // Shared AI mention/suggestion engine (BaseSingleton — same instance the composer plugins use)
+  private mentionAutocompleteService = MentionAutocompleteService.Instance;
 
   constructor(
     public artifactState: ArtifactStateService,
     public collectionState: CollectionStateService,
     private artifactPermissionService: ArtifactPermissionService,
-    private mentionAutocompleteService: MentionAutocompleteService,
     private notificationService: MJNotificationService,
     private streamingService: ConversationStreamingService,
     private uiCommandHandler: UICommandHandlerService,
@@ -244,6 +257,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     this.isNewUnsavedConversation = true;
     this.pendingMessageToSend = null;
     this.pendingAttachmentsToSend = null;
+    this.pendingMessageConversationId = null;
 
     // Auto-collapse if mobile OR if sidebar is not pinned
     if (this.isMobileView || !this.isSidebarPinned) {
@@ -325,6 +339,9 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
       // This ensures the new message-input component receives the pending data
       this.pendingMessageToSend = event.pendingMessage || null;
       this.pendingAttachmentsToSend = event.pendingAttachments || null;
+      // Pin the pending message to THIS conversation so a fast conversation-swap can't
+      // redirect its auto-send into a different conversation.
+      this.pendingMessageConversationId = event.conversation.ID;
       this.selectedConversationId = event.conversation.ID;
       this.selectedConversation = event.conversation;
       this.isNewUnsavedConversation = false;
@@ -341,6 +358,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   onPendingMessageRequested(event: {text: string; attachments: PendingAttachment[]}): void {
     this.pendingMessageToSend = event.text;
     this.pendingAttachmentsToSend = event.attachments;
+    this.pendingMessageConversationId = this.selectedConversationId;
   }
 
   /**
@@ -373,8 +391,8 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     // These will be bubbled up to the host application
     this.uiCommandHandler.actionableCommandRequested
       .pipe(takeUntil(this.destroy$))
-      .subscribe(command => {
-        this.onActionableCommand(command);
+      .subscribe(request => {
+        this.onActionableCommand(request.command);
       });
 
     this.uiCommandHandler.automaticCommandRequested
@@ -1151,6 +1169,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
       // Store pending artifact info so chat area can show it and scroll to message
       if (event.artifactId) {
         this.pendingArtifactId = event.artifactId;
+        this.pendingArtifactConversationId = event.id;
         this.pendingArtifactVersionNumber = event.versionNumber || null;
         console.log('📦 Pending artifact set:', event.artifactId, 'v' + event.versionNumber);
       }

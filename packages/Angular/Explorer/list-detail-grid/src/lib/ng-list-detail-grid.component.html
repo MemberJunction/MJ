@@ -16,6 +16,8 @@
 
   <!-- Grid display when list is loaded -->
   @if (listLoaded && gridParams) {
+    <!-- List detail grid is not a saved User View, so there's no canonical GridState to manage —
+         suppress the "Manage Columns" chooser (AllowColumnToggle=false). -->
     <mj-entity-data-grid
       #entityDataGrid
       [Params]="gridParams"
@@ -23,6 +25,7 @@
       [ShowToolbar]="showToolbar"
       [ToolbarConfig]="effectiveToolbarConfig"
       [SelectionMode]="selectionMode"
+      [AllowColumnToggle]="false"
       (AfterRowClick)="onRowClick($event)"
       (AfterRowDoubleClick)="onRowDoubleClick($event)"
       (AfterDataLoad)="onDataLoaded($event)"

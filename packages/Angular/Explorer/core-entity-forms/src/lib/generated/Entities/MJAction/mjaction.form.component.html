@@ -612,6 +612,31 @@
         }
     </mj-collapsible-panel>
 
+    <!-- AI Skill Actions Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAISkillActions"
+        SectionName="AI Skill Actions"
+        Icon="fa fa-bolt"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAISkillActions')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Skill Actions','ActionID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Skill Actions')"
+                [AllowLoad]="IsSectionExpanded('mJAISkillActions')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAISkillActions', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-related" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
 </mj-record-form-container>
         

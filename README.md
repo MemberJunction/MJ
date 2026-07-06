@@ -234,7 +234,7 @@ docker-compose up -d
 # Versioned migrations in /migrations/v2/ run automatically on startup
 ```
 
-**Security:** Auth0 + Azure AD (MSAL) authentication, row-level security, field permissions, GraphQL query depth limiting, and complete audit logging.
+**Security:** Pluggable authentication — Auth0, Azure AD (MSAL), Okta, AWS Cognito, Google, and WorkOS (AuthKit) — plus row-level security, field permissions, GraphQL query depth limiting, and complete audit logging.
 
 ---
 
@@ -447,7 +447,7 @@ The MJExplorer application -- MemberJunction's primary Angular-based UI for brow
 | [explorer-core](./packages/Angular/Explorer/explorer-core/README.md) | `@memberjunction/ng-explorer-core` | Core Explorer framework: application shell, routing, resource containers, and navigation |
 | [explorer-modules](./packages/Angular/Explorer/explorer-modules/README.md) | `@memberjunction/ng-explorer-modules` | Consolidated Explorer NgModule bundle that re-exports all Explorer feature modules |
 | [base-application](./packages/Angular/Explorer/base-application/README.md) | `@memberjunction/ng-base-application` | BaseApplication class system for app-centric navigation |
-| [auth-services](./packages/Angular/Explorer/auth-services/README.md) | `@memberjunction/ng-auth-services` | Authentication services with Auth0, MSAL, and Okta provider support |
+| [auth-services](./packages/Angular/Explorer/auth-services/README.md) | `@memberjunction/ng-auth-services` | Authentication services with Auth0, MSAL, Okta, Cognito, and WorkOS provider support |
 | [shared](./packages/Angular/Explorer/shared/README.md) | `@memberjunction/ng-shared` | Shared Explorer utilities, base components, services, and events used across Explorer packages |
 | [workspace-initializer](./packages/Angular/Explorer/workspace-initializer/README.md) | `@memberjunction/ng-workspace-initializer` | Workspace initialization service and components for bootstrapping the Explorer environment |
 

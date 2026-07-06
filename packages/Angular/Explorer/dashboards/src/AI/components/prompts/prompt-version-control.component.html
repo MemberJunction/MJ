@@ -406,14 +406,13 @@
   <!-- Error state -->
   @if (error) {
     <div class="error-container">
-      <div class="alert alert-danger" role="alert">
-        <i class="fa-solid fa-exclamation-triangle"></i>
+      <mj-alert Variant="error">
         {{ error }}
-        <button type="button" class="btn btn-sm btn-outline-danger ms-2" (click)="refreshHistory()">
+        <button mjButton variant="danger" size="sm" actions (click)="refreshHistory()">
           <i class="fa-solid fa-refresh"></i>
           Retry
         </button>
-      </div>
+      </mj-alert>
     </div>
   }
   }

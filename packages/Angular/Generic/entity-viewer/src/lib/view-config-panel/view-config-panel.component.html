@@ -567,10 +567,7 @@
             </div>
             <!-- Multi-sort hint -->
             @if (SortItems.length > 1) {
-              <div class="sort-hint">
-                <i class="fa-solid fa-info-circle"></i>
-                <span>Drag items to change priority. Records sort by first level, then second, etc.</span>
-              </div>
+              <mj-alert Variant="info" Size="sm">Drag items to change priority. Records sort by first level, then second, etc.</mj-alert>
             }
           } @else {
             <mj-empty-state
@@ -640,10 +637,7 @@
             </div>
 
             @if (SmartFilterExplanation) {
-              <div class="smart-filter-explanation">
-                <i class="fa-solid fa-robot"></i>
-                <span>{{ SmartFilterExplanation }}</span>
-              </div>
+              <mj-alert Variant="info" Size="sm" Icon="fa-solid fa-robot" class="view-config-alert-pos-mb">{{ SmartFilterExplanation }}</mj-alert>
             }
 
             <!-- Example Prompts -->
@@ -684,10 +678,7 @@
               </div>
             </div>
 
-            <div class="smart-filter-tip">
-              <i class="fa-solid fa-info-circle"></i>
-              <span>The AI will interpret your description and create the appropriate filter when you save the view.</span>
-            </div>
+            <mj-alert Variant="info" Size="sm" class="view-config-alert-pos">The AI will interpret your description and create the appropriate filter when you save the view.</mj-alert>
           </div>
         }
 
@@ -726,10 +717,7 @@
               </div>
             </div>
 
-            <div class="traditional-filter-tip">
-              <i class="fa-solid fa-info-circle"></i>
-              <span>Build precise filters by selecting fields, operators, and values. Use groups for complex AND/OR logic.</span>
-            </div>
+            <mj-alert Variant="info" Size="sm" class="view-config-alert-pos">Build precise filters by selecting fields, operators, and values. Use groups for complex AND/OR logic.</mj-alert>
           </div>
         }
       </div>
@@ -844,10 +832,7 @@
           }
 
           <!-- Info Tip -->
-          <div class="aggregates-tip">
-            <i class="fa-solid fa-info-circle"></i>
-            <span>Aggregates are calculated server-side for accuracy with filtered/paginated data.</span>
-          </div>
+          <mj-alert Variant="info" Size="sm" class="view-config-alert-pos">Aggregates are calculated server-side for accuracy with filtered/paginated data.</mj-alert>
         </div>
       </div>
     }
@@ -927,10 +912,7 @@
 
   <!-- Validation Errors Banner -->
   @if (ValidationErrors.length > 0 && VisibleColumns.length === 0) {
-    <div class="validation-banner">
-      <i class="fa-solid fa-exclamation-triangle"></i>
-      <span>At least one column must be visible</span>
-    </div>
+    <mj-alert Variant="error" Size="sm" class="view-config-validation-pos">At least one column must be visible</mj-alert>
   }
 
   <!-- Panel Footer -->

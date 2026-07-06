@@ -1,0 +1,38 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Logistic Regression Hyperparameters",
+  "type": "object",
+  "properties": {
+    "C": {
+      "type": "number",
+      "minimum": 0.0001,
+      "maximum": 1000,
+      "default": 1.0,
+      "description": "Inverse of regularization strength; smaller values mean stronger regularization."
+    },
+    "penalty": {
+      "type": "string",
+      "enum": ["l1", "l2"],
+      "default": "l2",
+      "description": "Norm used in the penalization term."
+    },
+    "solver": {
+      "type": "string",
+      "enum": ["lbfgs", "liblinear", "saga"],
+      "default": "lbfgs",
+      "description": "Optimization algorithm; must be compatible with the chosen penalty."
+    },
+    "max_iter": {
+      "type": "integer",
+      "minimum": 50,
+      "maximum": 10000,
+      "default": 1000,
+      "description": "Maximum number of solver iterations for convergence."
+    },
+    "class_weight": {
+      "enum": [null, "balanced"],
+      "default": null,
+      "description": "Class weighting; 'balanced' adjusts weights inversely to class frequencies."
+    }
+  }
+}

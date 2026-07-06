@@ -8,7 +8,8 @@ import {
   MJDialogComponent,
   MJDialogActionsComponent,
   MJDropdownComponent,
-  MJEmptyStateComponent
+  MJEmptyStateComponent,
+  MJAlertComponent
 } from '@memberjunction/ng-ui-components';
 
 // MemberJunction imports
@@ -57,6 +58,7 @@ import { ListSharingService } from './services/list-sharing.service';
     MJDialogActionsComponent,
     MJDropdownComponent,
     MJEmptyStateComponent,
+    MJAlertComponent,
     ContainerDirectivesModule,
     SharedGenericModule
   ],

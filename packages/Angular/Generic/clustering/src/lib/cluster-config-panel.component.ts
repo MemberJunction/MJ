@@ -400,9 +400,9 @@ export class ClusterConfigPanelComponent implements OnInit, OnDestroy {
         this.cdr.detectChanges();
     }
 
-    /** Toggle the multi-source expander. */
-    public ToggleMultiSource(): void {
-        this.ShowMultiSource = !this.ShowMultiSource;
+    /** Handle the multi-source accordion's expand/collapse. */
+    public OnMultiSourceExpandedChange(expanded: boolean): void {
+        this.ShowMultiSource = expanded;
         this.cdr.detectChanges();
     }
 

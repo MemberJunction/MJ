@@ -22,7 +22,10 @@ interface DocumentParamInput {
  *   - SignatureAccountID (required)
  *   - Title (required)
  *   - Documents (required) — array of `{ filename, contentType?, contentBase64 }`
- *   - Recipients (required) — array of `{ email, name?, routingOrder?, role? }`
+ *   - Recipients (required) — array of `{ email, name?, routingOrder?, role?, fields? }`, where each
+ *     `fields[]` entry places a signature/date/initials/text/checkbox field by anchor string
+ *     (preferred) or normalized page/xPercent/yPercent coordinates. Omit `fields` to let the
+ *     provider apply its own default placement (no forced tab).
  *   - Message?, EntityID?, RecordID?, ArtifactID?, ArtifactVersionID?, SendImmediately?, Metadata?
  *
  * Outputs: SignatureRequestID, ExternalEnvelopeID, Status.

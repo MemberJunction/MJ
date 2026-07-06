@@ -181,10 +181,9 @@
 
     <!-- Merge Warning Banner (non-blocking, shown when entity lacks AllowRecordMerge) -->
     @if (ShowMergeWarningBanner) {
-        <div class="merge-warning-banner">
-            <i class="fa-solid fa-triangle-exclamation"></i>
+        <mj-alert Variant="warning">
             Merging is not available for this entity. Detection results are read-only.
-        </div>
+        </mj-alert>
     }
 
     <!-- Content -->

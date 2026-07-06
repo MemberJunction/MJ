@@ -5,6 +5,8 @@ import { ResourceData, MJListCategoryEntity, MJListEntity } from '@memberjunctio
 import { Metadata, RunView } from '@memberjunction/core';
 import { Subject } from 'rxjs';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { validateStringParam } from '../../shared/agent-tool-validation';
+import { buildListCategoriesAgentContext, resolveNamedRecord, buildNotFoundError } from '../lists-agent-context';
 interface CategoryViewModel {
   category: MJListCategoryEntity;
   listCount: number;
@@ -846,6 +848,8 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
   async ngOnInit() {
     super.ngOnInit();
     await this.loadData();
+    this.registerAgentTools();
+    this.publishAgentContext();
     this.NotifyLoadComplete();
   }
 
@@ -853,6 +857,105 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
     super.ngOnDestroy();
     this.destroy$.next();
     this.destroy$.complete();
+  }
+
+  // ================================================================
+  // AI Agent Context & Client Tools
+  //
+  // SAFETY BOUNDARY: This surface exposes only SAFE (selection / expand)
+  // operations plus ONE bounded-mutation tool (CreateCategory) that opens
+  // the dialog-validated create flow. INTENTIONALLY EXCLUDED — must NOT be
+  // wired in:
+  //   - EditCategory   (editCategory)   — mutates an existing record
+  //   - DeleteCategory (confirmDelete)  — destructive
+  // Edit/delete stay user-driven on purpose.
+  // ================================================================
+
+  /**
+   * Report the Categories surface's salient state to the AI agent.
+   * Re-called whenever the selection changes or data reloads.
+   */
+  private publishAgentContext(): void {
+    this.navigationService.SetAgentContext(this, buildListCategoriesAgentContext({
+      SelectedCategoryId: this.selectedCategory?.ID ?? null,
+      SelectedCategoryName: this.selectedCategory?.Name ?? null,
+      CategoryCount: this.categories.length,
+      SelectedCategoryListCount: this.selectedCategoryLists.length,
+      // Deep context: the member-list NAMES under the selection (bounded) and a
+      // bounded view of the category tree (name / count / expanded), so the agent
+      // sees what the user sees and can act by name.
+      SelectedCategoryListNames: this.selectedCategoryLists.map(l => l.Name),
+      CategoryNodes: this.categoryViewModels.map(vm => ({
+        Name: vm.category.Name,
+        ListCount: vm.listCount,
+        Expanded: vm.isExpanded,
+      })),
+    }));
+  }
+
+  /**
+   * Resolve an agent-supplied reference (a category ID or NAME, exact or
+   * partial) to one of the loaded categories via the pure {@link resolveNamedRecord}
+   * helper. Returns the matching {@link MJListCategoryEntity}, or null.
+   */
+  private resolveCategory(input: string): MJListCategoryEntity | null {
+    const match = resolveNamedRecord(input, this.categories.map(c => ({ ID: c.ID, Name: c.Name })));
+    if (!match) {
+      return null;
+    }
+    return this.categories.find(c => UUIDsEqual(c.ID, match.ID)) ?? null;
+  }
+
+  /**
+   * Register the Categories surface's agent-actionable tools. SAFE tools
+   * select / expand a category; the single bounded-mutation tool only
+   * opens the dialog-validated create flow.
+   */
+  private registerAgentTools(): void {
+    this.navigationService.SetAgentClientTools(this, [
+      {
+        Name: 'SelectCategory',
+        Description: 'Select a category to view its detail and member lists. Pass the category ID or name (see CategoryNodes) — the tool resolves an exact ID, an exact name, or a partial name match.',
+        ParameterSchema: { type: 'object', properties: { category: { type: 'string', description: 'The category ID or name to select' }, categoryId: { type: 'string', description: 'Deprecated alias for "category".' } } },
+        Handler: async (params: Record<string, unknown>) => {
+          const check = validateStringParam(params['category'] ?? params['categoryId'], 'category');
+          if (!check.ok) return check.result;
+          const category = this.resolveCategory(check.value);
+          if (!category) return { Success: false, ErrorMessage: buildNotFoundError(check.value, this.categories.map(c => ({ ID: c.ID, Name: c.Name })), 'category') };
+          this.selectCategory(category);
+          this.publishAgentContext();
+          return { Success: true, Data: { categoryName: category.Name, listCount: this.selectedCategoryLists.length } };
+        },
+      },
+      {
+        Name: 'ExpandCategory',
+        Description: 'Expand (or collapse) a category node in the tree. Pass the category ID or name (see CategoryNodes) — the tool resolves an exact ID, an exact name, or a partial name match.',
+        ParameterSchema: { type: 'object', properties: { category: { type: 'string', description: 'The category ID or name to toggle' }, categoryId: { type: 'string', description: 'Deprecated alias for "category".' } } },
+        Handler: async (params: Record<string, unknown>) => {
+          const check = validateStringParam(params['category'] ?? params['categoryId'], 'category');
+          if (!check.ok) return check.result;
+          const category = this.resolveCategory(check.value);
+          if (!category) return { Success: false, ErrorMessage: buildNotFoundError(check.value, this.categories.map(c => ({ ID: c.ID, Name: c.Name })), 'category') };
+          const vm = this.categoryViewModels.find(v => UUIDsEqual(v.category.ID, category.ID));
+          if (!vm) return { Success: false, ErrorMessage: buildNotFoundError(check.value, this.categories.map(c => ({ ID: c.ID, Name: c.Name })), 'category') };
+          vm.isExpanded = !vm.isExpanded;
+          this.publishAgentContext();
+          this.cdr.detectChanges();
+          return { Success: true, Data: { categoryName: vm.category.Name, isExpanded: vm.isExpanded } };
+        },
+      },
+      {
+        // BOUNDED MUTATION: opens the create dialog only. The category name
+        // is validated by the dialog before any record is written.
+        Name: 'CreateCategory',
+        Description: 'Open the "Create Category" dialog. The user confirms the name in the dialog; nothing is saved until they do.',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => {
+          this.createCategory();
+          return { Success: true };
+        },
+      },
+    ]);
   }
 
   async loadData() {
@@ -1010,6 +1113,7 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
   selectCategory(category: MJListCategoryEntity) {
     this.selectedCategory = category;
     this.selectedCategoryLists = this.listsByCategoryId.get(category.ID) || [];
+    this.publishAgentContext();
   }
 
   getParentCategoryName(category: MJListCategoryEntity): string | null {

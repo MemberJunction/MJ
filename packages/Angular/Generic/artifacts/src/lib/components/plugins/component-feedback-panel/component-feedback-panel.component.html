@@ -144,16 +144,10 @@
 
             <!-- Success/Error Messages -->
             @if (SubmitSuccess) {
-              <div class="message success-message">
-                <i class="fa-solid fa-check-circle"></i>
-                <span>Feedback submitted successfully!</span>
-              </div>
+              <mj-alert Variant="success">Feedback submitted successfully!</mj-alert>
             }
             @if (SubmitError) {
-              <div class="message error-message">
-                <i class="fa-solid fa-exclamation-circle"></i>
-                <span>{{ SubmitError }}</span>
-              </div>
+              <mj-alert Variant="error">{{ SubmitError }}</mj-alert>
             }
           </div>
         } @else {

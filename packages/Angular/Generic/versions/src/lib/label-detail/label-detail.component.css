@@ -715,38 +715,9 @@
     gap: 8px;
 }
 
-.snapshot-group {
-    background: var(--mj-bg-surface);
-    border: 1px solid var(--mj-border-default);
-    border-radius: 10px;
-    overflow: hidden;
-}
+/* .snapshot-group chrome is now owned by <mj-accordion-panel>. */
 
-.group-header {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 12px 14px;
-    cursor: pointer;
-    transition: background 0.15s ease;
-}
-
-.group-header:hover {
-    background: var(--mj-bg-surface-sunken);
-}
-
-.group-chevron {
-    font-size: 11px;
-    color: var(--mj-text-disabled);
-    transition: transform 0.2s ease;
-    width: 14px;
-    text-align: center;
-}
-
-.group-chevron.expanded {
-    transform: rotate(90deg);
-}
-
+/* .group-header / .group-chevron chrome is now owned by <mj-accordion-panel>. */
 .group-entity-icon {
     color: var(--mj-brand-primary);
     font-size: 14px;
@@ -759,21 +730,7 @@
     flex: 1;
 }
 
-.group-count-inline {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 20px;
-    height: 20px;
-    padding: 0 6px;
-    margin-left: 6px;
-    background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
-    color: var(--mj-brand-primary);
-    border-radius: 10px;
-    font-size: 12px;
-    font-weight: 600;
-    vertical-align: middle;
-}
+/* .group-count-inline removed — replaced by the standard .mj-accordion-badge--right. */
 
 .group-content {
     border-top: 1px solid var(--mj-border-default);
@@ -1057,38 +1014,7 @@
     gap: 8px;
 }
 
-.diff-group {
-    background: var(--mj-bg-surface);
-    border: 1px solid var(--mj-border-default);
-    border-radius: 10px;
-    overflow: hidden;
-}
-
-.diff-group-header {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 12px 14px;
-    cursor: pointer;
-    transition: background 0.15s ease;
-}
-
-.diff-group-header:hover {
-    background: var(--mj-bg-surface-sunken);
-}
-
-.diff-chevron {
-    font-size: 11px;
-    color: var(--mj-text-disabled);
-    transition: transform 0.2s ease;
-    width: 14px;
-    text-align: center;
-}
-
-.diff-chevron.expanded {
-    transform: rotate(90deg);
-}
-
+/* .diff-group chrome (border / header / chevron) is now owned by <mj-accordion-panel>. */
 .diff-group-icon {
     color: var(--mj-brand-primary);
     font-size: 14px;
@@ -1101,12 +1027,8 @@
     flex: 1;
 }
 
-.diff-group-count {
-    font-size: 12px;
-    font-weight: 600;
-    padding: 2px 10px;
-    border-radius: 10px;
-}
+/* .diff-group-count removed — the "N modified" count now uses the standard
+   .mj-accordion-badge--warning --right (warning-tinted status count). */
 
 .diff-group-content {
     border-top: 1px solid var(--mj-border-default);

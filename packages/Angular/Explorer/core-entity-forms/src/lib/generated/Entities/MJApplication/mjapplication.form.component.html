@@ -14,7 +14,7 @@
     <mj-collapsible-panel
         SectionKey="applicationConfiguration"
         SectionName="Application Configuration"
-        Icon="fa fa-cog"
+        Icon="fa fa-sliders-h"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -129,7 +129,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="DefaultNavItems"
-            Type="textarea"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -160,11 +160,29 @@
 
     </mj-collapsible-panel>
 
+    <!-- Agent Configuration Section -->
+    <mj-collapsible-panel
+        SectionKey="agentConfiguration"
+        SectionName="Agent Configuration"
+        Icon="fa fa-robot"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="false"
+            FieldName="AgentSettings"
+            Type="code"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
     <!-- System Metadata Section -->
     <mj-collapsible-panel
         SectionKey="systemMetadata"
         SectionName="System Metadata"
-        Icon="fa fa-database"
+        Icon="fa fa-cog"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 

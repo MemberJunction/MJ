@@ -11,7 +11,7 @@
  * @since 2.49.0
  */
 
-import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, FileStorageEngineBase } from '@memberjunction/core-entities';
+import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, FileStorageEngineBase, MJAISkillEntity } from '@memberjunction/core-entities';
 import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended, MJAIAgentEntityExtended, MJAIModelEntityExtended, MJAIPromptRunEntityExtended } from "@memberjunction/ai-core-plus";
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider, DatabaseProviderBase } from '@memberjunction/core';
 import { AgentRunWatchdog } from './agent-run-watchdog';
@@ -48,6 +48,7 @@ import { AIEngine } from '@memberjunction/aiengine';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import { AgentMemoryContextBuilder } from './agent-memory-context-builder';
+import { PromptComponentResolver, InjectScopedPromptParts } from './prompt-component-resolver';
 import { AgentPreExecutionRAGResult } from './agent-pre-execution-rag';
 import {
     AIPromptParams,
@@ -82,11 +83,15 @@ import {
     AgentClientToolInvocation,
     ClientToolResultSummary,
     ClientToolMetadata,
+    ResolveClientTools,
+    AppContextSnapshot,
     InputArtifact,
     AgentPipelineRequest,
     initAgentRunStep,
     finalizeAgentRunStep,
-    AgentRunStepSaveQueue
+    AgentRunStepSaveQueue,
+    AgentSkillActivationRequest,
+    AgentSkillInvocation
 } from '@memberjunction/ai-core-plus';
 import { MJActionEntityExtended, ActionResult, ActionParam, AIDirective } from '@memberjunction/actions-base';
 import { AgentRunner } from './AgentRunner';
@@ -880,6 +885,52 @@ export class BaseAgent {
     private _effectiveActions: MJActionEntityExtended[] = [];
 
     /**
+     * Effective sub-agents available to this agent after applying subAgentChanges — the sub-agent
+     * counterpart of {@link _effectiveActions}. Populated during gatherPromptTemplateData() and used
+     * for validation in {@link validateSubAgentNextStep} via {@link getEffectiveSubAgentsForValidation}.
+     * Without this, a sub-agent added at runtime (e.g. by Skill activation) would be advertised in the
+     * prompt catalog but rejected as "not found" when the agent tried to actually use it.
+     * @private
+     */
+    private _effectiveSubAgents: MJAIAgentEntityExtended[] = [];
+
+    /**
+     * IDs of skills already activated during this run. Prevents re-activation from re-appending
+     * the same instructions to context / re-pushing duplicate actionChanges/subAgentChanges entries
+     * when the LLM references an already-active skill again.
+     * @private
+     */
+    private _activatedSkillIDs: string[] = [];
+
+    /**
+     * Full observability records for every skill activated this run — one {@link AgentSkillInvocation}
+     * per activation, carrying activation type ('requested' | 'auto'), the provenance-of-authority
+     * gate values that admitted the skill, and the agent-stated reason when self-activated.
+     * Serialized onto `AIAgentRunStep.Skills`: Skill steps record their own activation(s), Prompt
+     * steps record the full set in effect for the turn, and Actions/Sub-Agent steps record the
+     * skill(s) that granted the executed tool (see {@link getSkillAttributionForAction} /
+     * {@link getSkillAttributionForSubAgent}).
+     */
+    private _skillInvocations: AgentSkillInvocation[] = [];
+
+    /**
+     * Whether Plan Mode is active for this run — resolved once in {@link initializeAgentRun} via
+     * {@link resolvePlanModeGate}. True only when `agent.SupportsPlanMode` (capability, default ON)
+     * AND `params.planMode` (per-request, default OFF) are both true AND this is a root agent.
+     * @private
+     */
+    private _planModeActive: boolean = false;
+
+    /**
+     * Whether Plan Mode's approval gate has already been satisfied for this run — either because
+     * Plan Mode isn't active, or because a prior linked run's Plan step was approved. When active
+     * and NOT yet approved, `validateNextStep` blocks Actions/Sub-Agent steps until a Plan step
+     * has been presented and approved.
+     * @private
+     */
+    private _planApproved: boolean = false;
+
+    /**
      * Counts only prompt (LLM) executions, NOT all agent steps.
      * Used for message expiration age calculations so that `expirationTurns`
      * semantically means "number of LLM calls" rather than "number of steps"
@@ -1495,6 +1546,16 @@ export class BaseAgent {
                 )
             ]);
 
+            // Inject scope-resolved prompt parts (role-faithful) for this agent's prompt, alongside
+            // memory/RAG. Synchronous — parts are cached on AIEngine. Uses the same run scope.
+            this.InjectScopedPromptParts(
+                params.agent,
+                wrappedParams.conversationMessages,
+                primaryScopeEntityId,
+                primaryScopeRecordId,
+                secondaryScopes
+            );
+
             if (!config.success) {
                 this.logError(`Failed to load agent configuration: ${config.errorMessage}`, {
                     agent: params.agent,
@@ -1768,6 +1829,11 @@ export class BaseAgent {
             UserID: params.contextUser?.ID,
             DisableAutoResponse: meetingMode || undefined,
             SelfNames: selfNames,
+            // App awareness (Move 1/3/4): the app the session runs in (sources the app cascade layer +
+            // RelevantAgents → allowed-agent union) and the live app-context snapshot injected at mint.
+            // Both ride params.data, the same conduit async agents use for appContext.
+            ApplicationID: (params.data?.applicationId as string | undefined)?.trim() || undefined,
+            AppContext: params.data?.appContext as AppContextSnapshot | undefined,
         };
     }
 
@@ -2830,6 +2896,45 @@ export class BaseAgent {
     }
 
     /**
+     * Inject this agent's scoped prompt parts into the conversation, role-faithfully.
+     *
+     * Parallels {@link InjectContextMemory}: resolves `MJ: Scoped Prompt Parts` for the agent's
+     * primary prompt under the run's polymorphic scope (the SAME PrimaryScope/SecondaryScopes the
+     * runtime threads for memory), and unshifts the assembled role-tagged messages onto
+     * `conversationMessages`. In-memory + synchronous (parts are cached on `AIEngine`). No-op when
+     * the agent has no active prompt or no parts resolve for the scope.
+     */
+    protected InjectScopedPromptParts(
+        agent: MJAIAgentEntityExtended,
+        conversationMessages: ChatMessage[],
+        primaryScopeEntityId?: string,
+        primaryScopeRecordId?: string,
+        secondaryScopes?: Record<string, SecondaryScopeValue>
+    ): void {
+        try {
+            const prompts = AIEngine.Instance.AgentPrompts
+                .filter(ap => UUIDsEqual(ap.AgentID, agent.ID) && ap.Status === 'Active')
+                .sort((a, b) => (a.ExecutionOrder ?? 0) - (b.ExecutionOrder ?? 0));
+            if (prompts.length === 0) return;
+
+            // Obtain the (possibly downstream-overridden) resolver via the class factory, so any
+            // consumer can plug in custom inclusion/scope logic by subclassing PromptComponentResolver.
+            const resolver =
+                MJGlobal.Instance.ClassFactory.CreateInstance<PromptComponentResolver>(PromptComponentResolver) ??
+                new PromptComponentResolver();
+
+            InjectScopedPromptParts(
+                resolver,
+                prompts[0].PromptID,
+                { primaryScopeEntityId, primaryScopeRecordId, secondaryScopes },
+                conversationMessages
+            );
+        } catch (e) {
+            this.logError(e instanceof Error ? e : new Error(String(e)), { category: 'ScopedPromptParts' });
+        }
+    }
+
+    /**
      * Inject pre-execution RAG context for this agent using scoped search.
      *
      * Runs in parallel with `InjectContextMemory` during Phase 2 of `Execute()`. Loads the
@@ -3451,6 +3556,21 @@ export class BaseAgent {
         agentRun: MJAIAgentRunEntityExtended,
         currentStep: MJAIAgentRunStepEntityExtended
     ): Promise<BaseAgentNextStep<P>> {
+        // Plan Mode enforcement: while active and not yet approved, block Actions/Sub-Agent so the
+        // agent cannot skip straight to execution — it must present a Plan first. Chat, Retry,
+        // Skill activation, ForEach/While, and ClientTools are all still allowed (e.g. asking a
+        // clarifying question, or loading a skill's instructions, before forming the plan).
+        if (this._planModeActive && !this._planApproved && (nextStep.step === 'Actions' || nextStep.step === 'Sub-Agent')) {
+            // nextStep.step is narrowed to 'Actions' | 'Sub-Agent' here, so it can never already be
+            // 'Retry' — always increment (we're demoting it to Retry from a non-retry step).
+            this._generalValidationRetryCount++;
+            return {
+                step: 'Retry',
+                terminate: false,
+                errorMessage: 'Plan mode is active for this request. Present your plan first via a "Plan" next step and wait for approval before executing actions or sub-agents.'
+            };
+        }
+
         // for next step, let's do a little quick validation here for sub-agent and actions to ensure requests are valid
         switch (nextStep.step) {
             case 'Sub-Agent':           
@@ -3471,6 +3591,15 @@ export class BaseAgent {
             case 'While':
                 // While loops are valid - no additional validation needed
                 return nextStep;
+            // Type assertion required because 'Skill' is not part of the BaseAgentNextStep step
+            // union (it's non-terminal, like 'ClientTools' — see the type's doc comment).
+            case 'Skill' as typeof nextStep.step:
+                return this.validateSkillNextStep<P>(params, nextStep, currentPayload, agentRun, currentStep);
+            // Type assertion required because 'Plan' is not part of the BaseAgentNextStep step
+            // union (it's non-terminal — the terminal step it produces is 'Chat', see
+            // executePlanStep's doc comment for why).
+            case 'Plan' as typeof nextStep.step:
+                return this.validatePlanNextStep<P>(params, nextStep, currentPayload, agentRun, currentStep);
             case 'ClientTools' as typeof nextStep.step:
                 // Client tools are valid - execution handled by executeClientToolsStep
                 return nextStep;
@@ -3522,7 +3651,7 @@ export class BaseAgent {
         agentRun: MJAIAgentRunEntityExtended,
         currentStep: MJAIAgentRunStepEntityExtended
     ): Promise<BaseAgentNextStep<P>> {
-        const curAgentSubAgents = AIEngine.Instance.GetSubAgents(params.agent.ID, 'Active');
+        const curAgentSubAgents = this.getEffectiveSubAgentsForValidation(params.agent.ID);
 
         // Collect requested sub-agents. Prefer plural `subAgents` (parallel fan-out);
         // fall back to singular `subAgent` for the classic single-sub-agent next step.
@@ -3739,6 +3868,142 @@ export class BaseAgent {
         return ActionEngineServer.Instance.Actions.filter(a =>
             agentActions.some(aa => UUIDsEqual(aa.ActionID, a.ID)) && a.Status === 'Active'
         );
+    }
+
+    /**
+     * Gets the effective sub-agents for validation, using runtime subAgentChanges if available.
+     * Falls back to the database-configured relationship set if _effectiveSubAgents is empty.
+     * Mirrors {@link getEffectiveActionsForValidation}.
+     *
+     * @param agentId - The ID of the agent to get sub-agents for
+     * @returns Array of effective sub-agents available to the agent
+     * @protected
+     */
+    protected getEffectiveSubAgentsForValidation(agentId: string): MJAIAgentEntityExtended[] {
+        if (this._effectiveSubAgents.length > 0) {
+            return this._effectiveSubAgents;
+        }
+
+        // Fallback: compute from database configuration (ParentID children + AgentRelationships)
+        return AIEngine.Instance.GetSubAgents(agentId, 'Active');
+    }
+
+    /**
+     * Validates that the requested skill(s) are known and allowed for this agent (resolved via
+     * {@link AIEngine.GetSkillsForAgent}, which enforces the agent's AcceptsSkills gate + the
+     * catalog/grant Status chain). Subclasses can override to implement custom validation logic.
+     *
+     * Mirrors {@link validateActionsNextStep}'s fuzzy-name-matching UX: an exact case-insensitive
+     * match is tried first, falling back to a CONTAINS match when exactly one candidate matches.
+     *
+     * @protected
+     */
+    protected async validateSkillNextStep<P>(
+        params: ExecuteAgentParams,
+        nextStep: BaseAgentNextStep<P>,
+        currentPayload: P,
+        agentRun: MJAIAgentRunEntityExtended,
+        currentStep: MJAIAgentRunStepEntityExtended
+    ): Promise<BaseAgentNextStep<P>> {
+        const requested = nextStep.skillActivations ?? [];
+        if (requested.length === 0) {
+            if (nextStep.step !== 'Retry') {
+                this._generalValidationRetryCount++;
+            }
+            return {
+                step: 'Retry',
+                terminate: false,
+                errorMessage: 'When activating a skill, 1 or more skills must be specified'
+            };
+        }
+
+        // Plan Mode × skills: agent-initiated activations are only legal BEFORE plan approval,
+        // so the plan the human reviews always reflects the widened tool surface. Once the plan
+        // is approved, a new activation would expand capabilities the reviewer never saw — the
+        // agent must present an updated plan instead (the normal re-plan path).
+        if (this._planModeActive && this._planApproved) {
+            if (nextStep.step !== 'Retry') {
+                this._generalValidationRetryCount++;
+            }
+            return {
+                step: 'Retry',
+                terminate: false,
+                errorMessage: 'Skill activations are not allowed after your plan has been approved — ' +
+                    'the approved plan did not include these capabilities. Present an updated plan ' +
+                    "(nextStep.type='Plan') that includes the skill(s) you need and why, so the user " +
+                    'can review the expanded tool surface.'
+            };
+        }
+
+        // Agent-initiated (self-)activation is governed by the DOUBLE activation gate: the agent's
+        // SkillActivationMode AND each skill's ActivationMode must both be 'Auto'. RequestedOnly
+        // skills can only enter a run via an explicit user /skill request (requestedSkillIDs) —
+        // never via this step. This is the same set the prompt catalog was built from, so a
+        // well-behaved model can only name skills that pass; the re-check here is the enforcement
+        // boundary against hallucinated or smuggled names.
+        const availableSkills = AIEngine.Instance.GetAutoActivatableSkillsForAgent(params.agent, params.contextUser);
+
+        const missingSkills = requested.filter(req => {
+            const requestedName = req.name.trim().toLowerCase();
+
+            const exactMatch = availableSkills.find(s => s.Name.trim().toLowerCase() === requestedName);
+            if (exactMatch) return false;
+
+            const containsMatches = availableSkills.filter(s => s.Name.trim().toLowerCase().includes(requestedName));
+            if (containsMatches.length === 1) {
+                this.logStatus(`Skill name fuzzy matched: '${req.name}' → '${containsMatches[0].Name}'`, true, params);
+                req.name = containsMatches[0].Name;
+                return false;
+            }
+
+            return true;
+        });
+
+        if (missingSkills.length > 0) {
+            const missingNames = missingSkills.map(s => s.name).join(', ');
+            const availableNames = availableSkills.map(s => s.Name).join(', ') || '(none)';
+            this.logError(`Skill(s) '${missingNames}' not found or not available for agent '${params.agent.Name}'. Available: ${availableNames}`, {
+                agent: params.agent,
+                category: 'SkillExecution'
+            });
+            if (nextStep.step !== 'Retry') {
+                this._generalValidationRetryCount++;
+            }
+            return {
+                step: 'Retry',
+                terminate: false,
+                errorMessage: `Skill(s) '${missingNames}' not found or not available. Available: ${availableNames}`
+            };
+        }
+
+        return nextStep;
+    }
+
+    /**
+     * Validates that a 'Plan' next step (Plan Mode) has plan text to present. Subclasses can
+     * override to add additional plan-quality checks (e.g. minimum length, required sections).
+     *
+     * @protected
+     */
+    protected async validatePlanNextStep<P>(
+        params: ExecuteAgentParams,
+        nextStep: BaseAgentNextStep<P>,
+        currentPayload: P,
+        agentRun: MJAIAgentRunEntityExtended,
+        currentStep: MJAIAgentRunStepEntityExtended
+    ): Promise<BaseAgentNextStep<P>> {
+        if (!nextStep.planDetails?.plan || nextStep.planDetails.plan.trim().length === 0) {
+            if (nextStep.step !== 'Retry') {
+                this._generalValidationRetryCount++;
+            }
+            return {
+                step: 'Retry',
+                terminate: false,
+                errorMessage: 'Plan text is required when presenting a Plan for approval'
+            };
+        }
+
+        return nextStep;
     }
 
     /**
@@ -5592,6 +5857,8 @@ The context is now within limits. Please retry your request with the recovered c
             }
             // Store for later validation in executeActionsStep
             this._effectiveActions = activeActions;
+            // Store for later validation in validateSubAgentNextStep (see getEffectiveSubAgentsForValidation)
+            this._effectiveSubAgents = uniqueActiveSubAgents;
 
             // Agent type prompt params: reuse cached base merge unless a runtime override is present.
             const runtimePromptParamOverrides = extraData?.__agentTypePromptParams as Record<string, unknown> | undefined;
@@ -5613,6 +5880,17 @@ The context is now within limits. Please retry your request with the recovered c
             // Build app context section if provided in extraData
             const appContext = this.buildAppContextSection(extraData);
 
+            // Skill catalog (name + description only — progressive disclosure). This is the
+            // SELF-ACTIVATION surface, so it uses the double-gated auto set: empty unless the
+            // agent's SkillActivationMode is 'Auto', and containing only skills whose own
+            // ActivationMode is 'Auto' (RequestedOnly skills never appear — they can only enter
+            // a run via an explicit user /skill request). Also empty for AcceptsSkills='None',
+            // and filtered by the acting user's Run permission (open-by-default) so the agent
+            // is never even offered a skill the user isn't entitled to — the permission
+            // boundary is enforced at the catalog, not just at activation.
+            const availableSkills = engine.GetAutoActivatableSkillsForAgent(agent, _contextUser);
+            const skillsCatalog = this.formatSkillsCatalog(availableSkills);
+
             const contextData: AgentContextData = {
                 agentName: agent.Name,
                 agentDescription: agent.Description,
@@ -5622,6 +5900,10 @@ The context is now within limits. Please retry your request with the recovered c
                 actionCount: activeActions.length,
                 actionDetails: actionDetails,
                 clientToolDetails: clientToolDetails,
+                skillCount: availableSkills.length,
+                skillsCatalog: skillsCatalog,
+                planModeActive: this._planModeActive,
+                planApproved: this._planApproved,
                 appContext: appContext,
             };
 
@@ -6240,6 +6522,18 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
+     * Formats the skill CATALOG as compact markdown — name + description ONLY. This is
+     * progressive disclosure by design: the LLM sees just enough to decide whether to activate a
+     * skill (via a 'Skill' next step), but never sees `Instructions` until it does. Instructions
+     * are appended separately in {@link buildSkillActivationMessage} on activation.
+     *
+     * @private
+     */
+    private formatSkillsCatalog(skills: MJAISkillEntity[]): string {
+        return skills.map(s => `- **${s.Name}** — ${s.Description ?? '(no description)'}`).join('\n');
+    }
+
+    /**
      * Utility method to get agent prompt parameters for a given agent. This gets the 
      * highest priority prompt for the agent, and then gets the parameters for that
      * prompt.
@@ -6322,48 +6616,45 @@ The context is now within limits. Please retry your request with the recovered c
     /**
      * Build the client tool prompt section for system prompt injection.
      *
-     * Tool sources (checked in order, all merged — first registration wins):
-     * 1. Metadata tools from AI Agent Client Tools junction table
-     * 2. Session-level enriched tools from ClientToolRequestManager (set by client SDK)
-     * 3. Tools provided directly in extraData.clientTools (runtime override)
+     * Resolution is delegated to the shared, tier-agnostic {@link ResolveClientTools}
+     * (`@memberjunction/ai-core-plus`) — the single source of truth used by the async
+     * path (here), the realtime co-agent broker, and the conversations runtime. Tiers,
+     * highest precedence first:
+     *
+     * 1. **override** — tools passed directly in the run's `data.clientTools`
+     * 2. **session (dynamic)** — client-SDK enriched tools from {@link ClientToolRequestManager}
+     * 3. **app** — tools the active surface published in the app-context capability manifest
+     * 4. **static** — the agent's metadata tools from the `AI Agent Client Tools` junction
+     *
+     * NOTE (behavior change): the previous inline merge resolved *static-wins* (metadata
+     * was added first and won name collisions). The unified resolver uses the more-correct
+     * *override > session > app > static* — a runtime/dynamic tool now overrides a stale
+     * static metadata tool of the same name. Collisions are rare in practice.
      */
     private buildClientToolPromptSection(agent: MJAIAgentEntityExtended, extraData?: Record<string, unknown>): string {
-        const toolMap = new Map<string, ClientToolMetadata>();
-
-        // 1. Metadata tools from junction table (authoritative source)
+        // Static tier — agent's metadata tools from the AI Agent Client Tools junction.
         const engine = AIEngine.Instance;
-        const metadataTools = engine.GetClientToolsForAgent(agent.ID);
-        for (const tool of metadataTools) {
-            toolMap.set(tool.Name, {
-                Name: tool.Name,
-                Description: tool.Description,
-                InputSchema: tool.InputSchemaJSON ? JSON.parse(tool.InputSchemaJSON) : {},
-                OutputSchema: tool.OutputSchemaJSON ? JSON.parse(tool.OutputSchemaJSON) : undefined,
-                Category: tool.Category || undefined,
-                DefaultTimeoutMs: tool.DefaultTimeoutMs || undefined
-            });
-        }
+        const staticTools: ClientToolMetadata[] = engine.GetClientToolsForAgent(agent.ID).map(tool => ({
+            Name: tool.Name,
+            Description: tool.Description,
+            InputSchema: tool.InputSchemaJSON ? JSON.parse(tool.InputSchemaJSON) : {},
+            OutputSchema: tool.OutputSchemaJSON ? JSON.parse(tool.OutputSchemaJSON) : undefined,
+            Category: tool.Category || undefined,
+            DefaultTimeoutMs: tool.DefaultTimeoutMs || undefined
+        }));
 
-        // 2. Session-level enriched tools (client SDK decorated tools)
+        // Dynamic (session) tier — client-SDK enriched tools for this session.
         const sessionID = extraData?.sessionID as string | undefined;
-        if (sessionID) {
-            for (const tool of ClientToolRequestManager.Instance.GetSessionTools(sessionID)) {
-                if (!toolMap.has(tool.Name)) {
-                    toolMap.set(tool.Name, tool);
-                }
-            }
-        }
+        const sessionTools = sessionID ? ClientToolRequestManager.Instance.GetSessionTools(sessionID) : [];
 
-        // 3. Runtime extraData override
-        if (extraData?.clientTools) {
-            for (const tool of extraData.clientTools as ClientToolMetadata[]) {
-                if (!toolMap.has(tool.Name)) {
-                    toolMap.set(tool.Name, tool);
-                }
-            }
-        }
+        // App tier — tools the active surface published in the app-context capability manifest.
+        const appContext = extraData?.appContext as { Capabilities?: { Tools?: ClientToolMetadata[] } } | undefined;
+        const appTools = appContext?.Capabilities?.Tools ?? [];
 
-        const tools = Array.from(toolMap.values());
+        // Override tier — tools passed directly in the run's data.
+        const overrideTools = (extraData?.clientTools as ClientToolMetadata[] | undefined) ?? [];
+
+        const tools = ResolveClientTools({ agentId: agent.ID, staticTools, sessionTools, appTools, overrideTools });
 
         if (tools.length === 0) {
             return ''; // No client tools available
@@ -7091,6 +7382,23 @@ The context is now within limits. Please retry your request with the recovered c
         this._depth = params.parentDepth !== undefined ? params.parentDepth + 1 : 0;
         this._parentStepCounts = params.parentStepCounts || [];
 
+        // Resolve Plan Mode gate state for this run (must happen before the main loop starts —
+        // gatherPromptTemplateData/validateNextStep both read _planModeActive/_planApproved — and
+        // after _depth is set above, since the gate only applies to root agents).
+        const planModeGate = await this.resolvePlanModeGate(params);
+        this._planModeActive = planModeGate.active;
+        this._planApproved = planModeGate.approved;
+
+        // Stamp the run record so the UX (run-header Plan Mode chip) and plan-drift audits can
+        // tell plan-mode runs apart without re-deriving gate state from steps/requests.
+        if (this._agentRun && planModeGate.active) {
+            this._agentRun.PlanMode = true;
+        }
+
+        // Pre-activate any user-requested skills (from a `/skill-name` composer mention). Must run
+        // after _depth is set (root-only) and after the run is persisted (records a Skill step).
+        await this.preActivateRequestedSkills(params);
+
         // Reset execution chain and progress tracking
         this._allProgressSteps = [];
         
@@ -7103,8 +7411,78 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
+     * Resolves whether Plan Mode is active for this run, and whether its approval gate is already
+     * satisfied. Called once from {@link initializeAgentRun}, after `_depth` is set.
+     *
+     * - `active`: this is a root agent (`_depth === 0`) AND either `agent.RequirePlanMode`
+     *   (mandatory HITL — forces plan mode on every root run regardless of the per-request flag;
+     *   `SupportsPlanMode` is irrelevant when set) OR `agent.SupportsPlanMode` (capability,
+     *   default ON/opt-out) AND `params.planMode` (per-request, default OFF). Sub-agents never
+     *   gate on Plan Mode — only the top-level agent the user/caller invoked does.
+     * - `approved`: only meaningful when `active`. True when `params.lastRunId` points to a prior
+     *   run whose Plan step's `MJ: AI Agent Requests` row resolved to `Approved` or `Responded`
+     *   (a `Rejected` plan — or no matching request at all — leaves the gate unsatisfied, sending
+     *   the agent back to present a revised plan).
+     *
+     * Override to change Plan Mode eligibility rules (e.g. gate on a specific agent category).
+     *
+     * @protected
+     */
+    protected async resolvePlanModeGate(
+        params: ExecuteAgentParams
+    ): Promise<{ active: boolean; approved: boolean }> {
+        const requiredByAgent = params.agent.RequirePlanMode === true;
+        const requestedByCaller = !!(params.agent.SupportsPlanMode && params.planMode === true);
+        const active = this._depth === 0 && (requiredByAgent || requestedByCaller);
+        if (!active) {
+            return { active: false, approved: false };
+        }
+
+        if (!params.lastRunId) {
+            return { active: true, approved: false };
+        }
+
+        const rv = new RunView();
+        const requestResult = await rv.RunView<{ Status: string; OriginatingAgentRunStepID: string | null }>({
+            EntityName: 'MJ: AI Agent Requests',
+            ExtraFilter: `OriginatingAgentRunID='${params.lastRunId}'`,
+            Fields: ['Status', 'OriginatingAgentRunStepID'],
+            OrderBy: '__mj_CreatedAt DESC',
+            MaxRows: 1,
+            ResultType: 'simple'
+        }, params.contextUser);
+
+        if (!requestResult.Success || requestResult.Results.length === 0) {
+            return { active: true, approved: false };
+        }
+
+        const request = requestResult.Results[0];
+        const resolved = request.Status === 'Approved' || request.Status === 'Responded';
+        if (!resolved || !request.OriginatingAgentRunStepID) {
+            return { active: true, approved: false };
+        }
+
+        // Confirm the request actually originated from a Plan step — a resolved request from an
+        // unrelated Chat clarification (asked before the agent could even form a plan) must NOT
+        // satisfy the Plan Mode gate.
+        const stepResult = await rv.RunView<{ StepType: string }>({
+            EntityName: 'MJ: AI Agent Run Steps',
+            ExtraFilter: `ID='${request.OriginatingAgentRunStepID}'`,
+            Fields: ['StepType'],
+            MaxRows: 1,
+            ResultType: 'simple'
+        }, params.contextUser);
+
+        const approved = stepResult.Success
+            && stepResult.Results.length > 0
+            && stepResult.Results[0].StepType === 'Plan';
+
+        return { active: true, approved };
+    }
+
+    /**
      * Validates the agent with tracking.
-     * 
+     *
      * @private
      * @param {MJAIAgentEntityExtended} agent - The agent to validate
      * @returns {Promise<ExecuteAgentResult | null>} - Failure result if validation fails, null if successful
@@ -7159,6 +7537,14 @@ The context is now within limits. Please retry your request with the recovered c
         payloadAtStart?: any;
         payloadAtEnd?: any;
         parentId?: string;
+        /**
+         * Skill-invocation records to persist on `AIAgentRunStep.Skills` for this step. When
+         * omitted, Prompt steps default to the full set of skills currently in effect
+         * ({@link _skillInvocations}) so prompt injection is always visible; all other step
+         * types default to no skill linkage. Pass explicitly for Skill steps (the activation
+         * performed) and Actions/Sub-Agent steps (the skill(s) that granted the tool).
+         */
+        skills?: AgentSkillInvocation[];
     }): Promise<MJAIAgentRunStepEntityExtended> {
         const stepEntity = await this._activeProvider.GetEntityObject<MJAIAgentRunStepEntityExtended>('MJ: AI Agent Run Steps', params.contextUser);
         // Client-generate the PK so the step ID is valid IMMEDIATELY (before the INSERT lands) — child
@@ -7196,9 +7582,26 @@ The context is now within limits. Please retry your request with the recovered c
                 : undefined
         });
 
+        // Skill observability: persist the invocation records for this step. Prompt steps
+        // default to everything currently in effect (so every turn's injection is auditable);
+        // other step types only carry skills when the caller attributes them explicitly.
+        const skillsForStep = params.skills
+            ?? (params.stepType === 'Prompt' && this._skillInvocations.length > 0
+                ? this._skillInvocations
+                : undefined);
+        if (skillsForStep && skillsForStep.length > 0) {
+            stepEntity.Skills = JSON.stringify(skillsForStep);
+        }
+
         // Fire-and-forget the 'started' INSERT — the agent flow never blocks on a step save. The queue
         // tracks the INSERT so every later UPDATE (queueStepSave) chains AFTER it commits.
-        this._stepSaveQueue.Insert(stepEntity);
+        // When the step has a parent, chain the INSERT AFTER the parent's INSERT to satisfy the
+        // self-referencing FK_AIAgentRunStep_ParentID constraint — without this, a child INSERT that
+        // races the parent INSERT hits an FK violation (especially under large-payload parent INSERTs).
+        const parentStepEntity = params.parentId && this._agentRun?.Steps
+            ? this._agentRun.Steps.find(s => UUIDsEqual(s.ID, params.parentId))
+            : undefined;
+        this._stepSaveQueue.Insert(stepEntity, parentStepEntity);
 
         // Add the step to the agent run's Steps array
         if (this._agentRun) {
@@ -7505,6 +7908,16 @@ The context is now within limits. Please retry your request with the recovered c
                 return await this.processSubAgentStep<P, P>(params, previousDecision!, undefined, undefined, stepCount);
             case 'Actions':
                 return await this.executeActionsStep(params, previousDecision, undefined, true, stepCount);
+            // Type assertion required because 'Skill' is not part of the BaseAgentNextStep step
+            // union (non-terminal, like 'ClientTools') — LoopAgentType.DetermineNextStep() emits it
+            // when the LLM chooses to activate a skill.
+            case 'Skill' as typeof previousDecision.step:
+                return await this.executeSkillStep(params, config, previousDecision, stepCount);
+            // Type assertion required because 'Plan' is not part of the BaseAgentNextStep step
+            // union — LoopAgentType.DetermineNextStep() emits it when the LLM presents a plan
+            // (Plan Mode). executePlanStep's terminal return is 'Chat'-shaped (see its doc comment).
+            case 'Plan' as typeof previousDecision.step:
+                return await this.executePlanStep(params, previousDecision);
             // Type assertion required because 'ClientTools' is not part of the BaseAgentNextStep
             // step union — LoopAgentType.DetermineNextStep() emits it when the LLM chooses client tools.
             case 'ClientTools' as typeof previousDecision.step:
@@ -8209,7 +8622,8 @@ The context is now within limits. Please retry your request with the recovered c
         previousDecision?: BaseAgentNextStep<SR, SC>,
         parentStepId?: string,
         subAgentPayloadOverride?: any,
-        stepCount: number = 0
+        stepCount: number = 0,
+        resolvedSubAgentEntity?: MJAIAgentEntityExtended
     ): Promise<BaseAgentNextStep<SR, SC>> {
         const subAgentRequest = previousDecision.subAgent as AgentSubAgentRequest<SC>;
         // Check for cancellation before starting
@@ -8251,13 +8665,19 @@ The context is now within limits. Please retry your request with the recovered c
             parentAgentHierarchy: this._agentHierarchy
         };
         
-        // Get sub-agent entity to access payload paths
-        const subAgentEntity = AIEngine.Instance.Agents.find(a => a.Name === subAgentRequest.name &&
-                                                            UUIDsEqual(a.ParentID, params.agent.ID));
+        // Get sub-agent entity to access payload paths. Prefer the entity the caller already
+        // resolved (resolveSubAgentByName — covers ParentID children AND runtime-granted
+        // sub-agents from skill activations / subAgentChanges); fall back to the ParentID
+        // lookup, then the effective set, for any legacy direct callers of this method.
+        const subAgentEntity = resolvedSubAgentEntity
+            ?? AIEngine.Instance.Agents.find(a => a.Name === subAgentRequest.name &&
+                                                  UUIDsEqual(a.ParentID, params.agent.ID))
+            ?? this.getEffectiveSubAgentsForValidation(params.agent.ID).find(
+                   a => a.Name.trim().toLowerCase() === subAgentRequest.name?.trim().toLowerCase());
         if (!subAgentEntity) {
             throw new Error(`Sub-agent '${subAgentRequest.name}' not found`);
         }
-        const stepEntity = await this.createStepEntity({ stepType: 'Sub-Agent', stepName: `Execute Sub-Agent: ${subAgentRequest.name}`, contextUser: params.contextUser, targetId: subAgentEntity.ID, inputData, payloadAtStart: previousDecision.newPayload, parentId: parentStepId });
+        const stepEntity = await this.createStepEntity({ stepType: 'Sub-Agent', stepName: `Execute Sub-Agent: ${subAgentRequest.name}`, contextUser: params.contextUser, targetId: subAgentEntity.ID, inputData, payloadAtStart: previousDecision.newPayload, parentId: parentStepId, skills: this.getSkillAttributionForSubAgent(subAgentEntity, params.agent) });
         
         // Increment execution count for this sub-agent
         this.incrementExecutionCount(subAgentEntity.ID);
@@ -8604,18 +9024,27 @@ The context is now within limits. Please retry your request with the recovered c
                 previousDecision,
                 parentStepId,
                 subAgentPayloadOverride,
-                stepCount
+                stepCount,
+                resolved.subAgentEntity
             );
         }
 
-        this.logError(`Sub-agent '${name}' not found or not active for agent '${params.agent.Name}'`, {
+        // Execution-time resolution failure. Count it against the shared validation-retry cap
+        // (MAX_VALIDATION_RETRIES) so a model that keeps picking an unresolvable sub-agent fails
+        // the run with a clear guardrail message instead of looping forever, and tell the model
+        // exactly which sub-agents ARE available so it can self-correct on the next turn.
+        const availableNames = this.getEffectiveSubAgentsForValidation(params.agent.ID)
+            .map(a => a.Name).join(', ') || '(none)';
+        this.logError(`Sub-agent '${name}' not found or not active for agent '${params.agent.Name}'. Available sub-agents: ${availableNames}`, {
             agent: params.agent,
             category: 'SubAgentExecution'
         });
+        this._generalValidationRetryCount++;
         return {
             step: 'Retry',
             terminate: false,
-            errorMessage: `Sub-agent '${name}' not found or not active`,
+            errorMessage: `Sub-agent '${name}' not found or not active. Available sub-agents: ${availableNames}. ` +
+                `Pick one of the available sub-agents, or complete the task another way — do not request '${name}' again.`,
             previousPayload: previousDecision.newPayload,
             newPayload: previousDecision.newPayload
         };
@@ -8660,6 +9089,18 @@ The context is now within limits. Please retry your request with the recovered c
             if (relatedAgent) {
                 return { subAgentEntity: relatedAgent, relationship: rel };
             }
+        }
+        // 3) Runtime-granted sub-agents (skill activation / caller subAgentChanges): resolve from
+        // the SAME effective set the prompt offered and validateSubAgentNextStep approved. Without
+        // this branch, a skill-granted sub-agent passes validation but fails execution ("not found
+        // or not active") — and because the catalog keeps offering it, the model re-picks the same
+        // sub-agent forever (observed live: Research Agent looping 36+ turns on the skill-granted
+        // Infographic Agent). No relationship row exists for these, so they dispatch child-style.
+        const effectiveAgent = this.getEffectiveSubAgentsForValidation(params.agent.ID).find(a =>
+            a.Status === 'Active' && a.Name.trim().toLowerCase() === normalized
+        );
+        if (effectiveAgent) {
+            return { subAgentEntity: effectiveAgent };
         }
         return undefined;
     }
@@ -8948,6 +9389,7 @@ The context is now within limits. Please retry your request with the recovered c
             stepName: `Execute Parallel Sub-Agent: ${request.name}`,
             contextUser: params.contextUser,
             targetId: subAgentEntity.ID,
+            skills: this.getSkillAttributionForSubAgent(subAgentEntity, params.agent),
             inputData: {
                 agentName: params.agent.Name,
                 subAgentName: request.name,
@@ -9189,7 +9631,8 @@ The context is now within limits. Please retry your request with the recovered c
             targetId: subAgentEntity.ID,
             inputData,
             payloadAtStart: previousDecision.newPayload,
-            parentId: parentStepId
+            parentId: parentStepId,
+            skills: this.getSkillAttributionForSubAgent(subAgentEntity, params.agent)
         });
 
         // Increment execution count for this sub-agent
@@ -9821,7 +10264,7 @@ The context is now within limits. Please retry your request with the recovered c
                     actionParams: aa.params
                 };
                 
-                const stepEntity = await this.createStepEntity({ stepType: 'Actions', stepName: `Execute Action: ${aa.name}`, contextUser: params.contextUser, targetId: actionEntity.ID, inputData: actionInputData, payloadAtStart: currentPayload, payloadAtEnd: currentPayload, parentId: parentStepId });
+                const stepEntity = await this.createStepEntity({ stepType: 'Actions', stepName: `Execute Action: ${aa.name}`, contextUser: params.contextUser, targetId: actionEntity.ID, inputData: actionInputData, payloadAtStart: currentPayload, payloadAtEnd: currentPayload, parentId: parentStepId, skills: this.getSkillAttributionForAction(actionEntity.ID, params.agent) });
                 lastStep = stepEntity;
                 // Override step number to ensure unique values for parallel actions
                 stepEntity.StepNumber = baseStepNumber + numActionsProcessed++;
@@ -10217,6 +10660,498 @@ The context is now within limits. Please retry your request with the recovered c
         });
 
         return `${header}\n${lines.join('\n')}`;
+    }
+
+    /**
+     * Executes a 'Skill' next step: activates one or more skills the LLM requested by name.
+     * Activating a skill (1) appends its full `Instructions` to the conversation so they take
+     * effect for the remainder of the run, and (2) enables its bundled Actions/sub-agents by
+     * pushing `root`-scoped `add` entries onto `params.actionChanges`/`params.subAgentChanges` —
+     * the same runtime tool-surface-extension mechanism `ExecuteAgentParams` already exposes to
+     * external callers. This is NOT a nested agent run; it never terminates the loop itself.
+     *
+     * Already-activated skills (tracked in `_activatedSkillIDs`) are skipped — re-requesting an
+     * active skill is a harmless no-op rather than re-appending duplicate instructions.
+     *
+     * Decomposed into {@link resolveSkillActivations}, {@link buildSkillActivationMessage},
+     * {@link enableSkillCapabilities}, and {@link recordSkillActivationStep} — override any of
+     * those for fine-grained control (e.g. custom instruction formatting, additional side effects
+     * on activation) without re-implementing the whole step.
+     *
+     * @protected
+     */
+    protected async executeSkillStep(
+        params: ExecuteAgentParams,
+        config: AgentConfiguration,
+        previousDecision: BaseAgentNextStep,
+        stepCount: number = 0
+    ): Promise<BaseAgentNextStep> {
+        const requested: AgentSkillActivationRequest[] = previousDecision.skillActivations ?? [];
+        if (requested.length === 0) {
+            // Nothing to activate — continue with next prompt
+            return await this.executePromptStep(params, config, previousDecision, stepCount);
+        }
+
+        const resolvedSkills = this.resolveSkillActivations(requested, params.agent, params.contextUser);
+        const newlyActivated = resolvedSkills.filter(
+            skill => !this._activatedSkillIDs.some(id => UUIDsEqual(id, skill.ID))
+        );
+
+        if (newlyActivated.length === 0) {
+            // All requested skills are already active this run — no-op, just continue
+            return await this.executePromptStep(params, config, previousDecision, stepCount);
+        }
+
+        const currentPayload = previousDecision?.newPayload || previousDecision?.previousPayload || params.payload;
+
+        for (const skill of newlyActivated) {
+            // Agent self-activation — carry the model's stated rationale (skillActivations[].reason)
+            // into the provenance record. Names were fuzzy-corrected in validateSkillNextStep, so a
+            // case-insensitive exact match against the request list is reliable here.
+            const request = requested.find(r => r.name.trim().toLowerCase() === skill.Name.trim().toLowerCase());
+            const invocation = this.buildSkillInvocation(skill, params.agent, 'auto', request?.reason);
+            await this.recordSkillActivationStep(skill, currentPayload, params, invocation);
+            this.enableSkillCapabilities(skill, params);
+            this._activatedSkillIDs.push(skill.ID);
+            this._skillInvocations.push(invocation);
+        }
+
+        const activationMessage = this.buildSkillActivationMessage(newlyActivated);
+        params.conversationMessages.push({
+            role: 'user',
+            content: activationMessage,
+            metadata: {
+                turnAdded: this._promptTurnCount,
+                messageType: 'skill-activation'
+            }
+        } as AgentChatMessage);
+
+        return await this.executePromptStep(params, config, previousDecision, stepCount);
+    }
+
+    /**
+     * Pre-activates skills the caller explicitly requested via {@link ExecuteAgentParams.requestedSkillIDs}
+     * (typically an end user's `/skill-name` composer mentions), at run start — so their Instructions
+     * and bundled Actions/sub-agents take effect from the first turn rather than waiting for the model
+     * to discover and activate them through the catalog.
+     *
+     * **Root-agent only** (skills never cascade to sub-agents), and each requested skill activates
+     * **only if it survives the guard**: it must be in the set {@link AIEngine.GetSkillsForAgent}
+     * allows for this agent (the AcceptsSkills gate) AND the acting user must have Run permission on it
+     * — both enforced by passing `params.contextUser` to `GetSkillsForAgent`. Requested IDs that fail
+     * either check are silently dropped, so a client can never force-activate a skill the user or agent
+     * isn't entitled to. Reuses the same {@link recordSkillActivationStep} / {@link enableSkillCapabilities}
+     * / {@link buildSkillActivationMessage} machinery as the model-initiated `Skill` step, so activation
+     * is recorded and takes effect identically. Plan Mode is unaffected — pre-activation widens the tool
+     * surface, but the plan-approval gate still blocks executing those tools until the plan is approved.
+     *
+     * @protected
+     */
+    protected async preActivateRequestedSkills(params: ExecuteAgentParams): Promise<void> {
+        if (this._depth !== 0) {
+            return; // skills are root-agent only; never pre-activate on sub-agents
+        }
+        const requestedIds = params.requestedSkillIDs;
+        if (!requestedIds || requestedIds.length === 0) {
+            return;
+        }
+
+        // Guard: intersect the requested IDs with the agent-accepted ∩ user-permitted set.
+        const allowed = AIEngine.Instance.GetSkillsForAgent(params.agent, params.contextUser);
+        const droppedIds = requestedIds.filter(id => !allowed.some(s => UUIDsEqual(id, s.ID)));
+        if (droppedIds.length > 0) {
+            this.notifyDroppedSkillRequests(droppedIds, params);
+        }
+        const newlyActivated = allowed.filter(
+            s => requestedIds.some(id => UUIDsEqual(id, s.ID)) &&
+                 !this._activatedSkillIDs.some(id => UUIDsEqual(id, s.ID))
+        );
+        if (newlyActivated.length === 0) {
+            return;
+        }
+
+        const currentPayload = params.payload;
+        for (const skill of newlyActivated) {
+            const invocation = this.buildSkillInvocation(skill, params.agent, 'requested');
+            await this.recordSkillActivationStep(skill, currentPayload, params, invocation);
+            this.enableSkillCapabilities(skill, params);
+            this._activatedSkillIDs.push(skill.ID);
+            this._skillInvocations.push(invocation);
+        }
+
+        const activationMessage = this.buildSkillActivationMessage(newlyActivated);
+        if (!params.conversationMessages) {
+            params.conversationMessages = [];
+        }
+        params.conversationMessages.push({
+            role: 'user',
+            content: activationMessage,
+            metadata: {
+                turnAdded: this._promptTurnCount,
+                messageType: 'skill-activation'
+            }
+        } as AgentChatMessage);
+    }
+
+    /**
+     * Handles user-requested skill IDs that failed the activation guard (agent-accepted ∩
+     * user-permitted). A silent drop leaves both the user AND the agent blind to the refusal —
+     * the agent then improvises around the missing capability instead of explaining it. This
+     * emits a server-side warning log and injects a system note into the conversation so the
+     * agent tells the user why the skill isn't available rather than working around it.
+     *
+     * @protected
+     */
+    protected notifyDroppedSkillRequests(droppedIds: string[], params: ExecuteAgentParams): void {
+        const names = droppedIds.map(
+            id => AIEngine.Instance.Skills.find(s => UUIDsEqual(s.ID, id))?.Name ?? id
+        );
+        const reason = params.agent.AcceptsSkills === 'None'
+            ? `agent '${params.agent.Name}' does not accept skills (AcceptsSkills='None')`
+            : `the skill(s) are not available to agent '${params.agent.Name}' — not Active, not assigned to it (AcceptsSkills='Limited'), or the user lacks Run permission`;
+        LogErrorEx({
+            message: `Requested skill activation dropped for [${names.join(', ')}]: ${reason}`,
+            severity: 'warning',
+            category: 'AgentSkills'
+        });
+        if (!params.conversationMessages) {
+            params.conversationMessages = [];
+        }
+        params.conversationMessages.push({
+            role: 'user',
+            content: `SYSTEM NOTE: The user requested activation of the following skill(s) for this run: ${names.join(', ')}. The request was NOT honored because ${reason}. Briefly inform the user that the requested skill(s) are not available to you and, if appropriate, suggest an agent that accepts skills or that an administrator can grant this capability. Do NOT attempt to build, delegate, or improvise a workaround for the missing capability.`,
+            metadata: {
+                turnAdded: this._promptTurnCount,
+                messageType: 'skill-activation-refused'
+            }
+        } as AgentChatMessage);
+    }
+
+    /**
+     * Resolves the LLM's requested skill names to `MJ: AI Skills` entities, restricted to what
+     * {@link AIEngine.GetSkillsForAgent} allows for this agent (the AcceptsSkills gate + Status
+     * chain). Names that don't resolve are silently dropped here — {@link validateSkillNextStep}
+     * is responsible for rejecting unknown/disallowed names before execution ever reaches this
+     * point, so by the time `executeSkillStep` runs, every requested name is expected to match.
+     *
+     * Override to change resolution semantics (e.g. resolve by ID instead of Name).
+     *
+     * @protected
+     */
+    protected resolveSkillActivations(
+        requested: AgentSkillActivationRequest[],
+        agent: MJAIAgentEntityExtended,
+        contextUser?: UserInfo
+    ): MJAISkillEntity[] {
+        // Agent-initiated activations resolve against the double-gated AUTO set only —
+        // RequestedOnly skills (on either side of the gate) can never be self-activated, even if
+        // a response somehow names one that validateSkillNextStep didn't catch.
+        const availableSkills = AIEngine.Instance.GetAutoActivatableSkillsForAgent(agent, contextUser);
+        const resolved: MJAISkillEntity[] = [];
+
+        for (const req of requested) {
+            const requestedName = req.name.trim().toLowerCase();
+            const match = availableSkills.find(s => s.Name.trim().toLowerCase() === requestedName);
+            if (match && !resolved.some(s => UUIDsEqual(s.ID, match.ID))) {
+                resolved.push(match);
+            }
+        }
+
+        return resolved;
+    }
+
+    /**
+     * Builds the message appended to `conversationMessages` when skill(s) activate — this is what
+     * actually puts each skill's `Instructions` into effect for the rest of the run. Override to
+     * change formatting (e.g. a more compact representation for a high skill-activation-count agent).
+     *
+     * @protected
+     */
+    protected buildSkillActivationMessage(skills: MJAISkillEntity[]): string {
+        const sections = skills.map(s => `## Skill Activated: ${s.Name}\n\n${s.Instructions}`);
+        return `The following skill(s) have been activated. Their instructions are now in effect ` +
+            `for the remainder of this run:\n\n${sections.join('\n\n')}`;
+    }
+
+    /**
+     * Enables a skill's bundled Actions and sub-agents by pushing `specific`-scoped `add` entries
+     * (targeted at exactly the activating agent's ID) onto `params.actionChanges` /
+     * `params.subAgentChanges`. `specific`/`[agent.ID]` is the correct scope for "apply to THIS
+     * agent, at whatever depth it runs, and never leak to its sub-agents":
+     *   - {@link doesChangeScopeApply} returns true only when the running agent's ID is in the list,
+     *     so it applies to the activating agent regardless of depth (a sub-agent that activates a
+     *     skill still gets its tools — which a `root`-scoped change would NOT do, since `root` means
+     *     "the depth-0 agent," not "the current agent").
+     *   - {@link filterActionChangesForSubAgent} / {@link filterSubAgentChangesForSubAgent} propagate
+     *     `specific` as-is, and each downstream agent checks `includes(itsOwnID)` → false, so the
+     *     grant never cascades to sub-agents the activating agent later delegates to.
+     * Because `params` is the same object reference used for the rest of this run, every subsequent
+     * turn's `gatherPromptTemplateData()` call picks up the change automatically — no extra plumbing.
+     *
+     * Override to change propagation scope (e.g. a subclass that wants skill-granted capabilities
+     * to cascade to sub-agents could push `scope: 'all-subagents'` instead).
+     *
+     * @protected
+     */
+    protected enableSkillCapabilities(skill: MJAISkillEntity, params: ExecuteAgentParams): void {
+        const activatingAgentIds = [params.agent.ID];
+
+        const actionIds = AIEngine.Instance.GetSkillActionIDs(skill.ID);
+        if (actionIds.length > 0) {
+            if (!params.actionChanges) {
+                params.actionChanges = [];
+            }
+            params.actionChanges.push({
+                scope: 'specific',
+                mode: 'add',
+                actionIds,
+                agentIds: activatingAgentIds
+            });
+        }
+
+        const subAgentIds = AIEngine.Instance.GetSkillSubAgentIDs(skill.ID);
+        if (subAgentIds.length > 0) {
+            if (!params.subAgentChanges) {
+                params.subAgentChanges = [];
+            }
+            params.subAgentChanges.push({
+                scope: 'specific',
+                mode: 'add',
+                subAgentIds,
+                agentIds: activatingAgentIds
+            });
+        }
+    }
+
+    /**
+     * Builds the {@link AgentSkillInvocation} observability record for a skill activation —
+     * capturing WHO pulled the trigger and the provenance-of-authority gate values in effect at
+     * activation time, so auditors can see exactly which configuration admitted the skill even
+     * if that configuration later changes.
+     *
+     * @protected
+     */
+    protected buildSkillInvocation(
+        skill: MJAISkillEntity,
+        agent: MJAIAgentEntityExtended,
+        activationType: AgentSkillInvocation['ActivationType'],
+        reason?: string
+    ): AgentSkillInvocation {
+        return {
+            SkillID: skill.ID,
+            SkillName: skill.Name,
+            ActivationType: activationType,
+            Provenance: {
+                AgentAcceptsSkills: agent.AcceptsSkills,
+                SkillActivationMode: skill.ActivationMode,
+                AgentSkillActivationMode: agent.SkillActivationMode,
+                RequestedBy: activationType === 'requested' ? 'user-request' : 'agent-decision'
+            },
+            ...(reason ? { Reason: reason } : {})
+        };
+    }
+
+    /**
+     * Resolves which activated skill(s), if any, granted the given action to this agent — the
+     * attribution recorded on the Actions step's `Skills` column. Returns `undefined` (no
+     * linkage) when the action is one of the agent's NATIVE grants (an Active `MJ: AI Agent
+     * Actions` row), even if an activated skill also bundles it: native authority takes
+     * precedence, and `Skills = NULL` is the contract for "the agent had this tool anyway".
+     *
+     * @protected
+     */
+    protected getSkillAttributionForAction(actionId: string, agent: MJAIAgentEntityExtended): AgentSkillInvocation[] | undefined {
+        if (this._skillInvocations.length === 0 || !actionId) {
+            return undefined;
+        }
+        const isNative = AIEngine.Instance.AgentActions.some(aa =>
+            UUIDsEqual(aa.AgentID, agent.ID) && UUIDsEqual(aa.ActionID, actionId) && aa.Status === 'Active'
+        );
+        if (isNative) {
+            return undefined;
+        }
+        const granting = this._skillInvocations.filter(inv =>
+            AIEngine.Instance.GetSkillActionIDs(inv.SkillID).some(id => UUIDsEqual(id, actionId))
+        );
+        return granting.length > 0 ? granting : undefined;
+    }
+
+    /**
+     * Resolves which activated skill(s), if any, granted the given sub-agent to this agent — the
+     * attribution recorded on the Sub-Agent step's `Skills` column. Returns `undefined` when the
+     * sub-agent is a NATIVE relationship (a `ParentID` child of this agent, or an Active
+     * `MJ: AI Agent Relationships` referenced-sub-agent row), even if an activated skill also
+     * bundles it — same native-precedence contract as {@link getSkillAttributionForAction}.
+     *
+     * @protected
+     */
+    protected getSkillAttributionForSubAgent(subAgent: MJAIAgentEntityExtended, agent: MJAIAgentEntityExtended): AgentSkillInvocation[] | undefined {
+        if (this._skillInvocations.length === 0 || !subAgent) {
+            return undefined;
+        }
+        const isParentChild = subAgent.ParentID != null && UUIDsEqual(subAgent.ParentID, agent.ID);
+        const isReferenced = AIEngine.Instance.AgentRelationships.some(rel =>
+            UUIDsEqual(rel.AgentID, agent.ID) && UUIDsEqual(rel.SubAgentID, subAgent.ID) && rel.Status === 'Active'
+        );
+        if (isParentChild || isReferenced) {
+            return undefined;
+        }
+        const granting = this._skillInvocations.filter(inv =>
+            AIEngine.Instance.GetSkillSubAgentIDs(inv.SkillID).some(id => UUIDsEqual(id, subAgent.ID))
+        );
+        return granting.length > 0 ? granting : undefined;
+    }
+
+    /**
+     * Creates and immediately finalizes the `AIAgentRunStep` (StepType='Skill') that records this
+     * skill activation for observability/audit. The step's `Skills` column carries the single
+     * {@link AgentSkillInvocation} performed (activation type, provenance of authority, and the
+     * agent-stated reason when self-activated). Activation is not itself a failure mode today — it
+     * always finalizes as successful — but subclasses can override to add richer InputData/OutputData
+     * or to make activation conditionally fail (e.g. a licensing check).
+     *
+     * @protected
+     */
+    protected async recordSkillActivationStep(
+        skill: MJAISkillEntity,
+        currentPayload: unknown,
+        params: ExecuteAgentParams,
+        invocation?: AgentSkillInvocation
+    ): Promise<void> {
+        const stepEntity = await this.createStepEntity({
+            stepType: 'Skill',
+            stepName: `Skill: ${skill.Name}`,
+            targetId: skill.ID,
+            inputData: { skillName: skill.Name },
+            contextUser: params.contextUser,
+            payloadAtStart: currentPayload,
+            payloadAtEnd: currentPayload,
+            ...(invocation ? { skills: [invocation] } : {})
+        });
+
+        await this.finalizeStepEntity(stepEntity, true, undefined, {
+            skillId: skill.ID,
+            skillName: skill.Name,
+            ...(invocation ? {
+                activationType: invocation.ActivationType,
+                requestedBy: invocation.Provenance.RequestedBy,
+                ...(invocation.Reason ? { reason: invocation.Reason } : {})
+            } : {})
+        });
+    }
+
+    /**
+     * Executes a 'Plan' next step (Plan Mode): records a `Plan` run-step, raises the standard
+     * `MJ: AI Agent Requests` HITL request with an editable plan-approval `AgentResponseForm`, and
+     * terminates this run awaiting the human's response — reusing the exact same pause/resume
+     * infrastructure `executeChatStep` uses (`createFeedbackRequest` + the existing
+     * `MJAIAgentRequestEntityServer.Save()` auto-resume-on-status-change hook). A rejected or
+     * edited-and-resubmitted plan resumes as a new linked run via the normal run-chain mechanism;
+     * `resolvePlanModeGate` re-checks approval on that new run so a rejection sends the agent back
+     * to present a revised plan rather than through to execution.
+     *
+     * **Important**: the RETURNED `BaseAgentNextStep.step` is `'Chat'`, not `'Plan'` — 'Plan' is
+     * only ever an intermediate classification (used for the `AIAgentRunStep.StepType` audit
+     * record, which the UI reads to render a plan-approval card instead of a generic chat bubble).
+     * The step returned to the framework must stay within `AIAgentRun.FinalStep`'s DB-CHECK-
+     * constrained, terminal-only vocabulary — `'Plan'` is deliberately not part of it (see the
+     * `BaseAgentNextStep.step` doc comment) — so a plan-approval pause is represented as the same
+     * terminal shape `executeChatStep` already uses.
+     *
+     * @protected
+     */
+    protected async executePlanStep(
+        params: ExecuteAgentParams,
+        previousDecision: BaseAgentNextStep
+    ): Promise<BaseAgentNextStep> {
+        const planText = previousDecision.planDetails?.plan ?? '';
+
+        const stepEntity = await this.createStepEntity({
+            stepType: 'Plan',
+            stepName: 'Plan Presented for Approval',
+            contextUser: params.contextUser,
+            inputData: { plan: planText }
+        });
+        await this.finalizeStepEntity(stepEntity, true, undefined, { plan: planText });
+
+        const responseForm = this.buildPlanApprovalForm(planText);
+        const planPresentation: BaseAgentNextStep = {
+            step: 'Plan' as BaseAgentNextStep['step'],
+            terminate: true,
+            message: previousDecision.message || 'Please review the proposed plan before I proceed.',
+            reasoning: previousDecision.reasoning,
+            confidence: previousDecision.confidence,
+            responseForm
+        };
+
+        // For root agents, create a persistent AIAgentRequest so the request is tracked in the
+        // dashboard and can be responded to outside a conversation (mirrors executeChatStep).
+        if (this._depth === 0) {
+            await this.createFeedbackRequest(params, stepEntity, planPresentation);
+        }
+
+        return {
+            step: 'Chat',
+            terminate: true,
+            message: planPresentation.message,
+            reasoning: previousDecision.reasoning,
+            confidence: previousDecision.confidence,
+            previousPayload: previousDecision.previousPayload,
+            newPayload: previousDecision.newPayload || previousDecision.previousPayload,
+            responseForm
+        };
+    }
+
+    /**
+     * Builds the editable plan-approval `AgentResponseForm`: the Markdown-rendered plan (with an
+     * Edit toggle so the human can amend it before approving), an optional feedback field that
+     * travels back to the agent with the decision (most useful on Reject — it steers the re-plan),
+     * and an Approve/Reject button group. Override to change the card's layout (e.g. split the
+     * plan into per-step checkboxes instead of one field).
+     *
+     * Approval is a HIGHER-ORDER signal, not just a form reply: conversation hosts detect
+     * `decision === 'approve'` on this form and switch the conversation out of Plan Mode
+     * (see ng-conversations' plan-decision handling), so the follow-up run executes the approved
+     * plan instead of planning again. Rejection keeps Plan Mode on — the agent re-plans with the
+     * feedback in context.
+     *
+     * @protected
+     */
+    protected buildPlanApprovalForm(planText: string): AgentResponseForm {
+        return {
+            title: 'Review Plan',
+            description: 'Review the proposed plan below. Edit it if needed, then approve to proceed — or reject (with a note on what to change) and the agent will re-plan.',
+            submitLabel: 'Submit',
+            questions: [
+                {
+                    id: 'plan',
+                    label: 'Plan',
+                    // markdown: agents author plans in Markdown (see the plan-mode prompt
+                    // instructions); the UI renders a formatted preview with an Edit toggle.
+                    type: { type: 'textarea', markdown: true },
+                    defaultValue: planText,
+                    required: true
+                },
+                {
+                    id: 'reason',
+                    label: 'Feedback',
+                    type: { type: 'textarea', placeholder: 'Optional — if rejecting, tell the agent what to change and it will re-plan.' },
+                    required: false
+                },
+                {
+                    id: 'decision',
+                    label: 'Decision',
+                    type: {
+                        type: 'buttongroup',
+                        options: [
+                            { value: 'approve', label: 'Approve' },
+                            { value: 'reject', label: 'Reject' }
+                        ]
+                    },
+                    required: true
+                }
+            ]
+        };
     }
 
     private async executeChatStep(

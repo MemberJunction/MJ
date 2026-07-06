@@ -1,33 +1,37 @@
 # @memberjunction/ng-auth-services
 
-Angular authentication services for MemberJunction Explorer applications. Provides a unified abstraction layer supporting multiple OAuth providers (Auth0, Microsoft MSAL, Okta) through a consistent, type-safe API.
+Angular authentication services for MemberJunction Explorer applications. Provides a unified abstraction layer supporting multiple OAuth providers (Auth0, Microsoft MSAL, Okta, Cognito, WorkOS) through a consistent, type-safe API.
 
 ## Overview
 
-This package implements a provider-agnostic authentication system using the Strategy pattern. A single abstract base class (`MJAuthBase`) defines the contract, while concrete providers handle Auth0, MSAL (Azure AD), and Okta specifics. Application code interacts only with the standardized interface, making provider switches a configuration change rather than a code change.
+This package implements a provider-agnostic authentication system using the Strategy pattern. A single abstract base class (`MJAuthBase`) defines the contract, while concrete providers handle Auth0, MSAL (Azure AD), Okta, Cognito, and WorkOS (AuthKit) specifics. Application code interacts only with the standardized interface, making provider switches a configuration change rather than a code change.
 
 ```mermaid
 graph TD
     A["MJAuthBase\n(Abstract Service)"] --> B["MJAuth0Provider"]
     A --> C["MJMSALProvider"]
     A --> D["MJOktaProvider"]
+    A --> H["MJWorkOSProvider"]
     B --> E["@auth0/auth0-angular"]
     C --> F["@azure/msal-angular"]
     D --> G["@okta/okta-auth-js"]
+    H --> I["@workos-inc/authkit-js"]
 
     style A fill:#7c5295,stroke:#563a6b,color:#fff
     style B fill:#2d6a9f,stroke:#1a4971,color:#fff
     style C fill:#2d6a9f,stroke:#1a4971,color:#fff
     style D fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style H fill:#2d6a9f,stroke:#1a4971,color:#fff
     style E fill:#2d8659,stroke:#1a5c3a,color:#fff
     style F fill:#2d8659,stroke:#1a5c3a,color:#fff
     style G fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style I fill:#2d8659,stroke:#1a5c3a,color:#fff
 ```
 
 ## Features
 
 - **Unified Authentication Interface**: Standardized API across all providers via `IAngularAuthProvider`
-- **Multiple Provider Support**: Auth0, Microsoft MSAL (Azure AD), and Okta
+- **Multiple Provider Support**: Auth0, Microsoft MSAL (Azure AD), Okta, Cognito, and WorkOS (AuthKit)
 - **Standardized Types (v3.0.0)**: `StandardUserInfo`, `StandardAuthToken`, `StandardAuthError` eliminate leaky abstractions
 - **Semantic Error Classification**: `AuthErrorType` enum replaces provider-specific error checking
 - **Token Management**: ID token retrieval, token info, and automatic refresh
@@ -49,6 +53,7 @@ npm install @memberjunction/ng-auth-services
 | `@auth0/auth0-angular` | Auth0 provider (peer) |
 | `@azure/msal-angular`, `@azure/msal-browser` | MSAL provider (peer) |
 | `@okta/okta-auth-js` | Okta provider (peer) |
+| `@workos-inc/authkit-js` | WorkOS AuthKit provider (peer) |
 | `@memberjunction/core` | Core MJ utilities |
 | `rxjs` | Reactive state management |
 
@@ -77,7 +82,18 @@ export const environment = {
   OKTA_ISSUER: 'https://your-org.okta.com/oauth2/default',
   OKTA_CLIENTID: 'your-okta-client-id',
 };
+
+// WorkOS (AuthKit)
+export const environment = {
+  AUTH_TYPE: 'workos',
+  WORKOS_CLIENTID: 'client_01H...',
+  // optional: WORKOS_REDIRECT_URI, WORKOS_API_HOSTNAME, WORKOS_DEV_MODE
+};
 ```
+
+> **WorkOS needs server-side setup too** — a JWT Template to add the user's `email` to the access
+> token (WorkOS omits it by default, and MJ resolves users by email) and matching the `aud` claim.
+> See the end-to-end **[WorkOS Integration Guide](../../../AuthProviders/WORKOS.md)**.
 
 ### Module Setup
 

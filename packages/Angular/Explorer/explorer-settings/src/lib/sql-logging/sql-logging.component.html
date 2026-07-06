@@ -31,35 +31,18 @@
 
   <!-- Stats Cards with Toggle -->
   @if (isOwner && configEnabled) {
-    <div class="stats-toggle-container">
-      <!-- Toggle Button -->
-      <button
-        class="stats-toggle-button"
-        [class.expanded]="showStats"
-        (click)="showStats = !showStats"
-        [attr.aria-expanded]="showStats"
-        aria-controls="stats-grid-content"
-      >
-        <div class="stats-toggle-left">
-          <div class="stats-toggle-icon">
-            <i class="fa-solid fa-chart-line" aria-hidden="true"></i>
-          </div>
-          <div class="stats-toggle-text">
-            <h3 class="stats-toggle-title">Statistics</h3>
-            <p class="stats-toggle-subtitle">View session statistics and metrics</p>
-          </div>
+    <mj-accordion-panel class="stats-toggle-container" Size="sm" [(Expanded)]="showStats">
+      <ng-template mjAccordionTitle>
+        <div class="stats-toggle-icon">
+          <i class="fa-solid fa-chart-line" aria-hidden="true"></i>
         </div>
-        <i class="fa-solid fa-chevron-down stats-toggle-arrow" aria-hidden="true"></i>
-      </button>
-
-      <!-- Stats Grid (Collapsible) -->
-      <div
-        id="stats-grid-content"
-        class="stats-grid"
-        [class.visible]="showStats"
-        role="region"
-        aria-label="SQL logging statistics"
-      >
+        <div class="stats-toggle-text">
+          <h3 class="stats-toggle-title">Statistics</h3>
+          <p class="stats-toggle-subtitle">View session statistics and metrics</p>
+        </div>
+      </ng-template>
+      <ng-template mjAccordionBody>
+        <div id="stats-grid-content" class="stats-grid" role="region" aria-label="SQL logging statistics">
         <div class="stat-card">
           <div class="stat-icon stat-icon-status">
             <i class="fa-solid fa-power-off" aria-hidden="true"></i>
@@ -108,7 +91,8 @@
           </div>
         </div>
       </div>
-    </div>
+      </ng-template>
+    </mj-accordion-panel>
   }
 
   <!-- Loading State -->

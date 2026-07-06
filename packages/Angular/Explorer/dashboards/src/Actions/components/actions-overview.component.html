@@ -179,8 +179,8 @@
         @if (recentExecutions.length > 0) {
           <div class="executions-list">
             @for (execution of recentExecutions; track execution.ID) {
-              <div class="execution-item" [class.expanded]="execution.isExpanded">
-                <div class="execution-header" (click)="toggleExecutionExpanded(execution)">
+              <mj-accordion-panel Size="sm" [FlushBody]="true" [Expanded]="execution.isExpanded ?? false" (ExpandedChange)="execution.isExpanded = $event">
+                <ng-template mjAccordionTitle>
                   <div class="execution-time">
                     {{ execution.StartedAt | date:'MMM d, HH:mm' }}
                   </div>
@@ -193,15 +193,12 @@
                       {{ execution.ResultCode || 'Unknown' }}
                     </span>
                   </div>
-                  <div class="execution-expand-icon">
-                    <i [class]="execution.isExpanded ? 'fa-solid fa-chevron-up' : 'fa-solid fa-chevron-down'"></i>
-                  </div>
-                </div>
-                @if (execution.isExpanded) {
+                </ng-template>
+                <ng-template mjAccordionBody>
                   <div class="execution-details">
                     <div class="params-section">
                       <h5><i class="fa-solid fa-sliders"></i> Parameters</h5>
-                      <mj-code-editor 
+                      <mj-code-editor
                         [ngModel]="formatJsonParams(execution.Params)"
                         [readonly]="true"
                         [language]="'json'"
@@ -218,8 +215,8 @@
                       </button>
                     </div>
                   </div>
-                }
-              </div>
+                </ng-template>
+              </mj-accordion-panel>
             }
           </div>
         } @else {

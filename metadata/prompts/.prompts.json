@@ -194,8 +194,8 @@
       "ID": "FF7D441F-36E1-458A-B548-0FC2208923BE"
     },
     "sync": {
-      "lastModified": "2026-06-16T01:17:16.512Z",
-      "checksum": "add9790b59e6c76fba66cda0f54d7322be6a3bae93e3a13762844461836b8f1d"
+      "lastModified": "2026-07-02T22:19:41.044Z",
+      "checksum": "c5f7e4b1ac051c6a3b4edb310bd490081ca28db5c1ca42422ed84ebc65904398"
     }
   },
   {
@@ -1372,6 +1372,21 @@
     },
     "relatedEntities": {
       "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemma 4 31B Instruct",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
+            "Priority": 100
+          },
+          "primaryKey": {
+            "ID": "17DC3AA9-138C-4E82-A536-3FE06160318E"
+          },
+          "sync": {
+            "lastModified": "2026-07-02T03:13:43.382Z",
+            "checksum": "f9e269e1c9538b29583f8ad0948eb7aac0a42b4a6c510a5ad439367670382205"
+          }
+        },
         {
           "fields": {
             "PromptID": "@parent:ID",
