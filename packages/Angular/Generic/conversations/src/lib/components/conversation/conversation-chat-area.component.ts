@@ -522,6 +522,55 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
   @Output() composerDraftConsumed = new EventEmitter<void>();
 
+  /**
+   * Pre-address the composer to an AGENT as a resolved mention pill (+ space +
+   * focus) — the chip-resolving sibling of {@link composerDraft}. Value = the
+   * agent's name. Emits composerAgentMentionConsumed once applied.
+   */
+  @Input()
+  set composerAgentMention(value: string | null) {
+    if (value && value !== this._composerAgentMention) {
+      this._composerAgentMention = value;
+      this.applyComposerAgentMention(0);
+    } else if (!value) {
+      this._composerAgentMention = null;
+    }
+  }
+  get composerAgentMention(): string | null {
+    return this._composerAgentMention;
+  }
+  private _composerAgentMention: string | null = null;
+
+  @Output() composerAgentMentionConsumed = new EventEmitter<void>();
+
+  private applyComposerAgentMention(attempt: number): void {
+    const agentName = this._composerAgentMention;
+    if (!agentName) {
+      return;
+    }
+    // New/unsaved conversations render the empty-state composer; established ones
+    // use the active cached input. Both resolve the agent to a pill.
+    const insert: Promise<boolean> | null = this.emptyStateComponent
+      ? this.emptyStateComponent.InsertAgentMention(agentName, true)
+      : this.messageInputComponents?.first
+        ? this.messageInputComponents.first.InsertAgentMention(agentName, true)
+        : null;
+    if (insert) {
+      void insert.then((applied: boolean) => {
+        if (applied) {
+          this._composerAgentMention = null;
+          this.composerAgentMentionConsumed.emit();
+        } else if (attempt < 20) {
+          setTimeout(() => this.applyComposerAgentMention(attempt + 1), 150);
+        }
+      });
+      return;
+    }
+    if (attempt < 20) {
+      setTimeout(() => this.applyComposerAgentMention(attempt + 1), 150);
+    }
+  }
+
   /** The empty-state input applied the staged draft — clear + inform the host. */
   public OnComposerDraftApplied(): void {
     this.composerDraft = null;

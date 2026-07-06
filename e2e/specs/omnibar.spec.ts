@@ -109,9 +109,14 @@ test.describe.serial('Unified command palette', () => {
     await sageRow.click();
     await expect(page.locator('.omnibar-palette')).toBeHidden();
     await expect(page).toHaveURL(/chat/i, { timeout: 30_000 });
-    // The composer draft is PREFILLED (not sent) with the @mention, and focused.
+    // The composer is pre-addressed with a RESOLVED mention PILL (not raw text) —
+    // identical to typing '@sage' and picking from the dropdown — and focused.
     const composer = page.locator('mj-mention-editor [contenteditable="true"]').first();
-    await expect(composer).toContainText('@Sage', { timeout: 30_000 });
+    const chip = composer.locator('.mention-chip[data-mention-type="agent"][data-mention-name="Sage"]');
+    await expect(chip).toBeVisible({ timeout: 30_000 });
     await expect(composer).toBeFocused({ timeout: 15_000 });
+    // Typing lands AFTER the pill (caret placed past the trailing space).
+    await page.keyboard.type('hello');
+    await expect(composer).toContainText('hello');
   });
 });

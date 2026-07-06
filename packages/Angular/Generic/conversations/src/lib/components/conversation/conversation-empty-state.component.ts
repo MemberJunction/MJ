@@ -175,6 +175,18 @@ export class ConversationEmptyStateComponent {
    * Focus the message input programmatically.
    * Called by parent when the user clicks "New Conversation" while already on the empty state.
    */
+  /**
+   * Pre-addresses the composer to an agent as a resolved mention pill (delegates to
+   * MessageInputComponent.InsertAgentMention). Returns false while the input isn't
+   * mounted — callers may retry.
+   */
+  public async InsertAgentMention(agentName: string, focus: boolean = true): Promise<boolean> {
+    if (!this.messageInput) {
+      return false;
+    }
+    return this.messageInput.InsertAgentMention(agentName, focus);
+  }
+
   public FocusInput(): void {
     setTimeout(() => {
       if (this.messageInput) {

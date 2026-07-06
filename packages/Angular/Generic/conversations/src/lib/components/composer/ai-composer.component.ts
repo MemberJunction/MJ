@@ -1,6 +1,6 @@
 import { Component, EventEmitter, Input, Output, ViewChild } from '@angular/core';
 import { IMetadataProvider, UserInfo } from '@memberjunction/core';
-import {
+import { MentionSuggestion,
   ComposerTriggerProvider,
   MentionEditorComponent,
   MessageInputBoxComponent,
@@ -174,6 +174,11 @@ export class AiComposerComponent {
   }
 
   /** Focus the composer input. */
+  /** Inserts a resolved mention chip + space (see MentionEditorComponent.InsertMention). */
+  public InsertMention(suggestion: MentionSuggestion, focus: boolean = true): boolean {
+    return this.inputBox?.InsertMention(suggestion, focus) ?? false;
+  }
+
   public focus(): void {
     this.inputBox?.focus();
   }

@@ -96,8 +96,8 @@ import { Subject, takeUntil } from 'rxjs';
               (artifactLinkClicked)="onArtifactLinkClicked($event)"
               (openEntityRecord)="onOpenEntityRecord($event)"
               (navigationRequest)="onNavigationRequest($event)"
-              [composerDraft]="pendingComposerDraft"
-              (composerDraftConsumed)="onComposerDraftConsumed()">
+              [composerAgentMention]="pendingComposerAgentMention"
+              (composerAgentMentionConsumed)="onComposerAgentMentionConsumed()">
             </mj-conversation-chat-area>
           }
         </div>
@@ -465,20 +465,20 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
       return;
     }
     this.lastAppliedAgentParam = agentName;
-    const mention = agentName.includes(' ') ? `@"${agentName}" ` : `@${agentName} `;
     this.isNewUnsavedConversation = true;
     this.selectedConversationId = null;
     this.selectedConversation = null;
-    // DRAFT prefill (composerDraft) — pendingMessage would AUTO-SEND, which is wrong here.
-    this.pendingComposerDraft = mention;
+    // Resolved mention PILL (composerAgentMention) — matching the UX of typing
+    // '@agent' and picking from the dropdown; pendingMessage would AUTO-SEND.
+    this.pendingComposerAgentMention = agentName;
     this.cdr.detectChanges();
   }
 
-  public pendingComposerDraft: string | null = null;
+  public pendingComposerAgentMention: string | null = null;
   private lastAppliedAgentParam: string | null = null;
 
-  public onComposerDraftConsumed(): void {
-    this.pendingComposerDraft = null;
+  public onComposerAgentMentionConsumed(): void {
+    this.pendingComposerAgentMention = null;
   }
 
   private applyConfigurationParams(): void {

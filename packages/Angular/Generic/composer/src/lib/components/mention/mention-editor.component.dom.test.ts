@@ -243,3 +243,55 @@ describe('MentionEditorComponent trigger providers (DOM)', () => {
     expect(f.componentInstance.showMentionDropdown).toBe(true);
   });
 });
+
+describe('InsertMention (programmatic resolved chip)', () => {
+    function mount(): ComponentFixture<MentionEditorComponent> {
+        const user = new UserInfo();
+        user.ID = 'u-insert';
+        user.Name = 'Insert Tester';
+        return renderComponentFixture(MentionEditorComponent, {
+            imports: [CommonModule, MJEmptyStateComponent],
+            declarations: [MentionEditorComponent, MentionDropdownComponent],
+            inputs: { currentUser: user },
+        });
+    }
+
+    const SAGE: MentionSuggestion = {
+        type: 'agent', id: 'ag-1', name: 'Sage', displayName: 'Sage', icon: 'fa-solid fa-leaf',
+    };
+
+    it('inserts a resolved chip + trailing space at the end and updates the bound value', () => {
+        const fixture = mount();
+        fixture.detectChanges();
+        const ok = fixture.componentInstance.InsertMention(SAGE, false);
+        fixture.detectChanges();
+        expect(ok).toBe(true);
+        const editor = fixture.componentInstance.editorRef.nativeElement;
+        const chip = editor.querySelector('.mention-chip') as HTMLElement;
+        expect(chip).toBeTruthy();
+        expect(chip.getAttribute('data-mention-name')).toBe('Sage');
+        expect(chip.getAttribute('data-mention-type')).toBe('agent');
+        // Trailing space follows the chip so the user can type immediately.
+        expect(chip.nextSibling?.textContent).toBe(' ');
+        // The CVA value reflects the serialized mention (chip data attribute is authoritative).
+        expect(editor.textContent).toContain('Sage');
+    });
+
+    it('places the caret AFTER the trailing space (typing lands past the pill)', () => {
+        const fixture = mount();
+        fixture.detectChanges();
+        fixture.componentInstance.InsertMention(SAGE, true);
+        fixture.detectChanges();
+        const selection = window.getSelection();
+        expect(selection).toBeTruthy();
+        const editor = fixture.componentInstance.editorRef.nativeElement;
+        const chip = editor.querySelector('.mention-chip') as HTMLElement;
+        // Caret container must be the space text node right after the chip (or positioned after it).
+        const range = selection!.getRangeAt(0);
+        expect(range.collapsed).toBe(true);
+        // setStartAfter(space) puts the caret in the editor node, offset past the
+        // space that follows the chip — i.e. at the very end of the content.
+        expect(range.startContainer).toBe(editor);
+        expect(range.startOffset).toBe(editor.childNodes.length);
+    });
+});

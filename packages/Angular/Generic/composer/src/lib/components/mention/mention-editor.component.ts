@@ -474,6 +474,47 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
   /**
    * Insert a mention chip at the current cursor position
    */
+  /**
+   * Programmatically inserts a RESOLVED mention chip (+ a single trailing space) at
+   * the END of the editor content and places the caret after it — the exact state a
+   * user reaches by typing a trigger and picking from the dropdown. Unlike the
+   * dropdown path this needs no active trigger context, so hosts can pre-address a
+   * message (e.g. the omnibar's '@agent' flow staging a Sage pill) and leave the
+   * user ready to type.
+   *
+   * @returns false when the editor view isn't mounted yet — callers may retry.
+   */
+  public InsertMention(suggestion: MentionSuggestion, focus: boolean = true): boolean {
+    const editor = this.editorRef?.nativeElement;
+    if (!editor) {
+      return false;
+    }
+    editor.focus();
+    const selection = window.getSelection();
+    if (!selection) {
+      return false;
+    }
+    // Caret to the end of the current content, then chip + space + caret-after.
+    const range = document.createRange();
+    range.selectNodeContents(editor);
+    range.collapse(false);
+    const chip = this.createMentionChip(suggestion);
+    range.insertNode(chip);
+    const space = document.createTextNode(' ');
+    range.setStartAfter(chip);
+    range.collapse(true);
+    range.insertNode(space);
+    range.setStartAfter(space);
+    range.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    if (!focus) {
+      editor.blur();
+    }
+    this.onInput();
+    return true;
+  }
+
   private insertMentionChip(suggestion: MentionSuggestion): void {
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0) return;

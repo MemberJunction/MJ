@@ -293,6 +293,38 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
   @Output() initialDraftApplied = new EventEmitter<void>();
 
+  /**
+   * Pre-addresses the composer to an agent as a RESOLVED mention pill (+ trailing
+   * space, caret after, focused) — identical to the user typing '@agent' and picking
+   * it from the dropdown. Resolves the agent through MentionAutocompleteService so
+   * the chip carries the agent's real id/icon/presets; falls back to a plain-text
+   * '@Name ' draft when the agent can't be resolved (e.g. name mismatch).
+   *
+   * @returns false while the composer view isn't mounted yet — callers may retry.
+   */
+  public async InsertAgentMention(agentName: string, focus: boolean = true): Promise<boolean> {
+    if (!this.inputBox) {
+      return false;
+    }
+    try {
+      if (!this.mentionAutocomplete.IsInitialized && this.currentUser) {
+        await this.mentionAutocomplete.initialize(this.currentUser);
+      }
+      const wanted = agentName.trim().toLowerCase();
+      const suggestion = this.mentionAutocomplete
+        .getSuggestions(agentName, false, '@')
+        .find(s => s.type === 'agent' && s.name.trim().toLowerCase() === wanted);
+      if (suggestion) {
+        return this.inputBox.InsertMention(suggestion, focus);
+      }
+    } catch {
+      // resolution is best-effort — fall through to the plain-text draft
+    }
+    const mention = agentName.includes(' ') ? `@"${agentName}" ` : `@${agentName} `;
+    this.SetDraft(mention, focus);
+    return true;
+  }
+
   public SetDraft(text: string, focus: boolean = true): void {
     this.messageText = text;
     if (focus) {

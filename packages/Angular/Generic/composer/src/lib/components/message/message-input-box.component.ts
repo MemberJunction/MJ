@@ -190,6 +190,11 @@ export class MessageInputBoxComponent {
   /**
    * Public method to focus the input programmatically
    */
+  /** Inserts a resolved mention chip + space and focuses (see MentionEditorComponent.InsertMention). */
+  InsertMention(suggestion: MentionSuggestion, focus: boolean = true): boolean {
+    return this.mentionEditor?.InsertMention(suggestion, focus) ?? false;
+  }
+
   focus(): void {
     const editor = this.mentionEditor?.editorRef?.nativeElement;
     if (editor) {
