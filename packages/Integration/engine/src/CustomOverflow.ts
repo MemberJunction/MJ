@@ -76,3 +76,19 @@ export function computeUnmappedFields(
 export function hasUnmappedFields(unmapped: Record<string, unknown> | undefined | null): boolean {
     return unmapped != null && Object.keys(unmapped).length > 0;
 }
+
+/**
+ * U4 — the value to write to the overflow column when a record is synced: this record's CURRENT
+ * unmapped keys as JSON, or `null` when it has none. Returning `null` (instead of skipping the write)
+ * is what EVICTS a stale key: when a source column vanishes, the record's unmapped set shrinks (or
+ * empties), so re-writing the reconciled value drops the vanished key from the row's overflow instead
+ * of leaving the prior JSON behind forever (which would also let the key be phantom-promoted, U3).
+ *
+ * Byte-identical-safe: a customs-free row's overflow is already `null`, so writing `null` is a no-op
+ * under MJ's dirty tracking — only a row that USED to carry overflow and no longer does becomes dirty.
+ */
+export function reconcileOverflowValue(
+    unmapped: Record<string, unknown> | undefined | null,
+): string | null {
+    return hasUnmappedFields(unmapped) ? JSON.stringify(unmapped) : null;
+}
