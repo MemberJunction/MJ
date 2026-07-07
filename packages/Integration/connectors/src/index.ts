@@ -1,4 +1,11 @@
 export { RelationalDBConnector, type ConnectionConfig } from './RelationalDBConnector.js';
+
+// ── EDS-consuming ingestion connector ABSTRACTIONS (the "heart" — share the External Data Sources
+//    connection layer). The thin per-engine leaves (SQLServerConnector, PostgresConnector, …) ship as
+//    per-engine Open Apps in the MemberJunction/Integrations repo, each extending one of these. ──
+export { BaseExternalDataSourceConnector, type ExternalDataSourceFilterDialect } from './datasource/BaseExternalDataSourceConnector.js';
+export { BaseSqlExternalDataSourceConnector } from './datasource/BaseSqlExternalDataSourceConnector.js';
+export { BaseDocumentDataSourceConnector } from './datasource/BaseDocumentDataSourceConnector.js';
 export { HubSpotConnector } from './HubSpotConnector.js';
 export { SalesforceConnector, type SalesforceConnectionConfig } from './SalesforceConnector.js';
 export { FontevaConnector, LoadFontevaConnector } from './FontevaConnector.js';
