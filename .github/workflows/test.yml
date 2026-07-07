@@ -117,7 +117,7 @@ jobs:
         run: |
           if [ -n "$TURBO_FILTER" ]; then
             echo "::group::Affected build"
-            npx turbo --log-order=stream run build "$TURBO_FILTER"
+            npx turbo run build --log-order=stream "$TURBO_FILTER"
             echo "::endgroup::"
             npx turbo run test "$TURBO_FILTER"
           else
