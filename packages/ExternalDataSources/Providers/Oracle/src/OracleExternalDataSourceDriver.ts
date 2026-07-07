@@ -369,7 +369,8 @@ export class OracleExternalDataSourceDriver extends BaseSqlExternalDataSourceDri
     if (params.maxRows == null) {
       return undefined; // only pay for the count when paginating
     }
-    const { rows } = await this.query<{ CNT: number }>(pool, `SELECT COUNT(*) AS cnt FROM ${target}${params.filter ? ` WHERE ${params.filter}` : ''}`);
+    const where = this.effectiveWhere(params);
+    const { rows } = await this.query<{ CNT: number }>(pool, `SELECT COUNT(*) AS cnt FROM ${target}${where ? ` WHERE ${where}` : ''}`);
     return Number(rows[0]?.CNT ?? 0);
   }
 
@@ -420,5 +421,24 @@ export class OracleExternalDataSourceDriver extends BaseSqlExternalDataSourceDri
   /** Quote a SQL identifier with double-quotes (Oracle: case-sensitive when quoted), escaping `"`. */
   protected quoteIdent(name: string): string {
     return `"${name.replace(/"/g, '""')}"`;
+  }
+
+  /**
+   * Oracle's default NLS date format rejects an ISO-8601 timestamp literal (the `T`/`Z` form → ORA-01843),
+   * so an incremental watermark like `2026-03-01T00:00:00.000Z` is wrapped in `TO_TIMESTAMP` with a matching
+   * format mask. Non-ISO watermarks (numeric cursors, date-only strings) pass through as a plain literal.
+   *
+   * Note: for a naive (no-time-zone) source column, incremental correctness is time-zone sensitive — the
+   * session TZ governs how the value reads back; run against UTC-normalized data or a TIMESTAMP WITH TIME
+   * ZONE column for exact boundaries.
+   */
+  protected override formatIncrementalLiteral(value: string): string {
+    const isIsoTimestamp = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:?\d{2})?$/.test(value);
+    if (!isIsoTimestamp) {
+      return this.quoteLiteral(value);
+    }
+    const fractional = value.includes('.') ? '.FF3' : '';
+    const zoneLiteral = value.endsWith('Z') ? '"Z"' : '';
+    return `TO_TIMESTAMP(${this.quoteLiteral(value)}, 'YYYY-MM-DD"T"HH24:MI:SS${fractional}${zoneLiteral}')`;
   }
 }
