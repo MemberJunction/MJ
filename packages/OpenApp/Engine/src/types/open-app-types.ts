@@ -30,6 +30,55 @@ export type ErrorPhase = 'Schema' | 'Migration' | 'Packages' | 'Config' | 'Hooks
 export type DependencyStatus = 'Satisfied' | 'Missing' | 'Incompatible';
 
 /**
+ * Checkpoint values written to OpenApp.LastCompletedStep during `InstallApp`.
+ * Read back on re-entry (Status still 'Installing') to resume from the right
+ * point instead of restarting the whole install.
+ *
+ * There is no checkpoint value for schema creation / migrations: those steps run
+ * BEFORE the OpenApp row exists (nothing to attach a checkpoint to yet), and both
+ * are already safely re-runnable on their own — schema creation reuses an existing
+ * schema instead of erroring, and Skyway's own per-schema migration-history table
+ * only applies migrations it hasn't already applied. So the earliest checkpoint is
+ * 'RecordCreated'; a crash before that point just restarts from the top, which is
+ * cheap and correct.
+ */
+export type InstallStep =
+    | 'RecordCreated'
+    | 'PackagesInstalled'
+    | 'ConfigUpdated'
+    | 'AngularExcludesUpdated'
+    | 'Finalized'
+    | 'HooksRun';
+
+/**
+ * Checkpoint values written to OpenApp.LastCompletedStep during `UpgradeApp`.
+ * Read back on re-entry (Status still 'Upgrading') to resume from the right
+ * point instead of restarting the whole upgrade.
+ */
+export type UpgradeStep =
+    | 'MigrationsApplied'
+    | 'PackagesInstalled'
+    | 'ConfigUpdated'
+    | 'AngularExcludesUpdated'
+    | 'RecordUpdated'
+    | 'HooksRun'
+    | 'DependenciesReplaced';
+
+/**
+ * Checkpoint values written to OpenApp.LastCompletedStep during `RemoveApp`.
+ * Read back on re-entry (Status still 'Removing') to resume from the right
+ * point instead of restarting the whole removal.
+ *
+ * Mirrors the two phases `RemoveApp` already enforces strictly in order (DB cleanup —
+ * metadata + teardown + schema drop — must fully succeed before any filesystem mutation
+ * begins, so a DB failure never leaves a half-removed app with files stripped but schema
+ * intact). 'DbCleanupDone' means metadata/teardown/schema-drop all completed; 'FilesRemoved'
+ * means config/bootstrap/package files were removed too — only the final status write and
+ * audit history entry remain.
+ */
+export type RemoveStep = 'DbCleanupDone' | 'FilesRemoved';
+
+/**
  * Progress callbacks for installation operations.
  * Follows the same callback pattern as mj-sync's PushCallbacks.
  */
@@ -232,6 +281,8 @@ export interface InstalledAppInfo {
     InstalledByUserID: string;
     /** Current app status */
     Status: AppStatus;
+    /** Last install/upgrade/remove step that completed successfully, for resuming a retry */
+    LastCompletedStep?: string | null;
 }
 
 /**

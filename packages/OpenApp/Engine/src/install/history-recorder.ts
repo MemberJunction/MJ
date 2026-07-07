@@ -138,6 +138,22 @@ export async function SetAppStatus(contextUser: UserInfo, appId: string, status:
 }
 
 /**
+ * Records the last install/upgrade/remove step that completed successfully for an app.
+ *
+ * The orchestrator calls this immediately after each step of `InstallApp`/`UpgradeApp`/
+ * `RemoveApp` succeeds. On a later re-entry (the app's Status is still `Installing`/
+ * `Upgrading`/`Removing` — e.g. after a crash or a caught step failure), the orchestrator
+ * reads this back via `FindInstalledApp` and skips every step up to and including it,
+ * resuming the operation instead of restarting it from the beginning.
+ *
+ * Pass `null` to clear the checkpoint (done on terminal success, so a stale checkpoint
+ * can't be misread by a later, unrelated operation on the same row).
+ */
+export async function SetAppStep(contextUser: UserInfo, appId: string, step: string | null, provider?: IMetadataProvider): Promise<void> {
+  await UpdateAppRecord(contextUser, appId, { LastCompletedStep: step }, provider);
+}
+
+/**
  * Records an install history entry (install, upgrade, or remove).
  *
  * @param contextUser - The user who performed the action
