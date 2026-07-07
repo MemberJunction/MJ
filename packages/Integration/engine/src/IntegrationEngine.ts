@@ -43,6 +43,7 @@ import { MatchEngine } from './MatchEngine.js';
 import { WatermarkService } from './WatermarkService.js';
 import { SyncLogger } from './SyncLogger.js';
 import { CONTENT_HASH_COLUMN, computeContentHashWithOverflow, contentHashBasis } from './ContentHash.js';
+import { buildContentHashPrefetchFilter } from './prefetchFilter.js';
 import { serializeKeyValue } from './KeySerialization.js';
 import { CUSTOM_OVERFLOW_COLUMN, reconcileOverflowValue } from './CustomOverflow.js';
 import { partitionRecords, partitionRollupHash, diffPartitions, partitionKeyForIdentity } from './HashDiff.js';
@@ -3460,21 +3461,13 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
 
         try {
             const rv = new RunView();
-            let extraFilter: string;
-            if (pkNames.length === 1) {
-                // Single-PK fast path: WHERE pk IN (...).
-                const escaped = ids.map(id => `'${String(id).replace(/'/g, "''")}'`).join(',');
-                extraFilter = `${pkNames[0]} IN (${escaped})`;
-            } else {
-                // Composite-PK: each MatchedMJRecordID is "v1|v2|..." in PrimaryKeys order. Build
-                // an OR of per-record (pk1='v1' AND pk2='v2') clauses — bounded by batch size.
-                // Plain (unbracketed) identifiers → dialect-agnostic (SS brackets break Postgres).
-                extraFilter = ids.map(mid => {
-                    const parts = String(mid).split('|');
-                    return '(' + pkNames.map((name, i) =>
-                        `${name} = '${String(parts[i] ?? '').replace(/'/g, "''")}'`).join(' AND ') + ')';
-                }).join(' OR ');
-            }
+            // MJ#3047: quote the PK identifier(s) via the provider's dialect. A reserved-word PK column
+            // (e.g. Zendesk `custom_objects.key`) otherwise produces `WHERE key IN (...)`, which throws
+            // and — because this method is best-effort — silently disables the content-hash idempotent
+            // skip, re-writing every unchanged record each sync. Dialect-aware (SS `[key]`, PG `"key"`)
+            // so it stays valid on both targets (does NOT reintroduce the SS-brackets-break-PG problem).
+            const dialect = (this.ProviderToUse as DatabaseProviderBase).Dialect;
+            const extraFilter = buildContentHashPrefetchFilter(pkNames, ids, dialect);
             const res = await rv.RunView<Record<string, string>>({
                 EntityName: entityName,
                 Fields: [...pkNames, CONTENT_HASH_COLUMN],
@@ -3492,7 +3485,12 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 }
             }
             return map;
-        } catch {
+        } catch (err) {
+            // MJ#3047 lesson: this best-effort catch was SILENT, so a failing prefetch (e.g. a reserved-word
+            // PK producing an invalid WHERE) disabled the content-hash idempotent skip on EVERY sync with
+            // nothing surfacing. Surface it at status level so the NEXT silent-degradation of this class is
+            // visible in sync logs — the failure mode that let #3047 exist.
+            LogStatusEx({ message: `[IntegrationEngine] content-hash prefetch for "${entityName}" failed — idempotent skip disabled this batch (best-effort, sync continues): ${err instanceof Error ? err.message : String(err)}` });
             return undefined; // best-effort — never break a sync over a prefetch failure
         }
     }

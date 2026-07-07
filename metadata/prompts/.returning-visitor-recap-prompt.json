@@ -1,0 +1,28 @@
+[
+  {
+    "fields": {
+      "Name": "Returning-Visitor Recap",
+      "Description": "Summarizes a support conversation into a short recap stored as an agent memory note, so a returning visitor's agent opens with prior context (returning-visitor memory, RV2). Plain-text output; emits NO_RECAP when there is nothing worth remembering.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/returning-visitor-recap.template.md",
+      "Status": "Active",
+      "ResponseFormat": "Text",
+      "SelectionStrategy": "Default",
+      "PowerPreference": "Lowest",
+      "ParallelizationMode": "None",
+      "MaxRetries": 1,
+      "RetryDelayMS": 500,
+      "RetryStrategy": "Fixed",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System"
+    },
+    "primaryKey": {
+      "ID": "14DCE32F-761B-47CA-9711-D923189247E9"
+    },
+    "sync": {
+      "lastModified": "2026-06-29T23:29:50.428Z",
+      "checksum": "f9bfe5f7a1e57885fd54b9f504b6761ace39388132f665bcbada60c50cb4553e"
+    }
+  }
+]

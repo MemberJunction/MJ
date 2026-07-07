@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Blank Host — MJ Support Widget embed</title>
+    <style>
+        /* Deliberately aggressive host styles to prove the widget's shadow DOM is isolated:
+           none of these should affect the widget, and the widget must not affect them. */
+        body { font-family: Georgia, serif; background: #fafad2; color: #663399; padding: 2rem; }
+        button { background: hotpink !important; border: 4px dashed red !important; }
+        textarea { text-transform: uppercase !important; }
+    </style>
+</head>
+<body>
+    <h1>A bare third-party page</h1>
+    <p>The MemberJunction support widget is embedded below with a single mount element and
+       a single script tag. The host's loud CSS above must NOT leak into the widget (shadow DOM),
+       and the widget must NOT restyle this page.</p>
+
+    <!-- ── THE ENTIRE EMBED: one mount element + one script ─────────────────────
+         Replace data-widget-key with your pk_live_… key and data-api-url with your MJAPI URL.
+         The loader reads these attributes, mints a guest session at POST /widget/session,
+         and mounts <mj-support-widget> in this element's shadow DOM. No MJ login required. -->
+    <div
+        data-widget-key="pk_test_example_support_widget"
+        data-api-url="http://localhost:4008"
+        data-title="Acme Support"
+        data-greeting="Hi! Ask us anything."
+    ></div>
+
+    <script type="module" src="../dist/embed/mj-widget.js"></script>
+
+    <!-- NOTE: ../dist/embed/mj-widget.js is the single-file browser bundle produced by
+         `npm run bundle` (esbuild). See README "Build & bundle status". A live text/voice
+         turn additionally requires a running MJAPI with widget.enabled=true (Auth0-gated in
+         the overnight sandbox). For an offline UI demo, see examples/offline-demo.html which
+         injects a MockWidgetTransport. -->
+</body>
+</html>
