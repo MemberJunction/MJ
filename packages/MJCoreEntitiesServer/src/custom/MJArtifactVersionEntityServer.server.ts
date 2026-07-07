@@ -67,7 +67,7 @@ export class MJArtifactVersionEntityServer extends MJArtifactVersionEntity {
      * @param options
      */
     override async Save(options?: EntitySaveOptions): Promise<boolean> {
-        const contentDirty = this.IsSaved === false || this.Fields.find(f => f.Name === "Content")?.Dirty;
+        const contentDirty = this.IsSaved === false || this.GetFieldByName("Content")?.Dirty;
 
         if (contentDirty && this.Content) {
             try {

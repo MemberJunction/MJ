@@ -896,36 +896,12 @@
     flex-direction: column;
 }
 
-.field-group {
-    border-bottom: 1px solid var(--border-light);
-}
-
-.field-group:last-child {
-    border-bottom: none;
-}
-
-.group-header {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 14px 20px;
-    cursor: pointer;
-    transition: background var(--transition-fast);
-    user-select: none;
-    background: var(--bg-secondary);
-    border-left: 3px solid var(--accent-color);
-}
-
-.group-header:hover {
-    background: var(--bg-tertiary);
-}
-
-.expand-icon {
-    font-size: 10px;
-    color: var(--text-muted);
-    width: 16px;
-    transition: transform var(--transition-fast);
-}
+/* Field-group disclosure migrated to <mj-accordion-panel>. The bespoke
+   .field-group separators, .group-header bar + .group-header:hover, and the
+   .expand-icon chevron are now owned by the accordion and were removed. The
+   title-slot content styling (.group-icon / .group-label) is kept below. The
+   field-group count now uses the shared .mj-accordion-badge; .group-count below
+   is retained only for the non-accordion relationship / organic-key titles. */
 
 .group-icon {
     font-size: 16px;
@@ -2233,11 +2209,10 @@
     border-top: 1px solid var(--border-color);
 }
 
-.isa-field-inspector > .isa-chain-label {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
+/* Field Source Inspector disclosure migrated to <mj-accordion-panel>; the
+   bespoke .isa-chain-label header (with chevron) is now the accordion header
+   and its layout rule was removed. The .isa-field-inspector wrapper is kept
+   for its top-border separator from the inheritance chain above. */
 
 .isa-inspector-groups {
     display: flex;

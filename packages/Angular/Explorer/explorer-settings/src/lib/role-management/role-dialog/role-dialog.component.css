@@ -262,7 +262,7 @@
 .field-textarea:focus {
   outline: none;
   border-color: var(--mj-brand-primary);
-  box-shadow: 0 0 0 3px rgba(0, 118, 182, 0.2);
+  box-shadow: var(--mj-focus-ring);
 }
 
 .field-input:disabled,
@@ -280,7 +280,8 @@
 
 .field-input.error:focus,
 .field-textarea.error:focus {
-  box-shadow: 0 0 0 3px rgba(211, 47, 47, 0.2);
+  --mj-ring-color: var(--mj-status-error);
+  box-shadow: var(--mj-focus-ring);
 }
 
 .field-textarea {
@@ -307,75 +308,6 @@
 
 .field-error i {
   font-size: 0.875rem;
-}
-
-/* ============================================
-   Alert Messages
-   ============================================ */
-
-.alert {
-  display: flex;
-  align-items: flex-start;
-  gap: 1rem;
-  padding: 1rem 1.25rem;
-  border-radius: var(--mj-radius-md);
-  border: 1px solid;
-  font-size: 0.875rem;
-  line-height: 1.5;
-}
-
-.alert i {
-  font-size: 1.25rem;
-  flex-shrink: 0;
-  margin-top: 0.125rem;
-}
-
-.alert > div {
-  flex: 1;
-  min-width: 0;
-}
-
-.alert strong {
-  display: block;
-  font-weight: 600;
-  margin-bottom: 0.25rem;
-}
-
-.alert p {
-  margin: 0;
-}
-
-/* Error Alert (Red) */
-.alert-error {
-  background: var(--mj-color-error-100);
-  border-color: var(--mj-status-error);
-  color: var(--mj-status-error);
-}
-
-.alert-error i {
-  color: var(--mj-status-error);
-}
-
-/* Warning Alert (Orange) */
-.alert-warning {
-  background: var(--mj-color-warning-50);
-  border-color: var(--mj-color-warning-500);
-  color: var(--mj-color-warning-800);
-}
-
-.alert-warning i {
-  color: var(--mj-color-warning-500);
-}
-
-/* Info Alert (Blue) */
-.alert-info {
-  background: var(--mj-brand-accent-subtle);
-  border-color: var(--mj-brand-primary);
-  color: var(--mj-text-primary);
-}
-
-.alert-info i {
-  color: var(--mj-brand-primary);
 }
 
 /* ============================================

@@ -1,0 +1,100 @@
+@if (visible) {
+  <div
+    class="mention-dropdown"
+    [class.show-above]="showAbove"
+    [class.fixed-position]="useFixedPositioning"
+    [style.top.px]="position.top"
+    [style.left.px]="position.left"
+    >
+    <!-- Suggestions List -->
+    @if (suggestions.length > 0) {
+      <div class="mention-suggestions">
+        @for (suggestion of suggestions; track trackBySuggestion(i, suggestion); let i = $index) {
+          <div
+            class="mention-suggestion"
+            [class.selected]="i === selectedIndex"
+            (mousedown)="selectSuggestion(suggestion); $event.preventDefault()"
+            (mouseenter)="selectedIndex = i"
+            >
+            <div class="suggestion-icon"
+                 [class.skill]="suggestion.type === 'skill'"
+                 [style.background]="suggestion.type === 'skill' ? (suggestion.color || null) : null">
+              <!-- Agent with LogoURL image (takes precedence) -->
+              @if (suggestion.type === 'agent' && suggestion.imageUrl) {
+                <img
+                  [src]="suggestion.imageUrl"
+                  [alt]="suggestion.displayName"
+                  class="suggestion-image"
+                  />
+              }
+              <!-- Agent with icon class (fallback) -->
+              @if (suggestion.type === 'agent' && !suggestion.imageUrl && suggestion.icon) {
+                <i
+                  [ngClass]="getIconClasses(suggestion.icon)"
+                ></i>
+              }
+              <!-- User icon -->
+              @if (suggestion.type === 'user') {
+                <i
+                  class="fa-solid fa-user"
+                ></i>
+              }
+              <!-- Entity icon -->
+              @if (suggestion.type === 'entity') {
+                <i
+                  [ngClass]="getIconClasses(suggestion.icon || 'fa-solid fa-table')"
+                ></i>
+              }
+              <!-- Query icon (generic, from 'MJ: Queries' entity) -->
+              @if (suggestion.type === 'query') {
+                <i
+                  [ngClass]="getIconClasses(suggestion.icon || 'fa-solid fa-database')"
+                ></i>
+              }
+              <!-- Skill icon — container carries the skill's accent Color (green fallback) -->
+              @if (suggestion.type === 'skill') {
+                <i
+                  [ngClass]="getIconClasses(suggestion.icon || 'fa-solid fa-wand-magic-sparkles')"
+                ></i>
+              }
+            </div>
+            <div class="suggestion-content">
+              <div class="suggestion-name">
+                @if (suggestion.type === 'agent') {
+                  <span class="suggestion-type-badge">Agent</span>
+                }
+                @if (suggestion.type === 'user') {
+                  <span class="suggestion-type-badge user">User</span>
+                }
+                @if (suggestion.type === 'entity') {
+                  <span class="suggestion-type-badge entity">Entity</span>
+                }
+                @if (suggestion.type === 'query') {
+                  <span class="suggestion-type-badge query">Query</span>
+                }
+                @if (suggestion.type === 'skill') {
+                  <span class="suggestion-type-badge skill"
+                        [style.background]="suggestion.color || null">Skill</span>
+                }
+                {{ suggestion.displayName }}
+              </div>
+              @if (suggestion.description) {
+                <div class="suggestion-description">
+                  {{ suggestion.description }}
+                </div>
+              }
+            </div>
+          </div>
+        }
+      </div>
+    }
+    <!-- Empty State -->
+    @if (suggestions.length === 0) {
+      <mj-empty-state
+        Variant="no-results"
+        Size="compact"
+        Icon="fa-solid fa-robot"
+        Title="No matches found" />
+    }
+  </div>
+}

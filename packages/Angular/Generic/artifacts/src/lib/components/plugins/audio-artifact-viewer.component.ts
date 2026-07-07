@@ -5,6 +5,7 @@ import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.compo
 import { ArtifactFileService } from '../../services/artifact-file.service';
 import { IArtifactPreviewComponent } from '../../interfaces/artifact-viewer-plugin.interface';
 import { AudioArtifactPreviewComponent } from '../previews/audio-artifact-preview.component';
+import { MJMediaPlayerComponent, MediaTrack } from '@memberjunction/ng-media-player';
 
 /**
  * Minimal full-size viewer plugin for audio artifacts. Renders an `<audio controls>` player.
@@ -24,7 +25,7 @@ import { AudioArtifactPreviewComponent } from '../previews/audio-artifact-previe
                     <span>{{ errorMessage }}</span>
                 </div>
             } @else if (audioUrl) {
-                <audio class="audio-viewer__audio" controls preload="metadata" [src]="audioUrl" (error)="onMediaError()"></audio>
+                <mj-media-player class="audio-viewer__player" [Tracks]="MediaTracks" (Ended)="onMediaEnded()"></mj-media-player>
             } @else {
                 <div class="audio-viewer__state">
                     <i class="fa-solid fa-spinner fa-spin"></i>
@@ -49,9 +50,10 @@ import { AudioArtifactPreviewComponent } from '../previews/audio-artifact-previe
                 background: var(--mj-bg-surface-sunken);
             }
 
-            .audio-viewer__audio {
+            .audio-viewer__player {
+                display: block;
                 width: 100%;
-                max-width: 480px;
+                max-width: 640px;
             }
 
             .audio-viewer__state {
@@ -78,6 +80,28 @@ export class AudioArtifactViewerComponent extends BaseArtifactViewerPluginCompon
     public errorMessage = '';
 
     /**
+     * Single-track input for the generic {@link MJMediaPlayerComponent}. Rebuilt whenever
+     * {@link audioUrl} is (re)resolved via {@link setAudioUrl}; empty until a URL exists so the
+     * player shows its own empty state.
+     */
+    public MediaTracks: MediaTrack[] = [];
+
+    /** Set the resolved URL and recompute the single-element {@link MediaTracks} array in lockstep. */
+    private setAudioUrl(url: string): void {
+        this.audioUrl = url;
+        this.MediaTracks = url
+            ? [
+                  {
+                      Id: this.artifactVersion?.ID ?? 'audio',
+                      Kind: 'audio',
+                      Url: url,
+                      MimeType: this.artifactVersion?.MimeType ?? undefined,
+                  },
+              ]
+            : [];
+    }
+
+    /**
      * Inline-preview component for audio artifacts ({@link IArtifactViewerPluginPreviewStatics}).
      * STATIC so the resolver reads it off the constructor without instantiating this DI-using component.
      */
@@ -99,11 +123,11 @@ export class AudioArtifactViewerComponent extends BaseArtifactViewerPluginCompon
     async ngOnInit(): Promise<void> {
         try {
             if (this.artifactVersion?.ContentMode === 'File' && this.artifactVersion.ID) {
-                this.audioUrl = await this.fileService.getDownloadUrl(this.artifactVersion.ID);
+                this.setAudioUrl(await this.fileService.getDownloadUrl(this.artifactVersion.ID));
             } else {
                 const content = this.artifactVersion?.Content;
                 if (content) {
-                    this.audioUrl = content;
+                    this.setAudioUrl(content);
                 } else {
                     this.errorMessage = 'This artifact has no audio content.';
                 }
@@ -117,8 +141,13 @@ export class AudioArtifactViewerComponent extends BaseArtifactViewerPluginCompon
 
     public onMediaError(): void {
         this.errorMessage = 'The audio could not be played. It may be corrupt or in an unsupported format.';
-        this.audioUrl = '';
+        this.setAudioUrl('');
         this.cdr.markForCheck();
+    }
+
+    /** Fired when the generic player reaches the end of the track. No-op affordance hook. */
+    public onMediaEnded(): void {
+        // Playback finished — nothing to persist for a one-shot artifact viewer.
     }
 
     public override GetCurrentStateSnapshot(): DataSnapshot | null {

@@ -54,3 +54,31 @@ export function UUIDsEqual(uuid1: string | null | undefined, uuid2: string | nul
     if (uuid1 === uuid2) return true;
     return uuid1.trim().toLowerCase() === uuid2.trim().toLowerCase();
 }
+
+/**
+ * Canonical UUID format (8-4-4-4-12 hex groups). Case-insensitive; the version/variant digits are
+ * NOT constrained, so this validates SHAPE rather than RFC version — which is exactly what is needed
+ * to make a value safe to interpolate into a SQL filter or trust as an entity key.
+ */
+const UUID_FORMAT = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Returns true when the input is a well-formed UUID string (canonical 8-4-4-4-12 hex form,
+ * case-insensitive, surrounding whitespace tolerated). Null/undefined/empty are not valid.
+ *
+ * Use this to validate any externally-supplied id BEFORE interpolating it into a SQL filter or
+ * trusting it as an entity key — it guards against injection and malformed lookups.
+ *
+ * @param uuid - The value to test
+ * @returns true if `uuid` is a syntactically valid UUID, false otherwise
+ *
+ * @example
+ * IsValidUUID('a1b2c3d4-e5f6-7890-abcd-ef1234567890') // true
+ * IsValidUUID('  A1B2C3D4-E5F6-7890-ABCD-EF1234567890  ') // true (trimmed, case-insensitive)
+ * IsValidUUID('not-a-uuid') // false
+ * IsValidUUID(null) // false
+ */
+export function IsValidUUID(uuid: string | null | undefined): boolean {
+    if (uuid == null) return false;
+    return UUID_FORMAT.test(uuid.trim());
+}

@@ -16,6 +16,8 @@ import {
     ListSource,
     ProcessRunResult,
     ProgressInfo,
+    RecordProcessorBuildContext,
+    RecordProcessorRegistry,
     TriggeredByValue,
     ViewSource,
 } from '@memberjunction/record-set-processor-base';
@@ -143,7 +145,9 @@ export class RecordProcessExecutor {
     /**
      * Builds the processor from the process's Work. `FieldRules` reads its rule set from `Configuration`
      * and writes itself (honoring `dryRun`); the other work types build a base processor wrapped with
-     * output-mapping write-back when configured.
+     * output-mapping write-back when configured. The write-back wrapper also honors `dryRun` — on a
+     * dry-run the inner work runs but the mapping only previews (nothing is saved), so EVERY work type's
+     * dry-run is side-effect-free, not just FieldRules.
      */
     public buildProcessor(rp: MJRecordProcessEntity, dryRun?: boolean): IRecordProcessor {
         if (rp.WorkType === 'FieldRules') {
@@ -173,13 +177,42 @@ export class RecordProcessExecutor {
             }
             base = new InferProcessor(rp.PromptID, inputMapping);
         } else {
-            throw new Error(`Record Process '${rp.Name}': unsupported WorkType '${rp.WorkType}'`);
+            // Not a built-in work type — consult the pluggable registry. This is the open seam that
+            // lets external packages (e.g. Predictive Studio's 'ML Model' scoring) register a processor
+            // factory for their own work type WITHOUT this package depending on them.
+            base = this.resolveFromRegistry(rp, dryRun);
         }
 
         const outputMapping = rp.OutputMapping ? SafeJSONParse<OutputMappingConfig>(rp.OutputMapping) : undefined;
         if (outputMapping && (outputMapping.fields || outputMapping.childRecord)) {
-            return new WriteBackProcessor(base, outputMapping);
+            return new WriteBackProcessor(base, outputMapping, dryRun);
         }
         return base;
+    }
+
+    /**
+     * Resolves a processor for a work type the built-in switch doesn't handle by consulting the
+     * {@link RecordProcessorRegistry}. External packages register a factory keyed by their work-type
+     * string; the factory builds (and closes over its own injected deps for) the processor from the
+     * per-run context. Throws the same "unsupported WorkType" error as before when nothing is registered,
+     * so behavior is unchanged for genuinely-unknown work types.
+     */
+    private resolveFromRegistry(rp: MJRecordProcessEntity, dryRun?: boolean): IRecordProcessor {
+        const context: RecordProcessorBuildContext = {
+            WorkType: rp.WorkType,
+            Configuration: rp.Configuration,
+            InputMapping: rp.InputMapping,
+            OutputMapping: rp.OutputMapping,
+            EntityID: rp.EntityID,
+            RecordProcessID: rp.ID,
+            RecordProcessName: rp.Name,
+            DryRun: dryRun,
+            RecordProcess: rp,
+        };
+        const resolved = RecordProcessorRegistry.Instance.Resolve(context);
+        if (!resolved) {
+            throw new Error(`Record Process '${rp.Name}': unsupported WorkType '${rp.WorkType}'`);
+        }
+        return resolved;
     }
 }

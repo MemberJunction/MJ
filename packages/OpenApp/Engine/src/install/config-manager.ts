@@ -14,6 +14,7 @@
  */
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { compileFunction } from 'node:vm';
 import type { MJAppManifest } from '../manifest/manifest-schema.js';
 
 /** Config file name. All MJ projects use mj.config.cjs. */
@@ -52,9 +53,10 @@ export interface ConfigOperationResult {
  */
 export function AddServerDynamicPackages(
     repoRoot: string,
-    manifest: MJAppManifest
+    manifest: MJAppManifest,
+    serverPackagePath?: string
 ): ConfigOperationResult {
-    const configPath = resolveConfigPath(repoRoot);
+    const configPath = resolveConfigPath(repoRoot, serverPackagePath);
     if (!configPath) {
         return { Success: false, ErrorMessage: `No MJ config file found in ${repoRoot}. Expected: ${CONFIG_FILE_NAME}` };
     }
@@ -73,7 +75,7 @@ export function AddServerDynamicPackages(
             content = AddEntryToDynamicArray(content, entry, 'server');
         }
 
-        writeFileSync(configPath, content, 'utf-8');
+        WriteConfigChecked(configPath, content);
         return { Success: true };
     }
     catch (error: unknown) {
@@ -97,9 +99,10 @@ export function AddServerDynamicPackages(
  */
 export function AddClientDynamicPackages(
     repoRoot: string,
-    manifest: MJAppManifest
+    manifest: MJAppManifest,
+    serverPackagePath?: string
 ): ConfigOperationResult {
-    const configPath = resolveConfigPath(repoRoot);
+    const configPath = resolveConfigPath(repoRoot, serverPackagePath);
     if (!configPath) {
         return { Success: false, ErrorMessage: `No MJ config file found in ${repoRoot}. Expected: ${CONFIG_FILE_NAME}` };
     }
@@ -118,7 +121,7 @@ export function AddClientDynamicPackages(
             content = AddEntryToDynamicArray(content, entry, 'client');
         }
 
-        writeFileSync(configPath, content, 'utf-8');
+        WriteConfigChecked(configPath, content);
         return { Success: true };
     }
     catch (error: unknown) {
@@ -138,9 +141,10 @@ export function AddClientDynamicPackages(
  */
 export function RemoveServerDynamicPackages(
     repoRoot: string,
-    appName: string
+    appName: string,
+    serverPackagePath?: string
 ): ConfigOperationResult {
-    const configPath = resolveConfigPath(repoRoot);
+    const configPath = resolveConfigPath(repoRoot, serverPackagePath);
     if (!configPath) {
         return { Success: false, ErrorMessage: `No MJ config file found in ${repoRoot}` };
     }
@@ -148,7 +152,7 @@ export function RemoveServerDynamicPackages(
     try {
         let content = readFileSync(configPath, 'utf-8');
         content = RemoveEntriesForApp(content, appName);
-        writeFileSync(configPath, content, 'utf-8');
+        WriteConfigChecked(configPath, content);
         return { Success: true };
     }
     catch (error: unknown) {
@@ -168,9 +172,10 @@ export function RemoveServerDynamicPackages(
 export function ToggleServerDynamicPackages(
     repoRoot: string,
     appName: string,
-    enabled: boolean
+    enabled: boolean,
+    serverPackagePath?: string
 ): ConfigOperationResult {
-    const configPath = resolveConfigPath(repoRoot);
+    const configPath = resolveConfigPath(repoRoot, serverPackagePath);
     if (!configPath) {
         return { Success: false, ErrorMessage: `No MJ config file found in ${repoRoot}` };
     }
@@ -178,7 +183,7 @@ export function ToggleServerDynamicPackages(
     try {
         let content = readFileSync(configPath, 'utf-8');
         content = ToggleEntriesForApp(content, appName, enabled);
-        writeFileSync(configPath, content, 'utf-8');
+        WriteConfigChecked(configPath, content);
         return { Success: true };
     }
     catch (error: unknown) {
@@ -189,11 +194,47 @@ export function ToggleServerDynamicPackages(
 
 /**
  * Resolves the path to the MJ config file.
- * Returns the absolute path if it exists, or undefined if not found.
+ *
+ * Checks multiple locations in priority order, matching how cosmiconfig (used by
+ * ServerBootstrap) discovers the config at runtime:
+ *   1. ServerPackagePath (e.g. apps/MJAPI/mj.config.cjs) — the MJAPI's own config
+ *   2. Repo root (mj.config.cjs) — fallback for monorepos without a per-app config
+ *
+ * This ensures the dynamicPackages section is written to the same file the MJAPI
+ * will actually load at boot, not a root config that gets shadowed by a closer one.
  */
-function resolveConfigPath(repoRoot: string): string | undefined {
-    const candidate = resolve(repoRoot, CONFIG_FILE_NAME);
-    return existsSync(candidate) ? candidate : undefined;
+function resolveConfigPath(repoRoot: string, serverPackagePath?: string): string | undefined {
+    if (serverPackagePath) {
+        const serverConfig = resolve(repoRoot, serverPackagePath, CONFIG_FILE_NAME);
+        if (existsSync(serverConfig)) return serverConfig;
+    }
+    const rootConfig = resolve(repoRoot, CONFIG_FILE_NAME);
+    return existsSync(rootConfig) ? rootConfig : undefined;
+}
+
+/**
+ * Writes updated mj.config.cjs content, but ONLY after verifying it still parses as valid
+ * JavaScript. Every edit in this module is string surgery; this post-write parse guard turns a
+ * malformed edit — from this code OR any future change, including config shapes the brace/comment
+ * scanner can't perfectly handle (e.g. regex literals containing braces) — into a LOUD failure
+ * that leaves the file UNTOUCHED, instead of silently shipping a broken config that breaks the
+ * next `require('mj.config.cjs')` (the mj migrate / codegen / build steps an install runs) — #2975.
+ *
+ * `compileFunction` parses the content (throwing SyntaxError on malformed JS) WITHOUT executing
+ * it, so the `require(...)` / `process.env` references in a real config never run. It throws on
+ * failure so the caller's existing try/catch surfaces it as `{ Success: false, ErrorMessage }`.
+ */
+function WriteConfigChecked(configPath: string, content: string): void {
+    try {
+        compileFunction(content);
+    } catch (parseError: unknown) {
+        const message = parseError instanceof Error ? parseError.message : String(parseError);
+        throw new Error(
+            `the edit would produce invalid JavaScript (${message}); the file was left unchanged. ` +
+            `This is a bug in the Open App config editor — please report it with your mj.config.cjs shape.`,
+        );
+    }
+    writeFileSync(configPath, content, 'utf-8');
 }
 
 /**
@@ -433,27 +474,111 @@ function FindMatchingBracket(content: string, openPos: number): number {
 }
 
 /**
- * Inserts a section just before the closing brace of the `module.exports = { ... }` object
- * literal. Anchoring to that brace (via FindMatchingBracket) is correct even when the file
- * has trailing code or a later `};` — unlike `lastIndexOf('};')`, which lands in the wrong
- * block for `module.exports = { ... }; function helper() { ... };` and corrupts the config
- * (B4). Throws (rather than silently corrupting) when module.exports is not a direct object
- * literal — e.g. `module.exports = config;` — so the caller fails loudly.
+ * Returns the index of the last *significant* character (not whitespace, not inside a string
+ * literal, and not inside a `//` line or block comment) within `content[0, end)`, or -1 if
+ * there is none. Mirrors {@link FindMatchingBracket}'s string/comment state machine so a `//`
+ * inside a value like `'http://x'`, or a brace/quote inside a string, is never miscounted.
+ */
+function LastSignificantCharIndex(content: string, end: number): number {
+    let pos = 0;
+    let last = -1;
+    let inString: string | null = null;
+    let inLineComment = false;
+    let inBlockComment = false;
+
+    while (pos < end) {
+        const ch = content[pos];
+
+        if (inLineComment) {
+            if (ch === '\n') inLineComment = false;
+            pos++;
+            continue;
+        }
+        if (inBlockComment) {
+            if (ch === '*' && content[pos + 1] === '/') { inBlockComment = false; pos += 2; continue; }
+            pos++;
+            continue;
+        }
+        if (inString) {
+            if (ch === '\\') { pos += 2; continue; } // skip escaped char
+            if (ch === inString) { inString = null; last = pos; } // the closing quote is significant
+            pos++;
+            continue;
+        }
+
+        if (ch === '/' && content[pos + 1] === '/') { inLineComment = true; pos += 2; continue; }
+        if (ch === '/' && content[pos + 1] === '*') { inBlockComment = true; pos += 2; continue; }
+        if (ch === '"' || ch === "'" || ch === '`') { inString = ch; last = pos; pos++; continue; }
+
+        if (ch !== ' ' && ch !== '\t' && ch !== '\r' && ch !== '\n') {
+            last = pos;
+        }
+        pos++;
+    }
+    return last;
+}
+
+/**
+ * Ensures the object body in `before` (the text up to — but excluding — an object's closing
+ * brace) is comma-terminated, so a new property spliced in right after it is a valid sibling
+ * (#2975). No-op when the preceding token is already a comma, or when the body is empty.
+ * `openBracePos` is the index of the object's own opening `{`; the inserted section carries
+ * its own trailing comma, so an otherwise-empty literal stays valid.
+ */
+function EnsureTrailingComma(before: string, openBracePos: number): string {
+    const idx = LastSignificantCharIndex(before, before.length);
+    if (idx <= openBracePos || before[idx] === ',') {
+        return before;
+    }
+    return before.slice(0, idx + 1) + ',' + before.slice(idx + 1);
+}
+
+/**
+ * Inserts a section just before the closing brace of the config object exported by
+ * `module.exports`. Supports two patterns:
+ *
+ *   1. `module.exports = { ... }` — inline object literal (insert before its closing `}`)
+ *   2. `module.exports = config;` — variable reference (find the variable's object literal
+ *      declaration and insert before ITS closing `}`)
+ *
+ * Anchoring to the correct closing brace (via FindMatchingBracket) is correct even when the
+ * file has trailing code — unlike `lastIndexOf('};')`, which lands in the wrong block (B4).
  */
 function InsertBeforeModuleExportsClose(content: string, section: string): string {
-    const exportMatch = content.match(/module\.exports\s*=\s*\{/);
-    if (!exportMatch || exportMatch.index === undefined) {
-        throw new Error(
-            'Could not find a `module.exports = { ... }` object literal in mj.config.cjs to insert into. ' +
-            'If module.exports references a variable (e.g. `module.exports = config;`), add the section manually.',
-        );
+    // Try pattern 1: module.exports = { ... }
+    const inlineMatch = content.match(/module\.exports\s*=\s*\{/);
+    if (inlineMatch && inlineMatch.index !== undefined) {
+        const bracePos = content.indexOf('{', inlineMatch.index);
+        const closePos = FindMatchingBracket(content, bracePos);
+        if (closePos === -1) {
+            throw new Error('Could not locate the closing brace of module.exports in mj.config.cjs.');
+        }
+        const before = EnsureTrailingComma(content.slice(0, closePos), bracePos);
+        return before + section + content.slice(closePos);
     }
-    const bracePos = content.indexOf('{', exportMatch.index);
-    const closePos = FindMatchingBracket(content, bracePos);
-    if (closePos === -1) {
-        throw new Error('Could not locate the closing brace of module.exports in mj.config.cjs.');
+
+    // Try pattern 2: module.exports = someVar;
+    const varMatch = content.match(/module\.exports\s*=\s*([a-zA-Z_$][a-zA-Z0-9_$]*)\s*;/);
+    if (varMatch && varMatch.index !== undefined) {
+        const varName = varMatch[1];
+        // Find the variable's object literal: const/let/var varName = { ... }
+        const declPattern = new RegExp(`(?:const|let|var)\\s+${EscapeRegex(varName)}\\s*=\\s*\\{`);
+        const declMatch = content.match(declPattern);
+        if (declMatch && declMatch.index !== undefined) {
+            const bracePos = content.indexOf('{', declMatch.index);
+            const closePos = FindMatchingBracket(content, bracePos);
+            if (closePos === -1) {
+                throw new Error(`Could not locate the closing brace of '${varName}' object in mj.config.cjs.`);
+            }
+            const before = EnsureTrailingComma(content.slice(0, closePos), bracePos);
+            return before + section + content.slice(closePos);
+        }
     }
-    return content.slice(0, closePos) + section + content.slice(closePos);
+
+    throw new Error(
+        'Could not find a config object in mj.config.cjs to insert into. ' +
+        'Expected either `module.exports = { ... }` or `module.exports = <variable>;` where the variable is declared as an object literal.',
+    );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -473,7 +598,8 @@ function InsertBeforeModuleExportsClose(content: string, section: string): strin
  */
 export function AddEntityPackageMapping(
     repoRoot: string,
-    manifest: MJAppManifest
+    manifest: MJAppManifest,
+    serverPackagePath?: string
 ): ConfigOperationResult {
     const schemaName = manifest.schema?.name;
     if (!schemaName) {
@@ -485,7 +611,7 @@ export function AddEntityPackageMapping(
         return { Success: true }; // No entities package found → nothing to map
     }
 
-    const configPath = resolveConfigPath(repoRoot);
+    const configPath = resolveConfigPath(repoRoot, serverPackagePath);
     if (!configPath) {
         return { Success: false, ErrorMessage: `No MJ config file found in ${repoRoot}. Expected: ${CONFIG_FILE_NAME}` };
     }
@@ -494,7 +620,7 @@ export function AddEntityPackageMapping(
         let content = readFileSync(configPath, 'utf-8');
         content = EnsureEntityPackageNameSection(content);
         content = AddEntityPackageEntry(content, schemaName, entityPkg);
-        writeFileSync(configPath, content, 'utf-8');
+        WriteConfigChecked(configPath, content);
         return { Success: true };
     }
     catch (error: unknown) {
@@ -512,13 +638,14 @@ export function AddEntityPackageMapping(
  */
 export function RemoveEntityPackageMapping(
     repoRoot: string,
-    schemaName: string
+    schemaName: string,
+    serverPackagePath?: string
 ): ConfigOperationResult {
     if (!schemaName) {
         return { Success: true };
     }
 
-    const configPath = resolveConfigPath(repoRoot);
+    const configPath = resolveConfigPath(repoRoot, serverPackagePath);
     if (!configPath) {
         return { Success: false, ErrorMessage: `No MJ config file found in ${repoRoot}` };
     }
@@ -526,7 +653,7 @@ export function RemoveEntityPackageMapping(
     try {
         let content = readFileSync(configPath, 'utf-8');
         content = RemoveEntityPackageEntry(content, schemaName);
-        writeFileSync(configPath, content, 'utf-8');
+        WriteConfigChecked(configPath, content);
         return { Success: true };
     }
     catch (error: unknown) {

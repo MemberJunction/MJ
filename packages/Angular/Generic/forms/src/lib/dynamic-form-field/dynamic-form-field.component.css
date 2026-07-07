@@ -269,3 +269,65 @@
     max-width: 100%;
   }
 }
+
+/* ── Markdown textarea (question.type.markdown) — rendered preview + Edit toggle ── */
+.markdown-field {
+  border: 1px solid var(--mj-border-default);
+  border-radius: 10px;
+  background: var(--mj-bg-surface);
+  overflow: hidden;
+}
+.markdown-field-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--mj-bg-surface-sunken);
+  border-bottom: 1px solid var(--mj-border-subtle);
+}
+.markdown-field-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--mj-text-muted);
+}
+.markdown-field-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 7px;
+  border: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-secondary);
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+.markdown-field-toggle:hover:not(:disabled) {
+  color: var(--mj-brand-primary);
+  border-color: color-mix(in srgb, var(--mj-brand-primary) 45%, var(--mj-border-default));
+}
+.markdown-field-toggle:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.markdown-field-preview {
+  padding: 12px 14px;
+  max-height: 420px;
+  overflow-y: auto;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--mj-text-primary);
+}
+/* the raw editor inside the panel loses its own border (the panel provides it) */
+.markdown-field .question-textarea {
+  border: none;
+  border-radius: 0;
+  width: 100%;
+}

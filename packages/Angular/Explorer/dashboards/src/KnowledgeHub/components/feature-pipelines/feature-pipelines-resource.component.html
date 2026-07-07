@@ -1,0 +1,124 @@
+<mj-page-layout>
+  <mj-page-header
+    Title="Feature Pipelines"
+    Icon="fa-solid fa-diagram-project"
+    Subtitle="Derive feature attributes from your data and persist them back to entities">
+    <div meta>
+      @if (FailedCount > 0) {
+        <mj-stat-badge [Count]="FailedCount" Label="last run failed" Variant="error"></mj-stat-badge>
+      } @else {
+        <mj-stat-badge
+          [Count]="FilteredPipelines.length"
+          [Total]="AllPipelines.length"
+          Label="pipelines">
+        </mj-stat-badge>
+      }
+    </div>
+    <div actions>
+      <mj-refresh-button [Loading]="IsLoading" (Clicked)="Refresh()"></mj-refresh-button>
+      <button mjButton variant="primary" size="sm" (click)="OnNewPipeline()">
+        <i class="fa-solid fa-plus"></i> New Pipeline
+      </button>
+    </div>
+    <div toolbar>
+      <mj-page-search
+        [Value]="SearchQuery"
+        Placeholder="Search by name, entity, or attribute…"
+        (ValueChange)="SearchQuery = $event; OnSearchChanged()">
+      </mj-page-search>
+    </div>
+  </mj-page-header>
+
+  <mj-page-body [Flex]="true">
+    @if (IsLoading) {
+      <div class="fp-loading">
+        <mj-loading text="Loading feature pipelines…" size="medium"></mj-loading>
+      </div>
+    } @else if (AllPipelines.length === 0) {
+      <mj-empty-state
+        Icon="fa-solid fa-diagram-project"
+        Title="No feature pipelines yet"
+        Message="A Feature Pipeline derives an attribute per record (e.g. an LLM summary or score) and writes it back to your data — reusable analytics, independent of any model."
+        ActionText="New Pipeline"
+        ActionIcon="fa-solid fa-plus"
+        (Action)="OnNewPipeline()">
+      </mj-empty-state>
+    } @else if (FilteredPipelines.length === 0) {
+      <mj-empty-state
+        Variant="no-results"
+        Icon="fa-solid fa-magnifying-glass"
+        Title="No matching pipelines"
+        Message="No feature pipelines match your search.">
+      </mj-empty-state>
+    } @else {
+      <div class="fp-grid">
+        @for (pipeline of FilteredPipelines; track pipeline.ID) {
+          <div class="fp-card" [class.fp-card--disabled]="pipeline.Status !== 'Active'">
+            <div class="fp-card__head">
+              <i class="fp-card__icon" [class]="WorkTypeIcon(pipeline.WorkType)"></i>
+              <div class="fp-card__title">
+                <h3 [title]="pipeline.Name">{{ pipeline.Name }}</h3>
+                <span class="fp-card__worktype">{{ pipeline.WorkType }}</span>
+              </div>
+              <span class="fp-status" [class]="RunStatusClass(pipeline.LastRunStatus)">
+                {{ RunStatusLabel(pipeline.LastRunStatus) }}
+              </span>
+            </div>
+
+            @if (pipeline.Description) {
+              <p class="fp-card__desc" [title]="pipeline.Description">{{ pipeline.Description }}</p>
+            }
+
+            <div class="fp-card__meta">
+              <div class="fp-meta-row">
+                <span class="fp-meta-row__k"><i class="fa-solid fa-table"></i> Target</span>
+                <span class="fp-meta-row__v">{{ pipeline.TargetEntity }}</span>
+              </div>
+              <div class="fp-meta-row">
+                <span class="fp-meta-row__k"><i class="fa-solid fa-pen-to-square"></i> Writes</span>
+                <span class="fp-meta-row__v">{{ pipeline.OutputAttribute || '—' }}</span>
+              </div>
+              <div class="fp-meta-row">
+                <span class="fp-meta-row__k"><i class="fa-solid fa-clock-rotate-left"></i> Last run</span>
+                <span class="fp-meta-row__v">
+                  {{ TimeAgo(pipeline.LastRunAt) }}
+                  @if (pipeline.LastRunProcessed != null) {
+                    <span class="fp-meta-row__sub">· {{ pipeline.LastRunSuccess }}/{{ pipeline.LastRunProcessed }} written</span>
+                  }
+                </span>
+              </div>
+            </div>
+
+            <div class="fp-card__actions">
+              <button
+                mjButton
+                variant="primary"
+                size="sm"
+                [disabled]="!pipeline.OnDemandEnabled || pipeline.Status !== 'Active' || IsRunning(pipeline.ID)"
+                (click)="OnRunPipeline(pipeline)">
+                @if (IsRunning(pipeline.ID)) {
+                  <i class="fa-solid fa-spinner fa-spin"></i> Running…
+                } @else {
+                  <i class="fa-solid fa-play"></i> Run
+                }
+              </button>
+              <button mjButton variant="secondary" size="sm" (click)="OnEditPipeline(pipeline)">
+                <i class="fa-solid fa-sliders"></i> Edit
+              </button>
+            </div>
+          </div>
+        }
+      </div>
+    }
+  </mj-page-body>
+</mj-page-layout>
+
+@if (ShowEditor) {
+  <mj-dialog [Visible]="ShowEditor" Title="Feature Pipeline" [Width]="900" (Close)="OnEditorCancelled()">
+    <mj-record-process-editor
+      [RecordProcessID]="EditingPipelineID"
+      (Saved)="OnEditorSaved($event)"
+      (Cancelled)="OnEditorCancelled()">
+    </mj-record-process-editor>
+  </mj-dialog>
+}

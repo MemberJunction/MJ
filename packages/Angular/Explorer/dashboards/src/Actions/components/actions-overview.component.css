@@ -242,63 +242,36 @@
   flex-direction: column;
   gap: 0.75rem;
 }
-.actions-overview .content-grid .recent-executions .executions-list .execution-item {
-  background: var(--mj-bg-surface);
-  border: 1px solid var(--mj-border-default);
-  border-radius: var(--mj-radius-md);
-  transition: all var(--mj-transition-base);
-  margin-bottom: 0.5rem;
-}
-.actions-overview .content-grid .recent-executions .executions-list .execution-item.expanded {
-  border-color: var(--mj-brand-primary);
-  box-shadow: var(--mj-shadow-sm);
-}
-.actions-overview .content-grid .recent-executions .executions-list .execution-item .execution-header {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: 1rem;
-  cursor: pointer;
-}
-.actions-overview .content-grid .recent-executions .executions-list .execution-item .execution-header:hover {
-  background: var(--mj-bg-surface-hover);
-}
-.actions-overview .content-grid .recent-executions .executions-list .execution-item .execution-header .execution-time {
+.actions-overview .content-grid .recent-executions .executions-list .execution-time {
   font-size: var(--mj-text-xs);
   color: var(--mj-text-muted);
   font-weight: var(--mj-font-semibold);
   min-width: 80px;
 }
-.actions-overview .content-grid .recent-executions .executions-list .execution-item .execution-header .execution-info {
+.actions-overview .content-grid .recent-executions .executions-list .execution-info {
   flex: 1;
 }
-.actions-overview .content-grid .recent-executions .executions-list .execution-item .execution-header .execution-info .execution-action {
+.actions-overview .content-grid .recent-executions .executions-list .execution-info .execution-action {
   font-weight: var(--mj-font-semibold);
   margin-bottom: 0.25rem;
   font-size: var(--mj-text-sm);
   color: var(--mj-text-primary);
 }
-.actions-overview .content-grid .recent-executions .executions-list .execution-item .execution-header .execution-info .execution-user {
+.actions-overview .content-grid .recent-executions .executions-list .execution-info .execution-user {
   font-size: var(--mj-text-xs);
   color: var(--mj-text-muted);
 }
-.actions-overview .content-grid .recent-executions .executions-list .execution-item .execution-header .execution-result {
+.actions-overview .content-grid .recent-executions .executions-list .execution-result {
   flex-shrink: 0;
 }
-.actions-overview .content-grid .recent-executions .executions-list .execution-item .execution-header .execution-expand-icon {
-  color: var(--mj-text-muted);
-  font-size: var(--mj-text-xs);
-  margin-left: 0.5rem;
-}
-.actions-overview .content-grid .recent-executions .executions-list .execution-item .execution-details {
+.actions-overview .content-grid .recent-executions .executions-list .execution-details {
   padding: 1rem;
   background: var(--mj-bg-surface-card);
-  border-top: 1px solid var(--mj-border-default);
 }
-.actions-overview .content-grid .recent-executions .executions-list .execution-item .execution-details .params-section {
+.actions-overview .content-grid .recent-executions .executions-list .execution-details .params-section {
   margin-bottom: 1rem;
 }
-.actions-overview .content-grid .recent-executions .executions-list .execution-item .execution-details .params-section h5 {
+.actions-overview .content-grid .recent-executions .executions-list .execution-details .params-section h5 {
   margin: 0 0 0.5rem 0;
   font-size: var(--mj-text-sm);
   color: var(--mj-text-muted);
@@ -306,10 +279,10 @@
   align-items: center;
   gap: 0.5rem;
 }
-.actions-overview .content-grid .recent-executions .executions-list .execution-item .execution-details .params-section h5 i {
+.actions-overview .content-grid .recent-executions .executions-list .execution-details .params-section h5 i {
   font-size: var(--mj-text-xs);
 }
-.actions-overview .content-grid .recent-executions .executions-list .execution-item .execution-details .execution-actions {
+.actions-overview .content-grid .recent-executions .executions-list .execution-details .execution-actions {
   display: flex;
   justify-content: flex-end;
 }

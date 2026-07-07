@@ -15,10 +15,7 @@
 
       <div class="panel-content">
         @if (Errors['general']) {
-          <div class="error-banner">
-            <i class="fa-solid fa-exclamation-circle"></i>
-            {{ Errors['general'] }}
-          </div>
+          <mj-alert Variant="error">{{ Errors['general'] }}</mj-alert>
         }
 
         <div class="form-group">

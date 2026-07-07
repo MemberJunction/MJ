@@ -249,12 +249,17 @@
                 </div>
 
                 <!-- Pipeline Settings Widget -->
-                <div class="at-card at-config-card">
-                    <div class="at-card-header" (click)="onToggleConfig()" style="cursor:pointer">
-                        <span class="at-card-title"><i class="fa-solid fa-sliders"></i> Pipeline Settings</span>
-                        <i class="fa-solid" [class.fa-chevron-down]="!ShowPipelineConfig" [class.fa-chevron-up]="ShowPipelineConfig" style="font-size:0.7rem; color:var(--mj-text-muted)"></i>
-                    </div>
-                    @if (ShowPipelineConfig) {
+                <!-- Migrated to <mj-accordion-panel>: it owns the card chrome, header
+                     row, chevron, and expand/collapse. ShowPipelineConfig is host-owned
+                     (an @Input), and onToggleConfig() emits ConfigToggled for the host to
+                     flip it — so this is the controlled [Expanded] + (ExpandedChange) form.
+                     [FlushBody] keeps the body flush; the at-config-body keeps its padding. -->
+                <mj-accordion-panel Size="sm" [FlushBody]="true"
+                    [Expanded]="ShowPipelineConfig" (ExpandedChange)="onToggleConfig()">
+                    <ng-template mjAccordionTitle>
+                        <i class="fa-solid fa-sliders"></i> <span>Pipeline Settings</span>
+                    </ng-template>
+                    <ng-template mjAccordionBody>
                         <div class="at-card-body at-config-body">
                             <div class="at-config-row">
                                 <label class="at-config-label">Batch Size</label>
@@ -314,8 +319,8 @@
                                 </div>
                             </div>
                         </div>
-                    }
-                </div>
+                    </ng-template>
+                </mj-accordion-panel>
             </div>
         </div>
     </div>

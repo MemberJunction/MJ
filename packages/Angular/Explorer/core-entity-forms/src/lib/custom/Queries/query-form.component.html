@@ -126,13 +126,11 @@
 
       <!-- Status Warning Banner for Non-Approved Queries -->
       @if (record.Status && record.Status !== 'Approved' && !EditMode) {
-        <div class="status-warning-banner" [style.border-left-color]="getStatusBadgeColor()">
-          <i class="fa-solid" [class]="getStatusBannerIcon()"
-            [style.color]="getStatusBadgeColor()"></i>
+        <mj-alert Variant="warning">
           <span>
             This query has status <strong>{{ record.Status }}</strong>. {{ getStatusBannerMessage() }}
           </span>
-        </div>
+        </mj-alert>
       }
 
       <!-- Main Content Area with Expansion Panels -->

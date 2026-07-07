@@ -59,6 +59,7 @@ interface CtxLog {
 function makeContext(log: CtxLog): RealtimeChannelContext {
   return {
     AgentName: 'Sage',
+    Provider: null,
     SendContextNote: (text: string) => log.Notes.push(text),
     RequestSpokenResponse: (instructions: string) => log.Spoken.push(instructions),
     RequestSave: (stateJson: string) => log.Saves.push(stateJson),

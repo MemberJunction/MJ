@@ -253,8 +253,4 @@ export class ArtifactConfigPanelComponent extends BaseConfigPanel implements OnI
     public onOptionChange(): void {
         this.emitConfigChanged();
     }
-
-    public toggleOptions(): void {
-        this.showOptions = !this.showOptions;
-    }
 }

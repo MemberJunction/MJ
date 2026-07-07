@@ -34,9 +34,7 @@ const domSetupFile = fileURLToPath(new URL('./vitest.dom.setup.ts', import.meta.
 // (extends the build config, re-includes specs). We auto-detect it relative to
 // the package's working directory; if absent, analog falls back to discovery.
 const specTsconfig = resolve(process.cwd(), 'tsconfig.spec.json');
-const angularOptions = existsSync(specTsconfig)
-  ? { jit: false, tsconfig: specTsconfig }
-  : { jit: false };
+const angularOptions = existsSync(specTsconfig) ? { jit: false, tsconfig: specTsconfig } : { jit: false };
 
 export default defineConfig({
   plugins: [
@@ -62,12 +60,7 @@ export default defineConfig({
       // List EVERY source file, not just the ones a test imported — so untested
       // components surface as 0% instead of silently vanishing from the report.
       include: ['src/**/*.ts'],
-      exclude: [
-        'src/**/*.test.ts',
-        'src/**/index.ts',
-        'src/**/public-api.ts',
-        'src/**/*.module.ts',
-      ],
+      exclude: ['src/**/*.test.ts', 'src/**/index.ts', 'src/**/public-api.ts', 'src/**/*.module.ts'],
       reporter: ['text', 'html'],
     },
   },

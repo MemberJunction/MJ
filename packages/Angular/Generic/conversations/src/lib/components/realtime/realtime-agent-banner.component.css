@@ -435,3 +435,93 @@
 .gp-link:hover i {
   color: var(--mj-brand-accent, var(--mj-brand-primary));
 }
+
+/* ============================================================= COMPACT (Calm Orb · overlay)
+   A tiny identity + state row only — the body owns the big orb + name + state, and the lean
+   dock owns the actions. No duplicate orb / state pill / headphones / gear / expand here. */
+.banner--compact {
+  gap: 10px;
+  padding: 12px 14px;
+  background: transparent;
+  border-bottom: none;
+}
+.banner__id--compact {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  overflow: hidden;
+}
+.banner__avatar {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--mj-text-inverse);
+  background: radial-gradient(circle at 35% 30%,
+    color-mix(in srgb, var(--mj-brand-primary) 60%, white), var(--mj-brand-primary) 65%);
+}
+.banner__name--compact {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--mj-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.banner__state-chip {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 10px;
+  border-radius: var(--mj-radius-full, 9999px);
+  background: var(--mj-bg-surface-card);
+  border: 1px solid var(--mj-border-default);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--mj-text-muted);
+}
+.banner__state-chip-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 130px;
+}
+.banner__state-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--mj-status-success);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--mj-status-success) 70%, transparent);
+}
+.banner__state-dot[data-state="speaking"] {
+  background: var(--mj-brand-primary);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--mj-brand-primary) 70%, transparent);
+  animation: compact-dot-blink 0.9s infinite;
+}
+.banner__state-dot[data-state="thinking"] {
+  background: var(--mj-status-warning);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--mj-status-warning) 70%, transparent);
+}
+@keyframes compact-dot-blink { 50% { opacity: 0.35; } }
+/* Minimize is the only control left in the compact bar — render it round + de-emphasized. */
+.banner__minimize--compact {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: transparent;
+  border-color: transparent;
+  color: var(--mj-text-muted);
+}
+.banner__minimize--compact:hover {
+  background: var(--mj-bg-surface-hover);
+  border-color: var(--mj-border-default);
+}

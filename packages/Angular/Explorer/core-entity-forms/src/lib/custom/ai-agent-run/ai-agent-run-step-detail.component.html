@@ -35,7 +35,7 @@
         </div>
       }
       <!-- Tab Navigation - Show when we have payload diff or scratchpad data -->
-      @if (showStepPayloadDiff || showScratchpadTab) {
+      @if (showStepPayloadDiff || showScratchpadTab || showSkillsTab) {
         <div class="detail-pane-tabs">
           @if (showStepPayloadDiff) {
             <button
@@ -44,6 +44,16 @@
               (click)="detailPaneTab = 'diff'">
               <i class="fa-solid fa-code-branch"></i>
               Payload Changes
+            </button>
+          }
+          @if (showSkillsTab) {
+            <button
+              class="detail-tab"
+              [class.active]="detailPaneTab === 'skills'"
+              (click)="detailPaneTab = 'skills'">
+              <i class="fa-solid fa-wand-magic-sparkles"></i>
+              Skills
+              <span class="tab-badge">{{ stepSkillInvocations.length }}</span>
             </button>
           }
           @if (showScratchpadTab) {
@@ -68,7 +78,54 @@
         </div>
       }
       <!-- Tab Content -->
-      <div class="detail-pane-content" [class.with-tabs]="showStepPayloadDiff || showScratchpadTab">
+      <div class="detail-pane-content" [class.with-tabs]="showStepPayloadDiff || showScratchpadTab || showSkillsTab">
+        <!-- Skills Tab — skill-invocation observability (activation type, provenance of authority, reason) -->
+        @if (detailPaneTab === 'skills' && showSkillsTab) {
+          <div class="skills-content">
+            @for (inv of stepSkillInvocations; track inv.SkillID) {
+              <div class="skill-invocation-card" [attr.data-activation]="inv.ActivationType">
+                <div class="skill-invocation-header">
+                  <span class="skill-invocation-name">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i>
+                    {{ inv.SkillName }}
+                  </span>
+                  <span class="skill-invocation-type" [attr.data-activation]="inv.ActivationType">
+                    {{ GetActivationTypeLabel(inv) }}
+                  </span>
+                </div>
+                @if (inv.Reason) {
+                  <div class="skill-invocation-reason">
+                    <i class="fa-solid fa-quote-left"></i>
+                    {{ inv.Reason }}
+                  </div>
+                }
+                <div class="skill-invocation-provenance">
+                  <div class="provenance-title">Provenance of Authority</div>
+                  <div class="provenance-row">
+                    <span class="provenance-label">Requested By</span>
+                    <span class="provenance-value">{{ inv.Provenance.RequestedBy === 'user-request' ? 'User (/skill mention)' : 'Agent decision' }}</span>
+                  </div>
+                  <div class="provenance-row">
+                    <span class="provenance-label">Agent AcceptsSkills</span>
+                    <span class="provenance-value">{{ inv.Provenance.AgentAcceptsSkills }}</span>
+                  </div>
+                  <div class="provenance-row">
+                    <span class="provenance-label">Skill ActivationMode</span>
+                    <span class="provenance-value">{{ inv.Provenance.SkillActivationMode }}</span>
+                  </div>
+                  <div class="provenance-row">
+                    <span class="provenance-label">Agent SkillActivationMode</span>
+                    <span class="provenance-value">{{ inv.Provenance.AgentSkillActivationMode }}</span>
+                  </div>
+                  <div class="provenance-row">
+                    <span class="provenance-label">Skill ID</span>
+                    <span class="provenance-value provenance-id">{{ inv.SkillID }}</span>
+                  </div>
+                </div>
+              </div>
+            }
+          </div>
+        }
         <!-- Payload Diff Tab -->
         @if (detailPaneTab === 'diff' && showStepPayloadDiff) {
           <div class="step-payload-diff">

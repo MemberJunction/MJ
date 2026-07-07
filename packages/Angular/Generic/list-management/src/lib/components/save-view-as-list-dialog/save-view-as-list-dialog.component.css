@@ -11,17 +11,6 @@
   font-size: 13px;
 }
 
-.info-banner {
-  display: flex;
-  gap: 10px;
-  padding: 10px 12px;
-  background: var(--mj-status-info-bg);
-  border: 1px solid var(--mj-status-info-border);
-  color: var(--mj-status-info-text);
-  border-radius: 8px;
-  font-size: 12.5px;
-  line-height: 1.5;
-}
 
 .field {
   display: flex;

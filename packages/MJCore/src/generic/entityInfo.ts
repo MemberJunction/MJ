@@ -1454,9 +1454,30 @@ export class EntityInfo extends BaseInfo {
      */
     SchemaName: string = null
     /**
+     * Case-stable canonical schema name, sourced from the app manifest (mj-app.json schema.name)
+     * and persisted on SchemaInfo. When non-null it is used in place of SchemaName to derive the
+     * schema prefix for the entity ClassName/CodeName and GraphQL type name, so PostgreSQL installs
+     * (whose physical SchemaName is folded to lowercase) still produce PascalCase prefixes matching
+     * the published, hand-cased entity packages. NULL means "no override" -> the prefix falls back
+     * to SchemaName (every existing install, the core __mj schema, and SQL Server).
+     */
+    CanonicalSchemaName: string = null
+    /**
      * If true, this is a virtual entity not backed by a physical database table
      */
     VirtualEntity: boolean = null
+    /**
+     * If set, this entity is backed by an external data source (Snowflake, MongoDB,
+     * external SQL/PostgreSQL/MySQL, ...) and is read-only. Reads are proxied live
+     * through the registered ExternalDataSourceReadRouter. Null = backed by the MJ database.
+     */
+    ExternalDataSourceID: string = null
+    /**
+     * Remote object name (table/view/collection) on the external system that backs
+     * this entity. Resolved against the data source defaults when unqualified. Only
+     * meaningful when ExternalDataSourceID is set.
+     */
+    ExternalObjectName: string = null
     /**
      * Whether to track all changes to records in the RecordChange table
      */
@@ -2320,7 +2341,7 @@ export class EntityInfo extends BaseInfo {
         let keyValue: string = '';
         if (relationship.EntityKeyField && relationship.EntityKeyField.length > 0) {
             keyValue = record.Get(relationship.EntityKeyField);
-            quotes = record.EntityInfo.Fields.find((f) => f.Name.trim().toLowerCase() === relationship.EntityKeyField.trim().toLowerCase()).NeedsQuotes ? "'" : '';
+            quotes = record.EntityInfo.FieldByName(relationship.EntityKeyField)?.NeedsQuotes ? "'" : '';
         }
         else {
             // currently we only support a single value for FOREIGN KEYS, so we can just grab the first value in the primary key

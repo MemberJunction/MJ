@@ -20,6 +20,39 @@ import { Observable } from 'rxjs';
  */
 export type UserApplicationAccessStatus = 'installed_active' | 'installed_inactive' | 'not_installed' | 'not_authorized';
 
+/**
+ * Optional filter that consuming projects can register to customize
+ * application access checks. Called by `UserHasApplicationAccess()` after
+ * the default global role check. The filter receives the result of the
+ * default check and can override it.
+ *
+ * @param applicationId - The application being checked
+ * @param defaultAccess - The result of the default global role check
+ * @param user - The current UserInfo (includes TenantContext if set by middleware)
+ * @returns Whether the user should have access to the application
+ */
+export type ApplicationAccessFilter = (
+  applicationId: string,
+  defaultAccess: boolean,
+  user: UserInfo
+) => boolean;
+
+/**
+ * Optional filter that consuming projects can register to customize
+ * application admin checks. Called by `UserCanAdminApplication()` after
+ * the default global role check.
+ *
+ * @param applicationId - The application being checked
+ * @param defaultCanAdmin - The result of the default global role check
+ * @param user - The current UserInfo (includes TenantContext if set by middleware)
+ * @returns Whether the user should have admin access to the application
+ */
+export type ApplicationAdminFilter = (
+  applicationId: string,
+  defaultCanAdmin: boolean,
+  user: UserInfo
+) => boolean;
+
 import {
   MJApplicationRoleEntity,
   MJUserNotificationEntity,
@@ -77,6 +110,10 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
   private _UserNotificationPreferences: MJUserNotificationPreferenceEntity[] = [];
   // Application role assignments (global - not user-specific)
   private _applicationRoles: MJApplicationRoleEntity[] = [];
+
+  // Optional filters for customizing application access/admin checks (e.g., tenant-scoped roles)
+  private _applicationAccessFilter: ApplicationAccessFilter | null = null;
+  private _applicationAdminFilter: ApplicationAdminFilter | null = null;
 
   // Track the user ID we loaded data for
   private _loadedForUserId: string | null = null;
@@ -174,6 +211,12 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
         PropertyName: '_UserApplications',
         CacheLocal: true,
         Filter: userFilter,
+        // Short debounce (vs the 1500ms BaseEngine default). The app switcher, the
+        // Home dashboard, and the shell all derive their app lists from this cache
+        // via DataChange$, so a save from the app-config dialog should reach the UI
+        // near-instantly. Writes to this entity are rare and the per-user row set is
+        // tiny, so an occasional extra refresh costs nothing.
+        DebounceTime: 200,
       },
       {
         Type: 'entity',
@@ -249,7 +292,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    */
   public get UserNotifications(): MJUserNotificationEntity[] {
     if (!this._loadedForUserId) return [];
-    return (this._UserNotifications || [])
+    return this.GetConfigData<MJUserNotificationEntity>('_UserNotifications')
       .filter((n) => UUIDsEqual(n.UserID, this._loadedForUserId))
       .sort((a, b) => new Date(b.Get('__mj_CreatedAt')).getTime() - new Date(a.Get('__mj_CreatedAt')).getTime());
   }
@@ -259,7 +302,8 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    */
   public get UserSettings(): MJUserSettingEntity[] {
     if (!this._loadedForUserId) return [];
-    return (this._UserSettings || []).filter((s) => UUIDsEqual(s.UserID, this._loadedForUserId));
+    return this.GetConfigData<MJUserSettingEntity>('_UserSettings')
+      .filter((s) => UUIDsEqual(s.UserID, this._loadedForUserId));
   }
 
   /**
@@ -525,7 +569,8 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    */
   public get Workspaces(): MJWorkspaceEntity[] {
     if (!this._loadedForUserId) return [];
-    return (this._Workspaces || []).filter((w) => UUIDsEqual(w.UserID, this._loadedForUserId));
+    return this.GetConfigData<MJWorkspaceEntity>('_Workspaces')
+      .filter((w) => UUIDsEqual(w.UserID, this._loadedForUserId));
   }
 
   /**
@@ -541,7 +586,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    */
   public get UserApplications(): MJUserApplicationEntity[] {
     if (!this._loadedForUserId) return [];
-    return (this._UserApplications || [])
+    return this.GetConfigData<MJUserApplicationEntity>('_UserApplications')
       .filter((ua) => UUIDsEqual(ua.UserID, this._loadedForUserId))
       .sort((a, b) => {
         // Sort by Sequence first, then by Application name
@@ -557,7 +602,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    */
   public get UserFavorites(): MJUserFavoriteEntity[] {
     if (!this._loadedForUserId) return [];
-    return (this._UserFavorites || [])
+    return this.GetConfigData<MJUserFavoriteEntity>('_UserFavorites')
       .filter((f) => UUIDsEqual(f.UserID, this._loadedForUserId))
       .sort((a, b) => new Date(b.Get('__mj_CreatedAt')).getTime() - new Date(a.Get('__mj_CreatedAt')).getTime());
   }
@@ -567,7 +612,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    */
   public get UserRecordLogs(): MJUserRecordLogEntity[] {
     if (!this._loadedForUserId) return [];
-    return (this._UserRecordLogs || [])
+    return this.GetConfigData<MJUserRecordLogEntity>('_UserRecordLogs')
       .filter((r) => UUIDsEqual(r.UserID, this._loadedForUserId))
       .sort((a, b) => new Date(b.LatestAt).getTime() - new Date(a.LatestAt).getTime());
   }
@@ -581,7 +626,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    * Useful for server-side admin scenarios.
    */
   public get AllNotifications(): MJUserNotificationEntity[] {
-    return this._UserNotifications || [];
+    return this.GetConfigData<MJUserNotificationEntity>('_UserNotifications');
   }
 
   /**
@@ -589,7 +634,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    * Useful for server-side admin scenarios.
    */
   public get AllUserApplications(): MJUserApplicationEntity[] {
-    return this._UserApplications || [];
+    return this.GetConfigData<MJUserApplicationEntity>('_UserApplications');
   }
 
   /**
@@ -705,6 +750,44 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
   }
 
   /**
+   * Register a custom filter for application access checks. The filter is
+   * called by `UserHasApplicationAccess()` after the default global role check.
+   * It receives the default result and can override it based on custom logic
+   * (e.g., tenant-scoped roles, feature flags, license restrictions).
+   *
+   * Only one filter can be registered at a time. Calling this again replaces
+   * the previous filter. Pass `null` to remove the filter.
+   *
+   * @example
+   * ```typescript
+   * // Multi-tenant: scope access to the current tenant's role instead of the global union
+   * UserInfoEngine.Instance.RegisterApplicationAccessFilter((appId, defaultAccess, user) => {
+   *   const tenantRoleID = user.TenantContext?.roleID;
+   *   if (!tenantRoleID) return defaultAccess; // no tenant context — fall back to default
+   *   const appRoles = UserInfoEngine.Instance.ApplicationRoles
+   *     .filter(ar => UUIDsEqual(ar.ApplicationID, appId));
+   *   if (appRoles.length === 0) return true; // open access
+   *   return appRoles.some(ar => UUIDsEqual(ar.RoleID, tenantRoleID) && ar.CanAccess);
+   * });
+   * ```
+   */
+  public RegisterApplicationAccessFilter(filter: ApplicationAccessFilter | null): void {
+    this._applicationAccessFilter = filter;
+  }
+
+  /**
+   * Register a custom filter for application admin checks. The filter is
+   * called by `UserCanAdminApplication()` after the default global role check.
+   * It receives the default result and can override it based on custom logic.
+   *
+   * Only one filter can be registered at a time. Calling this again replaces
+   * the previous filter. Pass `null` to remove the filter.
+   */
+  public RegisterApplicationAdminFilter(filter: ApplicationAdminFilter | null): void {
+    this._applicationAdminFilter = filter;
+  }
+
+  /**
    * Checks if the current user's roles grant access to the application.
    * If no ApplicationRole records exist for the app, access is open (backwards compatible).
    * If records exist, user must have at least one role with CanAccess=1.
@@ -714,19 +797,33 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
       ar => UUIDsEqual(ar.ApplicationID, applicationId)
     );
 
-    // No role records = open access (backwards compatible)
-    if (appRoles.length === 0) return true;
-
-    // Check if any of the user's roles have CanAccess=1
     const md = this.ProviderToUse;
     const user = md.CurrentUser;
+
+    // No role records = open access (backwards compatible)
+    if (appRoles.length === 0) {
+      // Still call filter — it may want to restrict open-access apps
+      if (this._applicationAccessFilter && user) {
+        return this._applicationAccessFilter(applicationId, true, user);
+      }
+      return true;
+    }
+
+    // Check if any of the user's roles have CanAccess=1
     if (!user || !user.UserRoles) return false;
 
-    return user.UserRoles.some(ur =>
+    const defaultAccess = user.UserRoles.some(ur =>
       appRoles.some(ar =>
         UUIDsEqual(ar.RoleID, ur.RoleID) && ar.CanAccess
       )
     );
+
+    // Call through registered filter if present
+    if (this._applicationAccessFilter) {
+      return this._applicationAccessFilter(applicationId, defaultAccess, user);
+    }
+
+    return defaultAccess;
   }
 
   /**
@@ -737,17 +834,32 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
     const appRoles = this._applicationRoles.filter(
       ar => UUIDsEqual(ar.ApplicationID, applicationId)
     );
-    if (appRoles.length === 0) return false; // No admin without explicit grant
 
     const md = this.ProviderToUse;
     const user = md.CurrentUser;
+
+    if (appRoles.length === 0) {
+      // No admin without explicit grant — but still let filter override
+      if (this._applicationAdminFilter && user) {
+        return this._applicationAdminFilter(applicationId, false, user);
+      }
+      return false;
+    }
+
     if (!user || !user.UserRoles) return false;
 
-    return user.UserRoles.some(ur =>
+    const defaultCanAdmin = user.UserRoles.some(ur =>
       appRoles.some(ar =>
         UUIDsEqual(ar.RoleID, ur.RoleID) && ar.CanAdmin
       )
     );
+
+    // Call through registered filter if present
+    if (this._applicationAdminFilter) {
+      return this._applicationAdminFilter(applicationId, defaultCanAdmin, user);
+    }
+
+    return defaultCanAdmin;
   }
 
   /**
@@ -846,8 +958,15 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
       if (existingApp.IsActive) {
         return existingApp;
       }
-      // If disabled, enable it
+      // If disabled, enable it — with a FRESH sequence. The row keeps its stale
+      // Sequence from when it was deactivated (the app-config dialog parks removed
+      // apps at 999), and re-activating with that value can collide with another
+      // row's Sequence. Duplicate Sequences make value-swap reordering a silent
+      // no-op downstream (issue #3027), so re-enabling always appends to the end.
       try {
+        // Compute BEFORE flipping IsActive — the sequence comes from the ACTIVE rows'
+        // max, and this row's own stale/parked value must not participate.
+        existingApp.Sequence = this.nextUserApplicationSequence();
         existingApp.IsActive = true;
         const saved = await existingApp.Save();
         if (saved) {
@@ -863,8 +982,9 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
       }
     }
 
-    // Get the next sequence number
-    const nextSequence = this.UserApplications.length;
+    // Get the next sequence number (max+1 — a row COUNT can collide with an
+    // existing Sequence when the set is sparse, e.g. rows at [0, 1, 3])
+    const nextSequence = this.nextUserApplicationSequence();
 
     try {
       const userApp = await md.GetEntityObject<MJUserApplicationEntity>('MJ: User Applications', contextUser);
@@ -910,6 +1030,12 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
     }
 
     try {
+      // Fresh sequence on re-activation — the row's stale Sequence (e.g. the
+      // dialog's 999 park value) can collide with another row's and make
+      // value-swap reordering a silent no-op (issue #3027). Append to the end.
+      // Compute BEFORE flipping IsActive so this row's own stale value doesn't
+      // participate in the active-rows max.
+      userApp.Sequence = this.nextUserApplicationSequence();
       userApp.IsActive = true;
       const saved = await userApp.Save();
       if (saved) {
@@ -923,6 +1049,19 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
       console.error('UserInfoEngine.EnableApplication: Error:', error instanceof Error ? error.message : String(error));
       return false;
     }
+  }
+
+  /**
+   * Next Sequence value for the current user's UserApplication rows: one past the
+   * highest Sequence among ACTIVE rows, so a newly created or re-activated row
+   * appends to the end of the visible list without colliding. Inactive rows are
+   * excluded — they carry parked values (the app-config dialog uses 999) that
+   * would otherwise inflate every subsequent assignment past the park value.
+   * Callers re-activating a row must call this BEFORE setting IsActive = true.
+   */
+  private nextUserApplicationSequence(): number {
+    const activeSequences = this.UserApplications.filter((ua) => ua.IsActive).map((ua) => ua.Sequence);
+    return activeSequences.length > 0 ? Math.max(...activeSequences) + 1 : 0;
   }
 
   /**
@@ -982,6 +1121,15 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
         const index = this._UserApplications.findIndex((ua) => UUIDsEqual(ua.ApplicationID, applicationId));
         if (index >= 0) {
           this._UserApplications.splice(index, 1);
+          // The debounced BaseEngine delete handler stays silent for rows already absent
+          // from the array (it can't distinguish "we spliced it" from "never matched the
+          // config's Filter"), so the code that spliced must notify observers itself —
+          // otherwise DataChange$ consumers (ApplicationManager → app switcher / Home)
+          // never learn the app was removed.
+          const config = this.Configs.find((c) => c.PropertyName === '_UserApplications');
+          if (config) {
+            this.notifyAlreadyAppliedMutation(config, 'delete', userApp);
+          }
         }
         console.log(`UserInfoEngine.UninstallApplication: Uninstalled application ${applicationId}`);
         return true;
@@ -1126,7 +1274,8 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    */
   public get NotificationPreferences(): MJUserNotificationPreferenceEntity[] {
     if (!this._loadedForUserId) return [];
-    return (this._UserNotificationPreferences || []).filter((p) => UUIDsEqual(p.UserID, this._loadedForUserId));
+    return this.GetConfigData<MJUserNotificationPreferenceEntity>('_UserNotificationPreferences')
+      .filter((p) => UUIDsEqual(p.UserID, this._loadedForUserId));
   }
 
   public GetUserPreferenceForType(userId: string, typeId: string): MJUserNotificationPreferenceEntity | undefined {
@@ -1146,6 +1295,6 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    * Notification types are global (not user-specific) and define the available notification categories.
    */
   public get NotificationTypes(): MJUserNotificationTypeEntity[] {
-    return this._NotificationTypes || [];
+    return this.GetConfigData<MJUserNotificationTypeEntity>('_NotificationTypes');
   }
 }

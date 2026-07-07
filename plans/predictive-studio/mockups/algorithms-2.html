@@ -1,0 +1,253 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Predictive Studio — Algorithm Catalog</title>
+<link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  /* ---- Option 2: rich card gallery + "Guide me" scenario picker ---- */
+  .guide { display:flex; align-items:flex-start; gap:18px; flex-wrap:wrap; }
+  .guide .gtxt { flex:1; min-width:240px; }
+  .chips { display:flex; gap:8px; flex-wrap:wrap; }
+  .chip { display:inline-flex; align-items:center; gap:7px; padding:7px 13px; border-radius:999px; border:1px solid var(--mj-border-default); background:var(--mj-bg-surface); color:var(--mj-text-secondary); font-weight:600; font-size:12.5px; cursor:pointer; transition:all .14s ease; user-select:none; }
+  .chip i { font-size:12px; color:var(--mj-text-muted); }
+  .chip:hover { background:var(--mj-bg-surface-hover); border-color:var(--mj-border-strong); }
+  .chip.on { background:var(--mj-brand-primary); border-color:var(--mj-brand-primary); color:#fff; box-shadow:var(--shadow-sm); }
+  .chip.on i { color:#fff; }
+  .clearx { font-size:12px; color:var(--mj-text-muted); cursor:pointer; font-weight:600; padding:7px 4px; }
+  .clearx:hover { color:var(--mj-brand-primary); }
+
+  .gallery { display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:16px; }
+  .acard { background:var(--mj-bg-surface); border:1px solid var(--mj-border-default); border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); display:flex; flex-direction:column; position:relative; transition:box-shadow .16s ease, transform .16s ease, border-color .16s ease; overflow:hidden; }
+  .acard:hover { box-shadow:var(--shadow); transform:translateY(-2px); }
+  .acard.dim { opacity:.46; filter:saturate(.6); }
+  .acard.hit { border-color:var(--mj-brand-primary); box-shadow:0 0 0 2px var(--mj-brand-soft), var(--shadow); }
+  .acard .ah { display:flex; align-items:flex-start; gap:13px; padding:16px 16px 12px; }
+  .acard .ic { width:46px; height:46px; border-radius:12px; display:grid; place-items:center; font-size:20px; background:var(--mj-brand-soft); color:var(--mj-brand-primary); flex:0 0 auto; }
+  .acard .nm { font-weight:700; font-size:15.5px; line-height:1.15; }
+  .acard .key { font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace; font-size:11.5px; color:var(--mj-text-muted); margin-top:3px; }
+  .ab { padding:0 16px 14px; display:flex; flex-direction:column; gap:13px; }
+  .meta-row { display:flex; gap:8px; flex-wrap:wrap; }
+  .kvtitle { font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--mj-text-muted); font-weight:700; margin-bottom:6px; }
+  .hps { display:flex; flex-direction:column; gap:4px; }
+  .hps .hp { display:flex; justify-content:space-between; gap:10px; font-size:12px; padding:3px 0; border-bottom:1px dashed var(--mj-border-subtle); }
+  .hps .hp:last-child { border-bottom:none; }
+  .hps .hk { color:var(--mj-text-secondary); font-weight:600; }
+  .hps .hv { font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace; font-size:11px; color:var(--mj-text-primary); }
+  .bestchips { display:flex; gap:6px; flex-wrap:wrap; }
+  .af { margin-top:auto; padding:11px 16px; border-top:1px solid var(--mj-border-subtle); display:flex; align-items:center; gap:10px; background:var(--mj-bg-surface-card); }
+  .af .btn { flex:1; justify-content:center; }
+  .fitchip { margin-left:auto; }
+  .reco-banner { display:none; align-items:center; gap:10px; padding:11px 14px; border-radius:10px; background:var(--mj-info-bg); border:1px solid #cdddfb; color:var(--mj-info-text); font-size:13px; font-weight:600; margin-bottom:16px; }
+  .reco-banner.show { display:flex; }
+  .reco-banner b { font-weight:750; }
+  .ribbon { position:absolute; top:13px; right:-1px; display:none; }
+  .ribbon.show { display:block; }
+</style></head>
+<body><div class="ps-app">
+<aside class="ps-sidebar">
+ <div class="ps-brand"><div class="logo"><i class="fa-solid fa-wand-magic-sparkles"></i></div><div><div class="name">Predictive Studio</div><div class="sub">MemberJunction</div></div></div>
+ <nav class="ps-nav"><div class="group">Build</div>
+  <a><i class="fa-solid fa-gauge-high"></i> Home</a>
+  <a><i class="fa-solid fa-diagram-project"></i> Training Pipelines</a>
+  <a class="active"><i class="fa-solid fa-shapes"></i> Algorithm Catalog</a>
+  <div class="group">Run</div>
+  <a><i class="fa-solid fa-flask"></i> Experiments</a><a><i class="fa-solid fa-cubes"></i> Model Registry</a><a><i class="fa-solid fa-chart-column"></i> Compare Runs</a>
+  <div class="group">Assist</div><a><i class="fa-solid fa-robot"></i> Model Dev Agent</a>
+ </nav>
+ <div class="me"><div class="ps-avatar">AN</div><div class="small"><div style="color:#fff;font-weight:600">Amith N.</div><div style="color:#7e8ca5">Data Studio</div></div></div>
+</aside>
+<main class="ps-main">
+ <div class="ps-topbar">
+   <div><div class="crumb">Build / Algorithm Catalog</div><h1>Algorithm Gallery</h1></div>
+   <div class="spacer"></div>
+   <button class="btn ghost"><i class="fa-solid fa-circle-question"></i> How this works</button>
+   <button class="btn"><i class="fa-solid fa-table-cells"></i> Matrix view</button>
+   <button class="btn primary"><i class="fa-solid fa-diagram-project"></i> New Pipeline</button>
+ </div>
+ <div class="ps-content">
+
+  <!-- Guide me -->
+  <div class="card" style="margin-bottom:16px;">
+   <div class="card-body">
+    <div class="guide">
+     <div class="gtxt">
+      <h3 style="font-size:15px;"><i class="fa-solid fa-compass" style="color:var(--mj-brand-primary);margin-right:7px;"></i>Guide me — what does your problem look like?</h3>
+      <div class="muted small" style="margin-top:4px;max-width:560px;">Tap the scenarios that describe your data and goals. We'll highlight the algorithms that fit and pull the best matches to the front. Pick one or several.</div>
+     </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;margin-top:14px;flex-wrap:wrap;">
+     <div class="chips" id="chips">
+      <span class="chip" data-s="binary"><i class="fa-solid fa-circle-half-stroke"></i> Binary classification</span>
+      <span class="chip" data-s="regression"><i class="fa-solid fa-arrow-trend-up"></i> Regression</span>
+      <span class="chip" data-s="interp"><i class="fa-solid fa-magnifying-glass-chart"></i> Interpretability required</span>
+      <span class="chip" data-s="minimal"><i class="fa-solid fa-sliders"></i> Minimal tuning</span>
+      <span class="chip" data-s="large"><i class="fa-solid fa-gauge-high"></i> Large / wide dataset</span>
+      <span class="chip" data-s="embed"><i class="fa-solid fa-vector-square"></i> Embedding / LLM-feature-heavy</span>
+      <span class="chip" data-s="small"><i class="fa-solid fa-compress"></i> Small dataset</span>
+     </div>
+     <span class="clearx" id="clearx" style="display:none;" onclick="clearAll()"><i class="fa-solid fa-xmark"></i> Clear</span>
+    </div>
+   </div>
+  </div>
+
+  <div class="reco-banner" id="banner"><i class="fa-solid fa-wand-magic-sparkles"></i><span id="banner-txt"></span></div>
+
+  <div class="gallery" id="gallery"></div>
+ </div>
+</main>
+</div>
+
+<script>
+ // level rank for sorting/labeling
+ const RANK = { Primary:4, Strong:3, Viable:2, Weak:1, NotRecommended:0 };
+ const LABEL = { Primary:'Primary fit', Strong:'Strong fit', Viable:'Viable', Weak:'Weak fit', NotRecommended:'Not recommended' };
+
+ const ALG = [
+  {id:'xgb', name:'XGBoost', key:'xgboost', ic:'fa-bolt', importance:true,
+   pt:['Classification','Regression'], interp:['amber','fa-chart-simple','Feature importances'],
+   best:['Tabular accuracy','Large / wide data','Embeddings','Kaggle-grade'],
+   hp:[['n_estimators','100 – 1000'],['max_depth','3 – 10'],['learning_rate','0.01 – 0.3'],['subsample','0.6 – 1.0']],
+   blurb:'The accuracy workhorse for tabular data — gradient-boosted trees that top most leaderboards.'},
+  {id:'lgbm', name:'LightGBM', key:'lightgbm', ic:'fa-feather', importance:true,
+   pt:['Classification','Regression'], interp:['amber','fa-chart-simple','Feature importances'],
+   best:['Speed at scale','Large / wide data','Regression','Classification'],
+   hp:[['num_leaves','15 – 255'],['max_depth','-1 – 12'],['learning_rate','0.01 – 0.3'],['min_child_samples','5 – 100']],
+   blurb:'Histogram-based boosting that trains fastest on big, wide datasets with minimal memory.'},
+  {id:'logreg', name:'Logistic Regression', key:'logistic_regression', ic:'fa-wave-square', importance:true, coeff:true,
+   pt:['Classification'], interp:['green','fa-list-ol','Signed coefficients'],
+   best:['Interpretability','Small dataset','Minimal tuning','Yes / no targets'],
+   hp:[['C (inverse reg.)','0.001 – 100'],['penalty','l1 · l2 · elasticnet'],['solver','lbfgs · liblinear'],['max_iter','100 – 1000']],
+   blurb:'The transparent classifier — signed coefficients give a defensible reason for every yes/no.'},
+  {id:'rf', name:'Random Forest', key:'random_forest', ic:'fa-tree', importance:true,
+   pt:['Classification','Regression'], interp:['amber','fa-chart-simple','Feature importances'],
+   best:['Robust baseline','Minimal tuning','Small dataset','Classification'],
+   hp:[['n_estimators','100 – 500'],['max_depth','None · 5 – 30'],['max_features','sqrt · log2'],['min_samples_leaf','1 – 20']],
+   blurb:'A dependable, low-maintenance ensemble that works well out of the box on almost anything.'},
+  {id:'ridge', name:'Ridge Regression', key:'ridge', ic:'fa-ruler', importance:true, coeff:true,
+   pt:['Regression'], interp:['green','fa-list-ol','Signed coefficients'],
+   best:['Interpretability','Regression','Small dataset','Minimal tuning'],
+   hp:[['alpha (reg.)','0.01 – 100'],['solver','auto · cholesky · sag'],['fit_intercept','true · false'],['max_iter','None · 1000']],
+   blurb:'Linear regression with regularization — readable coefficients and stable on scarce data.'},
+  {id:'mlp', name:'Multilayer Perceptron', key:'mlp', ic:'fa-network-wired', importance:false,
+   pt:['Classification','Regression'], interp:['red','fa-eye-slash','No simple explanation'],
+   best:['Embeddings','LLM features','Complex patterns','Dense vectors'],
+   hp:[['hidden_layer_sizes','(64,) – (256,128)'],['activation','relu · tanh'],['alpha (L2)','1e-5 – 1e-1'],['learning_rate_init','1e-4 – 1e-2']],
+   blurb:'A neural network that shines on dense embeddings and LLM-derived feature vectors.'},
+ ];
+
+ // scenario -> { algId: level }
+ const FIT = {
+  binary:    {xgb:'Primary', lgbm:'Strong', logreg:'Viable',          rf:'Strong', ridge:'NotRecommended', mlp:'Viable'},
+  regression:{xgb:'Primary', lgbm:'Strong', logreg:'NotRecommended',  rf:'Strong', ridge:'Strong',         mlp:'Viable'},
+  interp:    {xgb:'Weak',    lgbm:'Weak',   logreg:'Primary',         rf:'Viable', ridge:'Primary',        mlp:'NotRecommended'},
+  minimal:   {xgb:'Viable',  lgbm:'Viable', logreg:'Strong',          rf:'Primary',ridge:'Strong',         mlp:'Weak'},
+  large:     {xgb:'Strong',  lgbm:'Primary',logreg:'Strong',          rf:'Viable', ridge:'Strong',         mlp:'Viable'},
+  embed:     {xgb:'Strong',  lgbm:'Strong', logreg:'Viable',          rf:'Viable', ridge:'Viable',         mlp:'Primary'},
+  small:     {xgb:'Viable',  lgbm:'Viable', logreg:'Primary',         rf:'Strong', ridge:'Primary',        mlp:'Weak'},
+ };
+ const SCEN_LABEL = {binary:'Binary classification', regression:'Regression', interp:'Interpretability required',
+   minimal:'Minimal tuning', large:'Large / wide dataset', embed:'Embedding / LLM-feature-heavy', small:'Small dataset'};
+
+ const BCLS = {green:'green', amber:'amber', red:'red'};
+ let selected = new Set();
+
+ function cardHTML(a){
+   const imp = a.importance
+     ? `<span class="badge green"><i class="fa-solid fa-chart-column"></i> Feature importance</span>`
+     : `<span class="badge red"><i class="fa-solid fa-ban"></i> No importance</span>`;
+   const coeff = a.coeff ? `<span class="badge blue"><i class="fa-solid fa-list-ol"></i> Simple coefficients</span>` : '';
+   const pts = a.pt.map(p=>`<span class="tag">${p}</span>`).join('');
+   const best = a.best.map(b=>`<span class="badge gray">${b}</span>`).join('');
+   const hps = a.hp.map(h=>`<div class="hp"><span class="hk">${h[0]}</span><span class="hv">${h[1]}</span></div>`).join('');
+   return `<div class="acard" id="card-${a.id}">
+     <div class="ribbon" id="ribbon-${a.id}"><span class="lvl lvl-Primary">Primary</span></div>
+     <div class="ah">
+       <div class="ic"><i class="fa-solid ${a.ic}"></i></div>
+       <div><div class="nm">${a.name}</div><div class="key">${a.key}</div></div>
+     </div>
+     <div class="ab">
+       <div class="muted small" style="line-height:1.45;">${a.blurb}</div>
+       <div>
+         <div class="kvtitle">Problem types</div>
+         <div class="meta-row">${pts}</div>
+       </div>
+       <div class="meta-row">${imp}${coeff}<span class="badge ${BCLS[a.interp[0]]}"><i class="fa-solid ${a.interp[1]}"></i> ${a.interp[2]}</span></div>
+       <div>
+         <div class="kvtitle">Key hyperparameters</div>
+         <div class="hps">${hps}</div>
+       </div>
+       <div>
+         <div class="kvtitle">Best for</div>
+         <div class="bestchips">${best}</div>
+       </div>
+     </div>
+     <div class="af">
+       <span class="fit-slot" id="fit-${a.id}"></span>
+       <button class="btn sm"><i class="fa-solid fa-circle-info"></i> Details</button>
+       <button class="btn sm primary"><i class="fa-solid fa-diagram-project"></i> Use</button>
+     </div>
+   </div>`;
+ }
+
+ function render(){
+   document.getElementById('gallery').innerHTML = ALG.map(cardHTML).join('');
+   applyGuide();
+ }
+
+ // best level across selected scenarios (used to rank/highlight)
+ function bestLevel(algId){
+   if(selected.size===0) return null;
+   let best = -1, lvl = 'NotRecommended';
+   selected.forEach(s=>{ const v = FIT[s][algId]; if(RANK[v] > best){ best = RANK[v]; lvl = v; } });
+   return lvl;
+ }
+
+ function applyGuide(){
+   const banner = document.getElementById('banner');
+   const gallery = document.getElementById('gallery');
+   document.getElementById('clearx').style.display = selected.size ? 'inline-flex' : 'none';
+
+   // reset fit slots + classes
+   ALG.forEach(a=>{
+     const card = document.getElementById('card-'+a.id);
+     card.classList.remove('dim','hit');
+     document.getElementById('ribbon-'+a.id).classList.remove('show');
+     document.getElementById('fit-'+a.id).innerHTML = '';
+   });
+
+   if(selected.size===0){
+     banner.classList.remove('show');
+     // restore natural order
+     ALG.forEach(a=> gallery.appendChild(document.getElementById('card-'+a.id)));
+     return;
+   }
+
+   // compute levels, sort cards by best fit desc
+   const scored = ALG.map(a=>({a, lvl:bestLevel(a.id)})).sort((x,y)=> RANK[y.lvl]-RANK[x.lvl]);
+   scored.forEach(({a,lvl})=>{
+     const card = document.getElementById('card-'+a.id);
+     gallery.appendChild(card); // reorder
+     document.getElementById('fit-'+a.id).innerHTML = `<span class="lvl lvl-${lvl}" title="${LABEL[lvl]}">${lvl==='NotRecommended'?'N/A':lvl}</span>`;
+     if(lvl==='Primary'){ card.classList.add('hit'); const r=document.getElementById('ribbon-'+a.id); r.classList.add('show'); }
+     if(RANK[lvl] <= 1){ card.classList.add('dim'); }
+   });
+
+   const top = scored.filter(s=>s.lvl==='Primary').map(s=>s.a.name);
+   const names = selected.size===1 ? SCEN_LABEL[[...selected][0]] : `${selected.size} scenarios`;
+   const txt = top.length
+     ? `For <b>${names}</b>, your top pick${top.length>1?'s are':' is'} <b>${top.join(' &amp; ')}</b>. Stronger fits are pulled to the front.`
+     : `For <b>${names}</b>, no single primary stands out — review the strong fits at the top.`;
+   document.getElementById('banner-txt').innerHTML = txt;
+   banner.classList.add('show');
+ }
+
+ function clearAll(){ selected.clear(); document.querySelectorAll('.chip').forEach(c=>c.classList.remove('on')); applyGuide(); }
+
+ document.getElementById('chips').addEventListener('click', e=>{
+   const chip = e.target.closest('.chip'); if(!chip) return;
+   const s = chip.dataset.s;
+   if(selected.has(s)){ selected.delete(s); chip.classList.remove('on'); }
+   else { selected.add(s); chip.classList.add('on'); }
+   applyGuide();
+ });
+
+ render();
+</script>
+</body></html>

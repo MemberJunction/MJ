@@ -43,16 +43,52 @@
         />
     }
 
-    <!-- Textarea -->
+    <!-- Textarea (markdown mode: rendered preview by default, Edit toggles the raw editor) -->
     @if (QuestionType === 'textarea') {
-      <textarea
-        class="mj-textarea question-textarea"
-        [value]="$any(Value) || ''"
-        [placeholder]="Placeholder"
-        [disabled]="Disabled"
-        (input)="OnValueChange($any($event.target).value)"
-        rows="5"
-      ></textarea>
+      @if (IsMarkdown) {
+        <div class="markdown-field" [class.editing]="MarkdownEditing">
+          <div class="markdown-field-toolbar">
+            <span class="markdown-field-hint">
+              <i class="fa-brands fa-markdown" aria-hidden="true"></i>
+              {{ MarkdownEditing ? 'Editing Markdown' : 'Formatted preview' }}
+            </span>
+            <button
+              type="button"
+              class="markdown-field-toggle"
+              [disabled]="Disabled"
+              (click)="ToggleMarkdownEditing()"
+              [title]="MarkdownEditing ? 'Show the formatted preview' : 'Edit the raw Markdown'"
+              >
+              <i class="fa-solid" [ngClass]="MarkdownEditing ? 'fa-eye' : 'fa-pen'" aria-hidden="true"></i>
+              {{ MarkdownEditing ? 'Preview' : 'Edit' }}
+            </button>
+          </div>
+          @if (!MarkdownEditing) {
+            <div class="markdown-field-preview">
+              <mj-markdown [data]="MarkdownValue"></mj-markdown>
+            </div>
+          }
+          @if (MarkdownEditing) {
+            <textarea
+              class="mj-textarea question-textarea"
+              [value]="$any(Value) || ''"
+              [placeholder]="Placeholder"
+              [disabled]="Disabled"
+              (input)="OnValueChange($any($event.target).value)"
+              rows="10"
+            ></textarea>
+          }
+        </div>
+      } @else {
+        <textarea
+          class="mj-textarea question-textarea"
+          [value]="$any(Value) || ''"
+          [placeholder]="Placeholder"
+          [disabled]="Disabled"
+          (input)="OnValueChange($any($event.target).value)"
+          rows="5"
+        ></textarea>
+      }
     }
 
     <!-- Number Input -->

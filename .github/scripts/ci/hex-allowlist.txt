@@ -28,6 +28,11 @@ packages/Angular/Generic/shared/src/lib/_tokens.scss
 # Self-contained retro-terminal dark theme using local --perfmon-* properties.
 packages/Angular/Explorer/dashboards/src/SystemDiagnostics/system-diagnostics.component.css
 
+# Category 0 + 3: Standalone UX mockup (not shipped component code)
+# Defines its own dark-theme token block (hex by definition) plus categorical
+# provider brand swatches (Salesforce #00a1e0, HubSpot #ff7a59) with no token equivalent.
+mockups/dupe-detection/shared.css
+
 # Category 3: SVG Paint & Flow Editor Visualization
 # SVG fill/stroke and node-graph visualization colors — distinct visual language.
 packages/Angular/Generic/flow-editor/src/lib/components/flow-editor.component.css
@@ -49,6 +54,10 @@ packages/Angular/Generic/markdown/src/lib/components/markdown.component.css
 packages/Angular/Generic/filter-builder/src/lib/filter-group/filter-group.component.css
 
 # Category 3: Categorical colors (must remain distinct; no semantic token equivalent)
+# Predictive Studio DAG node-type + algorithm accent palette — 5 categorical diagram colors
+# (source/feature/embedding/target/algorithm) declared ONCE as --ps-* custom props and consumed
+# everywhere via those tokens. Must stay distinct across light/dark to read as diagram accents.
+packages/Angular/Explorer/dashboards/src/PredictiveStudio/predictive-studio.shared.scss
 # Iconic gold rating star (#ffd700) — intentional branding color, theme-independent (documented in-file).
 packages/Angular/Generic/artifacts/src/lib/components/plugins/component-feedback-panel/component-feedback-panel.component.css
 # Suggestion type-badge identity colors — entity badge teal (#11998e) distinguishes it
