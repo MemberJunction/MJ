@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import { mkdirSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
-import type { AppInstallCallbacks, InstallOptions, UpgradeOptions, RemoveOptions, AppOperationResult, ErrorPhase, PassthroughInstallOptions, AppHookPayload } from '../types/open-app-types.js';
+import type { AppInstallCallbacks, InstallOptions, UpgradeOptions, RemoveOptions, AppOperationResult, ErrorPhase, PassthroughInstallOptions, AppHookPayload, AppStatus, InstallAction } from '../types/open-app-types.js';
 import type { MJAppManifest } from '../manifest/manifest-schema.js';
 import { ParseAndValidateManifest } from '../manifest/manifest-loader.js';
 import { CheckMJVersionCompatibility, IsValidUpgrade } from '../dependency/version-checker.js';
@@ -61,6 +61,40 @@ function IsStepDone<T extends string>(order: readonly T[], checkpoint: string | 
   // An unrecognized checkpoint value (e.g. from a future version) is treated as "not done" —
   // safer to redo a step than to wrongly skip one this build doesn't know about.
   return checkpointIndex >= 0 && checkpointIndex >= stepIndex;
+}
+
+/**
+ * Mutex guard: statuses in which an app is genuinely settled — no install/upgrade/remove is
+ * mid-flight on this row. Every other status ('Installing', 'Upgrading', 'Removing', 'Error')
+ * means SOME operation left the row in a non-final state, so a DIFFERENT operation must not be
+ * allowed to start concurrently — it would race the in-flight one, corrupting Status/
+ * LastCompletedStep or operating on half-written schema/config/package state.
+ *
+ * The gate deliberately does not apply to the operation that OWNS the in-flight status (e.g.
+ * `RemoveApp` re-entering on `Status==='Removing'`, or `UpgradeApp` re-entering on
+ * `Status==='Upgrading'`) — those are the resume paths implemented above, not a conflict.
+ */
+const SETTLED_STATUSES: ReadonlySet<AppStatus> = new Set(['Active', 'Disabled']);
+
+/**
+ * Builds the standard mutex-conflict error for Enable/Disable/Upgrade/Remove being invoked
+ * while a DIFFERENT operation already has the app mid-flight.
+ */
+function BuildMutexConflictResult(action: InstallAction, appName: string, version: string, startTime: number, currentStatus: AppStatus): AppOperationResult {
+  const guidance: Record<string, string> = {
+    Installing: `finish it with 'mj app install <source>' (it will resume automatically)`,
+    Upgrading: `finish it with 'mj app upgrade ${appName}' (it will resume automatically)`,
+    Removing: `finish it with 'mj app remove ${appName}' (it will resume automatically)`,
+    Error: `resolve it — 'mj app install <source>' to retry a failed install, 'mj app upgrade ${appName}' to retry a failed upgrade, or 'mj app remove ${appName}' to remove it`,
+  };
+  return BuildFailureResult(
+    action,
+    appName,
+    version,
+    'Schema',
+    startTime,
+    `Cannot ${action.toLowerCase()} '${appName}' while it is '${currentStatus}' — another operation is still in progress or failed partway. ${guidance[currentStatus] ?? 'Resolve the in-progress operation first.'}`,
+  );
 }
 
 /**
@@ -526,6 +560,14 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
     }
     upgradeAppId = existingApp.ID;
 
+    // Mutex: 'Upgrading' is allowed through as the resume path below; 'Error' is allowed
+    // because a failed upgrade's documented recovery IS re-running 'mj app upgrade' (B21).
+    // 'Installing'/'Removing' mean a DIFFERENT operation owns this row right now — upgrading
+    // on top of it would race a still-forming schema/record or a still-being-torn-down one.
+    if (existingApp.Status === 'Installing' || existingApp.Status === 'Removing') {
+      return BuildMutexConflictResult('Upgrade', options.AppName, existingApp.Version, startTime, existingApp.Status);
+    }
+
     previousVersion = existingApp.Version;
 
     // Step 1: Fetch new manifest
@@ -613,16 +655,14 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
       }
     }
 
-    // Resumable = a prior upgrade attempt is still 'Upgrading' (crashed/killed mid-upgrade).
-    // Version stays at the PRE-upgrade value until the RecordUpdated step below, so it can't
-    // distinguish a resume from a fresh upgrade request — the checkpoint itself (or its
-    // absence) is what drives which steps get skipped.
-    const resumeCheckpoint = existingApp.Status === 'Upgrading' ? (existingApp.LastCompletedStep ?? null) : null;
-    if (existingApp.Status === 'Upgrading') {
-      Callbacks?.OnProgress?.(
-        'Resume',
-        `Resuming upgrade of ${options.AppName} to v${manifest.version}${resumeCheckpoint ? ` from step '${resumeCheckpoint}'` : ''}...`,
-      );
+    // Resumable = a prior upgrade attempt is still 'Upgrading' (crashed/killed mid-upgrade) OR
+    // was caught and left 'Error' (B21's documented recovery IS re-running the upgrade — the
+    // mutex guard above already allows both statuses through). Read the checkpoint on either,
+    // so a caught mid-upgrade failure (the common case — most failures set Error, not a raw
+    // crash) still benefits from skipping already-completed steps, not just a hard process kill.
+    const resumeCheckpoint = existingApp.Status === 'Upgrading' || existingApp.Status === 'Error' ? (existingApp.LastCompletedStep ?? null) : null;
+    if (resumeCheckpoint) {
+      Callbacks?.OnProgress?.('Resume', `Resuming upgrade of ${options.AppName} to v${manifest.version} from step '${resumeCheckpoint}'...`);
     }
 
     // Set status to Upgrading (idempotent no-op if already Upgrading from a resumed attempt)
@@ -806,6 +846,16 @@ export async function RemoveApp(options: RemoveOptions, context: OrchestratorCon
     }
     removeAppId = existingApp.ID;
 
+    // Mutex: 'Removing' is allowed through as the resume path below; 'Error' is allowed
+    // because a failed remove's documented recovery IS re-running 'mj app remove' (the
+    // abort-before-touching-files design means an Error-status remove is always safe to
+    // retry). 'Installing'/'Upgrading' mean a DIFFERENT operation owns this row right now —
+    // removing out from under a still-forming install or a mid-migration upgrade would tear
+    // down schema/metadata the other operation is actively depending on.
+    if (existingApp.Status === 'Installing' || existingApp.Status === 'Upgrading') {
+      return BuildMutexConflictResult('Remove', options.AppName, existingApp.Version, startTime, existingApp.Status);
+    }
+
     // Step 1: Check dependents
     if (!options.Force) {
       const dependents = await FindDependentApps(context.ContextUser, options.AppName);
@@ -819,6 +869,20 @@ export async function RemoveApp(options: RemoveOptions, context: OrchestratorCon
           `Cannot remove: the following apps depend on ${options.AppName}: ${dependents.join(', ')}. Use --force to override.`,
         );
       }
+    }
+
+    // Resumable = a prior remove attempt is still 'Removing' (crashed/killed mid-remove) or
+    // left 'Error' by a DB-cleanup failure (the existing, deliberate "retry the remove" design
+    // — B14/B20's abort-before-touching-files guarantee means an Error-status remove has its
+    // files intact and is always safe to retry from the top). Read the checkpoint on EITHER
+    // status: an Error can be either a caught DB-cleanup failure (no checkpoint yet — the DB
+    // phase correctly restarts and is idempotent against a partially-removed target) or an
+    // uncaught throw AFTER DbCleanupDone was written (e.g. mid file-removal) — that case
+    // should skip re-running the already-successful DB-cleanup phase, same as a raw crash
+    // leaves 'Removing' with the same checkpoint.
+    const resumeCheckpoint = existingApp.Status === 'Removing' || existingApp.Status === 'Error' ? (existingApp.LastCompletedStep ?? null) : null;
+    if (resumeCheckpoint) {
+      Callbacks?.OnProgress?.('Resume', `Resuming removal of ${options.AppName} from step '${resumeCheckpoint}'...`);
     }
 
     await SetAppStatus(context.ContextUser, existingApp.ID, 'Removing');
@@ -847,119 +911,137 @@ export async function RemoveApp(options: RemoveOptions, context: OrchestratorCon
     // part). Doing it BEFORE any filesystem mutation means a DB failure aborts with the
     // config / package.json / client bootstrap still intact, instead of leaving a
     // half-removed app whose files are stripped but whose schema/metadata remain (B20).
-    // Skipped entirely when another app shares the schema (B14).
-    const shareCheck: SchemaShareCheck = existingApp.SchemaName
-      ? await CheckSchemaSharedByOtherApps(context.ContextUser, existingApp.SchemaName, existingApp.ID)
-      : { Shared: false, CheckFailed: false };
-    const schemaShared = shareCheck.Shared;
-    // An INDETERMINATE share-check (the query failed) is not a license to skip-and-strip — that
-    // would leave a half-removed app (files gone, schema + metadata intact, status Removed). Treat
-    // it like a removal error and abort BEFORE touching the filesystem (joined into removalErrors
-    // below). B14/B20.
-    const shareCheckError = shareCheck.CheckFailed
-      ? `Could not determine whether schema '${existingApp.SchemaName}' is shared by other Open Apps (share-check query failed): ${shareCheck.ErrorMessage ?? 'unknown error'}`
-      : undefined;
-    if (schemaShared && !shareCheck.CheckFailed) {
-      Callbacks?.OnWarn?.('Schema', `Schema '${existingApp.SchemaName}' is still used by another installed Open App — skipping metadata + schema removal to protect co-tenant data.`);
-    }
-
-    let metadataResult: { Success: boolean; ErrorMessage?: string } = { Success: true };
-    if (existingApp.SchemaName && !schemaShared) {
-      Callbacks?.OnProgress?.('Metadata', `Removing entity metadata for schema '${existingApp.SchemaName}'...`);
-      metadataResult = await RemoveAppEntityMetadata(existingApp.SchemaName, context.ContextUser, Callbacks);
-    }
-
-    // Teardown — retire the rows this app's seed migrations wrote into the SHARED core schema
-    // (Integration/IO/IOF/Action rows in __mj); dropping the app's own schema cannot reach them.
-    // Data removal, so gated on !KeepData. No-op unless the manifest declares migrations.teardownDirectory.
-    let teardownResult: InternalResult = { Success: true };
-    if (!options.KeepData) {
-      teardownResult = await HandleTeardown(manifest, context, existingApp.Subpath ?? undefined);
-      if (!teardownResult.Success) {
-        Callbacks?.OnError?.('Metadata', `Teardown failed: ${teardownResult.ErrorMessage}`);
+    // Skipped entirely when another app shares the schema (B14). Skipped on resume once
+    // checkpointed — metadata/teardown/schema-drop are all no-ops against an already-removed
+    // target anyway, but skipping avoids redundant work and (for teardown) re-running
+    // seed-migration DELETE scripts that assume the rows are still present.
+    if (!IsStepDone(REMOVE_STEP_ORDER, resumeCheckpoint, 'DbCleanupDone')) {
+      const shareCheck: SchemaShareCheck = existingApp.SchemaName
+        ? await CheckSchemaSharedByOtherApps(context.ContextUser, existingApp.SchemaName, existingApp.ID)
+        : { Shared: false, CheckFailed: false };
+      const schemaShared = shareCheck.Shared;
+      // An INDETERMINATE share-check (the query failed) is not a license to skip-and-strip — that
+      // would leave a half-removed app (files gone, schema + metadata intact, status Removed). Treat
+      // it like a removal error and abort BEFORE touching the filesystem (joined into removalErrors
+      // below). B14/B20.
+      const shareCheckError = shareCheck.CheckFailed
+        ? `Could not determine whether schema '${existingApp.SchemaName}' is shared by other Open Apps (share-check query failed): ${shareCheck.ErrorMessage ?? 'unknown error'}`
+        : undefined;
+      if (schemaShared && !shareCheck.CheckFailed) {
+        Callbacks?.OnWarn?.('Schema', `Schema '${existingApp.SchemaName}' is still used by another installed Open App — skipping metadata + schema removal to protect co-tenant data.`);
       }
-    }
 
-    let schemaDropError: string | undefined;
-    if (!options.KeepData && existingApp.SchemaName && !schemaShared) {
-      Callbacks?.OnProgress?.('Schema', `Dropping schema '${existingApp.SchemaName}'...`);
-      const dropResult = await DropAppSchema(existingApp.SchemaName, context.DatabaseProvider, {
-        allowDoubleUnderscore: options.AllowDoubleUnderscoreSchema === true,
-      });
-      if (!dropResult.Success) {
-        schemaDropError = dropResult.ErrorMessage;
-        Callbacks?.OnError?.('Schema', `Failed to drop schema: ${dropResult.ErrorMessage}`);
+      let metadataResult: { Success: boolean; ErrorMessage?: string } = { Success: true };
+      if (existingApp.SchemaName && !schemaShared) {
+        Callbacks?.OnProgress?.('Metadata', `Removing entity metadata for schema '${existingApp.SchemaName}'...`);
+        metadataResult = await RemoveAppEntityMetadata(existingApp.SchemaName, context.ContextUser, Callbacks);
       }
-    }
 
-    // Abort BEFORE touching the filesystem if DB cleanup failed — the app stays installed
-    // (status Error) with its files intact, so it can be retried/removed again cleanly.
-    const removalErrors = [
-      shareCheckError,
-      teardownResult.Success ? undefined : teardownResult.ErrorMessage,
-      metadataResult.Success ? undefined : metadataResult.ErrorMessage,
-      schemaDropError,
-    ].filter((e): e is string => !!e);
-    if (removalErrors.length > 0) {
-      const combined = removalErrors.join('; ');
-      await RecordInstallHistoryEntry(context.ContextUser, existingApp.ID, 'Remove', manifest, {
-        Success: false,
-        DurationSeconds: GetDurationSeconds(startTime),
-        StartedAt: new Date(startTime),
-        EndedAt: new Date(),
-        Summary: `Remove failed: ${combined}`,
-      });
-      await SetAppStatus(context.ContextUser, existingApp.ID, 'Error');
-      return BuildFailureResult('Remove', options.AppName, existingApp.Version, 'Schema', startTime, combined);
+      // Teardown — retire the rows this app's seed migrations wrote into the SHARED core schema
+      // (Integration/IO/IOF/Action rows in __mj); dropping the app's own schema cannot reach them.
+      // Data removal, so gated on !KeepData. No-op unless the manifest declares migrations.teardownDirectory.
+      let teardownResult: InternalResult = { Success: true };
+      if (!options.KeepData) {
+        teardownResult = await HandleTeardown(manifest, context, existingApp.Subpath ?? undefined);
+        if (!teardownResult.Success) {
+          Callbacks?.OnError?.('Metadata', `Teardown failed: ${teardownResult.ErrorMessage}`);
+        }
+      }
+
+      let schemaDropError: string | undefined;
+      if (!options.KeepData && existingApp.SchemaName && !schemaShared) {
+        Callbacks?.OnProgress?.('Schema', `Dropping schema '${existingApp.SchemaName}'...`);
+        const dropResult = await DropAppSchema(existingApp.SchemaName, context.DatabaseProvider, {
+          allowDoubleUnderscore: options.AllowDoubleUnderscoreSchema === true,
+        });
+        if (!dropResult.Success) {
+          schemaDropError = dropResult.ErrorMessage;
+          Callbacks?.OnError?.('Schema', `Failed to drop schema: ${dropResult.ErrorMessage}`);
+        }
+      }
+
+      // Abort BEFORE touching the filesystem if DB cleanup failed — the app stays installed
+      // (status Error) with its files intact, so it can be retried/removed again cleanly.
+      const removalErrors = [
+        shareCheckError,
+        teardownResult.Success ? undefined : teardownResult.ErrorMessage,
+        metadataResult.Success ? undefined : metadataResult.ErrorMessage,
+        schemaDropError,
+      ].filter((e): e is string => !!e);
+      if (removalErrors.length > 0) {
+        const combined = removalErrors.join('; ');
+        await RecordInstallHistoryEntry(context.ContextUser, existingApp.ID, 'Remove', manifest, {
+          Success: false,
+          DurationSeconds: GetDurationSeconds(startTime),
+          StartedAt: new Date(startTime),
+          EndedAt: new Date(),
+          Summary: `Remove failed: ${combined}`,
+        });
+        await SetAppStatus(context.ContextUser, existingApp.ID, 'Error');
+        return BuildFailureResult('Remove', options.AppName, existingApp.Version, 'Schema', startTime, combined);
+      }
+      await SetAppStep(context.ContextUser, existingApp.ID, 'DbCleanupDone');
     }
 
     // Steps 4-7: Remove config, client bootstrap, angular.json excludes, and package refs
     // (parallel where they write to different files) — only AFTER DB cleanup succeeded.
-    Callbacks?.OnProgress?.('Config', 'Removing config, client bootstrap, and package references...');
+    // Skipped entirely on resume once checkpointed — these are file overwrites/removals that
+    // are safe to redo, but skipping avoids a redundant (slow) package install below.
+    if (!IsStepDone(REMOVE_STEP_ORDER, resumeCheckpoint, 'FilesRemoved')) {
+      Callbacks?.OnProgress?.('Config', 'Removing config, client bootstrap, and package references...');
 
-    // Collect other installed apps' manifests so we don't remove shared prebundle excludes
-    const otherApps = (await ListInstalledApps(context.ContextUser))
-      .filter(a => a.Name !== options.AppName && a.Status !== 'Removed');
-    // Skip a corrupt OTHER-app manifest — it must not break THIS app's removal (B24).
-    const otherManifests = otherApps.flatMap(a => {
-      try {
-        return [JSON.parse(a.ManifestJSON) as MJAppManifest];
-      } catch {
-        Callbacks?.OnWarn?.('Config', `Ignoring app '${a.Name}' when computing shared excludes — its ManifestJSON could not be parsed.`);
-        return [];
+      // Collect other installed apps' manifests so we don't remove shared prebundle excludes
+      const otherApps = (await ListInstalledApps(context.ContextUser))
+        .filter(a => a.Name !== options.AppName && a.Status !== 'Removed');
+      // Skip a corrupt OTHER-app manifest — it must not break THIS app's removal (B24).
+      const otherManifests = otherApps.flatMap(a => {
+        try {
+          return [JSON.parse(a.ManifestJSON) as MJAppManifest];
+        } catch {
+          Callbacks?.OnWarn?.('Config', `Ignoring app '${a.Name}' when computing shared excludes — its ManifestJSON could not be parsed.`);
+          return [];
+        }
+      });
+
+      await Promise.all([
+        Promise.resolve(RemoveServerDynamicPackages(context.RepoRoot, options.AppName, context.ServerPackagePath)),
+        Promise.resolve(manifest.schema ? RemoveEntityPackageMapping(context.RepoRoot, manifest.schema.name, context.ServerPackagePath) : undefined),
+        Promise.resolve(HandleAngularPrebundleExcludeRemoval(manifest, otherManifests, context)),
+        Promise.resolve(
+          RemoveAppPackages({
+            RepoRoot: context.RepoRoot,
+            ServerPackages: manifest.packages?.server ?? [],
+            ClientPackages: manifest.packages?.client ?? [],
+            SharedPackages: manifest.packages?.shared ?? [],
+            Version: existingApp.Version,
+            ServerPackagePath: context.ServerPackagePath,
+            ClientPackagePath: context.ClientPackagePath,
+            PackageManager: context.PackageManager,
+            AdditionalTargets: context.AdditionalTargets,
+          }),
+        ),
+      ]);
+
+      // Package install must run after package.json changes are written
+      Callbacks?.OnProgress?.('Packages', 'Running package install...');
+      const installResult = RunPackageInstall(context.RepoRoot, options.Verbose, undefined, context.PackageManager);
+      if (!installResult.Success) {
+        Callbacks?.OnWarn?.('Packages', `Package install warning during removal: ${installResult.ErrorMessage}`);
       }
-    });
-
-    await Promise.all([
-      Promise.resolve(RemoveServerDynamicPackages(context.RepoRoot, options.AppName, context.ServerPackagePath)),
-      Promise.resolve(manifest.schema ? RemoveEntityPackageMapping(context.RepoRoot, manifest.schema.name, context.ServerPackagePath) : undefined),
-      Promise.resolve(HandleAngularPrebundleExcludeRemoval(manifest, otherManifests, context)),
-      Promise.resolve(
-        RemoveAppPackages({
-          RepoRoot: context.RepoRoot,
-          ServerPackages: manifest.packages?.server ?? [],
-          ClientPackages: manifest.packages?.client ?? [],
-          SharedPackages: manifest.packages?.shared ?? [],
-          Version: existingApp.Version,
-          ServerPackagePath: context.ServerPackagePath,
-          ClientPackagePath: context.ClientPackagePath,
-          PackageManager: context.PackageManager,
-          AdditionalTargets: context.AdditionalTargets,
-        }),
-      ),
-    ]);
-
-    // Package install must run after package.json changes are written
-    Callbacks?.OnProgress?.('Packages', 'Running package install...');
-    const installResult = RunPackageInstall(context.RepoRoot, options.Verbose, undefined, context.PackageManager);
-    if (!installResult.Success) {
-      Callbacks?.OnWarn?.('Packages', `Package install warning during removal: ${installResult.ErrorMessage}`);
+      await SetAppStep(context.ContextUser, existingApp.ID, 'FilesRemoved');
     }
 
-    // Step 8: Update records.
-    // Best-effort audit write — DB cleanup + file removal already succeeded; a failure to write
-    // the history entry must NOT throw into the outer catch and downgrade a successful remove to
-    // 'Error' (B31, parity with the Install path).
+    // Step 8: Update records. Clear the checkpoint and flip Status='Removed' in ONE write —
+    // previously these were two separate calls with the audit-history write sandwiched in
+    // between, leaving a window where a crash left the row at 'Removing' with a history entry
+    // that already said success. Writing the terminal state first (checkpoint cleared, status
+    // Removed) means a crash after this point has nothing left to resume — the remove is
+    // already done from the row's point of view — and the history write below is purely
+    // best-effort audit, matching the Install/Upgrade paths (B31).
+    await UpdateAppRecord(context.ContextUser, existingApp.ID, {
+      Status: 'Removed',
+      LastCompletedStep: null,
+    });
     try {
       await RecordInstallHistoryEntry(context.ContextUser, existingApp.ID, 'Remove', manifest, {
         Success: true,
@@ -971,10 +1053,6 @@ export async function RemoveApp(options: RemoveOptions, context: OrchestratorCon
     } catch (histErr: unknown) {
       Callbacks?.OnWarn?.('Record', `App removed, but the history audit entry could not be written: ${histErr instanceof Error ? histErr.message : String(histErr)}`);
     }
-
-    await UpdateAppRecord(context.ContextUser, existingApp.ID, {
-      Status: 'Removed',
-    });
 
     Callbacks?.OnSuccess?.('Remove', `Successfully removed ${options.AppName}`);
 
@@ -1017,6 +1095,11 @@ export async function DisableApp(appName: string, context: OrchestratorContext):
   if (!app) {
     return BuildFailureResult('Install', appName, '', 'Config', startTime, `App '${appName}' is not installed`);
   }
+  // Mutex: disabling mid-install/upgrade/remove would flip Status away from what that
+  // operation's resume logic expects to see, corrupting its checkpoint read.
+  if (!SETTLED_STATUSES.has(app.Status)) {
+    return BuildMutexConflictResult('Install', appName, app.Version, startTime, app.Status);
+  }
 
   const toggle = ToggleServerDynamicPackages(context.RepoRoot, appName, false, context.ServerPackagePath);
   if (!toggle.Success) {
@@ -1044,6 +1127,11 @@ export async function EnableApp(appName: string, context: OrchestratorContext): 
   const app = await FindInstalledApp(context.ContextUser, appName);
   if (!app) {
     return BuildFailureResult('Install', appName, '', 'Config', startTime, `App '${appName}' is not installed`);
+  }
+  // Mutex: see DisableApp — enabling mid-install/upgrade/remove would corrupt that operation's
+  // in-progress state the same way.
+  if (!SETTLED_STATUSES.has(app.Status)) {
+    return BuildMutexConflictResult('Install', appName, app.Version, startTime, app.Status);
   }
 
   const toggle = ToggleServerDynamicPackages(context.RepoRoot, appName, true, context.ServerPackagePath);
