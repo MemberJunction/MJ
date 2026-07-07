@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["vitest/globals", "node"]
+  },
+  "include": [
+    "src/lib/record-selector.component.ts",
+    "src/lib/record-selector.component.dom.test.ts",
+    "src/lib/dialog.component.ts",
+    "src/lib/dialog.component.dom.test.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
+}

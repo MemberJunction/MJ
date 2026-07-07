@@ -52,6 +52,9 @@ const loadModule = featureLoader(() => import('@memberjunction/ng-dashboards/mod
 // --- @memberjunction/ng-dashboards → ./predictive-studio-dashboards.module (3 entries) ---
 const loadPredictiveStudioDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/predictive-studio-dashboards.module'));
 
+// --- @memberjunction/ng-dashboards → ./routines-dashboards.module (1 entries) ---
+const loadRoutinesDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/routines-dashboards.module'));
+
 // --- @memberjunction/ng-dashboards → ./scheduling-dashboards.module (4 entries) ---
 const loadSchedulingDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/scheduling-dashboards.module'));
 
@@ -187,6 +190,9 @@ export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {
   'BaseResourceComponent::PredictiveStudioPredictionsResource': loadPredictiveStudioDashboardsModule,
   'BaseResourceComponent::PredictiveStudioStudioResource': loadPredictiveStudioDashboardsModule,
 
+  // @memberjunction/ng-dashboards → ./routines-dashboards.module
+  'BaseResourceComponent::UserRoutines': loadRoutinesDashboardsModule,
+
   // @memberjunction/ng-dashboards → ./scheduling-dashboards.module
   'BaseDashboard::SchedulingDashboard': loadSchedulingDashboardsModule,
   'BaseResourceComponent::SchedulingActivityResource': loadSchedulingDashboardsModule,
@@ -217,4 +223,4 @@ export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {
 
 };
 
-export const LAZY_FEATURE_CONFIG_COUNT = 109;
+export const LAZY_FEATURE_CONFIG_COUNT = 110;
