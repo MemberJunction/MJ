@@ -6,7 +6,7 @@
  */
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { mkdirSync, readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import type { AppInstallCallbacks, InstallOptions, UpgradeOptions, RemoveOptions, AppOperationResult, ErrorPhase, PassthroughInstallOptions, AppHookPayload } from '../types/open-app-types.js';
@@ -766,7 +766,10 @@ export async function RemoveApp(options: RemoveOptions, context: OrchestratorCon
       // Application has no FK to the app's schema and often zero ApplicationEntity links, so the
       // link-based detector can't see it — the migrations are the authoritative "owned" set.
       const declaredApplicationIds = await ExtractDeclaredApplicationIds(manifest, context, existingApp.Subpath ?? undefined);
-      metadataResult = await RemoveAppEntityMetadata(existingApp.SchemaName, context.ContextUser, Callbacks, undefined, {
+      // Pass the context's bound provider (not undefined) so the entity-layer fallback + all RunView/
+      // metadata reads inside use THIS provider rather than the process-global `new Metadata()` — the
+      // multi-provider rule. `DatabaseProviderBase` implements `IMetadataProvider`.
+      metadataResult = await RemoveAppEntityMetadata(existingApp.SchemaName, context.ContextUser, Callbacks, context.DatabaseProvider, {
         DatabaseProvider: context.DatabaseProvider,
         MJCoreSchema: context.MJCoreSchema,
         DeclaredApplicationIds: declaredApplicationIds,
@@ -1545,11 +1548,12 @@ async function ExecuteHookModule(specifier: string, payload: AppHookPayload, rep
 
 /**
  * Options for {@link RemoveAppEntityMetadata}. When {@link RemoveAppEntityMetadataOptions.DatabaseProvider}
- * is supplied AND the provider is NOT PostgreSQL, the FK-graph cascade teardown is used; otherwise
- * (PostgreSQL, or no provider) the existing entity-layer TransactionGroup path is used unchanged.
+ * is supplied, the dialect-driven FK-graph cascade teardown is used — on BOTH SQL Server and PostgreSQL
+ * (identifier quoting + the FK-graph catalog query come from the provider's `SQLDialect`). Only a caller
+ * that passes NO provider falls back to the legacy entity-layer TransactionGroup path (which under-deletes).
  */
 interface RemoveAppEntityMetadataOptions {
-  /** The live DB provider. Its presence + non-`postgresql` dialect selects the SQL-Server FK-graph path. */
+  /** The live DB provider. Its presence selects the dialect-driven FK-graph path (SQL Server or PostgreSQL). */
   DatabaseProvider?: DatabaseProviderBase;
   /** MJ core schema name (defaults to `__mj`) — used to root the FK-graph teardown. */
   MJCoreSchema?: string;
@@ -1561,13 +1565,21 @@ interface RemoveAppEntityMetadataOptions {
  * Removes all MJ entity metadata associated with an app's schema.
  *
  * Two teardown strategies, chosen by `options`:
- * - **FK-graph cascade (SQL Server)** — when `options.DatabaseProvider` is set AND its dialect is
- *   not `postgresql`: enumerates the live FK graph and clears every one of `Entity`'s dependents
- *   set-based, deepest-first, in one atomic transaction ({@link RunFkGraphTeardown}). This covers
- *   dependents the entity-layer path under-deletes (base-view joins hide FK-enforced rows).
- * - **Entity-layer (PostgreSQL / no provider)** — the existing hardcoded-list + per-entity
- *   `Delete()` inside ONE TransactionGroup, committed once (all-or-nothing, PG3). Unchanged, so
- *   existing 2-arg callers keep working.
+ * - **FK-graph cascade (any provider dialect)** — when `options.DatabaseProvider` is set:
+ *   enumerates the live FK graph and clears every one of `Entity`'s dependents set-based,
+ *   deepest-first, in one atomic transaction ({@link RunFkGraphTeardown}), on BOTH SQL Server and
+ *   PostgreSQL (quoting + the FK-graph catalog query come from the provider's `SQLDialect`). This
+ *   covers dependents the entity-layer path under-deletes (base-view joins hide FK-enforced rows).
+ * - **Entity-layer (no-provider fallback only)** — the legacy hardcoded-list + per-entity
+ *   `Delete()` inside ONE TransactionGroup, committed once (all-or-nothing, PG3). Under-deletes
+ *   (misses dependents like `RecordChange`), so it exists only for 2-arg callers that pass no
+ *   provider; pass a `DatabaseProvider` to get the complete cascade.
+ *
+ * NOTE: the FK-graph path executes raw set-based SQL — it does NOT go through the `BaseEntity`
+ * pipeline, so it emits no RecordChange audit rows, fires no `*EntityServer` delete hooks, and
+ * (most importantly) fires no BaseEntity events, so provider/engine metadata caches are NOT
+ * invalidated. Fine for `mj app remove` (the CLI process exits), but a caller invoking this inside
+ * a long-running process should refresh metadata afterward. See {@link RunFkGraphTeardown}.
  *
  * In BOTH paths the app-owned Application rows — the link-detected set unioned with the
  * migration-declared set — are dropped after teardown (so a re-install's fixed-UUID
@@ -1738,11 +1750,12 @@ async function ExtractDeclaredApplicationIds(
   context: OrchestratorContext,
   subpath?: string,
 ): Promise<string[]> {
+  if (!manifest.migrations || !manifest.schema) {
+    return [];
+  }
+  let tempDir: string | undefined;
   try {
-    if (!manifest.migrations || !manifest.schema) {
-      return [];
-    }
-    const tempDir = join(tmpdir(), `mj-app-${manifest.name}-appids-${Date.now()}`);
+    tempDir = join(tmpdir(), `mj-app-${manifest.name}-appids-${Date.now()}`);
     mkdirSync(tempDir, { recursive: true });
     const download = await DownloadAppMigrations(manifest, context, tempDir, subpath);
     if (!download.Success) {
@@ -1751,6 +1764,15 @@ async function ExtractDeclaredApplicationIds(
     return await extractApplicationIds(tempDir);
   } catch {
     return [];
+  } finally {
+    // Clean up the downloaded-migrations temp dir (best-effort — never mask the result).
+    if (tempDir) {
+      try {
+        rmSync(tempDir, { recursive: true, force: true });
+      } catch {
+        /* best-effort cleanup */
+      }
+    }
   }
 }
 

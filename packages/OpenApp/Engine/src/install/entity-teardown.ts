@@ -141,6 +141,11 @@ export function buildRootDoomedPredicate(dialect: SQLDialect, appSchema: string)
  * ({@link SQLDialect.ForeignKeyGraphSQL}), so this works on both SQL Server and PostgreSQL; the
  * normalized row shape (`parentTable, parentRefCol, childTable, childCol, childNullable, fkName,
  * colCount`) is identical across dialects.
+ *
+ * LIMITATION: the query filters BOTH ends to `mjSchema`, so a FK from a table in ANOTHER schema
+ * into `mjSchema.Entity` is not enumerated. Such a cross-schema dependent would still FK-block the
+ * final `Entity` delete → clean `XACT_ABORT`/transaction rollback, removal reported as failed
+ * (nothing partially deleted). Accepted as rare; documented so the next person who hits it knows why.
  */
 export async function EnumerateMjEntityFkGraph(
   dbProvider: DatabaseProviderBase,
@@ -211,27 +216,13 @@ export async function ReportTeardownPlan(
 /**
  * Wraps the teardown statements in ONE atomic transaction for the given dialect. PURE (no DB).
  *
- * - **SQL Server**: `SET QUOTED_IDENTIFIER ON` / `SET ANSI_NULLS ON` are required because some
- *   tables have filtered / computed-column indexes or indexed views, against which an UPDATE
- *   (SET NULL) or DELETE fails (Msg 1934) if those options are OFF — so we set them explicitly
- *   rather than depend on the driver's connection defaults. `SET XACT_ABORT ON` makes any failure
- *   roll the whole batch back (all-or-nothing atomicity).
- * - **PostgreSQL**: no session pragmas are needed (`QUOTED_IDENTIFIER`/`ANSI_NULLS` are SQL-Server
- *   concepts), and PostgreSQL already aborts the whole transaction on any error, so plain
- *   `BEGIN … COMMIT` gives the same all-or-nothing semantics as `XACT_ABORT`.
- *
- * The per-platform branch lives here (not on the dialect) because session/transaction setup has no
- * dialect API and there are only two platforms; `PlatformKey` is the single point of divergence.
- * Returns an empty string for an empty statement list.
+ * The platform-specific session/transaction setup is owned by the dialect
+ * ({@link SQLDialect.AtomicBatchScript}) — SQL Server emits `SET QUOTED_IDENTIFIER/ANSI_NULLS/XACT_ABORT`
+ * + `BEGIN/COMMIT TRANSACTION`; PostgreSQL emits plain `BEGIN … COMMIT`. This thin wrapper stays for
+ * the pure-function test seam. Returns an empty string for an empty statement list.
  */
 export function buildTeardownBatchScript(dialect: SQLDialect, statements: string[]): string {
-  if (!statements || !statements.length) return '';
-  const body = statements.join(';\n');
-  if (dialect.PlatformKey === 'postgresql') {
-    return `BEGIN;\n${body};\nCOMMIT;`;
-  }
-  // SQL Server (and any other T-SQL-family platform)
-  return `SET QUOTED_IDENTIFIER ON;\nSET ANSI_NULLS ON;\nSET XACT_ABORT ON;\nBEGIN TRANSACTION;\n${body};\nCOMMIT TRANSACTION;`;
+  return dialect.AtomicBatchScript(statements);
 }
 
 /**
@@ -252,6 +243,13 @@ export async function ExecTeardownBatch(
  * Orchestrates the full FK-graph teardown for the doomed entities of a schema:
  * enumerate the live FK graph → build the plan → surface any warnings → dry-run report →
  * execute the atomic batch. Runs on SQL Server or PostgreSQL (dialect-driven).
+ *
+ * WARNING: this executes raw set-based SQL and deliberately does NOT go through the `BaseEntity`
+ * pipeline — so it writes no RecordChange audit rows, fires no `*EntityServer` delete hooks, and
+ * fires no BaseEntity events, which means provider/`BaseEngine` metadata caches are NOT invalidated.
+ * That is correct for `mj app remove` (the CLI process exits immediately after), but a caller that
+ * invokes this inside a long-running process (e.g. MJAPI) must refresh metadata afterward or its
+ * cached entity metadata will be stale.
  */
 export async function RunFkGraphTeardown(
   dbProvider: DatabaseProviderBase,

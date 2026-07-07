@@ -7,6 +7,13 @@
  * found by walking entity links. The app's migrations (which create it with a fixed GUID) are the
  * reliable source of truth. Without this, a link-less nav Application survives removal and a
  * re-install's `spCreateApplication` collides on `PK_Application_ID`.
+ *
+ * KNOWN LIMITATION — SQL-Server-only patterns: the extraction regexes below are T-SQL-shaped
+ * (`EXEC … @ID = …`, `N'…'` literals, `INSERT INTO [schema].[Application]` bracket quoting). A
+ * PostgreSQL-flavored app migration won't match any of them, so on PostgreSQL this returns `[]` and
+ * the link-less-nav-Application cleanup (this "Solution 2") does not apply — a PG app's link-less
+ * Application can still survive removal. (The FK-graph metadata cascade — "Solution 1" — DOES have
+ * full PG parity; only this migration-scan does not yet.) PG-flavored patterns are a follow-up.
  */
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';

@@ -738,6 +738,14 @@ export class PostgreSQLDialect extends SQLDialect {
         );
     }
 
+    AtomicBatchScript(statements: string[]): string {
+        if (!statements || !statements.length) return '';
+        const body = statements.join(';\n');
+        // No session pragmas (QUOTED_IDENTIFIER/ANSI_NULLS are SQL-Server concepts) and PostgreSQL
+        // already aborts the whole transaction on any error, so plain BEGIN … COMMIT is all-or-nothing.
+        return `BEGIN;\n${body};\nCOMMIT;`;
+    }
+
     // ─── IIF ─────────────────────────────────────────────────────────
 
     IIF(condition: string, trueVal: string, falseVal: string): string {

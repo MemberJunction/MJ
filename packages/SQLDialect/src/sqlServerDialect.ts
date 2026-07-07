@@ -624,6 +624,9 @@ export class SQLServerDialect extends SQLDialect {
      */
     ForeignKeyGraphSQL(schema: string): string {
         const s = this.QuoteStringLiteral(schema);
+        // Disabled FKs (fk.is_disabled = 1) are intentionally NOT filtered: a disabled FK can't block
+        // the Entity delete, so including it only yields an extra, conservative-safe child clear.
+        // ORDER BY fk.name makes edge order — and therefore statement + dry-run order — deterministic.
         return (
             'SELECT rt.name AS parentTable, rc.name AS parentRefCol, pt.name AS childTable, ' +
             'pc.name AS childCol, pc.is_nullable AS childNullable, fk.name AS fkName, ' +
@@ -636,8 +639,15 @@ export class SQLServerDialect extends SQLDialect {
             'JOIN sys.objects pt ON pt.object_id = fk.parent_object_id ' +
             'JOIN sys.schemas ps ON ps.schema_id = pt.schema_id ' +
             'JOIN sys.columns pc ON pc.object_id = fk.parent_object_id AND pc.column_id = fkc.parent_column_id ' +
-            `WHERE rs.name = ${s} AND ps.name = ${s}`
+            `WHERE rs.name = ${s} AND ps.name = ${s} ` +
+            'ORDER BY fk.name'
         );
+    }
+
+    AtomicBatchScript(statements: string[]): string {
+        if (!statements || !statements.length) return '';
+        const body = statements.join(';\n');
+        return `SET QUOTED_IDENTIFIER ON;\nSET ANSI_NULLS ON;\nSET XACT_ABORT ON;\nBEGIN TRANSACTION;\n${body};\nCOMMIT TRANSACTION;`;
     }
 
     // ─── IIF ─────────────────────────────────────────────────────────
