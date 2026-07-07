@@ -34,6 +34,7 @@ import {
   RecordInstallHistoryEntry,
   RecordAppDependencies,
   ReplaceAppDependenciesAtomically,
+  DeleteAppDependencies,
   SetAppStatus,
   FindInstalledApp,
   CheckSchemaSharedByOtherApps,
@@ -390,6 +391,12 @@ async function RecordInstallationAtomically(
     const appId = await RecordAppInstallation(contextUser, manifest, callbacks, tg, 'Installing', provider, subpath);
 
     if (manifest.dependencies) {
+      // Reinstall idempotency: `mj app remove` soft-removes (OpenApp.Status='Removed') and keeps the
+      // OpenApp row + its dependency rows, so a reinstall reuses that same appId. A blind insert would
+      // then collide on UQ_OpenAppDep. Clear any pre-existing dependency rows for this appId in the SAME
+      // transaction group before re-recording (delete-then-insert, atomic on Submit — mirrors the
+      // upgrade path's ReplaceAppDependenciesAtomically). No-op on a first install (nothing to delete).
+      await DeleteAppDependencies(contextUser, appId, tg);
       await RecordAppDependencies(contextUser, appId, manifest.dependencies, tg);
     }
 
