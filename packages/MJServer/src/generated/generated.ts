@@ -18,7 +18,7 @@ import { mj_core_schema } from '../config.js';
 
 
 
-import { MJAccessControlRuleEntity, MJActionAuthorizationEntity, MJActionCategoryEntity, MJActionContextTypeEntity, MJActionContextEntity, MJActionExecutionLogEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity, MJActionEntity, MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentArtifactTypeEntity, MJAIAgentCategoryEntity, MJAIAgentChannelEntity, MJAIAgentClientToolEntity, MJAIAgentCoAgentEntity, MJAIAgentConfigurationEntity, MJAIAgentDataSourceEntity, MJAIAgentExampleEntity, MJAIAgentLearningCycleEntity, MJAIAgentModalityEntity, MJAIAgentModelEntity, MJAIAgentNoteTypeEntity, MJAIAgentNoteEntity, MJAIAgentPermissionEntity, MJAIAgentPromptEntity, MJAIAgentRelationshipEntity, MJAIAgentRequestTypeEntity, MJAIAgentRequestEntity, MJAIAgentRunMediaEntity, MJAIAgentRunStepEntity, MJAIAgentRunEntity, MJAIAgentSearchScopeEntity, MJAIAgentSessionBridgeParticipantEntity, MJAIAgentSessionBridgeEntity, MJAIAgentSessionChannelEntity, MJAIAgentSessionEntity, MJAIAgentSkillEntity, MJAIAgentStepPathEntity, MJAIAgentStepEntity, MJAIAgentTypeEntity, MJAIAgentEntity, MJAIArchitectureEntity, MJAIBridgeAgentIdentityEntity, MJAIBridgeProviderChannelEntity, MJAIBridgeProviderEntity, MJAIClientToolDefinitionEntity, MJAIConfigurationParamEntity, MJAIConfigurationEntity, MJAICredentialBindingEntity, MJAIModalityEntity, MJAIModelActionEntity, MJAIModelArchitectureEntity, MJAIModelCostEntity, MJAIModelModalityEntity, MJAIModelPriceTypeEntity, MJAIModelPriceUnitTypeEntity, MJAIModelTypeEntity, MJAIModelVendorEntity, MJAIModelEntity, MJAIPromptCategoryEntity, MJAIPromptModelEntity, MJAIPromptRunMediaEntity, MJAIPromptRunEntity, MJAIPromptTypeEntity, MJAIPromptEntity, MJAIRemoteBrowserProviderEntity, MJAIResultCacheEntity, MJAISkillActionEntity, MJAISkillPermissionEntity, MJAISkillSubAgentEntity, MJAISkillEntity, MJAIVendorTypeDefinitionEntity, MJAIVendorTypeEntity, MJAIVendorEntity, MJAPIApplicationScopeEntity, MJAPIApplicationEntity, MJAPIKeyApplicationEntity, MJAPIKeyScopeEntity, MJAPIKeyUsageLogEntity, MJAPIKeyEntity, MJAPIScopeEntity, MJApplicationEntityEntity, MJApplicationRoleEntity, MJApplicationSettingEntity, MJApplicationEntity, MJArchiveConfigurationEntityEntity, MJArchiveConfigurationEntity, MJArchiveRunDetailEntity, MJArchiveRunEntity, MJArtifactPermissionEntity, MJArtifactTypeEntity, MJArtifactUseEntity, MJArtifactVersionAttributeEntity, MJArtifactVersionEntity, MJArtifactEntity, MJAuditLogTypeEntity, MJAuditLogEntity, MJAuthorizationRoleEntity, MJAuthorizationEntity, MJClusterAnalysisEntity, MJClusterAnalysisClusterEntity, MJCollectionArtifactEntity, MJCollectionPermissionEntity, MJCollectionEntity, MJCommunicationBaseMessageTypeEntity, MJCommunicationLogEntity, MJCommunicationProviderMessageTypeEntity, MJCommunicationProviderEntity, MJCommunicationRunEntity, MJCompanyEntity, MJCompanyIntegrationEntityMapEntity, MJCompanyIntegrationFieldMapEntity, MJCompanyIntegrationRecordMapEntity, MJCompanyIntegrationRunAPILogEntity, MJCompanyIntegrationRunDetailEntity, MJCompanyIntegrationRunEntity, MJCompanyIntegrationSyncWatermarkEntity, MJCompanyIntegrationEntity, MJComponentDependencyEntity, MJComponentLibraryEntity, MJComponentLibraryLinkEntity, MJComponentRegistryEntity, MJComponentEntity, MJContentFileTypeEntity, MJContentItemAttributeEntity, MJContentItemDuplicateEntity, MJContentItemTagEntity, MJContentItemEntity, MJContentProcessRunDetailEntity, MJContentProcessRunPromptRunEntity, MJContentProcessRunEntity, MJContentSourceParamEntity, MJContentSourceTypeParamEntity, MJContentSourceTypeEntity, MJContentSourceEntity, MJContentTypeAttributeEntity, MJContentTypeEntity, MJConversationArtifactPermissionEntity, MJConversationArtifactVersionEntity, MJConversationArtifactEntity, MJConversationDetailArtifactEntity, MJConversationDetailAttachmentEntity, MJConversationDetailRatingEntity, MJConversationDetailEntity, MJConversationEntity, MJCountryEntity, MJCredentialCategoryEntity, MJCredentialTypeEntity, MJCredentialEntity, MJDashboardCategoryEntity, MJDashboardCategoryLinkEntity, MJDashboardCategoryPermissionEntity, MJDashboardPartTypeEntity, MJDashboardPermissionEntity, MJDashboardUserPreferenceEntity, MJDashboardUserStateEntity, MJDashboardEntity, MJDataContextItemEntity, MJDataContextEntity, MJDatasetItemEntity, MJDatasetEntity, MJDuplicateRunDetailMatchEntity, MJDuplicateRunDetailEntity, MJDuplicateRunEntity, MJEmployeeCompanyIntegrationEntity, MJEmployeeRoleEntity, MJEmployeeSkillEntity, MJEmployeeEntity, MJEncryptionAlgorithmEntity, MJEncryptionKeySourceEntity, MJEncryptionKeyEntity, MJEntityEntity, MJEntityActionFilterEntity, MJEntityActionInvocationTypeEntity, MJEntityActionInvocationEntity, MJEntityActionParamEntity, MJEntityActionEntity, MJEntityAIActionEntity, MJEntityCommunicationFieldEntity, MJEntityCommunicationMessageTypeEntity, MJEntityDocumentRunEntity, MJEntityDocumentSettingEntity, MJEntityDocumentTypeEntity, MJEntityDocumentEntity, MJEntityFieldValueEntity, MJEntityFieldEntity, MJEntityFormOverrideEntity, MJEntityOrganicKeyRelatedEntityEntity, MJEntityOrganicKeyEntity, MJEntityPermissionEntity, MJEntityRecordDocumentEntity, MJEntityRelationshipDisplayComponentEntity, MJEntityRelationshipEntity, MJEntitySettingEntity, MJEnvironmentEntity, MJErrorLogEntity, MJExperimentSessionIterationEntity, MJExperimentSessionEntity, MJExperimentEntity, MJExplorerNavigationItemEntity, MJFileCategoryEntity, MJFileEntityRecordLinkEntity, MJFileStorageAccountPermissionEntity, MJFileStorageAccountEntity, MJFileStorageProviderEntity, MJFileEntity, MJGeneratedCodeCategoryEntity, MJGeneratedCodeEntity, MJInstanceConfigurationEntity, MJIntegrationObjectFieldEntity, MJIntegrationObjectEntity, MJIntegrationSourceTypeEntity, MJIntegrationURLFormatEntity, MJIntegrationEntity, MJKnowledgeHubSavedSearchEntity, MJLibraryEntity, MJLibraryItemEntity, MJListCategoryEntity, MJListDetailEntity, MJListInvitationEntity, MJListShareEntity, MJListEntity, MJMagicLinkInviteAllowedDomainEntity, MJMagicLinkInviteAllowedPathEntity, MJMagicLinkInviteApplicationEntity, MJMagicLinkInviteRoleEntity, MJMagicLinkInviteEntity, MJMagicLinkRedemptionEntity, MJMCPServerConnectionPermissionEntity, MJMCPServerConnectionToolEntity, MJMCPServerConnectionEntity, MJMCPServerToolEntity, MJMCPServerEntity, MJMCPToolExecutionLogEntity, MJMCPToolFavoriteEntity, MJMLAlgorithmUseCaseRankingEntity, MJMLAlgorithmUseCaseEntity, MJMLAlgorithmEntity, MJMLModelScoringBindingEntity, MJMLModelEntity, MJMLTrainingPipelineEntity, MJMLTrainingRunEntity, MJOAuthAuthServerMetadataCacheEntity, MJOAuthAuthorizationStateEntity, MJOAuthClientRegistrationEntity, MJOAuthTokenEntity, MJOpenAppDependencyEntity, MJOpenAppInstallHistoryEntity, MJOpenAppEntity, MJOutputDeliveryTypeEntity, MJOutputFormatTypeEntity, MJOutputTriggerTypeEntity, MJPermissionDomainEntity, MJProcessRunDetailEntity, MJProcessRunEntity, MJProjectEntity, MJPublicLinkEntity, MJQueryEntity, MJQueryCategoryEntity, MJQueryDependencyEntity, MJQueryEntityEntity, MJQueryFieldEntity, MJQueryParameterEntity, MJQueryPermissionEntity, MJQuerySQLEntity, MJQueueTaskEntity, MJQueueTypeEntity, MJQueueEntity, MJRecommendationItemEntity, MJRecommendationProviderEntity, MJRecommendationRunEntity, MJRecommendationEntity, MJRecordChangeReplayRunEntity, MJRecordChangeEntity, MJRecordGeoCodeEntity, MJRecordLinkEntity, MJRecordMergeDeletionLogEntity, MJRecordMergeLogEntity, MJRecordProcessCategoryEntity, MJRecordProcessWatermarkEntity, MJRecordProcessEntity, MJRemoteOperationCategoryEntity, MJRemoteOperationEntity, MJReportCategoryEntity, MJReportSnapshotEntity, MJReportUserStateEntity, MJReportVersionEntity, MJReportEntity, MJResourceLinkEntity, MJResourcePermissionEntity, MJResourceTypeEntity, MJRoleEntity, MJRowLevelSecurityFilterEntity, MJScheduledActionParamEntity, MJScheduledActionEntity, MJScheduledJobRunEntity, MJScheduledJobTypeEntity, MJScheduledJobEntity, MJSchemaInfoEntity, MJScopedPromptPartEntity, MJSearchExecutionLogEntity, MJSearchProviderEntity, MJSearchScopeEntityEntity, MJSearchScopeExternalIndexEntity, MJSearchScopePermissionEntity, MJSearchScopeProviderEntity, MJSearchScopeStorageAccountEntity, MJSearchScopeTestQueryEntity, MJSearchScopeEntity, MJSignatureAccountEntity, MJSignatureProviderEntity, MJSignatureRequestDocumentEntity, MJSignatureRequestLogEntity, MJSignatureRequestRecipientEntity, MJSignatureRequestEntity, MJSkillEntity, MJSQLDialectEntity, MJStateProvinceEntity, MJTagAuditLogEntity, MJTagCoOccurrenceEntity, MJTagScopeEntity, MJTagSuggestionEntity, MJTagSynonymEntity, MJTaggedItemEntity, MJTagEntity, MJTaskDependencyEntity, MJTaskTypeEntity, MJTaskEntity, MJTemplateCategoryEntity, MJTemplateContentTypeEntity, MJTemplateContentEntity, MJTemplateParamEntity, MJTemplateEntity, MJTestRubricEntity, MJTestRunFeedbackEntity, MJTestRunOutputTypeEntity, MJTestRunOutputEntity, MJTestRunEntity, MJTestSuiteRunEntity, MJTestSuiteTestEntity, MJTestSuiteEntity, MJTestTypeEntity, MJTestEntity, MJUserApplicationEntityEntity, MJUserApplicationEntity, MJUserFavoriteEntity, MJUserNotificationPreferenceEntity, MJUserNotificationTypeEntity, MJUserNotificationEntity, MJUserRecordLogEntity, MJUserRoleEntity, MJUserRoutineRecipientEntity, MJUserRoutineRunEntity, MJUserRoutineEntity, MJUserSettingEntity, MJUserViewCategoryEntity, MJUserViewRunDetailEntity, MJUserViewRunEntity, MJUserViewEntity, MJUserEntity, MJVectorDatabaseEntity, MJVectorIndexEntity, MJVersionInstallationEntity, MJVersionLabelItemEntity, MJVersionLabelRestoreEntity, MJVersionLabelEntity, MJViewTypeEntity, MJWorkflowEngineEntity, MJWorkflowRunEntity, MJWorkflowEntity, MJWorkspaceItemEntity, MJWorkspaceEntity } from '@memberjunction/core-entities';
+import { MJAccessControlRuleEntity, MJActionAuthorizationEntity, MJActionCategoryEntity, MJActionContextTypeEntity, MJActionContextEntity, MJActionExecutionLogEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity, MJActionEntity, MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentArtifactTypeEntity, MJAIAgentCategoryEntity, MJAIAgentChannelEntity, MJAIAgentClientToolEntity, MJAIAgentCoAgentEntity, MJAIAgentConfigurationEntity, MJAIAgentDataSourceEntity, MJAIAgentExampleEntity, MJAIAgentLearningCycleEntity, MJAIAgentModalityEntity, MJAIAgentModelEntity, MJAIAgentNoteTypeEntity, MJAIAgentNoteEntity, MJAIAgentPermissionEntity, MJAIAgentPromptEntity, MJAIAgentRelationshipEntity, MJAIAgentRequestTypeEntity, MJAIAgentRequestEntity, MJAIAgentRunMediaEntity, MJAIAgentRunStepEntity, MJAIAgentRunEntity, MJAIAgentSearchScopeEntity, MJAIAgentSessionBridgeParticipantEntity, MJAIAgentSessionBridgeEntity, MJAIAgentSessionChannelEntity, MJAIAgentSessionEntity, MJAIAgentSkillEntity, MJAIAgentStepPathEntity, MJAIAgentStepEntity, MJAIAgentTypeEntity, MJAIAgentEntity, MJAIArchitectureEntity, MJAIBridgeAgentIdentityEntity, MJAIBridgeProviderChannelEntity, MJAIBridgeProviderEntity, MJAIClientToolDefinitionEntity, MJAIConfigurationParamEntity, MJAIConfigurationEntity, MJAICredentialBindingEntity, MJAIModalityEntity, MJAIModelActionEntity, MJAIModelArchitectureEntity, MJAIModelCostEntity, MJAIModelModalityEntity, MJAIModelPriceTypeEntity, MJAIModelPriceUnitTypeEntity, MJAIModelTypeEntity, MJAIModelVendorEntity, MJAIModelEntity, MJAIPromptCategoryEntity, MJAIPromptModelEntity, MJAIPromptRunMediaEntity, MJAIPromptRunEntity, MJAIPromptTypeEntity, MJAIPromptEntity, MJAIRemoteBrowserProviderEntity, MJAIResultCacheEntity, MJAISkillActionEntity, MJAISkillPermissionEntity, MJAISkillSubAgentEntity, MJAISkillEntity, MJAIVendorTypeDefinitionEntity, MJAIVendorTypeEntity, MJAIVendorEntity, MJAPIApplicationScopeEntity, MJAPIApplicationEntity, MJAPIKeyApplicationEntity, MJAPIKeyScopeEntity, MJAPIKeyUsageLogEntity, MJAPIKeyEntity, MJAPIScopeEntity, MJApplicationEntityEntity, MJApplicationRoleEntity, MJApplicationSettingEntity, MJApplicationEntity, MJArchiveConfigurationEntityEntity, MJArchiveConfigurationEntity, MJArchiveRunDetailEntity, MJArchiveRunEntity, MJArtifactPermissionEntity, MJArtifactTypeEntity, MJArtifactUseEntity, MJArtifactVersionAttributeEntity, MJArtifactVersionEntity, MJArtifactEntity, MJAuditLogTypeEntity, MJAuditLogEntity, MJAuthorizationRoleEntity, MJAuthorizationEntity, MJClusterAnalysisEntity, MJClusterAnalysisClusterEntity, MJCollectionArtifactEntity, MJCollectionPermissionEntity, MJCollectionEntity, MJCommunicationBaseMessageTypeEntity, MJCommunicationLogEntity, MJCommunicationProviderMessageTypeEntity, MJCommunicationProviderEntity, MJCommunicationRunEntity, MJCompanyEntity, MJCompanyIntegrationEntityMapEntity, MJCompanyIntegrationFieldMapEntity, MJCompanyIntegrationRecordMapEntity, MJCompanyIntegrationRunAPILogEntity, MJCompanyIntegrationRunDetailEntity, MJCompanyIntegrationRunEntity, MJCompanyIntegrationSyncWatermarkEntity, MJCompanyIntegrationEntity, MJComponentDependencyEntity, MJComponentLibraryEntity, MJComponentLibraryLinkEntity, MJComponentRegistryEntity, MJComponentEntity, MJContentFileTypeEntity, MJContentItemAttributeEntity, MJContentItemDuplicateEntity, MJContentItemTagEntity, MJContentItemEntity, MJContentProcessRunDetailEntity, MJContentProcessRunPromptRunEntity, MJContentProcessRunEntity, MJContentSourceParamEntity, MJContentSourceTypeParamEntity, MJContentSourceTypeEntity, MJContentSourceEntity, MJContentTypeAttributeEntity, MJContentTypeEntity, MJConversationArtifactPermissionEntity, MJConversationArtifactVersionEntity, MJConversationArtifactEntity, MJConversationDetailArtifactEntity, MJConversationDetailAttachmentEntity, MJConversationDetailRatingEntity, MJConversationDetailEntity, MJConversationWidgetInstanceEntity, MJConversationEntity, MJCountryEntity, MJCredentialCategoryEntity, MJCredentialTypeEntity, MJCredentialEntity, MJDashboardCategoryEntity, MJDashboardCategoryLinkEntity, MJDashboardCategoryPermissionEntity, MJDashboardPartTypeEntity, MJDashboardPermissionEntity, MJDashboardUserPreferenceEntity, MJDashboardUserStateEntity, MJDashboardEntity, MJDataContextItemEntity, MJDataContextEntity, MJDatasetItemEntity, MJDatasetEntity, MJDuplicateRunDetailMatchEntity, MJDuplicateRunDetailEntity, MJDuplicateRunEntity, MJEmployeeCompanyIntegrationEntity, MJEmployeeRoleEntity, MJEmployeeSkillEntity, MJEmployeeEntity, MJEncryptionAlgorithmEntity, MJEncryptionKeySourceEntity, MJEncryptionKeyEntity, MJEntityEntity, MJEntityActionFilterEntity, MJEntityActionInvocationTypeEntity, MJEntityActionInvocationEntity, MJEntityActionParamEntity, MJEntityActionEntity, MJEntityAIActionEntity, MJEntityCommunicationFieldEntity, MJEntityCommunicationMessageTypeEntity, MJEntityDocumentRunEntity, MJEntityDocumentSettingEntity, MJEntityDocumentTypeEntity, MJEntityDocumentEntity, MJEntityFieldValueEntity, MJEntityFieldEntity, MJEntityFormOverrideEntity, MJEntityOrganicKeyRelatedEntityEntity, MJEntityOrganicKeyEntity, MJEntityPermissionEntity, MJEntityRecordDocumentEntity, MJEntityRelationshipDisplayComponentEntity, MJEntityRelationshipEntity, MJEntitySettingEntity, MJEnvironmentEntity, MJErrorLogEntity, MJExperimentSessionIterationEntity, MJExperimentSessionEntity, MJExperimentEntity, MJExplorerNavigationItemEntity, MJExternalDataSourceTypeEntity, MJExternalDataSourceEntity, MJFileCategoryEntity, MJFileEntityRecordLinkEntity, MJFileStorageAccountPermissionEntity, MJFileStorageAccountEntity, MJFileStorageProviderEntity, MJFileEntity, MJGeneratedCodeCategoryEntity, MJGeneratedCodeEntity, MJInstanceConfigurationEntity, MJIntegrationObjectFieldEntity, MJIntegrationObjectEntity, MJIntegrationSourceTypeEntity, MJIntegrationURLFormatEntity, MJIntegrationEntity, MJKnowledgeHubSavedSearchEntity, MJLibraryEntity, MJLibraryItemEntity, MJListCategoryEntity, MJListDetailEntity, MJListInvitationEntity, MJListShareEntity, MJListEntity, MJMagicLinkInviteAllowedDomainEntity, MJMagicLinkInviteAllowedPathEntity, MJMagicLinkInviteApplicationEntity, MJMagicLinkInviteRoleEntity, MJMagicLinkInviteEntity, MJMagicLinkRedemptionEntity, MJMCPServerConnectionPermissionEntity, MJMCPServerConnectionToolEntity, MJMCPServerConnectionEntity, MJMCPServerToolEntity, MJMCPServerEntity, MJMCPToolExecutionLogEntity, MJMCPToolFavoriteEntity, MJMLAlgorithmUseCaseRankingEntity, MJMLAlgorithmUseCaseEntity, MJMLAlgorithmEntity, MJMLModelScoringBindingEntity, MJMLModelEntity, MJMLTrainingPipelineEntity, MJMLTrainingRunEntity, MJOAuthAuthServerMetadataCacheEntity, MJOAuthAuthorizationStateEntity, MJOAuthClientRegistrationEntity, MJOAuthTokenEntity, MJOpenAppDependencyEntity, MJOpenAppInstallHistoryEntity, MJOpenAppEntity, MJOutputDeliveryTypeEntity, MJOutputFormatTypeEntity, MJOutputTriggerTypeEntity, MJPermissionDomainEntity, MJProcessRunDetailEntity, MJProcessRunEntity, MJProjectEntity, MJPublicLinkEntity, MJQueryEntity, MJQueryCategoryEntity, MJQueryDependencyEntity, MJQueryEntityEntity, MJQueryFieldEntity, MJQueryParameterEntity, MJQueryPermissionEntity, MJQuerySQLEntity, MJQueueTaskEntity, MJQueueTypeEntity, MJQueueEntity, MJRecommendationItemEntity, MJRecommendationProviderEntity, MJRecommendationRunEntity, MJRecommendationEntity, MJRecordChangeReplayRunEntity, MJRecordChangeEntity, MJRecordGeoCodeEntity, MJRecordLinkEntity, MJRecordMergeDeletionLogEntity, MJRecordMergeLogEntity, MJRecordProcessCategoryEntity, MJRecordProcessWatermarkEntity, MJRecordProcessEntity, MJRemoteOperationCategoryEntity, MJRemoteOperationEntity, MJReportCategoryEntity, MJReportSnapshotEntity, MJReportUserStateEntity, MJReportVersionEntity, MJReportEntity, MJResourceLinkEntity, MJResourcePermissionEntity, MJResourceTypeEntity, MJRoleEntity, MJRowLevelSecurityFilterEntity, MJScheduledActionParamEntity, MJScheduledActionEntity, MJScheduledJobRunEntity, MJScheduledJobTypeEntity, MJScheduledJobEntity, MJSchemaInfoEntity, MJScopedPromptPartEntity, MJSearchExecutionLogEntity, MJSearchProviderEntity, MJSearchScopeEntityEntity, MJSearchScopeExternalIndexEntity, MJSearchScopePermissionEntity, MJSearchScopeProviderEntity, MJSearchScopeStorageAccountEntity, MJSearchScopeTestQueryEntity, MJSearchScopeEntity, MJSignatureAccountEntity, MJSignatureProviderEntity, MJSignatureRequestDocumentEntity, MJSignatureRequestLogEntity, MJSignatureRequestRecipientEntity, MJSignatureRequestEntity, MJSkillEntity, MJSQLDialectEntity, MJStateProvinceEntity, MJTagAuditLogEntity, MJTagCoOccurrenceEntity, MJTagScopeEntity, MJTagSuggestionEntity, MJTagSynonymEntity, MJTaggedItemEntity, MJTagEntity, MJTaskDependencyEntity, MJTaskTypeEntity, MJTaskEntity, MJTemplateCategoryEntity, MJTemplateContentTypeEntity, MJTemplateContentEntity, MJTemplateParamEntity, MJTemplateEntity, MJTestRubricEntity, MJTestRunFeedbackEntity, MJTestRunOutputTypeEntity, MJTestRunOutputEntity, MJTestRunEntity, MJTestSuiteRunEntity, MJTestSuiteTestEntity, MJTestSuiteEntity, MJTestTypeEntity, MJTestEntity, MJUserApplicationEntityEntity, MJUserApplicationEntity, MJUserFavoriteEntity, MJUserNotificationPreferenceEntity, MJUserNotificationTypeEntity, MJUserNotificationEntity, MJUserRecordLogEntity, MJUserRoleEntity, MJUserRoutineRecipientEntity, MJUserRoutineRunEntity, MJUserRoutineEntity, MJUserSettingEntity, MJUserViewCategoryEntity, MJUserViewRunDetailEntity, MJUserViewRunEntity, MJUserViewEntity, MJUserEntity, MJVectorDatabaseEntity, MJVectorIndexEntity, MJVersionInstallationEntity, MJVersionLabelItemEntity, MJVersionLabelRestoreEntity, MJVersionLabelEntity, MJViewTypeEntity, MJWorkflowEngineEntity, MJWorkflowRunEntity, MJWorkflowEntity, MJWorkspaceItemEntity, MJWorkspaceEntity } from '@memberjunction/core-entities';
     
 
 //****************************************************************************
@@ -9819,6 +9819,14 @@ export class MJAIAgentSession_ {
     @MaxLength(36)
     RecordingFileID?: string;
         
+    @Field({nullable: true, description: `Polymorphic counterparty-identity entity. Foreign key to Entity — identifies WHICH entity this realtime session's counterparty resolved to (e.g. User, a member/contact record, BizAppsCommon Person). Paired with LinkedRecordID via the CK_AIAgentSession_LinkBinding both-or-neither check, mirroring Conversation's linked pair. NULL while the session's counterparty is anonymous/unresolved.`}) 
+    @MaxLength(36)
+    LinkedEntityID?: string;
+        
+    @Field({nullable: true, description: `Polymorphic counterparty-identity record key. The primary-key value of the record (within LinkedEntityID's entity) this session resolved to, serialized as a string so any entity type can be referenced regardless of PK shape (UUID, int, composite). NVARCHAR(500), intentionally NOT FK-constrained. Used together with LinkedEntityID — see CK_AIAgentSession_LinkBinding. NULL while the session's counterparty is anonymous/unresolved.`}) 
+    @MaxLength(500)
+    LinkedRecordID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Agent?: string;
@@ -9834,6 +9842,10 @@ export class MJAIAgentSession_ {
     @Field({nullable: true}) 
     @MaxLength(500)
     RecordingFile?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    LinkedEntity?: string;
         
     @Field({nullable: true}) 
     @MaxLength(36)
@@ -9903,6 +9915,12 @@ export class CreateMJAIAgentSessionInput {
     @Field({ nullable: true })
     RecordingFileID: string | null;
 
+    @Field({ nullable: true })
+    LinkedEntityID: string | null;
+
+    @Field({ nullable: true })
+    LinkedRecordID: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -9954,6 +9972,12 @@ export class UpdateMJAIAgentSessionInput {
 
     @Field({ nullable: true })
     RecordingFileID?: string | null;
+
+    @Field({ nullable: true })
+    LinkedEntityID?: string | null;
+
+    @Field({ nullable: true })
+    LinkedRecordID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -11552,6 +11576,9 @@ if this limit is exceeded.`})
     @Field(() => [MJAIAgentSkill_])
     MJAIAgentSkills_AgentIDArray: MJAIAgentSkill_[]; // Link to MJAIAgentSkills
     
+    @Field(() => [MJConversationWidgetInstance_])
+    MJConversationWidgetInstances_PinnedAgentIDArray: MJConversationWidgetInstance_[]; // Link to MJConversationWidgetInstances
+    
     @Field(() => [MJAISkillSubAgent_])
     MJAISkillSubAgents_SubAgentIDArray: MJAISkillSubAgent_[]; // Link to MJAISkillSubAgents
     
@@ -12427,6 +12454,16 @@ export class MJAIAgentResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIAgentSkills')} WHERE ${provider.QuoteIdentifier('AgentID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Skills', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, [mjaiagent_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Skills', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJConversationWidgetInstance_])
+    async MJConversationWidgetInstances_PinnedAgentIDArray(@Root() mjaiagent_: MJAIAgent_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Conversation Widget Instances', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwConversationWidgetInstances')} WHERE ${provider.QuoteIdentifier('PinnedAgentID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Conversation Widget Instances', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjaiagent_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Conversation Widget Instances', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -23950,6 +23987,9 @@ export class MJApplication_ {
     @Field(() => [MJMagicLinkInvite_])
     MJMagicLinkInvites_ApplicationIDArray: MJMagicLinkInvite_[]; // Link to MJMagicLinkInvites
     
+    @Field(() => [MJConversationWidgetInstance_])
+    MJConversationWidgetInstances_ApplicationIDArray: MJConversationWidgetInstance_[]; // Link to MJConversationWidgetInstances
+    
 }
 
 //****************************************************************************
@@ -24230,6 +24270,16 @@ export class MJApplicationResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMagicLinkInvites')} WHERE ${provider.QuoteIdentifier('ApplicationID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Magic Link Invites', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, [mjapplication_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Magic Link Invites', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJConversationWidgetInstance_])
+    async MJConversationWidgetInstances_ApplicationIDArray(@Root() mjapplication_: MJApplication_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Conversation Widget Instances', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwConversationWidgetInstances')} WHERE ${provider.QuoteIdentifier('ApplicationID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Conversation Widget Instances', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjapplication_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Conversation Widget Instances', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -38388,6 +38438,301 @@ export class MJConversationDetailResolver extends ResolverBase {
 }
 
 //****************************************************************************
+// ENTITY CLASS for MJ: Conversation Widget Instances
+//****************************************************************************
+@ObjectType({ description: `Durable per-deployment configuration for one embeddable public support widget (text and/or voice). One row per site/embed. Resolves a public widget key to its application scope, pinned support agent, restricted guest role, allowed origins, modality, auth strategy, and abuse ceilings. Reuses the magic-link anonymous-embed minting path at session time; this entity holds only the configuration.` })
+export class MJConversationWidgetInstance_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `Human-readable name for this widget deployment (e.g. "Acme Marketing Site Support").`}) 
+    @MaxLength(255)
+    Name: string;
+        
+    @Field({description: `Public, non-secret embed key (e.g. "pk_live_…") placed in the host page's data-widget-key attribute. Used to resolve this configuration at POST /widget/session. Unique. Not a credential — security comes from the origin allowlist, rate limits, the restricted guest role, and short-lived minted tokens.`}) 
+    @MaxLength(100)
+    PublicKey: string;
+        
+    @Field({description: `Foreign key to Application — the single app a guest session is scoped to. Mirrors the magic-link single-application model.`}) 
+    @MaxLength(36)
+    ApplicationID: string;
+        
+    @Field({description: `Foreign key to AIAgent — the support agent that is PINNED for every turn (passed as explicitAgentId). D5: pinning fixes which agent runs; combined with the restricted guest role it prevents a public visitor from reaching arbitrary agents/data. The pinned agent's own tool/handoff surface should be support-scoped.`}) 
+    @MaxLength(36)
+    PinnedAgentID: string;
+        
+    @Field({description: `Foreign key to Role — the restricted guest role assigned to the synthesized guest principal. This role's entity permissions are the real authorization boundary (read/write only the visitor's own Conversation + Conversation Details). Roles ride per-session JWT claims, not DB rows on the shared Anonymous principal.`}) 
+    @MaxLength(36)
+    GuestRoleID: string;
+        
+    @Field({nullable: true, description: `Allowed embedding origins for this widget, as a JSON array of origin strings (e.g. ["https://www.acme.com","https://acme.com"]). Enforced both at mint (POST /widget/session rejects unlisted Origin) and via CORS. NULL or empty means no origin is allowed (fail-closed).`}) 
+    AllowedOrigins?: string;
+        
+    @Field({description: `Which modalities this widget exposes: Text (chat only), Voice (client-direct realtime only), or Both. Gates whether the realtime-mint path is offered to the guest.`}) 
+    @MaxLength(10)
+    Modality: string;
+        
+    @Field({description: `Pluggable public-auth strategy (D1): Anonymous (guest-first, default), MagicLinkUpgrade (guest may escalate to an email-verified session), or HostIdentity (an authenticated host portal posts a signed identity assertion exchanged for an MJ guest JWT). All three converge on AuthProviderFactory + buildMagicLinkSessionUser.`}) 
+    @MaxLength(20)
+    AuthStrategy: string;
+        
+    @Field({description: `Lifecycle status. Active widgets mint sessions; Disabled widgets reject all mints (used to turn off a deployment without deleting its config).`}) 
+    @MaxLength(20)
+    Status: string;
+        
+    @Field(() => Int, {description: `Time-to-live in minutes for a minted guest session JWT. Short by design (default 15) to limit replay/theft; the widget refreshes before expiry. Capped at 1440 (24h).`}) 
+    SessionTTLMinutes: number;
+        
+    @Field(() => Int, {description: `Maximum number of guest-session mints allowed per minute per source IP/origin for this widget. Reuses the magic-link rate-limit pattern.`}) 
+    RateLimitPerMinute: number;
+        
+    @Field(() => Int, {nullable: true, description: `Optional hard ceiling (minutes) on a single voice session's duration for this widget. NULL means fall back to the server-wide default. Voice is the biggest cost/abuse surface; the SessionJanitor enforces this server-side (W4).`}) 
+    VoiceMaxSessionMinutes?: number;
+        
+    @Field({nullable: true, description: `Which MJ interactive channels this widget may attach when a voice session is active, as a JSON array of channel names (e.g. ["Whiteboard"]). Resolved client-side through MJGlobal.ClassFactory the same way the realtime client driver is resolved; each named channel is scoped by the existing Widget Guest RLS on AI Agent Session Channels. NULL or empty array = no channels (the backwards-compatible default). Remote Browser, given its control surface, should only be listed when a deployment explicitly opts in.`}) 
+    EnabledChannels?: string;
+        
+    @Field({nullable: true, description: `PEM-encoded RS256 public key for the host-identity auth strategy (D1). When AuthStrategy is HostIdentity, the host signs a short-lived identity assertion with its private key; the HostIdentityProvider verifies it against this per-instance key. Supersedes the interim config map (mj.config.cjs hostPublicKeys keyed by PublicKey). NULL when the widget does not use host identity; a HostIdentity widget with no key fails closed at mint.`}) 
+    HostPublicKey?: string;
+        
+    @Field(() => Boolean, {description: `Returning-visitor memory opt-in (R6). When 0 (default) this widget sets no durable visitor cookie and writes no cross-session recap — fully off. When 1, the widget mints a durable VisitorKey cookie, links each new Conversation to the visitor's prior one, and writes a recap memory note on close so a returning visitor's agent opens with prior context.`}) 
+    RememberReturningVisitors: boolean;
+        
+    @Field(() => Int, {nullable: true, description: `Retention window (days) for returning-visitor recap memory notes generated by this widget. NULL means use the system default. Past this window the visitor's auto-generated recap notes decay/archive via the Memory Manager. Ignored when RememberReturningVisitors = 0.`}) 
+    VisitorMemoryRetentionDays?: number;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(100)
+    Application: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    PinnedAgent?: string;
+        
+    @Field() 
+    @MaxLength(50)
+    GuestRole: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Conversation Widget Instances
+//****************************************************************************
+@InputType()
+export class CreateMJConversationWidgetInstanceInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    PublicKey?: string;
+
+    @Field({ nullable: true })
+    ApplicationID?: string;
+
+    @Field({ nullable: true })
+    PinnedAgentID?: string;
+
+    @Field({ nullable: true })
+    GuestRoleID?: string;
+
+    @Field({ nullable: true })
+    AllowedOrigins: string | null;
+
+    @Field({ nullable: true })
+    Modality?: string;
+
+    @Field({ nullable: true })
+    AuthStrategy?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => Int, { nullable: true })
+    SessionTTLMinutes?: number;
+
+    @Field(() => Int, { nullable: true })
+    RateLimitPerMinute?: number;
+
+    @Field(() => Int, { nullable: true })
+    VoiceMaxSessionMinutes: number | null;
+
+    @Field({ nullable: true })
+    EnabledChannels: string | null;
+
+    @Field({ nullable: true })
+    HostPublicKey: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    RememberReturningVisitors?: boolean;
+
+    @Field(() => Int, { nullable: true })
+    VisitorMemoryRetentionDays: number | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Conversation Widget Instances
+//****************************************************************************
+@InputType()
+export class UpdateMJConversationWidgetInstanceInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    PublicKey?: string;
+
+    @Field({ nullable: true })
+    ApplicationID?: string;
+
+    @Field({ nullable: true })
+    PinnedAgentID?: string;
+
+    @Field({ nullable: true })
+    GuestRoleID?: string;
+
+    @Field({ nullable: true })
+    AllowedOrigins?: string | null;
+
+    @Field({ nullable: true })
+    Modality?: string;
+
+    @Field({ nullable: true })
+    AuthStrategy?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => Int, { nullable: true })
+    SessionTTLMinutes?: number;
+
+    @Field(() => Int, { nullable: true })
+    RateLimitPerMinute?: number;
+
+    @Field(() => Int, { nullable: true })
+    VoiceMaxSessionMinutes?: number | null;
+
+    @Field({ nullable: true })
+    EnabledChannels?: string | null;
+
+    @Field({ nullable: true })
+    HostPublicKey?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    RememberReturningVisitors?: boolean;
+
+    @Field(() => Int, { nullable: true })
+    VisitorMemoryRetentionDays?: number | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Conversation Widget Instances
+//****************************************************************************
+@ObjectType()
+export class RunMJConversationWidgetInstanceViewResult {
+    @Field(() => [MJConversationWidgetInstance_])
+    Results: MJConversationWidgetInstance_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJConversationWidgetInstance_)
+export class MJConversationWidgetInstanceResolver extends ResolverBase {
+    @Query(() => RunMJConversationWidgetInstanceViewResult)
+    async RunMJConversationWidgetInstanceViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJConversationWidgetInstanceViewResult)
+    async RunMJConversationWidgetInstanceViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJConversationWidgetInstanceViewResult)
+    async RunMJConversationWidgetInstanceDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Conversation Widget Instances';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJConversationWidgetInstance_, { nullable: true })
+    async MJConversationWidgetInstance(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJConversationWidgetInstance_ | null> {
+        this.CheckUserReadPermissions('MJ: Conversation Widget Instances', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwConversationWidgetInstances')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Conversation Widget Instances', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Conversation Widget Instances', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJConversationWidgetInstance_)
+    async CreateMJConversationWidgetInstance(
+        @Arg('input', () => CreateMJConversationWidgetInstanceInput) input: CreateMJConversationWidgetInstanceInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Conversation Widget Instances', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJConversationWidgetInstance_)
+    async UpdateMJConversationWidgetInstance(
+        @Arg('input', () => UpdateMJConversationWidgetInstanceInput) input: UpdateMJConversationWidgetInstanceInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Conversation Widget Instances', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJConversationWidgetInstance_)
+    async DeleteMJConversationWidgetInstance(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Conversation Widget Instances', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
 // ENTITY CLASS for MJ: Conversations
 //****************************************************************************
 @ObjectType({ description: `Tracks conversation sessions between users and AI agents or between users, including context, participants, and metadata.` })
@@ -38478,6 +38823,14 @@ export class MJConversation_ {
     @MaxLength(255)
     EgressID?: string;
         
+    @Field({nullable: true, description: `Durable, opaque returning-visitor anchor (R3). Holds the value of a long-lived first-party cookie minted by the widget on first visit, used to find this visitor's prior conversations while they are still anonymous. Distinct from ExternalID (which stays per-session for RLS isolation). NULL for conversations that are not widget returning-visitor sessions.`}) 
+    @MaxLength(255)
+    VisitorKey?: string;
+        
+    @Field({nullable: true, description: `Conversation-altitude returning-visitor chain (R2). Self-foreign-key to the visitor's immediately prior Conversation (found by VisitorKey or the resolved LinkedEntityID/LinkedRecordID pair at mint time). History and memory are conversation-scoped, so the chain lives here — NOT on AIAgentSession.LastSessionID, which owns reconnect/resume semantics and is walked by the replay viewer. Named to mirror AIAgentSession.LastSessionID. NULL for a brand-new visitor's first conversation.`}) 
+    @MaxLength(36)
+    LastConversationID?: string;
+        
     @Field() 
     @MaxLength(100)
     User: string;
@@ -38514,6 +38867,14 @@ export class MJConversation_ {
     @MaxLength(500)
     RecordingFile?: string;
         
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    LastConversation?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    RootLastConversationID?: string;
+        
     @Field(() => [MJConversationDetail_])
     MJConversationDetails_ConversationIDArray: MJConversationDetail_[]; // Link to MJConversationDetails
     
@@ -38534,6 +38895,9 @@ export class MJConversation_ {
     
     @Field(() => [MJAIAgentSession_])
     MJAIAgentSessions_ConversationIDArray: MJAIAgentSession_[]; // Link to MJAIAgentSessions
+    
+    @Field(() => [MJConversation_])
+    MJConversations_LastConversationIDArray: MJConversation_[]; // Link to MJConversations
     
     @Field(() => [MJUserRoutine_])
     MJUserRoutines_ConversationIDArray: MJUserRoutine_[]; // Link to MJUserRoutines
@@ -38608,6 +38972,12 @@ export class CreateMJConversationInput {
     @Field({ nullable: true })
     EgressID: string | null;
 
+    @Field({ nullable: true })
+    VisitorKey: string | null;
+
+    @Field({ nullable: true })
+    LastConversationID: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -38680,6 +39050,12 @@ export class UpdateMJConversationInput {
 
     @Field({ nullable: true })
     EgressID?: string | null;
+
+    @Field({ nullable: true })
+    VisitorKey?: string | null;
+
+    @Field({ nullable: true })
+    LastConversationID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -38812,6 +39188,16 @@ export class MJConversationResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIAgentSessions')} WHERE ${provider.QuoteIdentifier('ConversationID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Sessions', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, [mjconversation_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Sessions', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJConversation_])
+    async MJConversations_LastConversationIDArray(@Root() mjconversation_: MJConversation_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Conversations', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwConversations')} WHERE ${provider.QuoteIdentifier('LastConversationID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Conversations', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjconversation_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Conversations', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -39336,6 +39722,9 @@ export class MJCredentialType_ {
     @Field(() => [MJIntegration_])
     MJIntegrations_CredentialTypeIDArray: MJIntegration_[]; // Link to MJIntegrations
     
+    @Field(() => [MJExternalDataSourceType_])
+    MJExternalDataSourceTypes_RequiredCredentialTypeIDArray: MJExternalDataSourceType_[]; // Link to MJExternalDataSourceTypes
+    
     @Field(() => [MJAIVendor_])
     MJAIVendors_CredentialTypeIDArray: MJAIVendor_[]; // Link to MJAIVendors
     
@@ -39492,6 +39881,16 @@ export class MJCredentialTypeResolver extends ResolverBase {
         return result;
     }
         
+    @FieldResolver(() => [MJExternalDataSourceType_])
+    async MJExternalDataSourceTypes_RequiredCredentialTypeIDArray(@Root() mjcredentialtype_: MJCredentialType_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: External Data Source Types', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwExternalDataSourceTypes')} WHERE ${provider.QuoteIdentifier('RequiredCredentialTypeID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: External Data Source Types', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjcredentialtype_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: External Data Source Types', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
     @FieldResolver(() => [MJAIVendor_])
     async MJAIVendors_CredentialTypeIDArray(@Root() mjcredentialtype_: MJCredentialType_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Vendors', userPayload);
@@ -39614,6 +40013,9 @@ export class MJCredential_ {
     
     @Field(() => [MJSignatureAccount_])
     MJSignatureAccounts_CredentialIDArray: MJSignatureAccount_[]; // Link to MJSignatureAccounts
+    
+    @Field(() => [MJExternalDataSource_])
+    MJExternalDataSources_CredentialIDArray: MJExternalDataSource_[]; // Link to MJExternalDataSources
     
 }
 
@@ -39845,6 +40247,16 @@ export class MJCredentialResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwSignatureAccounts')} WHERE ${provider.QuoteIdentifier('CredentialID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Signature Accounts', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, [mjcredential_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Signature Accounts', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJExternalDataSource_])
+    async MJExternalDataSources_CredentialIDArray(@Root() mjcredential_: MJCredential_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: External Data Sources', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwExternalDataSources')} WHERE ${provider.QuoteIdentifier('CredentialID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: External Data Sources', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjcredential_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: External Data Sources', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -45018,6 +45430,14 @@ export class MJEntity_ {
     @Field(() => Boolean, {description: `When set to 1 AND TrackRecordChanges is also 1, the external change detection system will scan this entity for changes made outside the MJ framework (direct SQL, third-party tools, etc.) and replay them through Save() to create proper RecordChange audit entries. Default is 0 (opt-out) because most entities, especially __mj schema metadata tables, are managed by migrations/CodeGen and should not be scanned.`}) 
     DetectExternalChanges: boolean;
         
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    ExternalDataSourceID?: string;
+        
+    @Field({nullable: true, description: `Remote object name (table / view / collection) on the external system that backs this entity. Resolved against the data source DefaultSchema/DefaultDatabase when unqualified. Only meaningful when ExternalDataSourceID is set.`}) 
+    @MaxLength(255)
+    ExternalObjectName?: string;
+        
     @Field({nullable: true, description: `Schema-based programmatic code name derived from the entity Name. Uses GetClassNameSchemaPrefix(SchemaName) as the prefix, then strips EntityNamePrefix from the Name and removes spaces. For "__mj" schema with entity "MJ: AI Models", this produces "MJAIModels". For entities in other schemas, the sanitized schema name is prepended. Used in GraphQL type generation and internal code references.`}) 
     CodeName?: string;
         
@@ -45247,6 +45667,9 @@ export class MJEntity_ {
     @Field(() => [MJMLModelScoringBinding_])
     MJMLModelScoringBindings_TargetEntityIDArray: MJMLModelScoringBinding_[]; // Link to MJMLModelScoringBindings
     
+    @Field(() => [MJAIAgentSession_])
+    MJAIAgentSessions_LinkedEntityIDArray: MJAIAgentSession_[]; // Link to MJAIAgentSessions
+    
     @Field(() => [MJScopedPromptPart_])
     MJScopedPromptParts_PrimaryScopeEntityIDArray: MJScopedPromptPart_[]; // Link to MJScopedPromptParts
     
@@ -45440,6 +45863,12 @@ export class CreateMJEntityInput {
     @Field(() => Boolean, { nullable: true })
     DetectExternalChanges?: boolean;
 
+    @Field({ nullable: true })
+    ExternalDataSourceID: string | null;
+
+    @Field({ nullable: true })
+    ExternalObjectName: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -45632,6 +46061,12 @@ export class UpdateMJEntityInput {
 
     @Field(() => Boolean, { nullable: true })
     DetectExternalChanges?: boolean;
+
+    @Field({ nullable: true })
+    ExternalDataSourceID?: string | null;
+
+    @Field({ nullable: true })
+    ExternalObjectName?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -46384,6 +46819,16 @@ export class MJEntityResolverBase extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMLModelScoringBindings')} WHERE ${provider.QuoteIdentifier('TargetEntityID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: ML Model Scoring Bindings', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, [mjentity_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: ML Model Scoring Bindings', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJAIAgentSession_])
+    async MJAIAgentSessions_LinkedEntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Agent Sessions', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIAgentSessions')} WHERE ${provider.QuoteIdentifier('LinkedEntityID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Sessions', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjentity_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Sessions', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -53112,6 +53557,530 @@ export class MJExplorerNavigationItemResolver extends ResolverBase {
         const provider = GetReadWriteProvider(providers);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('MJ: Explorer Navigation Items', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: External Data Source Types
+//****************************************************************************
+@ObjectType()
+export class MJExternalDataSourceType_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `Display name of the external data source driver type (e.g. Snowflake, Oracle, MongoDB, PostgreSQL).`}) 
+    @MaxLength(100)
+    Name: string;
+        
+    @Field({nullable: true, description: `Human-readable description of the driver type and what remote systems it targets.`}) 
+    Description?: string;
+        
+    @Field({description: `Driver class resolved at runtime via MJGlobal.ClassFactory.CreateInstance(BaseExternalDataSourceDriver, DriverClass). MUST match the @RegisterClass key on the concrete driver (e.g. 'SnowflakeExternalDriver').`}) 
+    @MaxLength(255)
+    DriverClass: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    RequiredCredentialTypeID?: string;
+        
+    @Field({description: `How the metadata-introspection command hydrates Entity/EntityField rows from this driver family: InformationSchema (ANSI INFORMATION_SCHEMA), NativeCatalog (vendor catalog views), SampledDocuments (infer shape from sampled documents, e.g. MongoDB), or Manual (no automated introspection).`}) 
+    @MaxLength(17)
+    MetadataIntrospectionStrategy: string;
+        
+    @Field({description: `Dialect the driver expects for RunView filter pass-through: tsql, ansi, pgsql, mysql, oracle, or mongo-ast (MongoDB filter AST translated within the driver).`}) 
+    @MaxLength(9)
+    FilterDialect: string;
+        
+    @Field({description: `Pagination mechanism the driver uses: OffsetFetch (SQL Server OFFSET/FETCH), LimitOffset (Postgres/MySQL LIMIT/OFFSET), TopSkip, or Cursor.`}) 
+    @MaxLength(11)
+    PagingStrategy: string;
+        
+    @Field(() => Boolean, {description: `Whether the driver can introspect remote schema metadata to assist Entity/EntityField generation.`}) 
+    SupportsSchemaIntrospection: boolean;
+        
+    @Field(() => Boolean, {description: `Whether the driver supports native-dialect query execution for MJ Queries that set ExternalDataSourceID.`}) 
+    SupportsNativeQueries: boolean;
+        
+    @Field(() => Boolean, {description: `Reserved for a future write-capable phase. Always 0 in the current read-only design; external entities are read-only.`}) 
+    SupportsReadWrite: boolean;
+        
+    @Field({description: `Lifecycle status of the driver-type catalog entry: Active or Deprecated.`}) 
+    @MaxLength(10)
+    Status: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    RequiredCredentialType?: string;
+        
+    @Field(() => [MJExternalDataSource_])
+    MJExternalDataSources_TypeIDArray: MJExternalDataSource_[]; // Link to MJExternalDataSources
+    
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: External Data Source Types
+//****************************************************************************
+@InputType()
+export class CreateMJExternalDataSourceTypeInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    DriverClass?: string;
+
+    @Field({ nullable: true })
+    RequiredCredentialTypeID: string | null;
+
+    @Field({ nullable: true })
+    MetadataIntrospectionStrategy?: string;
+
+    @Field({ nullable: true })
+    FilterDialect?: string;
+
+    @Field({ nullable: true })
+    PagingStrategy?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    SupportsSchemaIntrospection?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    SupportsNativeQueries?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    SupportsReadWrite?: boolean;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: External Data Source Types
+//****************************************************************************
+@InputType()
+export class UpdateMJExternalDataSourceTypeInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    DriverClass?: string;
+
+    @Field({ nullable: true })
+    RequiredCredentialTypeID?: string | null;
+
+    @Field({ nullable: true })
+    MetadataIntrospectionStrategy?: string;
+
+    @Field({ nullable: true })
+    FilterDialect?: string;
+
+    @Field({ nullable: true })
+    PagingStrategy?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    SupportsSchemaIntrospection?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    SupportsNativeQueries?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    SupportsReadWrite?: boolean;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: External Data Source Types
+//****************************************************************************
+@ObjectType()
+export class RunMJExternalDataSourceTypeViewResult {
+    @Field(() => [MJExternalDataSourceType_])
+    Results: MJExternalDataSourceType_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJExternalDataSourceType_)
+export class MJExternalDataSourceTypeResolver extends ResolverBase {
+    @Query(() => RunMJExternalDataSourceTypeViewResult)
+    async RunMJExternalDataSourceTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJExternalDataSourceTypeViewResult)
+    async RunMJExternalDataSourceTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJExternalDataSourceTypeViewResult)
+    async RunMJExternalDataSourceTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: External Data Source Types';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJExternalDataSourceType_, { nullable: true })
+    async MJExternalDataSourceType(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJExternalDataSourceType_ | null> {
+        this.CheckUserReadPermissions('MJ: External Data Source Types', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwExternalDataSourceTypes')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: External Data Source Types', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: External Data Source Types', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @FieldResolver(() => [MJExternalDataSource_])
+    async MJExternalDataSources_TypeIDArray(@Root() mjexternaldatasourcetype_: MJExternalDataSourceType_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: External Data Sources', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwExternalDataSources')} WHERE ${provider.QuoteIdentifier('TypeID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: External Data Sources', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjexternaldatasourcetype_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: External Data Sources', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @Mutation(() => MJExternalDataSourceType_)
+    async CreateMJExternalDataSourceType(
+        @Arg('input', () => CreateMJExternalDataSourceTypeInput) input: CreateMJExternalDataSourceTypeInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: External Data Source Types', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJExternalDataSourceType_)
+    async UpdateMJExternalDataSourceType(
+        @Arg('input', () => UpdateMJExternalDataSourceTypeInput) input: UpdateMJExternalDataSourceTypeInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: External Data Source Types', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJExternalDataSourceType_)
+    async DeleteMJExternalDataSourceType(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: External Data Source Types', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: External Data Sources
+//****************************************************************************
+@ObjectType()
+export class MJExternalDataSource_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `Display name of this configured external data source instance.`}) 
+    @MaxLength(100)
+    Name: string;
+        
+    @Field({nullable: true, description: `Human-readable description of what this data source connects to and what it is used for.`}) 
+    Description?: string;
+        
+    @Field() 
+    @MaxLength(36)
+    TypeID: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    CredentialID?: string;
+        
+    @Field({nullable: true, description: `Default schema/namespace to resolve unqualified ExternalObjectName values against on the remote system (e.g. a SQL schema, Snowflake schema).`}) 
+    @MaxLength(255)
+    DefaultSchema?: string;
+        
+    @Field({nullable: true, description: `Default database/catalog on the remote system (e.g. Snowflake database, MongoDB dbName). Nullable when the driver derives it from connection config.`}) 
+    @MaxLength(255)
+    DefaultDatabase?: string;
+        
+    @Field({nullable: true, description: `JSON blob of NON-SECRET driver configuration (host, port, region, warehouse, replica-set name, pool sizing). All secrets flow through CredentialID -> Credential -> CredentialEngine; never store secrets here.`}) 
+    ConnectionConfig?: string;
+        
+    @Field(() => Int, {description: `Default server-side cache TTL (seconds) for reads against this source. External reads use time-based TTL because no event-driven invalidation is possible on remote systems. Default 300.`}) 
+    DefaultCacheTTLSeconds: number;
+        
+    @Field({description: `Operational status of this data source: Active (usable), Disabled (RunView fails fast), or TestFailed (last connection test failed).`}) 
+    @MaxLength(10)
+    Status: string;
+        
+    @Field({nullable: true, description: `Timestamp of the most recent connection test against this source.`}) 
+    LastConnectionTestAt?: Date;
+        
+    @Field({nullable: true, description: `Result message from the most recent connection test (success detail or error text).`}) 
+    LastConnectionTestResult?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(100)
+    Type: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    Credential?: string;
+        
+    @Field(() => [MJQuery_])
+    MJQueries_ExternalDataSourceIDArray: MJQuery_[]; // Link to MJQueries
+    
+    @Field(() => [MJEntity_])
+    MJEntities_ExternalDataSourceIDArray: MJEntity_[]; // Link to MJEntities
+    
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: External Data Sources
+//****************************************************************************
+@InputType()
+export class CreateMJExternalDataSourceInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    TypeID?: string;
+
+    @Field({ nullable: true })
+    CredentialID: string | null;
+
+    @Field({ nullable: true })
+    DefaultSchema: string | null;
+
+    @Field({ nullable: true })
+    DefaultDatabase: string | null;
+
+    @Field({ nullable: true })
+    ConnectionConfig: string | null;
+
+    @Field(() => Int, { nullable: true })
+    DefaultCacheTTLSeconds?: number;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    LastConnectionTestAt: Date | null;
+
+    @Field({ nullable: true })
+    LastConnectionTestResult: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: External Data Sources
+//****************************************************************************
+@InputType()
+export class UpdateMJExternalDataSourceInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    TypeID?: string;
+
+    @Field({ nullable: true })
+    CredentialID?: string | null;
+
+    @Field({ nullable: true })
+    DefaultSchema?: string | null;
+
+    @Field({ nullable: true })
+    DefaultDatabase?: string | null;
+
+    @Field({ nullable: true })
+    ConnectionConfig?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    DefaultCacheTTLSeconds?: number;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    LastConnectionTestAt?: Date | null;
+
+    @Field({ nullable: true })
+    LastConnectionTestResult?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: External Data Sources
+//****************************************************************************
+@ObjectType()
+export class RunMJExternalDataSourceViewResult {
+    @Field(() => [MJExternalDataSource_])
+    Results: MJExternalDataSource_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJExternalDataSource_)
+export class MJExternalDataSourceResolver extends ResolverBase {
+    @Query(() => RunMJExternalDataSourceViewResult)
+    async RunMJExternalDataSourceViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJExternalDataSourceViewResult)
+    async RunMJExternalDataSourceViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJExternalDataSourceViewResult)
+    async RunMJExternalDataSourceDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: External Data Sources';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJExternalDataSource_, { nullable: true })
+    async MJExternalDataSource(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJExternalDataSource_ | null> {
+        this.CheckUserReadPermissions('MJ: External Data Sources', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwExternalDataSources')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: External Data Sources', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: External Data Sources', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @FieldResolver(() => [MJQuery_])
+    async MJQueries_ExternalDataSourceIDArray(@Root() mjexternaldatasource_: MJExternalDataSource_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Queries', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwQueries')} WHERE ${provider.QuoteIdentifier('ExternalDataSourceID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Queries', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjexternaldatasource_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Queries', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJEntity_])
+    async MJEntities_ExternalDataSourceIDArray(@Root() mjexternaldatasource_: MJExternalDataSource_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Entities', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwEntities')} WHERE ${provider.QuoteIdentifier('ExternalDataSourceID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Entities', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjexternaldatasource_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Entities', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @Mutation(() => MJExternalDataSource_)
+    async CreateMJExternalDataSource(
+        @Arg('input', () => CreateMJExternalDataSourceInput) input: CreateMJExternalDataSourceInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: External Data Sources', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJExternalDataSource_)
+    async UpdateMJExternalDataSource(
+        @Arg('input', () => UpdateMJExternalDataSourceInput) input: UpdateMJExternalDataSourceInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: External Data Sources', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJExternalDataSource_)
+    async DeleteMJExternalDataSource(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: External Data Sources', key, options, provider, userPayload, pubSub);
     }
     
 }
@@ -66968,6 +67937,10 @@ export class MJQuery_ {
     Reusable: boolean;
         
     @Field({nullable: true}) 
+    @MaxLength(36)
+    ExternalDataSourceID?: string;
+        
+    @Field({nullable: true}) 
     @MaxLength(50)
     Category?: string;
         
@@ -66978,6 +67951,10 @@ export class MJQuery_ {
     @Field() 
     @MaxLength(100)
     SQLDialect: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    ExternalDataSource?: string;
         
     @Field(() => [MJDataContextItem_])
     MJDataContextItems_QueryIDArray: MJDataContextItem_[]; // Link to MJDataContextItems
@@ -67076,6 +68053,9 @@ export class CreateMJQueryInput {
     @Field(() => Boolean, { nullable: true })
     Reusable?: boolean;
 
+    @Field({ nullable: true })
+    ExternalDataSourceID: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -67151,6 +68131,9 @@ export class UpdateMJQueryInput {
 
     @Field(() => Boolean, { nullable: true })
     Reusable?: boolean;
+
+    @Field({ nullable: true })
+    ExternalDataSourceID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -74962,6 +75945,9 @@ export class MJRole_ {
     @Field(() => [MJAISkillPermission_])
     MJAISkillPermissions_RoleIDArray: MJAISkillPermission_[]; // Link to MJAISkillPermissions
     
+    @Field(() => [MJConversationWidgetInstance_])
+    MJConversationWidgetInstances_GuestRoleIDArray: MJConversationWidgetInstance_[]; // Link to MJConversationWidgetInstances
+    
 }
 
 //****************************************************************************
@@ -75230,6 +76216,16 @@ export class MJRoleResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAISkillPermissions')} WHERE ${provider.QuoteIdentifier('RoleID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Skill Permissions', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, [mjrole_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Skill Permissions', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJConversationWidgetInstance_])
+    async MJConversationWidgetInstances_GuestRoleIDArray(@Root() mjrole_: MJRole_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Conversation Widget Instances', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwConversationWidgetInstances')} WHERE ${provider.QuoteIdentifier('GuestRoleID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Conversation Widget Instances', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjrole_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Conversation Widget Instances', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         

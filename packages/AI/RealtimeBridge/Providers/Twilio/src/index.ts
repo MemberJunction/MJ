@@ -1,5 +1,8 @@
 export * from './twilio-call-sdk';
 export * from './twilio-native-call-sdk';
+export * from './real-twilio-bindings';
+export * from './twilio-rest-client';
+export * from './twilio-ingress';
 export * from './twilio-bridge';
 export * from './register-native';
 
