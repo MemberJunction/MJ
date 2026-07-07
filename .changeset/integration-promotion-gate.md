@@ -1,5 +1,5 @@
 ---
-"@memberjunction/integration-engine": patch
+"@memberjunction/integration-engine": minor
 ---
 
 Custom-column promotion gate (U3) + opt-in reclaim planner (U7) — two pure decision functions in `CustomColumnPromotion.ts`; the engine PLANS, the consumer executes.

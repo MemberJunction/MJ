@@ -217,6 +217,12 @@ export class IntegrationCustomColumnPromoter {
         const overflowJson = await this.scanOverflow(entityName);
         if (overflowJson.length === 0) return null; // no customs captured
 
+        // U3 note (rkihm-BC review, #3061): this in-repo promotion path passes no `LockUntilFullSync`, so it
+        // does NOT yet enforce "hold promotion until a full sync since the last schema change." The lever
+        // exists on `PromotionPlanOptions`, but pulling it here requires this caller to know whether a full
+        // sync has completed post-rediscovery — DEFERRED and tracked as a follow-up. The engine ships the
+        // gate; wiring MJServer's own consumer to set it is a separate change. Until then, this path retains
+        // the pre-U3 behavior for a rediscover-then-incremental sequence.
         const passing = planPromotions(buildOverflowStats(overflowJson), {});
         if (passing.length === 0) return null;
 
