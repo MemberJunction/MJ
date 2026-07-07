@@ -1,0 +1,9 @@
+{
+    "extends": "../../../../tsconfig.angular.json",
+    "compilerOptions": {
+      "outDir": "./dist"
+    },
+    "include": [
+      "src/**/*.ts"
+    ]
+}

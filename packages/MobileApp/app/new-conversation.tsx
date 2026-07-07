@@ -5,9 +5,12 @@ import {
     ScrollView, StyleSheet, Text, TextInput, View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { AttachmentChip } from '@/components/AttachmentChip';
+import { AttachmentPicker } from '@/components/AttachmentPicker';
 import { Icons } from '@/components/Icon';
 import { useAgents } from '@/hooks/useAgents';
 import { createConversation } from '@/data/services/agents';
+import { composeMessageWithAttachment, type CapturedAttachment } from '@/data/services/attachments';
 import { Colors, Radius, Shadow, Spacing, Type } from '@/theme/tokens';
 
 /** A starter-prompt card: display `title`, the full `prompt` it inserts, plus icon/color. */
@@ -41,13 +44,17 @@ const SUGGESTIONS: Suggestion[] = [
 export default function NewConversationScreen() {
     const { agents } = useAgents();
     const [text, setText] = useState('');
+    const [attachment, setAttachment] = useState<CapturedAttachment | null>(null);
+    const [pickerVisible, setPickerVisible] = useState(false);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    const canSend = text.trim().length > 0 && !busy;
+    const canSend = (text.trim().length > 0 || attachment != null) && !busy;
 
     const start = async (overrideText?: string) => {
-        const body = (overrideText ?? text).trim();
+        // Fold any pending attachment into the first message via the documented
+        // inline-note fallback (no mobile byte-upload pipeline yet; see attachments.ts).
+        const body = composeMessageWithAttachment(overrideText ?? text, attachment);
         if (!body || busy) return;
         setBusy(true);
         setError(null);
@@ -100,7 +107,15 @@ export default function NewConversationScreen() {
                             onChangeText={setText}
                             editable={!busy}
                         />
+                        {attachment ? (
+                            <View style={styles.attachRow}>
+                                <AttachmentChip attachment={attachment} onRemove={() => setAttachment(null)} />
+                            </View>
+                        ) : null}
                         <View style={styles.composerFoot}>
+                            <Pressable style={styles.attachBtn} onPress={() => setPickerVisible(true)} disabled={busy} hitSlop={6}>
+                                <Icons.Paperclip size={18} color={Colors.ink3} strokeWidth={2} />
+                            </Pressable>
                             <Pressable style={styles.micBtn} onPress={() => router.push('/voice-mode')} disabled={busy}>
                                 <Icons.Mic size={16} color={Colors.inverse} strokeWidth={2.2} />
                             </Pressable>
@@ -159,6 +174,11 @@ export default function NewConversationScreen() {
                     ) : null}
                     <View style={{ height: Spacing.xxxl }} />
                 </ScrollView>
+                <AttachmentPicker
+                    visible={pickerVisible}
+                    onClose={() => setPickerVisible(false)}
+                    onPicked={(a) => setAttachment(a)}
+                />
             </KeyboardAvoidingView>
         </SafeAreaView>
     );
@@ -178,6 +198,8 @@ const styles = StyleSheet.create({
 
     composerCard: { marginHorizontal: 18, marginTop: 22, backgroundColor: Colors.surface, borderRadius: 18, borderWidth: StyleSheet.hairlineWidth, borderColor: Colors.line2, padding: 14, ...Shadow.card },
     composerInput: { minHeight: 56, fontSize: 15.5, color: Colors.ink },
+    attachRow: { marginTop: 8 },
+    attachBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.surface2 },
     composerFoot: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
     composerIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
     micBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.brand, alignItems: 'center', justifyContent: 'center' },

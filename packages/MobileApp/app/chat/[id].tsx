@@ -14,10 +14,13 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AgentAvatarStack } from '@/components/AgentAvatarStack';
+import { AttachmentChip } from '@/components/AttachmentChip';
+import { AttachmentPicker } from '@/components/AttachmentPicker';
 import { Icons } from '@/components/Icon';
 import { MarkdownView } from '@/components/markdown/MarkdownView';
 import { adaptConversation, adaptConversationToSummary, type AdaptedAgentRef, type AdaptedMessage } from '@/data/adapt';
 import { sendMessage, getConversationDetailStatus, type SendProgress } from '@/data/services/agents';
+import { composeMessageWithAttachment, type CapturedAttachment } from '@/data/services/attachments';
 import { useConversation, useConversations } from '@/hooks/useConversations';
 import { Colors, Radius, Shadow, Type } from '@/theme/tokens';
 
@@ -207,7 +210,7 @@ export default function ChatThreadScreen() {
                 </ScrollView>
 
                 <ArtifactDockHandle conversationId={view.id} count={view.artifacts.length} />
-                <Composer onSend={handleSend} disabled={sending} />
+                <Composer onSend={handleSend} disabled={sending} conversationId={view.id} />
             </KeyboardAvoidingView>
         </SafeAreaView>
     );
@@ -368,25 +371,42 @@ function ArtifactDockHandle({ conversationId, count }: { conversationId: string;
 }
 
 /**
- * Message composer: a multiline input that owns its own draft `text` state.
- * Shows a send button when there's non-empty text (clears the draft and calls
- * `onSend`), otherwise a mic button that opens `/voice-mode`. `disabled` blocks
- * input/send while an agent run is in flight.
+ * Message composer: a multiline input that owns its own draft `text` state plus
+ * an optional pending {@link CapturedAttachment}. A paperclip button opens the
+ * {@link AttachmentPicker}; a chosen attachment shows a removable preview chip
+ * above the input. Shows a send button when there's non-empty text OR a pending
+ * attachment (clears the draft and calls `onSend`), otherwise a mic button that
+ * opens `/voice-mode`. `disabled` blocks input/send while an agent run is in flight.
+ *
+ * On send, the attachment is folded into the message via
+ * {@link composeMessageWithAttachment} — the documented inline-note fallback,
+ * since there is no mobile byte-upload pipeline yet (see `attachments.ts`).
  */
-function Composer({ onSend, disabled }: { onSend: (text: string) => void; disabled: boolean }) {
+function Composer({ onSend, disabled, conversationId }: { onSend: (text: string) => void; disabled: boolean; conversationId: string }) {
     const [text, setText] = useState('');
-    const canSend = text.trim().length > 0 && !disabled;
+    const [attachment, setAttachment] = useState<CapturedAttachment | null>(null);
+    const [pickerVisible, setPickerVisible] = useState(false);
+    const canSend = (text.trim().length > 0 || attachment != null) && !disabled;
 
     const submit = () => {
         if (!canSend) return;
-        const t = text;
+        const body = composeMessageWithAttachment(text, attachment);
         setText('');
-        onSend(t);
+        setAttachment(null);
+        onSend(body);
     };
 
     return (
         <View style={styles.composerWrap}>
+            {attachment ? (
+                <View style={styles.attachRow}>
+                    <AttachmentChip attachment={attachment} onRemove={() => setAttachment(null)} />
+                </View>
+            ) : null}
             <View style={styles.composer}>
+                <Pressable style={styles.attachBtn} onPress={() => setPickerVisible(true)} disabled={disabled} hitSlop={6}>
+                    <Icons.Paperclip size={20} color={Colors.ink3} strokeWidth={2} />
+                </Pressable>
                 <TextInput
                     placeholder="Reply or @mention an agent…"
                     placeholderTextColor={Colors.ink3}
@@ -401,11 +421,16 @@ function Composer({ onSend, disabled }: { onSend: (text: string) => void; disabl
                         <Icons.Send size={18} color={Colors.inverse} strokeWidth={2.2} />
                     </Pressable>
                 ) : (
-                    <Pressable style={styles.micBtn} onPress={() => router.push('/voice-mode')} disabled={disabled}>
+                    <Pressable style={styles.micBtn} onPress={() => router.push({ pathname: '/voice-mode', params: { conversationId } })} disabled={disabled}>
                         <Icons.Mic size={18} color={Colors.inverse} strokeWidth={2.2} />
                     </Pressable>
                 )}
             </View>
+            <AttachmentPicker
+                visible={pickerVisible}
+                onClose={() => setPickerVisible(false)}
+                onPicked={(a) => setAttachment(a)}
+            />
         </View>
     );
 }
@@ -470,7 +495,9 @@ const styles = StyleSheet.create({
     dockTextBold: { color: Colors.ink, fontWeight: Type.semibold },
 
     composerWrap: { paddingHorizontal: 14, paddingVertical: 8, backgroundColor: Colors.bg, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: Colors.line2 },
-    composer: { backgroundColor: Colors.surface, borderRadius: 24, paddingLeft: 16, paddingRight: 6, flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: StyleSheet.hairlineWidth, borderColor: Colors.line2, minHeight: 48, ...Shadow.card },
+    attachRow: { paddingBottom: 8 },
+    composer: { backgroundColor: Colors.surface, borderRadius: 24, paddingLeft: 8, paddingRight: 6, flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: StyleSheet.hairlineWidth, borderColor: Colors.line2, minHeight: 48, ...Shadow.card },
+    attachBtn: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
     composerInput: { flex: 1, fontSize: 15.5, color: Colors.ink, paddingVertical: 9, maxHeight: 120 },
     micBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: Colors.brand, alignItems: 'center', justifyContent: 'center', marginVertical: 4 },
     sendBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: Colors.brand, alignItems: 'center', justifyContent: 'center', marginVertical: 4 },

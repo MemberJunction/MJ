@@ -45,6 +45,10 @@
       "types": "./dist/lists-dashboards.module.d.ts",
       "default": "./dist/lists-dashboards.module.js"
     },
+    "./routines-dashboards.module": {
+      "types": "./dist/routines-dashboards.module.d.ts",
+      "default": "./dist/routines-dashboards.module.js"
+    },
     "./component-studio-dashboards.module": {
       "types": "./dist/component-studio-dashboards.module.d.ts",
       "default": "./dist/component-studio-dashboards.module.js"
@@ -121,6 +125,7 @@
     "@memberjunction/ng-base-types": "5.44.0",
     "@memberjunction/ng-clustering": "5.44.0",
     "@memberjunction/ng-code-editor": "5.44.0",
+    "@memberjunction/ng-composer": "5.44.0",
     "@memberjunction/ng-container-directives": "5.44.0",
     "@memberjunction/ng-conversations": "5.44.0",
     "@memberjunction/ng-core-entity-forms": "5.44.0",
@@ -147,10 +152,10 @@
     "@memberjunction/ng-testing": "5.44.0",
     "@memberjunction/ng-trees": "5.44.0",
     "@memberjunction/ng-ui-components": "5.44.0",
+    "@memberjunction/ng-user-routines": "5.44.0",
     "@memberjunction/ng-versions": "5.44.0",
     "@memberjunction/ng-word-cloud": "5.44.0",
     "@memberjunction/predictive-studio-core": "5.44.0",
-    "@memberjunction/skip-types": "5.44.0",
     "@memberjunction/tag-engine-base": "5.44.0",
     "@memberjunction/templates-base-types": "5.44.0",
     "@memberjunction/testing-engine-base": "5.44.0",

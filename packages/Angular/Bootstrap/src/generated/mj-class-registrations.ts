@@ -26,7 +26,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (398 classes)
+// @memberjunction/core-entities (404 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -189,6 +189,7 @@ import {
     MJConversationDetailEntityExtended,
     MJConversationDetailRatingEntity,
     MJConversationEntity,
+    MJConversationWidgetInstanceEntity,
     MJCountryEntity,
     MJCredentialCategoryEntity,
     MJCredentialEntity,
@@ -249,6 +250,8 @@ import {
     MJExperimentSessionEntity,
     MJExperimentSessionIterationEntity,
     MJExplorerNavigationItemEntity,
+    MJExternalDataSourceEntity,
+    MJExternalDataSourceTypeEntity,
     MJFileCategoryEntity,
     MJFileEntity,
     MJFileEntityRecordLinkEntity,
@@ -406,6 +409,9 @@ import {
     MJUserNotificationTypeEntity,
     MJUserRecordLogEntity,
     MJUserRoleEntity,
+    MJUserRoutineEntity,
+    MJUserRoutineRecipientEntity,
+    MJUserRoutineRunEntity,
     MJUserSettingEntity,
     MJUserViewCategoryEntity,
     MJUserViewEntity,
@@ -492,12 +498,15 @@ import {
     MJWorkOSProvider,
 } from '@memberjunction/ng-auth-services';
 
-// @memberjunction/ng-conversations (5 classes)
+// @memberjunction/ng-conversations (8 classes)
 import {
+    AgentMentionProvider,
     ClientContextChannel,
     RealtimeMediaChannel,
     RealtimeWhiteboardChannel,
+    RecordMentionProvider,
     RemoteBrowserChannel,
+    SkillCommandProvider,
     WhiteboardArtifactViewerComponent,
 } from '@memberjunction/ng-conversations';
 
@@ -575,7 +584,7 @@ import {
     TagEngineBase,
 } from '@memberjunction/tag-engine-base';
 
-// @memberjunction/ng-dashboards (96 classes)
+// @memberjunction/ng-dashboards (97 classes)
 import {
     AIAnalyticsResourceComponent,
     AIOverviewHubComponent,
@@ -667,6 +676,7 @@ import {
     TestingExplorerResourceComponent,
     TestingReviewResourceComponent,
     TestingRunsResourceComponent,
+    UserRoutinesResourceComponent,
     VectorManagementResourceComponent,
     VersionHistoryDiffResourceComponent,
     VersionHistoryGraphResourceComponent,
@@ -862,6 +872,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJConversationDetailEntityExtended,
     MJConversationDetailRatingEntity,
     MJConversationEntity,
+    MJConversationWidgetInstanceEntity,
     MJCountryEntity,
     MJCredentialCategoryEntity,
     MJCredentialEntity,
@@ -922,6 +933,8 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJExperimentSessionEntity,
     MJExperimentSessionIterationEntity,
     MJExplorerNavigationItemEntity,
+    MJExternalDataSourceEntity,
+    MJExternalDataSourceTypeEntity,
     MJFileCategoryEntity,
     MJFileEntity,
     MJFileEntityRecordLinkEntity,
@@ -1079,6 +1092,9 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJUserNotificationTypeEntity,
     MJUserRecordLogEntity,
     MJUserRoleEntity,
+    MJUserRoutineEntity,
+    MJUserRoutineRecipientEntity,
+    MJUserRoutineRunEntity,
     MJUserSettingEntity,
     MJUserViewCategoryEntity,
     MJUserViewEntity,
@@ -1135,10 +1151,13 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJMagicLinkProvider,
     MJOktaProvider,
     MJWorkOSProvider,
+    AgentMentionProvider,
     ClientContextChannel,
     RealtimeMediaChannel,
     RealtimeWhiteboardChannel,
+    RecordMentionProvider,
     RemoteBrowserChannel,
+    SkillCommandProvider,
     WhiteboardArtifactViewerComponent,
     RecordProcessRunnerUXComponent,
     CardsViewType,
@@ -1272,6 +1291,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     TestingExplorerResourceComponent,
     TestingReviewResourceComponent,
     TestingRunsResourceComponent,
+    UserRoutinesResourceComponent,
     VectorManagementResourceComponent,
     VersionHistoryDiffResourceComponent,
     VersionHistoryGraphResourceComponent,
@@ -1293,7 +1313,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 593;
+export const CLASS_REGISTRATIONS_COUNT = 603;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
