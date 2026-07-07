@@ -3,6 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "description": "MemberJunction Mobile App (React Native / Expo)",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  },
   "main": "expo-router/entry",
   "scripts": {
     "start": "expo start",
