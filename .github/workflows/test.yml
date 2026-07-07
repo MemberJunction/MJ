@@ -9,6 +9,11 @@ on:
       - 'package-lock.json'
       - 'packages/**'
       - 'vitest.*'
+      # A change to ONLY a root tsconfig must trigger the workflow — package tsconfigs extend the
+      # root ones, so the grep fallback below matches `tsconfig[^/]*\.json`, but without this paths
+      # entry a root-tsconfig-only PR never triggers the workflow at all (that fallback branch was
+      # dead for exactly the case it guards). Symmetric with the root package.json entry.
+      - 'tsconfig*.json'
       - 'turbo.json'
       - '.github/workflows/test.yml'
   # Full-suite backstop: every merge into next runs ALL package tests, so a runtime-only
@@ -35,6 +40,10 @@ jobs:
     name: Run unit tests
     timeout-minutes: 30
     runs-on: ubuntu-latest
+    # issues:write so a red BACKSTOP run (push/schedule) can auto-file an alert issue (see final step).
+    permissions:
+      contents: read
+      issues: write
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -123,3 +132,19 @@ jobs:
           name: coverage-report
           path: coverage/
           retention-days: 30
+
+      # Backstop-failure alert (rkihm-BC #2990): a red PUSH (merge to next) or nightly SCHEDULE run
+      # means a runtime-only break (e.g. @RegisterClass/ClassFactory coupling with no package.json edge)
+      # slipped past PR affected-filtering and `next` is now red. These runs gate nothing, so surface the
+      # failure as a GitHub issue instead of leaving it to whoever happens to open the Actions tab. Only
+      # fires on the backstop events (never on PRs, where the red check is already visible + gating).
+      - name: Alert on backstop failure
+        if: failure() && (github.event_name == 'push' || github.event_name == 'schedule')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          gh issue create \
+            --title "🔴 Unit-test backstop failed on next (${GITHUB_SHA:0:7})" \
+            --body "The full-suite **backstop** (\`${{ github.event_name }}\`) failed on \`next\` — a break slipped past PR affected-filtering, so \`next\` is red. Run: ${RUN_URL}. Please triage per CONTRIBUTING (owner TBD)." \
+            || echo "::error::Backstop failed AND alert-issue creation failed — see ${RUN_URL}"
