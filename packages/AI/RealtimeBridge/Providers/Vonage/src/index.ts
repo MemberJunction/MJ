@@ -1,5 +1,8 @@
 export * from './vonage-call-sdk';
 export * from './vonage-native-call-sdk';
+export * from './real-vonage-bindings';
+export * from './vonage-rest-client';
+export * from './vonage-ingress';
 export * from './vonage-bridge';
 export * from './register-native';
 

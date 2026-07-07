@@ -110,7 +110,11 @@ export class GraphQLServerGeneratorBase {
         const re = md.Entities.find((e) => e.Name.toLowerCase() === r.RelatedEntity.toLowerCase())!;
         // only include the relationship if we are IncludeInAPI for the related entity
         if (re.IncludeInAPI) {
-          if (!excludeRelatedEntitiesExternalToSchema || re.SchemaName === entity.SchemaName) {
+          if (re.ExternalDataSourceID) {
+            // Related entity is external (no MJ base view) — its resolver is skipped (see
+            // generateServerGraphQLResolver), so skip the paired field declaration too for consistency.
+            sEntityOutput += `// Relationship field to ${r.RelatedEntity} not generated: related entity is external (no local base view).\n`;
+          } else if (!excludeRelatedEntitiesExternalToSchema || re.SchemaName === entity.SchemaName) {
             // only include the relationship if either we are NOT excluding related entities external to the schema
             // or if the related entity is in the same schema as the current entity
             sEntityOutput += this.generateServerRelationship(md, sortedRelatedEntities[j], isInternal);
@@ -400,8 +404,26 @@ export class ${typeNameBase}Resolver${entity.CustomResolverAPI ? 'Base' : ''} ex
         pkParamNames.push(pk.CodeName);
       }
       const pkParamsList = pkParamNames.join(', ');
+      // CompositeKey.Validate() matches FieldName against entity.Fields…Name (the DB field name), so the
+      // key MUST use pk.Name — not pk.CodeName, which diverges for PKs whose DB name needs sanitizing
+      // (spaces, leading digit, reserved word). The bound value still comes from the CodeName arg variable.
+      const pkCompositeKeyPairs = entity.PrimaryKeys.map((pk) => `{ FieldName: '${pk.Name}', Value: ${pk.CodeName} }`).join(', ');
 
-      sRet += `
+      if (entity.ExternalDataSourceID) {
+        // External-data-source entities have no MJ base view to query — proxy the single-record
+        // load through a BaseEntity object, which the provider dispatches to the external read
+        // router (same path as the grid's RunView). RLS + field post-processing are applied there.
+        sRet += `
+    @Query(() => ${serverGraphQLTypeName}, { nullable: true })
+    async ${typeNameBase}(${graphQLPKEYArgs}, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<${serverGraphQLTypeName} | null> {
+        this.CheckUserReadPermissions('${entity.Name}', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });${auditAccessCode}
+        const compositeKey = new CompositeKey([${pkCompositeKeyPairs}]);
+        return this.LoadExternalRecordByKey<${serverGraphQLTypeName}>('${entity.Name}', compositeKey, provider, userPayload);
+    }
+    `;
+      } else {
+        sRet += `
     @Query(() => ${serverGraphQLTypeName}, { nullable: true })
     async ${typeNameBase}(${graphQLPKEYArgs}, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<${serverGraphQLTypeName} | null> {
         this.CheckUserReadPermissions('${entity.Name}', userPayload);
@@ -412,9 +434,17 @@ export class ${typeNameBase}Resolver${entity.CustomResolverAPI ? 'Base' : ''} ex
         return result;
     }
     `;
+      }
       if (entity.AllowAllRowsAPI) {
-        // this entity allows a query to return all rows, so include that type of query next
-        sRet += `
+        if (entity.ExternalDataSourceID) {
+          // External-data-source entities have no MJ base view, so `SELECT * FROM <baseView>` cannot run.
+          // The equivalent "all rows" capability is available via Run${typeNameBase}DynamicView (the same
+          // provider→external-read-router path the grid uses), so we skip the redundant All query here
+          // rather than emit a resolver that would fail at runtime.
+          sRet += `\n    // All${entity.CodeName}() intentionally not generated: external-data-source entity has no base view. Use Run${typeNameBase}DynamicView to retrieve external rows.\n`;
+        } else {
+          // this entity allows a query to return all rows, so include that type of query next
+          sRet += `
     @Query(() => [${serverGraphQLTypeName}])
     async All${entity.CodeName}(@Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('${entity.Name}', userPayload);
@@ -425,6 +455,7 @@ export class ${typeNameBase}Resolver${entity.CustomResolverAPI ? 'Base' : ''} ex
         return result;
     }
     `;
+        }
       }
 
       // now, generate the FieldResolvers for each of the one-to-many relationships
@@ -437,7 +468,13 @@ export class ${typeNameBase}Resolver${entity.CustomResolverAPI ? 'Base' : ''} ex
 
         // only include the relationship if we are IncludeInAPI for the related entity
         if (re.IncludeInAPI) {
-          if (!excludeRelatedEntitiesExternalToSchema || re.SchemaName === entity.SchemaName) {
+          if (re.ExternalDataSourceID) {
+            // The related entity is external-data-source-backed: its field resolver would query
+            // `SELECT * FROM <re.BaseView>`, but external entities have no MJ base view. Skip it rather
+            // than emit a resolver that fails at runtime (external rows are reachable via that entity's
+            // own RunView with a filter on the join column).
+            sRet += `// Relationship to ${r.RelatedEntity} not generated: related entity is external (no local base view to query).\n`;
+          } else if (!excludeRelatedEntitiesExternalToSchema || re.SchemaName === entity.SchemaName) {
             // only include the relationship if either we are NOT excluding related entities external to the schema
             // or if the related entity is in the same schema as the current entity
             if (r.Type.toLowerCase().trim() == 'many to many') sRet += this.generateManyToManyFieldResolver(entity, r);
@@ -551,6 +588,13 @@ export class ${classPrefix}${typeNameBase}Input {`;
 
     // MUTATIONS
     // First, determine if the entity has either Create/Edit allowed, if either, we need to generate a InputType
+    //
+    // External-data-source entities intentionally generate mutations like any other entity (gated only
+    // by Allow*API + !VirtualEntity). The generated resolver routes through CreateRecord/UpdateRecord/
+    // DeleteRecord → entity.Save()/.Delete(), and an external entity extends ReadOnlyExternalBaseEntity
+    // whose Save/Delete reject (returning false + LatestResult) BEFORE any sproc is reached — so the
+    // mutation fails loudly with the read-only reason rather than silently not existing. (No sproc is
+    // generated for these entities, but none is ever called.)
     if (entity.AllowCreateAPI && !entity.VirtualEntity) {
       // generate a create mutation
       sRet += `

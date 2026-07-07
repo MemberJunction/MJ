@@ -8,6 +8,7 @@ If you're about to start work in one of the areas below, **read the guide first*
 
 - **[Building Applications on MemberJunction](BUILDING_APPS_ON_MJ.md)** — The hub guide for using MJ as a first-class application development platform. Explains the metadata-driven, schema-to-app model, the unified-TypeScript / isomorphic object model, AI-native app patterns, and links out to the authoritative README/guide for every layer (data modeling, CodeGen, entities, API, UI, Actions, AI, deployment). Start here if you've got data in MJ and want to build on it.
 - **[Framework Comparison](FRAMEWORK_COMPARISON.md)** — Objective comparison of MJ against Next.js/Vercel, Supabase, Rails, Django, and a hand-rolled Node+ORM+SPA stack: where each shines, where MJ differs, and how to choose. Companion to the app-building guide.
+- **[Agent Framework Comparison](AGENT_FRAMEWORK_COMPARISON.md)** — Objective comparison of MJ's AI agent framework and infrastructure against LangGraph, CrewAI, AG2/AutoGen, the vendor agent SDKs, Semantic Kernel, LlamaIndex, and the TypeScript-native frameworks: orchestration paradigms, payload/state governance, HITL, model gateway, observability, memory, permissions, and deployment (self-host or managed via MJ Central). Companion to the app-stack comparison above.
 
 ## Framework fundamentals
 

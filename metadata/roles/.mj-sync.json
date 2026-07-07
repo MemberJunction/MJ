@@ -12,7 +12,7 @@
     "mergeStrategy": "merge",
     "backupBeforeUpdate": true,
     "backupDirectory": ".backups",
-    "filter": "Name='Magic Link Baseline'",
+    "filter": "Name IN ('Magic Link Baseline', 'Widget Guest')",
     "externalizeFields": [],
     "ignoreNullFields": true,
     "ignoreVirtualFields": true,

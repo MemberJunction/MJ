@@ -1,10 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import {
     planPromotions,
+    planColumnReclamations,
     inferColumnTypeFromSamples,
     buildOverflowStats,
     sanitizeColumnName,
     type OverflowKeyStats,
+    type PromotedColumnState,
 } from '../CustomColumnPromotion.js';
 
 function stat(key: string, occurrences: number, totalRows: number, sampleValues: unknown[] = ['x']): OverflowKeyStats {
@@ -129,6 +131,50 @@ describe('CustomColumnPromotion', () => {
             const plan = planPromotions(stats, { CoverageThreshold: 0.5 });
             // Region (4/4) and Score (2/4) clear 0.5; JunkOnce (1/4) does not.
             expect(plan.map(c => c.Key).sort()).toEqual(['Region', 'Score']);
+        });
+
+        it('U3 — LOCKED: plans NOTHING while a full sync is pending, even for a fully-covered key', () => {
+            // After a rediscover, promotion is held until a full sync evicts stale overflow keys — so a
+            // vanished column can't be phantom-promoted from stale, un-resynced rows.
+            expect(planPromotions([stat('WouldPromote', 10, 10)], { LockUntilFullSync: true })).toHaveLength(0);
+        });
+
+        it('U3 — UNLOCKED (default / explicit false) preserves current behavior', () => {
+            expect(planPromotions([stat('K', 10, 10)]).map(c => c.Key)).toEqual(['K']);
+            expect(planPromotions([stat('K', 10, 10)], { LockUntilFullSync: false }).map(c => c.Key)).toEqual(['K']);
+        });
+    });
+
+    describe('planColumnReclamations (U7 — opt-in reclaim of vanished promoted columns)', () => {
+        const col = (ColumnName: string, AllNullAcrossFullSync: boolean, VanishedFromSource: boolean): PromotedColumnState =>
+            ({ ColumnName, AllNullAcrossFullSync, VanishedFromSource });
+
+        it('DEFAULT OFF — reclaims nothing, even an all-NULL vanished column (non-destructive by default)', () => {
+            expect(planColumnReclamations([col('Gone', true, true)])).toHaveLength(0);
+        });
+
+        it('opted-in but NO full sync observed → reclaims nothing (all-NULL is untrustworthy on a partial pass)', () => {
+            expect(planColumnReclamations([col('Gone', true, true)], { ReclaimVanishedColumns: true, FullSyncCompleted: false })).toHaveLength(0);
+        });
+
+        it('opted-in + full sync: reclaims ONLY a column that is BOTH all-NULL AND vanished from the source', () => {
+            const out = planColumnReclamations(
+                [
+                    col('Gone', true, true),        // reclaimable
+                    col('StillNull', true, false),  // all-NULL but source still sends it → KEEP
+                    col('HasData', false, true),    // vanished but holds data → KEEP (never drop data)
+                ],
+                { ReclaimVanishedColumns: true, FullSyncCompleted: true },
+            );
+            expect(out.map(c => c.ColumnName)).toEqual(['Gone']);
+        });
+
+        it('is deterministic — sorted by column name', () => {
+            const out = planColumnReclamations(
+                [col('Zeta', true, true), col('Alpha', true, true)],
+                { ReclaimVanishedColumns: true, FullSyncCompleted: true },
+            );
+            expect(out.map(c => c.ColumnName)).toEqual(['Alpha', 'Zeta']);
         });
     });
 

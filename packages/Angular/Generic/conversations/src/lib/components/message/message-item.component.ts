@@ -168,10 +168,12 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   private _cachedDisplayMessage: string = '';
   private _cachedMessageText: string = '';
 
+  // Shared AI mention/suggestion engine (BaseSingleton — same instance the composer plugins use)
+  private mentionAutocomplete = MentionAutocompleteService.Instance;
+
   constructor(
     private cdRef: ChangeDetectorRef,
     private mentionParser: MentionParserService,
-    private mentionAutocomplete: MentionAutocompleteService,
     private uiCommandHandler: UICommandHandlerService,
     private agentService: ConversationAgentService,
     private markdownService: MarkdownService

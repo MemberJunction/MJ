@@ -425,6 +425,59 @@ export type AgentSubAgentRequest<TContext = any> = {
 export type AgentSkillActivationRequest = {
     /** Name of the skill (MJ: AI Skills.Name) to activate */
     name: string;
+    /**
+     * Brief agent-stated rationale for why this skill is being activated. Optional — supplied
+     * by the LLM when it self-activates a skill mid-run, and carried through to the run step's
+     * {@link AgentSkillInvocation} record for observability. User-requested activations
+     * (/skill mentions) don't carry a reason.
+     */
+    reason?: string;
+}
+
+/**
+ * One skill's involvement in an agent run step, recorded in `AIAgentRunStep.Skills`
+ * (a JSON array of these, or null when no skills are in play). This is the observability
+ * contract for skills: every step touched by a skill records WHICH skill, HOW it entered
+ * the run, and the PROVENANCE OF AUTHORITY that admitted it.
+ *
+ * Population rules (implemented in BaseAgent):
+ * - **Skill steps** record the activation(s) that step performed (with {@link Reason} when
+ *   agent-initiated).
+ * - **Prompt steps** record the full set of skills in effect for that turn, so prompt
+ *   injection is always visible.
+ * - **Actions / Sub-Agent steps** record the skill(s) through which the executed tool
+ *   became available; null/absent means the tool was a native agent grant.
+ *
+ * The canonical JSON-type interface for CodeGen lives at
+ * `metadata/entities/JSONType-interfaces/AgentSkillInvocation.ts` — keep the two in sync.
+ */
+export type AgentSkillInvocation = {
+    /** ID of the activated skill (MJ: AI Skills.ID) */
+    SkillID: string;
+    /** Name of the activated skill at activation time */
+    SkillName: string;
+    /** How the skill entered the run: explicit user request (/skill mention) or agent self-activation */
+    ActivationType: 'requested' | 'auto';
+    /** The gate values that admitted this skill — the provenance of authority */
+    Provenance: AgentSkillInvocationProvenance;
+    /** Agent-stated rationale (only for ActivationType='auto', from skillActivations[].reason) */
+    Reason?: string;
+}
+
+/**
+ * The gate values in effect when a skill was admitted to a run — recorded so an auditor can
+ * see exactly which configuration allowed the activation, even if the configuration has
+ * since changed.
+ */
+export type AgentSkillInvocationProvenance = {
+    /** The agent's AcceptsSkills value at activation ('All' or 'Limited' — 'None' can never activate) */
+    AgentAcceptsSkills: string;
+    /** The skill's ActivationMode at activation ('Auto' | 'RequestedOnly') */
+    SkillActivationMode: string;
+    /** The agent's SkillActivationMode at activation ('Auto' | 'RequestedOnly') */
+    AgentSkillActivationMode: string;
+    /** Who pulled the trigger: the user's /skill request or the agent's own decision */
+    RequestedBy: 'user-request' | 'agent-decision';
 }
 
 /**
@@ -1554,7 +1607,7 @@ export type AgentChatMessageMetadata = {
     /** Whether this message has expired */
     isExpired?: boolean;
     /** Type of message (for lifecycle management and logging) */
-    messageType?: 'action-result' | 'client-tool-result' | 'tool-result' | 'loop-result' | 'sub-agent-result' | 'skill-activation' | 'chat' | 'system' | 'user';
+    messageType?: 'action-result' | 'client-tool-result' | 'tool-result' | 'loop-result' | 'sub-agent-result' | 'skill-activation' | 'skill-activation-refused' | 'chat' | 'system' | 'user';
     /** Name of the sub-agent (only for sub-agent-result messages) */
     subAgentName?: string;
     /** ID of the sub-agent (only for sub-agent-result messages) */

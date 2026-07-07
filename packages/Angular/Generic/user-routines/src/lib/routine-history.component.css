@@ -1,0 +1,113 @@
+:host {
+    display: block;
+}
+
+.history-loading {
+    display: flex;
+    justify-content: center;
+    padding: 48px 0;
+}
+
+.history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.history-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 12px 14px;
+    background: var(--mj-bg-surface);
+    border: 1px solid var(--mj-border-default);
+    border-radius: var(--mj-radius-md, 8px);
+}
+
+.history-row-main {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.history-started {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--mj-text-primary);
+}
+
+.history-relative {
+    font-size: 12px;
+    color: var(--mj-text-muted);
+}
+
+.history-duration {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--mj-text-secondary);
+}
+
+.history-spacer {
+    flex: 1 1 auto;
+}
+
+.history-notified {
+    color: var(--mj-status-info);
+    font-size: 13px;
+}
+
+.history-summary {
+    font-size: 13px;
+    color: var(--mj-text-secondary);
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.history-error {
+    font-size: 12px;
+    color: var(--mj-status-error-text);
+    background: var(--mj-status-error-bg);
+    border: 1px solid var(--mj-status-error-border);
+    border-radius: var(--mj-radius-sm, 6px);
+    padding: 8px 10px;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+/* Run status chips */
+.history-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: var(--mj-radius-full, 999px);
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.history-chip--success {
+    background: var(--mj-status-success-bg);
+    color: var(--mj-status-success-text);
+    border: 1px solid var(--mj-status-success-border);
+}
+
+.history-chip--error {
+    background: var(--mj-status-error-bg);
+    color: var(--mj-status-error-text);
+    border: 1px solid var(--mj-status-error-border);
+}
+
+.history-chip--info {
+    background: var(--mj-status-info-bg);
+    color: var(--mj-status-info-text);
+    border: 1px solid var(--mj-status-info-border);
+}
+
+.history-chip--muted {
+    background: var(--mj-bg-surface-sunken);
+    color: var(--mj-text-muted);
+    border: 1px solid var(--mj-border-default);
+}
