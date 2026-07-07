@@ -19,6 +19,7 @@ import { MJAuthBase } from '@memberjunction/ng-auth-services';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { ThemeService, SharedService, ThemeDefinition } from '@memberjunction/ng-shared';
 import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
+import { IsOmnibarAvailable, IsOmnibarEnabledForUser, OMNIBAR_USER_SETTING_KEY } from '../omnibar/omnibar-user-setting';
 import { Subscription } from 'rxjs';
 
 interface NotificationChannel {
@@ -107,6 +108,37 @@ type ProfilePanel = 'none' | 'photo' | 'theme';
                 <i class="fa-solid fa-chevron-right mj-profile__field-chev"></i>
             </button>
         </div>
+
+        @if (OmnibarAvailable) {
+            <div class="mj-profile__section">
+                <div class="mj-profile__section-head">
+                    <h4>Command Palette</h4>
+                </div>
+                <div class="mj-profile__channels">
+                    <button type="button"
+                            class="mj-profile__channel"
+                            data-testid="omnibar-toggle"
+                            [class.mj-profile__channel--on]="OmnibarEnabled"
+                            [disabled]="SavingOmnibar"
+                            (click)="ToggleOmnibar()">
+                        <div class="mj-profile__channel-icon"><i class="fa-solid fa-magnifying-glass"></i></div>
+                        <div class="mj-profile__channel-label">
+                            Unified command palette
+                            <div class="mj-profile__channel-hint">Ctrl+K — search, records, agents &amp; commands in one bar</div>
+                        </div>
+                        <div class="mj-profile__channel-state">
+                            @if (SavingOmnibar) {
+                                <i class="fa-solid fa-spinner fa-spin"></i>
+                            } @else {
+                                <span class="mj-profile__switch" [class.mj-profile__switch--on]="OmnibarEnabled">
+                                    <span class="mj-profile__switch-knob"></span>
+                                </span>
+                            }
+                        </div>
+                    </button>
+                </div>
+            </div>
+        }
 
         <div class="mj-profile__section">
             <div class="mj-profile__section-head">
@@ -505,6 +537,12 @@ img.mj-profile__avatar { background: var(--mj-bg-surface-card); }
     font-weight: 500;
     color: var(--mj-text-primary);
 }
+.mj-profile__channel-hint {
+    font-size: 11.5px;
+    font-weight: 400;
+    color: var(--mj-text-muted);
+    margin-top: 2px;
+}
 .mj-profile__channel-state {
     flex-shrink: 0;
     color: var(--mj-text-muted);
@@ -740,6 +778,11 @@ export class ProfileDialogComponent extends BaseAngularComponent implements OnIn
     ];
     public UnreadCount = 0;
 
+    // Omnibar per-user opt-in (shown only when the instance makes it available)
+    public OmnibarAvailable = false;
+    public OmnibarEnabled = false;
+    public SavingOmnibar = false;
+
     // Slide-in panel state
     public ActivePanel: ProfilePanel = 'none';
     public ThemeOptions: Array<{ id: string; name: string; description: string; icon: string; swatch: 'light' | 'dark' | 'system' }> = [];
@@ -765,6 +808,8 @@ export class ProfileDialogComponent extends BaseAngularComponent implements OnIn
         this.populateIdentity();
         this.populateThemeOptions();
         this.loadNotifications();
+        this.OmnibarAvailable = IsOmnibarAvailable();
+        this.OmnibarEnabled = IsOmnibarEnabledForUser();
         this.themeSub = this.themeService.Preference$.subscribe(pref => {
             this.ThemePreference = pref;
             this.ThemeLabel = this.computeThemeLabel();
@@ -820,6 +865,30 @@ export class ProfileDialogComponent extends BaseAngularComponent implements OnIn
             this.sharedService.CreateSimpleNotification(`Theme change failed: ${msg}`, 'error', 3000);
         } finally {
             this.SavingTheme = null;
+            this.cdr.markForCheck();
+        }
+    }
+
+    /**
+     * Per-user omnibar opt-in/out. Persists via UserInfoEngine (MJ: User
+     * Settings) so the choice follows the user across browsers/devices. The
+     * shell reads the same setting on every change-detection pass, so the
+     * header affordance and Ctrl+K behavior flip live — no reload needed.
+     */
+    public async ToggleOmnibar(): Promise<void> {
+        if (this.SavingOmnibar) return;
+        const next = !this.OmnibarEnabled;
+        this.SavingOmnibar = true;
+        this.cdr.markForCheck();
+        try {
+            const saved = await UserInfoEngine.Instance.SetSetting(OMNIBAR_USER_SETTING_KEY, String(next));
+            if (saved) {
+                this.OmnibarEnabled = next;
+            } else {
+                this.sharedService.CreateSimpleNotification('Could not save the command palette preference', 'error', 3000);
+            }
+        } finally {
+            this.SavingOmnibar = false;
             this.cdr.markForCheck();
         }
     }

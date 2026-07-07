@@ -17,6 +17,7 @@ import { OmnibarSearchProvider } from '../providers/omnibar-search.provider';
 import { OmnibarCommandProvider } from '../providers/omnibar-command.provider';
 import { OmnibarAgentProvider } from '../providers/omnibar-agent.provider';
 import { LoadOmnibarProviders } from '../index';
+import { ResolveOmnibarEnabled } from '../omnibar-user-setting';
 
 const REQ: ComposerSuggestionRequest = { Query: '', MaxResults: 9, ContextUser: null, Provider: null };
 
@@ -161,5 +162,25 @@ describe('OmnibarAgentProvider', () => {
         // In this test bundle ng-conversations' plugins are not loaded, so the
         // composer-registry delegate resolves to null — the graceful path.
         expect(await provider.GetSuggestions({ ...REQ, Query: 'sa' })).toEqual([]);
+    });
+});
+
+describe('ResolveOmnibarEnabled (two-layer gate: instance availability × per-user opt-in)', () => {
+    it('is OFF when the instance master switch is off, regardless of the user setting', () => {
+        expect(ResolveOmnibarEnabled(false, 'true')).toBe(false);
+        expect(ResolveOmnibarEnabled(false, 'false')).toBe(false);
+        expect(ResolveOmnibarEnabled(false, undefined)).toBe(false);
+    });
+
+    it('is OFF by default (opt-in): available instance + no user setting = legacy trio', () => {
+        expect(ResolveOmnibarEnabled(true, undefined)).toBe(false);
+    });
+
+    it('is ON only when the user explicitly opted in with the string "true"', () => {
+        expect(ResolveOmnibarEnabled(true, 'true')).toBe(true);
+        expect(ResolveOmnibarEnabled(true, 'false')).toBe(false);
+        expect(ResolveOmnibarEnabled(true, '')).toBe(false);
+        expect(ResolveOmnibarEnabled(true, 'TRUE')).toBe(false); // exact-match contract
+        expect(ResolveOmnibarEnabled(true, '1')).toBe(false);
     });
 });

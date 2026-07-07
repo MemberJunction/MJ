@@ -22,6 +22,7 @@
  */
 import { test, expect } from '../fixtures';
 import type { Page } from '@playwright/test';
+import { ensureOmnibarEnabled, setOmnibarEnabled } from '../omnibar-optin';
 
 async function gotoHome(page: Page): Promise<void> {
   await page.goto('/', { waitUntil: 'domcontentloaded' });
@@ -37,6 +38,8 @@ async function gotoHome(page: Page): Promise<void> {
   }
   // Shell header present = app booted past the loading screen.
   await expect(page.locator('.shell-omnibar-affordance, .shell-search-bar').first()).toBeVisible({ timeout: 120_000 });
+  // The omnibar is per-user OPT-IN — enable it for the test user (idempotent).
+  await ensureOmnibarEnabled(page);
 }
 
 async function openPalette(page: Page): Promise<void> {
@@ -139,4 +142,23 @@ test.describe.serial('Unified command palette', () => {
     await expect(composer.locator('.mention-chip')).toHaveCount(1);
     await expect(composer.locator('.mention-chip[data-mention-name="Sage"]')).toBeVisible();
   });
+  test('omnibar is per-user opt-in: My Profile toggle turns it off and back on live', async ({ page }) => {
+    await gotoHome(page); // ends opted-IN via ensureOmnibarEnabled
+
+    // Opt OUT → affordance disappears live, Ctrl+K falls back to legacy (no palette).
+    await setOmnibarEnabled(page, false);
+    await expect(page.locator('.shell-omnibar-affordance')).toBeHidden({ timeout: 10_000 });
+    await expect(page.locator('.shell-search-bar').first()).toBeVisible({ timeout: 10_000 });
+    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+k' : 'Control+k');
+    await page.waitForTimeout(1_000);
+    await expect(page.locator('.omnibar-palette')).toHaveCount(0);
+    await page.keyboard.press('Escape'); // dismiss whatever legacy Ctrl+K focused
+
+    // Opt back IN → affordance returns live and Ctrl+K opens the palette again.
+    await setOmnibarEnabled(page, true);
+    await expect(page.locator('.shell-omnibar-affordance').first()).toBeVisible({ timeout: 10_000 });
+    await openPalette(page);
+    await page.keyboard.press('Escape');
+  });
+
 });

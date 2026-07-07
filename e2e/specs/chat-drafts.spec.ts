@@ -16,6 +16,7 @@
  */
 import { test, expect } from '../fixtures';
 import type { Page } from '@playwright/test';
+import { ensureOmnibarEnabled } from '../omnibar-optin';
 
 /**
  * Deterministic persistence sync: the draft pipeline logs '[Drafts]' at each stage
@@ -54,6 +55,8 @@ async function bootToShell(page: Page): Promise<void> {
     await page.goto('/app/Chat', { waitUntil: 'domcontentloaded' });
   } catch { /* normal boot */ }
   await expect(page.locator('.chat-conversations-container')).toBeVisible({ timeout: 120_000 });
+  // The omnibar is per-user OPT-IN — this spec stages pills through it.
+  await ensureOmnibarEnabled(page);
 }
 
 const visibleComposer = (page: Page) =>

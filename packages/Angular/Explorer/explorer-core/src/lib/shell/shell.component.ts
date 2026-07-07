@@ -25,6 +25,7 @@ import { UserAvatarService } from '@memberjunction/ng-user-avatar';
 import { UserSharingCenterDialogService } from './services/user-sharing-center-dialog.service';
 import { AboutDialogService } from './services/about-dialog.service';
 import { ProfileDialogService } from './services/profile-dialog.service';
+import { IsOmnibarEnabledForUser } from '../omnibar/omnibar-user-setting';
 import { LoadingTheme, LoadingAnimationType, AnimationStep, getActiveTheme } from './loading-themes';
 import { AppAccessDialogComponent, AppAccessDialogConfig, AppAccessDialogResult } from './components/dialogs/app-access-dialog.component';
 import { TabContainerComponent } from './components/tabs/tab-container.component';
@@ -136,13 +137,17 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       return InstanceConfigEngine.Instance.GetBoolean('Shell.SearchBar.EnablePreview', true);
   }
   /**
-   * Feature flag: the unified Ctrl+K command palette (omnibar). ON = the header
-   * shows the palette affordance and Ctrl+K / Ctrl+/ open the palette; OFF = the
+   * Two-layer gate for the unified Ctrl+K command palette (omnibar):
+   * the 'Shell.Omnibar.Enabled' Instance Config row is the master AVAILABILITY
+   * switch (default TRUE; false = legacy trio for everyone), and each user
+   * opts in personally via My Profile → Command Palette (a UserInfoEngine
+   * setting, so the choice follows them across devices). ON = the header shows
+   * the palette affordance and Ctrl+K / Ctrl+/ open the palette; OFF = the
    * legacy trio (search composite + app command palette + search popup) behaves
-   * exactly as before. Flip via the 'Shell.Omnibar.Enabled' Instance Config row.
+   * exactly as before. Both reads are synchronous cache hits.
    */
   get UseOmnibar(): boolean {
-      return InstanceConfigEngine.Instance.GetBoolean('Shell.Omnibar.Enabled', true);
+      return IsOmnibarEnabledForUser();
   }
 
   @ViewChild('omnibarPalette') omnibarPalette?: { Open(initialQuery?: string): void };
