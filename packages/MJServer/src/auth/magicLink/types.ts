@@ -58,6 +58,32 @@ export interface MagicLinkJWTClaims {
   mj_anon?: boolean;
   /** Opaque per-session id — correlates one anonymous session's activity across audit rows without a real user. */
   mj_sid?: string;
+  /**
+   * Public web widget instance id (additive — set only for widget guest sessions
+   * minted by WidgetSessionService). Binds the synthesized guest principal to one
+   * widget instance so its pinned agent / guest role can be locked down. Absent on
+   * ordinary magic-link sessions.
+   */
+  mj_widget_id?: string;
+  /**
+   * Host-asserted visitor email for a widget `host-identity` session (additive). The
+   * authoritative `email`/`sub` still resolve the constrained shared Anonymous principal;
+   * this carries WHO the host says the visitor is, for the agent to look up their account —
+   * without granting that account's permissions. Absent on anonymous/ordinary sessions.
+   */
+  mj_host_email?: string;
+  /**
+   * Returning-visitor anchor for a widget guest session (additive, RV1). Carried so the VOICE path —
+   * whose conversation is created server-side — can stamp the same Conversation.VisitorKey the text
+   * path stamps client-side. Present only when the widget remembers returning visitors.
+   */
+  mj_visitor_key?: string;
+  /** The prior conversation this visit chains from (RV2), for the voice path to stamp Conversation.LastConversationID. */
+  mj_last_conversation_id?: string;
+  /** Resolved polymorphic identity entity id (RV4), for the voice path to stamp the existing Conversation.LinkedEntityID / AIAgentSession.LinkedEntityID. */
+  mj_linked_entity_id?: string;
+  /** Resolved polymorphic identity record id (RV4), for the voice path to stamp the existing Conversation.LinkedRecordID / AIAgentSession.LinkedRecordID. */
+  mj_linked_record_id?: string;
   /** Marks the session as magic-link so the Explorer can confine the UI. */
   mj_magic_link: true;
 }
