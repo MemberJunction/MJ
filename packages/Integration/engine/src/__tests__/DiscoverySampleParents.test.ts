@@ -97,16 +97,16 @@ describe('BaseRESTIntegrationConnector — discovery-time parent sampling (§sam
     describe('the gap (proves the fix is required)', () => {
         it('a template-var child yields ZERO records at discovery when no parents are synced', async () => {
             const c = new TestConnector();
-            const result = await c.FetchChanges(childCtx());   // no DiscoverySampleParents flag
+            const result = await c.FetchChanges(childCtx());   // sync path — FetchChanges never samples parents
             expect(result.Records).toEqual([]);
             expect(result.Warnings?.[0]?.Code).toBe('ZERO_PARENTS');
-            // Without the flag the connector must NOT reach out for a parent sample — the child is simply empty.
+            // On the sync path the connector must NOT reach out for a parent sample — the child is simply empty.
             expect(c.urls).toEqual([]);
         });
 
         it('is ALSO the sync-path behavior: no flag → ZERO_PARENTS is preserved (sync must sync the parent first)', async () => {
             // Same call as above, asserted as the regression guard: the fix must NOT change the sync path,
-            // which never sets DiscoverySampleParents. An unsynced parent still means "sync the parent first".
+            // which never live-samples parents. An unsynced parent still means "sync the parent first".
             const c = new TestConnector();
             const result = await c.FetchChanges(childCtx());
             expect(result.Warnings?.[0]?.Code).toBe('ZERO_PARENTS');
@@ -151,8 +151,8 @@ describe('BaseRESTIntegrationConnector — discovery-time parent sampling (§sam
         });
 
         it('DiscoverFieldsViaFetch surfaces a template-var child\'s fields at discovery on an empty DB', async () => {
-            // The real user-facing path: DiscoverFieldsViaFetch sets DiscoverySampleParents itself, so the
-            // child is no longer field-less at discovery. Pre-fix this returned no sampled fields.
+            // The real user-facing path: DiscoverFieldsViaFetch drives the recursive parent-sample stream
+            // itself, so the child is no longer field-less at discovery. Pre-fix this returned no sampled fields.
             const c = new TestConnector();
             const ci = { IntegrationID: 'int1' } as unknown as MJCompanyIntegrationEntity;
             const fields = await c.DiscoverFieldsViaFetch(ci, 'events', {} as UserInfo);
