@@ -202,8 +202,11 @@ export class RecordDependencyAnalyzer {
       const recordId = `${entityName}_${this.recordCounter++}`;
       const path = pathPrefix ? `${pathPrefix}/${entityName}[${i}]` : `${entityName}[${i}]`;
 
-      // Validate that the record has a 'fields' property (required)
-      if (!record.fields) {
+      // Validate that the record has a 'fields' property (required). Delete tombstones
+      // are exempt — they remove a record by primaryKey alone and legitimately carry no
+      // 'fields' (ValidationService applies the same exemption). They have no lookups/FKs,
+      // so they flow through as leaf nodes and are handled in the delete phase.
+      if (!record.fields && record.deleteRecord?.delete !== true) {
         const hint = 'field' in record ? ' Did you mean "fields" instead of "field"?' : '';
         throw new Error(
           `Record at ${path} is missing required "fields" property.${hint} ` +

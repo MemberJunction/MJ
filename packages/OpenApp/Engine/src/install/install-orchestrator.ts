@@ -7,7 +7,9 @@
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { mkdirSync, readFileSync } from 'node:fs';
-import type { AppInstallCallbacks, InstallOptions, UpgradeOptions, RemoveOptions, AppOperationResult, ErrorPhase, PassthroughInstallOptions } from '../types/open-app-types.js';
+import { createRequire } from 'node:module';
+import { pathToFileURL } from 'node:url';
+import type { AppInstallCallbacks, InstallOptions, UpgradeOptions, RemoveOptions, AppOperationResult, ErrorPhase, PassthroughInstallOptions, AppHookPayload } from '../types/open-app-types.js';
 import type { MJAppManifest } from '../manifest/manifest-schema.js';
 import { ParseAndValidateManifest } from '../manifest/manifest-loader.js';
 import { CheckMJVersionCompatibility, IsValidUpgrade } from '../dependency/version-checker.js';
@@ -40,6 +42,18 @@ import {
   ListInstalledApps,
   UpdateAppRecord,
 } from './history-recorder.js';
+
+/**
+ * Error carrying the lifecycle {@link ErrorPhase} in which it occurred, so the top-level
+ * install/upgrade/remove catch blocks can attribute the failure to the correct phase
+ * (e.g. 'Hooks') instead of defaulting to 'Schema'.
+ */
+class OpenAppPhaseError extends Error {
+  constructor(public readonly Phase: ErrorPhase, message: string) {
+    super(message);
+    this.name = 'OpenAppPhaseError';
+  }
+}
 
 /**
  * Runtime context provided by the CLI to the orchestrator.
@@ -278,13 +292,26 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
     await SetAppStatus(context.ContextUser, createdAppId!, finalStatus);
     if (finalStatus !== 'Active') {
       // Array-agnostic by AppName — sweeps both the server and client arrays.
-      ToggleServerDynamicPackages(context.RepoRoot, manifest.name, false);
+      ToggleServerDynamicPackages(context.RepoRoot, manifest.name, false, context.ServerPackagePath);
     }
 
     // Step 16: Execute hooks
     if (manifest.hooks?.postInstall) {
       Callbacks?.OnProgress?.('Hooks', 'Running postInstall hook...');
       await ExecuteHook(manifest.hooks.postInstall, context.RepoRoot);
+    }
+    // Step 16b: Execute in-process postInstall module hook (interactive, DB-aware setup wizard)
+    if (manifest.hooks?.postInstallModule) {
+      Callbacks?.OnProgress?.('Hooks', `Running postInstall module '${manifest.hooks.postInstallModule}'...`);
+      const appInfo = await FindInstalledApp(context.ContextUser, manifest.name);
+      await ExecuteHookModule(manifest.hooks.postInstallModule, {
+        App: appInfo!,
+        RepoRoot: context.RepoRoot,
+        Provider: context.DatabaseProvider,
+        ContextUser: context.ContextUser,
+        Callbacks: context.Callbacks,
+        Manifest: manifest,
+      }, context.RepoRoot);
     }
 
     // The install is complete (status is already 'Active'). The history entry is an
@@ -329,16 +356,17 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
     };
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
+    const phase: ErrorPhase = error instanceof OpenAppPhaseError ? error.Phase : 'Schema';
     if (createdAppId && manifest) {
       try {
-        await RecordFailureHistory(context.ContextUser, createdAppId, 'Install', manifest, 'Schema', message, startTime);
+        await RecordFailureHistory(context.ContextUser, createdAppId, 'Install', manifest, phase, message, startTime);
         await SetAppStatus(context.ContextUser, createdAppId, 'Error');
       } catch {
         /* best effort */
       }
     }
     Callbacks?.OnError?.('Install', message);
-    return BuildFailureResult('Install', options.Source, '', 'Schema', startTime, message);
+    return BuildFailureResult('Install', options.Source, '', phase, startTime, message);
   }
 }
 
@@ -578,6 +606,17 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
       Callbacks?.OnProgress?.('Hooks', 'Running postUpgrade hook...');
       await ExecuteHook(manifest.hooks.postUpgrade, context.RepoRoot);
     }
+    if (manifest.hooks?.postUpgradeModule) {
+      Callbacks?.OnProgress?.('Hooks', `Running postUpgrade module '${manifest.hooks.postUpgradeModule}'...`);
+      await ExecuteHookModule(manifest.hooks.postUpgradeModule, {
+        App: existingApp,
+        RepoRoot: context.RepoRoot,
+        Provider: context.DatabaseProvider,
+        ContextUser: context.ContextUser,
+        Callbacks: context.Callbacks,
+        Manifest: manifest,
+      }, context.RepoRoot);
+    }
 
     // Update dependency records to reflect new manifest. Delete + re-add atomically so a
     // crash mid-rewrite can't leave the app with zero dependency rows (B23). The upgrade
@@ -623,10 +662,11 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
     };
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
+    const phase: ErrorPhase = error instanceof OpenAppPhaseError ? error.Phase : 'Schema';
     if (upgradeAppId) {
       try {
         if (manifest) {
-          await RecordFailureHistory(context.ContextUser, upgradeAppId, 'Upgrade', manifest, 'Schema', message, startTime, previousVersion);
+          await RecordFailureHistory(context.ContextUser, upgradeAppId, 'Upgrade', manifest, phase, message, startTime, previousVersion);
         }
         await SetAppStatus(context.ContextUser, upgradeAppId, 'Error');
       } catch {
@@ -634,7 +674,7 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
       }
     }
     Callbacks?.OnError?.('Upgrade', message);
-    return BuildFailureResult('Upgrade', options.AppName, '', 'Schema', startTime, message);
+    return BuildFailureResult('Upgrade', options.AppName, '', phase, startTime, message);
   }
 }
 
@@ -685,6 +725,18 @@ export async function RemoveApp(options: RemoveOptions, context: OrchestratorCon
     if (manifest.hooks?.preRemove) {
       Callbacks?.OnProgress?.('Hooks', 'Running preRemove hook...');
       await ExecuteHook(manifest.hooks.preRemove, context.RepoRoot);
+    }
+    // In-process preRemove module hook (DB-aware teardown, e.g. removing seeded __mj records)
+    if (manifest.hooks?.preRemoveModule) {
+      Callbacks?.OnProgress?.('Hooks', `Running preRemove module '${manifest.hooks.preRemoveModule}'...`);
+      await ExecuteHookModule(manifest.hooks.preRemoveModule, {
+        App: existingApp,
+        RepoRoot: context.RepoRoot,
+        Provider: context.DatabaseProvider,
+        ContextUser: context.ContextUser,
+        Callbacks: context.Callbacks,
+        Manifest: manifest,
+      }, context.RepoRoot);
     }
 
     // Step 3: Database cleanup FIRST — metadata + schema (the hard-to-undo, failure-prone
@@ -783,8 +835,8 @@ export async function RemoveApp(options: RemoveOptions, context: OrchestratorCon
     });
 
     await Promise.all([
-      Promise.resolve(RemoveServerDynamicPackages(context.RepoRoot, options.AppName)),
-      Promise.resolve(manifest.schema ? RemoveEntityPackageMapping(context.RepoRoot, manifest.schema.name) : undefined),
+      Promise.resolve(RemoveServerDynamicPackages(context.RepoRoot, options.AppName, context.ServerPackagePath)),
+      Promise.resolve(manifest.schema ? RemoveEntityPackageMapping(context.RepoRoot, manifest.schema.name, context.ServerPackagePath) : undefined),
       Promise.resolve(HandleAngularPrebundleExcludeRemoval(manifest, otherManifests, context)),
       Promise.resolve(
         RemoveAppPackages({
@@ -840,10 +892,11 @@ export async function RemoveApp(options: RemoveOptions, context: OrchestratorCon
     };
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
+    const phase: ErrorPhase = error instanceof OpenAppPhaseError ? error.Phase : 'Schema';
     if (removeAppId) {
       try {
         if (removeManifest) {
-          await RecordFailureHistory(context.ContextUser, removeAppId, 'Remove', removeManifest, 'Schema', message, startTime);
+          await RecordFailureHistory(context.ContextUser, removeAppId, 'Remove', removeManifest, phase, message, startTime);
         }
         await SetAppStatus(context.ContextUser, removeAppId, 'Error');
       } catch {
@@ -851,7 +904,7 @@ export async function RemoveApp(options: RemoveOptions, context: OrchestratorCon
       }
     }
     Callbacks?.OnError?.('Remove', message);
-    return BuildFailureResult('Remove', options.AppName, '', 'Schema', startTime, message);
+    return BuildFailureResult('Remove', options.AppName, '', phase, startTime, message);
   }
 }
 
@@ -869,7 +922,7 @@ export async function DisableApp(appName: string, context: OrchestratorContext):
     return BuildFailureResult('Install', appName, '', 'Config', startTime, `App '${appName}' is not installed`);
   }
 
-  const toggle = ToggleServerDynamicPackages(context.RepoRoot, appName, false);
+  const toggle = ToggleServerDynamicPackages(context.RepoRoot, appName, false, context.ServerPackagePath);
   if (!toggle.Success) {
     // Don't flip the DB status when the config edit failed — that desyncs the DB
     // from mj.config.cjs and would report success on a half-applied disable (B25).
@@ -897,7 +950,7 @@ export async function EnableApp(appName: string, context: OrchestratorContext): 
     return BuildFailureResult('Install', appName, '', 'Config', startTime, `App '${appName}' is not installed`);
   }
 
-  const toggle = ToggleServerDynamicPackages(context.RepoRoot, appName, true);
+  const toggle = ToggleServerDynamicPackages(context.RepoRoot, appName, true, context.ServerPackagePath);
   if (!toggle.Success) {
     return BuildFailureResult('Install', appName, app.Version, 'Config', startTime, toggle.ErrorMessage ?? 'Failed to update dynamicPackages.server in mj.config.cjs');
   }
@@ -1370,7 +1423,7 @@ async function HandlePackageInstallation(
 function HandleServerConfig(manifest: MJAppManifest, context: OrchestratorContext): InternalResult {
   context.Callbacks?.OnProgress?.('Config', 'Updating server config...');
 
-  const dynamicResult = AddServerDynamicPackages(context.RepoRoot, manifest);
+  const dynamicResult = AddServerDynamicPackages(context.RepoRoot, manifest, context.ServerPackagePath);
   if (!dynamicResult.Success) {
     return { Success: false, ErrorMessage: dynamicResult.ErrorMessage };
   }
@@ -1380,13 +1433,13 @@ function HandleServerConfig(manifest: MJAppManifest, context: OrchestratorContex
   // side-effect import in the class-registrations manifest MJExplorer already imports —
   // so the client load path lives in distributed packages, not a bespoke MJExplorer file.
   // Runs on both install and upgrade (both call HandleServerConfig); idempotent per entry.
-  const clientResult = AddClientDynamicPackages(context.RepoRoot, manifest);
+  const clientResult = AddClientDynamicPackages(context.RepoRoot, manifest, context.ServerPackagePath);
   if (!clientResult.Success) {
     return { Success: false, ErrorMessage: clientResult.ErrorMessage };
   }
 
   // Add entityPackageName mapping so CodeGen resolves per-schema imports correctly
-  const entityResult = AddEntityPackageMapping(context.RepoRoot, manifest);
+  const entityResult = AddEntityPackageMapping(context.RepoRoot, manifest, context.ServerPackagePath);
   if (!entityResult.Success) {
     return { Success: false, ErrorMessage: entityResult.ErrorMessage };
   }
@@ -1444,7 +1497,50 @@ function HandleAngularPrebundleExcludeRemoval(
  */
 async function ExecuteHook(command: string, cwd: string): Promise<void> {
   const { execSync } = await import('node:child_process');
-  execSync(command, { cwd, encoding: 'utf-8', timeout: 120000, stdio: 'inherit' });
+  try {
+    execSync(command, { cwd, encoding: 'utf-8', timeout: 120000, stdio: 'inherit' });
+  } catch (err: unknown) {
+    throw new OpenAppPhaseError('Hooks', `Hook command failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+/**
+ * Executes an in-process lifecycle hook MODULE. The specifier is resolved from the
+ * consumer monorepo (`repoRoot`) so it loads one of the app's already-installed npm
+ * packages (npm install runs earlier in the flow), then its default export is awaited
+ * with the live {@link AppHookPayload} — DB provider, context user, interactive prompt
+ * callbacks, and the manifest. Unlike {@link ExecuteHook} this runs IN-PROCESS: no child
+ * process, no execSync timeout, and no need for the hook to self-bootstrap a DB
+ * connection. This is what powers DB-aware, interactive setup/teardown (e.g. a guided
+ * config wizard). A repo-relative path will NOT work here — only the manifest + migration
+ * .sql files are downloaded to the consumer, never the app's source — so the specifier
+ * must resolve to an installed package (e.g. '@scope/app-server/setup').
+ */
+async function ExecuteHookModule(specifier: string, payload: AppHookPayload, repoRoot: string): Promise<void> {
+  try {
+    const requireFromRepo = createRequire(pathToFileURL(join(repoRoot, 'package.json')).href);
+    let resolved: string;
+    try {
+      resolved = requireFromRepo.resolve(specifier);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new Error(
+        `Hook module '${specifier}' could not be resolved from '${repoRoot}'. ` +
+        `Ensure it is exported by one of the app's installed packages. (${msg})`,
+      );
+    }
+    const mod = await import(pathToFileURL(resolved).href);
+    const fn = (mod.default ?? mod) as unknown;
+    if (typeof fn !== 'function') {
+      throw new Error(`Hook module '${specifier}' must export a default async function`);
+    }
+    await (fn as (p: AppHookPayload) => Promise<void>)(payload);
+  } catch (err: unknown) {
+    // Attribute any hook-module failure (resolution, import, missing export, or the
+    // module's own throw) to the 'Hooks' phase rather than the catch's default 'Schema'.
+    if (err instanceof OpenAppPhaseError) throw err;
+    throw new OpenAppPhaseError('Hooks', err instanceof Error ? err.message : String(err));
+  }
 }
 
 /**

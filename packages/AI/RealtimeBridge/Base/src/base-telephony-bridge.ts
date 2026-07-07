@@ -40,6 +40,7 @@ import {
 } from './base-realtime-bridge';
 import { BridgeMediaFrame, BridgeMediaTrackKind, BridgeParticipantInfo } from './media-tracks';
 import { IBridgeMeetingControlsEventSource } from './channel-plane';
+import { resamplePcm16Buffer } from './audio/index';
 
 /**
  * Whether a telephony bridge **places** the call (outbound) or **answers** an incoming one (inbound).
@@ -74,6 +75,34 @@ export const FROM_NUMBER_CONFIG_KEY = 'FromNumber';
  * webhook delivered). Required to answer an inbound call; ignored for outbound.
  */
 export const INBOUND_CALL_ID_CONFIG_KEY = 'InboundCallId';
+
+/**
+ * The **default** carrier media rate: G.711 μ-law at 8 kHz, the PSTN rate Twilio/Vonage carry. Realtime
+ * models speak PCM16 at a higher rate (e.g. OpenAI 24 kHz, Gemini 16 kHz in / 24 kHz out), so
+ * {@link BaseTelephonyBridge} resamples between the carrier rate and the model's rate on BOTH legs.
+ * Skipping this plays the audio at the wrong rate — e.g. 24 kHz samples emitted as 8 kHz are ~3× slow and
+ * pitched down ("deep").
+ *
+ * Not every carrier is 8 kHz: a SIP/RTP leg negotiated as OPUS/16000 (e.g. the RingCentral softphone) is
+ * wideband 16 kHz. Such drivers override the per-call rate via {@link CARRIER_SAMPLE_RATE_CONFIG_KEY};
+ * this constant remains the default when that key is absent, so the 8 kHz carriers are unaffected.
+ */
+export const TELEPHONY_SAMPLE_RATE = 8000;
+
+/** Config key carrying the realtime model's INPUT sample rate (the rate inbound caller audio must be fed at). */
+export const INBOUND_SAMPLE_RATE_CONFIG_KEY = 'InboundSampleRate';
+
+/** Config key carrying the realtime model's OUTPUT sample rate (the rate the model's outbound audio arrives at). */
+export const OUTBOUND_SAMPLE_RATE_CONFIG_KEY = 'OutboundSampleRate';
+
+/**
+ * Config key carrying the **carrier's** PCM16 media rate (Hz) for this call — the rate the SDK seam
+ * sends/receives audio at, which the bridge resamples to/from the model rate. Defaults to
+ * {@link TELEPHONY_SAMPLE_RATE} (8 kHz) when absent, so the G.711 carriers (Twilio/Vonage) need not set it.
+ * A wideband SIP/RTP driver (RingCentral softphone, OPUS/16000) sets it to its negotiated rate so the
+ * audio isn't needlessly bottlenecked through 8 kHz.
+ */
+export const CARRIER_SAMPLE_RATE_CONFIG_KEY = 'CarrierSampleRate';
 
 /**
  * The role of the single remote party on a telephony call, surfaced through
@@ -169,6 +198,16 @@ export interface ITelephonyCallSdk {
      * @param cb Invoked when the call has ended.
      */
     onCallEnded(cb: () => void): void;
+
+    /**
+     * Discards any outbound audio the provider has QUEUED but not yet played — the agent's not-yet-heard
+     * voice — so the agent goes silent immediately on barge-in. Carriers that buffer deeply (Vonage queues
+     * up to ~60s) MUST implement this or the agent keeps talking over itself after being interrupted.
+     *
+     * **Optional**: a provider whose media path plays in near-real-time with no client-side queue has
+     * nothing to flush and omits it (the base treats an absent method as a no-op).
+     */
+    flushOutbound?(): void;
 }
 
 /**
@@ -226,6 +265,19 @@ export abstract class BaseTelephonyBridge extends BaseRealtimeBridge {
 
     /** The direction this call was established with. */
     protected direction: BridgeConnectDirection = 'Outbound';
+
+    /** The realtime model's INPUT rate (Hz) — inbound 8 kHz caller audio is resampled UP to this. */
+    protected modelInputRate: number = 24000;
+
+    /** The realtime model's OUTPUT rate (Hz) — outbound model audio is resampled DOWN to the carrier rate from this. */
+    protected modelOutputRate: number = 24000;
+
+    /**
+     * The carrier's PCM16 media rate (Hz) — what the SDK seam sends/receives audio at, between which and the
+     * model rate the bridge resamples. Defaults to {@link TELEPHONY_SAMPLE_RATE} (8 kHz); a wideband SIP/RTP
+     * driver overrides it per-call via {@link CARRIER_SAMPLE_RATE_CONFIG_KEY}.
+     */
+    protected carrierSampleRate: number = TELEPHONY_SAMPLE_RATE;
 
     /** The inbound-media handler registered via {@link OnMedia}; inbound audio is forwarded to it. */
     private mediaHandler?: (frame: BridgeMediaFrame) => void;
@@ -298,6 +350,12 @@ export abstract class BaseTelephonyBridge extends BaseRealtimeBridge {
         const config = ctx.Configuration ?? {};
         this.direction = this.readDirection(config);
         this.fromNumber = this.readStringConfig(config, FROM_NUMBER_CONFIG_KEY) ?? '';
+        // The engine forwards the realtime session's sample rates here; default 24 kHz when absent.
+        this.modelInputRate = this.readNumberConfig(config, INBOUND_SAMPLE_RATE_CONFIG_KEY) ?? 24000;
+        this.modelOutputRate = this.readNumberConfig(config, OUTBOUND_SAMPLE_RATE_CONFIG_KEY) ?? 24000;
+        // The carrier's media rate — 8 kHz G.711 (Twilio/Vonage) by default, or a wideband SIP rate (e.g.
+        // 16 kHz for the RingCentral softphone's OPUS/16000) when the driver/service sets it.
+        this.carrierSampleRate = this.readNumberConfig(config, CARRIER_SAMPLE_RATE_CONFIG_KEY) ?? TELEPHONY_SAMPLE_RATE;
 
         this.sdk = this.sdkFactory(ctx.Configuration);
         this.wireInboundAudio(this.sdk);
@@ -352,7 +410,10 @@ export abstract class BaseTelephonyBridge extends BaseRealtimeBridge {
         if (track === 'audio-out') {
             const pcm = this.framePcm(frame);
             if (pcm) {
-                this.sdk.sendAudioFrame(pcm);
+                // Resample the model's output (e.g. 24 kHz) DOWN to the carrier rate before the SDK sends it;
+                // otherwise the caller hears it at the wrong rate (24 kHz emitted as 8 kHz is ~3× slow + "deep").
+                const out = this.modelOutputRate === this.carrierSampleRate ? pcm : resamplePcm16Buffer(pcm, this.modelOutputRate, this.carrierSampleRate);
+                this.sdk.sendAudioFrame(out);
             }
         }
         // video-out / screen-out (and any inbound track passed in error) are n/a for telephony — no-op.
@@ -366,6 +427,17 @@ export abstract class BaseTelephonyBridge extends BaseRealtimeBridge {
      */
     public OnMedia(handler: (frame: BridgeMediaFrame) => void): void {
         this.mediaHandler = handler;
+    }
+
+    /**
+     * Flushes the agent's queued outbound voice on barge-in by delegating to the SDK's {@link
+     * ITelephonyCallSdk.flushOutbound} (e.g. Vonage's `{"action":"clear"}` websocket command). The engine
+     * calls this from `OnInterruption`; for carriers that buffer outbound audio (notably Vonage's ~60s
+     * queue) this is what stops the agent talking over itself after the caller cuts in. A no-op when the
+     * SDK doesn't implement flush (its media path has no client-side queue).
+     */
+    public override FlushOutboundMedia(): void {
+        this.sdk?.flushOutbound?.();
     }
 
     // ── Capability-gated virtuals telephony supports (gated by SupportedFeatures) ─────
@@ -505,9 +577,12 @@ export abstract class BaseTelephonyBridge extends BaseRealtimeBridge {
     /** Wires the SDK's inbound-audio callback to a single-party inbound {@link BridgeMediaFrame}. */
     private wireInboundAudio(sdk: ITelephonyCallSdk): void {
         sdk.onAudioFrame((pcm: ArrayBuffer) => {
+            // The SDK hands us carrier-rate PCM16 (8 kHz μ-law-decoded, or 16 kHz from a wideband SIP leg).
+            // Resample UP to the model's input rate (e.g. 24 kHz) so it hears the caller at the right pitch/speed.
+            const inbound = this.modelInputRate === this.carrierSampleRate ? pcm : resamplePcm16Buffer(pcm, this.carrierSampleRate, this.modelInputRate);
             this.mediaHandler?.({
                 Track: 'audio-in',
-                Bytes: pcm,
+                Bytes: inbound,
                 SpeakerLabel: BaseTelephonyBridge.REMOTE_PARTICIPANT_ID, // single remote party — trivial diarization
                 TimestampMs: Date.now(),
             });
@@ -558,6 +633,13 @@ export abstract class BaseTelephonyBridge extends BaseRealtimeBridge {
     private readStringConfig(config: Record<string, unknown>, key: string): string | undefined {
         const value = config[key];
         return typeof value === 'string' ? value : undefined;
+    }
+
+    /** Reads a positive-number config value (accepts numeric strings), returning `undefined` when absent/invalid. */
+    private readNumberConfig(config: Record<string, unknown>, key: string): number | undefined {
+        const value = config[key];
+        const n = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN;
+        return Number.isFinite(n) && n > 0 ? n : undefined;
     }
 
     /** Returns the PCM bytes of an outbound audio frame, preferring the binary payload. */
