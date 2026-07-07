@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Projects — MJ Conversations Phase 1 Mockups</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<style>
+/* ============================================================================
+   Shared mockup stylesheet — MemberJunction Conversations Phase 1
+   Static, self-contained design language for the UX mockups. Token values
+   mirror the REAL packages/Angular/Generic/shared/src/lib/_tokens.scss
+   (light :root / dark overrides) so these frames read like the product.
+   Illustrative only; production uses the real tokens.
+   ============================================================================ */
+:root {
+  /* Brand */
+  --mj-brand-primary: #0076b6;
+  --mj-brand-primary-hover: #006aa3;
+  --mj-brand-primary-active: #005a8a;
+  --mj-brand-secondary: #092340;      /* navy sidebar — same in both modes */
+  --mj-brand-on-secondary: #ffffff;
+  --mj-brand-accent: #5cc0ed;
+  /* Text */
+  --mj-text-primary: #1e293b;
+  --mj-text-secondary: #475569;
+  --mj-text-muted: #64748b;
+  --mj-text-disabled: #94a3b8;
+  --mj-text-inverse: #ffffff;
+  --mj-text-link: #0076b6;
+  /* Backgrounds */
+  --mj-bg-page: #f8fafc;
+  --mj-bg-surface: #ffffff;
+  --mj-bg-surface-card: #f8fafc;
+  --mj-bg-surface-sunken: #f1f5f9;
+  --mj-bg-surface-elevated: #ffffff;
+  --mj-bg-surface-hover: #f1f5f9;
+  --mj-bg-surface-active: #e2e8f0;
+  --mj-bg-overlay: rgba(15, 23, 42, 0.5);
+  /* Borders */
+  --mj-border-subtle: #f1f5f9;
+  --mj-border-default: #e2e8f0;
+  --mj-border-strong: #cbd5e1;
+  --mj-border-focus: #0076b6;
+  /* Status */
+  --mj-status-success: #22c55e;
+  --mj-status-success-bg: #dcfce7;
+  --mj-status-warning: #f59e0b;
+  --mj-status-warning-bg: #fef3c7;
+  --mj-status-error: #ef4444;
+  --mj-status-error-bg: #fee2e2;
+  --mj-status-info: #3b82f6;
+  --mj-status-info-bg: #dbeafe;
+  /* Shape */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --mj-brand-primary: #2699cc;
+    --mj-brand-primary-hover: #4dabd5;
+    --mj-brand-primary-active: #80c3e1;
+    --mj-brand-accent: #aae7fd;
+    --mj-text-primary: #f1f5f9;
+    --mj-text-secondary: #cbd5e1;
+    --mj-text-muted: #94a3b8;
+    --mj-text-disabled: #475569;
+    --mj-text-inverse: #0f172a;
+    --mj-text-link: #4cb3e3;
+    --mj-bg-page: #0f172a;
+    --mj-bg-surface: #1e293b;
+    --mj-bg-surface-card: #253347;
+    --mj-bg-surface-sunken: #020617;
+    --mj-bg-surface-elevated: #334155;
+    --mj-bg-surface-hover: #475569;
+    --mj-bg-surface-active: #64748b;
+    --mj-bg-overlay: rgba(0, 0, 0, 0.7);
+    --mj-border-subtle: #1e293b;
+    --mj-border-default: #334155;
+    --mj-border-strong: #475569;
+    --mj-status-success-bg: rgba(34, 197, 94, 0.15);
+    --mj-status-warning-bg: rgba(245, 158, 11, 0.15);
+    --mj-status-error-bg: rgba(239, 68, 68, 0.15);
+    --mj-status-info-bg: rgba(59, 130, 246, 0.15);
+    --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.55);
+  }
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: var(--font);
+  color: var(--mj-text-primary);
+  background: var(--mj-bg-page);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* --- Mockup page scaffolding (matches sibling mockups) --- */
+.mockup-header { padding: 20px 28px; background: var(--mj-bg-surface); border-bottom: 1px solid var(--mj-border-default); }
+.mockup-header h1 { margin: 0 0 4px; font-size: 20px; }
+.mockup-header p { margin: 0; color: var(--mj-text-secondary); font-size: 14px; max-width: 1100px; }
+.mockup-back { display: inline-block; margin-bottom: 10px; font-size: 13px; color: var(--mj-text-link); text-decoration: none; }
+.mockup-back:hover { text-decoration: underline; }
+
+.variant-grid { display: grid; grid-template-columns: 1fr; gap: 26px; padding: 24px 28px 48px; max-width: 1560px; margin: 0 auto; }
+.variant { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: var(--radius-lg); overflow: hidden; box-shadow: var(--shadow-sm); display: flex; flex-direction: column; }
+.variant-head { padding: 14px 18px; border-bottom: 1px solid var(--mj-border-default); }
+.variant-head .badge { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--mj-brand-primary); }
+.variant-head h2 { margin: 4px 0 0; font-size: 16px; }
+.variant-head .thesis { margin: 4px 0 0; font-size: 13px; color: var(--mj-text-secondary); }
+.variant-body { padding: 18px; flex: 1; }
+.variant-notes { padding: 12px 18px; background: var(--mj-bg-surface-card); border-top: 1px solid var(--mj-border-default); font-size: 13px; color: var(--mj-text-secondary); }
+.variant-notes strong { color: var(--mj-text-primary); }
+.variant-notes .tradeoff { color: var(--mj-status-warning); }
+
+/* --- Reusable primitives --- */
+.btn { font: inherit; font-size: 13px; font-weight: 600; padding: 8px 14px; border-radius: var(--radius-sm); border: 1px solid transparent; cursor: pointer; background: var(--mj-brand-primary); color: #fff; display: inline-flex; align-items: center; gap: 7px; }
+.btn:hover { background: var(--mj-brand-primary-hover); }
+.btn.secondary { background: transparent; color: var(--mj-text-primary); border-color: var(--mj-border-strong); }
+.btn.secondary:hover { background: var(--mj-bg-surface-hover); }
+.btn.ghost { background: transparent; color: var(--mj-text-secondary); }
+.btn.sm { padding: 5px 10px; font-size: 12px; }
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; background: var(--mj-bg-surface-active); color: var(--mj-text-secondary); }
+.pill.brand { background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent); color: var(--mj-brand-primary); }
+.pill.success { background: var(--mj-status-success-bg); color: var(--mj-status-success); }
+.pill.warning { background: var(--mj-status-warning-bg); color: var(--mj-status-warning); }
+.pill.info { background: var(--mj-status-info-bg); color: var(--mj-status-info); }
+.muted { color: var(--mj-text-muted); }
+.small { font-size: 12px; }
+.row { display: flex; align-items: center; gap: 8px; }
+.spread { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.avatar { width: 24px; height: 24px; border-radius: 50%; background: var(--mj-text-primary); color: var(--mj-bg-surface); display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; flex: none; border: 2px solid var(--mj-bg-surface); }
+</style>
+<style>
+/* ============================================================================
+   Projects area styles (.pj-*) — tokens only, no hardcoded colors except the
+   per-project accent hexes, which mirror Project.Color (user-chosen data).
+   ============================================================================ */
+
+/* ---------- The app frame: top nav + navy sidebar + main ---------- */
+.pj-frame { height: 700px; border: 1px solid var(--mj-border-default); border-radius: var(--radius-md); overflow: hidden; display: flex; flex-direction: column; background: var(--mj-bg-surface-card); box-shadow: var(--shadow-md); }
+.pj-topnav { height: 44px; flex: none; background: var(--mj-text-primary); display: flex; align-items: center; gap: 4px; padding: 0 14px; }
+.pj-topnav .logo { color: color-mix(in srgb, var(--mj-text-inverse) 92%, transparent); font-weight: 800; font-size: 13px; letter-spacing: .02em; margin-right: 14px; display: flex; align-items: center; gap: 8px; }
+.pj-topnav .tab { color: color-mix(in srgb, var(--mj-text-inverse) 70%, transparent); font-size: 13px; font-weight: 600; padding: 0 12px; height: 44px; display: inline-flex; align-items: center; border-bottom: 3px solid transparent; cursor: pointer; }
+.pj-topnav .tab:hover { background: color-mix(in srgb, var(--mj-text-inverse) 10%, transparent); }
+.pj-topnav .tab.active { color: var(--mj-text-inverse); border-bottom-color: var(--mj-brand-accent); }
+.pj-body { flex: 1; display: flex; min-height: 0; }
+
+/* ---------- Navy sidebar (mirrors conversation-list) ---------- */
+.pj-side { width: 262px; flex: none; background: var(--mj-brand-secondary); color: var(--mj-brand-on-secondary); display: flex; flex-direction: column; min-height: 0; }
+.pj-side .side-head { padding: 10px 10px 6px; border-bottom: 1px solid color-mix(in srgb, var(--mj-brand-on-secondary) 10%, transparent); }
+.pj-search { display: flex; align-items: center; gap: 8px; background: color-mix(in srgb, var(--mj-brand-on-secondary) 10%, transparent); border-radius: 6px; padding: 7px 11px; font-size: 13px; color: color-mix(in srgb, var(--mj-brand-on-secondary) 55%, transparent); }
+.pj-newbtn { margin: 8px; padding: 9px 10px; background: var(--mj-brand-primary); color: #fff; border: 0; border-radius: 6px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; }
+.pj-newbtn:hover { background: var(--mj-brand-primary-hover); }
+.pj-newbtn .ghosty { margin-left: auto; opacity: .75; font-size: 12px; }
+.pj-side .scroll { flex: 1; overflow: auto; padding-bottom: 8px; }
+.pj-sect { display: flex; align-items: center; gap: 7px; padding: 5px 14px; font-size: 13px; font-weight: 500; color: var(--mj-brand-on-secondary); cursor: pointer; margin-top: 6px; }
+.pj-sect:hover { background: color-mix(in srgb, var(--mj-brand-on-secondary) 8%, transparent); }
+.pj-sect .chev { font-size: 10px; width: 10px; transition: transform .15s; opacity: .8; }
+.pj-sect.open .chev { transform: rotate(90deg); }
+.pj-sect .pin { color: var(--mj-status-warning); font-size: 11px; }
+.pj-sect .grow { flex: 1; }
+.pj-sect .add { width: 22px; height: 22px; border-radius: 5px; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; opacity: .7; }
+.pj-sect .add:hover { background: color-mix(in srgb, var(--mj-brand-on-secondary) 15%, transparent); opacity: 1; }
+.pj-folder { display: flex; align-items: center; gap: 6px; padding: 5px 8px 5px 12px; font-size: 13px; color: color-mix(in srgb, var(--mj-brand-on-secondary) 80%, transparent); cursor: pointer; position: relative; }
+.pj-folder:hover { background: color-mix(in srgb, var(--mj-brand-on-secondary) 8%, transparent); }
+.pj-folder.sel { background: color-mix(in srgb, var(--mj-brand-on-secondary) 14%, transparent); color: var(--mj-brand-on-secondary); }
+.pj-folder .chev { font-size: 9px; width: 10px; opacity: .75; transition: transform .15s; }
+.pj-folder.open .chev { transform: rotate(90deg); }
+.pj-folder .ficon { font-size: 12px; width: 16px; text-align: center; }
+.pj-folder .fname { flex: 1; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pj-folder .fcount { font-size: 11px; font-weight: 600; color: color-mix(in srgb, var(--mj-brand-on-secondary) 50%, transparent); }
+.pj-conv { display: flex; align-items: center; gap: 8px; padding: 7px 8px 7px 16px; font-size: 13px; color: color-mix(in srgb, var(--mj-brand-on-secondary) 70%, transparent); cursor: pointer; min-height: 38px; }
+.pj-conv:hover { background: color-mix(in srgb, var(--mj-brand-on-secondary) 8%, transparent); color: var(--mj-brand-on-secondary); }
+.pj-conv.active { background: var(--mj-brand-primary); color: #fff; }
+.pj-conv .cname { flex: 1; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pj-conv .cwhen { font-size: 11px; opacity: .65; }
+.pj-conv .ghost-ic { font-size: 11px; opacity: .8; }
+.pj-indent-1 { padding-left: 30px !important; }
+.pj-indent-2 { padding-left: 44px !important; }
+.pj-side .side-foot { border-top: 1px solid color-mix(in srgb, var(--mj-brand-on-secondary) 10%, transparent); padding: 8px 14px; font-size: 12px; color: color-mix(in srgb, var(--mj-brand-on-secondary) 60%, transparent); display: flex; align-items: center; gap: 8px; }
+
+/* ---------- Main column & chat primitives ---------- */
+.pj-main { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--mj-bg-surface-card); }
+.pj-chat-head { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 11px 18px; border-bottom: 1px solid var(--mj-border-default); background: var(--mj-bg-surface-card); box-shadow: var(--shadow-sm); z-index: 2; }
+.pj-chat-title { font-size: 15px; font-weight: 600; color: var(--mj-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pj-proj-tag { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 3px 10px; border-radius: 16px; font-size: 11px; font-weight: 600; background: var(--mj-bg-surface-sunken); border: 1px solid var(--mj-border-default); color: var(--mj-text-secondary); cursor: pointer; }
+.pj-proj-tag:hover { border-color: var(--mj-brand-primary); color: var(--mj-brand-primary); }
+.pj-actbtn { padding: 6px 9px; border: 1px solid var(--mj-border-default); border-radius: 6px; background: transparent; color: var(--mj-text-secondary); font-size: 12px; cursor: pointer; position: relative; display: inline-flex; align-items: center; gap: 6px; }
+.pj-actbtn:hover { background: var(--mj-bg-surface-sunken); color: var(--mj-text-primary); }
+.pj-actbtn .cnt { position: absolute; top: -6px; right: -6px; width: 16px; height: 16px; border-radius: 50%; background: var(--mj-brand-primary); color: #fff; font-size: 10px; font-weight: 600; display: flex; align-items: center; justify-content: center; }
+.pj-msgs { flex: 1; overflow: auto; padding: 18px 22px; display: flex; flex-direction: column; gap: 14px; min-height: 0; }
+.pj-msg { display: flex; gap: 10px; max-width: 86%; }
+.pj-msg .mav { width: 30px; height: 30px; flex: none; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 13px; }
+.pj-msg.user { align-self: flex-end; flex-direction: row-reverse; }
+.pj-msg.user .mav { border-radius: 50%; background: var(--mj-text-primary); color: var(--mj-bg-surface); font-size: 11px; font-weight: 700; }
+.pj-msg.agent .mav { border-radius: 8px; background: var(--mj-brand-primary); }
+.pj-msg .bubble { padding: 10px 14px; font-size: 13.5px; }
+.pj-msg.user .bubble { background: var(--mj-brand-primary); color: #fff; border-radius: 12px 12px 4px 12px; }
+.pj-msg.agent .bubble { background: var(--mj-bg-surface); color: var(--mj-text-primary); border: 1px solid var(--mj-border-default); border-radius: 4px 12px 12px 12px; }
+.pj-msg .who { font-size: 11px; font-weight: 700; margin-bottom: 3px; opacity: .8; }
+.pj-mem-used { display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 11px; font-weight: 600; color: var(--mj-brand-primary); background: color-mix(in srgb, var(--mj-brand-primary) 8%, transparent); border: 1px dashed color-mix(in srgb, var(--mj-brand-primary) 40%, transparent); border-radius: 999px; padding: 3px 9px; cursor: pointer; }
+.pj-composer { flex: none; margin: 0 20px 18px; background: var(--mj-bg-surface-card); border: 2px solid var(--mj-border-default); border-radius: 12px; box-shadow: var(--shadow-sm); padding: 12px 14px 10px; }
+.pj-composer:focus-within { border-color: var(--mj-brand-primary); }
+.pj-composer .ph { font-size: 14px; color: var(--mj-text-muted); min-height: 40px; }
+.pj-composer .bar { display: flex; align-items: center; gap: 6px; }
+.pj-composer .tool { width: 32px; height: 32px; border-radius: 8px; border: 0; background: transparent; color: var(--mj-text-muted); font-size: 14px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+.pj-composer .tool:hover { background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent); color: var(--mj-brand-primary); }
+.pj-composer .send { margin-left: auto; width: 34px; height: 34px; border-radius: 8px; border: 0; background: var(--mj-brand-primary); color: #fff; font-size: 14px; cursor: pointer; }
+
+/* ---------- Shared project bits ---------- */
+.pj-picon { display: inline-flex; align-items: center; justify-content: center; border-radius: 10px; color: #fff; flex: none; }
+.pj-avstack { display: flex; }
+.pj-avstack .avatar:not(:first-child) { margin-left: -8px; }
+.pj-avstack .more { width: 24px; height: 24px; border-radius: 50%; background: var(--mj-bg-surface-active); color: var(--mj-text-secondary); font-size: 10px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; border: 2px solid var(--mj-bg-surface); margin-left: -8px; }
+.pj-card { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: var(--radius-md); }
+.pj-card .chead { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 11px 14px; border-bottom: 1px solid var(--mj-border-subtle); font-size: 13px; font-weight: 700; color: var(--mj-text-primary); }
+.pj-card .chead i { color: var(--mj-text-muted); font-size: 12px; margin-right: 2px; }
+.pj-card .chead .lnk { font-size: 12px; font-weight: 600; color: var(--mj-text-link); cursor: pointer; }
+.pj-card .cbody { padding: 10px 14px 12px; }
+.pj-memrow { display: flex; gap: 9px; align-items: flex-start; padding: 7px 0; border-bottom: 1px solid var(--mj-border-subtle); font-size: 12.5px; color: var(--mj-text-primary); }
+.pj-memrow:last-child { border-bottom: 0; }
+.pj-memrow i { color: var(--mj-brand-primary); font-size: 11px; margin-top: 3px; }
+.pj-memrow .scope { margin-left: auto; flex: none; font-size: 10px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; color: var(--mj-text-disabled); }
+.pj-memrow .tags { margin-left: auto; display: flex; gap: 5px; flex: none; align-items: center; }
+.pj-memrow .mtag { font-size: 9.5px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; color: var(--mj-text-disabled); border: 1px solid var(--mj-border-default); border-radius: 999px; padding: 1px 7px; white-space: nowrap; }
+.pj-memrow .mtag.agent { color: var(--mj-brand-primary); border-color: color-mix(in srgb, var(--mj-brand-primary) 35%, transparent); }
+.pj-memrow .edit { flex: none; color: var(--mj-text-disabled); font-size: 11px; cursor: pointer; }
+.pj-memrow .edit:hover { color: var(--mj-text-primary); }
+.pj-taskrow { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--mj-border-subtle); font-size: 12.5px; }
+.pj-taskrow:last-child { border-bottom: 0; }
+.pj-taskrow .status { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.pj-taskrow .status.done { background: var(--mj-status-success); }
+.pj-taskrow .status.run { background: var(--mj-status-info); box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-status-info) 25%, transparent); }
+.pj-taskrow .status.wait { background: var(--mj-border-strong); }
+.pj-taskrow .tname { flex: 1; font-weight: 600; color: var(--mj-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pj-taskrow .tagent { font-size: 11px; color: var(--mj-text-muted); }
+.pj-progress { width: 74px; height: 5px; border-radius: 999px; background: var(--mj-bg-surface-active); overflow: hidden; flex: none; }
+.pj-progress span { display: block; height: 100%; border-radius: 999px; background: var(--mj-status-info); }
+.pj-artrow { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--mj-border-subtle); font-size: 12.5px; cursor: pointer; }
+.pj-artrow:last-child { border-bottom: 0; }
+.pj-artrow:hover .aname { color: var(--mj-brand-primary); }
+.pj-artrow .aicon { width: 28px; height: 28px; border-radius: 7px; background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent); color: var(--mj-brand-primary); display: inline-flex; align-items: center; justify-content: center; font-size: 12px; flex: none; }
+.pj-artrow .aname { font-weight: 600; color: var(--mj-text-primary); }
+.pj-artrow .ameta { font-size: 11px; color: var(--mj-text-muted); }
+.pj-ghost-note { display: flex; align-items: center; gap: 9px; padding: 8px 12px; border-radius: var(--radius-sm); background: var(--mj-bg-surface-sunken); border: 1px dashed var(--mj-border-strong); font-size: 12px; color: var(--mj-text-muted); }
+.pj-ghost-note i { flex: none; }
+
+/* ---------- Option A: Project Hub ---------- */
+.hubA-body { flex: 1; min-height: 0; overflow: auto; padding: 22px 26px; }
+.hubA-head { display: flex; align-items: flex-start; gap: 16px; }
+.hubA-head .pj-picon { width: 52px; height: 52px; font-size: 22px; }
+.hubA-title { font-size: 21px; font-weight: 700; color: var(--mj-text-primary); margin: 0; }
+.hubA-desc { font-size: 13px; color: var(--mj-text-secondary); margin: 3px 0 0; }
+.hubA-stats { display: flex; align-items: center; gap: 14px; margin-top: 9px; font-size: 12px; color: var(--mj-text-muted); flex-wrap: wrap; }
+.hubA-stats b { color: var(--mj-text-primary); font-weight: 700; }
+.hubA-actions { margin-left: auto; display: flex; align-items: center; gap: 9px; flex: none; }
+.hubA-tabs { display: flex; gap: 2px; margin-top: 18px; border-bottom: 1px solid var(--mj-border-default); }
+.hubA-tabs .t { font-size: 13px; font-weight: 600; color: var(--mj-text-muted); padding: 8px 13px; border-bottom: 2px solid transparent; cursor: pointer; display: inline-flex; align-items: center; gap: 7px; }
+.hubA-tabs .t:hover { color: var(--mj-text-primary); }
+.hubA-tabs .t.active { color: var(--mj-brand-primary); border-bottom-color: var(--mj-brand-primary); }
+.hubA-tabs .t .n { font-size: 10.5px; font-weight: 700; background: var(--mj-bg-surface-active); color: var(--mj-text-secondary); border-radius: 999px; padding: 1px 7px; }
+.hubA-grid { display: grid; grid-template-columns: 1.25fr 1fr; gap: 14px; margin-top: 16px; }
+.hubA-convrow { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--mj-border-subtle); font-size: 13px; cursor: pointer; }
+.hubA-convrow:last-child { border-bottom: 0; }
+.hubA-convrow i { color: var(--mj-text-disabled); font-size: 12px; width: 16px; }
+.hubA-convrow:hover .t { color: var(--mj-brand-primary); }
+.hubA-convrow .t { font-weight: 600; color: var(--mj-text-primary); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hubA-convrow .w { font-size: 11px; color: var(--mj-text-muted); flex: none; }
+.hubA-start { margin-top: 14px; display: flex; align-items: center; gap: 10px; background: var(--mj-bg-surface); border: 2px solid var(--mj-border-default); border-radius: 12px; padding: 11px 14px; box-shadow: var(--shadow-sm); }
+.hubA-start:focus-within, .hubA-start:hover { border-color: var(--mj-brand-primary); }
+.hubA-start .hint { flex: 1; font-size: 13.5px; color: var(--mj-text-muted); }
+.hubA-start .send { width: 32px; height: 32px; border-radius: 8px; border: 0; background: var(--mj-brand-primary); color: #fff; cursor: pointer; }
+.hubA-start .ghost { width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--mj-border-default); background: transparent; color: var(--mj-text-muted); cursor: pointer; }
+.hubA-start .ghost:hover { color: var(--mj-text-primary); border-color: var(--mj-border-strong); }
+
+/* ---------- Option B: Project as Workspace (rail switcher) ---------- */
+.wsB-rail { width: 58px; flex: none; background: color-mix(in srgb, #000 35%, var(--mj-brand-secondary)); display: flex; flex-direction: column; align-items: center; padding: 10px 0; gap: 8px; }
+.wsB-ritem { width: 38px; height: 38px; border-radius: 11px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 15px; cursor: pointer; position: relative; opacity: .85; }
+.wsB-ritem:hover { opacity: 1; }
+.wsB-ritem.home { background: color-mix(in srgb, var(--mj-brand-on-secondary) 14%, transparent); font-size: 14px; }
+.wsB-ritem.active { opacity: 1; box-shadow: 0 0 0 2px color-mix(in srgb, #000 35%, var(--mj-brand-secondary)), 0 0 0 4px var(--mj-brand-accent); }
+.wsB-ritem.active::before { content: ""; position: absolute; left: -10px; width: 4px; height: 22px; border-radius: 999px; background: var(--mj-brand-accent); }
+.wsB-ritem.add { background: transparent; border: 1.5px dashed color-mix(in srgb, var(--mj-brand-on-secondary) 40%, transparent); color: color-mix(in srgb, var(--mj-brand-on-secondary) 70%, transparent); font-size: 13px; }
+.wsB-ritem.add:hover { border-color: var(--mj-brand-on-secondary); color: var(--mj-brand-on-secondary); }
+.wsB-rlabel { font-size: 8.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: color-mix(in srgb, var(--mj-brand-on-secondary) 45%, transparent); margin-top: -4px; }
+.wsB-rspacer { flex: 1; }
+.wsB-projhead { padding: 14px 14px 12px; border-bottom: 1px solid color-mix(in srgb, var(--mj-brand-on-secondary) 10%, transparent); }
+.wsB-projhead .prow { display: flex; align-items: center; gap: 10px; }
+.wsB-projhead .pj-picon { width: 34px; height: 34px; font-size: 15px; border-radius: 9px; }
+.wsB-projhead .pname { font-size: 14px; font-weight: 700; color: var(--mj-brand-on-secondary); line-height: 1.2; }
+.wsB-projhead .pmeta { font-size: 11px; color: color-mix(in srgb, var(--mj-brand-on-secondary) 55%, transparent); }
+.wsB-projhead .share { margin-left: auto; width: 26px; height: 26px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; color: color-mix(in srgb, var(--mj-brand-on-secondary) 70%, transparent); font-size: 12px; cursor: pointer; }
+.wsB-projhead .share:hover { background: color-mix(in srgb, var(--mj-brand-on-secondary) 15%, transparent); color: var(--mj-brand-on-secondary); }
+.wsB-projhead .pj-avstack { margin-top: 9px; }
+.wsB-projhead .pj-avstack .avatar { width: 20px; height: 20px; font-size: 9px; border-color: var(--mj-brand-secondary); }
+.wsB-projhead .pj-avstack .more { width: 20px; height: 20px; font-size: 9px; border-color: var(--mj-brand-secondary); background: color-mix(in srgb, var(--mj-brand-on-secondary) 18%, transparent); color: var(--mj-brand-on-secondary); }
+.wsB-navyrow { display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 16px; font-size: 12.5px; color: color-mix(in srgb, var(--mj-brand-on-secondary) 75%, transparent); cursor: pointer; }
+.wsB-navyrow:hover { background: color-mix(in srgb, var(--mj-brand-on-secondary) 8%, transparent); color: var(--mj-brand-on-secondary); }
+.wsB-navyrow .status { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+.wsB-navyrow .status.done { background: var(--mj-status-success); }
+.wsB-navyrow .status.run { background: var(--mj-brand-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-accent) 30%, transparent); }
+.wsB-navyrow .status.wait { background: color-mix(in srgb, var(--mj-brand-on-secondary) 35%, transparent); }
+.wsB-navyrow .rname { flex: 1; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wsB-navyrow .rmeta { font-size: 10.5px; opacity: .65; flex: none; }
+.wsB-navyrow .ricon { width: 16px; text-align: center; font-size: 11px; opacity: .8; flex: none; }
+.wsB-strip { flex: none; display: flex; align-items: center; gap: 10px; padding: 7px 18px; font-size: 12px; color: var(--mj-text-secondary); background: color-mix(in srgb, var(--mj-brand-primary) 6%, var(--mj-bg-surface-card)); border-bottom: 1px solid var(--mj-border-default); }
+.wsB-strip b { color: var(--mj-text-primary); }
+.wsB-strip .dotsep { color: var(--mj-text-disabled); }
+
+/* ---------- Option C: Companion Canvas (chat is the hero) ---------- */
+.ccC-panel { width: 322px; flex: none; background: var(--mj-bg-surface); border-left: 1px solid var(--mj-border-default); display: flex; flex-direction: column; min-height: 0; }
+.ccC-phead { flex: none; padding: 13px 15px; border-bottom: 1px solid var(--mj-border-default); }
+.ccC-phead .prow { display: flex; align-items: center; gap: 9px; }
+.ccC-phead .pj-picon { width: 30px; height: 30px; font-size: 13px; border-radius: 8px; }
+.ccC-phead .pname { font-size: 13.5px; font-weight: 700; color: var(--mj-text-primary); line-height: 1.2; }
+.ccC-phead .pmeta { font-size: 11px; color: var(--mj-text-muted); }
+.ccC-phead .hbtn { width: 26px; height: 26px; border-radius: 6px; border: 0; background: transparent; color: var(--mj-text-muted); font-size: 12px; cursor: pointer; }
+.ccC-phead .hbtn:hover { background: var(--mj-bg-surface-hover); color: var(--mj-text-primary); }
+.ccC-phead .pj-avstack { margin-top: 9px; }
+.ccC-phead .pj-avstack .avatar { width: 20px; height: 20px; font-size: 9px; }
+.ccC-scroll { flex: 1; overflow: auto; min-height: 0; }
+.ccC-sect { display: flex; align-items: center; gap: 8px; padding: 9px 15px 7px; font-size: 11.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--mj-text-muted); cursor: pointer; border-top: 1px solid var(--mj-border-subtle); }
+.ccC-sect:first-child { border-top: 0; }
+.ccC-sect .chev { font-size: 9px; transition: transform .15s; }
+.ccC-sect.open .chev { transform: rotate(90deg); }
+.ccC-sect .grow { flex: 1; }
+.ccC-sect .n { font-size: 10px; font-weight: 700; background: var(--mj-bg-surface-active); color: var(--mj-text-secondary); border-radius: 999px; padding: 1px 7px; text-transform: none; letter-spacing: 0; }
+.ccC-sect .act { color: var(--mj-text-disabled); font-size: 11px; }
+.ccC-sect .act:hover { color: var(--mj-brand-primary); }
+.ccC-inner { padding: 2px 15px 12px; }
+.ccC-scopechips { display: flex; gap: 5px; margin: 2px 0 8px; }
+.ccC-scopechip { font-size: 10.5px; font-weight: 600; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--mj-border-default); color: var(--mj-text-secondary); cursor: pointer; }
+.ccC-scopechip.on { background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent); border-color: var(--mj-brand-primary); color: var(--mj-brand-primary); }
+.ccC-fromchat { font-size: 10.5px; color: var(--mj-text-muted); font-style: italic; margin-top: 6px; }
+.ccC-drophint { margin-top: 8px; padding: 9px; border: 1.5px dashed var(--mj-border-strong); border-radius: var(--radius-sm); font-size: 11px; color: var(--mj-text-muted); text-align: center; }
+.ccC-learned { align-self: flex-start; max-width: 78%; border: 1px dashed color-mix(in srgb, var(--mj-brand-primary) 45%, var(--mj-border-default)); background: color-mix(in srgb, var(--mj-brand-primary) 7%, var(--mj-bg-surface)); border-radius: var(--radius-md); padding: 9px 12px; margin-left: 40px; }
+.ccC-learned .lead { font-size: 11px; font-weight: 700; color: var(--mj-brand-primary); display: flex; align-items: center; gap: 7px; }
+.ccC-learned .body { font-size: 12.5px; color: var(--mj-text-primary); margin: 5px 0 8px; }
+.ccC-learned .acts { display: flex; gap: 6px; align-items: center; }
+.ccC-learned .mini { font: inherit; font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: var(--radius-sm); border: 1px solid var(--mj-border-default); background: var(--mj-bg-surface); color: var(--mj-text-secondary); cursor: pointer; }
+.ccC-learned .mini:hover { color: var(--mj-text-primary); background: var(--mj-bg-surface-hover); }
+.ccC-learned .mini.primary { background: var(--mj-brand-primary); border-color: var(--mj-brand-primary); color: #fff; }
+.ccC-learned .scopesel { font-size: 11px; color: var(--mj-text-muted); margin-left: auto; }
+</style>
+</head>
+<body>
+
+<header class="mockup-header">
+  <a class="mockup-back" href="../index.html">&larr; Back to all mockups</a>
+  <h1>Projects — from "Folders" to the first-class workspace container</h1>
+  <p>
+    The sidebar's "Folders" are already <code>MJ: Projects</code> underneath. These three directions
+    rename the concept to <strong>Projects</strong> and give it a real presentation: conversations,
+    agent memory (P1.6), Sage's task-graph workflows, artifacts, and sharing — scoped to the project.
+    Three divergent philosophies below, all in the ng-conversations design language (navy sidebar,
+    MJ tokens, existing chrome). Toggle your OS theme to preview dark mode.
+  </p>
+</header>
+
+<main class="variant-grid">
+
+<!-- ════════════════════════════════════════════════════════════════════════
+     OPTION A — PROJECT HUB (a project is a PLACE you open)
+     ════════════════════════════════════════════════════════════════════════ -->
+<section class="variant">
+  <div class="variant-head">
+    <span class="badge">Option A</span>
+    <h2>Project Hub — a project is a place you open</h2>
+    <p class="thesis">Clicking a project opens a landing page — overview, memory, workflows, artifacts, members — one destination that answers "where is this initiative?" before you ever open a chat. Metaphor: a Notion/Linear project page, powered by agents.</p>
+  </div>
+  <div class="variant-body">
+    <div class="pj-frame">
+      <div class="pj-topnav">
+        <span class="logo"><i class="fa-solid fa-hexagon-nodes"></i> MemberJunction</span>
+        <span class="tab active">Conversations</span>
+        <span class="tab">Collections</span>
+        <span class="tab">Tasks</span>
+      </div>
+      <div class="pj-body">
+        <!-- Sidebar: Folders renamed to Projects; project rows navigate to the hub -->
+        <aside class="pj-side">
+          <div class="side-head"><div class="pj-search"><i class="fa-solid fa-magnifying-glass"></i> Search conversations…</div></div>
+          <button class="pj-newbtn"><i class="fa-solid fa-plus"></i> New Conversation <span class="ghosty" title="New temporary chat"><i class="fa-solid fa-user-secret"></i></span></button>
+          <div class="scroll">
+            <div class="pj-sect open"><i class="fa-solid fa-chevron-right chev"></i><i class="fa-solid fa-thumbtack pin"></i> Pinned <span class="grow"></span></div>
+            <div class="pj-conv"><span class="cname">Weekly KPI check-in</span><span class="cwhen">2h</span></div>
+            <div class="pj-sect open"><i class="fa-solid fa-chevron-right chev"></i> Projects <span class="grow"></span><span class="add" title="New project"><i class="fa-solid fa-plus"></i></span></div>
+            <div class="pj-folder sel open"><i class="fa-solid fa-chevron-right chev"></i><i class="fa-solid fa-arrows-rotate ficon" style="color:#5CC0ED"></i><span class="fname">Membership Renewal</span><span class="fcount">7</span></div>
+            <div class="pj-conv pj-indent-1"><span class="cname">Q3 renewal targets</span><span class="cwhen">1d</span></div>
+            <div class="pj-conv pj-indent-1"><span class="cname">Lapsed member win-back copy</span><span class="cwhen">2d</span></div>
+            <div class="pj-folder"><i class="fa-solid fa-chevron-right chev"></i><i class="fa-solid fa-calendar-days ficon" style="color:#B794F6"></i><span class="fname">Annual Conference 2026</span><span class="fcount">12</span></div>
+            <div class="pj-folder"><i class="fa-solid fa-chevron-right chev"></i><i class="fa-solid fa-chart-line ficon" style="color:#68D391"></i><span class="fname">Board Reporting</span><span class="fcount">4</span></div>
+            <div class="pj-folder"><i class="fa-solid fa-chevron-right chev"></i><i class="fa-solid fa-globe ficon" style="color:#F6AD55"></i><span class="fname">Website Refresh</span><span class="fcount">3</span></div>
+            <div class="pj-sect open"><i class="fa-solid fa-chevron-right chev"></i> Ungrouped <span class="grow"></span></div>
+            <div class="pj-conv"><span class="cname">Quick question re: dues</span><span class="cwhen">3d</span></div>
+            <div class="pj-conv"><i class="fa-solid fa-user-secret ghost-ic"></i><span class="cname" style="font-style:italic">Temporary chat</span><span class="cwhen">now</span></div>
+          </div>
+          <div class="side-foot"><i class="fa-solid fa-clock-rotate-left"></i> Routines <span style="margin-left:auto"><i class="fa-solid fa-chevron-up"></i></span></div>
+        </aside>
+        <!-- Main: the HUB replaces the chat area when a project is opened -->
+        <div class="pj-main">
+          <div class="hubA-body">
+            <div class="hubA-head">
+              <span class="pj-picon" style="background:#0076B6"><i class="fa-solid fa-arrows-rotate"></i></span>
+              <div style="min-width:0">
+                <h3 class="hubA-title">Membership Renewal</h3>
+                <p class="hubA-desc">FY26 renewal push — targets, win-back messaging, and the renewal dashboard.</p>
+                <div class="hubA-stats">
+                  <span><b>7</b> conversations</span><span>·</span>
+                  <span><b>1</b> workflow running</span><span>·</span>
+                  <span><b>8</b> artifacts</span><span>·</span>
+                  <span><b>12</b> memories</span><span>·</span>
+                  <span class="muted">updated 2h ago</span>
+                </div>
+              </div>
+              <div class="hubA-actions">
+                <span class="pj-avstack"><span class="avatar" style="background:#0076B6">AN</span><span class="avatar" style="background:#7C3AED">CB</span><span class="avatar" style="background:#16A34A">JF</span><span class="more">+2</span></span>
+                <button class="btn secondary sm"><i class="fa-solid fa-user-plus"></i> Share</button>
+                <button class="btn sm"><i class="fa-solid fa-plus"></i> New chat</button>
+              </div>
+            </div>
+            <div class="hubA-tabs">
+              <span class="t active"><i class="fa-solid fa-house"></i> Overview</span>
+              <span class="t"><i class="fa-regular fa-comments"></i> Conversations <span class="n">7</span></span>
+              <span class="t"><i class="fa-solid fa-brain"></i> Memory <span class="n">12</span></span>
+              <span class="t"><i class="fa-solid fa-diagram-project"></i> Workflows <span class="n">3</span></span>
+              <span class="t"><i class="fa-solid fa-cube"></i> Artifacts <span class="n">8</span></span>
+              <span class="t"><i class="fa-solid fa-users"></i> Members <span class="n">5</span></span>
+            </div>
+            <div class="hubA-grid">
+              <div style="display:flex;flex-direction:column;gap:14px;min-width:0">
+                <div class="pj-card">
+                  <div class="chead"><span><i class="fa-regular fa-comments"></i> Recent conversations</span><span class="lnk">All 7 →</span></div>
+                  <div class="cbody">
+                    <div class="hubA-convrow"><i class="fa-regular fa-comment"></i><span class="t">Q3 renewal targets</span><span class="w">Sage · 1d</span></div>
+                    <div class="hubA-convrow"><i class="fa-regular fa-comment"></i><span class="t">Lapsed member win-back copy</span><span class="w">Sage · 2d</span></div>
+                    <div class="hubA-convrow"><i class="fa-regular fa-comment"></i><span class="t">Renewal email sequence review</span><span class="w">Skip · 4d</span></div>
+                  </div>
+                </div>
+                <div class="pj-card">
+                  <div class="chead"><span><i class="fa-solid fa-diagram-project"></i> Workflows</span><span class="lnk">Gantt →</span></div>
+                  <div class="cbody">
+                    <div class="pj-taskrow"><span class="status done"></span><span class="tname">Segment lapsed members</span><span class="tagent">Research Agent</span><span class="pill success" style="font-size:10.5px">Done</span></div>
+                    <div class="pj-taskrow"><span class="status run"></span><span class="tname">Draft win-back emails</span><span class="tagent">Sage</span><span class="pj-progress"><span style="width:60%"></span></span></div>
+                    <div class="pj-taskrow"><span class="status wait"></span><span class="tname">Build renewal dashboard</span><span class="tagent">Skip</span><span class="pill" style="font-size:10.5px">Waiting</span></div>
+                  </div>
+                </div>
+                <div class="hubA-start">
+                  <i class="fa-solid fa-wand-magic-sparkles" style="color:var(--mj-brand-primary)"></i>
+                  <span class="hint">Start a conversation in Membership Renewal — your agents know this project…</span>
+                  <button class="ghost" title="Temporary chat — no memory read or write"><i class="fa-solid fa-user-secret"></i></button>
+                  <button class="send"><i class="fa-solid fa-paper-plane"></i></button>
+                </div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:14px;min-width:0">
+                <div class="pj-card">
+                  <div class="chead"><span><i class="fa-solid fa-brain"></i> What agents remember here</span><span class="lnk">Manage →</span></div>
+                  <div class="cbody">
+                    <div class="pj-memrow"><i class="fa-solid fa-lightbulb"></i><span>Target members lapsed &lt; 90 days before longer-lapsed cohorts</span><span class="tags"><span class="mtag agent">All agents</span><span class="mtag">Project</span></span><i class="fa-solid fa-pen edit"></i></div>
+                    <div class="pj-memrow"><i class="fa-solid fa-lightbulb"></i><span>Renewal emails come from the chapter, not national</span><span class="tags"><span class="mtag agent">Sage</span><span class="mtag">Project</span></span><i class="fa-solid fa-pen edit"></i></div>
+                    <div class="pj-memrow"><i class="fa-solid fa-lightbulb"></i><span>Fiscal year runs July–June</span><span class="tags"><span class="mtag agent">All agents</span><span class="mtag">Global</span></span><i class="fa-solid fa-pen edit"></i></div>
+                  </div>
+                </div>
+                <div class="pj-card">
+                  <div class="chead"><span><i class="fa-solid fa-cube"></i> Latest artifacts</span><span class="lnk">All 8 →</span></div>
+                  <div class="cbody">
+                    <div class="pj-artrow"><span class="aicon"><i class="fa-solid fa-envelope-open-text"></i></span><div style="min-width:0"><div class="aname">Renewal Email Sequence</div><div class="ameta">Document · v3 · 2d ago</div></div></div>
+                    <div class="pj-artrow"><span class="aicon"><i class="fa-solid fa-chart-column"></i></span><div style="min-width:0"><div class="aname">Lapse Risk Dashboard</div><div class="ameta">Component · v1 · 4d ago</div></div></div>
+                    <div class="pj-artrow"><span class="aicon"><i class="fa-solid fa-table"></i></span><div style="min-width:0"><div class="aname">Q3 Target Segments</div><div class="ameta">Query · v2 · 5d ago</div></div></div>
+                  </div>
+                </div>
+                <div class="pj-ghost-note"><i class="fa-solid fa-user-secret"></i> Temporary chats never join a project and never read or write memory.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="variant-notes">
+    <strong>Why it works:</strong> the project finally answers "what's going on here?" in one screen — activity, memory, running workflows, outputs, people. Deep-linkable; a natural home for sharing. Conversations stay one click away (any row, or the start bar at the bottom).
+    <span class="tradeoff">Tradeoff: adds a page between the list and the chat — daily-driver users who live in one thread may see the hub as a toll booth; needs a "skip straight to last conversation" affordance.</span>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════════════
+     OPTION B — PROJECT AS WORKSPACE (a project is a CONTEXT you work inside)
+     ════════════════════════════════════════════════════════════════════════ -->
+<section class="variant">
+  <div class="variant-head">
+    <span class="badge">Option B</span>
+    <h2>Project as Workspace — a context you work inside</h2>
+    <p class="thesis">A slim project rail on the far left switches the <em>entire</em> workspace lens: the sidebar becomes the active project — its conversations, workflows, artifacts, and memory in one column — and everything you do happens inside that project until you switch. Metaphor: Slack workspaces / Discord servers, for initiatives.</p>
+  </div>
+  <div class="variant-body">
+    <div class="pj-frame">
+      <div class="pj-topnav">
+        <span class="logo"><i class="fa-solid fa-hexagon-nodes"></i> MemberJunction</span>
+        <span class="tab active">Conversations</span>
+        <span class="tab">Collections</span>
+        <span class="tab">Tasks</span>
+      </div>
+      <div class="pj-body">
+        <!-- The project rail: the whole workspace switches lens -->
+        <div class="wsB-rail">
+          <span class="wsB-ritem home" title="All conversations"><i class="fa-solid fa-inbox"></i></span>
+          <span class="wsB-rlabel">All</span>
+          <span class="wsB-ritem active" style="background:#0076B6" title="Membership Renewal"><i class="fa-solid fa-arrows-rotate"></i></span>
+          <span class="wsB-ritem" style="background:#7C3AED" title="Annual Conference 2026"><i class="fa-solid fa-calendar-days"></i></span>
+          <span class="wsB-ritem" style="background:#16A34A" title="Board Reporting"><i class="fa-solid fa-chart-line"></i></span>
+          <span class="wsB-ritem" style="background:#EA580C" title="Website Refresh"><i class="fa-solid fa-globe"></i></span>
+          <span class="wsB-ritem add" title="New project"><i class="fa-solid fa-plus"></i></span>
+          <span class="wsB-rspacer"></span>
+          <span class="wsB-ritem" style="background:color-mix(in srgb, var(--mj-brand-on-secondary) 12%, transparent)" title="Temporary chat — outside every project, no memory"><i class="fa-solid fa-user-secret"></i></span>
+        </div>
+        <!-- Sidebar IS the active project -->
+        <aside class="pj-side">
+          <div class="wsB-projhead">
+            <div class="prow">
+              <span class="pj-picon" style="background:#0076B6"><i class="fa-solid fa-arrows-rotate"></i></span>
+              <div style="min-width:0">
+                <div class="pname">Membership Renewal</div>
+                <div class="pmeta">7 chats · 1 workflow running</div>
+              </div>
+              <span class="share" title="Share project"><i class="fa-solid fa-user-plus"></i></span>
+            </div>
+            <div class="pj-avstack"><span class="avatar" style="background:#0076B6">AN</span><span class="avatar" style="background:#7C3AED">CB</span><span class="avatar" style="background:#16A34A">JF</span><span class="more">+2</span></div>
+          </div>
+          <button class="pj-newbtn"><i class="fa-solid fa-plus"></i> New chat in this project</button>
+          <div class="scroll">
+            <div class="pj-sect open"><i class="fa-solid fa-chevron-right chev"></i> Conversations <span class="grow"></span></div>
+            <div class="pj-conv"><span class="cname">Q3 renewal targets</span><span class="cwhen">1d</span></div>
+            <div class="pj-conv active"><span class="cname">Lapsed member win-back copy</span><span class="cwhen">2d</span></div>
+            <div class="pj-conv"><span class="cname">Renewal email sequence review</span><span class="cwhen">4d</span></div>
+            <div class="pj-conv"><span class="cname">Dashboard requirements</span><span class="cwhen">1w</span></div>
+            <div class="pj-sect open"><i class="fa-solid fa-chevron-right chev"></i> Workflows <span class="grow"></span><span class="add"><i class="fa-solid fa-chart-gantt"></i></span></div>
+            <div class="wsB-navyrow"><span class="status done"></span><span class="rname">Segment lapsed members</span><span class="rmeta">done</span></div>
+            <div class="wsB-navyrow"><span class="status run"></span><span class="rname">Draft win-back emails</span><span class="rmeta">60%</span></div>
+            <div class="wsB-navyrow"><span class="status wait"></span><span class="rname">Build renewal dashboard</span><span class="rmeta">queued</span></div>
+            <div class="pj-sect open"><i class="fa-solid fa-chevron-right chev"></i> Artifacts <span class="grow"></span></div>
+            <div class="wsB-navyrow"><span class="ricon"><i class="fa-solid fa-envelope-open-text"></i></span><span class="rname">Renewal Email Sequence</span><span class="rmeta">v3</span></div>
+            <div class="wsB-navyrow"><span class="ricon"><i class="fa-solid fa-chart-column"></i></span><span class="rname">Lapse Risk Dashboard</span><span class="rmeta">v1</span></div>
+            <div class="pj-sect open"><i class="fa-solid fa-chevron-right chev"></i> Memory <span class="grow"></span></div>
+            <div class="wsB-navyrow"><span class="ricon"><i class="fa-solid fa-brain"></i></span><span class="rname">12 project memories</span><span class="rmeta">manage</span></div>
+          </div>
+          <div class="side-foot"><i class="fa-solid fa-clock-rotate-left"></i> Routines <span style="margin-left:auto"><i class="fa-solid fa-chevron-up"></i></span></div>
+        </aside>
+        <!-- Main: pure chat — the context strip carries the project state -->
+        <div class="pj-main">
+          <div class="wsB-strip">
+            <i class="fa-solid fa-arrows-rotate" style="color:#0076B6"></i>
+            <span>You're working in <b>Membership Renewal</b></span>
+            <span class="dotsep">·</span>
+            <span><i class="fa-solid fa-diagram-project"></i> 1 workflow running</span>
+            <span class="dotsep">·</span>
+            <span><i class="fa-solid fa-brain"></i> memory on</span>
+            <span style="margin-left:auto" class="pill brand">Switch with the rail ⌘1–9</span>
+          </div>
+          <div class="pj-chat-head">
+            <div class="row" style="min-width:0">
+              <span class="pj-chat-title">Lapsed member win-back copy</span>
+            </div>
+            <div class="row">
+              <button class="pj-actbtn"><i class="fa-solid fa-users"></i><span class="cnt">5</span></button>
+              <button class="pj-actbtn"><i class="fa-solid fa-cube"></i><span class="cnt">2</span></button>
+              <button class="pj-actbtn"><i class="fa-solid fa-ellipsis"></i></button>
+            </div>
+          </div>
+          <div class="pj-msgs">
+            <div class="pj-msg user">
+              <span class="mav">AN</span>
+              <div class="bubble">Draft three win-back email variants for members lapsed 30–60 days.</div>
+            </div>
+            <div class="pj-msg agent">
+              <span class="mav"><i class="fa-solid fa-robot"></i></span>
+              <div class="bubble">
+                <div class="who">Sage</div>
+                Here are three variants. Per this project's playbook I kept the sender as the <strong>chapter</strong> (not national) and led with the 90-day early-renewal incentive…
+                <div><span class="pj-mem-used"><i class="fa-solid fa-brain"></i> Used 2 project memories</span></div>
+              </div>
+            </div>
+            <div class="pj-msg agent">
+              <span class="mav"><i class="fa-solid fa-robot"></i></span>
+              <div class="bubble">
+                <div class="who">Sage</div>
+                I've queued <em>Draft win-back emails</em> in the project workflow — you can watch it in the sidebar (60% complete).
+              </div>
+            </div>
+          </div>
+          <div class="pj-composer">
+            <div class="ph">Message Sage in Membership Renewal…</div>
+            <div class="bar">
+              <button class="tool"><i class="fa-solid fa-paperclip"></i></button>
+              <button class="tool"><i class="fa-solid fa-microphone"></i></button>
+              <button class="tool" title="Plan mode"><i class="fa-solid fa-list-check"></i></button>
+              <button class="send"><i class="fa-solid fa-paper-plane"></i></button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="variant-notes">
+    <strong>Why it works:</strong> total focus — one initiative at a time, with its conversations, workflows, artifacts, and memory in a single column; zero per-chat ceremony (no project pills needed — everything inside is scoped). The rail gives instant switching and makes "how many things am I juggling?" visible. Temporary chat lives structurally <em>outside</em> every project.
+    <span class="tradeoff">Tradeoff: cross-project awareness costs a switch; the rail spends ~58px of width; casual users with 1–2 projects get workspace machinery they didn't ask for — needs a graceful "no projects yet" degradation.</span>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════════════
+     OPTION C — COMPANION CANVAS (chat stays the hero; the project rides along)
+     ════════════════════════════════════════════════════════════════════════ -->
+<section class="variant">
+  <div class="variant-head">
+    <span class="badge">Option C</span>
+    <h2>Companion Canvas — the project rides alongside the chat</h2>
+    <p class="thesis">Nothing about today's layout changes: the sidebar keeps the Projects tree and the chat stays the hero. But every conversation inside a project gains a live companion panel — memory, the running workflow, artifacts, sibling chats — always in reach, never in the way. Memory moments surface inline as they're learned. Metaphor: Claude Projects' knowledge panel, grown up.</p>
+  </div>
+  <div class="variant-body">
+    <div class="pj-frame">
+      <div class="pj-topnav">
+        <span class="logo"><i class="fa-solid fa-hexagon-nodes"></i> MemberJunction</span>
+        <span class="tab active">Conversations</span>
+        <span class="tab">Collections</span>
+        <span class="tab">Tasks</span>
+      </div>
+      <div class="pj-body">
+        <!-- Sidebar: exactly today's tree, renamed Projects -->
+        <aside class="pj-side">
+          <div class="side-head"><div class="pj-search"><i class="fa-solid fa-magnifying-glass"></i> Search conversations…</div></div>
+          <button class="pj-newbtn"><i class="fa-solid fa-plus"></i> New Conversation <span class="ghosty" title="New temporary chat"><i class="fa-solid fa-user-secret"></i></span></button>
+          <div class="scroll">
+            <div class="pj-sect open"><i class="fa-solid fa-chevron-right chev"></i> Projects <span class="grow"></span><span class="add" title="New project"><i class="fa-solid fa-plus"></i></span></div>
+            <div class="pj-folder open"><i class="fa-solid fa-chevron-right chev"></i><i class="fa-solid fa-arrows-rotate ficon" style="color:#5CC0ED"></i><span class="fname">Membership Renewal</span><span class="fcount">7</span></div>
+            <div class="pj-conv pj-indent-1"><span class="cname">Q3 renewal targets</span><span class="cwhen">1d</span></div>
+            <div class="pj-conv pj-indent-1 active"><span class="cname">Lapsed member win-back copy</span><span class="cwhen">2d</span></div>
+            <div class="pj-folder open"><i class="fa-solid fa-chevron-right chev"></i><i class="fa-solid fa-calendar-days ficon" style="color:#B794F6"></i><span class="fname">Annual Conference 2026</span><span class="fcount">12</span></div>
+            <div class="pj-folder pj-indent-1"><i class="fa-solid fa-chevron-right chev"></i><i class="fa-solid fa-microphone-lines ficon" style="color:#B794F6"></i><span class="fname">Speakers</span><span class="fcount">5</span></div>
+            <div class="pj-folder"><i class="fa-solid fa-chevron-right chev"></i><i class="fa-solid fa-chart-line ficon" style="color:#68D391"></i><span class="fname">Board Reporting</span><span class="fcount">4</span></div>
+            <div class="pj-sect open"><i class="fa-solid fa-chevron-right chev"></i> Ungrouped <span class="grow"></span></div>
+            <div class="pj-conv"><span class="cname">Quick question re: dues</span><span class="cwhen">3d</span></div>
+          </div>
+          <div class="side-foot"><i class="fa-solid fa-clock-rotate-left"></i> Routines <span style="margin-left:auto"><i class="fa-solid fa-chevron-up"></i></span></div>
+        </aside>
+        <!-- Main: today's chat, plus the inline memory moment -->
+        <div class="pj-main">
+          <div class="pj-chat-head">
+            <div class="row" style="min-width:0">
+              <span class="pj-chat-title">Lapsed member win-back copy</span>
+              <span class="pj-proj-tag"><i class="fa-solid fa-arrows-rotate" style="color:#0076B6"></i> Membership Renewal</span>
+            </div>
+            <div class="row">
+              <button class="pj-actbtn" title="Toggle project companion" style="border-color: var(--mj-brand-primary); color: var(--mj-brand-primary);"><i class="fa-solid fa-table-columns"></i></button>
+              <button class="pj-actbtn"><i class="fa-solid fa-cube"></i><span class="cnt">2</span></button>
+              <button class="pj-actbtn"><i class="fa-solid fa-ellipsis"></i></button>
+            </div>
+          </div>
+          <div class="pj-msgs">
+            <div class="pj-msg user">
+              <span class="mav">AN</span>
+              <div class="bubble">The board wants the win-back sequence to reference the new member portal. Also — renewal discounts are capped at 15% this year.</div>
+            </div>
+            <div class="pj-msg agent">
+              <span class="mav"><i class="fa-solid fa-robot"></i></span>
+              <div class="bubble">
+                <div class="who">Sage</div>
+                Updated all three variants to feature the portal onboarding link, and adjusted the incentive tiers to stay within 15%…
+                <div><span class="pj-mem-used"><i class="fa-solid fa-brain"></i> Used 2 project memories</span></div>
+              </div>
+            </div>
+            <div class="ccC-learned">
+              <div class="lead"><i class="fa-solid fa-brain"></i> Remembered for this project</div>
+              <div class="body">"Renewal discounts are capped at 15% for FY26."</div>
+              <div class="acts">
+                <button class="mini primary"><i class="fa-solid fa-check"></i> Keep</button>
+                <button class="mini">Edit</button>
+                <button class="mini">Undo</button>
+                <span class="scopesel">Scope: <b>Project</b> ▾</span>
+              </div>
+            </div>
+          </div>
+          <div class="pj-composer">
+            <div class="ph">Message Sage…</div>
+            <div class="bar">
+              <button class="tool"><i class="fa-solid fa-paperclip"></i></button>
+              <button class="tool"><i class="fa-solid fa-microphone"></i></button>
+              <button class="tool" title="Plan mode"><i class="fa-solid fa-list-check"></i></button>
+              <button class="send"><i class="fa-solid fa-paper-plane"></i></button>
+            </div>
+          </div>
+        </div>
+        <!-- The project companion panel -->
+        <aside class="ccC-panel">
+          <div class="ccC-phead">
+            <div class="prow">
+              <span class="pj-picon" style="background:#0076B6"><i class="fa-solid fa-arrows-rotate"></i></span>
+              <div style="min-width:0">
+                <div class="pname">Membership Renewal</div>
+                <div class="pmeta">7 chats · 8 artifacts · 5 members</div>
+              </div>
+              <button class="hbtn" title="Share project"><i class="fa-solid fa-user-plus"></i></button>
+              <button class="hbtn"><i class="fa-solid fa-ellipsis"></i></button>
+            </div>
+            <div class="pj-avstack"><span class="avatar" style="background:#0076B6">AN</span><span class="avatar" style="background:#7C3AED">CB</span><span class="avatar" style="background:#16A34A">JF</span><span class="more">+2</span></div>
+          </div>
+          <div class="ccC-scroll">
+            <div class="ccC-sect open"><i class="fa-solid fa-chevron-right chev"></i> Memory <span class="n">12</span> <span class="grow"></span><i class="fa-solid fa-plus act"></i></div>
+            <div class="ccC-inner">
+              <div class="ccC-scopechips">
+                <span class="ccC-scopechip on">Project</span>
+                <span class="ccC-scopechip">Global</span>
+              </div>
+              <div class="pj-memrow"><i class="fa-solid fa-lightbulb"></i><span>Target members lapsed &lt; 90 days first</span><i class="fa-solid fa-pen edit"></i></div>
+              <div class="pj-memrow"><i class="fa-solid fa-lightbulb"></i><span>Renewal emails come from the chapter, not national</span><i class="fa-solid fa-pen edit"></i></div>
+              <div class="pj-memrow"><i class="fa-solid fa-lightbulb"></i><span>Discounts capped at 15% for FY26 <span class="pill warning" style="font-size:9.5px;padding:1px 7px;margin-left:4px">new</span></span><i class="fa-solid fa-pen edit"></i></div>
+            </div>
+            <div class="ccC-sect open"><i class="fa-solid fa-chevron-right chev"></i> Workflow <span class="n">3</span> <span class="grow"></span><i class="fa-solid fa-chart-gantt act"></i></div>
+            <div class="ccC-inner">
+              <div class="pj-taskrow"><span class="status done"></span><span class="tname">Segment lapsed members</span><span class="tagent">Research</span></div>
+              <div class="pj-taskrow"><span class="status run"></span><span class="tname">Draft win-back emails</span><span class="pj-progress"><span style="width:60%"></span></span></div>
+              <div class="pj-taskrow"><span class="status wait"></span><span class="tname">Build renewal dashboard</span><span class="tagent">Skip</span></div>
+              <div class="ccC-fromchat"><i class="fa-solid fa-reply"></i> started from this conversation</div>
+            </div>
+            <div class="ccC-sect open"><i class="fa-solid fa-chevron-right chev"></i> Artifacts <span class="n">8</span> <span class="grow"></span></div>
+            <div class="ccC-inner">
+              <div class="pj-artrow"><span class="aicon"><i class="fa-solid fa-envelope-open-text"></i></span><div style="min-width:0"><div class="aname">Renewal Email Sequence</div><div class="ameta">v3 · from this chat</div></div></div>
+              <div class="pj-artrow"><span class="aicon"><i class="fa-solid fa-chart-column"></i></span><div style="min-width:0"><div class="aname">Lapse Risk Dashboard</div><div class="ameta">v1 · 4d ago</div></div></div>
+              <div class="ccC-drophint"><i class="fa-solid fa-hand-pointer"></i> Drag any artifact here to add it to the project</div>
+            </div>
+            <div class="ccC-sect"><i class="fa-solid fa-chevron-right chev"></i> Project chats <span class="n">6</span> <span class="grow"></span></div>
+            <div class="ccC-inner" style="padding-bottom:14px">
+              <div class="pj-ghost-note" style="margin-top:6px"><i class="fa-solid fa-user-secret"></i> Temporary chats have no companion — no project, no memory.</div>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </div>
+  </div>
+  <div class="variant-notes">
+    <strong>Why it works:</strong> zero disruption — today's tree, today's chat, no new navigation level. Project context is ambient: memory is visible and editable <em>where it's learned</em> (the inline "Remembered" moment doubles as P1.6's provisional-note review), the workflow the agent kicked off is watchable without leaving the thread, and artifacts land where you're looking. Cheapest to ship: the panel is a slot beside the existing artifact panel.
+    <span class="tradeoff">Tradeoff: the project never gets a face of its own — no overview/landing to share or link; panel + artifact viewer compete for the right edge on smaller screens; project-level management (rename, members, bulk moves) still needs a home elsewhere.</span>
+  </div>
+</section>
+
+</main>
+</body>
+</html>
