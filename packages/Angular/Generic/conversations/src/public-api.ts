@@ -108,6 +108,7 @@ export * from './lib/components/search/search-panel.component';
 export * from './lib/components/shared/user-picker.component';
 export * from './lib/components/tasks/tasks-dropdown.component';
 export * from './lib/components/thread/thread-panel.component';
+export * from './lib/directives/search-shortcut.directive';
 
 // PR 2c — Widget extension surface (slots, events, design tokens)
 export * from './lib/services/conversations-runtime-bootstrap.service';
