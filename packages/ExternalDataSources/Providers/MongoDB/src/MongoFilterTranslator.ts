@@ -153,8 +153,8 @@ class Parser {
       const value = this.parseValue();
       return MongoFilterTranslator.Comparison(field, t.value, value);
     }
-    if (this.isKw('IN')) { this.next(); return { [field]: { $in: this.parseValueList().map(v => MongoFilterTranslator.CoerceObjectId(field, v)) } }; }
-    if (this.isKw('NOT')) { this.next(); if (!this.isKw('IN')) throw new Error("Expected IN after NOT."); this.next(); return { [field]: { $nin: this.parseValueList().map(v => MongoFilterTranslator.CoerceObjectId(field, v)) } }; }
+    if (this.isKw('IN')) { this.next(); return { [field]: { $in: this.parseValueList().map(v => MongoFilterTranslator.CoerceTemporal(MongoFilterTranslator.CoerceObjectId(field, v))) } }; }
+    if (this.isKw('NOT')) { this.next(); if (!this.isKw('IN')) throw new Error("Expected IN after NOT."); this.next(); return { [field]: { $nin: this.parseValueList().map(v => MongoFilterTranslator.CoerceTemporal(MongoFilterTranslator.CoerceObjectId(field, v))) } }; }
     if (this.isKw('IS')) {
       this.next();
       const negated = this.isKw('NOT');
@@ -202,7 +202,7 @@ export class MongoFilterTranslator {
   }
 
   public static Comparison(field: string, op: string, value: Primitive): MongoFilter {
-    const v = MongoFilterTranslator.CoerceObjectId(field, value);
+    const v = MongoFilterTranslator.CoerceTemporal(MongoFilterTranslator.CoerceObjectId(field, value));
     switch (op) {
       case '=': return { [field]: { $eq: v } };
       case '!=': return { [field]: { $ne: v } };
@@ -224,6 +224,25 @@ export class MongoFilterTranslator {
   public static CoerceObjectId(field: string, value: unknown): unknown {
     if (field === '_id' && typeof value === 'string' && /^[0-9a-fA-F]{24}$/.test(value)) {
       return new ObjectId(value);
+    }
+    return value;
+  }
+
+  /**
+   * Coerce an ISO-8601 date-time string literal to a `Date` so range/equality comparisons match Mongo's
+   * native `Date`-typed fields (BSON compares across types by a fixed order, so a string never matches a
+   * `Date`). Without this, an incremental-sync watermark predicate like `updatedAt >= '2026-03-01T…Z'`
+   * silently matches ZERO documents. Only strict ISO-8601 date-times (with a `T` time component) are
+   * coerced — a plain `'2026-03-01'` or any non-temporal string passes through unchanged, so callers who
+   * genuinely store ISO-looking strings are unaffected. Applied to comparison + IN values (alongside
+   * {@link CoerceObjectId}); an already-coerced ObjectId / non-string passes through.
+   */
+  public static CoerceTemporal(value: unknown): unknown {
+    if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:?\d{2})?$/.test(value)) {
+      const d = new Date(value);
+      if (!Number.isNaN(d.getTime())) {
+        return d;
+      }
     }
     return value;
   }
