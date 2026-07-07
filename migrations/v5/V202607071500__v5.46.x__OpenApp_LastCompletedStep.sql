@@ -47,6 +47,47 @@ EXEC sp_addextendedproperty
     @level1type = N'TABLE',  @level1name = N'OpenApp',
     @level2type = N'COLUMN', @level2name = N'LastCompletedStepTargetVersion';
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 -- ============================================================================
 -- CodeGen output — regenerated for real via 'mj codegen' against a fresh SQL Server DB
 -- migrated through this file (single clean run, appended verbatim). Scoped entirely to
