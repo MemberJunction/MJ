@@ -3,7 +3,7 @@ import type {
     ExternalSchemaColumn,
     ExternalSchemaObject,
 } from '@memberjunction/core';
-import type { MJCompanyIntegrationEntity, MJExternalDataSourceTypeEntity } from '@memberjunction/core-entities';
+import type { MJCompanyIntegrationEntity } from '@memberjunction/core-entities';
 import {
     BaseIntegrationConnector,
     type ConnectionTestResult,
@@ -20,9 +20,6 @@ import {
 } from '@memberjunction/integration-engine';
 import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
 import { ExternalDataSourceRouter, type ResolvedExternalDataSource } from '@memberjunction/external-data-sources';
-
-/** SQL/filter dialects an EDS source type can declare — derived from the entity so it tracks CodeGen. */
-export type ExternalDataSourceFilterDialect = MJExternalDataSourceTypeEntity['FilterDialect'];
 
 /** Resolved foreign-key edge for one referencing column (built from the descriptor's relationships). */
 interface ForeignKeyEdge {
@@ -44,19 +41,19 @@ interface ExternalObjectMeta {
  * Base for **integration connectors that ingest from a shared External Data Source (EDS)** — the
  * "dbconnection" heart of the ingestion-connector hierarchy.
  *
- * It does NOT open its own connection or re-implement per-engine introspection. Instead it resolves the
- * SAME first-class `MJ: External Data Sources` row that EDS live-read/materialize use (connection config +
- * credential via CredentialEngine + the engine driver), through {@link ExternalDataSourceRouter}, and on
- * top of that shared connection provides the whole integration contract: `TestConnection`, schema
- * introspection (mapping EDS's `ExternalSchemaDescriptor` → the framework's `SourceSchemaInfo`), object/
- * field discovery, AND incremental delta ingestion (`FetchChanges`).
+ * It does NOT open its own connection, re-implement per-engine introspection, or write any dialect SQL.
+ * Instead it resolves the SAME first-class `MJ: External Data Sources` row that EDS live-read/materialize
+ * use (connection config + credential via CredentialEngine + the engine driver), through
+ * {@link ExternalDataSourceRouter}, and on top of that shared connection provides the whole integration
+ * contract: `TestConnection`, schema introspection (mapping EDS's `ExternalSchemaDescriptor` → the
+ * framework's `SourceSchemaInfo`), object/field discovery, AND incremental delta ingestion (`FetchChanges`).
  *
- * `FetchChanges` is generic across every EDS driver shipped today: all of them — the SQL drivers and the
- * MongoDB driver (via its SQL-WHERE → query translator) — accept a SQL-WHERE `filter` and a
- * `field [ASC|DESC]` `orderBy` on `driver.RunView`. The only per-family variance is **identifier quoting**
- * (`{@link QuoteIdent}`, the single abstract hook) and **whether discovery is authoritative** (SQL
- * introspection enumerates the full column set; document introspection samples — see the family subclasses).
- * A future family whose driver can't take a SQL-WHERE filter simply overrides `FetchChanges`.
+ * `FetchChanges` is generic across every EDS driver: it passes a **structured** `incrementalSince` watermark
+ * bound plus raw ordering columns to `driver.RunView`, and the EDS driver renders the dialect predicate,
+ * identifier quoting, and literal formatting itself. So this connector carries **NO** dialect knowledge —
+ * the only per-family variance is **whether discovery is authoritative** (SQL introspection enumerates the
+ * full column set; document introspection samples — see the family subclasses). A future family whose
+ * driver can't take these `RunView` params simply overrides `FetchChanges`.
  *
  * This supersedes the SQL-Server-hardcoded, inline-`mssql` {@link RelationalDBConnector}: every engine's
  * connect/introspect/read is single-sourced in the EDS drivers, so this class is engine-agnostic.
@@ -78,9 +75,6 @@ export abstract class BaseExternalDataSourceConnector extends BaseIntegrationCon
     public override get MonotonicWatermark(): boolean {
         return true;
     }
-
-    /** The single per-family hook: quote a filter/order-by identifier for the source's dialect. */
-    protected abstract QuoteIdent(name: string, dialect: ExternalDataSourceFilterDialect): string;
 
     // ─── The bridge: CompanyIntegration → shared EDS data-source row ──────────────
 
@@ -202,18 +196,25 @@ export abstract class BaseExternalDataSourceConnector extends BaseIntegrationCon
     // ─── Incremental delta ingestion (generic across all EDS drivers) ─────────────
 
     public async FetchChanges(ctx: FetchContext): Promise<FetchBatchResult> {
-        const { dataSource, dataSourceType, driver } = await this.Resolve(ctx.CompanyIntegration, ctx.ContextUser);
+        const { dataSource, driver } = await this.Resolve(ctx.CompanyIntegration, ctx.ContextUser);
         const meta = await this.ResolveObjectMeta(ctx);
-        const dialect = dataSourceType.FilterDialect;
 
+        // Order by watermark then PK (ascending) so the last row carries the max watermark and paging is
+        // deterministic. Raw identifiers — the EDS driver quotes them per its own dialect.
+        const orderColumns = [meta.WatermarkField, ...meta.PrimaryKeyFields].filter(
+            (c): c is string => typeof c === 'string' && c.length > 0,
+        );
         const offset = ctx.CurrentOffset ?? 0;
         const result = await driver.RunView(
             dataSource,
             {
                 objectName: ctx.ObjectName,
-                filter: this.BuildWatermarkFilter(ctx.WatermarkValue, meta.WatermarkField, dialect),
-                orderBy: this.BuildOrderBy(meta.WatermarkField, meta.PrimaryKeyFields, dialect),
-                defaultOrderByColumns: meta.PrimaryKeyFields.length ? meta.PrimaryKeyFields : undefined,
+                // Structured incremental bound (>=) — the EDS driver renders the dialect predicate, quoting,
+                // and literal formatting itself, so this connector writes no SQL. Full fetch when unset.
+                incrementalSince: ctx.WatermarkValue && meta.WatermarkField
+                    ? { Field: meta.WatermarkField, Value: ctx.WatermarkValue }
+                    : undefined,
+                defaultOrderByColumns: orderColumns.length ? orderColumns : undefined,
                 // Fetch one extra to detect HasMore without a separate COUNT.
                 maxRows: ctx.BatchSize + 1,
                 offset,
@@ -247,64 +248,6 @@ export abstract class BaseExternalDataSourceConnector extends BaseIntegrationCon
             .filter(f => f.IsPrimaryKey)
             .map(f => f.Name);
         return { WatermarkField: object.IncrementalWatermarkField ?? undefined, PrimaryKeyFields: primaryKeyFields };
-    }
-
-    /**
-     * Incremental predicate: rows changed at or after the saved watermark. `>=` (not `>`) refetches only
-     * the boundary rows — cheap, and the engine's record-map dedup drops them — which avoids skipping a
-     * row whose sub-millisecond timestamp truncates to the saved value. Returns undefined for a full fetch.
-     */
-    protected BuildWatermarkFilter(
-        watermarkValue: string | null,
-        watermarkField: string | undefined,
-        dialect: ExternalDataSourceFilterDialect,
-    ): string | undefined {
-        if (!watermarkValue || !watermarkField) {
-            return undefined;
-        }
-        return `${this.QuoteIdent(watermarkField, dialect)} >= ${this.FormatWatermarkLiteral(watermarkValue, dialect)}`;
-    }
-
-    /**
-     * Format a watermark value as a dialect-safe SQL literal. Most engines (SQL Server, Postgres, MySQL,
-     * Snowflake) implicitly parse an ISO-8601 timestamp string. Oracle does NOT — its default NLS format
-     * rejects the `T`/`Z` form (ORA-01843), so an ISO-8601 watermark is wrapped in an explicit `TO_TIMESTAMP`
-     * with a matching format mask. Non-timestamp watermarks (numeric cursors, etc.) pass through as a plain
-     * quoted literal on every dialect.
-     *
-     * Note: for a naive (no-time-zone) source TIMESTAMP column, incremental correctness is time-zone
-     * sensitive — the client's session TZ governs how the driver reads the value back; run against UTC-
-     * normalized data or a TIMESTAMP WITH TIME ZONE column for exact boundaries.
-     */
-    protected FormatWatermarkLiteral(value: string, dialect: ExternalDataSourceFilterDialect): string {
-        const isIsoTimestamp = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:?\d{2})?$/.test(value);
-        if (isIsoTimestamp && dialect === 'oracle') {
-            const fractional = value.includes('.') ? '.FF3' : '';
-            const zoneLiteral = value.endsWith('Z') ? '"Z"' : '';
-            return `TO_TIMESTAMP(${this.QuoteLiteral(value)}, 'YYYY-MM-DD"T"HH24:MI:SS${fractional}${zoneLiteral}')`;
-        }
-        return this.QuoteLiteral(value);
-    }
-
-    /** Deterministic ordering: watermark first (so the last row carries the max), then PK for tie-breaks. */
-    protected BuildOrderBy(
-        watermarkField: string | undefined,
-        primaryKeyFields: string[],
-        dialect: ExternalDataSourceFilterDialect,
-    ): string | undefined {
-        const columns: string[] = [];
-        if (watermarkField) {
-            columns.push(this.QuoteIdent(watermarkField, dialect));
-        }
-        for (const pk of primaryKeyFields) {
-            columns.push(this.QuoteIdent(pk, dialect));
-        }
-        return columns.length ? columns.join(', ') : undefined;
-    }
-
-    /** Quote a string literal for inline use in a screened, read-only filter (single-quote escaped). */
-    protected QuoteLiteral(value: string): string {
-        return `'${value.replace(/'/g, "''")}'`;
     }
 
     // ─── Record assembly ──────────────────────────────────────────────────────────

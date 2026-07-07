@@ -14,14 +14,15 @@ import type { FetchContext } from '@memberjunction/integration-engine';
 import {
     BaseSqlExternalDataSourceConnector,
     BaseDocumentDataSourceConnector,
-    type ExternalDataSourceFilterDialect,
 } from '../index.js';
 
 /**
  * CI-safe unit tests for the EDS-consuming ingestion connector heart + families. No database: a mock EDS
  * driver returns canned catalog/rows and CAPTURES the RunView params, so we can assert the connector's
- * pure logic — descriptor→SourceSchemaInfo mapping, per-dialect watermark quoting, full-record pass-through,
- * and incremental narrowing. The live cross-engine proof is the opt-in integration harness (5 real DBs).
+ * pure logic — descriptor→SourceSchemaInfo mapping, full-record pass-through, and that the connector passes
+ * a STRUCTURED `incrementalSince` bound (no dialect SQL) so the EDS driver owns all quoting/predicate
+ * rendering. Per-dialect quoting is proven in the EDS provider tests; the live cross-engine proof is the
+ * opt-in integration harness (5 real DBs).
  */
 
 const DESCRIPTOR: ExternalSchemaDescriptor = {
@@ -53,7 +54,10 @@ const ROWS: ExternalRow[] = [
     { id: 3, email: 'c@x.com', updated_at: '2026-03-01T00:00:00.000Z' },
 ];
 
-/** Mock EDS driver: canned introspect/rows, captures the RunView params, narrows on a `>= '<iso>'` filter. */
+/**
+ * Mock EDS driver: canned introspect/rows, captures the RunView params, and narrows on the STRUCTURED
+ * `incrementalSince` bound (the connector no longer builds a filter string — the driver would).
+ */
 class MockDriver extends BaseExternalDataSourceDriver {
     public LastView: ExternalViewParams | undefined;
     public async TestConnection(): Promise<ExternalConnectionTestResult> {
@@ -65,9 +69,8 @@ class MockDriver extends BaseExternalDataSourceDriver {
     public async RunView<TRow extends ExternalRow = ExternalRow>(_ds: MJExternalDataSourceEntity, params: ExternalViewParams): Promise<ExternalViewResult<TRow>> {
         this.LastView = params;
         let rows = ROWS;
-        const m = params.filter?.match(/>=\s*(?:TO_TIMESTAMP\()?'([^']+)'/);
-        if (m) {
-            const watermark = new Date(m[1]).getTime();
+        if (params.incrementalSince) {
+            const watermark = new Date(params.incrementalSince.Value).getTime();
             rows = rows.filter(r => new Date(String(r.updated_at)).getTime() >= watermark);
         }
         const offset = params.offset ?? 0;
@@ -85,9 +88,10 @@ const CI = { ID: 'ci', Name: 'ci', IntegrationID: 'int', Configuration: JSON.str
 const USER = {} as unknown as UserInfo;
 const META = { WatermarkField: 'updated_at', PrimaryKeyFields: ['id'] };
 
-function resolvedFor(driver: BaseExternalDataSourceDriver, dialect: ExternalDataSourceFilterDialect): ResolvedExternalDataSource {
+/** A resolved data source. FilterDialect is irrelevant to the connector now — the driver owns quoting. */
+function resolvedFor(driver: BaseExternalDataSourceDriver): ResolvedExternalDataSource {
     const dataSource = { ID: 'ds', Name: 'ds', DefaultSchema: 'dbo', DefaultDatabase: 'db' } as unknown as MJExternalDataSourceEntity;
-    const dataSourceType = { FilterDialect: dialect } as unknown as MJExternalDataSourceTypeEntity;
+    const dataSourceType = { FilterDialect: 'ansi' } as unknown as MJExternalDataSourceTypeEntity;
     return { dataSource, dataSourceType, driver };
 }
 
@@ -111,7 +115,7 @@ const fetchCtx = (overrides: Partial<FetchContext> = {}): FetchContext => ({
 
 describe('BaseExternalDataSourceConnector — descriptor → SourceSchemaInfo mapping', () => {
     it('maps objects, PK, composite FK, and nullability; SQL discovery is authoritative', async () => {
-        const c = new TestSqlConnector(resolvedFor(new MockDriver(), 'tsql'));
+        const c = new TestSqlConnector(resolvedFor(new MockDriver()));
         const schema = await c.IntrospectSchema(CI, USER);
         expect(schema.IsAuthoritative).toBe(true);
         const customers = schema.Objects.find(o => o.ExternalName === 'customers');
@@ -126,35 +130,47 @@ describe('BaseExternalDataSourceConnector — descriptor → SourceSchemaInfo ma
     });
 
     it('document (sampled) discovery is NOT authoritative', async () => {
-        const c = new TestDocConnector(resolvedFor(new MockDriver(), 'mongo-ast'));
+        const c = new TestDocConnector(resolvedFor(new MockDriver()));
         const schema = await c.IntrospectSchema(CI, USER);
         expect(schema.IsAuthoritative).toBe(false);
     });
 
     it('TestConnection passes the driver result through', async () => {
-        const c = new TestSqlConnector(resolvedFor(new MockDriver(), 'tsql'));
+        const c = new TestSqlConnector(resolvedFor(new MockDriver()));
         expect((await c.TestConnection(CI, USER)).Success).toBe(true);
     });
 });
 
-describe('FetchChanges — per-dialect watermark quoting', () => {
-    const cases: Array<[ExternalDataSourceFilterDialect, RegExp]> = [
-        ['tsql', /^\[updated_at\] >= '2026-02-01/],
-        ['pgsql', /^"updated_at" >= '2026-02-01/],
-        ['mysql', /^`updated_at` >= '2026-02-01/],
-        ['oracle', /^"updated_at" >= TO_TIMESTAMP\('2026-02-01/],
-    ];
-    it.each(cases)('%s quotes the watermark predicate correctly', async (dialect, expected) => {
+describe('FetchChanges — passes STRUCTURED params, never dialect SQL', () => {
+    it('incremental: sets incrementalSince {Field, Value} + defaultOrderByColumns [watermark, pk], no filter string', async () => {
         const driver = new MockDriver();
-        const c = new TestSqlConnector(resolvedFor(driver, dialect));
+        const c = new TestSqlConnector(resolvedFor(driver));
         await c.FetchChanges(fetchCtx({ WatermarkValue: '2026-02-01T00:00:00.000Z' }));
-        expect(driver.LastView?.filter).toMatch(expected);
+        expect(driver.LastView?.incrementalSince).toEqual({ Field: 'updated_at', Value: '2026-02-01T00:00:00.000Z' });
+        expect(driver.LastView?.defaultOrderByColumns).toEqual(['updated_at', 'id']);
+        expect(driver.LastView?.filter).toBeUndefined();
+    });
+
+    it('full fetch (no watermark) omits incrementalSince but still orders by [watermark, pk]', async () => {
+        const driver = new MockDriver();
+        const c = new TestSqlConnector(resolvedFor(driver));
+        await c.FetchChanges(fetchCtx());
+        expect(driver.LastView?.incrementalSince).toBeUndefined();
+        expect(driver.LastView?.defaultOrderByColumns).toEqual(['updated_at', 'id']);
+    });
+
+    it('the document family passes the identical structured params (driver translates to a Mongo query)', async () => {
+        const driver = new MockDriver();
+        const c = new TestDocConnector(resolvedFor(driver));
+        await c.FetchChanges(fetchCtx({ WatermarkValue: '2026-02-01T00:00:00.000Z' }));
+        expect(driver.LastView?.incrementalSince).toEqual({ Field: 'updated_at', Value: '2026-02-01T00:00:00.000Z' });
+        expect(driver.LastView?.filter).toBeUndefined();
     });
 });
 
 describe('FetchChanges — records + incremental narrowing', () => {
     it('full fetch returns all rows with full-record pass-through + PK-derived ExternalID', async () => {
-        const c = new TestSqlConnector(resolvedFor(new MockDriver(), 'pgsql'));
+        const c = new TestSqlConnector(resolvedFor(new MockDriver()));
         const r = await c.FetchChanges(fetchCtx());
         expect(r.Records).toHaveLength(3);
         const first = r.Records.find(x => x.ExternalID === '1');
@@ -164,14 +180,14 @@ describe('FetchChanges — records + incremental narrowing', () => {
     });
 
     it('incremental fetch narrows to rows at/after the watermark', async () => {
-        const c = new TestSqlConnector(resolvedFor(new MockDriver(), 'pgsql'));
+        const c = new TestSqlConnector(resolvedFor(new MockDriver()));
         const r = await c.FetchChanges(fetchCtx({ WatermarkValue: '2026-03-01T00:00:00.000Z' }));
         expect(r.Records).toHaveLength(1);
         expect(r.Records[0].ExternalID).toBe('3');
     });
 
     it('HasMore + NextOffset paginate when the batch is full', async () => {
-        const c = new TestSqlConnector(resolvedFor(new MockDriver(), 'pgsql'));
+        const c = new TestSqlConnector(resolvedFor(new MockDriver()));
         const r = await c.FetchChanges(fetchCtx({ BatchSize: 2 }));
         expect(r.Records).toHaveLength(2);
         expect(r.HasMore).toBe(true);
