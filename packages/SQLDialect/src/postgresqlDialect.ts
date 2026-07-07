@@ -710,6 +710,34 @@ export class PostgreSQLDialect extends SQLDialect {
         };
     }
 
+    /**
+     * PostgreSQL FK-graph query for cascade planning — reads `pg_catalog.pg_constraint`
+     * (`contype = 'f'`). Returns one row per FK column (via `unnest(conkey, confkey)`, which
+     * preserves column pairing/order), with `childNullable` (`NOT attnotnull`) and `colCount`
+     * (`array_length(conkey, 1)`, for composite exclusion). Column aliases and semantics MATCH
+     * the SQL Server variant so a single caller parses both. `relname`/`attname` preserve the
+     * quoted mixed-case identifiers MJ creates on PG, so they feed straight into QuoteIdentifier.
+     * Both parent + child are filtered to `schema`; the schema is embedded as a literal.
+     */
+    ForeignKeyGraphSQL(schema: string): string {
+        const s = this.QuoteStringLiteral(schema);
+        return (
+            'SELECT pt.relname AS "parentTable", pa.attname AS "parentRefCol", ct.relname AS "childTable", ' +
+            'ca.attname AS "childCol", (NOT ca.attnotnull) AS "childNullable", con.conname AS "fkName", ' +
+            'array_length(con.conkey, 1) AS "colCount" ' +
+            'FROM pg_catalog.pg_constraint con ' +
+            'JOIN pg_catalog.pg_class ct ON ct.oid = con.conrelid ' +
+            'JOIN pg_catalog.pg_namespace cn ON cn.oid = ct.relnamespace ' +
+            'JOIN pg_catalog.pg_class pt ON pt.oid = con.confrelid ' +
+            'JOIN pg_catalog.pg_namespace pn ON pn.oid = pt.relnamespace ' +
+            'JOIN LATERAL unnest(con.conkey, con.confkey) WITH ORDINALITY AS k(child_attnum, parent_attnum, ord) ON true ' +
+            'JOIN pg_catalog.pg_attribute ca ON ca.attrelid = con.conrelid AND ca.attnum = k.child_attnum ' +
+            'JOIN pg_catalog.pg_attribute pa ON pa.attrelid = con.confrelid AND pa.attnum = k.parent_attnum ' +
+            `WHERE con.contype = 'f' AND cn.nspname = ${s} AND pn.nspname = ${s} ` +
+            'ORDER BY con.conname, k.ord'
+        );
+    }
+
     // ─── IIF ─────────────────────────────────────────────────────────
 
     IIF(condition: string, trueVal: string, falseVal: string): string {

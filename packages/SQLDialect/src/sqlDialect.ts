@@ -831,6 +831,28 @@ export abstract class SQLDialect implements SQLParserDialect {
      */
     abstract SchemaIntrospectionQueries(): SchemaIntrospectionSQL;
 
+    /**
+     * Returns a ready-to-run (no bind parameters) query that enumerates the foreign-key graph
+     * of a single schema, for FK-cascade planning (e.g. Open-App metadata teardown).
+     *
+     * Unlike {@link SchemaIntrospectionQueries}.`listForeignKeys` (a placeholder template), this
+     * embeds the schema literal directly (via {@link QuoteStringLiteral}) so it can be executed
+     * with `ExecuteSQL(sql)` on any provider without a dialect-specific bind convention. It also
+     * returns two extra columns the cascade planner needs:
+     *
+     * - `childNullable` — whether the referencing (child) column allows NULL, which decides
+     *   `UPDATE … SET NULL` (nullable) vs. `DELETE` + recurse (NOT NULL).
+     * - `colCount` — the number of columns in the FK constraint, so a caller can exclude
+     *   composite FKs (`colCount > 1`).
+     *
+     * Every row is one FK column. Column aliases are IDENTICAL across dialects:
+     * `parentTable, parentRefCol, childTable, childCol, childNullable, fkName, colCount`
+     * (both the referenced/parent and referencing/child tables are within `schema`).
+     *
+     * @param schema the schema whose intra-schema FK edges to enumerate (e.g. `__mj`)
+     */
+    abstract ForeignKeyGraphSQL(schema: string): string;
+
     // ─── Null Handling ───────────────────────────────────────────────
 
     /**
