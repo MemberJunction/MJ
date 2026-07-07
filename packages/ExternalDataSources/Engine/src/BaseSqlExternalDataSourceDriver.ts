@@ -140,10 +140,26 @@ export abstract class BaseSqlExternalDataSourceDriver<TConnection = unknown> ext
    */
   protected effectiveWhere(params: ExternalViewParams): string | undefined {
     const incremental = this.buildIncrementalPredicate(params);
-    if (params.filter && incremental) {
-      return `(${params.filter}) AND ${incremental}`;
+    // Normalize a blank filter to undefined FIRST: `''`/whitespace is falsy but NOT nullish, so a naive
+    // `params.filter ?? incremental` would return `''` and silently DROP the incremental bound (and emit
+    // an empty `WHERE`). Treat a blank filter as "no filter".
+    const filter = params.filter && params.filter.trim().length > 0 ? params.filter : undefined;
+    if (filter && incremental) {
+      return `(${filter}) AND ${incremental}`;
     }
-    return params.filter ?? incremental;
+    return filter ?? incremental;
+  }
+
+  /**
+   * Build the `COUNT(*)` SQL for a paginated view — honoring BOTH the caller's `filter` AND the structured
+   * `incrementalSince` bound via {@link effectiveWhere}, so `totalRowCount` is consistent with the rows the
+   * matching SELECT returns. Centralized here (rather than each driver hand-rolling `WHERE ${params.filter}`)
+   * so a driver can't forget the incremental bound. The `cnt` alias reads back per-dialect case (Oracle /
+   * Snowflake uppercase it to `CNT`).
+   */
+  protected buildCountSql(target: string, params: ExternalViewParams): string {
+    const where = this.effectiveWhere(params);
+    return `SELECT COUNT(*) AS cnt FROM ${target}${where ? ` WHERE ${where}` : ''}`;
   }
 
   /**
@@ -155,7 +171,7 @@ export abstract class BaseSqlExternalDataSourceDriver<TConnection = unknown> ext
    * structured {@link ExternalViewParams.incrementalSince} is ANDed in via {@link effectiveWhere}.
    */
   protected buildSelectSql(target: string, params: ExternalViewParams): string {
-    if (params.filter) {
+    if (params.filter && params.filter.trim().length > 0) {
       this.screenReadOnlyClause(params.filter, 'where');
     }
     if (params.orderBy) {

@@ -308,8 +308,7 @@ export class SQLServerExternalDataSourceDriver extends BaseSqlExternalDataSource
     if (params.maxRows == null) {
       return undefined; // only pay for the count when paginating
     }
-    const where = this.effectiveWhere(params);
-    const res = await pool.request().query(`SELECT COUNT(*) AS cnt FROM ${target}${where ? ` WHERE ${where}` : ''}`);
+    const res = await pool.request().query(this.buildCountSql(target, params));
     return Number(res.recordset[0]?.cnt ?? 0);
   }
 
@@ -388,7 +387,7 @@ export class SQLServerExternalDataSourceDriver extends BaseSqlExternalDataSource
    * routes through {@link buildCastAwareProjection} so DECIMAL/NUMERIC/MONEY come back as lossless strings.
    */
   protected buildSelectSqlCastAware(target: string, params: ExternalViewParams, columns: SqlColumnMeta[]): string {
-    if (params.filter) {
+    if (params.filter && params.filter.trim().length > 0) {
       this.screenReadOnlyClause(params.filter, 'where');
     }
     if (params.orderBy) {

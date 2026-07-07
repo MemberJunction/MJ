@@ -25,6 +25,9 @@ class TestableOracleDriver extends OracleExternalDataSourceDriver {
   public numAsString(precision: number | undefined, scale: number | undefined) {
     return this.shouldFetchNumberAsString(precision, scale);
   }
+  public fmtLit(value: string) {
+    return this.formatIncrementalLiteral(value);
+  }
 }
 
 const ds = (over: Partial<MJExternalDataSourceEntity>): MJExternalDataSourceEntity =>
@@ -32,6 +35,28 @@ const ds = (over: Partial<MJExternalDataSourceEntity>): MJExternalDataSourceEnti
 
 describe('OracleExternalDataSourceDriver — SQL building', () => {
   const d = new TestableOracleDriver();
+
+  describe('formatIncrementalLiteral (Oracle date literal handling)', () => {
+    it('Z-zoned ISO → TO_TIMESTAMP_TZ (Z normalized to +00:00, TZH:TZM mask) — no ORA-01830', () => {
+      expect(d.fmtLit('2026-03-01T00:00:00.000Z'))
+        .toBe(`TO_TIMESTAMP_TZ('2026-03-01T00:00:00.000+00:00', 'YYYY-MM-DD"T"HH24:MI:SS.FFTZH:TZM')`);
+    });
+    it('numeric-offset ISO → TO_TIMESTAMP_TZ preserving the offset (the ORA-01830 case)', () => {
+      expect(d.fmtLit('2026-03-01T12:30:00+05:30'))
+        .toBe(`TO_TIMESTAMP_TZ('2026-03-01T12:30:00+05:30', 'YYYY-MM-DD"T"HH24:MI:SSTZH:TZM')`);
+    });
+    it('naive (zoneless) ISO → TO_TIMESTAMP', () => {
+      expect(d.fmtLit('2026-03-01T00:00:00'))
+        .toBe(`TO_TIMESTAMP('2026-03-01T00:00:00', 'YYYY-MM-DD"T"HH24:MI:SS')`);
+    });
+    it('fractional seconds use FF (any precision, not a fixed FF3)', () => {
+      expect(d.fmtLit('2026-03-01T00:00:00.123456'))
+        .toBe(`TO_TIMESTAMP('2026-03-01T00:00:00.123456', 'YYYY-MM-DD"T"HH24:MI:SS.FF')`);
+    });
+    it('a non-ISO watermark (numeric cursor) is a plain quoted literal', () => {
+      expect(d.fmtLit('12345')).toBe(`'12345'`);
+    });
+  });
 
   describe('qualifyObject', () => {
     it('double-quotes + schema-qualifies a bare object name with DefaultSchema', () => {
