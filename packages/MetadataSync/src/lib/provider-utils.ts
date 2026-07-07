@@ -134,6 +134,11 @@ async function initializePostgresProvider(config: MJConfig): Promise<DatabasePro
       Password: config.dbPassword,
       MaxConnections: 10,
       MinConnections: 1,
+      // The provider's OWN pool (PGConnectionManager creates a separate pg.Pool from this config) is
+      // what `provider.ExecuteSQL` — including the schema DROP on `mj app remove` — runs on. Carry the
+      // configured per-request timeout as a libpq `statement_timeout` startup option so it reaches THAT
+      // pool, not just the local connectivity-check pool above. (Otherwise the "PG parity" is inert.)
+      ...(config.dbRequestTimeout ? { Options: `-c statement_timeout=${Number(config.dbRequestTimeout)}` } : {}),
     },
     coreSchema,
     1, // must be > 0 to trigger initial metadata load (AllowRefresh gate in PostgreSQLDataProvider)
