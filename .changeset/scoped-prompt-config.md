@@ -3,6 +3,7 @@
 "@memberjunction/ai-engine-base": minor
 "@memberjunction/aiengine": minor
 "@memberjunction/ai-agents": minor
+"@memberjunction/ai-prompts": patch
 "@memberjunction/server": minor
 "@memberjunction/ng-core-entity-forms": minor
 ---
@@ -29,3 +30,7 @@ Any MJ app can tune which model a prompt runs on and how it samples, per scope, 
   existing scope, right before the params are returned. **Runtime-explicit overrides still win.**
 - Unit tests for the resolver (cascade / priority / status / null-column inherit / runtime-wins) +
   a changeset.
+- **`@memberjunction/ai-prompts`** — `AIPromptRunner` now records caller-supplied
+  `conversationMessages` to `AIPromptRun.Messages` even when there is no template-rendered system
+  prompt (previously the assembled prompt was dropped for the direct-messages /
+  `templateMessageRole='none'` path, leaving `Messages` null).
