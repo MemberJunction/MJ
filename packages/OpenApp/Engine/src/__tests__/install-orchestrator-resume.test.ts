@@ -242,7 +242,7 @@ describe('UpgradeApp — resume after a crash mid-upgrade', () => {
     });
 
     it('resumes from MigrationsApplied (skips migrations, still updates packages/config/record)', async () => {
-        trackRow({ ID: 'app-x-id', Name: 'app-x', Version: '1.0.0', Status: 'Upgrading', LastCompletedStep: 'MigrationsApplied', RepositoryURL: 'https://github.com/test/app-x', SchemaName: 'test_app_x' });
+        trackRow({ ID: 'app-x-id', Name: 'app-x', Version: '1.0.0', Status: 'Upgrading', LastCompletedStep: 'MigrationsApplied', LastCompletedStepTargetVersion: '2.0.0', RepositoryURL: 'https://github.com/test/app-x', SchemaName: 'test_app_x' });
 
         const result = await UpgradeApp({ AppName: 'app-x' }, context);
 
@@ -270,7 +270,7 @@ describe('UpgradeApp — resume after a crash mid-upgrade', () => {
         // Second attempt resumes past the checkpointed Packages step (row is Error, per the
         // mutex rule Error is still an allowed re-entry status for Upgrade — B21).
         vi.mocked(FindInstalledApp).mockResolvedValue({
-            ID: 'app-x-id', Name: 'app-x', Version: '1.0.0', Status: 'Error', LastCompletedStep: 'PackagesInstalled',
+            ID: 'app-x-id', Name: 'app-x', Version: '1.0.0', Status: 'Error', LastCompletedStep: 'PackagesInstalled', LastCompletedStepTargetVersion: '2.0.0',
             RepositoryURL: 'https://github.com/test/app-x', SchemaName: 'test_app_x',
         } as never);
 
@@ -279,6 +279,26 @@ describe('UpgradeApp — resume after a crash mid-upgrade', () => {
         // Error-status re-entry reads the checkpoint too (not just 'Upgrading'), so the
         // already-completed Packages step is skipped on the retry — it is NOT re-run.
         expect(vi.mocked(RunPackageInstall)).toHaveBeenCalledTimes(1);
+    });
+
+    it('a checkpoint left by an interrupted upgrade to a DIFFERENT version is not trusted for this version (regression for the version-scoping gap)', async () => {
+        // Interrupted upgrade to 1.2 got as far as PackagesInstalled, then crashed. A fresh
+        // upgrade request now targets 2.0.0 (this describe block's served manifest). Without
+        // version-scoping, the checkpoint would wrongly skip 2.0.0's migrations/packages while
+        // still stamping Version=2.0.0 at the end — claiming a version whose packages never ran.
+        vi.mocked(FindInstalledApp).mockResolvedValue({
+            ID: 'app-x-id', Name: 'app-x', Version: '1.0.0', Status: 'Upgrading',
+            LastCompletedStep: 'PackagesInstalled', LastCompletedStepTargetVersion: '1.2.0',
+            RepositoryURL: 'https://github.com/test/app-x', SchemaName: 'test_app_x',
+        } as never);
+
+        const result = await UpgradeApp({ AppName: 'app-x' }, context);
+
+        expect(result.Success).toBe(true);
+        // The mismatched checkpoint is ignored — migrations AND packages both actually run for 2.0.0.
+        expect(vi.mocked(RunAppMigrations)).toHaveBeenCalled();
+        expect(vi.mocked(RunPackageInstall)).toHaveBeenCalled();
+        expect(vi.mocked(UpdateAppRecord)).toHaveBeenCalledWith(expect.anything(), 'app-x-id', expect.objectContaining({ Version: '2.0.0' }));
     });
 });
 

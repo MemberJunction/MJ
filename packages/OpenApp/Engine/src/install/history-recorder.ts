@@ -9,7 +9,7 @@
 import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
 import type { UserInfo, TransactionGroupBase, BaseEntity, IMetadataProvider } from '@memberjunction/core';
 import type { MJOpenAppEntity, MJOpenAppInstallHistoryEntity, MJOpenAppDependencyEntity } from '@memberjunction/core-entities';
-import type { AppStatus, InstallAction, ErrorPhase, InstalledAppInfo, AppInstallCallbacks } from '../types/open-app-types.js';
+import type { AppStatus, InstallAction, ErrorPhase, InstalledAppInfo, AppInstallCallbacks, InstallStep, UpgradeStep, RemoveStep } from '../types/open-app-types.js';
 import type { MJAppManifest } from '../manifest/manifest-schema.js';
 
 /**
@@ -142,15 +142,27 @@ export async function SetAppStatus(contextUser: UserInfo, appId: string, status:
  *
  * The orchestrator calls this immediately after each step of `InstallApp`/`UpgradeApp`/
  * `RemoveApp` succeeds. On a later re-entry (the app's Status is still `Installing`/
- * `Upgrading`/`Removing` — e.g. after a crash or a caught step failure), the orchestrator
- * reads this back via `FindInstalledApp` and skips every step up to and including it,
- * resuming the operation instead of restarting it from the beginning.
+ * `Upgrading`/`Removing`, or a caught failure left it `Error`), the orchestrator reads this
+ * back via `FindInstalledApp` and skips every step up to and including it, resuming the
+ * operation instead of restarting it from the beginning.
  *
  * Pass `null` to clear the checkpoint (done on terminal success, so a stale checkpoint
  * can't be misread by a later, unrelated operation on the same row).
+ *
+ * `targetVersion` is Upgrade-only: it pairs with the checkpoint so a resume can be told apart
+ * from a fresh upgrade request to a DIFFERENT version arriving while one was mid-flight (see
+ * `UpgradeStep`'s doc comment). Omit it for Install/Remove, which don't need it — Install's
+ * resume gate already compares `existingApp.Version === manifest.version` directly, and Remove
+ * has no "target version" concept.
  */
-export async function SetAppStep(contextUser: UserInfo, appId: string, step: string | null, provider?: IMetadataProvider): Promise<void> {
-  await UpdateAppRecord(contextUser, appId, { LastCompletedStep: step }, provider);
+export async function SetAppStep(
+  contextUser: UserInfo,
+  appId: string,
+  step: InstallStep | UpgradeStep | RemoveStep | null,
+  provider?: IMetadataProvider,
+  targetVersion?: string,
+): Promise<void> {
+  await UpdateAppRecord(contextUser, appId, { LastCompletedStep: step, ...(targetVersion !== undefined ? { LastCompletedStepTargetVersion: step ? targetVersion : null } : {}) }, provider);
 }
 
 /**

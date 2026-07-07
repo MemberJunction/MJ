@@ -52,8 +52,21 @@ export type InstallStep =
 
 /**
  * Checkpoint values written to OpenApp.LastCompletedStep during `UpgradeApp`.
- * Read back on re-entry (Status still 'Upgrading') to resume from the right
- * point instead of restarting the whole upgrade.
+ * Read back on re-entry (Status 'Upgrading' or a caught-failure 'Error') to resume from the
+ * right point instead of restarting the whole upgrade.
+ *
+ * Always paired with `OpenApp.LastCompletedStepTargetVersion`. `Version` on the row stays at
+ * the PRE-upgrade value until this attempt's `RecordUpdated` step, so the checkpoint alone can't
+ * tell "resume THIS upgrade" apart from "a fresh upgrade request to a DIFFERENT target arrived
+ * while one was mid-flight." A checkpoint is only trusted when the target-version column matches
+ * the version currently being requested — a mismatch means a full (safe) restart instead.
+ *
+ * `HooksRun` is checkpointed for audit/observability, but is NOT reliably resumable: both Install
+ * and Upgrade flip Status to a settled value (Active/Disabled) BEFORE running hooks, so a hard
+ * process kill during hook execution (not a caught JS exception — that DOES flip to 'Error' and
+ * IS retried) leaves the row settled with a stale 'Finalized'/'RecordUpdated' checkpoint that
+ * nothing ever revisits. Known limitation; fixing it means either moving the terminal status
+ * write after hooks or building real hook-level resumability — deferred as a follow-up.
  */
 export type UpgradeStep =
     | 'MigrationsApplied'
@@ -282,7 +295,9 @@ export interface InstalledAppInfo {
     /** Current app status */
     Status: AppStatus;
     /** Last install/upgrade/remove step that completed successfully, for resuming a retry */
-    LastCompletedStep?: string | null;
+    LastCompletedStep?: InstallStep | UpgradeStep | RemoveStep | null;
+    /** For Upgrade only: the version LastCompletedStep was recorded against — see UpgradeStep doc. */
+    LastCompletedStepTargetVersion?: string | null;
 }
 
 /**

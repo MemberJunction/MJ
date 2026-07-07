@@ -31,6 +31,7 @@ import {
   RecordAppInstallation,
   RecordInstallHistoryEntry,
   RecordAppDependencies,
+  DeleteAppDependencies,
   ReplaceAppDependenciesAtomically,
   SetAppStatus,
   FindInstalledApp,
@@ -258,13 +259,24 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
     // the "already installed" error below like any other in-flight status.
     const isResume = existingApp != null && existingApp.Status === 'Installing' && existingApp.Version === manifest.version;
     if (existingApp && !isReinstall && !isResume) {
+      // Actionable per status: 'Active'/'Disabled' → upgrade is the right tool; 'Upgrading'/
+      // 'Removing' → a DIFFERENT operation currently owns the row (this can legitimately happen
+      // now that ResolveDependencyChain re-queues a dependency stuck at any non-Active/Disabled
+      // status, including 'Upgrading' — loud beats the old silent skip, but the message should
+      // say what to do, not just that it's blocked) — mirrors BuildMutexConflictResult's guidance.
+      const guidance: Record<string, string> = {
+        Active: `Use 'mj app upgrade ${manifest.name}' to update it.`,
+        Disabled: `Use 'mj app upgrade ${manifest.name}' to update it.`,
+        Upgrading: `An upgrade is already in progress — finish it with 'mj app upgrade ${manifest.name}' (it will resume automatically), then re-run this install if still needed.`,
+        Removing: `A removal is already in progress — finish it with 'mj app remove ${manifest.name}' (it will resume automatically), then re-run this install once it's fully removed.`,
+      };
       return BuildFailureResult(
         'Install',
         manifest.name,
         manifest.version,
         'Schema',
         startTime,
-        `App '${manifest.name}' is already installed with status '${existingApp.Status}'. Use 'mj app upgrade' to update it.`,
+        `App '${manifest.name}' is already installed with status '${existingApp.Status}'. ${guidance[existingApp.Status] ?? `Resolve the '${existingApp.Status}' state first.`}`,
       );
     }
 
@@ -344,7 +356,10 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
         if (pkgResult.PackageJsonUpdated) {
           // package.json was updated successfully but `npm install` failed (e.g., missing npm auth).
           // Continue with the rest of the install — the user can run `npm install` manually once
-          // they fix their npm credentials.
+          // they fix their npm credentials. Deliberately NOT checkpointed: this is a soft-success
+          // for THIS attempt, but a resumed retry should re-attempt npm install (the user may have
+          // fixed their npm auth by then) rather than skip straight past it — skipping here was the
+          // bug that let a resume finalize 'Active' with dependencies never actually resolved.
           npmInstallWarning = pkgResult.ErrorMessage;
           Callbacks?.OnWarn?.('Packages', `npm install failed — package.json entries were added but dependencies were not resolved. Run 'npm install' manually after fixing npm auth.\n  Detail: ${pkgResult.ErrorMessage}`);
         } else {
@@ -352,8 +367,9 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
           await RecordFailureHistory(context.ContextUser, createdAppId!, 'Install', manifest, 'Packages', pkgResult.ErrorMessage ?? 'Package installation failed', startTime);
           return BuildFailureResult('Install', manifest.name, manifest.version, 'Packages', startTime, pkgResult.ErrorMessage ?? 'Package installation failed');
         }
+      } else {
+        await SetAppStep(context.ContextUser, createdAppId!, 'PackagesInstalled');
       }
-      await SetAppStep(context.ContextUser, createdAppId!, 'PackagesInstalled');
     }
 
     // Step 12: Update server config
@@ -497,6 +513,15 @@ async function RecordInstallationAtomically(
     const appId = await RecordAppInstallation(contextUser, manifest, callbacks, tg, 'Installing', provider, subpath);
 
     if (manifest.dependencies) {
+      // Delete-then-insert (queued into the SAME transaction group, so both commit together
+      // on tg.Submit() below) makes this call idempotent under a full restart: a crash between
+      // this transaction committing and the 'RecordCreated' checkpoint being written leaves a
+      // null checkpoint, which the caller correctly treats as "redo the whole DB phase" — WITHOUT
+      // the delete, that redo would call this function again and duplicate every dependency row
+      // (RecordAppDependencies only ever inserts). The delete matches nothing on a genuinely
+      // fresh install (new pre-generated appId) and is a no-op there; it only does real work on
+      // a reinstall/resume-restart where prior dependency rows exist.
+      await DeleteAppDependencies(contextUser, appId, tg);
       await RecordAppDependencies(contextUser, appId, manifest.dependencies, tg);
     }
 
@@ -660,9 +685,24 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
     // mutex guard above already allows both statuses through). Read the checkpoint on either,
     // so a caught mid-upgrade failure (the common case — most failures set Error, not a raw
     // crash) still benefits from skipping already-completed steps, not just a hard process kill.
-    const resumeCheckpoint = existingApp.Status === 'Upgrading' || existingApp.Status === 'Error' ? (existingApp.LastCompletedStep ?? null) : null;
+    //
+    // Version-scoped: `Version` on the row stays at the PRE-upgrade value until this attempt's
+    // RecordUpdated step, so it can't by itself tell "resume THIS upgrade" apart from "a fresh
+    // upgrade request to a DIFFERENT target arrived while one was mid-flight." A checkpoint is
+    // only trusted when `LastCompletedStepTargetVersion` matches the version we're about to
+    // upgrade to — otherwise it belongs to an abandoned attempt at some other version, and
+    // trusting it would skip THIS version's migrations/packages while still stamping this
+    // version as the result. A mismatch just means a full (safe, idempotent) restart.
+    const checkpointTargetsThisVersion = existingApp.LastCompletedStepTargetVersion === manifest.version;
+    const resumeCheckpoint =
+      (existingApp.Status === 'Upgrading' || existingApp.Status === 'Error') && checkpointTargetsThisVersion ? (existingApp.LastCompletedStep ?? null) : null;
     if (resumeCheckpoint) {
       Callbacks?.OnProgress?.('Resume', `Resuming upgrade of ${options.AppName} to v${manifest.version} from step '${resumeCheckpoint}'...`);
+    } else if ((existingApp.Status === 'Upgrading' || existingApp.Status === 'Error') && existingApp.LastCompletedStep && !checkpointTargetsThisVersion) {
+      Callbacks?.OnProgress?.(
+        'Resume',
+        `A previous upgrade attempt targeting a different version (${existingApp.LastCompletedStepTargetVersion ?? 'unknown'}) was left in progress — starting the upgrade to v${manifest.version} from the top instead of resuming it.`,
+      );
     }
 
     // Set status to Upgrading (idempotent no-op if already Upgrading from a resumed attempt)
@@ -688,8 +728,12 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
         await SetAppStatus(context.ContextUser, existingApp.ID, 'Error');
         return BuildFailureResult('Upgrade', options.AppName, targetVersion, 'Migration', startTime, recoverable);
       }
+      // Only checkpoint when this attempt actually ran (or skipped, above) the migration step —
+      // writing it unconditionally on every call would REGRESS a checkpoint that's already past
+      // this point (e.g. a resume that already skipped straight to PackagesInstalled), causing a
+      // second crash to redo packages/config for no reason.
+      await SetAppStep(context.ContextUser, existingApp.ID, 'MigrationsApplied', undefined, manifest.version);
     }
-    await SetAppStep(context.ContextUser, existingApp.ID, 'MigrationsApplied');
 
     // Steps 5-6: Update packages
     // When upgrading to an explicit version, pin packages exactly; otherwise use default strategy
@@ -700,6 +744,8 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
       const pkgResult = await HandlePackageInstallation(manifest, context, effectiveUpgradeVersion, effectiveUpgradeStrategy, options.Verbose);
       if (!pkgResult.Success) {
         if (pkgResult.PackageJsonUpdated) {
+          // Deliberately NOT checkpointed — see the matching comment in InstallApp. A resume
+          // should retry npm install, not skip past it and finalize Active with unresolved deps.
           npmInstallWarning = pkgResult.ErrorMessage;
           Callbacks?.OnWarn?.('Packages', `npm install failed — package.json entries were updated but dependencies were not resolved. Run 'npm install' manually after fixing npm auth.\n  Detail: ${pkgResult.ErrorMessage}`);
         } else {
@@ -707,8 +753,9 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
           await SetAppStatus(context.ContextUser, existingApp.ID, 'Error');
           return BuildFailureResult('Upgrade', options.AppName, targetVersion, 'Packages', startTime, pkgResult.ErrorMessage ?? 'Package update failed');
         }
+      } else {
+        await SetAppStep(context.ContextUser, existingApp.ID, 'PackagesInstalled', undefined, manifest.version);
       }
-      await SetAppStep(context.ContextUser, existingApp.ID, 'PackagesInstalled');
     }
 
     // Step 7: Update server config if changed
@@ -719,13 +766,13 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
         await SetAppStatus(context.ContextUser, existingApp.ID, 'Error');
         return BuildFailureResult('Upgrade', options.AppName, targetVersion, 'Config', startTime, configResult.ErrorMessage ?? 'Config update failed');
       }
-      await SetAppStep(context.ContextUser, existingApp.ID, 'ConfigUpdated');
+      await SetAppStep(context.ContextUser, existingApp.ID, 'ConfigUpdated', undefined, manifest.version);
     }
 
     // Step 8: Update angular.json prebundle excludes (handles new scopes in upgraded manifest)
     if (!IsStepDone(UPGRADE_STEP_ORDER, resumeCheckpoint, 'AngularExcludesUpdated')) {
       HandleAngularPrebundleExcludes(manifest, context);
-      await SetAppStep(context.ContextUser, existingApp.ID, 'AngularExcludesUpdated');
+      await SetAppStep(context.ContextUser, existingApp.ID, 'AngularExcludesUpdated', undefined, manifest.version);
     }
 
     // Step 9: Update app record first (including Status: Active) so the
@@ -735,7 +782,7 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
       ManifestJSON: JSON.stringify(manifest),
       Status: 'Active',
     });
-    await SetAppStep(context.ContextUser, existingApp.ID, 'RecordUpdated');
+    await SetAppStep(context.ContextUser, existingApp.ID, 'RecordUpdated', undefined, manifest.version);
 
     // Step 11: Execute hooks
     if (!IsStepDone(UPGRADE_STEP_ORDER, resumeCheckpoint, 'HooksRun')) {
@@ -754,7 +801,7 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
           Manifest: manifest,
         }, context.RepoRoot);
       }
-      await SetAppStep(context.ContextUser, existingApp.ID, 'HooksRun');
+      await SetAppStep(context.ContextUser, existingApp.ID, 'HooksRun', undefined, manifest.version);
     }
 
     // Update dependency records to reflect new manifest. Delete + re-add atomically so a
@@ -766,12 +813,12 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
       if (!depsReplaced) {
         Callbacks?.OnWarn?.('Record', 'App upgraded, but its dependency records could not be updated atomically — re-run the upgrade to refresh them.');
       } else {
-        await SetAppStep(context.ContextUser, existingApp.ID, 'DependenciesReplaced');
+        await SetAppStep(context.ContextUser, existingApp.ID, 'DependenciesReplaced', undefined, manifest.version);
       }
     }
 
     // Nothing left to resume — clear the checkpoint before the best-effort audit write.
-    await SetAppStep(context.ContextUser, existingApp.ID, null);
+    await SetAppStep(context.ContextUser, existingApp.ID, null, undefined, manifest.version);
 
     // Best-effort audit write — the upgrade is already complete (status Active); a failure to
     // write the history entry must NOT throw into the outer catch and downgrade a successful
