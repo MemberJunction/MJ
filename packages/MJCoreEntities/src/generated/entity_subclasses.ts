@@ -2913,10 +2913,11 @@ detailed information about what validation rules failed.`),
         * * Display Name: Comments
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Human-readable notes and comments about this agent run step`),
-    Skills: z.string().nullable().describe(`
+    Skills: z.any().nullable().describe(`
         * * Field Name: Skills
         * * Display Name: Skills Used
         * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: Array<MJAIAgentRunStepEntity_AgentSkillInvocation>
         * * Description: JSON array of skill-invocation records (AgentSkillInvocation[]) associating this step with the skills involved in it, or NULL when no skills are in play. Each record carries SkillID, SkillName, ActivationType (requested = user /skill mention; auto = agent self-activation), Provenance of authority (the gate values that admitted the skill: AcceptsSkills, both ActivationMode dials, and who requested it), and an optional agent-stated Reason when self-activated. Population: Skill steps record the activation(s) they performed; Prompt steps record the full set of skills in effect for that turn; Actions and Sub-Agent steps record the skill(s) through which the executed tool became available (NULL means the tool was a native grant).`),
     AgentRun: z.string().nullable().describe(`
         * * Field Name: AgentRun
@@ -40027,6 +40028,48 @@ export class MJAIAgentRunMediaEntity extends BaseEntity<MJAIAgentRunMediaEntityT
 
 
 /**
+ * One skill's involvement in an agent run step — the observability contract for skills.
+ * `AIAgentRunStep.Skills` holds a JSON array of these (or NULL when no skills are in play),
+ * so every step touched by a skill records WHICH skill, HOW it entered the run, and the
+ * PROVENANCE OF AUTHORITY that admitted it.
+ *
+ * Population rules (implemented in BaseAgent):
+ * - Skill steps record the activation(s) they performed (with Reason when agent-initiated).
+ * - Prompt steps record the full set of skills in effect for that turn.
+ * - Actions / Sub-Agent steps record the skill(s) through which the executed tool became
+ *   available; NULL means the tool was a native agent grant.
+ *
+ * Runtime twin: `MJAIAgentRunStepEntity_AgentSkillInvocation` in @memberjunction/ai-core-plus (agent-types.ts) —
+ * keep the two in sync.
+ */
+export interface MJAIAgentRunStepEntity_AgentSkillInvocation {
+    /** ID of the activated skill (MJ: AI Skills.ID). */
+    SkillID: string;
+    /** Name of the activated skill at activation time. */
+    SkillName: string;
+    /** How the skill entered the run: explicit user request (/skill mention) or agent self-activation. */
+    ActivationType: 'requested' | 'auto';
+    /** The gate values that admitted this skill — recorded so auditors see the configuration that allowed it. */
+    Provenance: MJAIAgentRunStepEntity_AgentSkillInvocationProvenance;
+    /** Agent-stated rationale (only for ActivationType='auto'). */
+    Reason?: string;
+}
+
+/**
+ * The gate values in effect when a skill was admitted to a run.
+ */
+export interface MJAIAgentRunStepEntity_AgentSkillInvocationProvenance {
+    /** The agent's AcceptsSkills value at activation ('All' or 'Limited' — 'None' can never activate). */
+    AgentAcceptsSkills: string;
+    /** The skill's ActivationMode at activation ('Auto' | 'RequestedOnly'). */
+    SkillActivationMode: string;
+    /** The agent's SkillActivationMode at activation ('Auto' | 'RequestedOnly'). */
+    AgentSkillActivationMode: string;
+    /** Who pulled the trigger: the user's /skill request or the agent's own decision. */
+    RequestedBy: 'user-request' | 'agent-decision';
+}
+
+/**
  * MJ: AI Agent Run Steps - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: AIAgentRunStep
@@ -40462,6 +40505,7 @@ detailed information about what validation rules failed.
     * * Field Name: Skills
     * * Display Name: Skills Used
     * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: Array<MJAIAgentRunStepEntity_AgentSkillInvocation>
     * * Description: JSON array of skill-invocation records (AgentSkillInvocation[]) associating this step with the skills involved in it, or NULL when no skills are in play. Each record carries SkillID, SkillName, ActivationType (requested = user /skill mention; auto = agent self-activation), Provenance of authority (the gate values that admitted the skill: AcceptsSkills, both ActivationMode dials, and who requested it), and an optional agent-stated Reason when self-activated. Population: Skill steps record the activation(s) they performed; Prompt steps record the full set of skills in effect for that turn; Actions and Sub-Agent steps record the skill(s) through which the executed tool became available (NULL means the tool was a native grant).
     */
     get Skills(): string | null {
@@ -40469,6 +40513,27 @@ detailed information about what validation rules failed.
     }
     set Skills(value: string | null) {
         this.Set('Skills', value);
+    }
+
+    private _SkillsObject_cached: Array<MJAIAgentRunStepEntity_AgentSkillInvocation> | null | undefined = undefined;
+    private _SkillsObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for Skills — returns parsed JSON as Array<MJAIAgentRunStepEntity_AgentSkillInvocation>.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get SkillsObject(): Array<MJAIAgentRunStepEntity_AgentSkillInvocation> | null {
+        const raw = this.Skills;
+        if (raw !== this._SkillsObject_lastRaw) {
+            this._SkillsObject_cached = raw ? JSON.parse(raw) : null;
+            this._SkillsObject_lastRaw = raw;
+        }
+        return this._SkillsObject_cached!;
+    }
+    set SkillsObject(value: Array<MJAIAgentRunStepEntity_AgentSkillInvocation> | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.Skills = raw;
+        this._SkillsObject_cached = value;
+        this._SkillsObject_lastRaw = raw;
     }
 
     /**
@@ -118034,48 +118099,4 @@ export class MJWorkspaceEntity extends BaseEntity<MJWorkspaceEntityType> {
     get User(): string {
         return this.Get('User');
     }
-}
-
-
-// ---- Restored canonical JSONType interfaces (re-added after codegen drift) ----
-/**
- * One skill's involvement in an agent run step — the observability contract for skills.
- * `AIAgentRunStep.Skills` holds a JSON array of these (or NULL when no skills are in play),
- * so every step touched by a skill records WHICH skill, HOW it entered the run, and the
- * PROVENANCE OF AUTHORITY that admitted it.
- *
- * Population rules (implemented in BaseAgent):
- * - Skill steps record the activation(s) they performed (with Reason when agent-initiated).
- * - Prompt steps record the full set of skills in effect for that turn.
- * - Actions / Sub-Agent steps record the skill(s) through which the executed tool became
- *   available; NULL means the tool was a native agent grant.
- *
- * Runtime twin: `MJAIAgentRunStepEntity_AgentSkillInvocation` in @memberjunction/ai-core-plus (agent-types.ts) —
- * keep the two in sync.
- */
-export interface MJAIAgentRunStepEntity_AgentSkillInvocation {
-    /** ID of the activated skill (MJ: AI Skills.ID). */
-    SkillID: string;
-    /** Name of the activated skill at activation time. */
-    SkillName: string;
-    /** How the skill entered the run: explicit user request (/skill mention) or agent self-activation. */
-    ActivationType: 'requested' | 'auto';
-    /** The gate values that admitted this skill — recorded so auditors see the configuration that allowed it. */
-    Provenance: MJAIAgentRunStepEntity_AgentSkillInvocationProvenance;
-    /** Agent-stated rationale (only for ActivationType='auto'). */
-    Reason?: string;
-}
-
-/**
- * The gate values in effect when a skill was admitted to a run.
- */
-export interface MJAIAgentRunStepEntity_AgentSkillInvocationProvenance {
-    /** The agent's AcceptsSkills value at activation ('All' or 'Limited' — 'None' can never activate). */
-    AgentAcceptsSkills: string;
-    /** The skill's ActivationMode at activation ('Auto' | 'RequestedOnly'). */
-    SkillActivationMode: string;
-    /** The agent's SkillActivationMode at activation ('Auto' | 'RequestedOnly'). */
-    AgentSkillActivationMode: string;
-    /** Who pulled the trigger: the user's /skill request or the agent's own decision. */
-    RequestedBy: 'user-request' | 'agent-decision';
 }
