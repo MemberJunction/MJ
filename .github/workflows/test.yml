@@ -38,7 +38,10 @@ concurrency:
 jobs:
   test:
     name: Run unit tests
-    timeout-minutes: 30
+    # 60 (not 30): the full-suite backstop (push/nightly) builds + tests ALL packages and was
+    # still running at ~27 min when the old 30-min cap killed it. PR affected-runs finish in
+    # minutes and are unaffected by the higher ceiling.
+    timeout-minutes: 60
     runs-on: ubuntu-latest
     # issues:write so a red BACKSTOP run (push/schedule) can auto-file an alert issue (see final step).
     permissions:
