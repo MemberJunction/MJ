@@ -2901,8 +2901,10 @@ export class AIPromptRunner {
         promptRun.StopSequences = JSON.stringify(params.additionalParameters.stopSequences);
       }
 
-      // Store the input data/context as JSON in Messages field
-      if (params.data || params.templateData || systemPromptText) {
+      // Store the input data/context as JSON in Messages field.
+      // Also capture callers that supply conversationMessages directly (e.g. templateMessageRole='none',
+      // no rendered system prompt) — otherwise their assembled prompt would never be persisted.
+      if (params.data || params.templateData || systemPromptText || (params.conversationMessages?.length ?? 0) > 0) {
         const messages: ChatMessage[] = [];
         if (systemPromptText) {
           // Build the system prompt content, including prefill fallback if applicable
@@ -2916,8 +2918,10 @@ export class AIPromptRunner {
             role: 'system',
             content: systemContent
           });
-          messages.push(...params.conversationMessages || []);
         }
+        // Always include any caller-supplied conversation messages (previously only recorded when a
+        // template system prompt was present, which dropped them for the pure-conversationMessages path).
+        messages.push(...(params.conversationMessages || []));
         promptRun.Messages = JSON.stringify({
           data: params.data,
           templateData: params.templateData,
