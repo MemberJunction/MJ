@@ -108,6 +108,26 @@ export function decideBooleanOverlay(
   return { value: discovered, winner: 'Discovered' };
 }
 
+/**
+ * U2 — PURE width overlay: a rediscovery's measured width should only ever GROW the persisted catalog
+ * `Length`, never shrink it. RSU widens the physical column but never shrinks it, so shrinking the
+ * catalog `Length` (because this run's sample happened to be narrower than a prior run's) drifts the
+ * two apart — the catalog says `nvarchar(128)` while the column is still `nvarchar(512)` — and a later
+ * apply keyed off the catalog could truncate a value the wider column still holds. Returns the new
+ * length + whether it changed. A null/undefined `srcMaxLength` is "no opinion" → keep the persisted
+ * value (never clears a width to MAX). Large-text types carry their MAX in the Type, not here.
+ */
+export function decideLengthOverlay(
+  existingLength: number | null | undefined,
+  srcMaxLength: number | null | undefined,
+): { Length: number | null | undefined; changed: boolean } {
+  if (srcMaxLength == null) return { Length: existingLength, changed: false };
+  if (existingLength == null || srcMaxLength > existingLength) {
+    return { Length: srcMaxLength, changed: existingLength !== srcMaxLength };
+  }
+  return { Length: existingLength, changed: false };   // never shrink
+}
+
 /** §7 — input for {@link decideAbsentDeactivations}. */
 export interface AbsentDeactivationInput {
   /** Caller requested a deactivating (comprehensive) refresh. */
@@ -627,8 +647,10 @@ export class IntegrationSchemaSync {
       // Length is DDL-affecting (describe wins): seed it so the column is sized
       // nvarchar(N) instead of defaulting to NVARCHAR(MAX) downstream. (Large-text types carry
       // their MAX in the Type itself — 'nvarchar(MAX)' — via MapSourceType, so no length here.)
-      if (srcField.MaxLength != null && existing.Length !== srcField.MaxLength) {
-        existing.Length = srcField.MaxLength;
+      // U2 — describe wins only to GROW the persisted width, never to shrink it (see decideLengthOverlay).
+      const lengthOverlay = decideLengthOverlay(existing.Length, srcField.MaxLength);
+      if (lengthOverlay.changed) {
+        existing.Length = lengthOverlay.Length;
         dirty = true;
       }
       if (existing.AllowsNull !== describedAllowsNull) {

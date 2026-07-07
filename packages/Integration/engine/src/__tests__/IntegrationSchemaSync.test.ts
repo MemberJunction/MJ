@@ -18,7 +18,37 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { decideBooleanOverlay, decideAbsentDeactivations, decideSchemaLimitViolations, type AbsentDeactivationInput } from '../IntegrationSchemaSync';
+import { decideBooleanOverlay, decideAbsentDeactivations, decideSchemaLimitViolations, decideLengthOverlay, type AbsentDeactivationInput } from '../IntegrationSchemaSync';
+
+describe('decideLengthOverlay (U2 — width overlay grows, never shrinks)', () => {
+    it('GROWS a persisted width when the rediscovered sample is wider', () => {
+        const r = decideLengthOverlay(128, 512);
+        expect(r.Length).toBe(512);
+        expect(r.changed).toBe(true);
+    });
+
+    it('NEVER shrinks: a narrower rediscovery keeps the persisted (wider) width', () => {
+        // The bug: a narrower sample used to overwrite 512 with 128 → catalog drifts below the column.
+        const r = decideLengthOverlay(512, 128);
+        expect(r.Length).toBe(512);
+        expect(r.changed).toBe(false);
+    });
+
+    it('adopts the measured width when nothing was persisted yet', () => {
+        const r = decideLengthOverlay(null, 256);
+        expect(r.Length).toBe(256);
+        expect(r.changed).toBe(true);
+    });
+
+    it('treats a null/undefined source width as "no opinion" — keeps the persisted width (never clears to MAX)', () => {
+        expect(decideLengthOverlay(512, null)).toEqual({ Length: 512, changed: false });
+        expect(decideLengthOverlay(512, undefined)).toEqual({ Length: 512, changed: false });
+    });
+
+    it('is a no-op when the widths already match', () => {
+        expect(decideLengthOverlay(255, 255)).toEqual({ Length: 255, changed: false });
+    });
+});
 
 describe('decideBooleanOverlay', () => {
     describe('undefined discovered (no-opinion case — the bug class)', () => {
