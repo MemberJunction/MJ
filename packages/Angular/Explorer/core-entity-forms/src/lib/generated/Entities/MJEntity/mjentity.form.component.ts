@@ -22,6 +22,7 @@ export class MJEntityFormComponent extends BaseFormComponent {
             { sectionKey: 'aPISearchSettings', sectionName: 'API & Search Settings', isExpanded: true },
             { sectionKey: 'proceduresDeletion', sectionName: 'Procedures & Deletion', isExpanded: true },
             { sectionKey: 'rowStatistics', sectionName: 'Row Statistics', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJApplicationEntities', sectionName: 'Application Entities', isExpanded: false },
             { sectionKey: 'mJAuditLogs', sectionName: 'Audit Logs', isExpanded: false },
@@ -91,6 +92,7 @@ export class MJEntityFormComponent extends BaseFormComponent {
             { sectionKey: 'mJRecordProcesses', sectionName: 'Record Processes', isExpanded: false },
             { sectionKey: 'mJMLTrainingPipelines', sectionName: 'ML Training Pipelines', isExpanded: false },
             { sectionKey: 'mJMLModelScoringBindings', sectionName: 'ML Model Scoring Bindings', isExpanded: false },
+            { sectionKey: 'mJAIAgentSessions', sectionName: 'AI Agent Sessions', isExpanded: false },
             { sectionKey: 'mJScopedPromptParts', sectionName: 'Scoped Prompt Parts', isExpanded: false }
         ]);
     }
