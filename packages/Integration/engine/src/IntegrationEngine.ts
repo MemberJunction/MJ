@@ -3485,7 +3485,12 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 }
             }
             return map;
-        } catch {
+        } catch (err) {
+            // MJ#3047 lesson: this best-effort catch was SILENT, so a failing prefetch (e.g. a reserved-word
+            // PK producing an invalid WHERE) disabled the content-hash idempotent skip on EVERY sync with
+            // nothing surfacing. Surface it at status level so the NEXT silent-degradation of this class is
+            // visible in sync logs — the failure mode that let #3047 exist.
+            LogStatusEx({ message: `[IntegrationEngine] content-hash prefetch for "${entityName}" failed — idempotent skip disabled this batch (best-effort, sync continues): ${err instanceof Error ? err.message : String(err)}` });
             return undefined; // best-effort — never break a sync over a prefetch failure
         }
     }
