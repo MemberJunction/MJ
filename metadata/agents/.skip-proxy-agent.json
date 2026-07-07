@@ -1,23 +1,15 @@
 [
   {
+    "__mj_sync_notes": "The 'Skip' agent moved to the @memberjunction/skip-client Open App. This deleteRecord tombstone removes the legacy core-seeded agent from instances that received it via earlier core syncs (no-op where it was never seeded). It may be FK-blocked on instances with Skip agent-run history — benign, since those instances manage the agent via the installed app. Once propagated, this tombstone can be removed in a later release.",
     "fields": {
-      "Name": "Skip",
-      "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Assistant",
-      "Description": "Data analytics and reporting expert that can create charts, graphs, dashboards and provide insights on data",
-      "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
-      "Status": "Active",
-      "DriverClass": "SkipProxyAgent",
-      "ExecutionOrder": 0,
-      "ExposeAsAction": true,
-      "IconClass": "mj-icon-skip",
-      "DefaultArtifactTypeID": "@lookup:MJ: Artifact Types.Name=Component"
+      "Name": "Skip"
     },
     "primaryKey": {
       "ID": "A829FAAC-9E64-440C-B650-83F92A37E990"
     },
-    "sync": {
-      "lastModified": "2026-03-13T19:10:50.969Z",
-      "checksum": "34ed57a88dda13bef3ba6e0d902be422f8ddfc2cf2229b460e0e3d43aeace848"
+    "deleteRecord": {
+      "delete": true,
+      "deletedAt": "2026-06-18T04:21:08.708Z"
     }
   }
 ]

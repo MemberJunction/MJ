@@ -213,6 +213,7 @@ export class SearchKnowledgeResolver extends ResolverBase {
     ): Promise<SearchKnowledgeResult> {
         const startTime = Date.now();
         try {
+            await this.CheckAPIKeyScopeAuthorization('search:execute', '*', userPayload);
             const currentUser = this.GetUserFromPayload(userPayload);
             if (!currentUser) {
                 return this.errorResult('Unable to determine current user', startTime);
@@ -400,6 +401,7 @@ export class SearchKnowledgeResolver extends ResolverBase {
     ): Promise<SearchKnowledgeResult> {
         const startTime = Date.now();
         try {
+            await this.CheckAPIKeyScopeAuthorization('search:execute', '*', userPayload);
             const currentUser = this.GetUserFromPayload(userPayload);
             if (!currentUser) {
                 return this.errorResult('Unable to determine current user', startTime);
