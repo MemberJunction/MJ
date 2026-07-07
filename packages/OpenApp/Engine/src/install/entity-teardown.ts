@@ -6,17 +6,19 @@
  * FKs (which are NO ACTION, not CASCADE) block the delete. The naive entity-layer approach
  * (RunView + per-row `Delete()`) UNDER-deletes: RunView reads base VIEWS (e.g. `vwRecordChanges`
  * INNER JOINs to `[User]`/`[Entity]`), so rows whose join is orphaned are invisible while the
- * base-TABLE FK still enforces them. This module instead enumerates the LIVE FK graph from
- * `sys.foreign_keys` and clears every one of `Entity`'s dependents — deepest-first, set-based,
- * in ONE atomic transaction.
+ * base-TABLE FK still enforces them. This module instead enumerates the LIVE FK graph and clears
+ * every one of `Entity`'s dependents — deepest-first, set-based, in ONE atomic transaction.
  *
- * **SQL Server only.** The `sys.foreign_keys` catalog query, bracket-quoting, and
- * `SET XACT_ABORT ON` transaction wrapper are SQL-Server-specific. PostgreSQL keeps the existing
- * entity-layer teardown path (see `RemoveAppEntityMetadata` in `install-orchestrator.ts`).
+ * **Dialect-neutral (SQL Server + PostgreSQL).** The FK-graph catalog query and identifier
+ * quoting come from the provider's {@link SQLDialect} (`ForeignKeyGraphSQL` / `QuoteSchema` /
+ * `QuoteIdentifier`), so the same walk runs on either backend. Only the atomic-batch session
+ * preamble (SQL Server `SET …` pragmas vs. PostgreSQL `BEGIN`/`COMMIT`) is branched per platform,
+ * because there is no dialect API for session setup. Callers that pass NO provider still get the
+ * legacy entity-layer path (see `RemoveAppEntityMetadata` in `install-orchestrator.ts`).
  */
 import type { DatabaseProviderBase } from '@memberjunction/core';
+import type { SQLDialect } from '@memberjunction/sql-dialect';
 import type { AppInstallCallbacks } from '../types/open-app-types.js';
-import { EscapeSqlString } from './schema-manager.js';
 
 /**
  * A single-column foreign key within the MJ core schema: `childTable.childCol` references
@@ -63,10 +65,16 @@ export interface TeardownPlan {
  * covered by the table's own set-delete) and cross-table cycles (path guard) are handled.
  *
  * @param fkEdges the single-column FK edges of the MJ core schema (from {@link EnumerateMjEntityFkGraph})
- * @param mjSchema the MJ core schema name (e.g. `__mj`), used for bracket-quoting `[mjSchema].[table]`
- * @param rootDoomedPredicate the predicate selecting the doomed `Entity` rows (e.g. `[SchemaName] = 'x'`)
+ * @param dialect the provider's {@link SQLDialect}, used to quote identifiers (`[x]` vs. `"x"`)
+ * @param mjSchema the MJ core schema name (e.g. `__mj`)
+ * @param rootDoomedPredicate the predicate selecting the doomed `Entity` rows (already dialect-quoted)
  */
-export function buildEntityTeardownPlan(fkEdges: FkEdge[], mjSchema: string, rootDoomedPredicate: string): TeardownPlan {
+export function buildEntityTeardownPlan(
+  fkEdges: FkEdge[],
+  dialect: SQLDialect,
+  mjSchema: string,
+  rootDoomedPredicate: string,
+): TeardownPlan {
   const byParent = new Map<string, FkEdge[]>();
   for (const e of fkEdges) {
     if (!byParent.has(e.parentTable)) byParent.set(e.parentTable, []);
@@ -76,18 +84,19 @@ export function buildEntityTeardownPlan(fkEdges: FkEdge[], mjSchema: string, roo
   const plan: TeardownPlanItem[] = [];
   const warnings: string[] = [];
   const emitted = new Set<string>();
-  const q = (t: string): string => `[${mjSchema}].[${t}]`;
-  const push = (sql: string, op: 'delete' | 'setnull', table: string, col: string | null, where: string): void => {
+  const q = (t: string): string => dialect.QuoteSchema(mjSchema, t);
+  const col = (c: string): string => dialect.QuoteIdentifier(c);
+  const push = (sql: string, op: 'delete' | 'setnull', table: string, colName: string | null, where: string): void => {
     if (emitted.has(sql)) return;
     emitted.add(sql);
     statements.push(sql);
-    plan.push({ op, table, col, where });
+    plan.push({ op, table, col: colName, where });
   };
   const walk = (parentTable: string, parentDoomed: string, path: Set<string>): void => {
     const children = byParent.get(parentTable) ?? [];
     for (const c of children) {
-      const where = `[${c.childCol}] IN (SELECT [${c.parentRefCol}] FROM ${q(parentTable)} WHERE ${parentDoomed})`;
-      const setNull = `UPDATE ${q(c.childTable)} SET [${c.childCol}] = NULL WHERE ${where}`;
+      const where = `${col(c.childCol)} IN (SELECT ${col(c.parentRefCol)} FROM ${q(parentTable)} WHERE ${parentDoomed})`;
+      const setNull = `UPDATE ${q(c.childTable)} SET ${col(c.childCol)} = NULL WHERE ${where}`;
       const del = `DELETE FROM ${q(c.childTable)} WHERE ${where}`;
       if (c.childTable === parentTable) {
         if (c.childNullable) push(setNull, 'setnull', c.childTable, c.childCol, where);
@@ -116,31 +125,29 @@ export function buildEntityTeardownPlan(fkEdges: FkEdge[], mjSchema: string, roo
 }
 
 /**
+ * Builds the dialect-quoted predicate that selects the doomed `Entity` rows for `appSchema`
+ * (`SchemaName = '<appSchema>'`). Shared by the caller (to seed the walk root) and used verbatim
+ * as `rootDoomedPredicate`. Kept here so the quoting stays owned by this module + the dialect.
+ */
+export function buildRootDoomedPredicate(dialect: SQLDialect, appSchema: string): string {
+  return `${dialect.QuoteIdentifier('SchemaName')} = ${dialect.QuoteStringLiteral(appSchema)}`;
+}
+
+/**
  * Enumerates every SINGLE-column FK within the MJ core schema (parent + child both in `mjSchema`).
  *
  * Composite FKs (a constraint spanning >1 column) are excluded and warned — `Entity` references
- * are all single-column, so this is safe. Runs the exact `sys.foreign_keys` catalog query and is
- * therefore SQL-Server-specific.
+ * are all single-column, so this is safe. The catalog query comes from the provider's dialect
+ * ({@link SQLDialect.ForeignKeyGraphSQL}), so this works on both SQL Server and PostgreSQL; the
+ * normalized row shape (`parentTable, parentRefCol, childTable, childCol, childNullable, fkName,
+ * colCount`) is identical across dialects.
  */
 export async function EnumerateMjEntityFkGraph(
   dbProvider: DatabaseProviderBase,
   mjSchema: string,
   callbacks?: AppInstallCallbacks,
 ): Promise<FkEdge[]> {
-  const s = EscapeSqlString(mjSchema);
-  const sql =
-    'SELECT rt.name AS parentTable, rc.name AS parentRefCol, pt.name AS childTable, ' +
-    'pc.name AS childCol, pc.is_nullable AS childNullable, fk.name AS fkName, ' +
-    '(SELECT COUNT(*) FROM sys.foreign_key_columns x WHERE x.constraint_object_id = fk.object_id) AS colCount ' +
-    'FROM sys.foreign_keys fk ' +
-    'JOIN sys.foreign_key_columns fkc ON fkc.constraint_object_id = fk.object_id ' +
-    'JOIN sys.objects rt ON rt.object_id = fk.referenced_object_id ' +
-    'JOIN sys.schemas rs ON rs.schema_id = rt.schema_id ' +
-    'JOIN sys.columns rc ON rc.object_id = fk.referenced_object_id AND rc.column_id = fkc.referenced_column_id ' +
-    'JOIN sys.objects pt ON pt.object_id = fk.parent_object_id ' +
-    'JOIN sys.schemas ps ON ps.schema_id = pt.schema_id ' +
-    'JOIN sys.columns pc ON pc.object_id = fk.parent_object_id AND pc.column_id = fkc.parent_column_id ' +
-    `WHERE rs.name = '${s}' AND ps.name = '${s}'`;
+  const sql = dbProvider.Dialect.ForeignKeyGraphSQL(mjSchema);
   const rows = await dbProvider.ExecuteSQL<Record<string, unknown>>(sql);
   const edges: FkEdge[] = [];
   const composite = new Set<string>();
@@ -174,6 +181,7 @@ export async function EnumerateMjEntityFkGraph(
  */
 export async function ReportTeardownPlan(
   dbProvider: DatabaseProviderBase,
+  dialect: SQLDialect,
   mjSchema: string,
   plan: TeardownPlanItem[],
   callbacks?: AppInstallCallbacks,
@@ -183,7 +191,7 @@ export async function ReportTeardownPlan(
   for (const p of plan) {
     try {
       const rows = await dbProvider.ExecuteSQL<Record<string, unknown>>(
-        `SELECT COUNT(*) AS n FROM [${mjSchema}].[${p.table}] WHERE ${p.where}`,
+        `SELECT COUNT(*) AS n FROM ${dialect.QuoteSchema(mjSchema, p.table)} WHERE ${p.where}`,
       );
       const n = rows && rows[0] ? Number(rows[0].n) : 0;
       if (n > 0) {
@@ -201,27 +209,49 @@ export async function ReportTeardownPlan(
 }
 
 /**
- * Executes all teardown statements as ONE batch inside a single transaction.
+ * Wraps the teardown statements in ONE atomic transaction for the given dialect. PURE (no DB).
  *
- * `SET QUOTED_IDENTIFIER ON` / `SET ANSI_NULLS ON` are required because some tables have filtered
- * / computed-column indexes or indexed views, against which an UPDATE (SET NULL) or DELETE fails
- * (Msg 1934) if those options are OFF — so we set them explicitly rather than depend on the
- * driver's connection defaults. `SET XACT_ABORT ON` makes any failure roll the whole batch back
- * (all-or-nothing atomicity). No-op on an empty statement list.
+ * - **SQL Server**: `SET QUOTED_IDENTIFIER ON` / `SET ANSI_NULLS ON` are required because some
+ *   tables have filtered / computed-column indexes or indexed views, against which an UPDATE
+ *   (SET NULL) or DELETE fails (Msg 1934) if those options are OFF — so we set them explicitly
+ *   rather than depend on the driver's connection defaults. `SET XACT_ABORT ON` makes any failure
+ *   roll the whole batch back (all-or-nothing atomicity).
+ * - **PostgreSQL**: no session pragmas are needed (`QUOTED_IDENTIFIER`/`ANSI_NULLS` are SQL-Server
+ *   concepts), and PostgreSQL already aborts the whole transaction on any error, so plain
+ *   `BEGIN … COMMIT` gives the same all-or-nothing semantics as `XACT_ABORT`.
+ *
+ * The per-platform branch lives here (not on the dialect) because session/transaction setup has no
+ * dialect API and there are only two platforms; `PlatformKey` is the single point of divergence.
+ * Returns an empty string for an empty statement list.
  */
-export async function ExecTeardownBatch(dbProvider: DatabaseProviderBase, statements: string[]): Promise<void> {
-  if (!statements || !statements.length) return;
-  const script =
-    'SET QUOTED_IDENTIFIER ON;\nSET ANSI_NULLS ON;\nSET XACT_ABORT ON;\nBEGIN TRANSACTION;\n' +
-    statements.join(';\n') +
-    ';\nCOMMIT TRANSACTION;';
+export function buildTeardownBatchScript(dialect: SQLDialect, statements: string[]): string {
+  if (!statements || !statements.length) return '';
+  const body = statements.join(';\n');
+  if (dialect.PlatformKey === 'postgresql') {
+    return `BEGIN;\n${body};\nCOMMIT;`;
+  }
+  // SQL Server (and any other T-SQL-family platform)
+  return `SET QUOTED_IDENTIFIER ON;\nSET ANSI_NULLS ON;\nSET XACT_ABORT ON;\nBEGIN TRANSACTION;\n${body};\nCOMMIT TRANSACTION;`;
+}
+
+/**
+ * Executes all teardown statements as ONE batch inside a single transaction, using the dialect's
+ * session/transaction wrapper ({@link buildTeardownBatchScript}). No-op on an empty statement list.
+ */
+export async function ExecTeardownBatch(
+  dbProvider: DatabaseProviderBase,
+  dialect: SQLDialect,
+  statements: string[],
+): Promise<void> {
+  const script = buildTeardownBatchScript(dialect, statements);
+  if (!script) return;
   await dbProvider.ExecuteSQL<Record<string, unknown>>(script);
 }
 
 /**
  * Orchestrates the full FK-graph teardown for the doomed entities of a schema:
  * enumerate the live FK graph → build the plan → surface any warnings → dry-run report →
- * execute the atomic batch. SQL Server only.
+ * execute the atomic batch. Runs on SQL Server or PostgreSQL (dialect-driven).
  */
 export async function RunFkGraphTeardown(
   dbProvider: DatabaseProviderBase,
@@ -229,9 +259,10 @@ export async function RunFkGraphTeardown(
   rootDoomedPredicate: string,
   callbacks?: AppInstallCallbacks,
 ): Promise<void> {
+  const dialect = dbProvider.Dialect;
   const fkEdges = await EnumerateMjEntityFkGraph(dbProvider, mjSchema, callbacks);
-  const planned = buildEntityTeardownPlan(fkEdges, mjSchema, rootDoomedPredicate);
+  const planned = buildEntityTeardownPlan(fkEdges, dialect, mjSchema, rootDoomedPredicate);
   for (const w of planned.warnings) callbacks?.OnWarn?.('Metadata', `Teardown: ${w}`);
-  await ReportTeardownPlan(dbProvider, mjSchema, planned.plan, callbacks);
-  await ExecTeardownBatch(dbProvider, planned.statements);
+  await ReportTeardownPlan(dbProvider, dialect, mjSchema, planned.plan, callbacks);
+  await ExecTeardownBatch(dbProvider, dialect, planned.statements);
 }

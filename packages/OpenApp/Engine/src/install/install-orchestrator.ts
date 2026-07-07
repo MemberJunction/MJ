@@ -17,7 +17,7 @@ import type { InstalledAppMap, DependencyValue } from '../dependency/dependency-
 import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, ListGitHubReleases, ListGitHubTags, ValidateGitHubTag, ParseGitHubUrl, type GitHubClientOptions, type MigrationDownloadResult } from '../github/github-client.js';
 import semver from 'semver';
 import { CreateAppSchema, DropAppSchema, SchemaExists, EscapeSqlString } from './schema-manager.js';
-import { RunFkGraphTeardown } from './entity-teardown.js';
+import { RunFkGraphTeardown, buildRootDoomedPredicate } from './entity-teardown.js';
 import { extractApplicationIds } from './migration-application-ids.js';
 import { RunAppMigrations, type SkywayDatabaseConfig } from './migration-runner.js';
 import { AddAppPackages, RemoveAppPackages, RunPackageInstall, BumpPrefixedDependencies, type PackageManagerType, type VersionStrategy, type WorkspaceTarget } from './package-manager.js';
@@ -1495,9 +1495,11 @@ export async function RemoveAppEntityMetadata(
       .map((id) => NormalizeUUID(id))
       .filter((id): id is string => !!id);
 
-    // The SQL-Server FK-graph teardown is used only when a non-Postgres provider is supplied.
-    // PostgreSQL (and any no-provider caller) keeps the existing entity-layer path unchanged.
-    const useFkGraph = !!options?.DatabaseProvider && options.DatabaseProvider.Dialect.PlatformKey !== 'postgresql';
+    // The dialect-driven FK-graph teardown is used whenever a DatabaseProvider is supplied — it
+    // runs on BOTH SQL Server and PostgreSQL (identifier quoting + the FK-graph catalog query come
+    // from the provider's SQLDialect). Only a caller that passes NO provider falls back to the
+    // legacy entity-layer path below (which under-deletes; see the comment on that branch).
+    const useFkGraph = !!options?.DatabaseProvider?.Dialect;
 
     const md = (provider ?? new Metadata()) as unknown as IMetadataProvider;
 
@@ -1541,16 +1543,21 @@ export async function RemoveAppEntityMetadata(
     const ownedAppIds = await FindAppOwnedApplications(rv, contextUser, entityIds, idList);
 
     if (useFkGraph) {
-      // SQL Server: dynamic, set-based, atomic FK-graph teardown on the base tables (covers ALL of
-      // Entity's dependents, incl. those the entity-layer path under-deletes via base-view joins).
-      // Replaces the hardcoded QueueDeleteEntitiesByFilter list + per-entity Delete + SchemaInfo delete.
+      // Dynamic, set-based, atomic FK-graph teardown on the base tables — runs on BOTH SQL Server
+      // and PostgreSQL via the provider's SQLDialect (covers ALL of Entity's dependents, incl.
+      // those the entity-layer path under-deletes via base-view joins). Replaces the hardcoded
+      // QueueDeleteEntitiesByFilter list + per-entity Delete + SchemaInfo delete.
+      const dbProvider = options!.DatabaseProvider!;
       const mjSchema = options?.MJCoreSchema ?? '__mj';
-      const rootPredicate = `[SchemaName] = '${escaped}'`;
-      await RunFkGraphTeardown(options!.DatabaseProvider!, mjSchema, rootPredicate, callbacks);
+      const rootPredicate = buildRootDoomedPredicate(dbProvider.Dialect, schemaName);
+      await RunFkGraphTeardown(dbProvider, mjSchema, rootPredicate, callbacks);
     } else {
-      // PostgreSQL / no provider: the existing entity-layer path — all deletes queued into ONE
-      // TransactionGroup and committed once (all-or-nothing; each un-grouped delete would otherwise
-      // autocommit on PostgreSQL, leaving partial orphan state on an FK violation — PG3).
+      // LEGACY FALLBACK (no DatabaseProvider passed): entity-layer path — all deletes queued into
+      // ONE TransactionGroup and committed once (all-or-nothing; each un-grouped delete would
+      // otherwise autocommit on PostgreSQL, leaving partial orphan state on an FK violation — PG3).
+      // NOTE: this UNDER-deletes — it clears only the hardcoded dependent list below and misses the
+      // rest of Entity's FK-dependents (e.g. RecordChange). Pass a DatabaseProvider (both SS and PG)
+      // to get the complete, dialect-driven FK-graph cascade above instead.
       const tg = await md.CreateTransactionGroup();
       const queueDeleteByFilterOrThrow = async (entityName: string, filter: string): Promise<void> => {
         const r = await QueueDeleteEntitiesByFilter(rv, contextUser, entityName, filter, tg);
