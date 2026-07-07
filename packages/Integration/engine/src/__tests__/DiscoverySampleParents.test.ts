@@ -114,36 +114,39 @@ describe('BaseRESTIntegrationConnector — discovery-time parent sampling (§sam
     });
 
     describe('the fix', () => {
-        it('with DiscoverySampleParents, the child live-samples its parent and yields records', async () => {
+        // NOTE: these exercise the SINGLE discovery mechanism — DiscoverFieldsViaFetch → the REST
+        // DiscoverySampleRecordStream override → StreamRecordsForDiscovery. (The old FetchChanges-with-
+        // DiscoverySampleParents path was removed as dead code; see rkihm-BC #3049.)
+        it('the child live-samples its parent and yields child records tagged with the parent FK', async () => {
             const c = new TestConnector();
-            const result = await c.FetchChanges(childCtx({ DiscoverySampleParents: true }));
-            // Parent GET /orgs sampled exactly once, then one child fetch per sampled org.
-            expect(c.urls.filter(u => u.endsWith('/orgs')).length).toBe(1);
+            const ci = { IntegrationID: 'int1' } as unknown as MJCompanyIntegrationEntity;
+            const fields = await c.DiscoverFieldsViaFetch(ci, 'events', {} as UserInfo);
+            // Parent /orgs live-sampled, then one child fetch per sampled org.
+            expect(c.urls.filter(u => u.endsWith('/orgs')).length).toBeGreaterThanOrEqual(1);
             expect(childPaths(c)).toEqual(['/orgs/org1/events', '/orgs/org2/events', '/orgs/org3/events']);
-            expect(result.Records.length).toBe(3);
-            // Each child record carries the resolved parent FK (tagged during iteration) + its own PK.
-            expect(result.Records[0].Fields.OrgId).toBeDefined();
+            // The resolved parent FK (OrgId, tagged onto each child row) is surfaced in the child's fields.
+            expect(fields.map(fl => fl.Name)).toContain('OrgId');
         });
 
         it('resolves a keyless parent\'s key from the FETCHED rows (no declared PK) — not presupposed', async () => {
             // OrgsKL declares no IsPrimaryKey. The key must come from the rows fetch returned — the
-            // value-statistic classifier over the fetched rows picks 'id',
-            // never an assumed name. So a keyless parent's child still samples.
+            // value-statistic classifier over the fetched rows picks 'id', never an assumed name. So a
+            // keyless parent's child still samples.
             const c = new TestConnector();
-            const result = await c.FetchChanges({ ...childCtx(), ObjectName: 'eventsKL', DiscoverySampleParents: true });
-            expect(c.urls.filter(u => u.endsWith('/orgskl')).length).toBe(1);   // keyless parent WAS fetched
+            const ci = { IntegrationID: 'int1' } as unknown as MJCompanyIntegrationEntity;
+            await c.DiscoverFieldsViaFetch(ci, 'eventsKL', {} as UserInfo);
+            expect(c.urls.filter(u => u.endsWith('/orgskl')).length).toBeGreaterThanOrEqual(1); // keyless parent WAS fetched
             const kids = c.urls.map(u => u.replace('https://api.test', '')).filter(p => p.startsWith('/orgskl/')).sort();
             expect(kids).toEqual(['/orgskl/kl1/events', '/orgskl/kl2/events']);   // child sampled via key from fetched rows
-            expect(result.Records.length).toBe(2);
         });
 
         it('walks parents until the CHILD target — no fixed "N parents per child" cap', async () => {
             orgRows = [{ OrgId: 'o1' }, { OrgId: 'o2' }, { OrgId: 'o3' }, { OrgId: 'o4' }, { OrgId: 'o5' }];
             const c = new TestConnector();
-            // Each org yields 1 child here, so reaching the child's record target requires walking ALL 5
-            // parents — the child accumulates across as many parents as it takes (bounded by the parent
-            // sample size), NOT a fixed count of parents.
-            await c.FetchChanges(childCtx({ DiscoverySampleParents: true }));
+            const ci = { IntegrationID: 'int1' } as unknown as MJCompanyIntegrationEntity;
+            // Each org yields 1 child, so with a large target the child accumulates across as many parents
+            // as it takes — all 5 here — NOT a fixed count of parents.
+            await c.DiscoverFieldsViaFetch(ci, 'events', {} as UserInfo, { MaxRecords: 500 });
             expect(childPaths(c).length).toBe(5);
         });
 

@@ -601,17 +601,11 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         // AfterKeyValue, so the engine loops to completion), fetch them CONCURRENTLY up to the engine's
         // MaxConcurrency, and gate each on the engine's adaptive AIMD bucket (RateLimitAcquire/Report).
         const top = resolutions[0];
-        let allParentIDs = this.SortIdsStable(await this.LoadParentIDs(top.parentObjectID, ctx.ContextUser, []));
-        // DISCOVERY-ONLY fallback (§sample-discover per entity): at discovery the DB holds no synced
-        // parent rows yet, so LoadParentIDs returns []. Rather than emit ZERO_PARENTS and leave this
-        // template-var CHILD with zero sampled fields (no widths / PK / custom-column stats), live-sample
-        // a bounded page of the parent — "sync-like fetch, no DB work" — so the child yields
-        // representative records for field-stat accumulation. Gated on ctx.DiscoverySampleParents, which
-        // ONLY DiscoverFieldsViaFetch sets; a real sync never takes this branch, so ZERO_PARENTS stays
-        // correct on the sync path (an unsynced parent still means "sync the parent first").
-        if (allParentIDs.length === 0 && ctx.DiscoverySampleParents) {
-            allParentIDs = this.SortIdsStable(await this.SampleParentIDsForDiscovery(top.parentObjectID, ctx));
-        }
+        // Sync path only: parent IDs come from the SYNCED DB. Discovery-time sampling of a template-var
+        // child no longer routes through here — the REST DiscoverySampleRecordStream override drives it via
+        // StreamRecordsForDiscovery (which fetches parents live), so FetchWithTemplateVars is sync-exclusive
+        // and an unsynced parent correctly yields ZERO_PARENTS ("sync the parent first").
+        const allParentIDs = this.SortIdsStable(await this.LoadParentIDs(top.parentObjectID, ctx.ContextUser, []));
         if (allParentIDs.length === 0) {
             const parentObj = IntegrationEngineBase.Instance.GetIntegrationObjectByID(top.parentObjectID);
             return { Records: [], HasMore: false, Warnings: [{
@@ -669,9 +663,10 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
     }
 
     /**
-     * REST override (§sample-discover): ANY template-var CHILD (single- or multi-var) is sampled with the
-     * recursive, record-constrained {@link StreamRecordsForDiscovery}. Flat objects fall back to the
-     * generic FetchChanges loop.
+     * REST override (§sample-discover): a SINGLE-template-var CHILD is sampled with the recursive,
+     * record-constrained {@link StreamRecordsForDiscovery}. Flat objects fall back to the generic
+     * FetchChanges loop; MULTI-var (composition) children are deferred — {@link StreamRecordsForDiscovery}
+     * adjourns them (declared-only until first sync) rather than fire malformed URLs.
      */
     protected override async *DiscoverySampleRecordStream(
         companyIntegration: MJCompanyIntegrationEntity,
@@ -733,6 +728,13 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
             return;
         }
 
+        // MULTI-VAR (composition) children are DEFERRED, and deferring means NOT ATTEMPTING: resolving only
+        // templateVars[0] would leave the remaining `{Vars}` as literal, unsubstituted text in the fetch URL
+        // (e.g. `/orgs/123/profiles/{ProfileId}/events`) — malformed requests fired at the vendor API. Adjourn
+        // instead → the multi-var child falls back to declared-only fields, caught at first real sync (which
+        // handles multi-var properly via FetchWithTemplateVars). (rkihm-BC #3049.)
+        if (templateVars.length > 1) return;
+
         // CHILD (single template var): stream the PARENT recursively via this SAME routine — so a
         // grandparent is sampled identically (uniform to all depths). Classify the parent's key from its
         // own rows (declared PK → value-statistic classifier → adjourn — never a guessed name), then fetch
@@ -743,7 +745,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         // WHOLE chain: when a parent's children run out and the leaf still needs more, the loop pulls the
         // next parent — which lazily pulls the next grandparent, and so on to the highest ancestor. That is
         // where the "fill to N" completion actually happens — at the top of the dependency chain, not
-        // locally. (Composition / multi-var is deferred — a future optimization.)
+        // locally.
         const parentInfo = this.ResolveParentForVar(obj, fields, templateVars[0], companyIntegration.IntegrationID);
         if (!parentInfo) return;
         const parentObj = IntegrationEngineBase.Instance.GetIntegrationObjectByID(parentInfo.parentObjectID);
@@ -787,74 +789,10 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
     }
 
     /**
-     * DISCOVERY-ONLY fallback used by {@link FetchWithTemplateVars} when no parent rows are synced yet:
-     * live-fetch a bounded page of the parent object and return its primary-key values, so a template-var
-     * CHILD can be sampled for field stats at discovery ("sync-like fetch, no DB work"). Returns the same
-     * kind of value {@link LoadParentIDs} would (the parent PK column value used to substitute the child's
-     * template var). NEVER invoked on the sync path — the caller gates it on `ctx.DiscoverySampleParents`.
-     */
-    private async SampleParentIDsForDiscovery(parentObjectID: string, ctx: FetchContext): Promise<string[]> {
-        // The recursion depth cap is CONSUMER-decided (per-connection Configuration → operator env), not a
-        // hardcoded value the connector imposes.
-        const maxDepth = this.ReadDiscoveryConfig(ctx.CompanyIntegration)
-            .int('discoverySampleMaxDepth', 'MJ_INTEGRATION_DISCOVERY_SAMPLE_MAX_DEPTH', this.DiscoverySampleMaxDepth());
-        const depth = ctx.DiscoverySampleDepth ?? 0;
-        if (depth >= maxDepth) return [];
-        const parentObj = IntegrationEngineBase.Instance.GetIntegrationObjectByID(parentObjectID);
-        if (!parentObj) return [];
-
-        // ONE sample-size value, consumer-decided: the parent is sampled to the SAME discovery size the
-        // child targets — `ctx.BatchSize`, set from the consumer's discovery config. Nothing hardcoded
-        // here. We return ALL fetched parent IDs; the child then WALKS them (the DiscoverFieldsViaFetch
-        // loop keyset-resumes over parents) and stops when the CHILD hits its own target. So the fetched
-        // parents split naturally into two parts: those used WITH children (walked) and those WITHOUT
-        // (the remainder — they served only the parent's own key classification).
-        // The fetch is recursive (a parent that is itself a child resolves ITS parents the same way) and
-        // pure HTTP — no SQL — so it is dialect-agnostic (identical on SQL Server and Postgres).
-        const parentCtx: FetchContext = {
-            ...ctx,
-            ObjectName: parentObj.Name,
-            WatermarkValue: null,
-            // inherits ctx.BatchSize (the one consumer-decided discovery sample size) via the spread above.
-            // RESUME the parent stream from where the child left off (ctx.AfterKeyValue = the last parent
-            // this child already walked), so successive DiscoverFieldsViaFetch calls pull the NEXT page of
-            // parents — never re-fetch page one, never bulk. Unlike SYNC (which walks ALL parents via the
-            // DAG), discovery is RECORD-CONSTRAINED: the child's readPathStream stops at its own T records,
-            // so we pull only as many parent pages as the child needs — a million-row parent is streamed
-            // and cut off early. (A page-based parent with no stable key advances via its own pagination.)
-            AfterKeyValue: ctx.AfterKeyValue ?? null,
-            DiscoverySampleParents: true,
-            DiscoverySampleDepth: depth + 1,
-        };
-        const batch = await this.FetchChanges(parentCtx);
-        if (batch.Records.length === 0) return [];
-
-        // The parent's addressing-key field is NOT presupposed. It is resolved from, in order:
-        // (1) METADATA — a declared PK, if the parent already declares one;
-        // (2) DISCOVERY-VIA-FETCH — the value-statistic PK classifier run over the rows FETCH just
-        //     returned (the same pick-key-from-stats the engine uses everywhere).
-        // If neither yields a key, the parent is genuinely keyless → adjourn (return []). No field name
-        // is ever assumed.
-        const keyField = await this.ResolveParentKeyField(parentObj, batch.Records);
-        if (!keyField) return [];
-
-        // Classification ran over the full parent sample above. Return EVERY parent ID from it — the
-        // caller walks them (bounded per call by TemplateVarParentBatchSize, keyset-resumed across calls)
-        // and the DiscoverFieldsViaFetch loop stops once the CHILD reaches its own record target. So the
-        // child consumes as many of these parents as it needs, and no more.
-        const ids: string[] = [];
-        for (const rec of batch.Records) {
-            const v = rec.Fields?.[keyField];
-            if (v != null && String(v) !== '') ids.push(String(v));
-        }
-        return ids;
-    }
-
-    /**
      * Resolves the parent's addressing-key FIELD NAME for discovery-time sampling, without presupposing
-     * it: (1) a declared PK in metadata; else (2) the value-statistic classifier over the fetched rows;
-     * else (3) a conventional identity name that is actually present in the data. Returns null when the
-     * parent is genuinely keyless (→ the caller adjourns). No name is ever assumed for an absent field.
+     * it: (1) a declared PK in metadata; else (2) the value-statistic classifier over the fetched rows.
+     * Returns null when the parent is genuinely keyless (→ the caller adjourns). No conventional identity
+     * name is ever guessed — a name is never assumed for a field the data doesn't prove is the key.
      */
     private async ResolveParentKeyField(parentObj: MJIntegrationObjectEntity, records: ExternalRecord[]): Promise<string | null> {
         // (1) metadata: a declared PK sticks.
