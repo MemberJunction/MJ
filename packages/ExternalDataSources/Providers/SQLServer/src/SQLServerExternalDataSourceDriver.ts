@@ -308,7 +308,8 @@ export class SQLServerExternalDataSourceDriver extends BaseSqlExternalDataSource
     if (params.maxRows == null) {
       return undefined; // only pay for the count when paginating
     }
-    const res = await pool.request().query(`SELECT COUNT(*) AS cnt FROM ${target}${params.filter ? ` WHERE ${params.filter}` : ''}`);
+    const where = this.effectiveWhere(params);
+    const res = await pool.request().query(`SELECT COUNT(*) AS cnt FROM ${target}${where ? ` WHERE ${where}` : ''}`);
     return Number(res.recordset[0]?.cnt ?? 0);
   }
 
@@ -395,9 +396,10 @@ export class SQLServerExternalDataSourceDriver extends BaseSqlExternalDataSource
     }
     const projection = this.buildCastAwareProjection(params.fields, columns);
     const effectiveParams = this.applyDefaultOrderBy(params);
+    const where = this.effectiveWhere(params);
     let sqlText = `SELECT ${this.selectTopClause(effectiveParams)}${projection} FROM ${target}`;
-    if (params.filter) {
-      sqlText += ` WHERE ${params.filter}`;
+    if (where) {
+      sqlText += ` WHERE ${where}`;
     }
     sqlText += this.orderAndPageClause(effectiveParams);
     return sqlText;
