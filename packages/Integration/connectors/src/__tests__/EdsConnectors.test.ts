@@ -100,6 +100,7 @@ class TestSqlConnector extends BaseSqlExternalDataSourceConnector {
     constructor(private readonly Resolved: ResolvedExternalDataSource) { super(); }
     protected override async Resolve(): Promise<ResolvedExternalDataSource> { return this.Resolved; }
     protected override async ResolveObjectMeta(): Promise<{ WatermarkField?: string; PrimaryKeyFields: string[] }> { return META; }
+    public coerce(value: unknown): Date | undefined { return this.CoerceDate(value); }
 }
 
 class TestDocConnector extends BaseDocumentDataSourceConnector {
@@ -192,5 +193,21 @@ describe('FetchChanges — records + incremental narrowing', () => {
         expect(r.Records).toHaveLength(2);
         expect(r.HasMore).toBe(true);
         expect(r.NextOffset).toBe(2);
+    });
+});
+
+describe('CoerceDate — ModifiedAt is timezone-stable', () => {
+    const c = new TestSqlConnector(resolvedFor(new MockDriver()));
+    it('a ZONELESS ISO watermark is interpreted as UTC (not server-local)', () => {
+        expect(c.coerce('2026-05-01T12:00:00')?.toISOString()).toBe('2026-05-01T12:00:00.000Z');
+    });
+    it('a zoned ISO watermark is preserved exactly', () => {
+        expect(c.coerce('2026-05-01T12:00:00Z')?.toISOString()).toBe('2026-05-01T12:00:00.000Z');
+        expect(c.coerce('2026-05-01T12:00:00+05:00')?.toISOString()).toBe('2026-05-01T07:00:00.000Z');
+    });
+    it('a Date passes through unchanged; an unparseable value is undefined', () => {
+        const d = new Date('2026-05-01T00:00:00Z');
+        expect(c.coerce(d)).toBe(d);
+        expect(c.coerce('not-a-date')).toBeUndefined();
     });
 });

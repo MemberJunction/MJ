@@ -299,12 +299,23 @@ export abstract class BaseExternalDataSourceConnector extends BaseIntegrationCon
         return last instanceof Date ? last.toISOString() : String(last);
     }
 
-    /** Coerce a raw watermark value into a Date for `ExternalRecord.ModifiedAt` (undefined when unparseable). */
+    /**
+     * Coerce a raw watermark value into a Date for `ExternalRecord.ModifiedAt` (undefined when unparseable).
+     * A ZONELESS ISO-8601 string is interpreted as UTC (not the API server's local time), so `ModifiedAt`
+     * is timezone-stable regardless of where this runs — matching how the EDS drivers interpret a zoneless
+     * incremental watermark. (In practice the driver returns `Date`s from `RunView`; this string path is the
+     * fallback.)
+     */
     protected CoerceDate(value: unknown): Date | undefined {
         if (value instanceof Date) {
             return value;
         }
-        if (typeof value === 'string' || typeof value === 'number') {
+        if (typeof value === 'string') {
+            const zoneless = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(value);
+            const d = new Date(zoneless ? `${value}Z` : value);
+            return Number.isNaN(d.getTime()) ? undefined : d;
+        }
+        if (typeof value === 'number') {
             const d = new Date(value);
             return Number.isNaN(d.getTime()) ? undefined : d;
         }
