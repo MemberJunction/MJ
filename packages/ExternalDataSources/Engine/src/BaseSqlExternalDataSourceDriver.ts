@@ -119,7 +119,17 @@ export abstract class BaseSqlExternalDataSourceDriver<TConnection = unknown> ext
     if (!params.incrementalSince) {
       return undefined;
     }
-    return `${this.quoteIdent(params.incrementalSince.Field)} >= ${this.quoteLiteral(params.incrementalSince.Value)}`;
+    return `${this.quoteIdent(params.incrementalSince.Field)} >= ${this.formatIncrementalLiteral(params.incrementalSince.Value)}`;
+  }
+
+  /**
+   * Format the incremental bound value as a dialect SQL literal. Default: a plain single-quoted string —
+   * SQL Server / PostgreSQL / Snowflake implicitly parse an ISO-8601 timestamp string, so no wrapping is
+   * needed. Dialects whose default parser rejects the ISO `T`/`Z` form override this (e.g. the Oracle
+   * driver wraps an ISO timestamp in `TO_TIMESTAMP` with a matching format mask).
+   */
+  protected formatIncrementalLiteral(value: string): string {
+    return this.quoteLiteral(value);
   }
 
   /**
