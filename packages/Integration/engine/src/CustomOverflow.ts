@@ -34,9 +34,12 @@
  * the JSON *values* parked here are ever transient.
  *
  * Gated everywhere by EntityInfo field presence, so it is a no-op on tables that predate
- * the column. CRUCIAL invariant: when a record has NO unmapped keys, NOTHING is written
- * here — empty across all rows is the signal that no RSU pass is needed, which is what
- * keeps a customs-free sync byte-identical to today (single-stage, zero overhead).
+ * the column. RECONCILE CONTRACT (U4): the overflow is reconciled on EVERY sync via
+ * {@link reconcileOverflowValue} — the record's CURRENT unmapped keys as JSON, or `null` when it
+ * has none. Writing `null` (rather than skipping the write) is what EVICTS a vanished key. A
+ * customs-free sync stays byte-identical NOT by skipping the write but by BaseEntity dirty
+ * tracking: `Set(column, null)` on an already-`null` column compares null-to-null and produces no
+ * UPDATE — only a row that USED to carry overflow and no longer does becomes dirty (the eviction).
  */
 export const CUSTOM_OVERFLOW_COLUMN = '__mj_integration_CustomOverflow';
 
