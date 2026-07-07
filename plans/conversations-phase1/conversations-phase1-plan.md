@@ -58,7 +58,7 @@
 >     shipped in `V202606301200__v5.44.x__Agent_Skills_And_Plan_Mode.sql` and
 >     `V202607020811__v5.45.x__AISkill_ActivationMode.sql`.
 >
-> - **P1.5 User Routines** → 🚧 **CARVED OUT & IN BUILD** — schema shipped via
+> - **P1.5 User Routines** → ✅ **SHIPPED & MERGED** (to `next` 2026-07-03) — delivered via
 >   PR [#3035](https://github.com/MemberJunction/MJ/pull/3035) (branch `user-routines`, 5.45):
 >   migration `V202607022102__v5.45.x__User_Routines.sql` creates `UserRoutine` /
 >   `UserRoutineRecipient` / `UserRoutineRun`, validated by a full virgin-DB replay of all
@@ -73,7 +73,24 @@
 >   duplicative); and `RequestedSkillIDs` (JSON array) pre-arms Agent targets with AI
 >   Skills each run via `ExecuteAgentParams.requestedSkillIDs` (5.45 skills-framework
 >   synergy). Dispatcher, `ng-user-routines`, the Routines app, and the conversations
->   entry point are in build on the same PR.
+>   entry point all shipped on that PR, documented in the
+>   **[User Routines Guide](../../guides/USER_ROUTINES_GUIDE.md)** (which supersedes §P1.5 as the
+>   authoritative reference). Two byproducts now exist as shared platform pieces this roadmap
+>   builds on: the extracted **`@memberjunction/ng-composer`** package (pluggable
+>   `ComposerTriggerProvider`s — `@` agents / `#` records / `/` skills) and the rebuilt Explorer
+>   notifications page. Agent runs land inside a dedicated per-routine, **Application-scoped**
+>   Conversation — the same hide-from-default-list machinery P1.6's incognito parallels.
+>
+> - **P1.6 Project-scoped Memory + Incognito** → 🔎 **NEXT UP** — pre-build code study of `next`
+>   completed **2026-07-06** (post-#2996/#3009/#3013–#3017/#3035). §P1.6 below is **revised to the
+>   as-built codebase**: the note-scoping lattice is now in-memory (the SQL filter the original
+>   task targeted is dead code), consolidation project-isolation is NOT inherited and must be added
+>   explicitly, Skip's context-bag `notes` is an unimplemented stub (deferred to P1.9),
+>   `AIAgentRun.ProjectID` joins the schema, and incognito hiding parallels P1.5's
+>   `ApplicationScope` mechanism. Proposed decisions **D17–D20** added to §0.3 (pending
+>   ratification at build start). Ships from its **own branch/worktree with its own minimal
+>   migration** — the mega migration in this PR is now fully historical (see the P1.0.2 status
+>   note).
 >
 > This planning doc remains the umbrella source of truth for the **remaining** sub-phases.
 
@@ -154,6 +171,10 @@ permissions), grounded in direct study of those subsystems.
 | D14 | **Realtime agents** run a separate session-driven path: **plan mode is skipped** (HITL via the delegated target's `AwaitingFeedback`, narrated live); **skills append at session build**; **memory uses the shared builder**; **not valid routine targets**; concurrency already handled by the **turn-moderator**. | Locked (from realtime study) |
 | D15 | **Proxy agents (Skip-style)** delegate their whole loop to the remote system: plan mode / skills / local memory injection are **OFF locally**; instead MJ passes a rich **context bag** (incl. project-scoped notes) for the remote to use. Betty is a `BaseLLM` used inside loop agents, so local features apply around it. | Locked (from proxy study) |
 | D16 | Standardized proxy: **design in Phase 1, implement in Phase 2.** `BaseRemoteProxyAgent` + "Remote Proxy" agent type + a standard context contract; the **Skip API is the template** for how the remote side is invoked generically. | Locked |
+| D17 | **Project memory scope = first-class `ProjectID` columns** on `AIAgentNote` / `AIAgentExample` / **`AIAgentRun`** (FK→`MJ: Projects`) — NOT a `SecondaryScopes` JSON dimension, despite the generalized Primary/Secondary scoping that shipped after this plan was written. Rationale: FK integrity on project delete/reparent, indexed memory-panel queries, and consolidation partitioning all want a hard column; the run-level stamp freezes provenance even if a conversation later moves folders. | Proposed (P1.6 study 2026-07-06) |
+| D18 | **Server derives `projectId`/`temporary` from the Conversation row** in the conversation-run path — incognito and project scope are enforced server-side, never trusted from the client. `ExecuteAgentParams.projectId?`/`temporary?` remain directly settable for non-conversation callers. | Proposed (P1.6 study 2026-07-06) |
+| D19 | **Skip context-bag notes defer to P1.9**: `skip-sdk.ts buildAgentNotes()` is an unimplemented stub today (returns `[]` — the plan's "Skip already passes notes" was contract-only), so wiring project-scoped notes into the bag is greenfield that belongs with the standardized-proxy build. P1.6's proxy test drops accordingly. | Proposed (P1.6 study 2026-07-06) |
+| D20 | **Incognito is a creation-time choice**, not a per-send toggle: `IsTemporary` is stamped once at the lazy first-send mint (new-chat empty-state toggle that locks after creation, plus a persistent in-chat banner) — deliberately unlike plan mode's sticky per-user preference. | Proposed (P1.6 study 2026-07-06) |
 
 ---
 
@@ -203,7 +224,7 @@ flowchart TB
 |---|---|---|---|
 | **Plan mode** | Capability ON by default; injected only when per-request toggle on | **Skipped** — would break live voice; HITL is the delegated target's `AwaitingFeedback`, narrated | **Delegated** to remote; local OFF |
 | **Skills** | Activated in-loop (`Skill` run-step) | **Appended at session build** (static for the session) | **Delegated** to remote (optionally passed in context bag, future); local OFF |
-| **Memory inject** | Per-iteration via `AgentMemoryContextBuilder` | **Once at session start** (same builder) | MJ **gathers notes (project-scoped) and passes them** in the context bag; local injector not used |
+| **Memory inject** | Per-iteration via `AgentMemoryContextBuilder` | **Once at session start** (same builder) | MJ **gathers notes (project-scoped) and passes them** in the context bag; local injector not used *(context-bag note passing deferred to P1.9 — D19: `buildAgentNotes` is a stub today)* |
 | **Routine target** | ✅ Yes | ❌ No (interactive/live) | ✅ Yes (single-step) |
 | **Concurrency** | Phase 2 coordinator | **Already solved** via turn-moderator | N/A (single step) |
 
@@ -218,6 +239,14 @@ Implementation guards: gate plan-mode prompt injection behind `!isSessionDrivenA
 **Deliverable:** mockups in `plans/conversations-phase1/mockups/` (browse via `plans/conversations-phase1/index.html`) for: context gauge; plan-mode pill toggle + plan-approval card; skills authoring + activation indicator; routines app (list/create/edit/history) + friendly cron builder + notification config + "turn into a routine" chat entry; project-scoped memory panel + temporary-chat toggle; artifact inline edit + magic-link share + remix; quote/shortcuts/TOC/fork; group-chat roster/invite/attribution/typing/concurrent-agent indicators; (P1.9) remote-proxy agent config. **Gate:** feature UI blocked until its mockup is approved. **Risk:** Low.
 
 ### P1.0.2 — DB Design → ONE Consolidated Migration
+
+> **⚠️ Status (2026-07-06): the consolidated mega migration in this PR is now fully historical —
+> design reference only; do NOT apply it.** P1.3/P1.4 schema shipped in #2996's migrations
+> (`V202606301200`, `V202607020811`), P1.5's in #3035's (`V202607022102`), and **P1.6 ships its
+> own minimal migration** (see revised §P1.6 — which also adds `AIAgentRun.ProjectID` beyond the
+> table below). The remaining unshipped pieces (`ConversationParticipant`, `Conversation.IsGroup`)
+> ship with P1.8 in its own migration. The one-mega-migration gate served its purpose while the
+> phase was monolithic; the carve-out-per-sub-phase reality supersedes it.
 
 ```mermaid
 erDiagram
@@ -376,15 +405,44 @@ flowchart TB
 
 ## P1.6 — Project-scoped Memory + Incognito
 
-Keys off `Conversation.ProjectID` (folders==projects). Shared injector → **Realtime gets it free**; **Proxy agents** get project-scoped notes **in the context bag** (Skip already passes `notes`).
+> **🔎 Revised 2026-07-06 after a pre-build code study of `next`** (post-Skills/Plan-Mode
+> #2996/#3009/#3013–#3017 and Routines #3035). Intent unchanged (D1/D6/D7); the task details below
+> are corrected to the as-built codebase, and proposed decisions **D17–D20** were added to §0.3.
+> Builds in its **own branch/worktree with its own minimal migration** (see the P1.0.2 status
+> note). Key drift the study found vs. the original tasks:
+>
+> - `Conversation.ProjectID` **already exists**, and P1.5's `ApplicationScope` list-hiding provides
+>   the exact pattern `IsTemporary` parallels (one WHERE predicate in the conversations engine's
+>   `LoadConversations` + two cache guards + a `CreateConversationOptions` flag) — the hiding half
+>   of incognito is now cheap.
+> - The note-scoping lattice moved **in-memory**: the SQL `buildNotesScopingFilter` this section
+>   originally targeted is **uncalled dead code** — retrieval filters the AIEngine cache via
+>   `filterNotesByScoping` (and `AGENT_MEMORY_SCOPING.md` is stale on the same point: wrong line
+>   refs + "builds SQL filters" framing).
+> - **"Never merges across projects" is not inherited:** Memory Manager consolidation cohorts only
+>   by Agent/User/Company and can **already** merge notes that differ in
+>   `PrimaryScopeRecordID`/`SecondaryScopes` (contradicting the scoping doc's "within a scope
+>   cohort by construction" claim) — project isolation, and the full-scope-tuple fix, must be added
+>   explicitly.
+> - "Skip already passes `notes`" was **contract-only** — `skip-sdk.ts buildAgentNotes()` is a TODO
+>   stub returning `[]`; wiring it is greenfield and moves to P1.9 (D19).
+> - Realtime shares `AgentMemoryContextBuilder` but its `assembleMemoryContext` passes only
+>   user/company today — projectId needs one explicit threading edit (nearly free, not free).
+> - Since this plan was written, notes/examples/runs gained generalized
+>   `PrimaryScope*`/`SecondaryScopes` scoping; D17 records why project is a first-class column
+>   anyway.
+
+Keys off `Conversation.ProjectID` (folders==projects — the column already exists). Shared
+injector; project scope reaches Realtime with one threading edit; **Proxy/Skip note-passing is
+deferred to P1.9** (D19).
 
 ```mermaid
 flowchart LR
-  CONV["Conversation (ProjectID, IsTemporary)"] --> PARAMS["ExecuteAgentParams.projectId + temporary"]
-  PARAMS --> INJ[AgentContextInjector / context bag]
+  CONV["Conversation (ProjectID, IsTemporary)"] --> PARAMS["ExecuteAgentParams.projectId + temporary (server-derived, D18)"]
+  PARAMS --> INJ["AgentContextInjector (in-memory lattice)"]
   INJ --> LAT{scope match}
   LAT --> A["Agent/User/Company (8-level)"]
-  LAT --> P["+ Project: ProjectID = X OR NULL (broad)"]
+  LAT --> P["+ Project: ProjectID = X OR NULL (broad, D6)"]
   PARAMS --> T{temporary?}
   T -->|yes| SKIP[skip read + skip write]
   T -->|no| OK["inject + writes stamped ProjectID"]
@@ -392,13 +450,13 @@ flowchart LR
 
 | Task | Detail |
 |---|---|
-| **P1.6.1** (schema P1.0.2) | `ProjectID` on `AIAgentNote`/`AIAgentExample`; `Conversation.IsTemporary`. |
-| **P1.6.2** Scope lattice | extend `agent-context-injector.ts` (`projectId?` param; broad Project dimension in `filterNotesByScoping`/`buildNotesScopingFilter`/vector pre-filter). **Risk:** Med (keep SQL+in-memory in sync). |
-| **P1.6.3** Write scope | `MemoryWriteManager`: `projectId` in context/scope; clamp + stamp on persist. |
-| **P1.6.4** Thread projectId | `initializeAgentRun()` resolves `Conversation.ProjectID` → params → injector/writer/**proxy context bag**; Memory Manager carries `ProjectID`, never merges across projects. |
-| **P1.6.5** Incognito | `ExecuteAgentParams.temporary?`; honor `Conversation.IsTemporary` (skip read+write); "Temporary chat" toggle; hidden from list. |
-| **P1.6.6** (opt) Memory panel | user-visible memory panel scoped by project. |
-| **Tests** | project note injects only in project + global; temporary memory-inert; cohort consolidation; Skip context bag carries project notes. |
+| **P1.6.1** Schema (own migration) | `ProjectID UNIQUEIDENTIFIER NULL` (FK→`MJ: Projects`) on `AIAgentNote`, `AIAgentExample`, **and `AIAgentRun`** (run-level provenance stamp — D17); `Conversation.IsTemporary BIT NOT NULL DEFAULT 0`. (`IsGroup`/`ConversationParticipant` stay with P1.8.) One consolidated ALTER per table + `sp_addextendedproperty`; CodeGen before any dependent TS. |
+| **P1.6.2** Scope lattice (in-memory) | `projectId?` on `GetNotesParams`/`GetExamplesParams`; 4th **broad** cascade (`ProjectID = X OR NULL`, D6) in `filterNotesByScoping` + `filterExamplesByScoping`; same dimension in `buildScopePreFilter` **and** `AIEngine.composeNoteFilters`/`FindSimilarAgentNotes` so the semantic path agrees with the cache path. Delete the dead SQL `buildNotesScopingFilter` + helpers and fix stale `AGENT_MEMORY_SCOPING.md` in the same task. **Risk:** Med (cache path + vector path must agree). |
+| **P1.6.3** Write scope | `MemoryWriteManager`: `projectId` on `MemoryWriteContext`/`MemoryWriteScope`; clamp in `clampScope`, stamp in `persistNewNote`, and partition the near-dup vector check (`queryVectorService`) by project so dedup never collides across projects. **Temporary write-gate:** skip `ExecuteWrite` when the run's conversation is temporary. |
+| **P1.6.4** Thread projectId | Server derives `Conversation.ProjectID`/`IsTemporary` in the conversation-run path (D18) → `ExecuteAgentParams.projectId?`/`temporary?` → `initializeAgentRun()` stamps `AIAgentRun.ProjectID` (alongside the existing UserID/CompanyID/Primary/Secondary stamping). Memory Manager: extraction copies `ProjectID` from the source run (extend `SOURCE_RUN_SCOPE_FIELDS`); temporary-conversation runs are **excluded from extraction** (memory-inert end to end); **consolidation partitions clusters by project — and by the full scope tuple** (`findConsolidationClusters` + `composeNoteFilters` + `createConsolidatedNote`), which also fixes the pre-existing cross-scope merge hazard. Realtime: thread `projectId` through `assembleMemoryContext`. |
+| **P1.6.5** Incognito | Parallel #3035's `ApplicationScope` hiding: `IsTemporary=0` predicate in `LoadConversations`' filter + the two cache guards (`CreateConversation` prepend-skip, `EnsureConversationLoaded`) + `CreateConversationOptions.isTemporary` stamped at the lazy first-send mint. UI per D20: new-chat empty-state toggle (locks once minted) + persistent in-chat banner; composer button mirrors the plan-mode contract in `ng-composer` (`message-input-box` → `ai-composer` pass-through → `message-input` wiring). ⚠️ Those composer files are also touched by the in-flight omnibar branch — land this slice after it merges or expect a rebase. |
+| **P1.6.6** (opt) Memory panel | User-visible memory panel scoped by project — mockup pick pending (P1.0.1 gate: "What I remember" side panel / inline memory moments / memory-manager dashboard). Can follow P1.6 core as its own slice. |
+| **Tests** | 4-dimension lattice: project note injects only in-project + global, on **both** the cache and vector paths; write clamp/stamp + near-dup project partition; consolidation never crosses project/scope tuple; temporary skips read+write **including Memory Manager extraction**; temporary hidden from list + cache; deterministic integration-suite additions per repo rule. ~~Skip context bag carries project notes~~ → moved to P1.9 (D19). |
 
 ---
 
@@ -476,7 +534,7 @@ flowchart LR
 | Item | Where |
 |---|---|
 | `AIAgentRunStep.StepType` extension (`Plan` + `Skill`) | P1.0.2 (single constraint edit) |
-| `ExecuteAgentParams` new fields (`planMode`, `projectId`, `temporary`) | P1.0.2 design → threaded in P1.3/P1.6 |
+| `ExecuteAgentParams` new fields — `planMode` ✅ + `requestedSkillIDs` ✅ shipped (#2996/#3009); `projectId`/`temporary` remain | P1.3 done; P1.6 next (server-derived per D18) |
 | Agent-type guards (`isSessionDrivenAgentType`, `isProxyAgent`) for plan/skills/memory | §1b — applied in P1.3/P1.4/P1.6 |
 | Concurrency coordinator (design only) | P1.0.3 → Phase 2 |
 | Notification path + cron-picker | P1.0.4 |
@@ -498,8 +556,13 @@ flowchart LR
 All major decisions are now **locked** (see Decision Log §0.3): plan-mode default (D5), public-artifact-share via Magic Links + dedicated privilege (D11), skill permissions (D10), proxy design-Phase-1/build-Phase-2 (D16), concurrency deferred to Phase 2 (D12), routines naming (D13), realtime/proxy behavior (D14/D15).
 
 Residual implementation-time choices (not blocking the plan; settle during P1.0):
-- Exact names/placement of the **"Can Share Skills"** and **"Can Publish Artifacts Publicly"** privileges in the unified-permissions seed.
+- Exact names/placement of the **"Can Share Skills"** and **"Can Publish Artifacts Publicly"** privileges in the unified-permissions seed. *(The "Can Share Skills" half was settled at P1.4 ship time — see D10's supersession note.)*
 - Whether the public-artifact magic link is per-share (one link) or regenerable, and its TTL.
+
+**P1.6 pre-build study (2026-07-06)** added proposed decisions **D17–D20** — first-class
+`ProjectID` columns incl. `AIAgentRun`, server-derived `projectId`/`temporary`, Skip
+context-bag notes deferred to P1.9, and creation-time incognito. These are **pending
+ratification at P1.6 build start**, and the memory-panel mockup pick (P1.0.1) remains open.
 
 ---
 
