@@ -60,6 +60,7 @@ import { ResolverBase } from '../generic/ResolverBase.js';
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
 import { GetReadWriteProvider } from '../util.js';
 import { SessionManager } from '../agentSessions/index.js';
+import { resolveWidgetGuestRunContext } from '../realtimeWidget/widgetGuestElevation.js';
 
 /**
  * Progress steps worth narrating to the realtime model — mirrors the normal agent-run path's filter
@@ -161,6 +162,13 @@ interface RealtimeSessionConfig {
      * rather than starting fresh. Re-stored if the resumed run pauses again.
      */
     pendingFeedbackRunID?: string;
+    /**
+     * Absolute server-authoritative deadline (ISO 8601) past which this session is hard-closed by the
+     * {@link SessionJanitor}, independent of idle activity. Stamped at session start for abuse-sensitive
+     * deployments (a public web-widget voice guest's `VoiceMaxSessionMinutes`); absent for uncapped
+     * sessions. Preserved across config rewrites so the cap survives run-id / feedback updates.
+     */
+    maxSessionDeadlineIso?: string;
     /**
      * The application the session runs in (sourced the app cascade layer + RelevantAgents). Persisted
      * for observability / continuity; absent when the session carries no app context.
@@ -412,7 +420,15 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         // silent ignore). Plain starts and within-pairing target selection are never gated here.
         await this.assertRuntimeOverridesAuthorized(coAgentID, configOverridesJson, preferredModelId, contextUser, provider);
 
+        // PUBLIC WEB-WIDGET VOICE CAP (public-web-widget.md W4): when the caller is a widget guest,
+        // resolve the deployment's hard duration ceiling and stamp an absolute deadline on the session.
+        // The SessionJanitor force-closes (finalizing runs) past the deadline — a server-authoritative
+        // bound that does not depend on the client honoring its own abuse guard or the ephemeral token TTL.
+        const maxSessionSeconds = await this.resolveWidgetVoiceCapSeconds(userPayload, providers);
         const config: RealtimeSessionConfig = { targetAgentID: effectiveTargetId };
+        if (maxSessionSeconds) {
+            config.maxSessionDeadlineIso = new Date(Date.now() + maxSessionSeconds * 1000).toISOString();
+        }
         // Per-session media-kit override: stored on the session config so the server-side MediaChannelServer
         // resolves it (over the agent default) at start. Validate the id here — a malformed value is
         // dropped (logged), never interpolated; the session still starts and falls back to the agent kit.
@@ -449,7 +465,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         const priorTranscript = await this.loadPriorTranscript(lastSessionId, contextUser, provider);
         const result = await this.prepareClientSessionOrClose(
             session, coAgentID, effectiveTargetId, contextUser, provider, preferredModelId, clientTools, priorTranscript,
-            configOverridesJson, applicationId, this.parseAppContext(appContextJson),
+            configOverridesJson, maxSessionSeconds, applicationId, this.parseAppContext(appContextJson),
         );
         // Best-effort restore of the PRIOR session's persisted channel states (e.g. the whiteboard
         // board). Strictly tolerant — any problem yields a null field, never a failed start.
@@ -562,6 +578,8 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             promptRunID: config.promptRunID,
             coAgentRunStepID: config.coAgentRunStepID,
             pendingFeedbackRunID: pausedRunID,
+            // Preserve the server-authoritative voice deadline across config rewrites.
+            maxSessionDeadlineIso: config.maxSessionDeadlineIso,
             applicationID: config.applicationID,
             allowedAgents: config.allowedAgents,
         };
@@ -1535,6 +1553,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         clientTools?: RealtimeToolDefinition[],
         priorTranscript?: string,
         configOverridesJson?: string,
+        maxSessionSeconds?: number,
         applicationId?: string,
         appContext?: AppContextSnapshot,
     ): Promise<StartRealtimeClientSessionResult> {
@@ -1544,6 +1563,9 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 TargetAgentID: targetAgentId,
                 AgentSessionID: session.ID,
                 ConversationID: session.ConversationID ?? undefined,
+                // Server-authoritative voice duration cap (widget guests) — bounds the driver session
+                // where supported; the janitor enforces the session deadline regardless.
+                MaxSessionSeconds: maxSessionSeconds,
                 // MVP: conversation history is not yet hydrated into ChatMessage[]; the co-agent
                 // companion prompt runs without prior turns. A later phase loads the session's
                 // Conversation into ChatMessage[] for richer context.
@@ -1608,8 +1630,16 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         applicationID?: string,
         allowedAgents?: RealtimeAllowedAgent[],
     ): Promise<void> {
+        // Preserve any server-authoritative voice deadline stamped at session start (this rebuilds the
+        // full config, so read the existing value forward rather than dropping it).
+        const existing = this.tryReadSessionConfig(session);
         const config: RealtimeSessionConfig = {
-            targetAgentID, coAgentRunID, promptRunID, coAgentRunStepID, applicationID,
+            targetAgentID,
+            coAgentRunID,
+            promptRunID,
+            coAgentRunStepID,
+            maxSessionDeadlineIso: existing?.maxSessionDeadlineIso,
+            applicationID,
             allowedAgents: allowedAgents && allowedAgents.length > 0 ? allowedAgents : undefined,
         };
         session.Config_ = JSON.stringify(config);
@@ -2335,6 +2365,8 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                         coAgentRunStepID: typeof parsed.coAgentRunStepID === 'string' ? parsed.coAgentRunStepID : undefined,
                         pendingFeedbackRunID:
                             typeof parsed.pendingFeedbackRunID === 'string' ? parsed.pendingFeedbackRunID : undefined,
+                        maxSessionDeadlineIso:
+                            typeof parsed.maxSessionDeadlineIso === 'string' ? parsed.maxSessionDeadlineIso : undefined,
                         applicationID: typeof parsed.applicationID === 'string' ? parsed.applicationID : undefined,
                         allowedAgents: Array.isArray(parsed.allowedAgents) ? parsed.allowedAgents : undefined,
                     };
@@ -2344,6 +2376,31 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             }
         }
         throw new Error(`Realtime session ${session.ID} has no target agent configured`);
+    }
+
+    /** Like {@link readSessionConfig} but returns `undefined` instead of throwing (for best-effort reads). */
+    private tryReadSessionConfig(session: MJAIAgentSessionEntity): RealtimeSessionConfig | undefined {
+        try {
+            return this.readSessionConfig(session);
+        } catch {
+            return undefined;
+        }
+    }
+
+    /**
+     * Resolves the server-authoritative voice duration cap (seconds) for a session start, or `undefined`
+     * when no cap applies (the common, uncapped case). A cap applies only when the caller is a public
+     * web-widget guest with a configured `VoiceMaxSessionMinutes` on its widget instance (the same value
+     * surfaced to the client guard at mint). Never throws — a resolution failure yields no cap rather
+     * than blocking the start.
+     */
+    private async resolveWidgetVoiceCapSeconds(
+        userPayload: UserPayload,
+        providers: AppContext['providers'],
+    ): Promise<number | undefined> {
+        const elevation = await resolveWidgetGuestRunContext(userPayload, GetReadWriteProvider(providers));
+        const minutes = elevation?.widget.VoiceMaxSessionMinutes;
+        return minutes && minutes > 0 ? minutes * 60 : undefined;
     }
 
     /**

@@ -5,15 +5,48 @@ on:
   pull_request:
     branches: [next]
     paths:
+      - 'package.json'
       - 'package-lock.json'
       - 'packages/**'
       - 'vitest.*'
+      # A change to ONLY a root tsconfig must trigger the workflow — package tsconfigs extend the
+      # root ones, so the grep fallback below matches `tsconfig[^/]*\.json`, but without this paths
+      # entry a root-tsconfig-only PR never triggers the workflow at all (that fallback branch was
+      # dead for exactly the case it guards). Symmetric with the root package.json entry.
+      - 'tsconfig*.json'
+      - 'turbo.json'
+      - '.github/workflows/test.yml'
+  # Full-suite backstop: every merge into next runs ALL package tests, so a runtime-only
+  # break (MJ's dynamic @RegisterClass / ClassFactory wiring can couple packages without a
+  # package.json edge that turbo's graph sees) can never slip through PR affected-filtering.
+  push:
+    branches: [next]
+  # Nightly full run as a second safety net (catches flaky/resource failures + drift).
+  schedule:
+    - cron: '0 7 * * *'
+
+# Cancel superseded runs for the same ref (e.g. when a PR is pushed again), so CI doesn't
+# keep churning the whole suite for commits that are already out of date.
+# EXCEPTION: push (merge to next) events get a per-commit group and are NEVER cancelled —
+# every merge's full-suite backstop must run to completion. `github.ref` is the same string
+# (refs/heads/next) for every merge, so a shared, cancellable group would let a later merge
+# kill an earlier merge's backstop mid-run, defeating the whole point of the backstop.
+concurrency:
+  group: unit-tests-${{ github.workflow }}-${{ github.ref }}${{ github.event_name == 'push' && format('-{0}', github.sha) || '' }}
+  cancel-in-progress: ${{ github.event_name != 'push' }}
 
 jobs:
   test:
     name: Run unit tests
-    timeout-minutes: 30
+    # 60 (not 30): the full-suite backstop (push/nightly) builds + tests ALL packages and was
+    # still running at ~27 min when the old 30-min cap killed it. PR affected-runs finish in
+    # minutes and are unaffected by the higher ceiling.
+    timeout-minutes: 60
     runs-on: ubuntu-latest
+    # issues:write so a red BACKSTOP run (push/schedule) can auto-file an alert issue (see final step).
+    permissions:
+      contents: read
+      issues: write
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -57,11 +90,43 @@ jobs:
           ENVEOF
           sed -i 's/^          //' packages/MJExplorer/src/environments/environment.ts
 
-      - name: Build packages
-        run: npm run build
+      # Decide what to run:
+      #  - pull_request: only packages changed since the base branch PLUS everything that
+      #    depends on them (turbo's `...[ref]` package-dependency selection).
+      #  - a change to a ROOT/global file (root package.json, lockfile, turbo.json, root
+      #    vitest/tsconfig, this workflow) can affect every package but lives in no package
+      #    dir, so turbo's filter would select nothing — fall back to the FULL suite there.
+      #    (Root package.json matters: editing `workspaces` globs or root `scripts` reshapes
+      #    the whole build without necessarily touching package-lock.json.)
+      #  - push to next / schedule / manual dispatch: always FULL (the backstop).
+      - name: Determine test scope
+        run: |
+          FILTER=""
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch --no-tags origin "${{ github.base_ref }}"
+            CHANGED="$(git diff --name-only "origin/${{ github.base_ref }}...HEAD")"
+            if echo "$CHANGED" | grep -qE '^(package\.json|package-lock\.json|turbo\.json|vitest\.[^/]+|tsconfig[^/]*\.json|\.github/workflows/test\.yml)$'; then
+              echo "Root/global change detected — running the FULL suite."
+            else
+              FILTER="--filter=...[origin/${{ github.base_ref }}]"
+              echo "PR scope — affected packages + dependents: $FILTER"
+            fi
+          else
+            echo "Event '${{ github.event_name }}' — running the FULL suite (backstop)."
+          fi
+          echo "TURBO_FILTER=$FILTER" >> "$GITHUB_ENV"
 
-      - name: Run unit tests
-        run: npm test
+      - name: Build + run unit tests
+        run: |
+          if [ -n "$TURBO_FILTER" ]; then
+            echo "::group::Affected build"
+            npx turbo run build --log-order=stream "$TURBO_FILTER"
+            echo "::endgroup::"
+            npx turbo run test "$TURBO_FILTER"
+          else
+            npm run build
+            npm test
+          fi
 
       - name: Upload coverage
         if: always()
@@ -70,3 +135,19 @@ jobs:
           name: coverage-report
           path: coverage/
           retention-days: 30
+
+      # Backstop-failure alert (rkihm-BC #2990): a red PUSH (merge to next) or nightly SCHEDULE run
+      # means a runtime-only break (e.g. @RegisterClass/ClassFactory coupling with no package.json edge)
+      # slipped past PR affected-filtering and `next` is now red. These runs gate nothing, so surface the
+      # failure as a GitHub issue instead of leaving it to whoever happens to open the Actions tab. Only
+      # fires on the backstop events (never on PRs, where the red check is already visible + gating).
+      - name: Alert on backstop failure
+        if: failure() && (github.event_name == 'push' || github.event_name == 'schedule')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          gh issue create \
+            --title "🔴 Unit-test backstop failed on next (${GITHUB_SHA:0:7})" \
+            --body "The full-suite **backstop** (\`${{ github.event_name }}\`) failed on \`next\` — a break slipped past PR affected-filtering, so \`next\` is red. Run: ${RUN_URL}. Please triage per CONTRIBUTING (owner TBD)." \
+            || echo "::error::Backstop failed AND alert-issue creation failed — see ${RUN_URL}"

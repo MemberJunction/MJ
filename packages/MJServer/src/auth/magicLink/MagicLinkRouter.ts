@@ -178,6 +178,23 @@ export function createMagicLinkHandler(publicUrl: string, config: MagicLinkConfi
 }
 
 /**
+ * A minimal PUBLIC router that serves ONLY the JWKS endpoint (the magic-link
+ * signing key's public half). Mount this when the full magic-link flow is
+ * disabled but another feature reuses the same RS256 key + `magic-link` auth
+ * provider — today, the public web widget. Without the published public key the
+ * unified auth middleware cannot validate the reused-key guest tokens and every
+ * request 401s. Assumes the key is already initialized (the widget handler does
+ * this via `MagicLinkKeyManager.Instance.Initialize` at startup).
+ */
+export function createMagicLinkJwksRouter(): Router {
+  const router = Router();
+  router.get('/jwks.json', (_req: Request, res: Response) => {
+    res.status(200).json(MagicLinkKeyManager.Instance.GetJWKS());
+  });
+  return router;
+}
+
+/**
  * Registers the `magic-link` auth provider so MJServer's issuer-driven JWT
  * validation accepts MJ-issued session tokens. Issuer = public URL, JWKS URL =
  * the public JWKS endpoint, audience = configured magic-link audience.
