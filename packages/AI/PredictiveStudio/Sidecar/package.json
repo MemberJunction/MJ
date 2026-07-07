@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/predictive-studio-sidecar",
-  "version": "5.44.0",
+  "version": "5.45.0",
   "description": "Self-managing TypeScript wrapper for the Predictive Studio Python ML sidecar. Spawns a bundled FastAPI microservice as a child process (managed mode) or connects to a remote/containerized instance, exposing a typed /train + /predict + /health client.",
   "type": "module",
   "main": "dist/index.js",
@@ -32,7 +32,7 @@
   },
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/predictive-studio-core": "5.44.0"
+    "@memberjunction/predictive-studio-core": "5.45.0"
   },
   "devDependencies": {
     "typescript": "^5.9.3",

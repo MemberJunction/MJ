@@ -1,5 +1,39 @@
 # Change Log - @memberjunction/cli
 
+## 5.45.0
+
+### Patch Changes
+
+- 21e33fe: Move Skip to a client-side Open App and remove server-embedded agent; scope-gate query/view/search resolvers with API-key scope authorization; add credential-store fallback for component registry keys; support Open App in-process lifecycle hooks with interactive prompts.
+- 037f3af: Fix: honor the configured request timeout on the MetadataSync/OpenApp provider pool. `mj app remove` (and other `mj app …` / `mj sync` commands sharing this provider) built the SQL Server connection without `requestTimeout`, so it silently fell back to mssql's 15s default — dropping a large app schema could time out regardless of `dbRequestTimeout` config. The configured value now flows through `toMJConfig` → `MJConfig.dbRequestTimeout` → the mssql pool's `requestTimeout` (and the PostgreSQL client's `statement_timeout` for parity). When unset, each driver's own default still applies.
+- Updated dependencies [45d121b]
+- Updated dependencies [21e33fe]
+- Updated dependencies [b7cf50f]
+- Updated dependencies [f4f11fa]
+- Updated dependencies [e370816]
+- Updated dependencies [e370816]
+- Updated dependencies [037f3af]
+- Updated dependencies [fbee64c]
+- Updated dependencies [b2927f1]
+- Updated dependencies [b18fcd0]
+- Updated dependencies [0b1e009]
+  - @memberjunction/core@5.45.0
+  - @memberjunction/server-bootstrap-lite@5.45.0
+  - @memberjunction/metadata-sync@5.45.0
+  - @memberjunction/open-app-engine@5.45.0
+  - @memberjunction/codegen-lib@5.45.0
+  - @memberjunction/generic-database-provider@5.45.0
+  - @memberjunction/ai-cli@5.45.0
+  - @memberjunction/db-auto-doc@5.45.0
+  - @memberjunction/query-gen@5.45.0
+  - @memberjunction/sqlserver-dataprovider@5.45.0
+  - @memberjunction/testing-cli@5.45.0
+  - @memberjunction/cli-core@5.45.0
+  - @memberjunction/config@5.45.0
+  - @memberjunction/installer@5.45.0
+  - @memberjunction/sql-converter@5.45.0
+  - @memberjunction/sqlglot-ts@5.45.0
+
 ## 5.44.0
 
 ### Patch Changes
