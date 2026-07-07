@@ -471,7 +471,7 @@ describe('InstallApp — npm-install failure disables the app AND its dynamicPac
         // The app's dynamicPackages entries are flipped off (array-agnostic by AppName → both
         // server and client) so `mj codegen manifest --open-app-client-bootstrap` emits commented
         // imports — a static import of a not-yet-installed package would break the MJExplorer build.
-        expect(vi.mocked(ToggleServerDynamicPackages)).toHaveBeenCalledWith(expect.anything(), 'app-x', false);
+        expect(vi.mocked(ToggleServerDynamicPackages)).toHaveBeenCalledWith(expect.anything(), 'app-x', false, undefined);
     });
 });
 
