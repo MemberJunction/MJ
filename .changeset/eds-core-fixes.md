@@ -1,5 +1,5 @@
 ---
-"@memberjunction/external-data-sources": minor
+"@memberjunction/external-data-sources": patch
 "@memberjunction/external-data-source-sqlserver": patch
 "@memberjunction/external-data-source-mongodb": patch
 "@memberjunction/external-data-source-oracle": patch
