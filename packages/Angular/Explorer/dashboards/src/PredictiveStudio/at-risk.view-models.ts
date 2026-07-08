@@ -12,6 +12,11 @@
 /** A scored record in the at-risk list. */
 export interface AtRiskRow {
   recordId: string;
+  /**
+   * Human-readable label for the record (e.g. the member's name/email), resolved from the model's
+   * target entity. Null until resolved; the UI falls back to {@link recordId} so the row is never blank.
+   */
+  label: string | null;
   /** 0–1 prediction score (probability / risk). */
   score: number;
   /** Risk as a 0–100 integer, for display. */
@@ -20,6 +25,58 @@ export interface AtRiskRow {
   class: string | null;
   /** Risk band, for color. */
   band: 'high' | 'medium' | 'low';
+  /**
+   * Top signed per-record drivers behind THIS row's prediction (P1-5), humanized + one-hot-collapsed for
+   * display. `up: true` pushed the risk up, `false` down. Null when the model doesn't produce per-record
+   * attribution (tree/ensemble/multiclass) — the UI then shows the model's global drivers instead.
+   */
+  drivers: RowDriver[] | null;
+}
+
+/** A humanized, signed per-record driver for the at-risk row's inline "why". */
+export interface RowDriver {
+  /** Display label (humanized, one-hot base collapsed). */
+  label: string;
+  /** Signed contribution magnitude for this row. */
+  value: number;
+  /** Whether this pushed the risk UP (value > 0) or down. */
+  up: boolean;
+}
+
+/** Parse + humanize the raw per-record `drivers` (post-preprocessing `feature`/`value`) into {@link RowDriver}s. */
+function parseRowDrivers(raw: unknown): RowDriver[] | null {
+  if (!Array.isArray(raw) || raw.length === 0) return null;
+  const out: RowDriver[] = [];
+  for (const d of raw as Array<{ feature?: unknown; value?: unknown }>) {
+    const feature = typeof d?.feature === 'string' ? d.feature : '';
+    const value = typeof d?.value === 'number' ? d.value : NaN;
+    if (!feature || !Number.isFinite(value)) continue;
+    // Collapse one-hot ("Col=Value" → "Col") then humanize, so the chip reads like a business term.
+    out.push({ label: humanizeFeatureName(feature.split('=')[0]), value, up: value > 0 });
+  }
+  return out.length > 0 ? out : null;
+}
+
+/**
+ * Build a human-readable label for a record from its (simple) row of the target entity — preferring a
+ * single `Name`, else `FirstName`+`LastName`, else `Email`, else any first non-empty string field.
+ * Returns null when nothing usable is found (caller falls back to the record id).
+ */
+export function labelFromRecord(row: Record<string, unknown> | undefined | null): string | null {
+  if (!row) return null;
+  const str = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
+  const name = str(row['Name']);
+  if (name) return name;
+  const full = `${str(row['FirstName'])} ${str(row['LastName'])}`.trim();
+  const email = str(row['Email']);
+  if (full && email) return `${full} (${email})`;
+  if (full) return full;
+  if (email) return email;
+  for (const v of Object.values(row)) {
+    const s = str(v);
+    if (s && s.length <= 120) return s;
+  }
+  return null;
 }
 
 /** The raw per-record detail the list is built from (a slice of `MJ: Process Run Details`). */
@@ -37,7 +94,12 @@ export function parseAtRiskRows(details: RunDetailLike[]): AtRiskRow[] {
   const rows: AtRiskRow[] = [];
   for (const d of details) {
     if (!d.ResultPayload) continue;
-    let parsed: { score?: number; class?: string; output?: { score?: number; class?: string } };
+    let parsed: {
+      score?: number;
+      class?: string;
+      drivers?: unknown;
+      output?: { score?: number; class?: string; drivers?: unknown };
+    };
     try {
       parsed = JSON.parse(d.ResultPayload);
     } catch {
@@ -47,7 +109,15 @@ export function parseAtRiskRows(details: RunDetailLike[]): AtRiskRow[] {
     const p = parsed.output ?? parsed;
     if (typeof p.score !== 'number' || !Number.isFinite(p.score)) continue;
     const score = p.score;
-    rows.push({ recordId: d.recordId, score, riskPct: Math.round(score * 100), class: p.class ?? null, band: bandFor(score) });
+    rows.push({
+      recordId: d.recordId,
+      label: null,
+      score,
+      riskPct: Math.round(score * 100),
+      class: p.class ?? null,
+      band: bandFor(score),
+      drivers: parseRowDrivers(p.drivers),
+    });
   }
   return rows.sort((a, b) => b.score - a.score);
 }
@@ -85,5 +155,21 @@ export function topGlobalDrivers(featureImportanceJson: string | null | undefine
     if (!base) continue;
     byFeature.set(base, Math.max(byFeature.get(base) ?? 0, weight));
   }
-  return [...byFeature.entries()].sort((a, b) => b[1] - a[1]).slice(0, n).map(([name]) => name);
+  return [...byFeature.entries()].sort((a, b) => b[1] - a[1]).slice(0, n).map(([name]) => humanizeFeatureName(name));
+}
+
+/**
+ * Turn a raw feature/column name into a readable label — `RetentionOverdueInvoices` → `Retention Overdue
+ * Invoices`, `overdue_invoices` → `Overdue Invoices`, and a one-hot `MembershipType=Student` →
+ * `Membership Type = Student`. Splits camelCase + snake/kebab, spaces one-hot `=`, collapses whitespace,
+ * and capitalizes the first letter. Already-spaced labels pass through unchanged.
+ */
+export function humanizeFeatureName(name: string): string {
+  return name
+    .replace(/[_-]+/g, ' ')
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/\s*=\s*/g, ' = ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/^\w/, (c) => c.toUpperCase());
 }

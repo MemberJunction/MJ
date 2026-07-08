@@ -94,6 +94,29 @@ export class RunViewRecordLoader implements IRecordLoader {
     }
     return (result.Results[0].Version ?? 0) + 1;
   }
+
+  /** @inheritdoc */
+  public async resolveAlgorithmDriverKey(
+    algorithmId: string,
+    contextUser?: UserInfo,
+    provider?: IMetadataProvider,
+  ): Promise<string | null> {
+    const rv = provider ? RunView.FromMetadataProvider(provider) : new RunView();
+    const result = await rv.RunView<{ DriverClass: string }>(
+      {
+        EntityName: 'MJ: ML Algorithms',
+        ExtraFilter: `ID='${algorithmId}'`,
+        Fields: ['DriverClass'],
+        MaxRows: 1,
+        ResultType: 'simple',
+      },
+      contextUser,
+    );
+    if (!result.Success || result.Results.length === 0) {
+      return null;
+    }
+    return result.Results[0].DriverClass ?? null;
+  }
 }
 
 /**

@@ -12,7 +12,7 @@
  * "build a new prediction" path is verifiable without the full LLM loop.
  */
 
-import { RunView, type IMetadataProvider, type UserInfo, LogError } from '@memberjunction/core';
+import { RunView, type IMetadataProvider, type UserInfo, type EntityInfo, LogError } from '@memberjunction/core';
 import type { MJMLTrainingPipelineEntity, MJMLModelEntity } from '@memberjunction/core-entities';
 import { type ModelingPlanSpec, deriveTrustVerdict, type TrustVerdict } from '@memberjunction/predictive-studio-core';
 
@@ -89,7 +89,15 @@ export class PredictiveStudioPipelineBuilder {
 
   /** Create + save the `MJ: ML Training Pipelines` row from the resolved config. */
   private async createPipeline(config: PipelineConfig, provider: IMetadataProvider, user: UserInfo): Promise<MJMLTrainingPipelineEntity> {
-    const targetEntityId = this.resolveTargetEntityId(config.targetEntityName, provider);
+    // Validate the whole plan against real metadata BEFORE creating any rows or training — so an invalid
+    // plan (bad entity / target / feature / algorithm) fails fast with an actionable message and leaves
+    // no orphan pipeline/run rows behind, instead of erroring mid-train.
+    const entity = provider.EntityByName(config.targetEntityName);
+    if (!entity) {
+      throw new Error(`Target entity '${config.targetEntityName}' was not found in metadata. The plan must reference a real entity.`);
+    }
+    this.validatePlanFields(config, entity);
+    const targetEntityId = entity.ID;
     const algorithmId = await this.resolveAlgorithmId(config.algorithmName, provider, user);
 
     const pipeline = await provider.GetEntityObject<MJMLTrainingPipelineEntity>('MJ: ML Training Pipelines', user);
@@ -113,27 +121,53 @@ export class PredictiveStudioPipelineBuilder {
     return pipeline;
   }
 
-  /** Resolve the training-unit entity name to its ID via the provider's metadata (case-insensitive). */
-  private resolveTargetEntityId(entityName: string, provider: IMetadataProvider): string {
-    const entity = provider.EntityByName(entityName);
-    if (!entity) {
-      throw new Error(`Target entity '${entityName}' was not found in metadata. The plan must reference a real entity.`);
+  /**
+   * Validate that the plan's target variable and its `select` feature columns actually exist as fields on
+   * the target entity — throwing a single actionable error (with a sample of the real field names) when
+   * they don't. This turns a would-be mid-train failure (or a garbage model trained on missing columns)
+   * into a fast, correctable "the plan references fields that don't exist" message.
+   */
+  private validatePlanFields(config: PipelineConfig, entity: EntityInfo): void {
+    const fieldNames = new Set(entity.Fields.map((f) => f.Name.toLowerCase()));
+    const missing: string[] = [];
+    if (config.targetVariable && !fieldNames.has(config.targetVariable.toLowerCase())) {
+      missing.push(`target field '${config.targetVariable}'`);
     }
-    return entity.ID;
+    const steps = (config.featureSteps?.Steps ?? []) as Array<{ Kind?: string; Columns?: string[] }>;
+    const selectCols = steps.filter((s) => s.Kind === 'select').flatMap((s) => s.Columns ?? []);
+    for (const c of selectCols) {
+      if (!fieldNames.has(c.toLowerCase())) missing.push(`feature '${c}'`);
+    }
+    if (missing.length > 0) {
+      const available = entity.Fields.map((f) => f.Name).slice(0, 25).join(', ');
+      throw new Error(
+        `The plan references field(s) that don't exist on '${entity.Name}': ${missing.join(', ')}. Available fields include: ${available}.`,
+      );
+    }
   }
 
-  /** Resolve an algorithm NAME to its `MJ: ML Algorithms` id. Throws if the algorithm doesn't exist. */
+  /**
+   * Resolve an algorithm reference to its `MJ: ML Algorithms` id. Tolerant of LLM
+   * naming variation: matches the display `Name` OR the `DriverClass`, comparing
+   * case- and separator-insensitively — so `'LogisticRegression'`,
+   * `'Logistic Regression'`, and `'logistic_regression'` all resolve to the same row.
+   * Throws with the available algorithm list if nothing matches.
+   */
   private async resolveAlgorithmId(algorithmName: string, provider: IMetadataProvider, user: UserInfo): Promise<string> {
     const rv = RunView.FromMetadataProvider(provider);
-    const res = await rv.RunView<{ ID: string }>(
-      { EntityName: 'MJ: ML Algorithms', ExtraFilter: `Name='${algorithmName.replace(/'/g, "''")}'`, Fields: ['ID'], ResultType: 'simple', MaxRows: 1 },
+    const res = await rv.RunView<{ ID: string; Name: string; DriverClass: string }>(
+      { EntityName: 'MJ: ML Algorithms', Fields: ['ID', 'Name', 'DriverClass'], ResultType: 'simple' },
       user,
     );
-    const id = res.Success ? res.Results?.[0]?.ID : undefined;
-    if (!id) {
-      throw new Error(`Algorithm '${algorithmName}' was not found in MJ: ML Algorithms. The plan must propose a registered algorithm.`);
+    const algos = res.Success ? res.Results ?? [] : [];
+    const normalize = (s: string | null | undefined): string => (s ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const want = normalize(algorithmName);
+    const match = algos.find((a) => normalize(a.Name) === want || normalize(a.DriverClass) === want);
+    if (!match) {
+      const available = algos.map((a) => a.Name).join(', ');
+      throw new Error(`Algorithm '${algorithmName}' was not found in MJ: ML Algorithms. Available: ${available || '(none)'}.`);
     }
-    return id;
+    return match.ID;
   }
 
   /**

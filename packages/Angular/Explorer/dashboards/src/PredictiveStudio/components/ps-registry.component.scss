@@ -1,7 +1,20 @@
-.ps-registry .md-layout { display: grid; grid-template-columns: 300px 1fr; gap: 18px; align-items: start; }
-@media (max-width: 1080px) { .ps-registry .md-layout { grid-template-columns: 1fr; } }
+/* The panel fills its section; the list and detail columns each scroll on their own. */
+.ps-registry { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.ps-registry .md-layout {
+  flex: 1; min-height: 0;
+  display: grid; grid-template-columns: 300px 1fr; grid-template-rows: minmax(0, 1fr); gap: 18px;
+}
+@media (max-width: 1080px) {
+  .ps-registry .md-layout { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) minmax(0, 1.4fr); }
+}
 
-.ps-registry .mlist { position: sticky; top: 0; }
+/* model list — its own scroll column */
+.ps-registry .mlist { min-height: 0; overflow-y: auto; align-self: start; max-height: 100%; }
+
+/* detail — its own scroll column, independent of the list. Children must not
+   flex-shrink, otherwise the column compresses the cards instead of scrolling. */
+.ps-registry .detail { min-height: 0; overflow-y: auto; padding-right: 2px; }
+.ps-registry .detail > * { flex: 0 0 auto; }
 .ps-registry .mrow {
   display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 8px; cursor: pointer; transition: background .12s;
 }

@@ -106,17 +106,19 @@ const PS_PIPELINES_STARTER_PROMPT =
           </button>
         </div>
       } @else {
-        <!-- Pipeline picker + toolbar -->
-        <div class="pl-bar" data-testid="ps-pipelines-picker">
+        <!-- Pipeline picker (its own scrollable row) -->
+        <div class="pl-picker" data-testid="ps-pipelines-picker">
           @for (p of pipelines; track p.ID) {
             <button class="pl-pill" [class.on]="isSelectedPipeline(p)"
-              data-testid="ps-pipelines-pill" (click)="selectPipeline(p.ID)">
-              <i class="fa-solid fa-diagram-project"></i> {{ p.Name }}
+              data-testid="ps-pipelines-pill" (click)="selectPipeline(p.ID)" [title]="p.Name">
+              <i class="fa-solid fa-diagram-project"></i> <span class="pl-pill-name">{{ p.Name }}</span>
               <span class="ps-badge" [class]="statusClass(p.Status)">{{ p.Status }}</span>
             </button>
           }
-          <span class="ps-spacer"></span>
-          @if (dirty) { <span class="ps-tag amber" data-testid="ps-pipelines-dirty"><i class="fa-solid fa-pen"></i> Unsaved</span> }
+        </div>
+
+        <!-- Toolbar for the selected pipeline (its own row) -->
+        <div class="pl-toolbar">
           <button mjButton variant="primary" size="sm" data-testid="ps-pipelines-save" [disabled]="!dirty || busy" (click)="save()">
             <i class="fa-solid fa-floppy-disk"></i> Save
           </button>
@@ -129,6 +131,8 @@ const PS_PIPELINES_STARTER_PROMPT =
           <button mjButton variant="secondary" size="sm" (click)="refine()">
             <i class="fa-solid fa-wand-magic-sparkles"></i> Agent
           </button>
+          <span class="ps-spacer"></span>
+          @if (dirty) { <span class="ps-tag amber" data-testid="ps-pipelines-dirty"><i class="fa-solid fa-pen"></i> Unsaved</span> }
         </div>
 
         <div class="builder">
