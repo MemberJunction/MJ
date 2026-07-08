@@ -704,10 +704,14 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * This callback will be invoked by the streaming service when progress updates arrive.
    */
   private createMessageProgressCallback(messageId: string): (progress: MessageProgressUpdate) => Promise<void> {
+    // Resolve the message once and reuse it for the callback's lifetime: streamed
+    // final-response updates arrive per content delta, and re-awaiting the cache on
+    // every delta both wastes work and (on a cold cache) races concurrent loads.
+    let resolvedMessage: Awaited<ReturnType<DataCacheService['getConversationDetail']>> = null;
     return async (progress: MessageProgressUpdate) => {
       try {
         // Get message from cache (single source of truth)
-        const message = await this.dataCache.getConversationDetail(messageId, this.currentUser);
+        const message = (resolvedMessage ??= await this.dataCache.getConversationDetail(messageId, this.currentUser));
 
         if (!message) {
           console.warn(`[StreamingCallback] Message ${messageId} not found in cache`);

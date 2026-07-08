@@ -95,9 +95,10 @@ describe('RunAIAgentResolver.createStreamingCallback', () => {
     });
 
     it('passes an absent kind through untouched — unmarked raw streams must stay unrendered', () => {
-        // NOTE: this test intentionally FAILS while the local TEMP-DO-NOT-COMMIT
-        // shim (`kind: chunk.kind ?? 'final-response'`) is in the resolver — it is
-        // the tripwire that keeps the testing shim from ever being committed.
+        // Guard rail: if the resolver ever defaults unmarked chunks to a renderable
+        // kind (e.g. `chunk.kind ?? 'final-response'` left in from local testing),
+        // every Loop agent's raw JSON envelope would render into chat bubbles.
+        // This test fails the moment such a fallback exists.
         const { publish, callback } = buildHarness();
 
         callback({ content: '{"taskComplete":', isComplete: false, stepType: 'prompt' });

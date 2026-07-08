@@ -107,12 +107,15 @@ export class ConversationStreaming {
     private pushStatusSubscription?: Subscription;
     private readonly callbackRegistry = new Map<string, MessageProgressCallback[]>();
     /**
-     * Per-message accumulation of streamed final-response deltas. The server
+     * Per-message accumulation of streamed final-response deltas, keyed by
+     * conversationDetailId and stamped with the producing agentRunId. The server
      * publishes token DELTAS (see BaseLLM's OnContent contract); we accumulate
      * here so every registered callback always receives the full reply text so
-     * far. Entries are cleared on the stream's final chunk and on completion.
+     * far. The run stamp guarantees a new run's stream can never splice onto a
+     * dead run's leftovers on the same message. Entries are cleared on the
+     * stream's final chunk, on completion, on reconnection, and on dispose.
      */
-    private readonly streamingAccumulator = new Map<string, string>();
+    private readonly streamingAccumulator = new Map<string, { agentRunId: string; text: string }>();
     private readonly recentCompletions = new Map<
         string,
         { conversationDetailId: string; agentRunId: string; timestamp: Date }
@@ -493,13 +496,24 @@ export class ConversationStreaming {
             return;
         }
 
+        // A message can be re-streamed by a different run (retry; overlapping runs;
+        // a chunk landing after 'complete' re-created the entry) — key accumulation
+        // to the producing run so a dead run's leftover prefix can never splice onto
+        // a new stream. agentRunId rides on every streaming payload.
+        const agentRunId = (data.agentRunId as string | undefined) ?? '';
         const isPartial = streaming.isPartial !== false;
-        const accumulated = (this.streamingAccumulator.get(conversationDetailId) ?? '') + (streaming.content ?? '');
+        const prev = this.streamingAccumulator.get(conversationDetailId);
+        const prefix = prev && prev.agentRunId === agentRunId ? prev.text : '';
+        const accumulated = prefix + (streaming.content ?? '');
         if (isPartial) {
-            this.streamingAccumulator.set(conversationDetailId, accumulated);
+            this.streamingAccumulator.set(conversationDetailId, { agentRunId, text: accumulated });
         } else {
             this.streamingAccumulator.delete(conversationDetailId);
         }
+
+        // Nothing renderable yet (e.g. a lone empty final chunk) — dispatching an
+        // empty string would blank the progress text already in the bubble.
+        if (!accumulated) return;
 
         const callbacks = this.callbackRegistry.get(conversationDetailId) ?? [];
         if (callbacks.length === 0) return;

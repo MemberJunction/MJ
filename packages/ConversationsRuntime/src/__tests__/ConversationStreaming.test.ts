@@ -172,15 +172,16 @@ describe('ConversationStreaming', () => {
     describe('streaming content routing', () => {
         function streamChunk(
             content: string,
-            options: { isPartial?: boolean; kind?: string; detailId?: string | null } = {}
+            options: { isPartial?: boolean; kind?: string; detailId?: string | null; runId?: string } = {}
         ): Record<string, unknown> {
-            const { isPartial = true, detailId = 'detail-1' } = options;
+            const { isPartial = true, detailId = 'detail-1', runId = 'run-1' } = options;
             // Distinguish "key absent" (default to final-response) from an explicit
             // undefined (an unmarked chunk) — a destructuring default can't do that.
             const kind = 'kind' in options ? options.kind : 'final-response';
             return {
                 data: {
                     type: 'streaming',
+                    agentRunId: runId,
                     agentRun: detailId ? { ConversationDetailID: detailId, Agent: 'Sage' } : { Agent: 'Sage' },
                     streaming: { content, isPartial, kind },
                 },
@@ -248,6 +249,28 @@ describe('ConversationStreaming', () => {
             } finally {
                 consoleSpy.mockRestore();
             }
+        });
+
+        it('resets accumulation when a different run streams to the same message', async () => {
+            const cb = vi.fn();
+            streaming.registerMessageCallback('detail-1', cb);
+
+            // Run A streams and dies without a final chunk or completion event.
+            await dispatchAgentProgress(streaming, streamChunk('Hello from run A', { runId: 'run-A' }));
+            // Run B (e.g. a retry) streams to the same message.
+            await dispatchAgentProgress(streaming, streamChunk('Hi', { runId: 'run-B' }));
+
+            const last = cb.mock.calls[cb.mock.calls.length - 1][0];
+            expect(last.streaming.content).toBe('Hi'); // never 'Hello from run AHi'
+        });
+
+        it('does not dispatch an empty accumulation (lone empty final chunk)', async () => {
+            const cb = vi.fn();
+            streaming.registerMessageCallback('detail-1', cb);
+
+            await dispatchAgentProgress(streaming, streamChunk('', { isPartial: false }));
+
+            expect(cb).not.toHaveBeenCalled(); // dispatching '' would blank the progress bubble
         });
 
         it('drops partial accumulation on reconnection so lost chunks cannot splice the text', async () => {
