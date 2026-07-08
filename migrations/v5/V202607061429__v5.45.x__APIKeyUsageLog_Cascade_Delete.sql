@@ -11,12 +11,26 @@
 -- FK-only change: no table columns change, so no CodeGen / entity regeneration
 -- is required (spDeleteAPIKey already relies on DB cascade for its children).
 
-ALTER TABLE [${flyway:defaultSchema}].[APIKeyUsageLog]
-    DROP CONSTRAINT [FK__APIKeyUsa__APIKe__56D4A469];
+-- Dynamically look up the FK constraint name since SQL Server auto-generates
+-- the suffix based on object IDs, which differ per database instance.
+DECLARE @fkName NVARCHAR(256);
+SELECT @fkName = fk.name
+FROM sys.foreign_keys fk
+JOIN sys.foreign_key_columns fkc ON fkc.constraint_object_id = fk.object_id
+JOIN sys.columns c ON c.object_id = fkc.parent_object_id AND c.column_id = fkc.parent_column_id
+WHERE OBJECT_NAME(fk.parent_object_id) = 'APIKeyUsageLog'
+  AND SCHEMA_NAME(fk.schema_id) = '${flyway:defaultSchema}'
+  AND c.name = 'APIKeyID'
+  AND OBJECT_NAME(fk.referenced_object_id) = 'APIKey';
+
+IF @fkName IS NOT NULL
+BEGIN
+    EXEC('ALTER TABLE [${flyway:defaultSchema}].[APIKeyUsageLog] DROP CONSTRAINT [' + @fkName + ']');
+END
 GO
 
 ALTER TABLE [${flyway:defaultSchema}].[APIKeyUsageLog]
-    ADD CONSTRAINT [FK__APIKeyUsa__APIKe__56D4A469]
+    ADD CONSTRAINT [FK_APIKeyUsageLog_APIKeyID]
     FOREIGN KEY ([APIKeyID]) REFERENCES [${flyway:defaultSchema}].[APIKey] ([ID])
     ON DELETE CASCADE;
 GO
