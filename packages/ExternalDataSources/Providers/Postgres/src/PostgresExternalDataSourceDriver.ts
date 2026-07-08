@@ -267,8 +267,7 @@ export class PostgresExternalDataSourceDriver extends BaseSqlExternalDataSourceD
     if (params.maxRows == null) {
       return undefined; // only pay for the count when paginating
     }
-    const sql = `SELECT COUNT(*)::bigint AS cnt FROM ${target}${params.filter ? ` WHERE ${params.filter}` : ''}`;
-    const res = await pool.query(sql);
+    const res = await pool.query(this.buildCountSql(target, params));
     return Number(res.rows[0]?.cnt ?? 0);
   }
 

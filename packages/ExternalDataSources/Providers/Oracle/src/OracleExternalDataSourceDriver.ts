@@ -17,6 +17,8 @@ import {
   ExternalQueryParameter,
   ExternalQueryResult,
   ExternalRow,
+  isIso8601DateTime,
+  iso8601Zone,
 } from "@memberjunction/external-data-sources";
 
 /** Non-secret connection config stored in ExternalDataSource.ConnectionConfig (JSON). */
@@ -369,7 +371,7 @@ export class OracleExternalDataSourceDriver extends BaseSqlExternalDataSourceDri
     if (params.maxRows == null) {
       return undefined; // only pay for the count when paginating
     }
-    const { rows } = await this.query<{ CNT: number }>(pool, `SELECT COUNT(*) AS cnt FROM ${target}${params.filter ? ` WHERE ${params.filter}` : ''}`);
+    const { rows } = await this.query<{ CNT: number }>(pool, this.buildCountSql(target, params));
     return Number(rows[0]?.CNT ?? 0);
   }
 
@@ -420,5 +422,32 @@ export class OracleExternalDataSourceDriver extends BaseSqlExternalDataSourceDri
   /** Quote a SQL identifier with double-quotes (Oracle: case-sensitive when quoted), escaping `"`. */
   protected quoteIdent(name: string): string {
     return `"${name.replace(/"/g, '""')}"`;
+  }
+
+  /**
+   * Oracle's default NLS date format rejects an ISO-8601 timestamp literal (the `T`/`Z` form → ORA-01843),
+   * so an incremental watermark like `2026-03-01T00:00:00.000Z` is wrapped in `TO_TIMESTAMP` with a matching
+   * format mask. Non-ISO watermarks (numeric cursors, date-only strings) pass through as a plain literal.
+   *
+   * Note: for a naive (no-time-zone) source column, incremental correctness is time-zone sensitive — the
+   * session TZ governs how the value reads back; run against UTC-normalized data or a TIMESTAMP WITH TIME
+   * ZONE column for exact boundaries.
+   */
+  protected override formatIncrementalLiteral(value: string): string {
+    if (!isIso8601DateTime(value)) {
+      return this.quoteLiteral(value);
+    }
+    const fractional = value.includes('.') ? '.FF' : ''; // FF matches any fractional precision (not just 3)
+    const zone = iso8601Zone(value);
+    if (zone) {
+      // Zoned watermark → TO_TIMESTAMP_TZ with an explicit `TZH:TZM` offset. Oracle can't parse a bare
+      // 'Z', so normalize it to '+00:00'; a numeric offset (e.g. +05:30) passes through. This fixes the
+      // ORA-01830 that a plain TO_TIMESTAMP mask (no TZH:TZM) threw on an offset/Z, and preserves the
+      // true instant rather than swallowing 'Z' as a literal.
+      const normalized = zone === 'Z' ? value.replace(/Z$/, '+00:00') : value;
+      return `TO_TIMESTAMP_TZ(${this.quoteLiteral(normalized)}, 'YYYY-MM-DD"T"HH24:MI:SS${fractional}TZH:TZM')`;
+    }
+    // Zoneless (naive) → TO_TIMESTAMP; compared in the session time zone (see the incremental TZ caveat).
+    return `TO_TIMESTAMP(${this.quoteLiteral(value)}, 'YYYY-MM-DD"T"HH24:MI:SS${fractional}')`;
   }
 }
