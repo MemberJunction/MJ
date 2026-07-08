@@ -101,6 +101,11 @@ class TestSqlConnector extends BaseSqlExternalDataSourceConnector {
     protected override async Resolve(): Promise<ResolvedExternalDataSource> { return this.Resolved; }
     protected override async ResolveObjectMeta(): Promise<{ WatermarkField?: string; PrimaryKeyFields: string[] }> { return META; }
     public coerce(value: unknown): Date | undefined { return this.CoerceDate(value); }
+    public contentKey(row: Record<string, unknown>, watermarkField?: string): string { return this.ContentKey(row, watermarkField); }
+    public readExternalDataSourceID(ci: MJCompanyIntegrationEntity): string { return this.ReadExternalDataSourceID(ci); }
+    public buildRecord(row: Record<string, unknown>, objectName: string, primaryKeyFields: string[], watermarkField?: string) {
+        return this.BuildRecord(row, objectName, primaryKeyFields, watermarkField);
+    }
 }
 
 class TestDocConnector extends BaseDocumentDataSourceConnector {
@@ -209,5 +214,73 @@ describe('CoerceDate — ModifiedAt is timezone-stable', () => {
         const d = new Date('2026-05-01T00:00:00Z');
         expect(c.coerce(d)).toBe(d);
         expect(c.coerce('not-a-date')).toBeUndefined();
+    });
+    it('a non-ISO shape (date-only) still parses via the Date fallback, not just the ISO helper', () => {
+        expect(c.coerce('2026-05-01')?.toISOString()).toBe('2026-05-01T00:00:00.000Z');
+    });
+    it('a numeric epoch millis value parses via the Date fallback', () => {
+        expect(c.coerce(1767225600000)?.toISOString()).toBe('2026-01-01T00:00:00.000Z');
+    });
+});
+
+describe('ReadExternalDataSourceID — error paths', () => {
+    const c = new TestSqlConnector(resolvedFor(new MockDriver()));
+
+    it('throws a clear error when Configuration is absent', () => {
+        const ci = { ID: 'ci', Name: 'no-config', Configuration: null } as unknown as MJCompanyIntegrationEntity;
+        expect(() => c.readExternalDataSourceID(ci)).toThrow(/requires Configuration/);
+    });
+
+    it('throws when Configuration is not valid JSON', () => {
+        const ci = { ID: 'ci', Name: 'bad-json', Configuration: '{not json' } as unknown as MJCompanyIntegrationEntity;
+        expect(() => c.readExternalDataSourceID(ci)).toThrow(/not valid JSON/);
+    });
+
+    it('throws when the externalDataSourceID key is absent', () => {
+        const ci = { ID: 'ci', Name: 'no-key', Configuration: JSON.stringify({ other: 'x' }) } as unknown as MJCompanyIntegrationEntity;
+        expect(() => c.readExternalDataSourceID(ci)).toThrow(/is required/);
+    });
+
+    it('throws when externalDataSourceID is present but blank', () => {
+        const ci = { ID: 'ci', Name: 'blank-id', Configuration: JSON.stringify({ externalDataSourceID: '   ' }) } as unknown as MJCompanyIntegrationEntity;
+        expect(() => c.readExternalDataSourceID(ci)).toThrow(/is required/);
+    });
+
+    it('accepts the legacy ExternalDataSourceID key as a fallback', () => {
+        const ci = { ID: 'ci', Name: 'legacy-key', Configuration: JSON.stringify({ ExternalDataSourceID: 'ds-legacy' }) } as unknown as MJCompanyIntegrationEntity;
+        expect(c.readExternalDataSourceID(ci)).toBe('ds-legacy');
+    });
+
+    it('trims surrounding whitespace from the resolved ID', () => {
+        const ci = { ID: 'ci', Name: 'padded', Configuration: JSON.stringify({ externalDataSourceID: '  ds-1  ' }) } as unknown as MJCompanyIntegrationEntity;
+        expect(c.readExternalDataSourceID(ci)).toBe('ds-1');
+    });
+});
+
+describe('ContentKey — excludes the watermark column so a PK-less row updates in place instead of re-inserting', () => {
+    const c = new TestSqlConnector(resolvedFor(new MockDriver()));
+
+    it('two rows differing ONLY in the watermark column produce the SAME content key', () => {
+        const before = { email: 'a@x.com', updated_at: '2026-01-01T00:00:00.000Z' };
+        const after = { email: 'a@x.com', updated_at: '2026-02-01T00:00:00.000Z' };
+        expect(c.contentKey(before, 'updated_at')).toBe(c.contentKey(after, 'updated_at'));
+    });
+
+    it('without a watermark field to exclude, the key changes when any column changes', () => {
+        const before = { email: 'a@x.com', updated_at: '2026-01-01T00:00:00.000Z' };
+        const after = { email: 'a@x.com', updated_at: '2026-02-01T00:00:00.000Z' };
+        expect(c.contentKey(before)).not.toBe(c.contentKey(after));
+    });
+
+    it('a genuine content change still produces a different key', () => {
+        const before = { email: 'a@x.com', updated_at: '2026-01-01T00:00:00.000Z' };
+        const after = { email: 'b@x.com', updated_at: '2026-01-01T00:00:00.000Z' };
+        expect(c.contentKey(before, 'updated_at')).not.toBe(c.contentKey(after, 'updated_at'));
+    });
+
+    it('BuildRecord: a PK-less row keeps the same ExternalID across an update to its watermark column (the regression this fixes)', () => {
+        const before = c.buildRecord({ email: 'a@x.com', updated_at: '2026-01-01T00:00:00.000Z' }, 'events', [], 'updated_at');
+        const after = c.buildRecord({ email: 'a@x.com', updated_at: '2026-02-01T00:00:00.000Z' }, 'events', [], 'updated_at');
+        expect(after.ExternalID).toBe(before.ExternalID);
     });
 });

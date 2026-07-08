@@ -19,7 +19,7 @@ import {
     type ExternalRecord,
 } from '@memberjunction/integration-engine';
 import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
-import { ExternalDataSourceRouter, type ResolvedExternalDataSource } from '@memberjunction/external-data-sources';
+import { ExternalDataSourceRouter, parseIso8601AsUtc, type ResolvedExternalDataSource } from '@memberjunction/external-data-sources';
 
 /** Resolved foreign-key edge for one referencing column (built from the descriptor's relationships). */
 interface ForeignKeyEdge {
@@ -263,7 +263,7 @@ export abstract class BaseExternalDataSourceConnector extends BaseIntegrationCon
         return {
             ExternalID: primaryKeyFields.length
                 ? primaryKeyFields.map(f => this.StringifyKeyPart(row[f])).join('|')
-                : this.ContentKey(row),
+                : this.ContentKey(row, watermarkField),
             ObjectType: objectName,
             // Full source record — never a hand-filtered subset (forward-compat custom-field capture).
             Fields: { ...row },
@@ -279,9 +279,16 @@ export abstract class BaseExternalDataSourceConnector extends BaseIntegrationCon
         return value instanceof Date ? value.toISOString() : String(value);
     }
 
-    /** Deterministic content key for a genuinely PK-less row (rare); lets such tables still dedupe. */
-    protected ContentKey(row: Record<string, unknown>): string {
+    /**
+     * Deterministic content key for a genuinely PK-less row (rare); lets such tables still dedupe.
+     * Excludes `watermarkField` when given — the watermark column changes on every update by definition, so
+     * including it would mint a new `ExternalID` (and therefore a new inserted record) on every update to
+     * the same PK-less row instead of matching its prior identity.
+     */
+    protected ContentKey(row: Record<string, unknown>, watermarkField?: string): string {
+        const excluded = watermarkField?.toLowerCase();
         return Object.keys(row)
+            .filter(k => k.toLowerCase() !== excluded)
             .sort()
             .map(k => `${k}=${this.StringifyKeyPart(row[k])}`)
             .join('|');
@@ -301,18 +308,22 @@ export abstract class BaseExternalDataSourceConnector extends BaseIntegrationCon
 
     /**
      * Coerce a raw watermark value into a Date for `ExternalRecord.ModifiedAt` (undefined when unparseable).
-     * A ZONELESS ISO-8601 string is interpreted as UTC (not the API server's local time), so `ModifiedAt`
-     * is timezone-stable regardless of where this runs — matching how the EDS drivers interpret a zoneless
-     * incremental watermark. (In practice the driver returns `Date`s from `RunView`; this string path is the
-     * fallback.)
+     * Delegates full ISO-8601 date-times to the shared {@link parseIso8601AsUtc} helper — the same one the
+     * EDS drivers use for incremental-watermark literal formatting and Mongo date coercion — so a ZONELESS
+     * ISO string is interpreted as UTC consistently everywhere, not via a locally-reimplemented regex. Falls
+     * back to `Date`'s own parsing for non-ISO shapes (e.g. a date-only string) that helper intentionally
+     * rejects. (In practice the driver returns `Date`s from `RunView`; this string path is the fallback.)
      */
     protected CoerceDate(value: unknown): Date | undefined {
         if (value instanceof Date) {
             return value;
         }
         if (typeof value === 'string') {
-            const zoneless = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(value);
-            const d = new Date(zoneless ? `${value}Z` : value);
+            const parsed = parseIso8601AsUtc(value);
+            if (parsed) {
+                return parsed;
+            }
+            const d = new Date(value);
             return Number.isNaN(d.getTime()) ? undefined : d;
         }
         if (typeof value === 'number') {
