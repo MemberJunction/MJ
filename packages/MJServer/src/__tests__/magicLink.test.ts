@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import jwt from 'jsonwebtoken';
-import { createPublicKey } from 'node:crypto';
+import { createPublicKey, type JsonWebKey } from 'node:crypto';
 import {
   generateRawToken,
   hashToken,
@@ -228,6 +228,56 @@ describe('magic-link core', () => {
     });
   });
 
+  describe('buildConsumeInviteSQL (postgresql dialect)', () => {
+    // PG uses `schema.table` (unquoted — PostgreSQLDataProvider.ExecuteSQL auto-quotes
+    // the PascalCase identifiers). SS uses the bracket-quoted `[schema].[table]` form.
+    const pgTable = '__mj.MagicLinkInvite';
+    const pgSql = buildConsumeInviteSQL(pgTable, 'postgresql');
+
+    it('targets the supplied unquoted schema.table', () => {
+      expect(pgSql).toContain(`UPDATE ${pgTable} `);
+    });
+
+    it('uses UPDATE … RETURNING as the atomic single-use gate (no OUTPUT/DECLARE table var)', () => {
+      expect(pgSql).toContain('RETURNING ID;');
+      expect(pgSql).not.toContain('OUTPUT');
+      expect(pgSql).not.toContain('DECLARE');
+    });
+
+    it('binds the invite ID as PG positional param $1, not T-SQL @p0 (injection-safe)', () => {
+      expect(pgSql).toContain('ID = $1');
+      expect(pgSql).not.toContain('@p0');
+      expect(pgSql).not.toMatch(/@/); // no T-SQL @-anything survives on PG
+      expect(pgSql).not.toMatch(/ID = '/);
+    });
+
+    it('uses PG timestamp expressions, not T-SQL SYSUTCDATETIME()', () => {
+      expect(pgSql).not.toContain('SYSUTCDATETIME');
+      expect(pgSql).toContain("(now() AT TIME ZONE 'utc')");
+      expect(pgSql).toContain("ConsumedAt = COALESCE(ConsumedAt, (now() AT TIME ZONE 'utc'))");
+    });
+
+    it('guards atomically on Active + not-exhausted + not-expired (same predicate as SS)', () => {
+      const where = pgSql.slice(pgSql.indexOf('WHERE'));
+      expect(where).toContain("Status = 'Active'");
+      expect(where).toContain('UseCount < MaxUses');
+      expect(where).toContain("ExpiresAt > (now() AT TIME ZONE 'utc')");
+    });
+
+    it('increments UseCount and flips Status on the last use (same semantics as SS)', () => {
+      expect(pgSql).toContain('UseCount = UseCount + 1');
+      expect(pgSql).toContain("Status = CASE WHEN UseCount + 1 >= MaxUses THEN 'Consumed' ELSE Status END");
+    });
+
+    it('rejects a non-whitelisted PG table identifier (defense-in-depth against injection)', () => {
+      // Bracket-quoted (SS) form is not a valid PG identifier here.
+      expect(() => buildConsumeInviteSQL('[__mj].[MagicLinkInvite]', 'postgresql')).toThrow();
+      expect(() => buildConsumeInviteSQL('__mj.MagicLinkInvite; DROP TABLE x;--', 'postgresql')).toThrow();
+      expect(() => buildConsumeInviteSQL('__mj.Magic Link', 'postgresql')).toThrow();
+      expect(() => buildConsumeInviteSQL(pgTable, 'postgresql')).not.toThrow();
+    });
+  });
+
   describe('canIssueInvites', () => {
     it('always allows Owners, regardless of issuer-role config (case/space-insensitive)', () => {
       expect(canIssueInvites('Owner', [], [])).toBe(true);
@@ -351,7 +401,7 @@ describe('MagicLinkKeyManager', () => {
     expect(header.kid).toBe(jwk.kid);
 
     // Full verification against the public key reconstructed from the JWK.
-    const publicKey = createPublicKey({ key: jwk as object, format: 'jwk' });
+    const publicKey = createPublicKey({ key: jwk as unknown as JsonWebKey, format: 'jwk' });
     const decoded = jwt.verify(token, publicKey, {
       algorithms: ['RS256'],
       issuer: 'http://localhost:4051',
@@ -375,7 +425,7 @@ describe('MagicLinkKeyManager', () => {
       ttlSeconds: 3600,
     });
     const token = km.Sign(claims);
-    const publicKey = createPublicKey({ key: km.GetJWKS().keys[0] as object, format: 'jwk' });
+    const publicKey = createPublicKey({ key: km.GetJWKS().keys[0] as unknown as JsonWebKey, format: 'jwk' });
 
     // Flip a character in the payload segment.
     const parts = token.split('.');
