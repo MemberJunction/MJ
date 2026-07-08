@@ -406,3 +406,70 @@ describe('Mutex — Enable/Disable/Upgrade/Remove refuse to act while a DIFFEREN
         expect(result.ErrorMessage?.toLowerCase()).toContain('already installed');
     });
 });
+
+describe('Cross-operation checkpoint contamination — a checkpoint left by one operation must not survive to be misread by a different, later operation', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        baseHappyPathStubs();
+    });
+
+    it('InstallApp: a reinstall of a Removed/Error app clears a foreign checkpoint before starting fresh DB work', async () => {
+        serveManifests({ 'https://github.com/test/app-x': manifestJSON('app-x') });
+        // Foreign to Install: 'MigrationsApplied' is an UpgradeStep, and the target version is a
+        // leftover from an abandoned upgrade attempt — neither means anything to InstallApp.
+        vi.mocked(FindInstalledApp).mockResolvedValue({
+            ID: 'app-x-id', Name: 'app-x', Version: '1.0.0', Status: 'Error',
+            LastCompletedStep: 'MigrationsApplied', LastCompletedStepTargetVersion: '1.2.0', SchemaName: 'test_app_x',
+        } as never);
+        vi.mocked(RecordAppInstallation).mockResolvedValue('app-x-id');
+
+        const result = await InstallApp({ Source: 'https://github.com/test/app-x' }, context);
+        expect(result.Success).toBe(true);
+
+        const stepCalls = vi.mocked(SetAppStep).mock.calls;
+        const clearIndex = stepCalls.findIndex(c => c[2] === null);
+        const recordCreatedIndex = stepCalls.findIndex(c => c[2] === 'RecordCreated');
+        expect(clearIndex).toBeGreaterThanOrEqual(0);
+        expect(recordCreatedIndex).toBeGreaterThan(clearIndex);
+    });
+
+    it('UpgradeApp: a checkpoint targeting an abandoned version is cleared immediately, before this attempt writes its own first checkpoint', async () => {
+        serveManifests({ 'https://github.com/test/app-x': manifestJSON('app-x', '2.0.0', true) });
+        vi.mocked(FindInstalledApp).mockResolvedValue({
+            ID: 'app-x-id', Name: 'app-x', Version: '1.0.0', Status: 'Error',
+            LastCompletedStep: 'PackagesInstalled', LastCompletedStepTargetVersion: '1.2.0',
+            RepositoryURL: 'https://github.com/test/app-x', SchemaName: 'test_app_x',
+        } as never);
+
+        const result = await UpgradeApp({ AppName: 'app-x' }, context);
+        expect(result.Success).toBe(true);
+
+        const stepCalls = vi.mocked(SetAppStep).mock.calls;
+        const clearIndex = stepCalls.findIndex(c => c[2] === null);
+        const migrationsIndex = stepCalls.findIndex(c => c[2] === 'MigrationsApplied');
+        expect(clearIndex).toBeGreaterThanOrEqual(0);
+        expect(migrationsIndex).toBeGreaterThan(clearIndex);
+        // The mismatched checkpoint is not trusted — migrations AND packages both actually run.
+        expect(vi.mocked(RunAppMigrations)).toHaveBeenCalled();
+        expect(vi.mocked(RunPackageInstall)).toHaveBeenCalled();
+    });
+
+    it("RemoveApp: a checkpoint left by an aborted Upgrade ('PackagesInstalled', foreign to Remove) is cleared before Remove starts its own DB cleanup — so a LATER upgrade to that same version cannot wrongly resume from it", async () => {
+        vi.mocked(FindInstalledApp).mockResolvedValue({
+            ID: 'app-x-id', Name: 'app-x', Version: '1.0.0', Status: 'Error',
+            LastCompletedStep: 'PackagesInstalled', LastCompletedStepTargetVersion: '1.2.0',
+            RepositoryURL: 'https://github.com/test/app-x', SchemaName: null, // isolates the file-removal phase, matching the other RemoveApp tests
+            ManifestJSON: manifestJSON('app-x'),
+        } as never);
+
+        const result = await RemoveApp({ AppName: 'app-x' }, context);
+        expect(result.Success).toBe(true);
+
+        const stepCalls = vi.mocked(SetAppStep).mock.calls;
+        // The very first checkpoint write must be the clearing of the foreign 'PackagesInstalled'
+        // value — BEFORE Remove's own 'DbCleanupDone' — so it can never survive a failed remove
+        // (e.g. a later schema-drop failure) to be wrongly trusted by a subsequent upgrade to 1.2.
+        expect(stepCalls[0]?.[2]).toBeNull();
+        expect(stepCalls.some(c => c[2] === 'DbCleanupDone')).toBe(true);
+    });
+});

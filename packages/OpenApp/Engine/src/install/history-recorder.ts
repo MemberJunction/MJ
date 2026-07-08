@@ -146,8 +146,12 @@ export async function SetAppStatus(contextUser: UserInfo, appId: string, status:
  * back via `FindInstalledApp` and skips every step up to and including it, resuming the
  * operation instead of restarting it from the beginning.
  *
- * Pass `null` to clear the checkpoint (done on terminal success, so a stale checkpoint
- * can't be misread by a later, unrelated operation on the same row).
+ * Pass `null` to clear the checkpoint (done on terminal success, or when a fresh/non-resuming
+ * attempt discards a stale checkpoint left by a different or abandoned operation, so it can't
+ * be misread by a later, unrelated operation on the same row). Clearing the step always clears
+ * `LastCompletedStepTargetVersion` too, regardless of whether a caller passes `targetVersion` —
+ * the two columns are cleared alongside each other by design (see `UpgradeStep`'s doc comment),
+ * so a caller can never leave a stale target version behind by omitting the parameter.
  *
  * `targetVersion` is Upgrade-only: it pairs with the checkpoint so a resume can be told apart
  * from a fresh upgrade request to a DIFFERENT version arriving while one was mid-flight (see
@@ -162,7 +166,8 @@ export async function SetAppStep(
   provider?: IMetadataProvider,
   targetVersion?: string,
 ): Promise<void> {
-  await UpdateAppRecord(contextUser, appId, { LastCompletedStep: step, ...(targetVersion !== undefined ? { LastCompletedStepTargetVersion: step ? targetVersion : null } : {}) }, provider);
+  const targetVersionUpdate = step === null ? { LastCompletedStepTargetVersion: null } : targetVersion !== undefined ? { LastCompletedStepTargetVersion: targetVersion } : {};
+  await UpdateAppRecord(contextUser, appId, { LastCompletedStep: step, ...targetVersionUpdate }, provider);
 }
 
 /**

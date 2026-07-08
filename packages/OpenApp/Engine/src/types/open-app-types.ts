@@ -4,6 +4,7 @@
  * These types are used throughout the engine for tracking app state,
  * installation actions, error phases, and progress reporting.
  */
+import type { MJOpenAppEntity } from '@memberjunction/core-entities';
 
 /**
  * Possible statuses for an installed Open App.
@@ -90,6 +91,18 @@ export type UpgradeStep =
  * audit history entry remain.
  */
 export type RemoveStep = 'DbCleanupDone' | 'FilesRemoved';
+
+/**
+ * Compile-time guard: the three checkpoint step unions above, combined, must exactly match the
+ * CHECK-constraint-derived union CodeGen generates for `MJOpenAppEntity.LastCompletedStep`. If a
+ * future migration adds/removes a CHECK value without updating `InstallStep`/`UpgradeStep`/
+ * `RemoveStep` (or vice versa), this fails to compile instead of silently falling through
+ * `IsStepDone`'s "unrecognized checkpoint → not done" fail-safe, which would just make the new
+ * value's step get redone forever rather than flagging the drift.
+ */
+type AssertExactUnion<A, B> = [A] extends [B] ? ([B] extends [A] ? true : never) : never;
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+type _StepUnionMatchesEntityCheckConstraint = AssertExactUnion<InstallStep | UpgradeStep | RemoveStep, NonNullable<MJOpenAppEntity['LastCompletedStep']>>;
 
 /**
  * Progress callbacks for installation operations.

@@ -65,6 +65,20 @@ function IsStepDone<T extends string>(order: readonly T[], checkpoint: string | 
 }
 
 /**
+ * True when `checkpoint` is one of THIS operation's own step values. `LastCompletedStep`'s
+ * vocabulary is shared across Install/Upgrade/Remove (e.g. 'PackagesInstalled' is a valid
+ * checkpoint for both Install and Upgrade), so a checkpoint left behind by a different or
+ * abandoned operation can pass `IsStepDone`'s "unrecognized → not done" check for THIS
+ * operation's own steps while still being wrongly trusted later by some OTHER operation that
+ * happens to recognize the same string. Callers use this to detect a foreign/stale checkpoint
+ * and clear it before starting their own work, instead of just tolerating it silently — see the
+ * cross-operation checkpoint contamination fix everywhere this is called.
+ */
+function IsOwnCheckpoint<T extends string>(order: readonly T[], checkpoint: string | null | undefined): checkpoint is T {
+  return !!checkpoint && (order as readonly string[]).includes(checkpoint);
+}
+
+/**
  * Mutex guard: statuses in which an app is genuinely settled — no install/upgrade/remove is
  * mid-flight on this row. Every other status ('Installing', 'Upgrading', 'Removing', 'Error')
  * means SOME operation left the row in a non-final state, so a DIFFERENT operation must not be
@@ -80,8 +94,15 @@ const SETTLED_STATUSES: ReadonlySet<AppStatus> = new Set(['Active', 'Disabled'])
 /**
  * Builds the standard mutex-conflict error for Enable/Disable/Upgrade/Remove being invoked
  * while a DIFFERENT operation already has the app mid-flight.
+ *
+ * `action` drives the returned `AppOperationResult.Action` (constrained to the `InstallAction`
+ * union recorded in history) and is also the default message verb. `displayVerb` overrides just
+ * the message text — needed because Enable/Disable have no `InstallAction` value of their own
+ * (there's no 'Enable'/'Disable' entry in that CHECK-constrained union) and pass `'Install'` for
+ * `action`, which would otherwise read as "Cannot install 'foo'" for a disable/enable conflict.
  */
-function BuildMutexConflictResult(action: InstallAction, appName: string, version: string, startTime: number, currentStatus: AppStatus): AppOperationResult {
+function BuildMutexConflictResult(action: InstallAction, appName: string, version: string, startTime: number, currentStatus: AppStatus, displayVerb?: string): AppOperationResult {
+  const verb = displayVerb ?? action.toLowerCase();
   const guidance: Record<string, string> = {
     Installing: `finish it with 'mj app install <source>' (it will resume automatically)`,
     Upgrading: `finish it with 'mj app upgrade ${appName}' (it will resume automatically)`,
@@ -94,7 +115,7 @@ function BuildMutexConflictResult(action: InstallAction, appName: string, versio
     version,
     'Schema',
     startTime,
-    `Cannot ${action.toLowerCase()} '${appName}' while it is '${currentStatus}' — another operation is still in progress or failed partway. ${guidance[currentStatus] ?? 'Resolve the in-progress operation first.'}`,
+    `Cannot ${verb} '${appName}' while it is '${currentStatus}' — another operation is still in progress or failed partway. ${guidance[currentStatus] ?? 'Resolve the in-progress operation first.'}`,
   );
 }
 
@@ -303,6 +324,16 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
       createdAppId = existingApp!.ID;
     } else {
       Callbacks?.OnProgress?.('Install', `Installing ${manifest.name} v${manifest.version}...`);
+
+      // Not resuming our own in-flight install (a fresh install, or a reinstall of a Removed/
+      // Error app) — any leftover checkpoint on this row belongs to a different operation
+      // (Upgrade/Remove) or an abandoned prior attempt, and must not survive into this fresh
+      // attempt: a LATER operation could otherwise wrongly trust it, since checkpoint step
+      // names are shared across Install/Upgrade (e.g. 'PackagesInstalled') — cross-operation
+      // checkpoint contamination.
+      if (existingApp?.LastCompletedStep) {
+        await SetAppStep(context.ContextUser, existingApp.ID, null);
+      }
 
       // Steps 6-7: Schema
       if (manifest.schema) {
@@ -705,6 +736,18 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
       );
     }
 
+    // Not trusting any existing checkpoint as OUR resume point (wrong status, or it targets a
+    // different/abandoned version) — clear it now, before any destructive work. Left in place,
+    // it could later be wrongly trusted by a DIFFERENT operation sharing step-name vocabulary
+    // (e.g. 'PackagesInstalled' is a valid checkpoint for both Install and Upgrade) — an
+    // intervening Remove that fails without writing its own checkpoint would otherwise leave
+    // this stale value sitting there for a LATER upgrade to this same version to wrongly resume
+    // from, skipping work on a row that other operation already partially tore down
+    // (cross-operation checkpoint contamination).
+    if (!resumeCheckpoint && existingApp.LastCompletedStep) {
+      await SetAppStep(context.ContextUser, existingApp.ID, null);
+    }
+
     // Set status to Upgrading (idempotent no-op if already Upgrading from a resumed attempt)
     await SetAppStatus(context.ContextUser, existingApp.ID, 'Upgrading');
 
@@ -927,7 +970,17 @@ export async function RemoveApp(options: RemoveOptions, context: OrchestratorCon
     // uncaught throw AFTER DbCleanupDone was written (e.g. mid file-removal) — that case
     // should skip re-running the already-successful DB-cleanup phase, same as a raw crash
     // leaves 'Removing' with the same checkpoint.
-    const resumeCheckpoint = existingApp.Status === 'Removing' || existingApp.Status === 'Error' ? (existingApp.LastCompletedStep ?? null) : null;
+    const rawCheckpoint = existingApp.Status === 'Removing' || existingApp.Status === 'Error' ? (existingApp.LastCompletedStep ?? null) : null;
+    // A checkpoint value that isn't one of Remove's own steps belongs to a different (and now
+    // abandoned) operation — e.g. an Upgrade interrupted before this remove was invoked, whose
+    // checkpoint happens to share a step name with Install/Upgrade ('PackagesInstalled' etc.).
+    // Clear it now, before any destructive DB work, so a LATER operation of that other type
+    // can't wrongly resume from a promise this remove attempt is about to invalidate
+    // (cross-operation checkpoint contamination).
+    const resumeCheckpoint = IsOwnCheckpoint(REMOVE_STEP_ORDER, rawCheckpoint) ? rawCheckpoint : null;
+    if (existingApp.LastCompletedStep && !resumeCheckpoint) {
+      await SetAppStep(context.ContextUser, existingApp.ID, null);
+    }
     if (resumeCheckpoint) {
       Callbacks?.OnProgress?.('Resume', `Resuming removal of ${options.AppName} from step '${resumeCheckpoint}'...`);
     }
@@ -1145,7 +1198,7 @@ export async function DisableApp(appName: string, context: OrchestratorContext):
   // Mutex: disabling mid-install/upgrade/remove would flip Status away from what that
   // operation's resume logic expects to see, corrupting its checkpoint read.
   if (!SETTLED_STATUSES.has(app.Status)) {
-    return BuildMutexConflictResult('Install', appName, app.Version, startTime, app.Status);
+    return BuildMutexConflictResult('Install', appName, app.Version, startTime, app.Status, 'disable');
   }
 
   const toggle = ToggleServerDynamicPackages(context.RepoRoot, appName, false, context.ServerPackagePath);
@@ -1178,7 +1231,7 @@ export async function EnableApp(appName: string, context: OrchestratorContext): 
   // Mutex: see DisableApp — enabling mid-install/upgrade/remove would corrupt that operation's
   // in-progress state the same way.
   if (!SETTLED_STATUSES.has(app.Status)) {
-    return BuildMutexConflictResult('Install', appName, app.Version, startTime, app.Status);
+    return BuildMutexConflictResult('Install', appName, app.Version, startTime, app.Status, 'enable');
   }
 
   const toggle = ToggleServerDynamicPackages(context.RepoRoot, appName, true, context.ServerPackagePath);
