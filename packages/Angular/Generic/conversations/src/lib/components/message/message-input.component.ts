@@ -727,6 +727,18 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
           return;
         }
 
+        // Streamed final-response content: the service accumulates deltas, so
+        // progress.streaming.content is always the full reply text so far — assign it.
+        // The completion flow (above guards + the 'complete' path) reconciles the
+        // bubble with the server-saved final message, so no append/merge is needed here.
+        if (progress.streaming) {
+          message.Message = progress.streaming.content;
+          this.messageSent.emit(message);
+          // Keep the tasks dropdown on a stable status line rather than the growing reply text.
+          this.activeTasks.updateStatusByConversationDetailId(message.ID, 'Responding…');
+          return;
+        }
+
         // Default: plain message (used by RunAIAgentResolver and TaskOrchestrator without step info)
         message.Message = progress.message;
 

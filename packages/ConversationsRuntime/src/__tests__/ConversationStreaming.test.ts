@@ -169,6 +169,121 @@ describe('ConversationStreaming', () => {
         });
     });
 
+    describe('streaming content routing', () => {
+        function streamChunk(
+            content: string,
+            options: { isPartial?: boolean; kind?: string; detailId?: string | null } = {}
+        ): Record<string, unknown> {
+            const { isPartial = true, detailId = 'detail-1' } = options;
+            // Distinguish "key absent" (default to final-response) from an explicit
+            // undefined (an unmarked chunk) — a destructuring default can't do that.
+            const kind = 'kind' in options ? options.kind : 'final-response';
+            return {
+                data: {
+                    type: 'streaming',
+                    agentRun: detailId ? { ConversationDetailID: detailId, Agent: 'Sage' } : { Agent: 'Sage' },
+                    streaming: { content, isPartial, kind },
+                },
+            };
+        }
+
+        it('surfaces a final-response chunk with accumulated content on the streaming field', async () => {
+            const cb = vi.fn();
+            streaming.registerMessageCallback('detail-1', cb);
+
+            await dispatchAgentProgress(streaming, streamChunk('Hello'));
+
+            expect(cb).toHaveBeenCalledOnce();
+            const update = cb.mock.calls[0][0];
+            expect(update.conversationDetailId).toBe('detail-1');
+            expect(update.streaming).toEqual({ content: 'Hello', isPartial: true, kind: 'final-response' });
+            expect(update.message).toBe('Hello');
+            expect(update.resolver).toBe('RunAIAgentResolver');
+        });
+
+        it('accumulates deltas across chunks so callbacks always get the full text so far', async () => {
+            const cb = vi.fn();
+            streaming.registerMessageCallback('detail-1', cb);
+
+            await dispatchAgentProgress(streaming, streamChunk('Hel'));
+            await dispatchAgentProgress(streaming, streamChunk('lo '));
+            await dispatchAgentProgress(streaming, streamChunk('world'));
+
+            expect(cb).toHaveBeenCalledTimes(3);
+            expect(cb.mock.calls[2][0].streaming.content).toBe('Hello world');
+        });
+
+        it('marks the final chunk isPartial=false and resets accumulation for the next stream', async () => {
+            const cb = vi.fn();
+            streaming.registerMessageCallback('detail-1', cb);
+
+            await dispatchAgentProgress(streaming, streamChunk('Answer'));
+            await dispatchAgentProgress(streaming, streamChunk('', { isPartial: false }));
+            // A later stream for the same message starts from scratch.
+            await dispatchAgentProgress(streaming, streamChunk('Fresh'));
+
+            expect(cb.mock.calls[1][0].streaming).toEqual({ content: 'Answer', isPartial: false, kind: 'final-response' });
+            expect(cb.mock.calls[2][0].streaming.content).toBe('Fresh');
+        });
+
+        it('drops chunks without a renderable kind (raw prompt output keeps pre-streaming behavior)', async () => {
+            const cb = vi.fn();
+            streaming.registerMessageCallback('detail-1', cb);
+
+            await dispatchAgentProgress(streaming, streamChunk('{"taskComplete":', { kind: undefined }));
+            await dispatchAgentProgress(streaming, streamChunk('secret', { kind: 'something-else' }));
+
+            expect(cb).not.toHaveBeenCalled();
+        });
+
+        it('ignores streaming chunks without a conversationDetailId', async () => {
+            const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+            try {
+                const cb = vi.fn();
+                streaming.registerMessageCallback('detail-1', cb);
+
+                await dispatchAgentProgress(streaming, streamChunk('orphan', { detailId: null }));
+
+                expect(cb).not.toHaveBeenCalled();
+            } finally {
+                consoleSpy.mockRestore();
+            }
+        });
+
+        it('drops partial accumulation on reconnection so lost chunks cannot splice the text', async () => {
+            vi.useFakeTimers();
+            try {
+                const cb = vi.fn();
+                streaming.registerMessageCallback('detail-1', cb);
+
+                await dispatchAgentProgress(streaming, streamChunk('first half '));
+                // Simulate a subscription drop: chunks published while down are lost,
+                // so the kept prefix would splice with post-reconnect deltas.
+                (streaming as unknown as { scheduleReconnection(): void }).scheduleReconnection();
+                await dispatchAgentProgress(streaming, streamChunk('second half'));
+
+                const last = cb.mock.calls[cb.mock.calls.length - 1][0];
+                expect(last.streaming.content).toBe('second half');
+            } finally {
+                vi.useRealTimers();
+            }
+        });
+
+        it('clears accumulated stream state when the run completes', async () => {
+            const cb = vi.fn();
+            streaming.registerMessageCallback('detail-1', cb);
+
+            await dispatchAgentProgress(streaming, streamChunk('partial answer'));
+            await dispatchAgentProgress(streaming, {
+                data: { type: 'complete', agentRunId: 'run-1', conversationDetailId: 'detail-1', success: true },
+            });
+            await dispatchAgentProgress(streaming, streamChunk('next run'));
+
+            const last = cb.mock.calls[cb.mock.calls.length - 1][0];
+            expect(last.streaming.content).toBe('next run');
+        });
+    });
+
     describe('completion + late-arrival replay', () => {
         it('clears the matching task via the IActiveTaskTracker adapter on completion', async () => {
             await dispatchAgentProgress(streaming, {
