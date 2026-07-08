@@ -1,5 +1,5 @@
 ---
-"@memberjunction/integration-connectors": minor
+"@memberjunction/integration-connectors": patch
 ---
 
 Add the External-Data-Source-backed ingestion connector abstractions (the "heart"): `BaseExternalDataSourceConnector` (family-neutral — resolves the shared `MJ: External Data Sources` row via the EDS router, `TestConnection`, `IntrospectSchema` mapping `ExternalSchemaDescriptor` → `SourceSchemaInfo`, and generic incremental `FetchChanges` that passes a **structured `incrementalSince` watermark bound + raw ordering columns** to `driver.RunView` — the connector writes NO dialect SQL; the EDS driver renders the predicate, quoting, and literal formatting), plus the `BaseSqlExternalDataSourceConnector` (SQL family — **authoritative** discovery) and `BaseDocumentDataSourceConnector` (document/NoSQL family — **non-authoritative** sampled discovery) families. The connection binds to a shared EDS row via `Configuration.externalDataSourceID`; credentials flow through CredentialEngine. Deprecates the SQL-Server-hardcoded, inline-`mssql` `RelationalDBConnector`. Thin per-engine leaves ship as Open Apps in the MemberJunction/Integrations repo.
