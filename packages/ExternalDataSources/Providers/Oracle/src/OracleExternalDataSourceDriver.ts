@@ -17,6 +17,8 @@ import {
   ExternalQueryParameter,
   ExternalQueryResult,
   ExternalRow,
+  isIso8601DateTime,
+  iso8601Zone,
 } from "@memberjunction/external-data-sources";
 
 /** Non-secret connection config stored in ExternalDataSource.ConnectionConfig (JSON). */
@@ -369,8 +371,7 @@ export class OracleExternalDataSourceDriver extends BaseSqlExternalDataSourceDri
     if (params.maxRows == null) {
       return undefined; // only pay for the count when paginating
     }
-    const where = this.effectiveWhere(params);
-    const { rows } = await this.query<{ CNT: number }>(pool, `SELECT COUNT(*) AS cnt FROM ${target}${where ? ` WHERE ${where}` : ''}`);
+    const { rows } = await this.query<{ CNT: number }>(pool, this.buildCountSql(target, params));
     return Number(rows[0]?.CNT ?? 0);
   }
 
@@ -433,12 +434,20 @@ export class OracleExternalDataSourceDriver extends BaseSqlExternalDataSourceDri
    * ZONE column for exact boundaries.
    */
   protected override formatIncrementalLiteral(value: string): string {
-    const isIsoTimestamp = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:?\d{2})?$/.test(value);
-    if (!isIsoTimestamp) {
+    if (!isIso8601DateTime(value)) {
       return this.quoteLiteral(value);
     }
-    const fractional = value.includes('.') ? '.FF3' : '';
-    const zoneLiteral = value.endsWith('Z') ? '"Z"' : '';
-    return `TO_TIMESTAMP(${this.quoteLiteral(value)}, 'YYYY-MM-DD"T"HH24:MI:SS${fractional}${zoneLiteral}')`;
+    const fractional = value.includes('.') ? '.FF' : ''; // FF matches any fractional precision (not just 3)
+    const zone = iso8601Zone(value);
+    if (zone) {
+      // Zoned watermark → TO_TIMESTAMP_TZ with an explicit `TZH:TZM` offset. Oracle can't parse a bare
+      // 'Z', so normalize it to '+00:00'; a numeric offset (e.g. +05:30) passes through. This fixes the
+      // ORA-01830 that a plain TO_TIMESTAMP mask (no TZH:TZM) threw on an offset/Z, and preserves the
+      // true instant rather than swallowing 'Z' as a literal.
+      const normalized = zone === 'Z' ? value.replace(/Z$/, '+00:00') : value;
+      return `TO_TIMESTAMP_TZ(${this.quoteLiteral(normalized)}, 'YYYY-MM-DD"T"HH24:MI:SS${fractional}TZH:TZM')`;
+    }
+    // Zoneless (naive) → TO_TIMESTAMP; compared in the session time zone (see the incremental TZ caveat).
+    return `TO_TIMESTAMP(${this.quoteLiteral(value)}, 'YYYY-MM-DD"T"HH24:MI:SS${fractional}')`;
   }
 }

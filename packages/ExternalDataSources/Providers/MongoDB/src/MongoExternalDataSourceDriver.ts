@@ -10,6 +10,7 @@ import {
   ExternalQueryParameter,
   ExternalQueryResult,
   ExternalRow,
+  parseIso8601AsUtc,
 } from '@memberjunction/external-data-sources';
 import { MongoFilterTranslator } from './MongoFilterTranslator';
 
@@ -327,15 +328,18 @@ export class MongoExternalDataSourceDriver extends BaseExternalDataSourceDriver<
     return sort;
   }
 
-  /** Coerce a watermark string into the value Mongo will `$gte`-match: ISO date → Date, numeric → number, else the string. */
+  /**
+   * Coerce a watermark string into the value Mongo will `$gte`-match: an ISO-8601 date-time → `Date`
+   * (a zoneless one interpreted as UTC, never server-local), a finite numeric → number, else the string
+   * verbatim. `Number.isFinite` (not `!isNaN`) so `'Infinity'`/`'NaN'` stay strings rather than becoming
+   * numeric bounds.
+   */
   private coerceIncrementalValue(value: string): unknown {
-    if (/^\d{4}-\d{2}-\d{2}T/.test(value)) {
-      const d = new Date(value);
-      if (!Number.isNaN(d.getTime())) return d;
-    }
+    const d = parseIso8601AsUtc(value);
+    if (d) return d;
     if (value.trim() !== '') {
       const n = Number(value);
-      if (!Number.isNaN(n)) return n;
+      if (Number.isFinite(n)) return n;
     }
     return value;
   }

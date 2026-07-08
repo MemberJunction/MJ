@@ -18,6 +18,7 @@
  */
 
 import { ObjectId } from 'mongodb';
+import { parseIso8601AsUtc } from '@memberjunction/external-data-sources';
 
 type MongoFilter = Record<string, unknown>;
 type Primitive = string | number | boolean | null;
@@ -232,15 +233,20 @@ export class MongoFilterTranslator {
    * Coerce an ISO-8601 date-time string literal to a `Date` so range/equality comparisons match Mongo's
    * native `Date`-typed fields (BSON compares across types by a fixed order, so a string never matches a
    * `Date`). Without this, an incremental-sync watermark predicate like `updatedAt >= '2026-03-01T…Z'`
-   * silently matches ZERO documents. Only strict ISO-8601 date-times (with a `T` time component) are
-   * coerced — a plain `'2026-03-01'` or any non-temporal string passes through unchanged, so callers who
-   * genuinely store ISO-looking strings are unaffected. Applied to comparison + IN values (alongside
-   * {@link CoerceObjectId}); an already-coerced ObjectId / non-string passes through.
+   * silently matched ZERO documents.
+   *
+   * BEHAVIOR CHANGE / deliberate trade-off: a field that actually STORES an ISO-looking STRING no longer
+   * matches such a predicate — `field >= '<iso>'` previously compared string↔string lexicographically, and
+   * now the literal is a `Date` (which never equals a stored string). This is the mirror of the bug being
+   * fixed; native `Date` fields are far more common and a watermark predicate needs `Date` semantics, so a
+   * source that genuinely stores ISO strings must compare via `RunNativeQuery` (the escape hatch). A
+   * ZONELESS ISO string is interpreted as UTC (via {@link parseIso8601AsUtc}), never server-local. Date-only
+   * (`'2026-03-01'`) and non-temporal strings pass through unchanged.
    */
   public static CoerceTemporal(value: unknown): unknown {
-    if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:?\d{2})?$/.test(value)) {
-      const d = new Date(value);
-      if (!Number.isNaN(d.getTime())) {
+    if (typeof value === 'string') {
+      const d = parseIso8601AsUtc(value);
+      if (d) {
         return d;
       }
     }

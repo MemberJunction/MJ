@@ -1,5 +1,63 @@
 # Change Log - @memberjunction/core-actions
 
+## 5.45.0
+
+### Patch Changes
+
+- Updated dependencies [45d121b]
+- Updated dependencies [21e33fe]
+- Updated dependencies [b7cf50f]
+- Updated dependencies [19ec4b0]
+- Updated dependencies [f4f11fa]
+- Updated dependencies [e370816]
+- Updated dependencies [f99cbc1]
+- Updated dependencies [11d5b4e]
+- Updated dependencies [fbee64c]
+- Updated dependencies [81a8aa2]
+- Updated dependencies [82ca89b]
+- Updated dependencies [b2927f1]
+- Updated dependencies [6125dcd]
+- Updated dependencies [ad9f4a3]
+- Updated dependencies [c1f2d3d]
+- Updated dependencies [0b1e009]
+  - @memberjunction/core@5.45.0
+  - @memberjunction/core-entities-server@5.45.0
+  - @memberjunction/ai-agents@5.45.0
+  - @memberjunction/core-entities@5.45.0
+  - @memberjunction/generic-database-provider@5.45.0
+  - @memberjunction/integration-engine@5.45.0
+  - @memberjunction/ai-engine-base@5.45.0
+  - @memberjunction/aiengine@5.45.0
+  - @memberjunction/ai-core-plus@5.45.0
+  - @memberjunction/global@5.45.0
+  - @memberjunction/ai-agent-manager@5.45.0
+  - @memberjunction/clustering-engine@5.45.0
+  - @memberjunction/ai-mcp-client@5.45.0
+  - @memberjunction/ai-prompts@5.45.0
+  - @memberjunction/ai-vector-sync@5.45.0
+  - @memberjunction/actions-base@5.45.0
+  - @memberjunction/code-execution@5.45.0
+  - @memberjunction/actions@5.45.0
+  - @memberjunction/communication-types@5.45.0
+  - @memberjunction/communication-engine@5.45.0
+  - @memberjunction/content-autotagging@5.45.0
+  - @memberjunction/external-change-detection@5.45.0
+  - @memberjunction/interactive-component-types@5.45.0
+  - @memberjunction/lists@5.45.0
+  - @memberjunction/storage@5.45.0
+  - @memberjunction/react-linter@5.45.0
+  - @memberjunction/record-set-processor-base@5.45.0
+  - @memberjunction/record-set-processor@5.45.0
+  - @memberjunction/sqlserver-dataprovider@5.45.0
+  - @memberjunction/search-engine@5.45.0
+  - @memberjunction/esignature@5.45.0
+  - @memberjunction/geo-core@5.45.0
+  - @memberjunction/ai@5.45.0
+  - @memberjunction/ai-betty-bot@5.45.0
+  - @memberjunction/lists-base@5.45.0
+  - @memberjunction/export-engine@5.45.0
+  - @memberjunction/sql-dialect@5.45.0
+
 ## 5.44.0
 
 ### Patch Changes
