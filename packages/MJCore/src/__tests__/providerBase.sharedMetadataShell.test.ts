@@ -45,27 +45,47 @@ describe('ProviderBase shared metadata shell (reuse-global fast path)', () => {
         Metadata.Provider = previousGlobalProvider;
     });
 
-    test('a provider reusing global metadata shares the entity array by reference (no deep clone)', async () => {
+    test('a provider reusing global metadata shares the Info INSTANCES but owns its array containers', async () => {
         const perRequestProvider = new TestMetadataProvider();
         const result = await perRequestProvider.Config(reuseGlobalConfig());
 
         expect(result).toBe(true);
         expect(perRequestProvider.Entities.length).toBeGreaterThan(0);
-        // The whole point of #3083: same array instance, same EntityInfo instances —
-        // not a re-instantiated copy of the 617-entity graph.
-        expect(perRequestProvider.Entities).toBe(globalProvider.Entities);
+        // The whole point of #3083: the same EntityInfo instances — never a
+        // re-instantiated copy of the 617-entity graph...
         expect(perRequestProvider.Entities[0]).toBe(globalProvider.Entities[0]);
+        // ...but the array CONTAINER is per-instance (shallow copy), so an in-place
+        // sort/push/splice by request-scoped code stays request-local instead of
+        // reordering the global graph for every other in-flight request.
+        expect(perRequestProvider.Entities).not.toBe(globalProvider.Entities);
+        expect(perRequestProvider.Entities).toEqual(globalProvider.Entities);
+    });
+
+    test('in-place array mutation on a reusing provider cannot corrupt the global graph', async () => {
+        const perRequestProvider = new TestMetadataProvider();
+        await perRequestProvider.Config(reuseGlobalConfig());
+
+        const globalOrder = [...globalProvider.Entities];
+        perRequestProvider.Entities.reverse();
+        perRequestProvider.Entities.push(globalProvider.Entities[0]);
+
+        expect(globalProvider.Entities).toEqual(globalOrder);
+        expect(globalProvider.Entities.length).toBe(globalOrder.length);
     });
 
     test('every metadata collection is shared — a newly added collection cannot silently regress', async () => {
         const perRequestProvider = new TestMetadataProvider();
         await perRequestProvider.Config(reuseGlobalConfig());
 
-        const shell = perRequestProvider.AllMetadata as unknown as Record<string, unknown>;
-        const source = globalProvider.AllMetadata as unknown as Record<string, unknown>;
+        const shell = perRequestProvider.AllMetadata as unknown as Record<string, unknown[]>;
+        const source = globalProvider.AllMetadata as unknown as Record<string, unknown[]>;
         for (const m of AllMetadataArrays) {
             expect(source[m.key], `global provider is missing ${m.key}`).toBeDefined();
-            expect(shell[m.key], `shell must share ${m.key} by reference`).toBe(source[m.key]);
+            expect(shell[m.key], `shell must have its own ${m.key} container`).not.toBe(source[m.key]);
+            expect(shell[m.key].length, `shell ${m.key} must carry the global's items`).toBe(source[m.key].length);
+            for (let i = 0; i < source[m.key].length; i++) {
+                expect(shell[m.key][i], `shell ${m.key}[${i}] must be the SAME instance`).toBe(source[m.key][i]);
+            }
         }
         // AllMetadataArrays must cover every array collection on AllMetadata — if a new
         // collection is added to the class but not the registry, the shell would hold an
@@ -141,10 +161,32 @@ describe('ProviderBase shared metadata shell (reuse-global fast path)', () => {
         expect(inFlightProvider.Entities).toBe(snapshotEntities);
         expect(inFlightProvider.Entities[0].Name).not.toBe('Refreshed Entity');
 
-        // A provider configured after the refresh shares the NEW graph.
+        // A provider configured after the refresh shares the NEW graph's instances.
         const nextRequestProvider = new TestMetadataProvider();
         await nextRequestProvider.Config(reuseGlobalConfig());
-        expect(nextRequestProvider.Entities).toBe(globalProvider.Entities);
+        expect(nextRequestProvider.Entities[0]).toBe(globalProvider.Entities[0]);
         expect(nextRequestProvider.EntityByName('Refreshed Entity')).toBe(globalProvider.Entities[0]);
+    });
+
+    test('a subclass override of CloneAllMetadata is still honored on the fast path (pre-#3083 seam)', async () => {
+        // External subclasses (e.g. tenant scoping) customized the reuse path by
+        // overriding CloneAllMetadata — the base class must keep calling the override
+        // rather than silently switching them to the shared shell.
+        class CloneOverridingProvider extends TestMetadataProvider {
+            public CloneCalls = 0;
+            protected override CloneAllMetadata(toClone: AllMetadata): AllMetadata {
+                this.CloneCalls++;
+                return super['CloneAllMetadata'](toClone);
+            }
+        }
+
+        const customProvider = new CloneOverridingProvider();
+        const result = await customProvider.Config(reuseGlobalConfig());
+
+        expect(result).toBe(true);
+        expect(customProvider.CloneCalls).toBe(1);
+        // The override produced a DEEP clone — distinct Info instances, not the shell.
+        expect(customProvider.Entities.length).toBe(globalProvider.Entities.length);
+        expect(customProvider.Entities[0]).not.toBe(globalProvider.Entities[0]);
     });
 });
