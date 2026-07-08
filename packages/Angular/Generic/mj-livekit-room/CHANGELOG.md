@@ -1,5 +1,17 @@
 # @memberjunction/ng-mj-livekit-room
 
+## 5.45.1
+
+### Patch Changes
+
+- @memberjunction/graphql-dataprovider@5.45.1
+- @memberjunction/ng-media-player@5.45.1
+- @memberjunction/ng-base-types@5.45.1
+- @memberjunction/ng-livekit-room@5.45.1
+- @memberjunction/livekit-room-core@5.45.1
+- @memberjunction/core@5.45.1
+- @memberjunction/global@5.45.1
+
 ## 5.45.0
 
 ### Patch Changes

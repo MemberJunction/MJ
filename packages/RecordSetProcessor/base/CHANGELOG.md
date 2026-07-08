@@ -1,5 +1,12 @@
 # @memberjunction/record-set-processor-base
 
+## 5.45.1
+
+### Patch Changes
+
+- @memberjunction/core@5.45.1
+- @memberjunction/global@5.45.1
+
 ## 5.45.0
 
 ### Patch Changes

@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/entity-communications-server
 
+## 5.45.1
+
+### Patch Changes
+
+- @memberjunction/communication-engine@5.45.1
+- @memberjunction/communication-types@5.45.1
+- @memberjunction/entity-communications-base@5.45.1
+- @memberjunction/core@5.45.1
+- @memberjunction/core-entities@5.45.1
+- @memberjunction/global@5.45.1
+
 ## 5.45.0
 
 ### Patch Changes
