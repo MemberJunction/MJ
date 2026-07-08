@@ -1,5 +1,48 @@
 # @memberjunction/ng-bootstrap
 
+## 5.45.0
+
+### Patch Changes
+
+- 21e33fe: Move Skip to a client-side Open App and remove server-embedded agent; scope-gate query/view/search resolvers with API-key scope authorization; add credential-store fallback for component registry keys; support Open App in-process lifecycle hooks with interactive prompts.
+- Updated dependencies [45d121b]
+- Updated dependencies [21e33fe]
+- Updated dependencies [b7cf50f]
+- Updated dependencies [13716e4]
+- Updated dependencies [f4f11fa]
+- Updated dependencies [e370816]
+- Updated dependencies [fbee64c]
+- Updated dependencies [6e10f66]
+- Updated dependencies [b2927f1]
+- Updated dependencies [6125dcd]
+- Updated dependencies [ad9f4a3]
+- Updated dependencies [c1f2d3d]
+- Updated dependencies [0b1e009]
+  - @memberjunction/core@5.45.0
+  - @memberjunction/ng-dashboards@5.45.0
+  - @memberjunction/graphql-dataprovider@5.45.0
+  - @memberjunction/ng-core-entity-forms@5.45.0
+  - @memberjunction/ng-artifacts@5.45.0
+  - @memberjunction/ng-conversations@5.45.0
+  - @memberjunction/core-entities@5.45.0
+  - @memberjunction/ng-explorer-core@5.45.0
+  - @memberjunction/ai-engine-base@5.45.0
+  - @memberjunction/ai-core-plus@5.45.0
+  - @memberjunction/tag-engine-base@5.45.0
+  - @memberjunction/ai-vectors-memory@5.45.0
+  - @memberjunction/actions-base@5.45.0
+  - @memberjunction/ng-auth-services@5.45.0
+  - @memberjunction/ng-explorer-settings@5.45.0
+  - @memberjunction/ng-shared@5.45.0
+  - @memberjunction/ng-clustering@5.45.0
+  - @memberjunction/ng-dashboard-viewer@5.45.0
+  - @memberjunction/ng-entity-action-ux@5.45.0
+  - @memberjunction/ng-entity-viewer@5.45.0
+  - @memberjunction/ng-file-storage@5.45.0
+  - @memberjunction/communication-types@5.45.0
+  - @memberjunction/entity-communications-base@5.45.0
+  - @memberjunction/ai-realtime-client@5.45.0
+
 ## 5.44.0
 
 ### Minor Changes
