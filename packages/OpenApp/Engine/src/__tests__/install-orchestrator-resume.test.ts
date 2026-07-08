@@ -334,7 +334,7 @@ describe('RemoveApp — resume after a crash mid-remove', () => {
 
         expect(result.Success).toBe(true);
         expect(vi.mocked(RemoveServerDynamicPackages)).not.toHaveBeenCalled();
-        expect(vi.mocked(UpdateAppRecord)).toHaveBeenCalledWith(expect.anything(), 'app-x-id', { Status: 'Removed', LastCompletedStep: null });
+        expect(vi.mocked(UpdateAppRecord)).toHaveBeenCalledWith(expect.anything(), 'app-x-id', { Status: 'Removed', LastCompletedStep: null, LastCompletedStepTargetVersion: null });
     });
 
     it('an Error-status remove with a DbCleanupDone checkpoint skips DB cleanup and finishes via files', async () => {

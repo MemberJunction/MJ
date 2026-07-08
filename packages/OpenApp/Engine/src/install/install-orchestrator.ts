@@ -1141,6 +1141,11 @@ export async function RemoveApp(options: RemoveOptions, context: OrchestratorCon
     await UpdateAppRecord(context.ContextUser, existingApp.ID, {
       Status: 'Removed',
       LastCompletedStep: null,
+      // Cleared alongside LastCompletedStep by convention (see SetAppStep) — this write bypasses
+      // SetAppStep for the single-call Status+checkpoint atomicity above, so it must clear this
+      // column explicitly to keep the pairing invariant local rather than relying on it holding
+      // transitively via every other code path.
+      LastCompletedStepTargetVersion: null,
     });
     try {
       await RecordInstallHistoryEntry(context.ContextUser, existingApp.ID, 'Remove', manifest, {
