@@ -687,6 +687,10 @@ describe('Cross-Dialect Comparison Tests', () => {
             expect(sql).toContain("con.contype = 'f'");
             expect(sql).toContain("cn.nspname = '__mj'");
             expect(sql).not.toContain('$1'); // literal-embedded, not a positional placeholder
+            // Must avoid `WITH ORDINALITY`: PostgreSQLDataProvider.autoQuoteIdentifiers quotes the bare
+            // uppercase word ORDINALITY → `WITH "ORDINALITY"` → syntax error when run via ExecuteSQL.
+            expect(sql).not.toContain('ORDINALITY');
+            expect(sql).not.toContain('LATERAL');
         });
 
         it('both dialects return the SAME normalized column aliases the planner parses', () => {

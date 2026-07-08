@@ -853,6 +853,23 @@ export abstract class SQLDialect implements SQLParserDialect {
      */
     abstract ForeignKeyGraphSQL(schema: string): string;
 
+    /**
+     * Wraps a list of statements in ONE all-or-nothing transaction batch for this platform, ready to
+     * run as a single `ExecuteSQL(script)` call. Owns the platform-specific session/transaction setup
+     * so callers don't sniff `PlatformKey` themselves:
+     *
+     * - **SQL Server**: `SET QUOTED_IDENTIFIER ON` / `SET ANSI_NULLS ON` (required for UPDATE/DELETE
+     *   against tables with filtered / computed-column indexes or indexed views — Msg 1934 otherwise)
+     *   + `SET XACT_ABORT ON` (any failure rolls the whole batch back) + `BEGIN/COMMIT TRANSACTION`.
+     * - **PostgreSQL**: plain `BEGIN … COMMIT` — no session pragmas (`QUOTED_IDENTIFIER`/`ANSI_NULLS`
+     *   are SQL-Server concepts) and PostgreSQL already aborts the whole transaction on any error.
+     *
+     * Returns an empty string for an empty statement list (nothing to run).
+     *
+     * @param statements individual SQL statements (each WITHOUT a trailing `;`)
+     */
+    abstract AtomicBatchScript(statements: string[]): string;
+
     // ─── Null Handling ───────────────────────────────────────────────
 
     /**

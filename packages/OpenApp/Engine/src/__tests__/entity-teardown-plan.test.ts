@@ -97,15 +97,18 @@ describe.each(dialects)('buildEntityTeardownPlan (pure FK-walk) [%s]', (_name, d
   });
 });
 
-describe('buildRootDoomedPredicate — dialect-quoted', () => {
-  it('SQL Server brackets the column', () => {
-    expect(buildRootDoomedPredicate(GetDialect('sqlserver'), 'app_x')).toBe("[SchemaName] = 'app_x'");
+describe('buildRootDoomedPredicate — dialect-quoted, case-insensitive', () => {
+  it('SQL Server brackets the column and lowercases both sides', () => {
+    expect(buildRootDoomedPredicate(GetDialect('sqlserver'), 'app_x')).toBe("LOWER([SchemaName]) = LOWER('app_x')");
   });
-  it('PostgreSQL double-quotes the column', () => {
-    expect(buildRootDoomedPredicate(GetDialect('postgresql'), 'app_x')).toBe('"SchemaName" = \'app_x\'');
+  it('PostgreSQL double-quotes the column and lowercases both sides (folded-identifier match)', () => {
+    expect(buildRootDoomedPredicate(GetDialect('postgresql'), 'app_x')).toBe('LOWER("SchemaName") = LOWER(\'app_x\')');
+  });
+  it('matches regardless of case — the manifest casing finds the PG-folded Entity rows', () => {
+    expect(buildRootDoomedPredicate(GetDialect('postgresql'), '__mj_BizAppsTasks')).toBe('LOWER("SchemaName") = LOWER(\'__mj_BizAppsTasks\')');
   });
   it("escapes a single-quote in the schema name (no injection)", () => {
-    expect(buildRootDoomedPredicate(GetDialect('sqlserver'), "a'b")).toBe("[SchemaName] = 'a''b'");
+    expect(buildRootDoomedPredicate(GetDialect('sqlserver'), "a'b")).toBe("LOWER([SchemaName]) = LOWER('a''b')");
   });
 });
 

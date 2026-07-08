@@ -107,7 +107,8 @@ export {
     UpgradeApp,
     RemoveApp,
     DisableApp,
-    EnableApp
+    EnableApp,
+    RemoveAppEntityMetadata
 } from './install/install-orchestrator.js';
 export type { OrchestratorContext } from './install/install-orchestrator.js';
 
