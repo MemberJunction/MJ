@@ -4,7 +4,7 @@ import { DatabaseProviderBase, LogError, LogStatus, Metadata, RunView, UserInfo,
 import { MJConversationDetailEntity, MJConversationDetailAttachmentEntity, MJConversationDetailArtifactEntity, MJArtifactVersionEntity, MJAIAgentRequestEntity, ArtifactMetadataEngine } from '@memberjunction/core-entities';
 import { RouteArtifact } from './artifact-routing.js';
 import { AgentRunner, ArtifactToolManager } from '@memberjunction/ai-agents';
-import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, ExecuteAgentResult, ConversationUtility, AttachmentData } from '@memberjunction/ai-core-plus';
+import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, ExecuteAgentResult, ConversationUtility, AttachmentData, AgentExecutionStreamingCallback } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ChatMessage, ChatMessageContent } from '@memberjunction/ai';
 import { ResolverBase } from '../generic/ResolverBase.js';
@@ -12,6 +12,7 @@ import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
 import { startLivenessPulse } from '../generic/FireAndForgetHeartbeat.js';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { GetReadWriteProvider } from '../util.js';
+import { resolveWidgetGuestRunContext, elevateUserPayload } from '../realtimeWidget/widgetGuestElevation.js';
 import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import { GetAttachmentService } from '@memberjunction/aiengine';
 import { NotificationEngine } from '@memberjunction/notifications';
@@ -77,6 +78,17 @@ export class AgentStreamingContent {
 
     @Field({ nullable: true })
     agentName?: string;
+
+    /**
+     * Content discriminator passed through from the agent's streaming chunk (see
+     * `AgentExecutionStreamingCallback` in @memberjunction/ai-core-plus).
+     * 'final-response' marks user-facing reply deltas the conversation client
+     * accumulates + renders into the message bubble; chunks without a kind are
+     * raw prompt output (e.g. a Loop agent's JSON turn envelope) and are not
+     * rendered by the conversation client.
+     */
+    @Field({ nullable: true })
+    kind?: string;
 }
 
 @ObjectType()
@@ -321,8 +333,8 @@ export class RunAIAgentResolver extends ResolverBase {
     /**
      * Create streaming content callback
      */
-    private createStreamingCallback(pubSub: PubSubEngine, sessionId: string, userPayload: UserPayload, agentRunRef: { current: any }) {
-        return (chunk: any) => {
+    private createStreamingCallback(pubSub: PubSubEngine, sessionId: string, userPayload: UserPayload, agentRunRef: { current: MJAIAgentRunEntityExtended | null }): AgentExecutionStreamingCallback {
+        return (chunk) => {
             // Use the agent run from the ref
             const agentRun = agentRunRef.current;
             if (!agentRun) {
@@ -340,7 +352,8 @@ export class RunAIAgentResolver extends ResolverBase {
                     content: chunk.content,
                     isPartial: !chunk.isComplete,
                     stepName: chunk.stepType,
-                    agentName: chunk.modelName
+                    agentName: chunk.modelName,
+                    kind: chunk.kind
                 },
                 timestamp: new Date()
             };
@@ -376,7 +389,12 @@ export class RunAIAgentResolver extends ResolverBase {
         conversationId?: string,
         /** Optional external ref the caller can read to observe the agent run as it becomes available
          *  (used by the fire-and-forget liveness pulse to enrich heartbeats with the run id/status). */
-        runRef?: { current: MJAIAgentRunEntityExtended | null }
+        runRef?: { current: MJAIAgentRunEntityExtended | null },
+        /** Per-request Plan Mode toggle — threaded into ExecuteAgentParams.planMode (root-agent HITL gate). */
+        planMode?: boolean,
+        /** Skill IDs the user requested (via `/skill-name`) — threaded into ExecuteAgentParams.requestedSkillIDs.
+         *  The framework intersects them with the agent's accepted skills AND the user's Run permission. */
+        requestedSkillIDs?: string[]
     ): Promise<AIAgentRunResult> {
         const startTime = Date.now();
         
@@ -428,6 +446,8 @@ export class RunAIAgentResolver extends ResolverBase {
                 lastRunId: lastRunId,
                 autoPopulateLastRunPayload: autoPopulateLastRunPayload,
                 configurationId: configurationId,
+                planMode: planMode,
+                requestedSkillIDs: requestedSkillIDs,
                 data: parsedData,
                 context: {
                     dataSource: dataSource
@@ -614,7 +634,12 @@ export class RunAIAgentResolver extends ResolverBase {
         @Arg('createNotification', { nullable: true }) createNotification?: boolean,
         @Arg('sourceArtifactId', { nullable: true }) sourceArtifactId?: string,
         @Arg('sourceArtifactVersionId', { nullable: true }) sourceArtifactVersionId?: string,
-        @Arg('fireAndForget', { nullable: true }) fireAndForget?: boolean
+        @Arg('fireAndForget', { nullable: true }) fireAndForget?: boolean,
+        /** Per-request Plan Mode toggle — symmetric with RunAIAgentFromConversationDetail. */
+        @Arg('planMode', { nullable: true }) planMode?: boolean,
+        /** Skill IDs the user requested — symmetric with RunAIAgentFromConversationDetail. Intersected
+         *  server-side with the agent's accepted skills AND the user's Run permission. */
+        @Arg('requestedSkillIDs', () => [String], { nullable: true }) requestedSkillIDs?: string[]
     ): Promise<AIAgentRunResult> {
         // Check API key scope authorization for agent execution
         await this.CheckAPIKeyScopeAuthorization('agent:execute', agentId, userPayload);
@@ -628,7 +653,7 @@ export class RunAIAgentResolver extends ResolverBase {
                 p, dataSource, agentId, userPayload, messagesJson, sessionId, pubSub,
                 data, payload, lastRunId, autoPopulateLastRunPayload, configurationId,
                 conversationDetailId, createArtifacts || false, createNotification || false,
-                sourceArtifactId, sourceArtifactVersionId
+                sourceArtifactId, sourceArtifactVersionId, undefined /*conversationId*/, planMode, requestedSkillIDs
             );
 
             LogStatus(`🔥 Fire-and-forget: Agent ${agentId} execution started in background for session ${sessionId}`);
@@ -658,7 +683,11 @@ export class RunAIAgentResolver extends ResolverBase {
             createArtifacts || false,
             createNotification || false,
             sourceArtifactId,
-            sourceArtifactVersionId
+            sourceArtifactVersionId,
+            undefined, // conversationId (not pre-resolved on this path)
+            undefined, // runRef
+            planMode,
+            requestedSkillIDs
         );
     }
 
@@ -684,7 +713,11 @@ export class RunAIAgentResolver extends ResolverBase {
         @Arg('createArtifacts', { nullable: true }) createArtifacts?: boolean,
         @Arg('createNotification', { nullable: true }) createNotification?: boolean,
         @Arg('sourceArtifactId', { nullable: true }) sourceArtifactId?: string,
-        @Arg('sourceArtifactVersionId', { nullable: true }) sourceArtifactVersionId?: string
+        @Arg('sourceArtifactVersionId', { nullable: true }) sourceArtifactVersionId?: string,
+        /** Per-request Plan Mode toggle — symmetric with the other run mutations. */
+        @Arg('planMode', { nullable: true }) planMode?: boolean,
+        /** User-requested skill IDs — symmetric with the other run mutations. */
+        @Arg('requestedSkillIDs', () => [String], { nullable: true }) requestedSkillIDs?: string[]
     ): Promise<AIAgentRunResult> {
         const p = GetReadWriteProvider(providers);
         return this.executeAIAgent(
@@ -705,7 +738,11 @@ export class RunAIAgentResolver extends ResolverBase {
             createArtifacts || false,
             createNotification || false,
             sourceArtifactId,
-            sourceArtifactVersionId
+            sourceArtifactVersionId,
+            undefined, // conversationId (not pre-resolved on this path)
+            undefined, // runRef
+            planMode,
+            requestedSkillIDs
         );
     }
 
@@ -932,7 +969,9 @@ export class RunAIAgentResolver extends ResolverBase {
         @Arg('createNotification', { nullable: true }) createNotification?: boolean,
         @Arg('sourceArtifactId', { nullable: true }) sourceArtifactId?: string,
         @Arg('sourceArtifactVersionId', { nullable: true }) sourceArtifactVersionId?: string,
-        @Arg('fireAndForget', { nullable: true }) fireAndForget?: boolean
+        @Arg('fireAndForget', { nullable: true }) fireAndForget?: boolean,
+        @Arg('planMode', { nullable: true }) planMode?: boolean,
+        @Arg('requestedSkillIDs', () => [String], { nullable: true }) requestedSkillIDs?: string[]
     ): Promise<AIAgentRunResult> {
         // Check API key scope authorization for agent execution
         await this.CheckAPIKeyScopeAuthorization('agent:execute', agentId, userPayload);
@@ -947,6 +986,17 @@ export class RunAIAgentResolver extends ResolverBase {
                 result: JSON.stringify({ success: false, errorMessage: 'Unable to determine current user' })
             };
         }
+
+        // PUBLIC WEB-WIDGET PRIVILEGED DISPATCH (public-web-widget.md Phase 0): when the request is a
+        // widget guest, the agent runs under a TRUSTED SERVER PRINCIPAL and the agent id is taken
+        // AUTHORITATIVELY from the widget instance (never the client-supplied arg) — so a guest needs
+        // no grants to WRITE the AI run entities and cannot run an arbitrary agent under elevation.
+        // Conversation OWNERSHIP is still enforced under the guest principal below: the guest loads its
+        // own ConversationDetail through the Widget Guest RLS filters, so a detail id from another
+        // session resolves to "not found" before any elevated work happens.
+        const widgetElevation = await resolveWidgetGuestRunContext(userPayload, p);
+        const effectiveAgentId = widgetElevation ? widgetElevation.pinnedAgentId : agentId;
+        const effectiveUserPayload = widgetElevation ? elevateUserPayload(userPayload, widgetElevation.elevatedUser) : userPayload;
 
         try {
             // LATENCY OPTIMIZATION (Opt #2 + #3): Load ConversationDetail once here to extract
@@ -978,13 +1028,13 @@ export class RunAIAgentResolver extends ResolverBase {
                 // Fire-and-forget mode: start execution in background, return immediately.
                 // The client will receive the result via WebSocket PubSub completion event.
                 this.executeAgentInBackground(
-                    p, dataSource, agentId, userPayload, messagesJson, sessionId, pubSub,
+                    p, dataSource, effectiveAgentId, effectiveUserPayload, messagesJson, sessionId, pubSub,
                     data, payload, lastRunId, autoPopulateLastRunPayload, configurationId,
                     conversationDetailId, createArtifacts || false, createNotification || false,
-                    sourceArtifactId, sourceArtifactVersionId, conversationId
+                    sourceArtifactId, sourceArtifactVersionId, conversationId, planMode, requestedSkillIDs
                 );
 
-                LogStatus(`🔥 Fire-and-forget: Agent ${agentId} execution started in background for session ${sessionId}`);
+                LogStatus(`🔥 Fire-and-forget: Agent ${effectiveAgentId} execution started in background for session ${sessionId}`);
 
                 return {
                     success: true,
@@ -996,8 +1046,8 @@ export class RunAIAgentResolver extends ResolverBase {
             return this.executeAIAgent(
                 p,
                 dataSource,
-                agentId,
-                userPayload,
+                effectiveAgentId,
+                effectiveUserPayload,
                 messagesJson,
                 sessionId,
                 pubSub,
@@ -1012,7 +1062,10 @@ export class RunAIAgentResolver extends ResolverBase {
                 createNotification || false,
                 sourceArtifactId,
                 sourceArtifactVersionId,
-                conversationId // LATENCY OPT #2: pass pre-resolved conversationId
+                conversationId, // LATENCY OPT #2: pass pre-resolved conversationId
+                undefined, // runRef
+                planMode,
+                requestedSkillIDs
             );
         } catch (error) {
             const errorMessage = (error as Error).message || 'Unknown error loading conversation history';
@@ -1227,7 +1280,11 @@ export class RunAIAgentResolver extends ResolverBase {
         sourceArtifactId?: string,
         sourceArtifactVersionId?: string,
         /** LATENCY OPT #2: Pre-resolved conversationId avoids redundant DB load in AgentRunner */
-        conversationId?: string
+        conversationId?: string,
+        /** Per-request Plan Mode toggle — threaded through to ExecuteAgentParams.planMode. */
+        planMode?: boolean,
+        /** Skill IDs the user requested — threaded through to ExecuteAgentParams.requestedSkillIDs. */
+        requestedSkillIDs?: string[]
     ): void {
         // Ref the liveness pulse reads to enrich heartbeats once the run is created.
         const runRef: { current: MJAIAgentRunEntityExtended | null } = { current: null };
@@ -1245,7 +1302,7 @@ export class RunAIAgentResolver extends ResolverBase {
             p, dataSource, agentId, userPayload, messagesJson, sessionId, pubSub,
             data, payload, undefined, lastRunId, autoPopulateLastRunPayload,
             configurationId, conversationDetailId, createArtifacts, createNotification,
-            sourceArtifactId, sourceArtifactVersionId, conversationId, runRef
+            sourceArtifactId, sourceArtifactVersionId, conversationId, runRef, planMode, requestedSkillIDs
         ).catch((error: unknown) => {
             // Background execution failed unexpectedly (executeAIAgent has its own try-catch,
             // so this would only fire for truly unexpected errors).

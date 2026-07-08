@@ -1,0 +1,97 @@
+<div class="urcc">
+  @if (ShowHeader) {
+    <div class="urcc-header">
+      <div class="urcc-title">
+        <i class="fa-solid fa-business-time"></i>
+        <span>Routines</span>
+        @if (TotalCount > 0) {
+          <span class="urcc-count">{{ TotalCount }}</span>
+        }
+      </div>
+
+      <div class="urcc-tabs" role="tablist" aria-label="Routines views">
+        <button type="button" class="urcc-tab" role="tab"
+          [class.urcc-tab--active]="ActiveView === 'list'"
+          [attr.aria-selected]="ActiveView === 'list'"
+          (click)="ShowList()">
+          My Routines
+        </button>
+        <button type="button" class="urcc-tab" role="tab"
+          [class.urcc-tab--active]="ActiveView === 'editor'"
+          [attr.aria-selected]="ActiveView === 'editor'"
+          (click)="ShowNewRoutine()">
+          {{ ActiveView === 'editor' && EditingRoutineID ? 'Edit Routine' : 'New Routine' }}
+        </button>
+        @if (ActiveView === 'history') {
+          <span class="urcc-tab urcc-tab--active urcc-tab--context" role="tab" aria-selected="true">
+            History{{ HistoryRoutineName ? ' — ' + HistoryRoutineName : '' }}
+          </span>
+        }
+      </div>
+
+      <span class="urcc-spacer"></span>
+
+      @if (ActiveView === 'list') {
+        <mj-page-search class="urcc-search" Placeholder="Search routines..."
+          [Value]="SearchText" (ValueChange)="OnSearchChange($event)"></mj-page-search>
+        <mj-refresh-button [ShowLabel]="false" (Clicked)="Refresh()"></mj-refresh-button>
+        <button mjButton variant="primary" size="sm" (click)="ShowNewRoutine()">
+          <i class="fa-solid fa-plus"></i> New Routine
+        </button>
+      } @else {
+        <button mjButton variant="outline" size="sm" (click)="ShowList()">
+          <i class="fa-solid fa-arrow-left"></i> Back to list
+        </button>
+      }
+
+      @if (ShowClose) {
+        <button mjButton variant="icon" size="sm" title="Close" (click)="CloseRequested.emit()">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      }
+    </div>
+  }
+
+  <div class="urcc-body">
+    @switch (ActiveView) {
+      @case ('list') {
+        <mj-my-routines-list #list
+          [Provider]="Provider"
+          [SearchText]="SearchText"
+          [StatusFilter]="StatusFilter"
+          (CreateRequested)="ShowNewRoutine()"
+          (EditRequested)="OnEditRequested($event)"
+          (HistoryRequested)="OnHistoryRequested($event)"
+          (ConversationOpened)="ConversationOpened.emit($event)"
+          (RoutineSelected)="OnRoutineSelected($event)"
+          (CountsChanged)="OnCountsChanged($event)"
+          (BeforeRoutinePaused)="BeforeRoutinePaused.emit($event)"
+          (AfterRoutinePaused)="AfterRoutinePaused.emit($event)"
+          (BeforeRoutineRunNow)="BeforeRoutineRunNow.emit($event)"
+          (AfterRoutineRunNow)="AfterRoutineRunNow.emit($event)"
+          (BeforeRoutineDeleted)="BeforeRoutineDeleted.emit($event)"
+          (AfterRoutineDeleted)="AfterRoutineDeleted.emit($event)">
+        </mj-my-routines-list>
+      }
+      @case ('editor') {
+        <mj-new-routine
+          [Provider]="Provider"
+          [RoutineID]="EditingRoutineID"
+          (Saved)="OnEditorSaved($event)"
+          (Cancelled)="OnEditorCancelled()"
+          (BeforeRoutineCreated)="BeforeRoutineCreated.emit($event)"
+          (AfterRoutineCreated)="AfterRoutineCreated.emit($event)">
+        </mj-new-routine>
+      }
+      @case ('history') {
+        <mj-user-routine-history #history
+          [Provider]="Provider"
+          [RoutineID]="HistoryRoutineID"
+          [RoutineName]="HistoryRoutineName"
+          (HistoryRecordOpened)="HistoryRecordOpened.emit($event)"
+          (ConversationOpened)="ConversationOpened.emit($event)">
+        </mj-user-routine-history>
+      }
+    }
+  </div>
+</div>

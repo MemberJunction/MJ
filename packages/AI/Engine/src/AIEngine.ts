@@ -24,7 +24,8 @@ import { MJAIActionEntity, MJActionEntity,
          MJAIAgentDataSourceEntity, MJAIAgentConfigurationEntity, MJAIAgentExampleEntity,
          MJAICredentialBindingEntity, MJAIModalityEntity, MJAIAgentModalityEntity,
          MJAIModelModalityEntity, MJAIClientToolDefinitionEntity,
-         MJAIAgentClientToolEntity, MJAIAgentCategoryEntity, IsInjectableNoteStatus } from "@memberjunction/core-entities";
+         MJAIAgentClientToolEntity, MJAIAgentCategoryEntity, IsInjectableNoteStatus,
+         MJAISkillEntity, MJAISkillActionEntity, MJAISkillSubAgentEntity, MJAIAgentSkillEntity, MJAISkillPermissionEntity } from "@memberjunction/core-entities";
 import { AIEngineBase } from "@memberjunction/ai-engine-base";
 import { SimpleVectorService } from "@memberjunction/ai-vectors-memory";
 import { AgentEmbeddingService } from "./services/AgentEmbeddingService";
@@ -252,6 +253,16 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
     public get AgentCategories(): MJAIAgentCategoryEntity[] { return this.Base.AgentCategories; }
     public get AgentActions(): MJAIAgentActionEntity[] { return this.Base.AgentActions; }
     public get AgentPrompts(): MJAIAgentPromptEntity[] { return this.Base.AgentPrompts; }
+    public get Skills(): MJAISkillEntity[] { return this.Base.Skills; }
+    public get SkillActions(): MJAISkillActionEntity[] { return this.Base.SkillActions; }
+    public get SkillSubAgents(): MJAISkillSubAgentEntity[] { return this.Base.SkillSubAgents; }
+    public get AgentSkills(): MJAIAgentSkillEntity[] { return this.Base.AgentSkills; }
+    public get SkillPermissions(): MJAISkillPermissionEntity[] { return this.Base.SkillPermissions; }
+    public GetSkillsForAgent(agent: MJAIAgentEntityExtended, user?: UserInfo): MJAISkillEntity[] { return this.Base.GetSkillsForAgent(agent, user); }
+    /** Double-gated self-activation set — see {@link AIEngineBase.GetAutoActivatableSkillsForAgent}. */
+    public GetAutoActivatableSkillsForAgent(agent: MJAIAgentEntityExtended, user?: UserInfo): MJAISkillEntity[] { return this.Base.GetAutoActivatableSkillsForAgent(agent, user); }
+    public GetSkillActionIDs(skillID: string): string[] { return this.Base.GetSkillActionIDs(skillID); }
+    public GetSkillSubAgentIDs(skillID: string): string[] { return this.Base.GetSkillSubAgentIDs(skillID); }
     public get AgentConfigurations(): MJAIAgentConfigurationEntity[] { return this.Base.AgentConfigurations; }
     public get AgentNoteTypes(): MJAIAgentNoteTypeEntity[] { return this.Base.AgentNoteTypes; }
     public get AgentPermissions(): MJAIAgentPermissionEntity[] { return this.Base.AgentPermissions; }

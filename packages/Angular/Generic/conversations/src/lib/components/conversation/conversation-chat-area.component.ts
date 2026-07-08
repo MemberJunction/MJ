@@ -9,6 +9,7 @@ import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { AgentStateService } from '../../services/agent-state.service';
 import { ConversationAgentService } from '../../services/conversation-agent.service';
 import { ActiveTasksService } from '../../services/active-tasks.service';
+import { PendingAttachment } from '@memberjunction/ng-composer';
 import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
 import { ArtifactPermissionService } from '../../services/artifact-permission.service';
 import { ConversationAttachmentService } from '../../services/conversation-attachment.service';
@@ -19,7 +20,6 @@ const CONVERSATIONS_RESOURCE_TYPE_ID = '81D4BC3D-9FEB-EF11-B01A-286B35C04427';
 import { MessageAttachment } from '../message/message-item.component';
 import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
 import { MessageInputComponent } from '../message/message-input.component';
-import { PendingAttachment } from '../mention/mention-editor.component';
 import { ArtifactViewerPanelComponent, NavigationRequest, AnalyzeArtifactService, InteractiveFormApplyService } from '@memberjunction/ng-artifacts';
 import type { ComponentSpec } from '@memberjunction/interactive-component-types';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -716,12 +716,14 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     return this.RealtimeSession.CurrentAgentName;
   }
 
+  // Shared AI mention/suggestion engine (BaseSingleton — same instance the composer plugins use)
+  private mentionAutocompleteService = MentionAutocompleteService.Instance;
+
   constructor(
     private agentStateService: AgentStateService,
     private conversationAgentService: ConversationAgentService,
     private activeTasks: ActiveTasksService,
     private cdr: ChangeDetectorRef,
-    private mentionAutocompleteService: MentionAutocompleteService,
     private artifactPermissionService: ArtifactPermissionService,
     private attachmentService: ConversationAttachmentService,
     private streamingService: ConversationStreamingService,
@@ -895,7 +897,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     // This prevents race conditions and ensures agents are fully loaded.
 
     // Fallback: If workspace didn't initialize (shouldn't happen), initialize now
-    if (!this.mentionAutocompleteService['isInitialized']) {
+    if (!this.mentionAutocompleteService.IsInitialized) {
       console.warn('⚠️ Mention autocomplete not initialized by workspace, initializing now...');
       await this.mentionAutocompleteService.initialize(this.currentUser);
     }

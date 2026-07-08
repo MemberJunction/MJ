@@ -3,6 +3,7 @@ import { MJCredentialCategoryEntity } from '@memberjunction/core-entities';
 import { RunView } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { MJConfirmService } from '@memberjunction/ng-ui-components';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 @Component({
@@ -51,7 +52,7 @@ export class CredentialCategoryEditPanelComponent extends BaseAngularComponent i
 
     private get _metadata() { return this.ProviderToUse; }
 
-    constructor(private cdr: ChangeDetectorRef) { super(); }
+    constructor(private cdr: ChangeDetectorRef, private confirmService: MJConfirmService) { super(); }
 
     ngOnInit(): void {
         this.loadCategories();
@@ -208,7 +209,7 @@ export class CredentialCategoryEditPanelComponent extends BaseAngularComponent i
     public async deleteCategory(): Promise<void> {
         if (this.isNew || !this.category) return;
 
-        const confirmed = confirm(`Are you sure you want to delete "${this.category.Name}"? This action cannot be undone.`);
+        const confirmed = await this.confirmService.ConfirmDelete({ title: 'Delete Category', message: `Delete "${this.category.Name}"?`, detail: 'This action cannot be undone.' });
         if (!confirmed) return;
 
         this.isSaving = true;

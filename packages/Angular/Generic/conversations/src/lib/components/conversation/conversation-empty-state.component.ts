@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, ViewChild } from '@angular/core';
 import { UserInfo } from '@memberjunction/core';
-import { PendingAttachment } from '../mention/mention-editor.component';
+import { PendingAttachment } from '@memberjunction/ng-composer';
 import { MessageInputComponent } from '../message/message-input.component';
 
 @Component({

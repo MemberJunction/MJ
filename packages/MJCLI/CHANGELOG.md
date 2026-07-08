@@ -1,5 +1,69 @@
 # Change Log - @memberjunction/cli
 
+## 5.45.0
+
+### Patch Changes
+
+- 21e33fe: Move Skip to a client-side Open App and remove server-embedded agent; scope-gate query/view/search resolvers with API-key scope authorization; add credential-store fallback for component registry keys; support Open App in-process lifecycle hooks with interactive prompts.
+- 037f3af: Fix: honor the configured request timeout on the MetadataSync/OpenApp provider pool. `mj app remove` (and other `mj app …` / `mj sync` commands sharing this provider) built the SQL Server connection without `requestTimeout`, so it silently fell back to mssql's 15s default — dropping a large app schema could time out regardless of `dbRequestTimeout` config. The configured value now flows through `toMJConfig` → `MJConfig.dbRequestTimeout` → the mssql pool's `requestTimeout` (and the PostgreSQL client's `statement_timeout` for parity). When unset, each driver's own default still applies.
+- Updated dependencies [45d121b]
+- Updated dependencies [21e33fe]
+- Updated dependencies [b7cf50f]
+- Updated dependencies [f4f11fa]
+- Updated dependencies [e370816]
+- Updated dependencies [e370816]
+- Updated dependencies [037f3af]
+- Updated dependencies [fbee64c]
+- Updated dependencies [b2927f1]
+- Updated dependencies [b18fcd0]
+- Updated dependencies [0b1e009]
+  - @memberjunction/core@5.45.0
+  - @memberjunction/server-bootstrap-lite@5.45.0
+  - @memberjunction/metadata-sync@5.45.0
+  - @memberjunction/open-app-engine@5.45.0
+  - @memberjunction/codegen-lib@5.45.0
+  - @memberjunction/generic-database-provider@5.45.0
+  - @memberjunction/ai-cli@5.45.0
+  - @memberjunction/db-auto-doc@5.45.0
+  - @memberjunction/query-gen@5.45.0
+  - @memberjunction/sqlserver-dataprovider@5.45.0
+  - @memberjunction/testing-cli@5.45.0
+  - @memberjunction/cli-core@5.45.0
+  - @memberjunction/config@5.45.0
+  - @memberjunction/installer@5.45.0
+  - @memberjunction/sql-converter@5.45.0
+  - @memberjunction/sqlglot-ts@5.45.0
+
+## 5.44.0
+
+### Patch Changes
+
+- 7119e17: Defer the DB-provider import in the MJCLI `postrun` hook so light commands no longer eagerly load the sqlserver-dataprovider/metadata-sync/core stack (~2.7s warm, far more cold). The import is now gated on `app:*` commands (the only ones that open a connection pool), fixing the deterministic `claude-pack` subprocess test spawn-timeout that was failing the unit-test CI gate on every PR.
+- Updated dependencies [5396d90]
+- Updated dependencies [89ea055]
+- Updated dependencies [7279819]
+- Updated dependencies [d44e430]
+- Updated dependencies [6cf6c43]
+- Updated dependencies [e315b2f]
+- Updated dependencies [6f74b17]
+- Updated dependencies [2f9b863]
+  - @memberjunction/core@5.44.0
+  - @memberjunction/server-bootstrap-lite@5.44.0
+  - @memberjunction/codegen-lib@5.44.0
+  - @memberjunction/open-app-engine@5.44.0
+  - @memberjunction/ai-cli@5.44.0
+  - @memberjunction/query-gen@5.44.0
+  - @memberjunction/generic-database-provider@5.44.0
+  - @memberjunction/sqlserver-dataprovider@5.44.0
+  - @memberjunction/metadata-sync@5.44.0
+  - @memberjunction/testing-cli@5.44.0
+  - @memberjunction/db-auto-doc@5.44.0
+  - @memberjunction/cli-core@5.44.0
+  - @memberjunction/config@5.44.0
+  - @memberjunction/installer@5.44.0
+  - @memberjunction/sql-converter@5.44.0
+  - @memberjunction/sqlglot-ts@5.44.0
+
 ## 5.43.0
 
 ### Minor Changes

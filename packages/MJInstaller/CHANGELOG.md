@@ -1,5 +1,9 @@
 # @memberjunction/installer
 
+## 5.45.0
+
+## 5.44.0
+
 ## 5.43.0
 
 ### Patch Changes

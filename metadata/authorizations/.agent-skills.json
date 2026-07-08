@@ -1,0 +1,18 @@
+[
+  {
+    "fields": {
+      "Name": "Can Share Skills",
+      "ParentID": null,
+      "IsActive": true,
+      "UseAuditLog": true,
+      "Description": "Grants the ability to manage an authored AI Skill's permission grid — per-user and per-role View/Run/Edit/Delete grants on the skill (stored in the dedicated MJ: AI Skill Permissions table). Authoring and using your own skills does not require this authorization; only managing the permission grid is gated."
+    },
+    "primaryKey": {
+      "ID": "10D6D3A8-EA24-493D-A963-39723F9A2B91"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T20:17:00.753Z",
+      "checksum": "25f6b9f24ed5182b4427634561d8bc7d7533ad71914c7c03696dc9b3f45c69fa"
+    }
+  }
+]

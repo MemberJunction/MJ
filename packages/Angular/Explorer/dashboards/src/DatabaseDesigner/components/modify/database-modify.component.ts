@@ -16,6 +16,7 @@ import {
     Component, Input, Output, EventEmitter, OnInit, OnDestroy,
     ChangeDetectionStrategy, ChangeDetectorRef, inject, ViewChild,
 } from '@angular/core';
+import { MJConfirmService } from '@memberjunction/ng-ui-components';
 import { DatabaseDesignerService } from '../../services/database-designer.service.js';
 import { DatabaseDesignerEngine } from '../../services/database-designer.engine.js';
 import { EntityPipelinePanelComponent } from '../shared/entity-pipeline-panel.component.js';
@@ -35,6 +36,7 @@ export class DatabaseModifyComponent implements OnInit, OnDestroy {
     // ─── Injected ──────────────────────────────────────────────────────────
 
     private readonly cdr = inject(ChangeDetectorRef);
+    private readonly confirmService = inject(MJConfirmService);
 
     // ─── Inputs / Outputs ──────────────────────────────────────────────────
 
@@ -116,14 +118,17 @@ export class DatabaseModifyComponent implements OnInit, OnDestroy {
         this.cdr.markForCheck();
     }
 
-    public OnCancel(): void {
+    public async OnCancel(): Promise<void> {
         if (this.IsPipelineRunning) {
-            // Use native confirm so the guard stays synchronous — required by MjSlidePanelComponent.CanClose.
-            // The pipeline continues on the server regardless; we're only hiding the progress UI.
-            const confirmed = window.confirm(
-                'A pipeline operation is in progress. Closing will hide the progress panel ' +
-                'but the operation will continue running on the server.\n\nAre you sure?'
-            );
+            // This is a plain button handler (fire-and-forget click), so it can await the
+            // styled confirm. Only the dashboard's [CanClose] guard must stay on the
+            // synchronous window.confirm. The pipeline continues on the server regardless;
+            // we're only hiding the progress UI.
+            const confirmed = await this.confirmService.Confirm({
+                title: 'Pipeline in progress',
+                message: 'A pipeline operation is in progress. Closing will hide the progress panel.',
+                detail: 'The operation will continue running on the server.',
+            });
             if (!confirmed) return;
         }
         this.Cancelled.emit();

@@ -85,6 +85,29 @@ export class YourModule { }
 </mj-agent-permissions-slideover>
 ```
 
+### Skill Permissions Components
+
+Skill permissions mirror the agent permissions components exactly, backed by `MJ: AI Skill Permissions`
+(the skill sibling of `MJ: AI Agent Permissions`) via `SkillPermissionsService`. Same grantee (User/Role) +
+View/Run/Edit/Delete model, same open-by-default semantics. The owner is the skill's `CreatedByUserID`.
+
+```html
+<!-- Embeddable panel -->
+<mj-skill-permissions-panel
+  [Skill]="selectedSkill"
+  (PermissionsChanged)="onSkillPermsChanged()">
+</mj-skill-permissions-panel>
+
+<!-- Modal dialog -->
+<mj-skill-permissions-dialog
+  [Skill]="selectedSkill"
+  (Closed)="onSkillPermsDialogClosed()">
+</mj-skill-permissions-dialog>
+```
+
+See the **[Agent Skills & Plan Mode Guide](../../../../guides/AGENT_SKILLS_AND_PLAN_MODE_GUIDE.md)** and
+**[Unified Permissions Guide](../../../../guides/UNIFIED_PERMISSIONS_GUIDE.md)** for the full permission model.
+
 ### Create Agent Components
 
 #### Embeddable Panel

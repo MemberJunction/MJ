@@ -169,6 +169,14 @@ export interface TextQuestionType {
 
     /** Maximum number of characters allowed */
     maxLength?: number;
+
+    /**
+     * Textarea only: when true, the UI renders the current value as formatted
+     * Markdown (headings, lists, bold, tables, code) with an Edit toggle that
+     * swaps to the raw textarea. Used for rich agent-authored content the human
+     * reviews more than types — e.g. the Plan Mode approval form.
+     */
+    markdown?: boolean;
 }
 
 /**
