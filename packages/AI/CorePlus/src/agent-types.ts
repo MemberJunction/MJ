@@ -811,6 +811,16 @@ export type AgentExecutionStreamingCallback = (chunk: {
     stepEntityId?: string;
     /** Model name producing this content (for prompt steps) */
     modelName?: string;
+    /**
+     * Content discriminator for chat-client rendering. `'final-response'` marks chunks
+     * that are deltas of the user-facing final reply — safe for the conversation client
+     * to accumulate and render into the message bubble as they arrive. Chunks WITHOUT a
+     * kind are raw prompt output (e.g. a Loop agent's streamed JSON turn envelope) and
+     * are not rendered by the conversation client. Emitters that compose the final
+     * answer as plain prose (outside the turn envelope) set this on their compose
+     * stream; future kinds (e.g. inter-turn progress narration) extend this union.
+     */
+    kind?: 'final-response';
 }) => void;
 
 /**
