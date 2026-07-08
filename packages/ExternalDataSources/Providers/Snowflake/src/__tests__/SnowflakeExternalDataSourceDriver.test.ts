@@ -48,6 +48,20 @@ const ds = (over: Partial<MJExternalDataSourceEntity>): MJExternalDataSourceEnti
 describe('SnowflakeExternalDataSourceDriver — SQL building', () => {
   const d = new TestableSnowflakeDriver();
 
+  describe('incrementalSince (ANSI double-quoted; the cast-aware path must honor it)', () => {
+    const wm = { objectName: 't', incrementalSince: { Field: 'UPDATED_AT', Value: '2026-03-01T00:00:00.000Z' } } as ExternalViewParams;
+    it('buildSelectSql renders the double-quoted watermark predicate', () => {
+      expect(d.sel('"S"."T"', wm)).toBe(`SELECT * FROM "S"."T" WHERE "UPDATED_AT" >= '2026-03-01T00:00:00.000Z'`);
+    });
+    it('buildSelectSqlCastAware ALSO honors incrementalSince (regression: it previously emitted only params.filter → returned the full table on a watermark request)', () => {
+      expect(d.selCast('"S"."T"', wm, [])).toContain(`WHERE "UPDATED_AT" >= '2026-03-01T00:00:00.000Z'`);
+    });
+    it('filter + incremental are ANDed', () => {
+      expect(d.sel('"S"."T"', { ...wm, filter: "status = 'a'" }))
+        .toBe(`SELECT * FROM "S"."T" WHERE (status = 'a') AND "UPDATED_AT" >= '2026-03-01T00:00:00.000Z'`);
+    });
+  });
+
   describe('qualifyObject', () => {
     it('quotes + schema-qualifies a bare object name with DefaultSchema', () => {
       expect(d.qual(ds({}), 'SALES')).toBe('"ANALYTICS"."SALES"');

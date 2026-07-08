@@ -308,7 +308,7 @@ export class SQLServerExternalDataSourceDriver extends BaseSqlExternalDataSource
     if (params.maxRows == null) {
       return undefined; // only pay for the count when paginating
     }
-    const res = await pool.request().query(`SELECT COUNT(*) AS cnt FROM ${target}${params.filter ? ` WHERE ${params.filter}` : ''}`);
+    const res = await pool.request().query(this.buildCountSql(target, params));
     return Number(res.recordset[0]?.cnt ?? 0);
   }
 
@@ -387,7 +387,7 @@ export class SQLServerExternalDataSourceDriver extends BaseSqlExternalDataSource
    * routes through {@link buildCastAwareProjection} so DECIMAL/NUMERIC/MONEY come back as lossless strings.
    */
   protected buildSelectSqlCastAware(target: string, params: ExternalViewParams, columns: SqlColumnMeta[]): string {
-    if (params.filter) {
+    if (params.filter && params.filter.trim().length > 0) {
       this.screenReadOnlyClause(params.filter, 'where');
     }
     if (params.orderBy) {
@@ -395,9 +395,10 @@ export class SQLServerExternalDataSourceDriver extends BaseSqlExternalDataSource
     }
     const projection = this.buildCastAwareProjection(params.fields, columns);
     const effectiveParams = this.applyDefaultOrderBy(params);
+    const where = this.effectiveWhere(params);
     let sqlText = `SELECT ${this.selectTopClause(effectiveParams)}${projection} FROM ${target}`;
-    if (params.filter) {
-      sqlText += ` WHERE ${params.filter}`;
+    if (where) {
+      sqlText += ` WHERE ${where}`;
     }
     sqlText += this.orderAndPageClause(effectiveParams);
     return sqlText;
