@@ -1,0 +1,236 @@
+<title>MJ Projects — Hierarchy Illustrated</title>
+<style>
+  :root {
+    --brand: #0076b6;
+    --ink: #1f2933;
+    --ink-2: #475569;
+    --ink-3: #64748b;
+    --page: #eef2f6;
+    --surface: #ffffff;
+    --card: #f8fafc;
+    --line: #d9e2ec;
+    --line-strong: #b8c7d6;
+    --shipped: #15803d;
+    --shipped-bg: #e8f6ee;
+    --building: #b45309;
+    --building-bg: #fdf3e3;
+    --planned: #64748b;
+    --unwired: #9a3412;
+    --pin: #0076b6;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ink: #e6edf3; --ink-2: #aebfce; --ink-3: #8b9bab;
+      --page: #0d1117; --surface: #161b22; --card: #1c232c;
+      --line: #30363d; --line-strong: #444c56;
+      --shipped-bg: #10281a; --building-bg: #2b2012;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ink: #e6edf3; --ink-2: #aebfce; --ink-3: #8b9bab;
+    --page: #0d1117; --surface: #161b22; --card: #1c232c;
+    --line: #30363d; --line-strong: #444c56;
+    --shipped-bg: #10281a; --building-bg: #2b2012;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--page); color: var(--ink); font-family: var(--font); font-size: 14.5px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 1060px; margin: 0 auto; padding: 34px 26px 70px; }
+  h1 { font-size: 26px; margin: 0 0 6px; letter-spacing: -0.015em; }
+  .sub { color: var(--ink-2); margin: 0 0 22px; max-width: 76ch; }
+  .eyebrow { font-size: 11.5px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--brand); margin-bottom: 7px; }
+
+  /* legend */
+  .legend { display: flex; flex-wrap: wrap; gap: 10px 22px; padding: 12px 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; margin-bottom: 26px; font-size: 12.5px; color: var(--ink-2); }
+  .lg { display: inline-flex; align-items: center; gap: 8px; }
+  .sw { width: 26px; height: 14px; border-radius: 4px; flex: none; }
+  .sw.shipped { background: var(--shipped-bg); border: 1.5px solid var(--shipped); }
+  .sw.unwired { background: repeating-linear-gradient(45deg, transparent 0 4px, color-mix(in srgb, var(--unwired) 25%, transparent) 4px 8px); border: 1.5px dashed var(--unwired); }
+  .sw.building { background: var(--building-bg); border: 1.5px dashed var(--building); }
+  .sw.planned { background: transparent; border: 1.5px dotted var(--planned); }
+  .lg .pin-demo { width: 18px; height: 18px; }
+
+  /* pins */
+  .pin { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 50%; background: var(--pin); color: #fff; font-size: 11px; font-weight: 800; flex: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--pin) 22%, transparent); cursor: default; }
+
+  /* containment boxes */
+  .box { border-radius: 12px; padding: 14px 16px; position: relative; }
+  .box .tag { position: absolute; top: -9px; left: 14px; font-size: 10px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; padding: 1px 9px; border-radius: 999px; background: var(--surface); }
+  .env { border: 1.5px dashed var(--line-strong); background: transparent; padding: 26px 18px 18px; }
+  .env > .tag { color: var(--ink-3); border: 1px solid var(--line-strong); }
+
+  .project { border: 2px solid var(--brand); background: var(--surface); margin-top: 8px; padding: 22px 16px 16px; }
+  .project > .tag { color: var(--brand); border: 1px solid var(--brand); }
+  .p-head { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; margin-bottom: 4px; }
+  .p-head .ic { width: 30px; height: 30px; border-radius: 8px; background: var(--brand); color: #fff; display: inline-flex; align-items: center; justify-content: center; font-size: 15px; }
+  .p-head .nm { font-weight: 800; font-size: 16px; }
+  .fieldchips { display: flex; flex-wrap: wrap; gap: 5px; margin: 6px 0 14px; }
+  .fchip { font-family: var(--mono); font-size: 10.5px; padding: 2px 8px; border-radius: 999px; background: var(--card); border: 1px solid var(--line); color: var(--ink-2); }
+  .fchip.warn { color: var(--unwired); border-color: color-mix(in srgb, var(--unwired) 40%, transparent); }
+
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
+  @media (max-width: 780px) { .grid2 { grid-template-columns: 1fr; } }
+
+  .conv { border: 1.5px solid var(--shipped); background: var(--shipped-bg); border-radius: 10px; padding: 16px 13px 12px; position: relative; margin-top: 8px; }
+  .conv > .tag { color: var(--shipped); border: 1px solid var(--shipped); background: var(--surface); }
+  .conv .t { font-weight: 700; font-size: 13.5px; display: flex; align-items: center; gap: 8px; }
+  .msg { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 8px 11px; margin-top: 8px; font-size: 12.5px; color: var(--ink-2); }
+  .msg b { color: var(--ink); }
+  .hangs { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 8px; }
+  .h-item { font-size: 11.5px; font-weight: 700; padding: 4px 10px; border-radius: 7px; display: inline-flex; align-items: center; gap: 6px; }
+  .h-item.art { background: var(--shipped-bg); border: 1.5px solid var(--shipped); color: var(--shipped); }
+  .h-item.wf { background: repeating-linear-gradient(45deg, transparent 0 5px, color-mix(in srgb, var(--unwired) 14%, transparent) 5px 10px); border: 1.5px dashed var(--unwired); color: var(--unwired); }
+
+  .subproject { border: 2px solid color-mix(in srgb, var(--brand) 55%, transparent); background: var(--card); border-radius: 12px; padding: 20px 13px 12px; position: relative; margin-top: 8px; }
+  .subproject > .tag { color: var(--brand); border: 1px solid color-mix(in srgb, var(--brand) 55%, transparent); }
+
+  .memory { border: 1.5px dashed var(--building); background: var(--building-bg); border-radius: 10px; padding: 16px 13px 12px; position: relative; margin-top: 8px; }
+  .memory > .tag { color: var(--building); border: 1px solid var(--building); background: var(--surface); }
+  .note { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; margin-top: 7px; font-size: 12px; color: var(--ink-2); display: flex; gap: 7px; align-items: baseline; flex-wrap: wrap; }
+  .scope { font-size: 9.5px; font-weight: 800; letter-spacing: .04em; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line-strong); color: var(--ink-3); white-space: nowrap; }
+
+  .share-ring { border: 2px dotted var(--planned); border-radius: 14px; padding: 16px 12px 12px; margin-top: 16px; position: relative; }
+  .share-ring > .tag { color: var(--planned); border: 1px dotted var(--planned); }
+  .share-ring .body { font-size: 12.5px; color: var(--ink-2); }
+
+  .beside { display: grid; grid-template-columns: 2.2fr 1fr; gap: 16px; align-items: start; margin-top: 22px; }
+  @media (max-width: 880px) { .beside { grid-template-columns: 1fr; } }
+  .collections { border: 1.5px dotted var(--planned); border-radius: 12px; background: var(--surface); padding: 20px 14px 12px; position: relative; }
+  .collections > .tag { color: var(--planned); border: 1px dotted var(--planned); background: var(--surface); }
+  .ctree { font-family: var(--mono); font-size: 12px; color: var(--ink-2); white-space: pre; line-height: 1.7; overflow-x: auto; }
+  .dashed-link { font-size: 11.5px; color: var(--planned); font-style: italic; margin-top: 8px; display: flex; align-items: center; gap: 7px; }
+
+  .outside { margin-top: 26px; border-top: 1px solid var(--line); padding-top: 18px; }
+  .outside h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .07em; color: var(--ink-3); margin: 0 0 12px; }
+  .out-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+  .out-card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+  .out-card .t { font-weight: 700; font-size: 13px; display: flex; align-items: center; gap: 8px; }
+  .out-card p { margin: 5px 0 0; font-size: 12.5px; color: var(--ink-2); }
+
+  .questions { margin-top: 34px; }
+  .questions h2 { font-size: 18px; margin: 0 0 4px; }
+  .questions .sub2 { color: var(--ink-2); font-size: 13.5px; margin: 0 0 14px; }
+  .q { display: flex; gap: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-top: 9px; }
+  .q .body b { display: block; font-size: 13.5px; margin-bottom: 2px; }
+  .q .body { font-size: 13px; color: var(--ink-2); }
+
+  footer { margin-top: 34px; text-align: center; font-size: 12px; color: var(--ink-3); }
+  .mono { font-family: var(--mono); font-size: .92em; }
+</style>
+
+<div class="wrap">
+  <div class="eyebrow">MemberJunction · Conversations · reference</div>
+  <h1>The Projects hierarchy, illustrated</h1>
+  <p class="sub">Containment as it actually exists in the schema (2026-07-07). Solid green is wired and shipped; hatched red-brown is a column that exists but nothing writes; dashed amber is being built right now (P1.6); dotted gray is planned. The numbered pins are the six open hierarchy questions.</p>
+
+  <div class="legend">
+    <span class="lg"><span class="sw shipped"></span> wired &amp; shipped</span>
+    <span class="lg"><span class="sw unwired"></span> schema exists, never written</span>
+    <span class="lg"><span class="sw building"></span> building now (P1.6)</span>
+    <span class="lg"><span class="sw planned"></span> planned / vision</span>
+    <span class="lg"><span class="pin pin-demo">n</span> open question</span>
+  </div>
+
+  <!-- ====================== THE TREE ====================== -->
+  <div class="box env">
+    <span class="tag">Environment — invisible to users, hard outer boundary</span>
+
+    <div class="box project">
+      <span class="tag">Project (today's UI name: "Folder")</span>
+      <div class="p-head">
+        <span class="ic">🔄</span><span class="nm">Membership Renewal</span>
+        <span class="pin" title="Sharing cascade">3</span>
+      </div>
+      <div class="fieldchips">
+        <span class="fchip">Name</span><span class="fchip">Description</span><span class="fchip">Color</span><span class="fchip">Icon</span><span class="fchip">ParentID (nesting)</span><span class="fchip">IsArchived</span><span class="fchip warn">no owner field!</span>
+      </div>
+
+      <div class="grid2">
+        <!-- conversations column -->
+        <div>
+          <div class="conv">
+            <span class="tag">Conversation</span>
+            <div class="t">Q3 renewal targets <span class="pin" title="Single-homed">4</span> <span class="pin" title="Move semantics">6</span></div>
+            <div class="msg"><b>Message</b> — "Draft three win-back email variants…" <span class="mono" style="color:var(--ink-3)">(messages can thread via ParentID)</span>
+              <div class="hangs">
+                <span class="h-item art"><span>📄 Artifact — identity only; content lives in versions v1→v3 · collections pin a version, not the artifact</span></span>
+                <span class="h-item wf">🗂 Workflow — parent Task → sub-tasks + dependencies <span class="mono">Task.ProjectID never written</span></span>
+              </div>
+            </div>
+          </div>
+
+          <div class="conv" style="opacity:.85">
+            <span class="tag">Conversation</span>
+            <div class="t">Lapsed member win-back copy</div>
+            <div class="msg" style="border-style:dashed;">🎙 <b>Voice session</b> — a <i>sidecar</i>, not a new tier: tags ordinary messages with <span class="mono">AgentSessionID</span> (UI collapses them into one "session block"). Owned by a user, attached to this conversation, <b>no ProjectID</b>. Real work = normal nested agent runs; memory injects once at session start.</div>
+          </div>
+        </div>
+
+        <!-- memory column -->
+        <div>
+          <div class="memory">
+            <span class="tag">Agent memory — P1.6, building now</span>
+            <div class="note">"Renewal emails come from the chapter, not national" <span class="scope">SAGE</span><span class="scope">PROJECT</span></div>
+            <div class="note">"Target members lapsed &lt; 90 days first" <span class="scope">ALL AGENTS</span><span class="scope">PROJECT</span></div>
+            <div class="note" style="border-style:dashed;"><span style="color:var(--ink-3)">+ global notes always inject alongside project notes (D6)</span> <span class="pin" title="Memory inheritance across nesting">2</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- nested sub-project -->
+      <div class="subproject">
+        <span class="tag">Sub-project — projects nest, unlike ChatGPT/Claude</span>
+        <div class="p-head" style="margin-bottom:2px;"><span class="ic" style="background:color-mix(in srgb, var(--brand) 70%, transparent)">🎤</span><span class="nm" style="font-size:14px;">Speakers</span> <span class="pin" title="Roll-up">1</span></div>
+        <div style="font-size:12.5px;color:var(--ink-2);">…its own conversations, memory, workflows. Does the parent's hub roll these up? Nobody has drawn it.</div>
+      </div>
+
+      <!-- sharing ring -->
+      <div class="share-ring">
+        <span class="tag">Sharing boundary — planned (last in build sequence)</span>
+        <div class="body">The vision: share the <i>project</i>, not N individual things. Reality check (verified): person-to-person sharing is <b>real</b> today (<span class="mono">Resource Permissions</span>, View/Edit/Owner + a working Sharing Center), but the share modal's <b>"anyone with the link" toggle is cosmetic</b> — it writes nothing; the <span class="mono">PublicLink</span> token table exists and is never used. Project-boundary sharing would come from the generic ACL layer (<span class="mono">AccessControlRule</span> — dormant, no write UI) since the Project table has no owner or member fields of its own.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- collections beside the tree -->
+  <div class="beside">
+    <div style="font-size:12.5px;color:var(--ink-2);padding:6px 2px;">
+      <b style="color:var(--ink)">Reading the tree:</b> everything project-related is optional. A chat can live in no project at all ("Ungrouped"), and today only <span class="mono">Conversation.ProjectID</span> is actually wired — so the honest current-state hierarchy is just <b>Project → Conversations</b>, with artifacts and workflows hanging off <i>messages</i> regardless of project. The rest of the picture is what P1.6 and "Projects v1" would attach.
+    </div>
+    <div class="collections">
+      <span class="tag">Collections — a second tree <span style="font-weight:400">📌</span></span>
+      <div class="ctree">Collections/
+├─ Renewal Assets/
+│  ├─ 📄 Email Sequence v3
+│  └─ 📊 Lapse Risk Dashboard
+└─ Board Materials/</div>
+      <div class="dashed-link"><span class="pin" title="Two trees">5</span> proposed: "Collections belong to Projects" — a tree inside a tree</div>
+    </div>
+  </div>
+
+  <!-- outside the tree -->
+  <div class="outside">
+    <h2>Deliberately outside the hierarchy</h2>
+    <div class="out-row">
+      <div class="out-card"><div class="t">🕘 Routines</div><p>Personal standing orders, run as <i>you</i>, no <span class="mono">ProjectID</span> anywhere. They appear in every mockup only as the global sidebar footer. Open question: should they join the tree?</p></div>
+      <div class="out-card"><div class="t">🕶 Temporary chats</div><p>Never join a project, never read or write memory (D20 — chosen at creation, locked after).</p></div>
+      <div class="out-card"><div class="t">🌐 Global memory</div><p>Notes with no project: inject everywhere. Project notes add to these, never replace them (D6, "broad" inheritance).</p></div>
+      <div class="out-card"><div class="t">👥 People — an overlay, not a level</div><p>Ownership differs per level: conversations/artifacts/routines strictly one-user; collections optionally owned; <b>projects ownerless</b>. Agents are first-class actors (task assignees, memory holders). MJ today = <b>single-player + grants</b>; the mockups' "Members" imply multiplayer with zero schema backing.</p></div>
+    </div>
+  </div>
+
+  <!-- the six questions -->
+  <div class="questions">
+    <h2>The six open hierarchy questions</h2>
+    <p class="sub2">Each pin on the diagram marks where the question lives. None of the three Projects mockups answers them — they all render a single flat project.</p>
+    <div class="q"><span class="pin">1</span><div class="body"><b>Roll-up:</b> what does a <i>parent</i> project's hub show — its own content only, or its descendants' conversations, memory, workflows, and artifacts too?</div></div>
+    <div class="q"><span class="pin">2</span><div class="body"><b>Memory inheritance:</b> P1.6's rule is flat (project X or global). Should a chat in "Speakers" also hear what agents learned in "Membership Renewal"? Not covered by D17–D20 — worth raising while P1.6 is in flight.</div></div>
+    <div class="q"><span class="pin">3</span><div class="body"><b>Sharing cascade:</b> if the project is the sharing boundary, does sharing a parent grant its children? Does project access reach every conversation and artifact inside? "Comprehensible in 5 seconds" is hard when the boundary is a tree.</div></div>
+    <div class="q"><span class="pin">4</span><div class="body"><b>Single-homed:</b> a conversation belongs to exactly one project (plain FK, no tags, no many-to-many). A chat can't serve two initiatives. Fine for v1 — but it's a baked-in modeling commitment.</div></div>
+    <div class="q"><span class="pin">5</span><div class="body"><b>Two trees:</b> Projects nest, Collections nest, and the proposal relates them. Users must intuit the difference between two nesting systems — a naming/affordance problem.</div></div>
+    <div class="q"><span class="pin">6</span><div class="body"><b>Move semantics:</b> reparent a chat to another project — do its learned memories move, stay, or ask? (Audit half solved: D17 stamps runs with the project at run time, freezing provenance.)</div></div>
+  </div>
+
+  <footer>Companion to <span class="mono">CONVERSATIONS-ATLAS.md</span> · schema verified against the v5.38 baseline · 2026-07-07</footer>
+</div>
