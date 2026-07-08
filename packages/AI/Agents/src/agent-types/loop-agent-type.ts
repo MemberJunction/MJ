@@ -11,7 +11,8 @@
  */
 
 import { RegisterClass, SafeExpressionEvaluator } from '@memberjunction/global';
-import { BaseAgentType } from './base-agent-type';
+import { AgentFinalResponseStreamExtractor, BaseAgentType } from './base-agent-type';
+import { LoopAgentStreamExtractor } from './loop-agent-stream-extractor';
 import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams, ExecuteAgentParams, AgentConfiguration, AgentAction, AgentClientToolInvocation } from '@memberjunction/ai-core-plus';
 import { LogError, LogStatusEx } from '@memberjunction/core';
 import { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
@@ -55,6 +56,17 @@ import { ConversationMessageResolver } from '../utils/ConversationMessageResolve
 @RegisterClass(BaseAgentType, "LoopAgentType")
 export class LoopAgentType extends BaseAgentType {
     private _evaluator = new SafeExpressionEvaluator();
+
+    /**
+     * Loop turns stream a JSON envelope whose root-level `message` field carries the
+     * user-facing reply on the final turn. This extractor re-emits just that text as
+     * `kind:'final-response'` deltas so the conversation client can render the reply
+     * live while the envelope is still being generated. Non-final turns and nested
+     * `message` keys are never emitted; see LoopAgentStreamExtractor.
+     */
+    public override CreateFinalResponseStreamExtractor(): AgentFinalResponseStreamExtractor | null {
+        return new LoopAgentStreamExtractor();
+    }
 
     public async InitializeAgentTypeState<ATS = any, P = any>(params: ExecuteAgentParams<any, P>): Promise<ATS> {
         // Loop agents do not require agent-type specific state initialization

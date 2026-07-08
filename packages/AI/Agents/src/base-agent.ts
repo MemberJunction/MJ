@@ -8148,6 +8148,21 @@ The context is now within limits. Please retry your request with the recovered c
             
             // Pass cancellation token and streaming callbacks to prompt execution
             promptParams.cancellationToken = params.cancellationToken;
+            // Final-reply extraction: the ROOT agent's type may know how to pull the
+            // user-facing reply text out of its raw prompt stream (e.g. Loop's envelope
+            // carries it in the root-level `message` field). Extracted text is re-emitted
+            // as ADDITIONAL `kind:'final-response'` deltas — the only chunks the
+            // conversation client renders — while raw chunks keep flowing unchanged for
+            // existing consumers. Root-only: a sub-agent's "final" message is a result
+            // for its parent, not the user's reply. One fresh extractor per turn.
+            const finalResponseExtractor =
+                params.onStreaming && (params.parentDepth ?? 0) === 0 && !params.parentAgentHierarchy?.length
+                    ? this.AgentTypeInstance?.CreateFinalResponseStreamExtractor()
+                    : null;
+            // Parallel prompt execution funnels every task's chunks through this same
+            // callback; interleaved envelopes would corrupt extraction, so the extractor
+            // binds to the first model that streams and ignores the rest for the turn.
+            let extractorModelName: string | undefined | null = null;
             promptParams.onStreaming = params.onStreaming ? (chunk) => {
                 // For streaming, we need to wrap it differently since chunk doesn't have metadata
                 // The server resolver should get the agent run from the closure
@@ -8156,6 +8171,33 @@ The context is now within limits. Please retry your request with the recovered c
                     stepType: 'prompt',
                     stepEntityId: stepEntity.ID
                 });
+                if (finalResponseExtractor) {
+                    if (extractorModelName === null) extractorModelName = chunk.modelName;
+                    if (chunk.modelName === extractorModelName) {
+                        const replyText = chunk.content ? finalResponseExtractor.Feed(chunk.content) : '';
+                        if (replyText) {
+                            params.onStreaming!({
+                                content: replyText,
+                                isComplete: false,
+                                stepType: 'prompt',
+                                stepEntityId: stepEntity.ID,
+                                modelName: chunk.modelName,
+                                kind: 'final-response'
+                            });
+                        }
+                        if (chunk.isComplete && finalResponseExtractor.HasEmitted) {
+                            // Close the tagged stream so the client marks it complete.
+                            params.onStreaming!({
+                                content: '',
+                                isComplete: true,
+                                stepType: 'prompt',
+                                stepEntityId: stepEntity.ID,
+                                modelName: chunk.modelName,
+                                kind: 'final-response'
+                            });
+                        }
+                    }
+                }
             } : undefined;
             
             promptParams.onPromptRunCreated = async (promptRunId: string) => {

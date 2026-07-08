@@ -43,7 +43,7 @@ import { ActionResult } from '@memberjunction/actions-base';
  *   public async DetermineNextStep(): Promise<BaseAgentNextStep> {
  *     // Parse LLM output to determine if goal is achieved
  *     const goalAchieved = // ... parsing logic
- *     
+ *
  *     return {
  *       step: goalAchieved ? 'success' : 'action',
  *       payload: result
@@ -52,6 +52,22 @@ import { ActionResult } from '@memberjunction/actions-base';
  * }
  * ```
  */
+
+/**
+ * Per-turn extractor of user-facing final-reply text from an agent type's raw prompt
+ * stream. Created via {@link BaseAgentType.CreateFinalResponseStreamExtractor} — one
+ * fresh instance per prompt turn; instances are stateful and never reused across turns.
+ */
+export interface AgentFinalResponseStreamExtractor {
+    /**
+     * Consume the next raw output delta and return any newly-available final-reply
+     * text (unescaped, renderable), or '' when nothing new is renderable yet.
+     */
+    Feed(delta: string): string;
+    /** True once any final-reply text has been emitted for this turn. */
+    readonly HasEmitted: boolean;
+}
+
 export abstract class BaseAgentType {
     /**
      * JSON validator instance for cleaning and validating responses
@@ -126,6 +142,26 @@ export abstract class BaseAgentType {
      * @since 2.76.0
      */
     public abstract DetermineInitialStep<P = any, ATS = any>(params: ExecuteAgentParams<P>, payload: P, agentTypeState: ATS): Promise<BaseAgentNextStep<P> | null>;
+
+    /**
+     * Optional factory for a per-turn extractor that pulls user-facing FINAL-REPLY text
+     * out of this agent type's raw prompt stream, so it can be re-emitted as
+     * `kind:'final-response'` deltas (which the conversation client renders live —
+     * see AgentExecutionStreamingCallback in @memberjunction/ai-core-plus).
+     *
+     * The default returns null: most agent types' raw streams contain no directly
+     * renderable text (e.g. structured envelopes), so nothing extra is emitted and raw
+     * chunks flow exactly as before. Types whose stream DOES embed the reply — like
+     * Loop, whose envelope carries it in the root-level `message` field — override this
+     * to return a fresh extractor. BaseAgent calls this once per prompt turn of the
+     * ROOT agent only (a sub-agent's "final" message is not the user's reply).
+     *
+     * @returns A fresh per-turn extractor, or null when this type's stream has no
+     *          extractable reply text.
+     */
+    public CreateFinalResponseStreamExtractor(): AgentFinalResponseStreamExtractor | null {
+        return null;
+    }
 
     /**
      * Pre-processes a retry step to allow agent types to customize retry behavior.

@@ -12,6 +12,7 @@
 export * from './agent-types/base-agent-type';
 export * from './agent-types/loop-agent-response-type';
 export * from './agent-types/loop-agent-prompt-params';
+export * from './agent-types/loop-agent-stream-extractor';
 export * from './base-agent';
 export * from './prompt-component-resolver';
 export * from './agent-run-watchdog';

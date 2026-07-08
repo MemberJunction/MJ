@@ -707,6 +707,10 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     // Resolve the message once and reuse it for the callback's lifetime: streamed
     // final-response updates arrive per content delta, and re-awaiting the cache on
     // every delta both wastes work and (on a cold cache) races concurrent loads.
+    // Known tradeoff: if the cache ever REPLACES the entity instance for this ID
+    // mid-run (e.g. a conversation reload), updates mutate the detached object until
+    // completion reconciliation repaints from the saved message — accepted, since the
+    // cache currently mutates in place rather than replacing instances.
     let resolvedMessage: Awaited<ReturnType<DataCacheService['getConversationDetail']>> = null;
     return async (progress: MessageProgressUpdate) => {
       try {

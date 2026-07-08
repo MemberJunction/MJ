@@ -72,6 +72,17 @@ tracking, sessions).
 | A custom server-side runner that observes conversations | **Layer 2** — subscribe to `Streaming` or `Sessions` |
 | **You're forking the widget because you can't customize it through slots/events** | **Stop and file an issue.** That's the gap the slot system is designed to fill. |
 
+> **Streamed final-response rendering.** `Streaming` also routes live reply text: agent
+> stream chunks tagged `kind: 'final-response'` (the `AgentStreamChunkKind` union in
+> `@memberjunction/ai-core-plus`) are accumulated per message — deltas in, full-text-so-far
+> out — and delivered to registered callbacks via the optional
+> `MessageProgressUpdate.streaming` member (`{ content, isPartial, kind }`); renderers
+> assign `content`, never append. Untagged stream chunks (e.g. raw Loop-agent envelope
+> fragments) are dropped. Producers: Loop agents' final-turn `message` is extracted and
+> tagged automatically by the framework (`LoopAgentStreamExtractor`); any custom emitter
+> can opt in by tagging its own chunks. If you build a chat surface on Layer 2, handle
+> `progress.streaming` to get live-typing replies.
+
 ---
 
 ## 4. The adapter pattern (the boundary between runtime and host)

@@ -798,6 +798,17 @@ export type AgentExecutionProgressCallback = (progress: {
 }) => void;
 
 /**
+ * Content discriminator for streamed agent chunks — the source-of-truth union for the
+ * `kind` field on {@link AgentExecutionStreamingCallback} chunks. `'final-response'`
+ * marks deltas of the user-facing final reply, which the conversation client
+ * accumulates and renders live; future kinds (e.g. inter-turn progress narration)
+ * extend this union. Wire-facing fields (the GraphQL payload,
+ * MessageProgressUpdate.streaming.kind) deliberately stay `string` for
+ * forward-compatibility — consumers should compare against these values.
+ */
+export type AgentStreamChunkKind = 'final-response';
+
+/**
  * Callback function type for streaming content updates during agent execution
  */
 export type AgentExecutionStreamingCallback = (chunk: {
@@ -820,7 +831,7 @@ export type AgentExecutionStreamingCallback = (chunk: {
      * answer as plain prose (outside the turn envelope) set this on their compose
      * stream; future kinds (e.g. inter-turn progress narration) extend this union.
      */
-    kind?: 'final-response';
+    kind?: AgentStreamChunkKind;
 }) => void;
 
 /**
