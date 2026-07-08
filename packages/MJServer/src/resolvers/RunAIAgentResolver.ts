@@ -4,7 +4,7 @@ import { DatabaseProviderBase, LogError, LogStatus, Metadata, RunView, UserInfo,
 import { MJConversationDetailEntity, MJConversationDetailAttachmentEntity, MJConversationDetailArtifactEntity, MJArtifactVersionEntity, MJAIAgentRequestEntity, ArtifactMetadataEngine } from '@memberjunction/core-entities';
 import { RouteArtifact } from './artifact-routing.js';
 import { AgentRunner, ArtifactToolManager } from '@memberjunction/ai-agents';
-import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, ExecuteAgentResult, ConversationUtility, AttachmentData } from '@memberjunction/ai-core-plus';
+import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, ExecuteAgentResult, ConversationUtility, AttachmentData, AgentExecutionStreamingCallback } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ChatMessage, ChatMessageContent } from '@memberjunction/ai';
 import { ResolverBase } from '../generic/ResolverBase.js';
@@ -78,6 +78,17 @@ export class AgentStreamingContent {
 
     @Field({ nullable: true })
     agentName?: string;
+
+    /**
+     * Content discriminator passed through from the agent's streaming chunk (see
+     * `AgentExecutionStreamingCallback` in @memberjunction/ai-core-plus).
+     * 'final-response' marks user-facing reply deltas the conversation client
+     * accumulates + renders into the message bubble; chunks without a kind are
+     * raw prompt output (e.g. a Loop agent's JSON turn envelope) and are not
+     * rendered by the conversation client.
+     */
+    @Field({ nullable: true })
+    kind?: string;
 }
 
 @ObjectType()
@@ -322,8 +333,8 @@ export class RunAIAgentResolver extends ResolverBase {
     /**
      * Create streaming content callback
      */
-    private createStreamingCallback(pubSub: PubSubEngine, sessionId: string, userPayload: UserPayload, agentRunRef: { current: any }) {
-        return (chunk: any) => {
+    private createStreamingCallback(pubSub: PubSubEngine, sessionId: string, userPayload: UserPayload, agentRunRef: { current: MJAIAgentRunEntityExtended | null }): AgentExecutionStreamingCallback {
+        return (chunk) => {
             // Use the agent run from the ref
             const agentRun = agentRunRef.current;
             if (!agentRun) {
@@ -341,7 +352,8 @@ export class RunAIAgentResolver extends ResolverBase {
                     content: chunk.content,
                     isPartial: !chunk.isComplete,
                     stepName: chunk.stepType,
-                    agentName: chunk.modelName
+                    agentName: chunk.modelName,
+                    kind: chunk.kind
                 },
                 timestamp: new Date()
             };

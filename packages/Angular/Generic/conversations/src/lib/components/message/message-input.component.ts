@@ -704,10 +704,14 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * This callback will be invoked by the streaming service when progress updates arrive.
    */
   private createMessageProgressCallback(messageId: string): (progress: MessageProgressUpdate) => Promise<void> {
+    // Resolve the message once and reuse it for the callback's lifetime: streamed
+    // final-response updates arrive per content delta, and re-awaiting the cache on
+    // every delta both wastes work and (on a cold cache) races concurrent loads.
+    let resolvedMessage: Awaited<ReturnType<DataCacheService['getConversationDetail']>> = null;
     return async (progress: MessageProgressUpdate) => {
       try {
         // Get message from cache (single source of truth)
-        const message = await this.dataCache.getConversationDetail(messageId, this.currentUser);
+        const message = (resolvedMessage ??= await this.dataCache.getConversationDetail(messageId, this.currentUser));
 
         if (!message) {
           console.warn(`[StreamingCallback] Message ${messageId} not found in cache`);
@@ -724,6 +728,18 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         const completionTime = this.completionTimestamps.get(messageId);
         if (completionTime) {
           console.log(`[StreamingCallback] Message ${messageId} marked complete at ${new Date(completionTime).toISOString()}, ignoring late progress update`);
+          return;
+        }
+
+        // Streamed final-response content: the service accumulates deltas, so
+        // progress.streaming.content is always the full reply text so far — assign it.
+        // The completion flow (above guards + the 'complete' path) reconciles the
+        // bubble with the server-saved final message, so no append/merge is needed here.
+        if (progress.streaming) {
+          message.Message = progress.streaming.content;
+          this.messageSent.emit(message);
+          // Keep the tasks dropdown on a stable status line rather than the growing reply text.
+          this.activeTasks.updateStatusByConversationDetailId(message.ID, 'Responding…');
           return;
         }
 
