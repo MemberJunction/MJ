@@ -24,6 +24,9 @@ class TestableSQLServerDriver extends SQLServerExternalDataSourceDriver {
   public selCast(target: string, params: ExternalViewParams, columns: Parameters<TestableSQLServerDriver['buildSelectSqlCastAware']>[2]) {
     return this.buildSelectSqlCastAware(target, params, columns);
   }
+  public buildCount(target: string, params: ExternalViewParams) {
+    return this.buildCountSql(target, params);
+  }
   // Expose the connection-identity guard surface (real shipped code) for the H1 race test.
   public peek(id: string) {
     return this.peekConnection(id);
@@ -84,6 +87,39 @@ describe('SQLServerExternalDataSourceDriver — SQL building', () => {
     it('coerces paging values to numbers (no injection via maxRows/offset)', () => {
       const sql = d.sel('[s].[t]', { objectName: 't', maxRows: Number('5; DROP'), offset: Number('1; DROP') });
       expect(sql).not.toContain('DROP');
+    });
+  });
+
+  // Exercises the shared BaseSqlExternalDataSourceDriver.effectiveWhere + buildCountSql (which Postgres /
+  // MySQL inherit unchanged) through the concrete SQL Server dialect quoting.
+  describe('incrementalSince (structured watermark → effectiveWhere / buildCountSql)', () => {
+    const wm = { objectName: 't', incrementalSince: { Field: 'updated_at', Value: '2026-03-01T00:00:00.000Z' } } as ExternalViewParams;
+    it('incremental-only → WHERE <quoted> >= <literal>', () => {
+      expect(d.sel('[s].[t]', wm)).toBe("SELECT * FROM [s].[t] WHERE [updated_at] >= '2026-03-01T00:00:00.000Z'");
+    });
+    it('filter + incremental are ANDed', () => {
+      expect(d.sel('[s].[t]', { ...wm, filter: "status = 'a'" }))
+        .toBe("SELECT * FROM [s].[t] WHERE (status = 'a') AND [updated_at] >= '2026-03-01T00:00:00.000Z'");
+    });
+    it('a BLANK filter does not drop the incremental bound (empty-string bug)', () => {
+      expect(d.sel('[s].[t]', { ...wm, filter: '' }))
+        .toBe("SELECT * FROM [s].[t] WHERE [updated_at] >= '2026-03-01T00:00:00.000Z'");
+      expect(d.sel('[s].[t]', { ...wm, filter: '   ' }))
+        .toBe("SELECT * FROM [s].[t] WHERE [updated_at] >= '2026-03-01T00:00:00.000Z'");
+    });
+    it('filter-only (no incremental) is unchanged', () => {
+      expect(d.sel('[s].[t]', { objectName: 't', filter: "status = 'a'" })).toBe("SELECT * FROM [s].[t] WHERE status = 'a'");
+    });
+    it('escapes single quotes in the watermark literal', () => {
+      expect(d.sel('[s].[t]', { objectName: 't', incrementalSince: { Field: 'c', Value: "a'b" } }))
+        .toBe("SELECT * FROM [s].[t] WHERE [c] >= 'a''b'");
+    });
+    it('COUNT(*) honors filter + incremental so paginated totals stay consistent', () => {
+      expect(d.buildCount('[s].[t]', { ...wm, filter: "status = 'a'" }))
+        .toBe("SELECT COUNT(*) AS cnt FROM [s].[t] WHERE (status = 'a') AND [updated_at] >= '2026-03-01T00:00:00.000Z'");
+    });
+    it('COUNT(*) omits WHERE when neither filter nor incremental is present', () => {
+      expect(d.buildCount('[s].[t]', { objectName: 't' })).toBe('SELECT COUNT(*) AS cnt FROM [s].[t]');
     });
   });
 

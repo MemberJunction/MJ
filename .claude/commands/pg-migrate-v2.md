@@ -168,6 +168,38 @@ If the output does **not** contain `AUTH_OK`, stop and tell the user to run
 This is a hard gate — gap-authoring and the browser phases all delegate to CC in
 Docker. Do not proceed past this point unauthenticated.
 
+### Step 0g: Browser-login strategy — magic-link by default (self-contained, no external IdP)
+
+> **The recurring "login worked last week, not this week" trap — and why we don't
+> depend on an external IdP anymore.** MJExplorer's auth config lives in the GITIGNORED
+> `environment.development.ts`. The workbench entrypoint only makes it `AUTH_TYPE:'auth0'`
+> when `docker/workbench/.env` carries `TEST_AUTH0_*`; absent those, Explorer falls back
+> to the committed `environment.ts` (`AUTH_TYPE:'msal'`, Azure AD), and any hardcoded
+> Auth0 login fails with *"username may be incorrect."* The pipeline only ever "worked"
+> on leftover volume state. **Depending on Auth0/MSAL for headless automated login is the
+> fragility.** The fix: log in with **magic-link**, which needs no external IdP, works
+> **regardless of `AUTH_TYPE`** (the Explorer magic-link provider activates on a `#token=`
+> fragment even under MSAL — see `mjexplorer-magic-link-provider.service.ts`), and mints a
+> real session for an **existing seeded DB user**. This is **proven** to work headlessly on
+> PostgreSQL and is the default for Phases 4/4b. (Auth0 remains an OPTIONAL path for anyone
+> who wants to exercise the real IdP — see the note at the end of this step.)
+
+No preflight credentials are required for the default (magic-link) path — the login is
+provisioned in Phase 4 against the target DB. The only prerequisite is that
+`magicLink.enabled: true` in the config the container's MJAPI reads (`mj.config.cjs`
+ships it enabled for the dev/e2e flow; verify once):
+
+```bash
+docker exec claude-dev bash -lc 'grep -A2 "magicLink:" /workspace/MJ/mj.config.cjs | grep -q "enabled: true" && echo "magic-link enabled" || echo "SET magicLink.enabled=true in mj.config.cjs"'
+```
+
+> **Optional — real-IdP (Auth0) testing.** To exercise the actual Auth0 flow instead of
+> magic-link, set `TEST_AUTH0_DOMAIN`/`TEST_AUTH0_CLIENT_ID`/`TEST_AUTH0_CLIENT_SECRET`/
+> `TEST_UID`/`TEST_PWD` in `docker/workbench/.env`, `docker compose --profile postgres up
+> -d --build` (entrypoint regenerates the Explorer env as Auth0), then log in with
+> `$TEST_UID`/`$TEST_PWD`. This needs a live Auth0 tenant + test account; magic-link needs
+> neither, so prefer it for routine runs.
+
 ---
 
 ## Phase 1: Convert with `--split` (in Docker)
@@ -470,6 +502,25 @@ Your job: Run FULL STACK smoke tests against the PostgreSQL database {{PG_DB_NAM
 {{PG_DB_NAME}} on postgres-claude already has all v5 migrations applied (CodeGen objects are baked into the migrations — no separate codegen step) + metadata seed. Use it.
 - PostgreSQL: host=postgres-claude, port=5432, user=mj_admin, password=Claude2Pg99, database={{PG_DB_NAME}}
 
+## Browser login — MAGIC-LINK (default, self-contained; NEVER hardcode an IdP account)
+Log in via magic-link minted against an EXISTING seeded DB user (Step 5) — no Auth0/MSAL
+account, no `TEST_*` creds, works under any `AUTH_TYPE`. A hardcoded external IdP account
+is exactly what broke prior runs (an Auth0 account rejected by an MSAL-configured Explorer).
+
+**Access model — this is FULL access, not a restricted guest.** A *named* magic-link (email
+identity mode = the default) inherits the target user's **full DB roles** at request time
+(`context.ts` builds the session with `userRecord.UserRoles`; only `mj_anon` sessions are
+scope-restricted). So the session authorizes identically to that user logging in via
+Auth0/MSAL — enough for the whole UI suite (grids, records, admin surfaces, CRUD). The
+invite's `RoleID`/`ApplicationID` are only landing hints; they do NOT cap a named session.
+**Rule: the access ceiling = the user you mint for.** Pick a broad-role user (e.g. one with
+UI + Developer, or an Owner/admin) to exercise everything. Do NOT use anonymous mode
+(`mj_anon`) for testing — that IS the restricted external-guest path.
+
+(Optional real-IdP path: if you deliberately set `TEST_AUTH0_*` + `TEST_UID`/`TEST_PWD` and
+rebuilt so Explorer serves Auth0, you may instead drive the Auth0 Universal Login with
+`$TEST_UID`/`$TEST_PWD` — but magic-link is the default and needs nothing external.)
+
 ## TIER 1: API smoke
 
 ### Step 1: Build MJAPI
@@ -493,34 +544,103 @@ Only proceed if MJAPI started. SKIP is not allowed — every test is PASS or FAI
 
 ### Step 4: npx playwright install chromium  (|| npx playwright install --with-deps chromium)
 
-### Step 5: Ensure test user has roles in PG
-psql -h postgres-claude -U mj_admin -d {{PG_DB_NAME}} -c "INSERT INTO __mj.\"UserRole\" (\"UserID\", \"RoleID\") SELECT '3e5ac17f-0b2c-4aca-878f-9f744f2168f4', \"ID\" FROM __mj.\"Role\" ON CONFLICT DO NOTHING;"
-(If that user ID differs, look it up: SELECT "ID" FROM __mj."User" WHERE "Email" = 'da-robot-tester@bluecypress.io';)
+### Step 5: Mint a magic-link session (self-contained — no external IdP)
+This is the RELIABLE login: it needs no Auth0/MSAL account, works under any `AUTH_TYPE`
+(the Explorer magic-link provider activates on the `#token=` fragment even under MSAL),
+and mints a real session for an EXISTING seeded user. **Proven headless on PostgreSQL.**
+There is no authenticated admin to call `POST /magic-link/create`, so insert the invite
+row directly. All commands run in the container against {{PG_DB_NAME}}.
 
-### Step 6: Build + start MJExplorer on port 4200
+```bash
+# a. Verify magic-link routes are mounted (jwks 200; redeem GET = interstitial 200, NOT 401):
+curl -s -o /dev/null -w "jwks=%{http_code}\n" localhost:4000/magic-link/jwks.json
+curl -s -o /dev/null -w "redeem=%{http_code}\n" "localhost:4000/magic-link/redeem?token=probe"
+#   401 on redeem ⇒ magic-link not enabled in the config MJAPI actually read → set
+#   magicLink.enabled=true in mj.config.cjs and restart MJAPI before continuing.
+
+# b. Pick an EXISTING user with the most roles (boots the shell cleanly), plus an app + a role it holds:
+psql -h postgres-claude -U mj_admin -d {{PG_DB_NAME}} -tAc "SELECT u.\"ID\", u.\"Email\", count(ur.\"ID\") FROM __mj.\"User\" u LEFT JOIN __mj.\"UserRole\" ur ON ur.\"UserID\"=u.\"ID\" WHERE u.\"IsActive\" GROUP BY u.\"ID\",u.\"Email\" ORDER BY 3 DESC LIMIT 3;"
+psql -h postgres-claude -U mj_admin -d {{PG_DB_NAME}} -tAc "SELECT \"ID\",\"Name\" FROM __mj.\"Application\" LIMIT 1;"   # ApplicationID
+# RoleID: any role the chosen user has (e.g. its 'UI' role via UserRole join).
+
+# c. Generate a token + matching hash (server stores base64url(sha256(rawToken))):
+node -e 'const c=require("crypto");const raw="mj_ml_"+c.randomBytes(32).toString("hex");console.log(raw+"|"+c.createHash("sha256").update(raw).digest("base64url"))'
+#   -> RAW|HASH   (keep RAW for the browser; insert HASH)
+
+# d. Insert the invite (substitute HASH, the chosen USER_ID / APP_ID / ROLE_ID):
+psql -h postgres-claude -U mj_admin -d {{PG_DB_NAME}} -c "INSERT INTO __mj.\"MagicLinkInvite\" (\"TokenHash\",\"Email\",\"ApplicationID\",\"RoleID\",\"ExpiresAt\",\"CreatedByUserID\",\"MaxUses\",\"UseCount\",\"Status\") VALUES ('<HASH>','<user email>','<APP_ID>','<ROLE_ID>', now()+interval '1 day','<USER_ID>',1,0,'Active');"
+echo "<RAW>" > /tmp/ml_browser_token.txt   # the browser script reads this
+```
+(Sanity: `POST` redeeming a token returns `{"success":true,"token":"eyJ…"}` — a live proof the PG atomic-consume works; the pre-#3075 T-SQL consume returned `errorCode:"consumed"` with no token. Mint a FRESH token for the browser, since redeem is single-use.)
+
+### Step 6: Build + serve MJExplorer on 4200
+`--configuration=development` is REQUIRED so the app boots with a real dev config. The
+served `AUTH_TYPE` does NOT matter for magic-link — the provider activates on the
+`#token=` fragment regardless (msal/auth0/any). No Auth0 env provisioning needed.
+```bash
 cd /workspace/MJ && npx turbo build --filter=@memberjunction/ng-explorer
 cd /workspace/MJ/packages/MJExplorer
-# --configuration=development is REQUIRED (swaps environment.ts → environment.development.ts;
-# without it the Auth0/MSAL config is the placeholder and login lands on an AAD error page).
 NODE_OPTIONS=--max-old-space-size=16384 npx ng serve --port 4200 --host 0.0.0.0 --configuration=development > /tmp/mjexplorer.log 2>&1 &
+```
 Wait up to 180s for http://localhost:4200/. If it never compiles/serves, capture /tmp/mjexplorer.log — Tier 2 failure.
 
-### Step 7: Playwright tests (use playwright-cli or Playwright MCP tools), IN ORDER:
-- BROWSER_LOAD: app loads (login page or shell)
-- BROWSER_LOGIN (MANDATORY): Auth0 Universal Login is a standard HTML form. Email da-robot-tester@bluecypress.io, password !!SoDamnSecureItHurt$. Email first, then password, click Continue/Submit. Accept any consent screen. Wait for redirect to the app shell.
-- BROWSER_DATA_EXPLORER: Data Explorer loads a grid with data
-- BROWSER_ENTITY_LIST: 2–3 entity lists render rows
-- BROWSER_OPEN_RECORD: a record form opens with fields populated
-- BROWSER_ADMIN: admin area loads (ERD / settings / entity management)
-- BROWSER_CONSOLE: report any critical JS errors across the run
+### Step 7: Playwright login — DETERMINISTIC SCRIPT with a shell assertion (VERIFIED working)
+BROWSER_LOGIN is where prior runs silently lied ("Welcome Back" text matched *on the login
+page* → false PASS → phantom "0 rows"). Drive login with the script below (place it inside
+`/workspace/MJ` so ESM resolves `node_modules/playwright`, e.g. `/workspace/MJ/pg-login.mjs`).
+It redeems the magic link → `#token` → shell, asserts a POSITIVE shell-only signal, and
+hard-FAILs otherwise. **This exact flow is verified working headless on PG.**
+```js
+import { chromium } from 'playwright';
+import { readFileSync } from 'node:fs';
+const RAW = readFileSync('/tmp/ml_browser_token.txt','utf8').trim();
+const b = await chromium.launch(); const pg = await b.newPage();
+const shot = n => pg.screenshot({ path:`/tmp/login-${n}.png`, fullPage:true }).catch(()=>{});
+try {
+  // NEGATIVE CHECK first: before login the shell must be ABSENT (proves no false-positive).
+  await pg.goto('http://localhost:4200/', { waitUntil:'domcontentloaded' });
+  await pg.waitForTimeout(4000);
+  const preShell = await pg.locator('mj-shell').first().isVisible().catch(()=>false);
+  if (preShell) { console.log('LOGIN_FAIL negative-check: shell present before auth'); process.exit(1); }
+  // Redeem: GET interstitial → click Continue (POST) → 302 → Explorer #token.
+  await pg.goto(`http://localhost:4000/magic-link/redeem?token=${RAW}`, { waitUntil:'domcontentloaded' });
+  const cont = pg.locator('button, input[type=submit], a').filter({ hasText:/continue|sign ?in|proceed/i }).first();
+  if (await cont.isVisible().catch(()=>false)) await cont.click();
+  else { const f = pg.locator('form').first(); if (await f.count()) await f.evaluate(el=>el.submit()); }
+  await pg.waitForURL(/localhost:4200/, { timeout:60000 });
+  await pg.waitForSelector('mj-shell', { timeout:90000 }).catch(()=>{});   // shell bootstraps async
+  await pg.waitForLoadState('networkidle').catch(()=>{});
+  await pg.waitForTimeout(3000);
+  await shot('post');
+  const url = pg.url();
+  const onIdp = /auth0\.com|login\.microsoftonline\.com/i.test(url);
+  const loginFormPresent = await pg.locator('input[type="password"]').first().isVisible().catch(()=>false);
+  // `mj-shell` = MJExplorer's authenticated shell root (rendered inside <mj-explorer-app>
+  // only AFTER auth; absent on the login screen). VERIFIED live.
+  const shellPresent = await pg.locator('mj-shell').first().isVisible().catch(()=>false);
+  const ok = shellPresent && !onIdp && !loginFormPresent && /localhost:4200/.test(url);
+  if (!ok) { console.log('LOGIN_FAIL', JSON.stringify({url,onIdp,loginFormPresent,shellPresent})); console.log('DOM', (await pg.content()).slice(0,2000)); process.exit(1); }
+  console.log('LOGIN_OK', url);
+} catch (e) { await shot('err'); console.log('LOGIN_FAIL', String(e)); process.exit(1); }
+finally { await b.close(); }
+```
+Run: `cd /workspace/MJ && node pg-login.mjs`. `LOGIN_OK` + exit 0 ⇒ BROWSER_LOGIN PASS; any `LOGIN_FAIL`/non-zero ⇒ **FAIL** (attach `/tmp/login-*.png` — do NOT paper over it). PASS is the shell assertion, never matched page text. Tests IN ORDER:
+- BROWSER_LOAD: app origin responds before login
+- BROWSER_LOGIN (MANDATORY): script above returns `LOGIN_OK`
+- BROWSER_DATA: authenticated shell renders real DB data. **Reliable check:** assert seeded values are visible in the shell (e.g. a known user email `page.locator('body').innerText()` contains it) — this is verified working. NOTE: the landing surface (Identity & Access) is a *custom* editor, not an ag-grid.
+- BROWSER_ENTITY_GRID: to exercise the ag-grid data view, navigate via **in-app UI clicks** (Data Explorer → an entity), NOT a cold-load deep link — a fresh `page.goto('/…/view/…')` does NOT mount the entity-viewer (shell URL updates but the tab content doesn't hydrate). When mounted, the grid container is `.mj-ag-grid` and data rows are `.ag-row` (ag-grid; verified from source). Assert `.ag-row` count > 0.
+- BROWSER_OPEN_RECORD: open a record form via in-app click; fields populated
+- BROWSER_CONSOLE: report critical JS errors across the run
 
 ### Step 8: Cleanup — kill MJAPI + MJExplorer, close playwright.
 
 ### Step 9: Write /tmp/phase4-result.json
 { "tier1": {"mjapiStarted": bool, "startupError": "...", "tests": [{"name","status":"PASS|FAIL","details"}]},
-  "tier2": {"explorerStarted": bool, "startupError": "...", "loginSucceeded": bool, "tests": [...], "consoleErrors": [], "screenshots": []},
+  "tier2": {"explorerStarted": bool, "loginMethod": "magic-link|auth0", "loginUser": "<authenticated email>", "startupError": "...",
+            "loginSucceeded": bool, "loginAssertion": {"url":"...","onIdp":bool,"loginFormPresent":bool,"shellPresent":bool},
+            "tests": [...], "consoleErrors": [], "screenshots": []},
   "overallPass": bool, "notes": "..." }
-Status MUST be PASS or FAIL only — SKIP is not allowed. Also write /tmp/phase4-summary.txt.
+`loginSucceeded` MUST reflect the scripted shell assertion (LOGIN_OK), never a text match. Status MUST be PASS or FAIL only — SKIP is not allowed. Also write /tmp/phase4-summary.txt.
 
 IMPORTANT: When completely finished, write PIPELINE_DONE as the very last line of your output.
 ```
@@ -550,12 +670,12 @@ You are running inside the claude-dev Docker container with the MJ repo at /work
 
 Your job: Run a DEEP CRUD workflow test against PostgreSQL {{PG_DB_NAME}} using Playwright. MJAPI (:4000) and MJExplorer (:4200) should already be running from Phase 4; if not, start them with the same PG config (DB_PLATFORM=postgresql, PG_HOST=postgres-claude, PG_DATABASE={{PG_DB_NAME}}, MJ_CORE_SCHEMA=__mj; Explorer with --configuration=development).
 
-## Auth0: da-robot-tester@bluecypress.io / !!SoDamnSecureItHurt$
+## Auth: reuse the Phase 4 MAGIC-LINK login. Mint a FRESH invite (Phase 4 Step 5 recipe — the last token was single-use and is consumed), write RAW to /tmp/ml_browser_token.txt, and run the deterministic /workspace/MJ/pg-login.mjs (shell-assertion gated). NEVER hardcode an IdP account. CRUD_LOGIN PASSes only on LOGIN_OK, never on matched page text.
 ## DB: postgres-claude:5432, mj_admin / Claude2Pg99, {{PG_DB_NAME}}
 
-Run these tests IN ORDER (PASS/FAIL only — no SKIP):
-- CRUD_LOGIN: log in, reach app shell
-- CRUD_NAVIGATE_TO_ACTIONS: Data Explorer → Actions list shows a grid of rows
+Run these tests IN ORDER (PASS/FAIL only — no SKIP). Navigate via IN-APP UI CLICKS (Data Explorer → entity), not cold-load deep links — a fresh page.goto to a view URL does not mount the ag-grid:
+- CRUD_LOGIN: run pg-login.mjs; reach app shell (positive `mj-shell` assertion, not text)
+- CRUD_NAVIGATE_TO_ACTIONS: Data Explorer → Actions list shows a grid of rows (`.ag-row` > 0)
 - CRUD_OPEN_ACTION_RECORD: open first Action; form loads with populated fields; note Category
 - CRUD_NAVIGATE_TO_CATEGORY: open the Action's Action Category record; note its Name
 - CRUD_EDIT_CATEGORY_NAME: append " - PG Test" to the Name, Save, confirm no error
@@ -667,4 +787,6 @@ files are now on the host as uncommitted changes for the user to review.
 10. **Discover CLI syntax dynamically** — if `mj migrate convert`, `mj migrate`, `mj codegen`, or `mj sync push` flags differ from examples, run `--help` first.
 11. **Poll patiently** — delegated phases can take a while; poll for `__DONE__` every 30–60s with no timeout.
 12. **Auth gate (Phase 0f)** — if CC in Docker isn't authenticated, stop immediately; Phases 2/4/4b all delegate to it.
-13. **Don't commit** — leave converted files as uncommitted host changes for the user to review.
+13. **Browser login = magic-link by default (self-contained). Don't depend on an external IdP.** Explorer's auth provider lives in the GITIGNORED `environment.development.ts`, so an Auth0/MSAL login depends on non-reproducible volume state — that's why "it worked last week, not this week." Magic-link sidesteps this entirely: mint an invite for an existing seeded user (Phase 4 Step 5) and redeem it — the provider activates on the `#token=` fragment under ANY `AUTH_TYPE`, needs no external account, and is DB-agnostic (PG-safe since #3075). It is VERIFIED working headless on PG. Auth0 is an optional path only if you deliberately supply `TEST_AUTH0_*` creds + rebuild. **Never hardcode an IdP email/password.**
+14. **A login PASSes only on a positive authenticated-shell assertion — never on matched page text.** Prior runs matched "Welcome Back" *on the login page* and reported false success + phantom "0 rows". Use the deterministic login script (place it at `/workspace/MJ/pg-login.mjs` so ESM resolves `node_modules/playwright`): negative-check (shell absent pre-login) → redeem → `mj-shell` present + off the IdP domain + no password field. On failure, FAIL loudly with screenshots + DOM dump. Grid checks assert `.ag-row` count > 0 — but reach the grid via **in-app clicks**, not a cold-load `goto` (which won't mount the entity-viewer).
+15. **Don't commit** — leave converted files as uncommitted host changes for the user to review.
