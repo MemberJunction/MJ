@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/communication-expo-push",
   "type": "module",
-  "version": "5.44.0",
+  "version": "5.45.0",
   "description": "Expo push notification provider for MemberJunction Communication framework",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -14,9 +14,9 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@memberjunction/communication-types": "5.44.0",
-    "@memberjunction/core": "5.44.0",
-    "@memberjunction/global": "5.44.0",
+    "@memberjunction/communication-types": "5.45.0",
+    "@memberjunction/core": "5.45.0",
+    "@memberjunction/global": "5.45.0",
     "dotenv": "^17.2.4",
     "env-var": "^7.4.1"
   },

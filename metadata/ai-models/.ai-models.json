@@ -18455,6 +18455,13 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": false,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "56A63BFA-C2B7-43E3-B79C-678E48C38B4B"
+          },
+          "sync": {
+            "lastModified": "2026-07-07T15:18:22.938Z",
+            "checksum": "855fe6d2f60967860a8183f7790fefe88ca5d1b5d8efb698e65b239d38b8f014"
           }
         },
         {
@@ -18471,6 +18478,13 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "A849137F-3857-4546-9580-9A0837091A86"
+          },
+          "sync": {
+            "lastModified": "2026-07-07T15:18:22.950Z",
+            "checksum": "0215a60442bc63b697339f754e8776cef90c6c8b08883a0ad8014d270efd929a"
           }
         },
         {
@@ -18487,6 +18501,13 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "5BE91680-C358-4671-9A89-2C5051F76369"
+          },
+          "sync": {
+            "lastModified": "2026-07-07T15:18:22.961Z",
+            "checksum": "a87693f64b05df2ba7978c03178d6ce2448781bc48d0aab15077cdc79ca1c38f"
           }
         },
         {
@@ -18503,6 +18524,13 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "04758D2B-1A51-42B8-A04B-7A0FABA6D4E3"
+          },
+          "sync": {
+            "lastModified": "2026-07-07T15:18:22.972Z",
+            "checksum": "b9a75f80754b7c311a20f1e944018d5aee056ddf196e9bb0ef2a8d297fd7295e"
           }
         }
       ],
@@ -18520,6 +18548,13 @@
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "Claude Sonnet 5 launch pricing on Anthropic direct as of June 30, 2026 GA: $2/$10 per 1M tokens (in/out). Introductory rate; steps up to standard $3/$15 per 1M tokens on September 1, 2026 (parity with Sonnet 4.6 per-token pricing). New Claude 5 tokenizer produces ~30-35% more tokens for the same input text than Sonnet 4.6, so blended per-request cost may still rise even at unchanged token rates. Sources: https://www.anthropic.com/news/claude-sonnet-5 ; https://platform.claude.com/docs/en/about-claude/pricing ; https://thenewstack.io/claude-sonnet-5-launch/ ; https://simonwillison.net/2026/Jun/30/claude-sonnet-5/"
+          },
+          "primaryKey": {
+            "ID": "960E27FF-F0D4-49FF-A77B-2A7295A63661"
+          },
+          "sync": {
+            "lastModified": "2026-07-07T15:18:22.984Z",
+            "checksum": "479521d7e4ad8c79f94d3082b8ff0f6aa2d73b32d47d2b368daf613141ba4237"
           }
         },
         {
@@ -18535,6 +18570,13 @@
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "Claude Sonnet 5 launch pricing on Amazon Bedrock as of June 30, 2026 simultaneous availability. Vendor-parity with Anthropic direct ($2/$10 per 1M tokens intro; steps to $3/$15 on Sept 1, 2026). Cross-region inference adds ~10%. Model ID: anthropic.claude-sonnet-5. Sources: https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-sonnet-5.html ; https://aws.amazon.com/blogs/machine-learning/introducing-claude-sonnet-5-on-aws-anthropics-most-capable-sonnet-model/"
+          },
+          "primaryKey": {
+            "ID": "E87DBE7D-F9BC-476A-8CFB-3A410E5DFEDC"
+          },
+          "sync": {
+            "lastModified": "2026-07-07T15:18:22.996Z",
+            "checksum": "83533ea236724fdcedab9ddf88b45e5237d4815101d72f2c7eaceabddd2ecb14"
           }
         },
         {
@@ -18550,9 +18592,23 @@
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "Claude Sonnet 5 on OpenRouter (passthrough pricing). Source: https://openrouter.ai/anthropic/claude-sonnet-5"
+          },
+          "primaryKey": {
+            "ID": "57EB99A8-3D01-49EF-83FC-C33404EF2834"
+          },
+          "sync": {
+            "lastModified": "2026-07-07T15:18:23.007Z",
+            "checksum": "1b56baa15af7e127189388873027de6e61c7e10b570b2ab796dca30645cc423b"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "31280CE6-5EFC-4407-BEFB-339322D0CC2E"
+    },
+    "sync": {
+      "lastModified": "2026-07-07T15:18:22.908Z",
+      "checksum": "d3525c5047c6688fc794a71bf967b18993690cbb2381ad0b9b21ba3d733039b4"
     }
   },
   {
@@ -18578,6 +18634,13 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": false,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "65DEA9C8-4004-4280-A02B-BAFC8952FFD8"
+          },
+          "sync": {
+            "lastModified": "2026-07-07T15:18:22.628Z",
+            "checksum": "855fe6d2f60967860a8183f7790fefe88ca5d1b5d8efb698e65b239d38b8f014"
           }
         },
         {
@@ -18594,6 +18657,13 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "4C8798DF-35D3-41E7-88B7-42D6F2B8DD00"
+          },
+          "sync": {
+            "lastModified": "2026-07-07T15:18:22.642Z",
+            "checksum": "783a296250a2dffadad9f5a963c19b9d59531b5f8e8852ee4860a879d653e9eb"
           }
         },
         {
@@ -18610,6 +18680,13 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "7647FED6-FDDC-4D6A-B8E1-E27414BBB15D"
+          },
+          "sync": {
+            "lastModified": "2026-07-07T15:18:22.656Z",
+            "checksum": "1677a500433ae2b78378d9bae35b3828edffa3f1f90ad2dea98b0da79ba1d3fb"
           }
         },
         {
@@ -18626,6 +18703,13 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "25246F34-48DF-4996-80E4-E68AA938105D"
+          },
+          "sync": {
+            "lastModified": "2026-07-07T15:18:22.669Z",
+            "checksum": "2bff6cbb6d06ae1f02e48154053f49dacfa2eedf0341599a7669e4fc4c489fe2"
           }
         }
       ],
@@ -18643,6 +18727,13 @@
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "Claude Fable 5 pricing on Anthropic direct as of June 9, 2026 GA: $10/$50 per 1M tokens (in/out) - exactly 2x Opus 4.8's rate card. Pricing shared with Claude Mythos 5 (same specs). Sources: https://www.anthropic.com/news/claude-fable-5-mythos-5 ; https://platform.claude.com/docs/en/about-claude/pricing ; https://platform.claude.com/docs/en/about-claude/models/introducing-claude-fable-5-and-claude-mythos-5"
+          },
+          "primaryKey": {
+            "ID": "68745FF6-D11E-4E02-B889-7A21939AFC65"
+          },
+          "sync": {
+            "lastModified": "2026-07-07T15:18:22.686Z",
+            "checksum": "9d53f113f71ee6562c75c890362eb6397a4309001488aad6aba6f39ac90025b0"
           }
         },
         {
@@ -18658,6 +18749,13 @@
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "Claude Fable 5 pricing on Amazon Bedrock. Originally available June 9, 2026, briefly withdrawn to comply with a US government export-control directive, restored on July 1, 2026 with stronger guardrails. Vendor-parity pricing with Anthropic direct ($10/$50 per 1M). Model ID: anthropic.claude-fable-5. Cross-region inference adds ~10%. Sources: https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-fable-5.html ; https://www.aboutamazon.com/news/aws/claude-fable-5-anthropic-available-amazon-bedrock"
+          },
+          "primaryKey": {
+            "ID": "631D63B0-27FF-4149-BDD5-B144E1B96465"
+          },
+          "sync": {
+            "lastModified": "2026-07-07T15:18:22.699Z",
+            "checksum": "b015174676a91dc4cee3a3a9044dff72a7b95e15917ebceecd2e4517a9563e33"
           }
         },
         {
@@ -18673,9 +18771,23 @@
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "Claude Fable 5 on OpenRouter (passthrough pricing). Source: https://openrouter.ai/anthropic/claude-fable-5"
+          },
+          "primaryKey": {
+            "ID": "4468B781-DE47-46FC-B91C-2CF8915DC304"
+          },
+          "sync": {
+            "lastModified": "2026-07-07T15:18:22.711Z",
+            "checksum": "33ab9b148ddb286ac7b11973b25689433d89adac028f56159bb9741b63133660"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "B27C205B-9B58-451C-9A82-ED86D48B56F3"
+    },
+    "sync": {
+      "lastModified": "2026-07-07T15:18:22.409Z",
+      "checksum": "ef121567c36876fa3f60c1f0d4348c35249edc8dd445a467536e2dc6b980aa03"
     }
   },
   {
@@ -18701,6 +18813,13 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": false,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "0F1384D2-A3DB-48FA-A660-CF23A7FFE45E"
+          },
+          "sync": {
+            "lastModified": "2026-07-07T15:18:22.723Z",
+            "checksum": "3cda2eeae80a38b920d9b7c5742bee8e62bdf5e0302545b85b5904eb7a27f5fb"
           }
         },
         {
@@ -18717,6 +18836,13 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "4B1FE24B-1B20-4642-9DDE-6010A8829890"
+          },
+          "sync": {
+            "lastModified": "2026-07-07T15:18:22.736Z",
+            "checksum": "e7b530b1ce8c0ab0ccfdf4fa9522163f7c6d667b89596a90f9d05c371bb7b0e1"
           }
         }
       ],
@@ -18734,9 +18860,23 @@
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "Nemotron 3 Super pricing on OpenRouter as of March 11, 2026 GTC launch: $0.08 / $0.45 per 1M tokens (in/out). A separate :free OpenRouter route is also available. Open weights under the NVIDIA Open Model License (commercial use permitted). Sources: https://openrouter.ai/nvidia/nemotron-3-super-120b-a12b ; https://research.nvidia.com/labs/nemotron/Nemotron-3/"
+          },
+          "primaryKey": {
+            "ID": "944BF5B5-33B6-4AE5-897E-DFA6EF84918D"
+          },
+          "sync": {
+            "lastModified": "2026-07-07T15:18:22.745Z",
+            "checksum": "faec852b02ed6c9ac206ab7bf2263e8031e110da922a936f61f40bc593d47000"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "B129C2BC-294A-4188-9811-7D64E2D06F1D"
+    },
+    "sync": {
+      "lastModified": "2026-07-07T15:18:22.420Z",
+      "checksum": "9e75449b1c6a0b2e656fc2527b48f6e73d8fd9ac6516572a57a3753fd10ced24"
     }
   },
   {
@@ -18762,6 +18902,13 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": false,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "A197CE4C-2535-40B2-8664-7E417569BD0F"
+          },
+          "sync": {
+            "lastModified": "2026-07-07T15:18:22.764Z",
+            "checksum": "3cda2eeae80a38b920d9b7c5742bee8e62bdf5e0302545b85b5904eb7a27f5fb"
           }
         },
         {
@@ -18778,6 +18925,13 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "DC10D3A3-110B-4B01-9436-106606880543"
+          },
+          "sync": {
+            "lastModified": "2026-07-07T15:18:22.776Z",
+            "checksum": "c547ec82cceb3fa942e27a2acf6c4e43d6b3538e657628aa4b83238dd62f0ed9"
           }
         }
       ],
@@ -18795,9 +18949,23 @@
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "Nemotron 3 Nano pricing on OpenRouter as of December 15, 2025 release: $0.05 / $0.20 per 1M tokens (in/out). A separate :free OpenRouter route is also available. Open weights under the NVIDIA Open Model License. Sources: https://openrouter.ai/nvidia/nemotron-3-nano-30b-a3b ; https://research.nvidia.com/labs/nemotron/Nemotron-3/"
+          },
+          "primaryKey": {
+            "ID": "B68A49D4-B018-4D18-8838-F38F5324D275"
+          },
+          "sync": {
+            "lastModified": "2026-07-07T15:18:22.787Z",
+            "checksum": "d64388ab3fecb64c00cad3617263fa64648fb3c6718fc7eac5ebe2a078699847"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "B79449B0-2BAF-4AC2-A7FA-295B66A813D0"
+    },
+    "sync": {
+      "lastModified": "2026-07-07T15:18:22.436Z",
+      "checksum": "0282b101bf2118c27e9547b48849dae067d621f4c07feaef7a68306c7bf3e3d5"
     }
   },
   {
@@ -18823,6 +18991,13 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": false,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "0C140233-BFEA-4366-A912-835168411CA1"
+          },
+          "sync": {
+            "lastModified": "2026-07-07T15:18:22.797Z",
+            "checksum": "98ce0a4e83ae6a9cb3f3b849a20a4cbef8e8d1deb8e82010c412576efe27537a"
           }
         },
         {
@@ -18839,6 +19014,13 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "A5B3FECE-92A8-4AB5-AE26-8F86C98B941B"
+          },
+          "sync": {
+            "lastModified": "2026-07-07T15:18:22.809Z",
+            "checksum": "26946f40ab0042944075df5b684501e93eaf84812e19ee5f064ac569ec6f811e"
           }
         },
         {
@@ -18855,6 +19037,13 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "D8C42249-04B1-4132-8A10-F872B4E0E3AA"
+          },
+          "sync": {
+            "lastModified": "2026-07-07T15:18:22.820Z",
+            "checksum": "844684f4eabe9f8675c07c6512e30eacfcddd223b2b5f221b53b5c3c4a6fb01e"
           }
         },
         {
@@ -18871,6 +19060,13 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "A2333674-A31B-4C0A-9C04-36C97C564ADE"
+          },
+          "sync": {
+            "lastModified": "2026-07-07T15:18:22.831Z",
+            "checksum": "c1b37223ab37c5249cb946f0dbe18dc6447e7069b996cc349ae1e65dc3c7d953"
           }
         }
       ],
@@ -18888,6 +19084,13 @@
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "Qwen 3.6 27B pricing on Alibaba Cloud Model Studio (DashScope/Bailian) as of April 22, 2026 release: $0.15 / $0.50 per 1M tokens (in/out). Sources: https://qwen.ai/blog?id=qwen3.6-27b ; https://cloudprice.net/models/alibaba-qwen3-6-27b"
+          },
+          "primaryKey": {
+            "ID": "CF2987FD-882A-4A9A-9D11-50FC7B19AC11"
+          },
+          "sync": {
+            "lastModified": "2026-07-07T15:18:22.842Z",
+            "checksum": "033de1a5ddf3d7e2cd8d7dc0f9258b99c71cf76182108c64f5d3866c2ea8a38b"
           }
         },
         {
@@ -18903,9 +19106,23 @@
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "Qwen 3.6 27B on OpenRouter (weighted-average across providers). Priced higher than Alibaba Cloud direct due to non-Alibaba routes. Source: https://openrouter.ai/qwen/qwen3.6-27b"
+          },
+          "primaryKey": {
+            "ID": "F63494AA-435E-4B61-9853-CC0975314A23"
+          },
+          "sync": {
+            "lastModified": "2026-07-07T15:18:22.852Z",
+            "checksum": "4fbaabcfce2bfc7616ac1a6ebdd0964587bd83de56b7bf6e5135066736db4c4d"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "37819FCA-3523-42E5-94A0-387870F140BD"
+    },
+    "sync": {
+      "lastModified": "2026-07-07T15:18:22.447Z",
+      "checksum": "5d7127c089801cab7c953a31796ef94b540156cd68bcdc0229eda8744ce8bdd2"
     }
   }
 ]
