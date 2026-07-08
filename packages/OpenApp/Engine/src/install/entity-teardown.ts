@@ -130,7 +130,13 @@ export function buildEntityTeardownPlan(
  * as `rootDoomedPredicate`. Kept here so the quoting stays owned by this module + the dialect.
  */
 export function buildRootDoomedPredicate(dialect: SQLDialect, appSchema: string): string {
-  return `${dialect.QuoteIdentifier('SchemaName')} = ${dialect.QuoteStringLiteral(appSchema)}`;
+  // Case-INSENSITIVE match. PostgreSQL folds unquoted identifiers, so an app whose manifest declares
+  // schema `__mj_BizAppsTasks` is created + registered on the `Entity` rows as `__mj_bizappstasks`,
+  // while the `OpenApp` install record keeps the manifest's mixed casing — a case-sensitive `=` on PG
+  // then matches ZERO rows and the teardown silently clears nothing. SQL Server preserves case but
+  // compares case-insensitively by default. `LOWER()` on both sides matches regardless of how the
+  // dialect folded the identifier (and never over-matches — app schema names don't collide by case).
+  return `LOWER(${dialect.QuoteIdentifier('SchemaName')}) = LOWER(${dialect.QuoteStringLiteral(appSchema)})`;
 }
 
 /**

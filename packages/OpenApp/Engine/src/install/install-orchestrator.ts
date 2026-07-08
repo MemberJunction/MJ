@@ -1622,7 +1622,10 @@ export async function RemoveAppEntityMetadata(
     const entityResult = await rv.RunView<MJEntityEntity>(
       {
         EntityName: 'MJ: Entities',
-        ExtraFilter: `SchemaName = '${escaped}'`,
+        // Case-insensitive: PostgreSQL lowercases the schema identifier at create time, so the Entity
+        // rows carry `__mj_bizappstasks` while `schemaName` (from the OpenApp record) is the manifest's
+        // `__mj_BizAppsTasks`. A case-sensitive `=` finds 0 entities on PG and the teardown no-ops.
+        ExtraFilter: `LOWER(SchemaName) = LOWER('${escaped}')`,
         ResultType: 'entity_object',
       },
       contextUser,
@@ -1635,7 +1638,7 @@ export async function RemoveAppEntityMetadata(
       // No entities found — clear SchemaInfo (entity-layer TransactionGroup, still atomic via the
       // group) AND drop any app-declared Application rows (they can exist independently of entities).
       const tg = await md.CreateTransactionGroup();
-      const r = await QueueDeleteEntitiesByFilter(rv, contextUser, 'MJ: Schema Info', `SchemaName = '${escaped}'`, tg);
+      const r = await QueueDeleteEntitiesByFilter(rv, contextUser, 'MJ: Schema Info', `LOWER(SchemaName) = LOWER('${escaped}')`, tg);
       if (!r.Success) {
         throw new Error(r.ErrorMessage ?? 'Failed to queue delete of MJ: Schema Info records');
       }

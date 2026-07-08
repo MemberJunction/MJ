@@ -721,6 +721,13 @@ export class PostgreSQLDialect extends SQLDialect {
      */
     ForeignKeyGraphSQL(schema: string): string {
         const s = this.QuoteStringLiteral(schema);
+        // NOTE: deliberately avoids `unnest(...) WITH ORDINALITY` / `LATERAL`. This query is executed
+        // through PostgreSQLDataProvider.ExecuteSQL, whose autoQuoteIdentifiers tokenizer quotes the
+        // bare uppercase word `ORDINALITY` (not in its keyword set) → `WITH "ORDINALITY"` → a syntax
+        // error. Using `= any(con.conkey)` (all-lowercase, autoQuote-safe) resolves the FK column via
+        // array membership instead. For SINGLE-column FKs (the only ones the planner keeps, colCount=1)
+        // this yields exactly one correctly-paired row; composite FKs (colCount>1) produce a cross
+        // product of rows that the caller skips wholesale by fkName — so the mispairing is irrelevant.
         return (
             'SELECT pt.relname AS "parentTable", pa.attname AS "parentRefCol", ct.relname AS "childTable", ' +
             'ca.attname AS "childCol", (NOT ca.attnotnull) AS "childNullable", con.conname AS "fkName", ' +
@@ -730,11 +737,10 @@ export class PostgreSQLDialect extends SQLDialect {
             'JOIN pg_catalog.pg_namespace cn ON cn.oid = ct.relnamespace ' +
             'JOIN pg_catalog.pg_class pt ON pt.oid = con.confrelid ' +
             'JOIN pg_catalog.pg_namespace pn ON pn.oid = pt.relnamespace ' +
-            'JOIN LATERAL unnest(con.conkey, con.confkey) WITH ORDINALITY AS k(child_attnum, parent_attnum, ord) ON true ' +
-            'JOIN pg_catalog.pg_attribute ca ON ca.attrelid = con.conrelid AND ca.attnum = k.child_attnum ' +
-            'JOIN pg_catalog.pg_attribute pa ON pa.attrelid = con.confrelid AND pa.attnum = k.parent_attnum ' +
+            'JOIN pg_catalog.pg_attribute ca ON ca.attrelid = con.conrelid AND ca.attnum = any(con.conkey) ' +
+            'JOIN pg_catalog.pg_attribute pa ON pa.attrelid = con.confrelid AND pa.attnum = any(con.confkey) ' +
             `WHERE con.contype = 'f' AND cn.nspname = ${s} AND pn.nspname = ${s} ` +
-            'ORDER BY con.conname, k.ord'
+            'ORDER BY con.conname'
         );
     }
 
