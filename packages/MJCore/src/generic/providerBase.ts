@@ -3424,6 +3424,13 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         }
     }
 
+    /**
+     * @deprecated No longer used by the reuse-global fast path — see
+     * {@link CreateSharedMetadataShell}. The metadata graph is immutable after Config,
+     * so re-instantiating every Info object (~1s of synchronous constructor work for a
+     * ~600-entity install) bought no isolation the shell doesn't already provide.
+     * Retained only for external subclasses that may still call it.
+     */
     protected CloneAllMetadata(toClone: AllMetadata): AllMetadata {
         // we need to create a copy but can't do it the standard way becuase we need object instances
         // for various things like EntityInfo
@@ -3433,14 +3440,45 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     }
 
     /**
-     * Copies metadata from the global provider to the local instance.
-     * This is used to ensure that the local instance has the latest metadata
-     * information available without having to reload it from the server.
+     * Builds this instance's AllMetadata as a thin shell over another provider's
+     * already-loaded metadata: every metadata array is held BY REFERENCE, while
+     * CurrentUser remains this instance's own.
+     *
+     * Why sharing is safe — and why this replaced the former deep clone
+     * (CloneAllMetadata) on the reuse-global fast path: the metadata graph is
+     * immutable after Config. Refreshes swap the WHOLE AllMetadata object
+     * (UpdateLocalMetadata), never mutate the arrays or Info objects in place, so
+     * the only per-instance datum inside the graph is CurrentUser — which this
+     * shell keeps independent. Callers must treat the shared arrays as read-only:
+     * copy before sorting/mutating (e.g. `[...provider.Entities].sort(...)`).
+     * The deep clone cost ~1s of event-loop-blocking constructor work per provider
+     * on every server request (MemberJunction/MJ#3083); the shell is ~20 reference
+     * assignments.
+     */
+    protected CreateSharedMetadataShell(shared: AllMetadata): AllMetadata {
+        const shell = new AllMetadata();
+        for (const m of AllMetadataArrays) {
+            shell[m.key] = shared[m.key];
+        }
+        shell.CurrentUser = this.CurrentUser; // same semantics the deep clone had — per-instance, not shared
+        return shell;
+    }
+
+    /**
+     * Adopts the global provider's metadata for this instance without reloading it
+     * from the server: shares the (immutable post-Config) metadata arrays by
+     * reference via {@link CreateSharedMetadataShell} and builds this instance's
+     * entity lookup maps.
      */
     protected CopyMetadataFromGlobalProvider(): boolean {
         try {
-            if (Metadata.Provider && Metadata.Provider !== this && Metadata.Provider.AllMetadata) { // global-provider-ok: this method literally clones FROM the global provider on bootstrap
-                this._localMetadata = this.CloneAllMetadata(Metadata.Provider.AllMetadata); // global-provider-ok: bootstrap clone path
+            // Require the global provider to actually HAVE metadata (entities loaded) — a
+            // registered-but-not-yet-configured global would otherwise donate an empty graph
+            // and this Config would "succeed" with zero entities. Falling through to the
+            // normal load path is the correct behavior in that case.
+            const globalMetadata = Metadata.Provider !== this ? Metadata.Provider?.AllMetadata : undefined; // global-provider-ok: this method adopts metadata FROM the global provider on bootstrap
+            if ((globalMetadata?.AllEntities?.length ?? 0) > 0) {
+                this.UpdateLocalMetadata(this.CreateSharedMetadataShell(globalMetadata));
                 return true;
             }
             return false;
