@@ -106,8 +106,23 @@ describe('ApplyScopedPromptConfig — overlay onto prompt params', () => {
         expect(params.configurationId).toBe('conf1');
         expect(params.effortLevel).toBe(42);
         expect(params.additionalParameters).toEqual({
-            temperature: 0.2, topP: 0.9, responseFormat: 'JSON', stopSequences: 'END',
+            temperature: 0.2, topP: 0.9, responseFormat: 'JSON', stopSequences: ['END'],
         });
+    });
+
+    it('splits comma-delimited StopSequences into a trimmed string[] (runner expects an array)', () => {
+        const resolver = new TestResolver([cfg({ StopSequences: 'END, STOP ,,  DONE ' })]);
+        const params: ScopedPromptConfigTarget = {};
+        ApplyScopedPromptConfig(resolver, 'P1', {}, params);
+        // array (not the raw string), trimmed, empties dropped
+        expect(params.additionalParameters?.stopSequences).toEqual(['END', 'STOP', 'DONE']);
+    });
+
+    it('maps ResponseFormat into additionalParameters.responseFormat (consumed by AIPromptRunner)', () => {
+        const resolver = new TestResolver([cfg({ ResponseFormat: 'JSON' })]);
+        const params: ScopedPromptConfigTarget = {};
+        ApplyScopedPromptConfig(resolver, 'P1', {}, params);
+        expect(params.additionalParameters?.responseFormat).toBe('JSON');
     });
 
     it('does NOT override runtime-explicit values (runtime wins)', () => {

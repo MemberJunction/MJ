@@ -134,7 +134,15 @@ export function ApplyScopedPromptConfig(
     if (cfg.FrequencyPenalty != null) knobs.frequencyPenalty = cfg.FrequencyPenalty;
     if (cfg.PresencePenalty != null) knobs.presencePenalty = cfg.PresencePenalty;
     if (cfg.Seed != null) knobs.seed = cfg.Seed;
-    if (cfg.StopSequences) knobs.stopSequences = cfg.StopSequences;
+    // StopSequences is comma-delimited text (like the prompt default); the runner's additionalParameters
+    // contract expects a ready-made string[] (it assigns it as-is to ChatParams.stopSequences), so split
+    // + trim here rather than passing the raw string. NOTE: the additionalParameters path intentionally
+    // bypasses AIPromptRunner's shouldApplyStopSequences driver-support gate — a scope-level override is
+    // taken as an explicit caller instruction, same as any runtime-supplied additionalParameters.
+    if (cfg.StopSequences) {
+        const stops = cfg.StopSequences.split(",").map((s) => s.trim()).filter((s) => s.length > 0);
+        if (stops.length > 0) knobs.stopSequences = stops;
+    }
     if (cfg.ResponseFormat) knobs.responseFormat = cfg.ResponseFormat;
     if (Object.keys(knobs).length > 0) {
         params.additionalParameters = { ...knobs, ...(params.additionalParameters ?? {}) };

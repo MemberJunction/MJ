@@ -28,9 +28,15 @@ Any MJ app can tune which model a prompt runs on and how it samples, per scope, 
   knobs → `additionalParameters`).
 - **`BaseAgent` wiring** — `preparePromptParams` resolves + applies the config using the run's
   existing scope, right before the params are returned. **Runtime-explicit overrides still win.**
-- Unit tests for the resolver (cascade / priority / status / null-column inherit / runtime-wins) +
-  a changeset.
-- **`@memberjunction/ai-prompts`** — `AIPromptRunner` now records caller-supplied
-  `conversationMessages` to `AIPromptRun.Messages` even when there is no template-rendered system
-  prompt (previously the assembled prompt was dropped for the direct-messages /
-  `templateMessageRole='none'` path, leaving `Messages` null).
+- `StopSequences` overlays as a trimmed `string[]` (the comma-delimited column is split before it
+  reaches `additionalParameters`, matching the runner's array contract — not the raw string).
+- Unit tests for the resolver (cascade / priority / status / null-column inherit / runtime-wins,
+  plus the StopSequences-array and ResponseFormat mappings).
+- **`@memberjunction/ai-prompts`** — two `AIPromptRunner` fixes:
+  1. **Response format override is honored** — the run now prefers `additionalParameters.responseFormat`
+     (set by `ApplyScopedPromptConfig`) over the prompt's own `ResponseFormat`, keeping `'Any'`-means-
+     silent semantics. Previously a `ScopedPromptConfig.ResponseFormat` was a no-op (the runner only
+     read `prompt.ResponseFormat`).
+  2. **`Messages` logging** — records caller-supplied `conversationMessages` to `AIPromptRun.Messages`
+     even without a template-rendered system prompt (previously dropped for the
+     `templateMessageRole='none'` path, leaving `Messages` null).

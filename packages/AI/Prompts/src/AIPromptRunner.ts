@@ -3537,9 +3537,12 @@ export class AIPromptRunner {
       }
       // If none are set, effortLevel remains undefined and providers use their defaults
 
-      // Apply response format from prompt settings
-      if (prompt.ResponseFormat && prompt.ResponseFormat !== 'Any') {
-        chatParams.responseFormat = prompt.ResponseFormat //as 'Any' | 'Text' | 'Markdown' | 'JSON' | 'ModelSpecific';
+      // Apply response format. A scope-level override (additionalParameters.responseFormat, populated
+      // by ApplyScopedPromptConfig from a ScopedPromptConfig row) takes precedence over the prompt
+      // default; 'Any' from either source stays silent so providers use their own default.
+      const effectiveResponseFormat = this.resolveEffectiveResponseFormat(prompt.ResponseFormat, params.additionalParameters);
+      if (effectiveResponseFormat) {
+        chatParams.responseFormat = effectiveResponseFormat as typeof prompt.ResponseFormat;
 
         if (prompt.ModelSpecificResponseFormat) {
           try {
@@ -3549,7 +3552,7 @@ export class AIPromptRunner {
           }
         }
       } else {
-        // if chatParams.responseFormat is not set or set to Any, stay silent on response format
+        // if response format is not set or set to Any (prompt or override), stay silent
         chatParams.responseFormat = undefined;
       }
 
@@ -3882,6 +3885,21 @@ export class AIPromptRunner {
    * - `true` means "force enable" (overrides code default)
    * - `false` means "force disable" (overrides code default, even if the driver says yes)
    */
+  /**
+   * Resolves the effective response format for a run. A scope-level override — `additionalParameters.
+   * responseFormat`, set by `ApplyScopedPromptConfig` from a `ScopedPromptConfig` row — takes precedence
+   * over the prompt's own `ResponseFormat`. `'Any'` (or absent) from either source resolves to
+   * `undefined`, i.e. stay silent so the provider uses its own default.
+   */
+  private resolveEffectiveResponseFormat(
+    promptResponseFormat: string | null | undefined,
+    additionalParameters: Record<string, unknown> | undefined,
+  ): string | undefined {
+    const override = additionalParameters?.responseFormat as string | undefined;
+    const effective = override ?? promptResponseFormat ?? undefined;
+    return effective && effective !== 'Any' ? effective : undefined;
+  }
+
   /**
    * Decides whether a prompt's StopSequences should be sent to the model.
    *
