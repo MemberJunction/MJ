@@ -3460,9 +3460,21 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * `.sort()`/`.push()`/`.splice()` by request-scoped code then stays local to
      * that provider — matching the clone era's isolation for the common accidental
      * mutation class — instead of reordering the global graph for every other
-     * in-flight request. Property writes on the shared Info objects themselves
-     * remain visible process-wide (as they always were on the client's global
-     * provider): treat Info objects as read-only.
+     * in-flight request. Only the top-level AllMetadata collections get this
+     * per-instance protection: everything below them is shared, including the
+     * nested arrays owned by Info objects (`entity.Fields`,
+     * `entity.RelatedEntities`, `application.ApplicationEntities`, ...) — an
+     * in-place mutation of those is process-wide. Property writes on the shared
+     * Info objects themselves are likewise visible process-wide (as they always
+     * were on the client's global provider): treat Info objects and everything
+     * they own as read-only; copy before sorting.
+     *
+     * Override precedence: if a subclass overrides BOTH this method and the
+     * deprecated {@link CloneAllMetadata}, the CloneAllMetadata override wins on
+     * the fast path (see {@link CopyMetadataFromGlobalProvider}) — the
+     * conservative back-compat choice, since pre-#3083 subclasses could only have
+     * customized adoption through CloneAllMetadata. Remove the CloneAllMetadata
+     * override to activate a CreateSharedMetadataShell override.
      */
     protected CreateSharedMetadataShell(shared: AllMetadata): AllMetadata {
         const shell = new AllMetadata();
@@ -3490,6 +3502,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 // Back-compat: before #3083 this path called the overridable CloneAllMetadata,
                 // so external subclasses could customize adoption (e.g. tenant-filtered deep
                 // clones). Honor such overrides; the base behavior is the cheap shared shell.
+                // If a subclass overrides both, the CloneAllMetadata override deliberately wins.
                 const subclassOverridesClone = this.CloneAllMetadata !== ProviderBase.prototype.CloneAllMetadata;
                 const adopted = subclassOverridesClone
                     ? this.CloneAllMetadata(globalMetadata)
