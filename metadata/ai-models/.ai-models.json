@@ -14566,6 +14566,22 @@
             "lastModified": "2026-06-16T01:17:10.442Z",
             "checksum": "e2951e51712324e15a5326268eff186ff54ae126071b0164964e8f716f52ef54"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Azure",
+            "Priority": 10,
+            "Status": "Active",
+            "DriverClass": "AzureLLM",
+            "APIName": "mercury-2",
+            "MaxInputTokens": 128000,
+            "MaxOutputTokens": 50000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -14591,6 +14607,23 @@
           "sync": {
             "lastModified": "2026-06-03T16:00:05.181Z",
             "checksum": "63d51ad99eb938b396acf119b7a49cc95a702702e19bc99dccf9378fbfdc00d7"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Azure",
+            "StartedAt": "2026-04-23T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.25,
+            "OutputPricePerUnit": 0.75,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Mercury 2 on Azure AI Foundry. Per-token pricing $0.25/1M input, $0.75/1M output; Azure additionally bills separate hourly software-license and compute costs (e.g. ND-H100-v5 instances). Source: https://www.inceptionlabs.ai/blog/mercury-2-on-azure-foundry",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
           }
         }
       ]
