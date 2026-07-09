@@ -14581,6 +14581,13 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "FB9A8F43-2A12-42CB-B303-09655CAA68D6"
+          },
+          "sync": {
+            "lastModified": "2026-07-09T15:13:10.020Z",
+            "checksum": "c127dce800914a8e3a79e5dc68f2b565a723b87c140ff14e8d767a691229e4b6"
           }
         }
       ],
@@ -14624,6 +14631,13 @@
             "Comments": "Mercury 2 on Azure AI Foundry. Per-token pricing $0.25/1M input, $0.75/1M output; Azure additionally bills separate hourly software-license and compute costs (e.g. ND-H100-v5 instances). Source: https://www.inceptionlabs.ai/blog/mercury-2-on-azure-foundry",
             "CacheReadPricePerUnit": null,
             "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "86D58D1E-541C-4497-ADA8-23D204B6F35E"
+          },
+          "sync": {
+            "lastModified": "2026-07-09T15:13:10.046Z",
+            "checksum": "cfd14339d9f550df1ef5583e160c8ff19bb1562183ae341f4e308045720a3c83"
           }
         }
       ]
