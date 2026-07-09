@@ -1,5 +1,16 @@
 # @memberjunction/postgresql-dataprovider
 
+## 5.45.1
+
+### Patch Changes
+
+- @memberjunction/generic-database-provider@5.45.1
+- @memberjunction/ai-vectordb@5.45.1
+- @memberjunction/core@5.45.1
+- @memberjunction/global@5.45.1
+- @memberjunction/query-processor@5.45.1
+- @memberjunction/sql-dialect@5.45.1
+
 ## 5.45.0
 
 ### Patch Changes

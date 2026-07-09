@@ -1,5 +1,14 @@
 # @memberjunction/remote-browser-browserbase
 
+## 5.45.1
+
+### Patch Changes
+
+- @memberjunction/remote-browser-base@5.45.1
+- @memberjunction/remote-browser-cdp@5.45.1
+- @memberjunction/core@5.45.1
+- @memberjunction/global@5.45.1
+
 ## 5.45.0
 
 ### Patch Changes
