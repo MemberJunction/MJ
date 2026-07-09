@@ -49,6 +49,7 @@ import { ActionEngineServer } from '@memberjunction/actions';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import { AgentMemoryContextBuilder } from './agent-memory-context-builder';
 import { PromptComponentResolver, InjectScopedPromptParts } from './prompt-component-resolver';
+import { ScopedPromptConfigResolver, ApplyScopedPromptConfig } from './scoped-prompt-config-resolver';
 import { AgentPreExecutionRAGResult } from './agent-pre-execution-rag';
 import {
     AIPromptParams,
@@ -90,7 +91,8 @@ import {
     initAgentRunStep,
     finalizeAgentRunStep,
     AgentRunStepSaveQueue,
-    AgentSkillActivationRequest
+    AgentSkillActivationRequest,
+    AgentSkillInvocation
 } from '@memberjunction/ai-core-plus';
 import { MJActionEntityExtended, ActionResult, ActionParam, AIDirective } from '@memberjunction/actions-base';
 import { AgentRunner } from './AgentRunner';
@@ -900,6 +902,17 @@ export class BaseAgent {
      * @private
      */
     private _activatedSkillIDs: string[] = [];
+
+    /**
+     * Full observability records for every skill activated this run — one {@link AgentSkillInvocation}
+     * per activation, carrying activation type ('requested' | 'auto'), the provenance-of-authority
+     * gate values that admitted the skill, and the agent-stated reason when self-activated.
+     * Serialized onto `AIAgentRunStep.Skills`: Skill steps record their own activation(s), Prompt
+     * steps record the full set in effect for the turn, and Actions/Sub-Agent steps record the
+     * skill(s) that granted the executed tool (see {@link getSkillAttributionForAction} /
+     * {@link getSkillAttributionForSubAgent}).
+     */
+    private _skillInvocations: AgentSkillInvocation[] = [];
 
     /**
      * Whether Plan Mode is active for this run — resolved once in {@link initializeAgentRun} via
@@ -3485,6 +3498,38 @@ export class BaseAgent {
         // Thread the per-request provider so prompt run records are saved through the isolated provider
         promptParams.provider = params.provider || this._activeProvider;
 
+        // Overlay scope-resolved run settings (model / vendor / configuration / effort / sampling
+        // knobs) for this run's scope — the config sibling of scoped prompt parts. Uses the same
+        // run scope BaseAgent already carries; runtime-explicit values set above still win.
+        const scopedConfigPromptId = promptParams.prompt?.ID;
+        if (scopedConfigPromptId) {
+            const primaryScopeEntityName =
+                params.PrimaryScopeEntityName ?? (params.data?.PrimaryScopeEntityName as string | undefined);
+            let primaryScopeEntityId: string | undefined;
+            if (primaryScopeEntityName) {
+                const primaryEntity = this.ProviderToUse.EntityByName(primaryScopeEntityName);
+                if (primaryEntity) {
+                    primaryScopeEntityId = primaryEntity.ID;
+                }
+            }
+            const configResolver =
+                MJGlobal.Instance.ClassFactory.CreateInstance<ScopedPromptConfigResolver>(ScopedPromptConfigResolver) ??
+                new ScopedPromptConfigResolver();
+            ApplyScopedPromptConfig(
+                configResolver,
+                scopedConfigPromptId,
+                {
+                    primaryScopeEntityId,
+                    primaryScopeRecordId:
+                        params.PrimaryScopeRecordID ?? (params.data?.PrimaryScopeRecordID as string | undefined),
+                    secondaryScopes:
+                        params.SecondaryScopes ??
+                        (params.data?.SecondaryScopes as Record<string, SecondaryScopeValue> | undefined),
+                },
+                promptParams,
+            );
+        }
+
         return promptParams;
     }
 
@@ -3905,7 +3950,31 @@ export class BaseAgent {
             };
         }
 
-        const availableSkills = AIEngine.Instance.GetSkillsForAgent(params.agent, params.contextUser);
+        // Plan Mode × skills: agent-initiated activations are only legal BEFORE plan approval,
+        // so the plan the human reviews always reflects the widened tool surface. Once the plan
+        // is approved, a new activation would expand capabilities the reviewer never saw — the
+        // agent must present an updated plan instead (the normal re-plan path).
+        if (this._planModeActive && this._planApproved) {
+            if (nextStep.step !== 'Retry') {
+                this._generalValidationRetryCount++;
+            }
+            return {
+                step: 'Retry',
+                terminate: false,
+                errorMessage: 'Skill activations are not allowed after your plan has been approved — ' +
+                    'the approved plan did not include these capabilities. Present an updated plan ' +
+                    "(nextStep.type='Plan') that includes the skill(s) you need and why, so the user " +
+                    'can review the expanded tool surface.'
+            };
+        }
+
+        // Agent-initiated (self-)activation is governed by the DOUBLE activation gate: the agent's
+        // SkillActivationMode AND each skill's ActivationMode must both be 'Auto'. RequestedOnly
+        // skills can only enter a run via an explicit user /skill request (requestedSkillIDs) —
+        // never via this step. This is the same set the prompt catalog was built from, so a
+        // well-behaved model can only name skills that pass; the re-check here is the enforcement
+        // boundary against hallucinated or smuggled names.
+        const availableSkills = AIEngine.Instance.GetAutoActivatableSkillsForAgent(params.agent, params.contextUser);
 
         const missingSkills = requested.filter(req => {
             const requestedName = req.name.trim().toLowerCase();
@@ -5844,12 +5913,15 @@ The context is now within limits. Please retry your request with the recovered c
             // Build app context section if provided in extraData
             const appContext = this.buildAppContextSection(extraData);
 
-            // Skill catalog (name + description only — progressive disclosure). Empty for
-            // AcceptsSkills='None' since GetSkillsForAgent already returns [] in that case.
-            // Filtered by the acting user's Run permission (open-by-default) so the agent is
-            // never even offered a skill the user isn't entitled to — the permission boundary
-            // is enforced at the catalog, not just at activation.
-            const availableSkills = engine.GetSkillsForAgent(agent, _contextUser);
+            // Skill catalog (name + description only — progressive disclosure). This is the
+            // SELF-ACTIVATION surface, so it uses the double-gated auto set: empty unless the
+            // agent's SkillActivationMode is 'Auto', and containing only skills whose own
+            // ActivationMode is 'Auto' (RequestedOnly skills never appear — they can only enter
+            // a run via an explicit user /skill request). Also empty for AcceptsSkills='None',
+            // and filtered by the acting user's Run permission (open-by-default) so the agent
+            // is never even offered a skill the user isn't entitled to — the permission
+            // boundary is enforced at the catalog, not just at activation.
+            const availableSkills = engine.GetAutoActivatableSkillsForAgent(agent, _contextUser);
             const skillsCatalog = this.formatSkillsCatalog(availableSkills);
 
             const contextData: AgentContextData = {
@@ -7350,6 +7422,12 @@ The context is now within limits. Please retry your request with the recovered c
         this._planModeActive = planModeGate.active;
         this._planApproved = planModeGate.approved;
 
+        // Stamp the run record so the UX (run-header Plan Mode chip) and plan-drift audits can
+        // tell plan-mode runs apart without re-deriving gate state from steps/requests.
+        if (this._agentRun && planModeGate.active) {
+            this._agentRun.PlanMode = true;
+        }
+
         // Pre-activate any user-requested skills (from a `/skill-name` composer mention). Must run
         // after _depth is set (root-only) and after the run is persisted (records a Skill step).
         await this.preActivateRequestedSkills(params);
@@ -7369,9 +7447,11 @@ The context is now within limits. Please retry your request with the recovered c
      * Resolves whether Plan Mode is active for this run, and whether its approval gate is already
      * satisfied. Called once from {@link initializeAgentRun}, after `_depth` is set.
      *
-     * - `active`: `agent.SupportsPlanMode` (capability, default ON/opt-out) AND `params.planMode`
-     *   (per-request, default OFF) AND this is a root agent (`_depth === 0`). Sub-agents never gate
-     *   on Plan Mode — only the top-level agent the user/caller invoked does.
+     * - `active`: this is a root agent (`_depth === 0`) AND either `agent.RequirePlanMode`
+     *   (mandatory HITL — forces plan mode on every root run regardless of the per-request flag;
+     *   `SupportsPlanMode` is irrelevant when set) OR `agent.SupportsPlanMode` (capability,
+     *   default ON/opt-out) AND `params.planMode` (per-request, default OFF). Sub-agents never
+     *   gate on Plan Mode — only the top-level agent the user/caller invoked does.
      * - `approved`: only meaningful when `active`. True when `params.lastRunId` points to a prior
      *   run whose Plan step's `MJ: AI Agent Requests` row resolved to `Approved` or `Responded`
      *   (a `Rejected` plan — or no matching request at all — leaves the gate unsatisfied, sending
@@ -7384,7 +7464,9 @@ The context is now within limits. Please retry your request with the recovered c
     protected async resolvePlanModeGate(
         params: ExecuteAgentParams
     ): Promise<{ active: boolean; approved: boolean }> {
-        const active = !!(params.agent.SupportsPlanMode && params.planMode === true && this._depth === 0);
+        const requiredByAgent = params.agent.RequirePlanMode === true;
+        const requestedByCaller = !!(params.agent.SupportsPlanMode && params.planMode === true);
+        const active = this._depth === 0 && (requiredByAgent || requestedByCaller);
         if (!active) {
             return { active: false, approved: false };
         }
@@ -7488,6 +7570,14 @@ The context is now within limits. Please retry your request with the recovered c
         payloadAtStart?: any;
         payloadAtEnd?: any;
         parentId?: string;
+        /**
+         * Skill-invocation records to persist on `AIAgentRunStep.Skills` for this step. When
+         * omitted, Prompt steps default to the full set of skills currently in effect
+         * ({@link _skillInvocations}) so prompt injection is always visible; all other step
+         * types default to no skill linkage. Pass explicitly for Skill steps (the activation
+         * performed) and Actions/Sub-Agent steps (the skill(s) that granted the tool).
+         */
+        skills?: AgentSkillInvocation[];
     }): Promise<MJAIAgentRunStepEntityExtended> {
         const stepEntity = await this._activeProvider.GetEntityObject<MJAIAgentRunStepEntityExtended>('MJ: AI Agent Run Steps', params.contextUser);
         // Client-generate the PK so the step ID is valid IMMEDIATELY (before the INSERT lands) — child
@@ -7524,6 +7614,17 @@ The context is now within limits. Please retry your request with the recovered c
                   })
                 : undefined
         });
+
+        // Skill observability: persist the invocation records for this step. Prompt steps
+        // default to everything currently in effect (so every turn's injection is auditable);
+        // other step types only carry skills when the caller attributes them explicitly.
+        const skillsForStep = params.skills
+            ?? (params.stepType === 'Prompt' && this._skillInvocations.length > 0
+                ? this._skillInvocations
+                : undefined);
+        if (skillsForStep && skillsForStep.length > 0) {
+            stepEntity.Skills = JSON.stringify(skillsForStep);
+        }
 
         // Fire-and-forget the 'started' INSERT — the agent flow never blocks on a step save. The queue
         // tracks the INSERT so every later UPDATE (queueStepSave) chains AFTER it commits.
@@ -8554,7 +8655,8 @@ The context is now within limits. Please retry your request with the recovered c
         previousDecision?: BaseAgentNextStep<SR, SC>,
         parentStepId?: string,
         subAgentPayloadOverride?: any,
-        stepCount: number = 0
+        stepCount: number = 0,
+        resolvedSubAgentEntity?: MJAIAgentEntityExtended
     ): Promise<BaseAgentNextStep<SR, SC>> {
         const subAgentRequest = previousDecision.subAgent as AgentSubAgentRequest<SC>;
         // Check for cancellation before starting
@@ -8596,13 +8698,19 @@ The context is now within limits. Please retry your request with the recovered c
             parentAgentHierarchy: this._agentHierarchy
         };
         
-        // Get sub-agent entity to access payload paths
-        const subAgentEntity = AIEngine.Instance.Agents.find(a => a.Name === subAgentRequest.name &&
-                                                            UUIDsEqual(a.ParentID, params.agent.ID));
+        // Get sub-agent entity to access payload paths. Prefer the entity the caller already
+        // resolved (resolveSubAgentByName — covers ParentID children AND runtime-granted
+        // sub-agents from skill activations / subAgentChanges); fall back to the ParentID
+        // lookup, then the effective set, for any legacy direct callers of this method.
+        const subAgentEntity = resolvedSubAgentEntity
+            ?? AIEngine.Instance.Agents.find(a => a.Name === subAgentRequest.name &&
+                                                  UUIDsEqual(a.ParentID, params.agent.ID))
+            ?? this.getEffectiveSubAgentsForValidation(params.agent.ID).find(
+                   a => a.Name.trim().toLowerCase() === subAgentRequest.name?.trim().toLowerCase());
         if (!subAgentEntity) {
             throw new Error(`Sub-agent '${subAgentRequest.name}' not found`);
         }
-        const stepEntity = await this.createStepEntity({ stepType: 'Sub-Agent', stepName: `Execute Sub-Agent: ${subAgentRequest.name}`, contextUser: params.contextUser, targetId: subAgentEntity.ID, inputData, payloadAtStart: previousDecision.newPayload, parentId: parentStepId });
+        const stepEntity = await this.createStepEntity({ stepType: 'Sub-Agent', stepName: `Execute Sub-Agent: ${subAgentRequest.name}`, contextUser: params.contextUser, targetId: subAgentEntity.ID, inputData, payloadAtStart: previousDecision.newPayload, parentId: parentStepId, skills: this.getSkillAttributionForSubAgent(subAgentEntity, params.agent) });
         
         // Increment execution count for this sub-agent
         this.incrementExecutionCount(subAgentEntity.ID);
@@ -8949,18 +9057,27 @@ The context is now within limits. Please retry your request with the recovered c
                 previousDecision,
                 parentStepId,
                 subAgentPayloadOverride,
-                stepCount
+                stepCount,
+                resolved.subAgentEntity
             );
         }
 
-        this.logError(`Sub-agent '${name}' not found or not active for agent '${params.agent.Name}'`, {
+        // Execution-time resolution failure. Count it against the shared validation-retry cap
+        // (MAX_VALIDATION_RETRIES) so a model that keeps picking an unresolvable sub-agent fails
+        // the run with a clear guardrail message instead of looping forever, and tell the model
+        // exactly which sub-agents ARE available so it can self-correct on the next turn.
+        const availableNames = this.getEffectiveSubAgentsForValidation(params.agent.ID)
+            .map(a => a.Name).join(', ') || '(none)';
+        this.logError(`Sub-agent '${name}' not found or not active for agent '${params.agent.Name}'. Available sub-agents: ${availableNames}`, {
             agent: params.agent,
             category: 'SubAgentExecution'
         });
+        this._generalValidationRetryCount++;
         return {
             step: 'Retry',
             terminate: false,
-            errorMessage: `Sub-agent '${name}' not found or not active`,
+            errorMessage: `Sub-agent '${name}' not found or not active. Available sub-agents: ${availableNames}. ` +
+                `Pick one of the available sub-agents, or complete the task another way — do not request '${name}' again.`,
             previousPayload: previousDecision.newPayload,
             newPayload: previousDecision.newPayload
         };
@@ -9005,6 +9122,18 @@ The context is now within limits. Please retry your request with the recovered c
             if (relatedAgent) {
                 return { subAgentEntity: relatedAgent, relationship: rel };
             }
+        }
+        // 3) Runtime-granted sub-agents (skill activation / caller subAgentChanges): resolve from
+        // the SAME effective set the prompt offered and validateSubAgentNextStep approved. Without
+        // this branch, a skill-granted sub-agent passes validation but fails execution ("not found
+        // or not active") — and because the catalog keeps offering it, the model re-picks the same
+        // sub-agent forever (observed live: Research Agent looping 36+ turns on the skill-granted
+        // Infographic Agent). No relationship row exists for these, so they dispatch child-style.
+        const effectiveAgent = this.getEffectiveSubAgentsForValidation(params.agent.ID).find(a =>
+            a.Status === 'Active' && a.Name.trim().toLowerCase() === normalized
+        );
+        if (effectiveAgent) {
+            return { subAgentEntity: effectiveAgent };
         }
         return undefined;
     }
@@ -9293,6 +9422,7 @@ The context is now within limits. Please retry your request with the recovered c
             stepName: `Execute Parallel Sub-Agent: ${request.name}`,
             contextUser: params.contextUser,
             targetId: subAgentEntity.ID,
+            skills: this.getSkillAttributionForSubAgent(subAgentEntity, params.agent),
             inputData: {
                 agentName: params.agent.Name,
                 subAgentName: request.name,
@@ -9534,7 +9664,8 @@ The context is now within limits. Please retry your request with the recovered c
             targetId: subAgentEntity.ID,
             inputData,
             payloadAtStart: previousDecision.newPayload,
-            parentId: parentStepId
+            parentId: parentStepId,
+            skills: this.getSkillAttributionForSubAgent(subAgentEntity, params.agent)
         });
 
         // Increment execution count for this sub-agent
@@ -10166,7 +10297,7 @@ The context is now within limits. Please retry your request with the recovered c
                     actionParams: aa.params
                 };
                 
-                const stepEntity = await this.createStepEntity({ stepType: 'Actions', stepName: `Execute Action: ${aa.name}`, contextUser: params.contextUser, targetId: actionEntity.ID, inputData: actionInputData, payloadAtStart: currentPayload, payloadAtEnd: currentPayload, parentId: parentStepId });
+                const stepEntity = await this.createStepEntity({ stepType: 'Actions', stepName: `Execute Action: ${aa.name}`, contextUser: params.contextUser, targetId: actionEntity.ID, inputData: actionInputData, payloadAtStart: currentPayload, payloadAtEnd: currentPayload, parentId: parentStepId, skills: this.getSkillAttributionForAction(actionEntity.ID, params.agent) });
                 lastStep = stepEntity;
                 // Override step number to ensure unique values for parallel actions
                 stepEntity.StepNumber = baseStepNumber + numActionsProcessed++;
@@ -10607,9 +10738,15 @@ The context is now within limits. Please retry your request with the recovered c
         const currentPayload = previousDecision?.newPayload || previousDecision?.previousPayload || params.payload;
 
         for (const skill of newlyActivated) {
-            await this.recordSkillActivationStep(skill, currentPayload, params);
+            // Agent self-activation — carry the model's stated rationale (skillActivations[].reason)
+            // into the provenance record. Names were fuzzy-corrected in validateSkillNextStep, so a
+            // case-insensitive exact match against the request list is reliable here.
+            const request = requested.find(r => r.name.trim().toLowerCase() === skill.Name.trim().toLowerCase());
+            const invocation = this.buildSkillInvocation(skill, params.agent, 'auto', request?.reason);
+            await this.recordSkillActivationStep(skill, currentPayload, params, invocation);
             this.enableSkillCapabilities(skill, params);
             this._activatedSkillIDs.push(skill.ID);
+            this._skillInvocations.push(invocation);
         }
 
         const activationMessage = this.buildSkillActivationMessage(newlyActivated);
@@ -10654,6 +10791,10 @@ The context is now within limits. Please retry your request with the recovered c
 
         // Guard: intersect the requested IDs with the agent-accepted ∩ user-permitted set.
         const allowed = AIEngine.Instance.GetSkillsForAgent(params.agent, params.contextUser);
+        const droppedIds = requestedIds.filter(id => !allowed.some(s => UUIDsEqual(id, s.ID)));
+        if (droppedIds.length > 0) {
+            this.notifyDroppedSkillRequests(droppedIds, params);
+        }
         const newlyActivated = allowed.filter(
             s => requestedIds.some(id => UUIDsEqual(id, s.ID)) &&
                  !this._activatedSkillIDs.some(id => UUIDsEqual(id, s.ID))
@@ -10664,9 +10805,11 @@ The context is now within limits. Please retry your request with the recovered c
 
         const currentPayload = params.payload;
         for (const skill of newlyActivated) {
-            await this.recordSkillActivationStep(skill, currentPayload, params);
+            const invocation = this.buildSkillInvocation(skill, params.agent, 'requested');
+            await this.recordSkillActivationStep(skill, currentPayload, params, invocation);
             this.enableSkillCapabilities(skill, params);
             this._activatedSkillIDs.push(skill.ID);
+            this._skillInvocations.push(invocation);
         }
 
         const activationMessage = this.buildSkillActivationMessage(newlyActivated);
@@ -10679,6 +10822,40 @@ The context is now within limits. Please retry your request with the recovered c
             metadata: {
                 turnAdded: this._promptTurnCount,
                 messageType: 'skill-activation'
+            }
+        } as AgentChatMessage);
+    }
+
+    /**
+     * Handles user-requested skill IDs that failed the activation guard (agent-accepted ∩
+     * user-permitted). A silent drop leaves both the user AND the agent blind to the refusal —
+     * the agent then improvises around the missing capability instead of explaining it. This
+     * emits a server-side warning log and injects a system note into the conversation so the
+     * agent tells the user why the skill isn't available rather than working around it.
+     *
+     * @protected
+     */
+    protected notifyDroppedSkillRequests(droppedIds: string[], params: ExecuteAgentParams): void {
+        const names = droppedIds.map(
+            id => AIEngine.Instance.Skills.find(s => UUIDsEqual(s.ID, id))?.Name ?? id
+        );
+        const reason = params.agent.AcceptsSkills === 'None'
+            ? `agent '${params.agent.Name}' does not accept skills (AcceptsSkills='None')`
+            : `the skill(s) are not available to agent '${params.agent.Name}' — not Active, not assigned to it (AcceptsSkills='Limited'), or the user lacks Run permission`;
+        LogErrorEx({
+            message: `Requested skill activation dropped for [${names.join(', ')}]: ${reason}`,
+            severity: 'warning',
+            category: 'AgentSkills'
+        });
+        if (!params.conversationMessages) {
+            params.conversationMessages = [];
+        }
+        params.conversationMessages.push({
+            role: 'user',
+            content: `SYSTEM NOTE: The user requested activation of the following skill(s) for this run: ${names.join(', ')}. The request was NOT honored because ${reason}. Briefly inform the user that the requested skill(s) are not available to you and, if appropriate, suggest an agent that accepts skills or that an administrator can grant this capability. Do NOT attempt to build, delegate, or improvise a workaround for the missing capability.`,
+            metadata: {
+                turnAdded: this._promptTurnCount,
+                messageType: 'skill-activation-refused'
             }
         } as AgentChatMessage);
     }
@@ -10699,7 +10876,10 @@ The context is now within limits. Please retry your request with the recovered c
         agent: MJAIAgentEntityExtended,
         contextUser?: UserInfo
     ): MJAISkillEntity[] {
-        const availableSkills = AIEngine.Instance.GetSkillsForAgent(agent, contextUser);
+        // Agent-initiated activations resolve against the double-gated AUTO set only —
+        // RequestedOnly skills (on either side of the gate) can never be self-activated, even if
+        // a response somehow names one that validateSkillNextStep didn't catch.
+        const availableSkills = AIEngine.Instance.GetAutoActivatableSkillsForAgent(agent, contextUser);
         const resolved: MJAISkillEntity[] = [];
 
         for (const req of requested) {
@@ -10777,8 +10957,89 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
+     * Builds the {@link AgentSkillInvocation} observability record for a skill activation —
+     * capturing WHO pulled the trigger and the provenance-of-authority gate values in effect at
+     * activation time, so auditors can see exactly which configuration admitted the skill even
+     * if that configuration later changes.
+     *
+     * @protected
+     */
+    protected buildSkillInvocation(
+        skill: MJAISkillEntity,
+        agent: MJAIAgentEntityExtended,
+        activationType: AgentSkillInvocation['ActivationType'],
+        reason?: string
+    ): AgentSkillInvocation {
+        return {
+            SkillID: skill.ID,
+            SkillName: skill.Name,
+            ActivationType: activationType,
+            Provenance: {
+                AgentAcceptsSkills: agent.AcceptsSkills,
+                SkillActivationMode: skill.ActivationMode,
+                AgentSkillActivationMode: agent.SkillActivationMode,
+                RequestedBy: activationType === 'requested' ? 'user-request' : 'agent-decision'
+            },
+            ...(reason ? { Reason: reason } : {})
+        };
+    }
+
+    /**
+     * Resolves which activated skill(s), if any, granted the given action to this agent — the
+     * attribution recorded on the Actions step's `Skills` column. Returns `undefined` (no
+     * linkage) when the action is one of the agent's NATIVE grants (an Active `MJ: AI Agent
+     * Actions` row), even if an activated skill also bundles it: native authority takes
+     * precedence, and `Skills = NULL` is the contract for "the agent had this tool anyway".
+     *
+     * @protected
+     */
+    protected getSkillAttributionForAction(actionId: string, agent: MJAIAgentEntityExtended): AgentSkillInvocation[] | undefined {
+        if (this._skillInvocations.length === 0 || !actionId) {
+            return undefined;
+        }
+        const isNative = AIEngine.Instance.AgentActions.some(aa =>
+            UUIDsEqual(aa.AgentID, agent.ID) && UUIDsEqual(aa.ActionID, actionId) && aa.Status === 'Active'
+        );
+        if (isNative) {
+            return undefined;
+        }
+        const granting = this._skillInvocations.filter(inv =>
+            AIEngine.Instance.GetSkillActionIDs(inv.SkillID).some(id => UUIDsEqual(id, actionId))
+        );
+        return granting.length > 0 ? granting : undefined;
+    }
+
+    /**
+     * Resolves which activated skill(s), if any, granted the given sub-agent to this agent — the
+     * attribution recorded on the Sub-Agent step's `Skills` column. Returns `undefined` when the
+     * sub-agent is a NATIVE relationship (a `ParentID` child of this agent, or an Active
+     * `MJ: AI Agent Relationships` referenced-sub-agent row), even if an activated skill also
+     * bundles it — same native-precedence contract as {@link getSkillAttributionForAction}.
+     *
+     * @protected
+     */
+    protected getSkillAttributionForSubAgent(subAgent: MJAIAgentEntityExtended, agent: MJAIAgentEntityExtended): AgentSkillInvocation[] | undefined {
+        if (this._skillInvocations.length === 0 || !subAgent) {
+            return undefined;
+        }
+        const isParentChild = subAgent.ParentID != null && UUIDsEqual(subAgent.ParentID, agent.ID);
+        const isReferenced = AIEngine.Instance.AgentRelationships.some(rel =>
+            UUIDsEqual(rel.AgentID, agent.ID) && UUIDsEqual(rel.SubAgentID, subAgent.ID) && rel.Status === 'Active'
+        );
+        if (isParentChild || isReferenced) {
+            return undefined;
+        }
+        const granting = this._skillInvocations.filter(inv =>
+            AIEngine.Instance.GetSkillSubAgentIDs(inv.SkillID).some(id => UUIDsEqual(id, subAgent.ID))
+        );
+        return granting.length > 0 ? granting : undefined;
+    }
+
+    /**
      * Creates and immediately finalizes the `AIAgentRunStep` (StepType='Skill') that records this
-     * skill activation for observability/audit. Activation is not itself a failure mode today — it
+     * skill activation for observability/audit. The step's `Skills` column carries the single
+     * {@link AgentSkillInvocation} performed (activation type, provenance of authority, and the
+     * agent-stated reason when self-activated). Activation is not itself a failure mode today — it
      * always finalizes as successful — but subclasses can override to add richer InputData/OutputData
      * or to make activation conditionally fail (e.g. a licensing check).
      *
@@ -10787,7 +11048,8 @@ The context is now within limits. Please retry your request with the recovered c
     protected async recordSkillActivationStep(
         skill: MJAISkillEntity,
         currentPayload: unknown,
-        params: ExecuteAgentParams
+        params: ExecuteAgentParams,
+        invocation?: AgentSkillInvocation
     ): Promise<void> {
         const stepEntity = await this.createStepEntity({
             stepType: 'Skill',
@@ -10796,12 +11058,18 @@ The context is now within limits. Please retry your request with the recovered c
             inputData: { skillName: skill.Name },
             contextUser: params.contextUser,
             payloadAtStart: currentPayload,
-            payloadAtEnd: currentPayload
+            payloadAtEnd: currentPayload,
+            ...(invocation ? { skills: [invocation] } : {})
         });
 
         await this.finalizeStepEntity(stepEntity, true, undefined, {
             skillId: skill.ID,
-            skillName: skill.Name
+            skillName: skill.Name,
+            ...(invocation ? {
+                activationType: invocation.ActivationType,
+                requestedBy: invocation.Provenance.RequestedBy,
+                ...(invocation.Reason ? { reason: invocation.Reason } : {})
+            } : {})
         });
     }
 

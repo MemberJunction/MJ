@@ -1,7 +1,8 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges, ChangeDetectorRef } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
-import { MJWindowComponent, MJButtonDirective, MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
+import { MJWindowComponent, MJButtonDirective, MJEmptyStateComponent, MJConfirmService } from '@memberjunction/ng-ui-components';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { UserInfo } from '@memberjunction/core';
 import { MJArtifactEntity } from '@memberjunction/core-entities';
 import { ArtifactPermissionService, ArtifactPermission, ArtifactPermissionSet } from '../../services/artifact-permission.service';
@@ -219,7 +220,8 @@ export class ArtifactShareModalComponent implements OnInit, OnChanges {
 
     constructor(
         private permissionService: ArtifactPermissionService,
-        private cdr: ChangeDetectorRef
+        private cdr: ChangeDetectorRef,
+        private confirmService: MJConfirmService
     ) {}
 
     async ngOnInit(): Promise<void> {
@@ -348,7 +350,7 @@ export class ArtifactShareModalComponent implements OnInit, OnChanges {
 
             // Validate permissions
             if (!this.permissionService.validatePermissions(this.newPermissions, userPerms, isOwner)) {
-                alert('You cannot grant permissions you do not have');
+                MJNotificationService.Instance.CreateSimpleNotification('You cannot grant permissions you do not have', 'warning', 4000);
                 return;
             }
 
@@ -366,7 +368,7 @@ export class ArtifactShareModalComponent implements OnInit, OnChanges {
             this.saved.emit();
         } catch (error) {
             console.error('Error adding user:', error);
-            alert('Failed to add user. Please try again.');
+            MJNotificationService.Instance.CreateSimpleNotification('Failed to add user. Please try again.', 'error', 5000);
         }
     }
 
@@ -411,7 +413,7 @@ export class ArtifactShareModalComponent implements OnInit, OnChanges {
 
             // Validate permissions
             if (!this.permissionService.validatePermissions(permission.editingPermissions, userPerms, isOwner)) {
-                alert('You cannot grant permissions you do not have');
+                MJNotificationService.Instance.CreateSimpleNotification('You cannot grant permissions you do not have', 'warning', 4000);
                 return;
             }
 
@@ -426,12 +428,12 @@ export class ArtifactShareModalComponent implements OnInit, OnChanges {
             this.saved.emit();
         } catch (error) {
             console.error('Error updating permission:', error);
-            alert('Failed to update permissions. Please try again.');
+            MJNotificationService.Instance.CreateSimpleNotification('Failed to update permissions. Please try again.', 'error', 5000);
         }
     }
 
     async onRevokePermission(permission: PermissionDisplay): Promise<void> {
-        if (!confirm(`Remove ${permission.userName}'s access to this artifact?`)) {
+        if (!(await this.confirmService.ConfirmDelete({ title: 'Remove Access', message: `Remove ${permission.userName}'s access to this artifact?`, confirmText: 'Remove' }))) {
             return;
         }
 
@@ -441,7 +443,7 @@ export class ArtifactShareModalComponent implements OnInit, OnChanges {
             this.saved.emit();
         } catch (error) {
             console.error('Error revoking permission:', error);
-            alert('Failed to revoke permission. Please try again.');
+            MJNotificationService.Instance.CreateSimpleNotification('Failed to revoke permission. Please try again.', 'error', 5000);
         }
     }
 

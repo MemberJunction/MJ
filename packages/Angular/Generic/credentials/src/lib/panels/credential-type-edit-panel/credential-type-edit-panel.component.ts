@@ -1,6 +1,7 @@
 import { Component, Input, Output, EventEmitter, ChangeDetectorRef, ChangeDetectionStrategy, OnInit } from '@angular/core';
 import { MJCredentialTypeEntity } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { MJConfirmService } from '@memberjunction/ng-ui-components';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 type CategoryType = 'AI' | 'Authentication' | 'Communication' | 'Database' | 'Integration' | 'Storage';
@@ -47,7 +48,7 @@ export class CredentialTypeEditPanelComponent extends BaseAngularComponent imple
 
     private get _metadata() { return this.ProviderToUse; }
 
-    constructor(private cdr: ChangeDetectorRef) { super(); }
+    constructor(private cdr: ChangeDetectorRef, private confirmService: MJConfirmService) { super(); }
 
     ngOnInit(): void {}
 
@@ -254,7 +255,7 @@ export class CredentialTypeEditPanelComponent extends BaseAngularComponent imple
     public async deleteType(): Promise<void> {
         if (this.isNew || !this.credentialType) return;
 
-        const confirmed = confirm(`Are you sure you want to delete "${this.credentialType.Name}"? This action cannot be undone.`);
+        const confirmed = await this.confirmService.ConfirmDelete({ title: 'Delete Type', message: `Delete "${this.credentialType.Name}"?`, detail: 'This action cannot be undone.' });
         if (!confirmed) return;
 
         this.isSaving = true;

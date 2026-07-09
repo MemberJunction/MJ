@@ -15,6 +15,7 @@ import {
   EvaluationPreferences
 } from '@memberjunction/ng-testing';
 import { createCopyOnlyToolbar, ToolbarConfig } from '@memberjunction/ng-code-editor';
+import { MJConfirmService } from '@memberjunction/ng-ui-components';
 
 /** Settings key for keyboard shortcuts visibility */
 const SHORTCUTS_SETTINGS_KEY = '__mj.Testing.ShowKeyboardShortcuts';
@@ -113,6 +114,7 @@ export class MJTestFormComponentExtended extends MJTestFormComponent implements 
   private evalPrefsService = inject(EvaluationPreferencesService);
   private viewContainerRef = inject(ViewContainerRef);
   private appManager = inject(ApplicationManager);
+  private confirmService = inject(MJConfirmService);
 
   // Edit state
   isSaving = false;
@@ -945,9 +947,9 @@ export class MJTestFormComponentExtended extends MJTestFormComponent implements 
   }
 
   /** Discard all pending field changes on the test. */
-  discardChanges(): void {
+  async discardChanges(): Promise<void> {
     if (!this.isDirty) return;
-    if (!confirm('Discard your unsaved changes?')) return;
+    if (!(await this.confirmService.Confirm('Discard your unsaved changes?'))) return;
     this.record.Revert();
     this.tagDraft = '';
     this.parseJsonFields();

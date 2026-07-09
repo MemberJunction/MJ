@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ComponentFixture } from '@angular/core/testing';
 import { MJEntityCardComponent } from '@memberjunction/ng-entity-card';
-import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
+import { MJEmptyStateComponent, MJAccordionModule } from '@memberjunction/ng-ui-components';
 import { renderComponentFixture, query, queryAll, text, capture } from '@memberjunction/ng-test-utils';
 import { ClusterScatterComponent } from './cluster-scatter.component';
 import { ClusterPoint, ClusterInfo, ClusterSelectedEvent } from './clustering.types';
@@ -12,14 +12,16 @@ import { ClusterPoint, ClusterInfo, ClusterSelectedEvent } from './clustering.ty
  * DOM-level spec for <mj-cluster-scatter>. The component renders a pure SVG scatter
  * plot — no media APIs (no getUserMedia/AudioContext/WebRTC), so the visual surface is
  * honestly unit-testable in jsdom. The tooltip/detail panel render a child
- * <mj-entity-card> (standalone), so we declare it as an import.
+ * <mj-entity-card> (standalone) plus the "Cluster Members" <mj-accordion-panel>, so both
+ * MJEntityCardComponent and MJAccordionModule are registered — clicking a point opens that
+ * panel, and without the accordion registered its render throws NG0304 as an unhandled error.
  *
  * autoDetect is used because ngOnChanges recomputes centroids during init, which would
  * otherwise trip the dev-mode NG0100 check on a single detectChanges().
  */
 function renderScatter(inputs: Record<string, unknown> = {}): ComponentFixture<ClusterScatterComponent> {
   return renderComponentFixture(ClusterScatterComponent, {
-    imports: [CommonModule, FormsModule, MJEntityCardComponent, MJEmptyStateComponent],
+    imports: [CommonModule, FormsModule, MJEntityCardComponent, MJEmptyStateComponent, MJAccordionModule],
     declarations: [ClusterScatterComponent],
     inputs,
     autoDetect: true,

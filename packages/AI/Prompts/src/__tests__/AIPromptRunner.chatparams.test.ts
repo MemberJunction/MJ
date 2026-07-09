@@ -19,6 +19,7 @@ type ChatInternals = {
   annotateManifestForUnsupportedMedia(text: string, caps: FileCaps, modelName: string): string;
   stripUnsupportedMediaBlocks(llm: unknown, chatParams: unknown, model: unknown, verbose: boolean, params: unknown): void;
   injectNativeFileInputs(params: unknown, llm: unknown, chatParams: unknown, verbose: boolean): void;
+  resolveEffectiveResponseFormat(promptResponseFormat: string | null | undefined, additionalParameters: Record<string, unknown> | undefined): string | undefined;
 };
 function priv(r: AIPromptRunner): ChatInternals { return r as unknown as ChatInternals; }
 
@@ -147,5 +148,22 @@ describe('injectNativeFileInputs', () => {
     const chatParams = { messages: [{ role: ChatMessageRole.user, content: 'plain' }] };
     priv(runner).injectNativeFileInputs({}, fakeLLM(null), chatParams, false);
     expect(chatParams.messages[0].content).toBe('plain');
+  });
+});
+
+describe('resolveEffectiveResponseFormat (ScopedPromptConfig override)', () => {
+  it('additionalParameters.responseFormat overrides the prompt default', () => {
+    expect(priv(runner).resolveEffectiveResponseFormat('Text', { responseFormat: 'JSON' })).toBe('JSON');
+  });
+  it("an 'Any' override stays silent (undefined) even when the prompt sets a concrete format", () => {
+    expect(priv(runner).resolveEffectiveResponseFormat('JSON', { responseFormat: 'Any' })).toBeUndefined();
+  });
+  it('falls back to the prompt format when there is no override', () => {
+    expect(priv(runner).resolveEffectiveResponseFormat('JSON', undefined)).toBe('JSON');
+    expect(priv(runner).resolveEffectiveResponseFormat('Markdown', {})).toBe('Markdown');
+  });
+  it("prompt 'Any' with no override stays silent", () => {
+    expect(priv(runner).resolveEffectiveResponseFormat('Any', undefined)).toBeUndefined();
+    expect(priv(runner).resolveEffectiveResponseFormat(null, undefined)).toBeUndefined();
   });
 });
