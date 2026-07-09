@@ -2536,18 +2536,30 @@ export abstract class BaseEntity<T = unknown> {
                         else {
                             // we are part of a transaction group, so we return true and subscribe to the transaction groups' events and do the finalization work then
                             this.TransactionGroup.TransactionNotifications$.subscribe(({ success, results, error }) => {
-                                if (success && results) {
-                                    const transItem = results.find(r => r.Transaction.BaseEntity === this);
-                                    if (transItem) {
-                                        this.finalizeSave(transItem.Result, saveSubType); // we get the resulting data from the transaction result, not data above as that will be blank when in a TG
-                                    }
-                                    else {
-                                        // should never get here, but if we do, we need to throw an error
-                                        throw new Error('Transaction group did not return a result for the entity object');
-                                    }
+                                const transItem = success && results ? results.find(r => r.Transaction.BaseEntity === this) : undefined;
+                                if (transItem) {
+                                    this.finalizeSave(transItem.Result, saveSubType); // we get the resulting data from the transaction result, not data above as that will be blank when in a TG
                                 }
                                 else {
-                                    throw error; // push this to the catch block below and that will add to the result history
+                                    // The transaction group failed / rolled back, OR (should never happen) reported success
+                                    // without a result for this entity. Either way, RECORD the failure on ResultHistory rather
+                                    // than throwing. This handler runs ASYNCHRONOUSLY — after Save() has already returned true and
+                                    // its enclosing try/catch has unwound — so a throw here has no catch to reach: rxjs routes a
+                                    // throwing next-handler to reportUnhandledError, which re-throws it on a fresh tick, producing
+                                    // an uncaughtException that exits the whole host process (MJServer only guards
+                                    // unhandledRejection). The transaction has already rolled back and Submit() returns false; the
+                                    // caller's error handling still runs. Mirrors the Delete() transaction-group-failure path below.
+                                    const err = error ?? (success ? new Error('Transaction group did not return a result for the entity object') : undefined);
+                                    if (currentResultCount === this.ResultHistory.length) {
+                                        // no new result was recorded elsewhere, so add one here (mirrors Save()'s own catch block)
+                                        newResult.Success = false;
+                                        newResult.Type = saveSubType ?? (this.IsSaved ? 'update' : 'create');
+                                        newResult.Message = err?.message ?? (err != null ? String(err) : 'Transaction group failed');
+                                        newResult.Errors = err?.Errors || [];
+                                        newResult.OriginalValues = this.Fields.map(f => { return {FieldName: f.CodeName, Value: f.OldValue} });
+                                        newResult.EndedAt = new Date();
+                                        this.RegisterResultHistoryEntry(newResult);
+                                    }
                                 }
                             });
                             return true;
