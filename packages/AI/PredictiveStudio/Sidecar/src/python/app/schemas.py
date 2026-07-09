@@ -119,11 +119,21 @@ class PredictRequest(BaseModel):
     model_config = {"protected_namespaces": ()}
 
 
+class PredictionContribution(BaseModel):
+    """One signed per-record feature contribution (P1-5). ``value > 0`` pushes the score up, ``< 0`` down."""
+
+    feature: str
+    value: float
+
+
 class Prediction(BaseModel):
     """A single prediction for one input row."""
 
     score: float
     class_: Optional[str] = Field(default=None, alias="class")
+    # Top signed drivers behind THIS row's prediction (linear models only; None otherwise — callers
+    # fall back to global feature importance). See app/main.py::_row_contributions.
+    contributions: Optional[List[PredictionContribution]] = None
 
     model_config = {"populate_by_name": True}
 

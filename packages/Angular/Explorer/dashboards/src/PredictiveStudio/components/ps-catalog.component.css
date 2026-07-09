@@ -27,8 +27,9 @@
 .ps-catalog .acard {
   position: relative; display: flex; flex-direction: column;
   background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default);
-  border-radius: 10px; box-shadow: var(--mj-shadow-sm); overflow: hidden; transition: opacity .15s, box-shadow .15s, border-color .15s;
+  border-radius: 8px; overflow: hidden; transition: opacity .15s, border-color .12s, background .12s;
 }
+.ps-catalog .acard:hover { border-color: var(--mj-brand-primary); background: color-mix(in srgb, var(--mj-brand-primary) 4%, var(--mj-bg-surface)); }
 .ps-catalog .acard.hit { border-color: var(--mj-brand-primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 14%, transparent); }
 .ps-catalog .acard.dim { opacity: .46; }
 .ps-catalog .ribbon { position: absolute; top: 12px; right: 12px; z-index: 1; }
