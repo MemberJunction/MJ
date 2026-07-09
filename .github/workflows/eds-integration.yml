@@ -288,3 +288,39 @@ jobs:
           ORA_USER: eds_it
           ORA_PASSWORD: Eds_CI_pass123
         run: npm run test
+
+  # Microsoft Fabric — Entra service-principal auth against a live Fabric Warehouse SQL endpoint.
+  # No service container exists for Fabric (like Snowflake), so this runs against a hosted trial via
+  # tester-supplied GitHub Secrets. MANUAL ONLY (workflow_dispatch) so it never runs on normal PRs/pushes
+  # and can't fail for contributors without the secrets. Doubles as a clean-cloud reachability check.
+  fabric-integration:
+    name: Microsoft Fabric (integration, manual)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Build SQL Server external driver
+        run: npx turbo build --filter=@memberjunction/external-data-source-sqlserver
+
+      # No fixture seeding — reads Fabric's built-in sample warehouse. The suite introspects and
+      # reads whatever table it finds (TestConnection -> IntrospectSchema -> projected read).
+      - name: Run Fabric integration test (Entra service principal)
+        working-directory: packages/ExternalDataSources/Providers/SQLServer
+        env:
+          RUN_FABRIC_INTEGRATION: '1'
+          FABRIC_HOST: ${{ secrets.FABRIC_HOST }}
+          FABRIC_DATABASE: ${{ secrets.FABRIC_DATABASE }}
+          FABRIC_TENANT_ID: ${{ secrets.FABRIC_TENANT_ID }}
+          FABRIC_CLIENT_ID: ${{ secrets.FABRIC_CLIENT_ID }}
+          FABRIC_CLIENT_SECRET: ${{ secrets.FABRIC_CLIENT_SECRET }}
+        run: npm run test -- fabric.integration

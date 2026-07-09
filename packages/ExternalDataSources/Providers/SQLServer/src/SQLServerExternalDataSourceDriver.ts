@@ -20,7 +20,7 @@ import {
 } from "@memberjunction/external-data-sources";
 
 /** Non-secret connection config stored in ExternalDataSource.ConnectionConfig (JSON). */
-interface SQLServerConnectionConfig {
+export interface SQLServerConnectionConfig {
   /** Server host (accepts `server` or `host`). */
   server?: string;
   host?: string;
@@ -43,12 +43,25 @@ interface SQLServerConnectionConfig {
   allowInsecureTransport?: boolean;
   /** Max pool connections (default 5). */
   maxPoolSize?: number;
+  /**
+   * Authentication mode. `'sql'` (default) uses username/password. `'entra-service-principal'`
+   * authenticates with a Microsoft Entra service principal (tenantId/clientId/clientSecret from the
+   * credential) — required for Microsoft Fabric SQL endpoints, which speak TDS but refuse SQL auth.
+   * When unset, the driver infers `'entra-service-principal'` if the credential carries a clientId,
+   * otherwise `'sql'` (so a correctly-shaped credential Just Works without setting this).
+   */
+  authMode?: 'sql' | 'entra-service-principal';
 }
 
-/** Decrypted credential values expected from the Credential Engine. */
-interface SQLServerCredentialValues extends Record<string, string> {
+/** Decrypted credential values from the Credential Engine — SQL auth or Entra service principal. */
+export interface SQLServerCredentialValues extends Record<string, string> {
+  /** SQL authentication. */
   username: string;
   password: string;
+  /** Microsoft Entra service-principal authentication (e.g. Microsoft Fabric). */
+  tenantId: string;
+  clientId: string;
+  clientSecret: string;
 }
 
 /** Column metadata for decimal-safe projection: the column name and whether it needs CAST-to-string. */
@@ -98,23 +111,11 @@ export class SQLServerExternalDataSourceDriver extends BaseSqlExternalDataSource
   /** Build a fresh pool for the data source — invoked once per source by the race-safe cache. */
   private async createPool(dataSource: MJExternalDataSourceEntity, contextUser?: UserInfo): Promise<sql.ConnectionPool> {
     const config = this.parseConnectionConfig<SQLServerConnectionConfig>(dataSource);
-    // Secure-by-default: refuse plaintext to a non-local host unless explicitly opted in.
-    this.assertSecureTransport({ host: config.server ?? config.host, tlsEnabled: !!config.ssl, allowInsecure: config.allowInsecureTransport, dataSourceName: dataSource.Name });
     const cred = await this.resolveCredential<SQLServerCredentialValues>(dataSource, contextUser);
-    const pool = new sql.ConnectionPool({
-      server: config.server ?? config.host ?? 'localhost',
-      port: config.port,
-      database: dataSource.DefaultDatabase ?? config.database,
-      user: cred?.values.username,
-      password: cred?.values.password,
-      options: {
-        encrypt: !!config.ssl,
-        // Secure by default: verify the server cert unless the config explicitly opts out.
-        trustServerCertificate: config.sslRejectUnauthorized === false,
-        ...(config.instanceName ? { instanceName: config.instanceName } : {}),
-      },
-      pool: { max: config.maxPoolSize ?? 5 },
-    });
+    const poolConfig = this.buildPoolConfig(dataSource, config, cred);
+    // Secure-by-default: refuse plaintext to a non-local host unless explicitly opted in.
+    this.assertSecureTransport({ host: config.server ?? config.host, tlsEnabled: !!poolConfig.options?.encrypt, allowInsecure: config.allowInsecureTransport, dataSourceName: dataSource.Name });
+    const pool = new sql.ConnectionPool(poolConfig);
     try {
       await pool.connect();
     } catch (e) {
@@ -124,6 +125,69 @@ export class SQLServerExternalDataSourceDriver extends BaseSqlExternalDataSource
       throw e;
     }
     return pool;
+  }
+
+  /**
+   * Builds the mssql pool config for either SQL auth or Microsoft Entra service-principal auth.
+   * Pure (no I/O) so the auth-mode selection, forced encryption, and the Entra `authentication`
+   * block are unit-testable without opening a connection. Entra mode is used when `authMode` says
+   * so, or is inferred when the credential carries a `clientId` (so a correctly-shaped credential
+   * works without extra config). Entra endpoints (Microsoft Fabric) are TLS-only, so encryption is
+   * forced on for them regardless of the `ssl` flag.
+   */
+  protected buildPoolConfig(
+    dataSource: MJExternalDataSourceEntity,
+    config: SQLServerConnectionConfig,
+    cred: { values: SQLServerCredentialValues } | null,
+  ): sql.config {
+    const useEntra = (config.authMode ?? (cred?.values.clientId ? 'entra-service-principal' : 'sql')) === 'entra-service-principal';
+    const encrypt = useEntra ? true : !!config.ssl;
+    const poolConfig: sql.config = {
+      server: config.server ?? config.host ?? 'localhost',
+      port: config.port,
+      database: dataSource.DefaultDatabase ?? config.database,
+      options: {
+        encrypt,
+        // Secure by default: verify the server cert unless the config explicitly opts out.
+        trustServerCertificate: config.sslRejectUnauthorized === false,
+        ...(config.instanceName ? { instanceName: config.instanceName } : {}),
+      },
+      pool: { max: config.maxPoolSize ?? 5 },
+    };
+    if (useEntra) {
+      // Microsoft Entra service principal — tedious authenticates the SPN; no user/password.
+      poolConfig.authentication = {
+        type: 'azure-active-directory-service-principal-secret',
+        options: {
+          clientId: cred?.values.clientId ?? '',
+          clientSecret: cred?.values.clientSecret ?? '',
+          tenantId: cred?.values.tenantId ?? '',
+        },
+      };
+    } else {
+      poolConfig.user = cred?.values.username;
+      poolConfig.password = cred?.values.password;
+    }
+    return poolConfig;
+  }
+
+  /**
+   * Extends the base auth-failure detection with Microsoft Entra (AAD) signatures, so the base
+   * class's evict-and-retry self-heal recovers from an expired/rotated service-principal client
+   * secret exactly as it does for a rotated SQL password. `AADSTS*` are Entra error codes.
+   */
+  protected override isAuthError(e: unknown): boolean {
+    if (super.isAuthError(e)) {
+      return true;
+    }
+    const msg = (e instanceof Error ? e.message : String(e)).toLowerCase();
+    return (
+      msg.includes('aadsts') ||
+      msg.includes('token is expired') ||
+      msg.includes('failed to authenticate the service principal') ||
+      msg.includes('invalid client secret') ||
+      msg.includes('invalid_client')
+    );
   }
 
   protected peekConnection(dataSourceId: string): unknown {
