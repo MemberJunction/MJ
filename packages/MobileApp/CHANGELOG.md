@@ -1,5 +1,22 @@
 # @memberjunction/mobile-app
 
+## 5.46.0
+
+### Patch Changes
+
+- Updated dependencies [d526470]
+- Updated dependencies [84fa44c]
+- Updated dependencies [33741fc]
+- Updated dependencies [ef3e802]
+  - @memberjunction/core@5.46.0
+  - @memberjunction/core-entities@5.46.0
+  - @memberjunction/graphql-dataprovider@5.46.0
+  - @memberjunction/react-runtime@5.46.0
+  - @memberjunction/ai@5.46.0
+  - @memberjunction/ai-realtime-client@5.46.0
+  - @memberjunction/global@5.46.0
+  - @memberjunction/markdown-core@5.46.0
+
 ## 5.45.1
 
 ### Patch Changes

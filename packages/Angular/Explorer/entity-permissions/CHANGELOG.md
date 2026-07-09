@@ -1,5 +1,23 @@
 # Change Log - @memberjunction/ng-entity-permissions
 
+## 5.46.0
+
+### Patch Changes
+
+- 84fa44c: Stop deep-cloning the metadata graph for providers that reuse the global provider's metadata (#3083). The reuse fast path (`ignoreExistingMetadata: false` — MJServer's per-request providers) now builds a per-instance AllMetadata shell: shallow-copied array containers whose elements are the global provider's immutable-post-Config Info object instances, instead of re-instantiating every EntityInfo/EntityFieldInfo/etc. (~1s of synchronous, event-loop-blocking constructor work per provider on a ~600-entity install, twice per GraphQL request — and the blocking made concurrent requests inflate each other; the shell is microseconds). Because the top-level array containers are per-instance, in-place array mutations (sort/push/splice) on the ~20 AllMetadata collections themselves (provider.Entities, AllQueries, etc.) by request-scoped code stay request-local exactly as they did in the deep-clone era. Everything BELOW that level is shared: the Info objects must be treated as read-only (as they always were on a client's global provider), and that includes their nested arrays — an in-place sort/push on entity.Fields, entity.RelatedEntities, application.ApplicationEntities, and the like now mutates process-wide state, where the deep clone kept it request-local (a repo-wide sweep found no code doing this today). CurrentUser stays per-instance, so RLS fallback semantics are unchanged. Subclass overrides of CloneAllMetadata are still honored on the fast path for backward compatibility (new code should override CreateSharedMetadataShell). Reuse-path providers also now build their entity lookup maps (EntityByName/EntityByID were silently falling back to linear scans), and the fast path requires the global provider to actually have entities loaded (an unconfigured global no longer donates an empty graph). Also fixes entity-permissions' entity selector mutating the provider's live Entities array via in-place sort.
+- Updated dependencies [d526470]
+- Updated dependencies [84fa44c]
+- Updated dependencies [33741fc]
+- Updated dependencies [ef3e802]
+  - @memberjunction/core@5.46.0
+  - @memberjunction/core-entities@5.46.0
+  - @memberjunction/ng-shared@5.46.0
+  - @memberjunction/ng-base-types@5.46.0
+  - @memberjunction/ng-container-directives@5.46.0
+  - @memberjunction/ng-shared-generic@5.46.0
+  - @memberjunction/ng-ui-components@5.46.0
+  - @memberjunction/global@5.46.0
+
 ## 5.45.1
 
 ### Patch Changes

@@ -1,5 +1,12 @@
 # @memberjunction/ng-agent-client
 
+## 5.46.0
+
+### Patch Changes
+
+- @memberjunction/ai-agent-client@5.46.0
+- @memberjunction/global@5.46.0
+
 ## 5.45.1
 
 ### Patch Changes
