@@ -2854,9 +2854,9 @@ export class RecordMergeDetailResult {
      */
     Success: boolean
     /**
-     * Deletion Log ID for the specific record that was merged
+     * Deletion Log ID (uniqueidentifier) for the specific record that was merged
      */
-    RecordMergeDeletionLogID: number | null
+    RecordMergeDeletionLogID: string | null
     /**
      * Status message, if any, for the specific record that was merged
      */

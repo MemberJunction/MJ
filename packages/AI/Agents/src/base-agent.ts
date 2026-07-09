@@ -49,6 +49,7 @@ import { ActionEngineServer } from '@memberjunction/actions';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import { AgentMemoryContextBuilder } from './agent-memory-context-builder';
 import { PromptComponentResolver, InjectScopedPromptParts } from './prompt-component-resolver';
+import { ScopedPromptConfigResolver, ApplyScopedPromptConfig } from './scoped-prompt-config-resolver';
 import { AgentPreExecutionRAGResult } from './agent-pre-execution-rag';
 import {
     AIPromptParams,
@@ -3496,6 +3497,38 @@ export class BaseAgent {
 
         // Thread the per-request provider so prompt run records are saved through the isolated provider
         promptParams.provider = params.provider || this._activeProvider;
+
+        // Overlay scope-resolved run settings (model / vendor / configuration / effort / sampling
+        // knobs) for this run's scope — the config sibling of scoped prompt parts. Uses the same
+        // run scope BaseAgent already carries; runtime-explicit values set above still win.
+        const scopedConfigPromptId = promptParams.prompt?.ID;
+        if (scopedConfigPromptId) {
+            const primaryScopeEntityName =
+                params.PrimaryScopeEntityName ?? (params.data?.PrimaryScopeEntityName as string | undefined);
+            let primaryScopeEntityId: string | undefined;
+            if (primaryScopeEntityName) {
+                const primaryEntity = this.ProviderToUse.EntityByName(primaryScopeEntityName);
+                if (primaryEntity) {
+                    primaryScopeEntityId = primaryEntity.ID;
+                }
+            }
+            const configResolver =
+                MJGlobal.Instance.ClassFactory.CreateInstance<ScopedPromptConfigResolver>(ScopedPromptConfigResolver) ??
+                new ScopedPromptConfigResolver();
+            ApplyScopedPromptConfig(
+                configResolver,
+                scopedConfigPromptId,
+                {
+                    primaryScopeEntityId,
+                    primaryScopeRecordId:
+                        params.PrimaryScopeRecordID ?? (params.data?.PrimaryScopeRecordID as string | undefined),
+                    secondaryScopes:
+                        params.SecondaryScopes ??
+                        (params.data?.SecondaryScopes as Record<string, SecondaryScopeValue> | undefined),
+                },
+                promptParams,
+            );
+        }
 
         return promptParams;
     }

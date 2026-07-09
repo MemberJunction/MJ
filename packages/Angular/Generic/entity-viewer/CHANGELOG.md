@@ -1,5 +1,51 @@
 # @memberjunction/ng-entity-viewer
 
+## 5.46.0
+
+### Patch Changes
+
+- Updated dependencies [d526470]
+- Updated dependencies [84fa44c]
+- Updated dependencies [33741fc]
+- Updated dependencies [ef3e802]
+  - @memberjunction/core@5.46.0
+  - @memberjunction/core-entities@5.46.0
+  - @memberjunction/actions-base@5.46.0
+  - @memberjunction/ng-base-types@5.46.0
+  - @memberjunction/ng-entity-action-ux@5.46.0
+  - @memberjunction/ng-filter-builder@5.46.0
+  - @memberjunction/ng-list-management@5.46.0
+  - @memberjunction/ng-map-view@5.46.0
+  - @memberjunction/ng-record-changes@5.46.0
+  - @memberjunction/ng-shared-generic@5.46.0
+  - @memberjunction/ng-timeline@5.46.0
+  - @memberjunction/ng-export-service@5.46.0
+  - @memberjunction/ng-pagination@5.46.0
+  - @memberjunction/ng-ui-components@5.46.0
+  - @memberjunction/export-engine@5.46.0
+  - @memberjunction/global@5.46.0
+
+## 5.45.1
+
+### Patch Changes
+
+- @memberjunction/ng-list-management@5.45.1
+- @memberjunction/ng-entity-action-ux@5.45.1
+- @memberjunction/ng-record-changes@5.45.1
+- @memberjunction/actions-base@5.45.1
+- @memberjunction/ng-base-types@5.45.1
+- @memberjunction/ng-export-service@5.45.1
+- @memberjunction/ng-filter-builder@5.45.1
+- @memberjunction/ng-map-view@5.45.1
+- @memberjunction/ng-pagination@5.45.1
+- @memberjunction/ng-shared-generic@5.45.1
+- @memberjunction/ng-timeline@5.45.1
+- @memberjunction/ng-ui-components@5.45.1
+- @memberjunction/core@5.45.1
+- @memberjunction/core-entities@5.45.1
+- @memberjunction/export-engine@5.45.1
+- @memberjunction/global@5.45.1
+
 ## 5.45.0
 
 ### Patch Changes
