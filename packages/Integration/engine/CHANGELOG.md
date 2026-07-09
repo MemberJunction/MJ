@@ -1,5 +1,20 @@
 # @memberjunction/integration-engine
 
+## 5.46.0
+
+### Patch Changes
+
+- Updated dependencies [d526470]
+- Updated dependencies [84fa44c]
+- Updated dependencies [33741fc]
+- Updated dependencies [ef3e802]
+  - @memberjunction/core@5.46.0
+  - @memberjunction/core-entities@5.46.0
+  - @memberjunction/integration-engine-base@5.46.0
+  - @memberjunction/integration-pk-classifier@5.46.0
+  - @memberjunction/integration-progress-artifacts@5.46.0
+  - @memberjunction/global@5.46.0
+
 ## 5.45.1
 
 ### Patch Changes

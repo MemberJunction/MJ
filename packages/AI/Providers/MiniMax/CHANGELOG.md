@@ -1,5 +1,13 @@
 # @memberjunction/ai-minimax
 
+## 5.46.0
+
+### Patch Changes
+
+- @memberjunction/ai@5.46.0
+- @memberjunction/ai-openai@5.46.0
+- @memberjunction/global@5.46.0
+
 ## 5.45.1
 
 ### Patch Changes

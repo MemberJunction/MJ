@@ -1,5 +1,37 @@
 # @memberjunction/core-entities-server
 
+## 5.46.0
+
+### Patch Changes
+
+- Updated dependencies [d526470]
+- Updated dependencies [84fa44c]
+- Updated dependencies [33741fc]
+- Updated dependencies [ef3e802]
+  - @memberjunction/core@5.46.0
+  - @memberjunction/core-entities@5.46.0
+  - @memberjunction/ai-engine-base@5.46.0
+  - @memberjunction/aiengine@5.46.0
+  - @memberjunction/ai-prompts@5.46.0
+  - @memberjunction/ai-core-plus@5.46.0
+  - @memberjunction/tag-engine@5.46.0
+  - @memberjunction/ai-vectordb@5.46.0
+  - @memberjunction/ai-vector-dupe@5.46.0
+  - @memberjunction/ai-vectors-memory@5.46.0
+  - @memberjunction/actions-base@5.46.0
+  - @memberjunction/doc-utils@5.46.0
+  - @memberjunction/generic-database-provider@5.46.0
+  - @memberjunction/integration-engine@5.46.0
+  - @memberjunction/integration-pk-classifier@5.46.0
+  - @memberjunction/sqlserver-dataprovider@5.46.0
+  - @memberjunction/scheduling-engine@5.46.0
+  - @memberjunction/ai-provider-bundle@5.46.0
+  - @memberjunction/ai@5.46.0
+  - @memberjunction/global@5.46.0
+  - @memberjunction/sql-converter@5.46.0
+  - @memberjunction/sql-dialect@5.46.0
+  - @memberjunction/sql-parser@5.46.0
+
 ## 5.45.1
 
 ### Patch Changes

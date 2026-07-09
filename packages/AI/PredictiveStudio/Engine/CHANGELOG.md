@@ -1,5 +1,26 @@
 # @memberjunction/predictive-studio
 
+## 5.46.0
+
+### Patch Changes
+
+- Updated dependencies [d526470]
+- Updated dependencies [84fa44c]
+- Updated dependencies [33741fc]
+- Updated dependencies [ef3e802]
+  - @memberjunction/core@5.46.0
+  - @memberjunction/core-entities@5.46.0
+  - @memberjunction/ai-agents@5.46.0
+  - @memberjunction/ai-core-plus@5.46.0
+  - @memberjunction/actions-base@5.46.0
+  - @memberjunction/actions@5.46.0
+  - @memberjunction/record-set-processor-base@5.46.0
+  - @memberjunction/record-set-processor@5.46.0
+  - @memberjunction/ai@5.46.0
+  - @memberjunction/predictive-studio-core@5.46.0
+  - @memberjunction/predictive-studio-sidecar@5.46.0
+  - @memberjunction/global@5.46.0
+
 ## 5.45.1
 
 ### Patch Changes

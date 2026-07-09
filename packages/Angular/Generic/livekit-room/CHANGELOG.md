@@ -1,5 +1,13 @@
 # @memberjunction/ng-livekit-room
 
+## 5.46.0
+
+### Patch Changes
+
+- @memberjunction/ng-whiteboard@5.46.0
+- @memberjunction/ng-ui-components@5.46.0
+- @memberjunction/livekit-room-core@5.46.0
+
 ## 5.45.1
 
 ### Patch Changes
