@@ -1,5 +1,7 @@
 # Change Log - @memberjunction/global
 
+## 5.45.1
+
 ## 5.45.0
 
 ### Minor Changes

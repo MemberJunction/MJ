@@ -1,5 +1,16 @@
 # @memberjunction/ng-entity-action-ux
 
+## 5.45.1
+
+### Patch Changes
+
+- @memberjunction/graphql-dataprovider@5.45.1
+- @memberjunction/ng-ui-components@5.45.1
+- @memberjunction/core@5.45.1
+- @memberjunction/core-entities@5.45.1
+- @memberjunction/global@5.45.1
+- @memberjunction/record-set-processor-base@5.45.1
+
 ## 5.45.0
 
 ### Patch Changes

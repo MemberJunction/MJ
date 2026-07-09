@@ -1,5 +1,38 @@
 # @memberjunction/ai-provider-bundle
 
+## 5.45.1
+
+### Patch Changes
+
+- @memberjunction/ai-vectors-pinecone@5.45.1
+- @memberjunction/ai-anthropic@5.45.1
+- @memberjunction/ai-assemblyai@5.45.1
+- @memberjunction/ai-azure@5.45.1
+- @memberjunction/ai-bedrock@5.45.1
+- @memberjunction/ai-betty-bot@5.45.1
+- @memberjunction/ai-blackforestlabs@5.45.1
+- @memberjunction/ai-cerebras@5.45.1
+- @memberjunction/ai-cohere@5.45.1
+- @memberjunction/ai-elevenlabs@5.45.1
+- @memberjunction/ai-fireworks@5.45.1
+- @memberjunction/ai-gemini@5.45.1
+- @memberjunction/ai-groq@5.45.1
+- @memberjunction/ai-heygen@5.45.1
+- @memberjunction/ai-inception@5.45.1
+- @memberjunction/ai-inworld@5.45.1
+- @memberjunction/ai-lmstudio@5.45.1
+- @memberjunction/ai-llamacpp@5.45.1
+- @memberjunction/ai-local-embeddings@5.45.1
+- @memberjunction/ai-minimax@5.45.1
+- @memberjunction/ai-mistral@5.45.1
+- @memberjunction/ai-ollama@5.45.1
+- @memberjunction/ai-openai@5.45.1
+- @memberjunction/ai-openrouter@5.45.1
+- @memberjunction/ai-recommendations-rex@5.45.1
+- @memberjunction/ai-vertex@5.45.1
+- @memberjunction/ai-zhipu@5.45.1
+- @memberjunction/ai-xai@5.45.1
+
 ## 5.45.0
 
 ### Patch Changes
