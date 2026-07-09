@@ -1,5 +1,16 @@
 # @memberjunction/integration-engine
 
+## 5.45.1
+
+### Patch Changes
+
+- @memberjunction/integration-engine-base@5.45.1
+- @memberjunction/integration-pk-classifier@5.45.1
+- @memberjunction/integration-progress-artifacts@5.45.1
+- @memberjunction/core@5.45.1
+- @memberjunction/core-entities@5.45.1
+- @memberjunction/global@5.45.1
+
 ## 5.45.0
 
 ### Minor Changes

@@ -1,5 +1,101 @@
 # Change Log - @memberjunction/server
 
+## 5.45.1
+
+### Patch Changes
+
+- 572d219: Render agent final-response streaming in the conversation chat. Adds an optional `kind` discriminator to agent streaming chunks — `'final-response'` marks deltas of the user-facing reply — passed through the server's PubSub payload; the conversation client now routes those chunks, accumulates deltas service-side, renders the growing text in the message bubble, and reconciles with the saved final message on completion. Unmarked streams (e.g. Loop-agent JSON turn envelopes) keep today's behavior exactly (dropped), so agents that don't opt in are unaffected.
+- 108a1d3: Fix v5.45 migration bugs: dynamically resolve FK constraint name in APIKeyUsageLog cascade delete (SQL Server + PostgreSQL) and deactivate Skip agent instead of deleting it in Metadata Sync. Add commit-message version override (`[version:X.Y.Z]`) to publish workflow.
+- aedfe44: Fix magic-link redemption on PostgreSQL. The atomic single-use consume SQL was T-SQL-only, so redemption on PG failed with a syntax error and minted no session. buildConsumeInviteSQL is now dialect-aware
+- Updated dependencies [572d219]
+  - @memberjunction/ai-core-plus@5.45.1
+  - @memberjunction/ai-agent-manager-actions@5.45.1
+  - @memberjunction/ai-agent-manager@5.45.1
+  - @memberjunction/ai-agents@5.45.1
+  - @memberjunction/ai-engine-base@5.45.1
+  - @memberjunction/clustering-engine@5.45.1
+  - @memberjunction/aiengine@5.45.1
+  - @memberjunction/tag-engine@5.45.1
+  - @memberjunction/computer-use-engine@5.45.1
+  - @memberjunction/ai-prompts@5.45.1
+  - @memberjunction/ai-vector-sync@5.45.1
+  - @memberjunction/core-actions@5.45.1
+  - @memberjunction/codegen-lib@5.45.1
+  - @memberjunction/graphql-dataprovider@5.45.1
+  - @memberjunction/core-entities-server@5.45.1
+  - @memberjunction/scheduling-engine@5.45.1
+  - @memberjunction/templates@5.45.1
+  - @memberjunction/testing-engine@5.45.1
+  - @memberjunction/ai-vectors-pinecone@5.45.1
+  - @memberjunction/communication-ms-graph@5.45.1
+  - @memberjunction/generic-database-provider@5.45.1
+  - @memberjunction/queue@5.45.1
+  - @memberjunction/sqlserver-dataprovider@5.45.1
+  - @memberjunction/search-engine@5.45.1
+  - @memberjunction/communication-engine@5.45.1
+  - @memberjunction/notifications@5.45.1
+  - @memberjunction/ai-provider-bundle@5.45.1
+  - @memberjunction/postgresql-dataprovider@5.45.1
+  - @memberjunction/schema-engine@5.45.1
+  - @memberjunction/external-change-detection@5.45.1
+  - @memberjunction/entity-communications-server@5.45.1
+  - @memberjunction/integration-schema-builder@5.45.1
+  - @memberjunction/computer-use@5.45.1
+  - @memberjunction/ai@5.45.1
+  - @memberjunction/tag-engine-base@5.45.1
+  - @memberjunction/ai-mcp-client@5.45.1
+  - @memberjunction/ai-bridge-base@5.45.1
+  - @memberjunction/ai-bridge-ringcentral@5.45.1
+  - @memberjunction/ai-bridge-teams@5.45.1
+  - @memberjunction/ai-bridge-twilio@5.45.1
+  - @memberjunction/ai-bridge-vonage@5.45.1
+  - @memberjunction/ai-bridge-server@5.45.1
+  - @memberjunction/remote-browser-base@5.45.1
+  - @memberjunction/remote-browser-cdp@5.45.1
+  - @memberjunction/remote-browser-selfhost@5.45.1
+  - @memberjunction/remote-browser-server@5.45.1
+  - @memberjunction/ai-vectordb@5.45.1
+  - @memberjunction/api-keys@5.45.1
+  - @memberjunction/actions-apollo@5.45.1
+  - @memberjunction/actions-base@5.45.1
+  - @memberjunction/actions-bizapps-accounting@5.45.1
+  - @memberjunction/actions-bizapps-crm@5.45.1
+  - @memberjunction/actions-bizapps-formbuilders@5.45.1
+  - @memberjunction/actions-bizapps-lms@5.45.1
+  - @memberjunction/actions-bizapps-social@5.45.1
+  - @memberjunction/actions@5.45.1
+  - @memberjunction/auth-providers@5.45.1
+  - @memberjunction/communication-types@5.45.1
+  - @memberjunction/entity-communications-base@5.45.1
+  - @memberjunction/communication-sendgrid@5.45.1
+  - @memberjunction/component-registry-client-sdk@5.45.1
+  - @memberjunction/config@5.45.1
+  - @memberjunction/credentials@5.45.1
+  - @memberjunction/doc-utils@5.45.1
+  - @memberjunction/encryption@5.45.1
+  - @memberjunction/integration-engine@5.45.1
+  - @memberjunction/integration-progress-artifacts@5.45.1
+  - @memberjunction/interactive-component-types@5.45.1
+  - @memberjunction/lists-base@5.45.1
+  - @memberjunction/lists@5.45.1
+  - @memberjunction/livekit-room-server@5.45.1
+  - @memberjunction/core@5.45.1
+  - @memberjunction/core-entities@5.45.1
+  - @memberjunction/data-context@5.45.1
+  - @memberjunction/data-context-server@5.45.1
+  - @memberjunction/global@5.45.1
+  - @memberjunction/storage@5.45.1
+  - @memberjunction/record-comparison@5.45.1
+  - @memberjunction/redis-provider@5.45.1
+  - @memberjunction/sql-dialect@5.45.1
+  - @memberjunction/scheduling-actions@5.45.1
+  - @memberjunction/scheduling-engine-base@5.45.1
+  - @memberjunction/scheduling-base-types@5.45.1
+  - @memberjunction/server-extensions-core@5.45.1
+  - @memberjunction/testing-engine-base@5.45.1
+  - @memberjunction/version-history@5.45.1
+  - @memberjunction/esignature@5.45.1
+
 ## 5.45.0
 
 ### Minor Changes

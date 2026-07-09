@@ -1,5 +1,12 @@
 # @memberjunction/esignature-docusign
 
+## 5.45.1
+
+### Patch Changes
+
+- @memberjunction/global@5.45.1
+- @memberjunction/esignature@5.45.1
+
 ## 5.45.0
 
 ### Patch Changes

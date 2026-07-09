@@ -11763,8 +11763,268 @@ SET
 
 GO
 
--- Delete MJ: AI Agents (core SP call only)
-EXEC [${flyway:defaultSchema}].[spDeleteAIAgent] @ID = 'A829FAAC-9E64-440C-B650-83F92A37E990';
+
+-- Save MJ: AI Agents (core SP call only)
+DECLARE @Name_15595692 NVARCHAR(255),
+@Description_15595692 NVARCHAR(MAX),
+@LogoURL_15595692 NVARCHAR(255),
+@ParentID_15595692 UNIQUEIDENTIFIER,
+@ExposeAsAction_15595692 BIT,
+@ExecutionOrder_15595692 INT,
+@ExecutionMode_15595692 NVARCHAR(20),
+@EnableContextCompression_15595692 BIT,
+@ContextCompressionMessageThreshold_15595692 INT,
+@ContextCompressionPromptID_15595692 UNIQUEIDENTIFIER,
+@ContextCompressionMessageRetentionCount_15595692 INT,
+@TypeID_15595692 UNIQUEIDENTIFIER,
+@Status_15595692 NVARCHAR(20),
+@DriverClass_15595692 NVARCHAR(255),
+@IconClass_15595692 NVARCHAR(100),
+@ModelSelectionMode_15595692 NVARCHAR(50),
+@PayloadDownstreamPaths_15595692 NVARCHAR(MAX),
+@PayloadUpstreamPaths_15595692 NVARCHAR(MAX),
+@PayloadSelfReadPaths_15595692 NVARCHAR(MAX),
+@PayloadSelfWritePaths_15595692 NVARCHAR(MAX),
+@PayloadScope_15595692 NVARCHAR(MAX),
+@FinalPayloadValidation_15595692 NVARCHAR(MAX),
+@FinalPayloadValidationMode_15595692 NVARCHAR(25),
+@FinalPayloadValidationMaxRetries_15595692 INT,
+@MaxCostPerRun_15595692 DECIMAL(10, 4),
+@MaxTokensPerRun_15595692 INT,
+@MaxIterationsPerRun_15595692 INT,
+@MaxTimePerRun_15595692 INT,
+@MinExecutionsPerRun_15595692 INT,
+@MaxExecutionsPerRun_15595692 INT,
+@StartingPayloadValidation_15595692 NVARCHAR(MAX),
+@StartingPayloadValidationMode_15595692 NVARCHAR(25),
+@DefaultPromptEffortLevel_15595692 INT,
+@ChatHandlingOption_15595692 NVARCHAR(30),
+@DefaultArtifactTypeID_15595692 UNIQUEIDENTIFIER,
+@OwnerUserID_15595692 UNIQUEIDENTIFIER,
+@InvocationMode_15595692 NVARCHAR(20),
+@ArtifactCreationMode_15595692 NVARCHAR(20),
+@FunctionalRequirements_15595692 NVARCHAR(MAX),
+@TechnicalDesign_15595692 NVARCHAR(MAX),
+@InjectNotes_15595692 BIT,
+@MaxNotesToInject_15595692 INT,
+@NoteInjectionStrategy_15595692 NVARCHAR(20),
+@InjectExamples_15595692 BIT,
+@MaxExamplesToInject_15595692 INT,
+@ExampleInjectionStrategy_15595692 NVARCHAR(20),
+@IsRestricted_15595692 BIT,
+@MessageMode_15595692 NVARCHAR(50),
+@MaxMessages_15595692 INT,
+@AttachmentStorageProviderID_15595692 UNIQUEIDENTIFIER,
+@AttachmentRootPath_15595692 NVARCHAR(500),
+@InlineStorageThresholdBytes_15595692 INT,
+@AgentTypePromptParams_15595692 NVARCHAR(MAX),
+@ScopeConfig_15595692 NVARCHAR(MAX),
+@NoteRetentionDays_15595692 INT,
+@ExampleRetentionDays_15595692 INT,
+@AutoArchiveEnabled_15595692 BIT,
+@RerankerConfiguration_15595692 NVARCHAR(MAX),
+@CategoryID_15595692 UNIQUEIDENTIFIER,
+@AllowEphemeralClientTools_15595692 BIT,
+@DefaultStorageAccountID_15595692 UNIQUEIDENTIFIER,
+@SearchScopeAccess_15595692 NVARCHAR(20),
+@AcceptUnregisteredFiles_15595692 BIT,
+@DefaultCoAgentID_15595692 UNIQUEIDENTIFIER,
+@TypeConfiguration_15595692 NVARCHAR(MAX),
+@AllowMemoryWrite_15595692 BIT,
+@RecordingDefault_15595692 NVARCHAR(20),
+@RecordingStorageProviderID_15595692 UNIQUEIDENTIFIER,
+@DefaultMediaCollectionID_15595692 UNIQUEIDENTIFIER,
+@SupportsPlanMode_15595692 BIT,
+@AcceptsSkills_15595692 NVARCHAR(20),
+@SkillActivationMode_15595692 NVARCHAR(20),
+@RequirePlanMode_15595692 BIT,
+@ID_15595692 UNIQUEIDENTIFIER
+SET
+  @Name_15595692 = N'Skip'
+SET
+  @Description_15595692 = N'Data analytics and reporting expert that can create charts, graphs, dashboards and provide insights on data'
+SET
+  @ExposeAsAction_15595692 = 1
+SET
+  @ExecutionOrder_15595692 = 0
+SET
+  @ExecutionMode_15595692 = N'Sequential'
+SET
+  @EnableContextCompression_15595692 = 0
+SET
+  @TypeID_15595692 = 'F7926101-5099-4FA5-836A-479D9707C818'
+SET
+  @Status_15595692 = N'Disabled'
+SET
+  @DriverClass_15595692 = N'SkipProxyAgent'
+SET
+  @IconClass_15595692 = N'mj-icon-skip'
+SET
+  @ModelSelectionMode_15595692 = N'Agent Type'
+SET
+  @PayloadDownstreamPaths_15595692 = N'["*"]'
+SET
+  @PayloadUpstreamPaths_15595692 = N'["*"]'
+SET
+  @FinalPayloadValidationMode_15595692 = N'Retry'
+SET
+  @FinalPayloadValidationMaxRetries_15595692 = 3
+SET
+  @StartingPayloadValidationMode_15595692 = N'Fail'
+SET
+  @DefaultArtifactTypeID_15595692 = 'E8BA10A3-019F-4C51-A8AA-397AB124F212'
+SET
+  @OwnerUserID_15595692 = 'ECAFCCEC-6A37-EF11-86D4-000D3A4E707E'
+SET
+  @InvocationMode_15595692 = N'Any'
+SET
+  @ArtifactCreationMode_15595692 = N'Always'
+SET
+  @InjectNotes_15595692 = 1
+SET
+  @MaxNotesToInject_15595692 = 5
+SET
+  @NoteInjectionStrategy_15595692 = N'Relevant'
+SET
+  @InjectExamples_15595692 = 0
+SET
+  @MaxExamplesToInject_15595692 = 3
+SET
+  @ExampleInjectionStrategy_15595692 = N'Semantic'
+SET
+  @IsRestricted_15595692 = 0
+SET
+  @MessageMode_15595692 = N'None'
+SET
+  @AutoArchiveEnabled_15595692 = 1
+SET
+  @CategoryID_15595692 = 'B9CB7669-D205-484A-9E9C-4C609827113A'
+SET
+  @AllowEphemeralClientTools_15595692 = 1
+SET
+  @SearchScopeAccess_15595692 = N'None'
+SET
+  @AcceptUnregisteredFiles_15595692 = 0
+SET
+  @AllowMemoryWrite_15595692 = 1
+SET
+  @SupportsPlanMode_15595692 = 1
+SET
+  @AcceptsSkills_15595692 = N'None'
+SET
+  @SkillActivationMode_15595692 = N'RequestedOnly'
+SET
+  @RequirePlanMode_15595692 = 0
+SET
+  @ID_15595692 = 'A829FAAC-9E64-440C-B650-83F92A37E990' EXEC [${flyway:defaultSchema}].spUpdateAIAgent @Name = @Name_15595692,
+  @Description = @Description_15595692,
+  @LogoURL = @LogoURL_15595692,
+  @LogoURL_Clear = 1,
+  @ParentID = @ParentID_15595692,
+  @ParentID_Clear = 1,
+  @ExposeAsAction = @ExposeAsAction_15595692,
+  @ExecutionOrder = @ExecutionOrder_15595692,
+  @ExecutionMode = @ExecutionMode_15595692,
+  @EnableContextCompression = @EnableContextCompression_15595692,
+  @ContextCompressionMessageThreshold = @ContextCompressionMessageThreshold_15595692,
+  @ContextCompressionMessageThreshold_Clear = 1,
+  @ContextCompressionPromptID = @ContextCompressionPromptID_15595692,
+  @ContextCompressionPromptID_Clear = 1,
+  @ContextCompressionMessageRetentionCount = @ContextCompressionMessageRetentionCount_15595692,
+  @ContextCompressionMessageRetentionCount_Clear = 1,
+  @TypeID = @TypeID_15595692,
+  @Status = @Status_15595692,
+  @DriverClass = @DriverClass_15595692,
+  @IconClass = @IconClass_15595692,
+  @ModelSelectionMode = @ModelSelectionMode_15595692,
+  @PayloadDownstreamPaths = @PayloadDownstreamPaths_15595692,
+  @PayloadUpstreamPaths = @PayloadUpstreamPaths_15595692,
+  @PayloadSelfReadPaths = @PayloadSelfReadPaths_15595692,
+  @PayloadSelfReadPaths_Clear = 1,
+  @PayloadSelfWritePaths = @PayloadSelfWritePaths_15595692,
+  @PayloadSelfWritePaths_Clear = 1,
+  @PayloadScope = @PayloadScope_15595692,
+  @PayloadScope_Clear = 1,
+  @FinalPayloadValidation = @FinalPayloadValidation_15595692,
+  @FinalPayloadValidation_Clear = 1,
+  @FinalPayloadValidationMode = @FinalPayloadValidationMode_15595692,
+  @FinalPayloadValidationMaxRetries = @FinalPayloadValidationMaxRetries_15595692,
+  @MaxCostPerRun = @MaxCostPerRun_15595692,
+  @MaxCostPerRun_Clear = 1,
+  @MaxTokensPerRun = @MaxTokensPerRun_15595692,
+  @MaxTokensPerRun_Clear = 1,
+  @MaxIterationsPerRun = @MaxIterationsPerRun_15595692,
+  @MaxIterationsPerRun_Clear = 1,
+  @MaxTimePerRun = @MaxTimePerRun_15595692,
+  @MaxTimePerRun_Clear = 1,
+  @MinExecutionsPerRun = @MinExecutionsPerRun_15595692,
+  @MinExecutionsPerRun_Clear = 1,
+  @MaxExecutionsPerRun = @MaxExecutionsPerRun_15595692,
+  @MaxExecutionsPerRun_Clear = 1,
+  @StartingPayloadValidation = @StartingPayloadValidation_15595692,
+  @StartingPayloadValidation_Clear = 1,
+  @StartingPayloadValidationMode = @StartingPayloadValidationMode_15595692,
+  @DefaultPromptEffortLevel = @DefaultPromptEffortLevel_15595692,
+  @DefaultPromptEffortLevel_Clear = 1,
+  @ChatHandlingOption = @ChatHandlingOption_15595692,
+  @ChatHandlingOption_Clear = 1,
+  @DefaultArtifactTypeID = @DefaultArtifactTypeID_15595692,
+  @OwnerUserID = @OwnerUserID_15595692,
+  @InvocationMode = @InvocationMode_15595692,
+  @ArtifactCreationMode = @ArtifactCreationMode_15595692,
+  @FunctionalRequirements = @FunctionalRequirements_15595692,
+  @FunctionalRequirements_Clear = 1,
+  @TechnicalDesign = @TechnicalDesign_15595692,
+  @TechnicalDesign_Clear = 1,
+  @InjectNotes = @InjectNotes_15595692,
+  @MaxNotesToInject = @MaxNotesToInject_15595692,
+  @NoteInjectionStrategy = @NoteInjectionStrategy_15595692,
+  @InjectExamples = @InjectExamples_15595692,
+  @MaxExamplesToInject = @MaxExamplesToInject_15595692,
+  @ExampleInjectionStrategy = @ExampleInjectionStrategy_15595692,
+  @IsRestricted = @IsRestricted_15595692,
+  @MessageMode = @MessageMode_15595692,
+  @MaxMessages = @MaxMessages_15595692,
+  @MaxMessages_Clear = 1,
+  @AttachmentStorageProviderID = @AttachmentStorageProviderID_15595692,
+  @AttachmentStorageProviderID_Clear = 1,
+  @AttachmentRootPath = @AttachmentRootPath_15595692,
+  @AttachmentRootPath_Clear = 1,
+  @InlineStorageThresholdBytes = @InlineStorageThresholdBytes_15595692,
+  @InlineStorageThresholdBytes_Clear = 1,
+  @AgentTypePromptParams = @AgentTypePromptParams_15595692,
+  @AgentTypePromptParams_Clear = 1,
+  @ScopeConfig = @ScopeConfig_15595692,
+  @ScopeConfig_Clear = 1,
+  @NoteRetentionDays = @NoteRetentionDays_15595692,
+  @NoteRetentionDays_Clear = 1,
+  @ExampleRetentionDays = @ExampleRetentionDays_15595692,
+  @ExampleRetentionDays_Clear = 1,
+  @AutoArchiveEnabled = @AutoArchiveEnabled_15595692,
+  @RerankerConfiguration = @RerankerConfiguration_15595692,
+  @RerankerConfiguration_Clear = 1,
+  @CategoryID = @CategoryID_15595692,
+  @AllowEphemeralClientTools = @AllowEphemeralClientTools_15595692,
+  @DefaultStorageAccountID = @DefaultStorageAccountID_15595692,
+  @DefaultStorageAccountID_Clear = 1,
+  @SearchScopeAccess = @SearchScopeAccess_15595692,
+  @AcceptUnregisteredFiles = @AcceptUnregisteredFiles_15595692,
+  @DefaultCoAgentID = @DefaultCoAgentID_15595692,
+  @DefaultCoAgentID_Clear = 1,
+  @TypeConfiguration = @TypeConfiguration_15595692,
+  @TypeConfiguration_Clear = 1,
+  @AllowMemoryWrite = @AllowMemoryWrite_15595692,
+  @RecordingDefault = @RecordingDefault_15595692,
+  @RecordingDefault_Clear = 1,
+  @RecordingStorageProviderID = @RecordingStorageProviderID_15595692,
+  @RecordingStorageProviderID_Clear = 1,
+  @DefaultMediaCollectionID = @DefaultMediaCollectionID_15595692,
+  @DefaultMediaCollectionID_Clear = 1,
+  @SupportsPlanMode = @SupportsPlanMode_15595692,
+  @AcceptsSkills = @AcceptsSkills_15595692,
+  @SkillActivationMode = @SkillActivationMode_15595692,
+  @RequirePlanMode = @RequirePlanMode_15595692,
+  @ID = @ID_15595692;
 
 GO
 
