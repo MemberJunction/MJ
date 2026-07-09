@@ -1,5 +1,13 @@
 # @memberjunction/communication-expo-push
 
+## 5.45.1
+
+### Patch Changes
+
+- @memberjunction/communication-types@5.45.1
+- @memberjunction/core@5.45.1
+- @memberjunction/global@5.45.1
+
 ## 5.45.0
 
 ### Minor Changes

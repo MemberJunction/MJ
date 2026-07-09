@@ -1,5 +1,17 @@
 # @memberjunction/livekit-room-server
 
+## 5.45.1
+
+### Patch Changes
+
+- @memberjunction/ai@5.45.1
+- @memberjunction/ai-bridge-base@5.45.1
+- @memberjunction/ai-bridge-livekit@5.45.1
+- @memberjunction/ai-bridge-server@5.45.1
+- @memberjunction/core@5.45.1
+- @memberjunction/core-entities@5.45.1
+- @memberjunction/global@5.45.1
+
 ## 5.45.0
 
 ### Patch Changes

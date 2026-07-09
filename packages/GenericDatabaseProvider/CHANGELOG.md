@@ -1,5 +1,23 @@
 # @memberjunction/generic-database-provider
 
+## 5.45.1
+
+### Patch Changes
+
+- @memberjunction/aiengine@5.45.1
+- @memberjunction/queue@5.45.1
+- @memberjunction/ai-vectors-memory@5.45.1
+- @memberjunction/actions-base@5.45.1
+- @memberjunction/actions@5.45.1
+- @memberjunction/encryption@5.45.1
+- @memberjunction/core@5.45.1
+- @memberjunction/core-entities@5.45.1
+- @memberjunction/global@5.45.1
+- @memberjunction/query-processor@5.45.1
+- @memberjunction/sql-dialect@5.45.1
+- @memberjunction/sql-parser@5.45.1
+- @memberjunction/geo-core@5.45.1
+
 ## 5.45.0
 
 ### Minor Changes

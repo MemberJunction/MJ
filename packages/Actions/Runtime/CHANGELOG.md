@@ -1,5 +1,15 @@
 # @memberjunction/action-runtime
 
+## 5.45.1
+
+### Patch Changes
+
+- @memberjunction/actions-base@5.45.1
+- @memberjunction/code-execution@5.45.1
+- @memberjunction/core@5.45.1
+- @memberjunction/core-entities@5.45.1
+- @memberjunction/global@5.45.1
+
 ## 5.45.0
 
 ### Patch Changes

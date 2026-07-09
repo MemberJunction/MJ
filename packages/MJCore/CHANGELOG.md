@@ -1,5 +1,12 @@
 # Change Log - @memberjunction/core
 
+## 5.45.1
+
+### Patch Changes
+
+- @memberjunction/global@5.45.1
+- @memberjunction/sql-dialect@5.45.1
+
 ## 5.45.0
 
 ### Minor Changes

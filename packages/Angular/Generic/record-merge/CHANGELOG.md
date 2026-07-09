@@ -1,5 +1,15 @@
 # @memberjunction/ng-record-merge
 
+## 5.45.1
+
+### Patch Changes
+
+- @memberjunction/ng-shared-generic@5.45.1
+- @memberjunction/ng-ui-components@5.45.1
+- @memberjunction/core@5.45.1
+- @memberjunction/core-entities@5.45.1
+- @memberjunction/global@5.45.1
+
 ## 5.45.0
 
 ### Patch Changes
