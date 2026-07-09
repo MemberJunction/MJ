@@ -32,7 +32,7 @@ interface SessionOption {
   selector: 'ps-compare',
   imports: [CommonModule, FormsModule],
   encapsulation: ViewEncapsulation.None,
-  styleUrls: ['../predictive-studio.shared.scss', './ps-compare.component.scss'],
+  styleUrls: ['../predictive-studio.shared.css', './ps-compare.component.css'],
   template: `
     <div class="ps-panel ps-compare" data-testid="ps-compare-panel">
       @if (sessionOptions.length === 0) {

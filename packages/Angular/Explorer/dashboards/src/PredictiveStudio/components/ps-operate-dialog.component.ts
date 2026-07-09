@@ -44,7 +44,7 @@ const RUN_RECORD_PROCESS_JOB_TYPE = 'Run Record Process';
   selector: 'ps-operate-dialog',
   imports: [CommonModule, MJButtonDirective, MJDialogComponent, SchedulingModule],
   encapsulation: ViewEncapsulation.None,
-  styleUrls: ['../predictive-studio.shared.scss', './ps-operate-dialog.component.scss'],
+  styleUrls: ['../predictive-studio.shared.css', './ps-operate-dialog.component.css'],
   template: `
     <mj-dialog [Visible]="Visible" [Title]="'Operate · ' + modelLabel" [Width]="640" (Close)="onCancel()">
       <div class="ps-operate" data-testid="ps-operate-dialog">
