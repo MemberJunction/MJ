@@ -37,8 +37,13 @@ describe('resolvePSRecord', () => {
     expect(resolvePSRecord('  lapse likelihood ', cards)?.ID).toBe('BBB');
   });
 
-  it('falls back to a contains match on the name', () => {
+  it('falls back to a contains match on the name — but only when unambiguous', () => {
     expect(resolvePSRecord('renewal', cards)?.ID).toBe('AAA');
+  });
+
+  it('returns null (never a silent first-match) when the needle matches several names', () => {
+    const many = [...cards, { ID: 'CCC', Name: 'Renewal Amount' }];
+    expect(resolvePSRecord('renewal', many)).toBeNull();
   });
 
   it('returns null on a miss or empty input', () => {
@@ -57,6 +62,19 @@ describe('buildPSNotFoundError', () => {
 
   it('handles an empty candidate set', () => {
     expect(buildPSNotFoundError('x', [], 'section')).toContain('(none)');
+  });
+
+  it('becomes a "did you mean" listing exactly the contenders on an ambiguous partial match', () => {
+    const many = [
+      { ID: '1', Name: 'Renewal Risk' },
+      { ID: '2', Name: 'Renewal Amount' },
+      { ID: '3', Name: 'Lapse Likelihood' },
+    ];
+    const msg = buildPSNotFoundError('renewal', many, 'prediction');
+    expect(msg).toContain('did you mean');
+    expect(msg).toContain('Renewal Risk');
+    expect(msg).toContain('Renewal Amount');
+    expect(msg).not.toContain('Lapse Likelihood');
   });
 });
 

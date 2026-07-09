@@ -38,6 +38,13 @@ export interface PredictiveStudioBuildOutcome {
 /** The agent payload = the modeling plan the conversation accumulated, plus the builder's outcome. */
 export interface PredictiveStudioBuilderPayload extends ModelingPlanSpec {
   BuildResult?: PredictiveStudioBuildOutcome;
+  /**
+   * The count of USER messages in the conversation at the moment the orchestrator last FORCED a build
+   * (stamped by `PredictiveStudioModelDevAgent.determineNextStep`). After a **failed** build this is what
+   * distinguishes the stale "build it" message that triggered the failed attempt (same count → no re-force,
+   * the no-loop guard) from a FRESH user request to retry (higher count → deterministic rebuild).
+   */
+  BuildAttemptUserMessageCount?: number;
 }
 
 /** Project the rich {@link BuildPredictionResult} into the compact, payload-safe outcome (pure → testable). */

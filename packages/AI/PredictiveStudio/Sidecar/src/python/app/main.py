@@ -550,7 +550,7 @@ def _build_predictions(
     estimator: Any,
     X: np.ndarray,
     is_classification: bool,
-    label_classes: List[str] = None,
+    label_classes: Optional[List[str]] = None,
     feature_names: Optional[List[str]] = None,
 ) -> List[Prediction]:
     """Build one :class:`Prediction` per transformed row, in input order.

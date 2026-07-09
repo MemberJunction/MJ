@@ -25,4 +25,33 @@ describe('shouldForceBuild', () => {
     const built = { Approved: true, BuildResult: { success: true, published: true, heldReason: null, errorMessage: null } };
     expect(shouldForceBuild(built, 'build it')).toBe(false);
   });
+
+  describe('after a FAILED build', () => {
+    const failed = {
+      Approved: true,
+      BuildResult: { success: false, published: false, heldReason: null, errorMessage: 'train blew up' },
+      BuildAttemptUserMessageCount: 3,
+    };
+
+    it('does NOT re-force on the same stale "build it" message that triggered the failed attempt (no loop)', () => {
+      expect(shouldForceBuild(failed, 'build it', 3)).toBe(false);
+    });
+
+    it('DOES force a deterministic retry on a FRESH user message with build intent', () => {
+      expect(shouldForceBuild(failed, 'ok I fixed the data — build it now', 4)).toBe(true);
+    });
+
+    it('does NOT force on a fresh user message without build intent', () => {
+      expect(shouldForceBuild(failed, 'why did it fail?', 4)).toBe(false);
+    });
+
+    it('stays conservative (LLM routing) when no attempt stamp exists', () => {
+      const noStamp = { Approved: true, BuildResult: { success: false, published: false, heldReason: null, errorMessage: 'x' } };
+      expect(shouldForceBuild(noStamp, 'build it', 5)).toBe(false);
+    });
+
+    it('the stale Approved flag alone never re-forces after a failure', () => {
+      expect(shouldForceBuild(failed, 'thanks', 9)).toBe(false);
+    });
+  });
 });

@@ -88,7 +88,7 @@ const PS_PIPELINES_STARTER_PROMPT =
   selector: 'ps-pipelines',
   imports: [CommonModule, MJButtonDirective],
   encapsulation: ViewEncapsulation.None,
-  styleUrls: ['../predictive-studio.shared.scss', './ps-pipelines.component.scss'],
+  styleUrls: ['../predictive-studio.shared.css', './ps-pipelines.component.css'],
   template: `
     <div class="ps-panel ps-pipelines" data-testid="ps-pipelines-panel">
       @if (pipelines.length === 0) {

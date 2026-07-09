@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, inject } from '@angular/core';
-import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { NormalizeUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { LogError, RunView, UserInfo } from '@memberjunction/core';
 import { MJConversationEntity, MJEnvironmentEntityExtended, MJMLModelEntity, MJProcessRunDetailEntity, MJListEntity, MJListDetailEntity } from '@memberjunction/core-entities';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
@@ -274,7 +274,9 @@ const MODEL_DEV_AGENT_NAME = 'Model Development Agent';
       .ps-atrisk-error i { color: var(--mj-status-error); }
       .ps-atrisk-error .ps-atrisk-error-msg { flex: 1; min-width: 0; word-break: break-word; }
       .mono { font-family: var(--mj-font-family-mono); }
-      .ps-load-error { display: flex; align-items: center; gap: 14px; max-width: 620px; margin: 32px auto; padding: 18px 20px; border: 1px solid var(--mj-status-error-border); background: var(--mj-status-error-bg); border-radius: var(--mj-radius-md); }
+      /* Kept local (not in the shared stylesheet) deliberately: shared styles are injected by the
+         ViewEncapsulation.None PANEL components, and this banner renders precisely when panels DON'T. */
+      .ps-load-error { display: flex; align-items: center; gap: 14px; max-width: 620px; margin: 32px auto; padding: 18px 20px; border: 1px solid var(--mj-status-error-border); background: var(--mj-status-error-bg); border-radius: var(--mj-radius-lg); }
       .ps-load-error > i { font-size: 24px; color: var(--mj-status-error); }
       .ps-load-error-text { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
       .ps-load-error-text strong { color: var(--mj-text-primary); }
@@ -448,6 +450,9 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
     this.drivers = [];
     this.atRiskError = null;
     this.listResult = null;
+    // Mark loading BEFORE the publish below: otherwise AtRiskLoaded computes true for one publish with
+    // atRiskRows still [], fabricating "0 at risk" to the agent for a list that hasn't been fetched yet.
+    this.atRiskLoading = true;
     this.publishAgentContext();
     this.cdrLocal.detectChanges();
     void this.loadAtRisk(c);
@@ -505,21 +510,38 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
   }
 
   private async resolveAtRiskLabels(model: MJMLModelEntity | undefined): Promise<void> {
-    const target = this.targetEntityForModel(model);
-    if (!target || this.atRiskRows.length === 0) return;
-    const entityName = target.name;
-    const targets = this.atRiskRows.slice(0, 200); // the rows a user actually acts on
-    const ids = targets.map((r) => `'${r.recordId.replace(/'/g, "''")}'`);
-    const res = await RunView.FromMetadataProvider(this.ProviderToUse).RunView<Record<string, unknown>>(
-      { EntityName: entityName, ExtraFilter: `ID IN (${ids.join(',')})`, ResultType: 'simple', MaxRows: ids.length },
-      this.ProviderToUse.CurrentUser ?? undefined,
-    );
-    if (!res.Success) return;
-    const byId = new Map<string, Record<string, unknown>>();
-    for (const row of res.Results ?? []) byId.set(String((row as { ID?: unknown }).ID ?? '').toUpperCase(), row);
-    for (const r of this.atRiskRows) {
-      const rec = byId.get(r.recordId.toUpperCase());
-      if (rec) r.label = labelFromRecord(rec);
+    // Labels are cosmetic — any failure here degrades to record ids, it must never surface as a
+    // "couldn't load who's at risk" error that hides a perfectly good list.
+    try {
+      const target = this.targetEntityForModel(model);
+      if (!target || this.atRiskRows.length === 0) return;
+      const entity = this.ProviderToUse.EntityByName(target.name);
+      const targets = this.atRiskRows.slice(0, 200); // the rows a user actually acts on
+      const ids = targets.map((r) => `'${r.recordId.replace(/'/g, "''")}'`);
+      // Only fetch the columns labelFromRecord can actually use — a broad no-Fields fetch pulls every
+      // column (incl. large text/JSON) of an arbitrary entity just to render a display name. Fall back
+      // to the broad fetch only when the entity has none of the candidate label fields.
+      const candidates = ['Name', 'FirstName', 'LastName', 'Email'];
+      const labelFields = entity ? candidates.filter((c) => entity.Fields.some((f) => f.Name.toLowerCase() === c.toLowerCase())) : [];
+      const res = await RunView.FromMetadataProvider(this.ProviderToUse).RunView<Record<string, unknown>>(
+        {
+          EntityName: target.name,
+          ExtraFilter: `ID IN (${ids.join(',')})`,
+          ...(labelFields.length > 0 ? { Fields: ['ID', ...labelFields] } : {}),
+          ResultType: 'simple',
+          MaxRows: ids.length,
+        },
+        this.ProviderToUse.CurrentUser ?? undefined,
+      );
+      if (!res.Success) return;
+      const byId = new Map<string, Record<string, unknown>>();
+      for (const row of res.Results ?? []) byId.set(NormalizeUUID(String((row as { ID?: unknown }).ID ?? '')), row);
+      for (const r of this.atRiskRows) {
+        const rec = byId.get(NormalizeUUID(r.recordId));
+        if (rec) r.label = labelFromRecord(rec);
+      }
+    } catch (err) {
+      LogError(`PSPredictionsResource.resolveAtRiskLabels (cosmetic — list keeps ids): ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
@@ -564,7 +586,8 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
       const p = this.ProviderToUse;
       const user = p.CurrentUser ?? undefined;
       const list = await p.GetEntityObject<MJListEntity>('MJ: Lists', user);
-      list.Name = `At-Risk: ${this.selected.title} (${new Date().toISOString().slice(0, 10)})`;
+      // Minute-resolution timestamp so two sends on the same day don't produce identical-named lists.
+      list.Name = `At-Risk: ${this.selected.title} (${new Date().toISOString().slice(0, 16).replace('T', ' ')})`;
       list.EntityID = entityId;
       if (user?.ID) list.UserID = user.ID;
       list.RefreshMode = 'Additive';
@@ -576,15 +599,25 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
       const members = this.atRiskRows.filter((r) => r.band !== 'low').slice(0, 200);
       let seq = 0;
       let added = 0;
+      let firstFailure: string | null = null;
       for (const r of members) {
         const ld = await p.GetEntityObject<MJListDetailEntity>('MJ: List Details', user);
         ld.ListID = list.ID;
         ld.RecordID = r.recordId;
         ld.Sequence = seq++;
         ld.Status = 'Active';
-        if (await ld.Save()) added++;
+        if (await ld.Save()) {
+          added++;
+        } else if (!firstFailure) {
+          firstFailure = ld.LatestResult?.CompleteMessage ?? 'unknown error';
+        }
       }
-      this.listResult = `Added ${added} at-risk member${added === 1 ? '' : 's'} to “${list.Name}”.`;
+      const failed = members.length - added;
+      this.listResult =
+        failed === 0
+          ? `Added ${added} at-risk member${added === 1 ? '' : 's'} to “${list.Name}”.`
+          : `Added ${added} of ${members.length} members to “${list.Name}” — ${failed} failed to add (first error: ${firstFailure}).`;
+      if (failed > 0) LogError(`PSPredictionsResource.sendToList: ${failed}/${members.length} adds failed. First: ${firstFailure}`);
     } catch (err) {
       this.listResult = `Couldn't create the list: ${err instanceof Error ? err.message : String(err)}`;
       LogError(`PSPredictionsResource.sendToList: ${err instanceof Error ? err.message : String(err)}`);
@@ -594,10 +627,23 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
     }
   }
 
+  /**
+   * Quote one CSV cell: RFC-4180 double-quote escaping (handles commas/quotes/newlines in labels) plus a
+   * leading `'` on formula-starting characters (`=`, `+`, `-`, `@`) so a hostile label can't execute as an
+   * Excel/Sheets formula on open.
+   */
+  private csvCell(value: string): string {
+    const guarded = /^[=+\-@]/.test(value) ? `'${value}` : value;
+    return /[",\n\r]/.test(guarded) ? `"${guarded.replace(/"/g, '""')}"` : guarded;
+  }
+
   /** "Share / export" — download the at-risk list as a CSV (dependency-free). */
   public exportList(): void {
     if (this.atRiskRows.length === 0) return;
-    const csv = ['Member,Likelihood %,Predicted', ...this.atRiskRows.map((r) => `${(r.label ?? r.recordId).replace(/,/g, ' ')},${r.riskPct},${r.class ?? ''}`)].join('\n');
+    const csv = [
+      'Member,Likelihood %,Predicted',
+      ...this.atRiskRows.map((r) => `${this.csvCell(r.label ?? r.recordId)},${r.riskPct},${this.csvCell(r.class ?? '')}`),
+    ].join('\n');
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
     const a = document.createElement('a');
     a.href = url;

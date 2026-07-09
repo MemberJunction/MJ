@@ -51,8 +51,10 @@ function parseRowDrivers(raw: unknown): RowDriver[] | null {
     const feature = typeof d?.feature === 'string' ? d.feature : '';
     const value = typeof d?.value === 'number' ? d.value : NaN;
     if (!feature || !Number.isFinite(value)) continue;
-    // Collapse one-hot ("Col=Value" → "Col") then humanize, so the chip reads like a business term.
-    out.push({ label: humanizeFeatureName(feature.split('=')[0]), value, up: value > 0 });
+    // Keep the one-hot category: for a per-record "why", the category IS the story — "Membership Type =
+    // Student lowers risk" is actionable where a collapsed "Membership Type" is close to meaningless.
+    // (Collapsing across categories is only right for GLOBAL importance — see topGlobalDrivers.)
+    out.push({ label: humanizeFeatureName(feature), value, up: value > 0 });
   }
   return out.length > 0 ? out : null;
 }

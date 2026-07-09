@@ -62,7 +62,7 @@ interface PendingPromotion {
   selector: 'ps-registry',
   imports: [CommonModule, MJButtonDirective, PSConfirmModalComponent],
   encapsulation: ViewEncapsulation.None,
-  styleUrls: ['../predictive-studio.shared.scss', './ps-registry.component.scss'],
+  styleUrls: ['../predictive-studio.shared.css', './ps-registry.component.css'],
   template: `
     <div class="ps-panel ps-registry" data-testid="ps-registry-panel">
       @if (models.length === 0) {

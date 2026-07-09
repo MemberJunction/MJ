@@ -11,8 +11,10 @@
 /* model list — its own scroll column */
 .ps-registry .mlist { min-height: 0; overflow-y: auto; align-self: start; max-height: 100%; }
 
-/* detail — its own scroll column, independent of the list. Children must not
-   flex-shrink, otherwise the column compresses the cards instead of scrolling. */
+/* detail — its own scroll column, independent of the list. NOTE: .detail is also a
+   .ps-col (display:flex column), so its card children ARE flex items — without
+   flex-shrink:0 they compress to fit (scrollHeight == clientHeight, verified live) and
+   the column never scrolls. The child rule is load-bearing, not decorative. */
 .ps-registry .detail { min-height: 0; overflow-y: auto; padding-right: 2px; }
 .ps-registry .detail > * { flex: 0 0 auto; }
 .ps-registry .mrow {

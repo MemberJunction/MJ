@@ -38,8 +38,11 @@ export interface PSNamedRecord {
 
 /**
  * Resolve an agent-supplied reference the way a user names things: exact ID (case-insensitive, to tolerate
- * SQL-Server-upper vs PG-lower UUID casing) → exact name (trimmed, case-insensitive) → first case-insensitive
- * *contains* match on the name. Pure + deterministic over the candidate list. Returns the match or null.
+ * SQL-Server-upper vs PG-lower UUID casing) → exact name (trimmed, case-insensitive) → case-insensitive
+ * *contains* match on the name, but ONLY when it's unambiguous — a needle contained in several candidate
+ * names returns null (silently opening the first would be silently opening the wrong one; the paired
+ * {@link buildPSNotFoundError} then lists the contenders so the agent can disambiguate). Pure +
+ * deterministic over the candidate list.
  */
 export function resolvePSRecord<T extends PSNamedRecord>(input: string, candidates: readonly T[]): T | null {
   const needle = (input ?? '').trim().toLowerCase();
@@ -48,11 +51,20 @@ export function resolvePSRecord<T extends PSNamedRecord>(input: string, candidat
   if (byId) return byId;
   const byName = candidates.find((c) => c.Name.trim().toLowerCase() === needle);
   if (byName) return byName;
-  return candidates.find((c) => c.Name.toLowerCase().includes(needle)) ?? null;
+  const contains = candidates.filter((c) => c.Name.toLowerCase().includes(needle));
+  return contains.length === 1 ? contains[0] : null;
 }
 
-/** Tolerant "not found" message that samples a few available names so the agent can self-correct. Pure. */
+/**
+ * Tolerant "not found" message so the agent can self-correct: when the input partially matches SEVERAL
+ * candidates it becomes a "did you mean…" listing exactly those; otherwise it samples available names. Pure.
+ */
 export function buildPSNotFoundError(input: string, candidates: readonly PSNamedRecord[], noun: string): string {
+  const needle = (input ?? '').trim().toLowerCase();
+  const contains = needle ? candidates.filter((c) => c.Name.toLowerCase().includes(needle)) : [];
+  if (contains.length > 1) {
+    return `"${input}" matches more than one ${noun} — did you mean: ${contains.slice(0, 6).map((c) => c.Name).join(', ')}? Use the exact name or ID.`;
+  }
   const sample = candidates.slice(0, 6).map((c) => c.Name).join(', ');
   return `No ${noun} matching "${input}" is available. Available ${noun}s include: ${sample || '(none)'}.`;
 }

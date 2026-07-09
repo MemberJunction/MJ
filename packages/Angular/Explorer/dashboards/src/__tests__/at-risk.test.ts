@@ -14,7 +14,7 @@ describe('parseAtRiskRows', () => {
     expect(rows[2].band).toBe('low');
   });
 
-  it('parses per-record drivers: collapses one-hot, humanizes labels, and signs them', () => {
+  it('parses per-record drivers: humanizes labels, KEEPS the one-hot category, and signs them', () => {
     const rows = parseAtRiskRows([
       {
         recordId: 'm1',
@@ -31,7 +31,9 @@ describe('parseAtRiskRows', () => {
     ]);
     expect(rows[0].drivers).toEqual([
       { label: 'Overdue Invoices', value: 1.4, up: true },
-      { label: 'Membership Type', value: -0.8, up: false },
+      // Per-record "why" keeps the category — "Membership Type = Student" is the actionable sentence;
+      // collapsing to "Membership Type" is only right for GLOBAL importance (topGlobalDrivers).
+      { label: 'Membership Type = Student', value: -0.8, up: false },
     ]);
     expect(rows[1].drivers).toBeNull();
   });

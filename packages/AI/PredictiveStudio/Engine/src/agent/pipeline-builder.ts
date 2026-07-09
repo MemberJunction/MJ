@@ -126,6 +126,11 @@ export class PredictiveStudioPipelineBuilder {
    * the target entity — throwing a single actionable error (with a sample of the real field names) when
    * they don't. This turns a would-be mid-train failure (or a garbage model trained on missing columns)
    * into a fast, correctable "the plan references fields that don't exist" message.
+   *
+   * SINGLE-SOURCE ASSUMPTION: select columns are validated against the TARGET entity only, which is
+   * correct today because the plan converter only emits select columns from `CandidateFeatures` on the
+   * training-unit entity (see modeling-plan-to-pipeline.ts). If feature steps ever gain multi-source
+   * selects, this must validate each select against ITS source entity or it will false-reject valid plans.
    */
   private validatePlanFields(config: PipelineConfig, entity: EntityInfo): void {
     const fieldNames = new Set(entity.Fields.map((f) => f.Name.toLowerCase()));
