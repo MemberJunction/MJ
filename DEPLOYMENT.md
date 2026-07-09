@@ -169,9 +169,34 @@ git push origin next
 
 ---
 
+## PostgreSQL Migration Conversion
+
+### Step 7: Convert New Migrations to PostgreSQL (`/pg-migrate-v2`)
+
+**This must be done for every release that adds new migrations** (including the metadata-sync migration from Step 3).
+
+MemberJunction ships migrations for **both** SQL Server and PostgreSQL. SS migrations in `migrations/v5/` are authored first; each needs a validated PostgreSQL counterpart (`.pg.sql`) in `migrations-pg/v5/`. Producing those counterparts is now a standard part of the release process, run via the **`/pg-migrate-v2`** skill (the "split-and-regenerate" pipeline).
+
+> ⚠️ **Do this after the full build (Step 6) and before the release PR (Step 8).** Every new SS migration in this release must have a committed, verified `.pg.sql` counterpart on `next` before the PR is opened — otherwise PostgreSQL deployments of the release are missing migrations.
+
+**What the skill does** (see `.claude/commands/pg-migrate-v2.md` for the full runbook):
+
+1. Runs entirely inside the `claude-dev` Docker workbench (with SQL Server + PostgreSQL containers), on a dedicated `pg-migrate-v2/<branch>` branch — the host repo stays read-only until the final copy-back.
+2. `mj migrate convert --split` classifies each new SS migration and transpiles only the ~2% hand-written DDL via the sqlglot AST dialect; CodeGen objects (views/sprocs/triggers/grants) are **baked inline** into each new migration. Only migrations lacking a `.pg.sql`/`.pg-only.sql` counterpart are converted — committed counterparts are immutable and never reconverted.
+3. Any procedural residue the dialect can't auto-translate lands as `.needs-hand` files; these are hand-authored (lifting from the committed ledger where the routine already exists) and renamed to `.pg.sql`.
+4. **The real gate:** the converted set is applied to a **fresh** PG database via `mj migrate` → `mj sync push` (no `mj codegen`). A clean apply — not the converter's "0 gaps" summary — is what proves the SQL is correct.
+5. Four verification layers run: conversion parity, SS↔PG schema parity, view semantic equivalence, and a CRUD behavioral oracle — followed by full-stack browser smoke + deep CRUD workflow tests (magic-link login, no external IdP).
+6. The verified `.pg.sql` files are copied back to the host as **uncommitted** changes for review, along with a `migrations-pg/PG_MIGRATION_REPORT.md`.
+
+**After the skill finishes:** review the converted `.pg.sql` files and the report, then **commit them to `next`** so they're included in the release PR. Confirm no `.needs-hand` files were copied back (that would mean conversion is incomplete).
+
+> **Invariant:** committed `migrations-pg/v5/*.pg.sql` / `*.pg-only.sql` are a deployed historical ledger — byte-for-byte immutable. This step only ever produces PG counterparts for the **new** SS migrations in this release.
+
+---
+
 ## Creating the Release
 
-### Step 7: Create PR from `next` → `main`
+### Step 8: Create PR from `next` → `main`
 
 > **Important:** All changes from the previous steps (metadata migration scripts, new changesets, AI model updates) must already be committed and pushed to `next` before creating this PR.
 
@@ -184,7 +209,7 @@ git push origin next
    - `dependency-check.yml` — checks for missing npm dependencies
    - `claude.yml` — reviews migration files for hardcoded UUIDs
 
-### Step 8: Merge the PR
+### Step 9: Merge the PR
 
 Once all checks pass, merge the PR into `main`.
 
@@ -194,7 +219,7 @@ Once all checks pass, merge the PR into `main`.
 
 Merging to `main` triggers a chain of automated workflows. Monitor each one.
 
-### 8a. `publish.yml` — Build & Publish Packages
+### 9a. `publish.yml` — Build & Publish Packages
 
 **Triggered by:** push to `main`
 
@@ -208,7 +233,7 @@ This workflow:
 7. Tags the release
 8. **Auto-merges `main` back into `next`** and updates lock files
 
-### 8b. `docker.yml` — Build & Publish Docker Images
+### 9b. `docker.yml` — Build & Publish Docker Images
 
 **Triggered by:** `publish.yml` completion
 
@@ -218,7 +243,7 @@ Builds and pushes multi-platform Docker images (`linux/amd64`, `linux/arm64`):
 
 > **Known issue:** This workflow sometimes fails because it tries to install the newly published npm packages before they've fully propagated on the npm registry. If it fails, **re-run the failed job** — it usually succeeds on the second attempt.
 
-### 8c. `docs.yml` — Update Package Documentation
+### 9c. `docs.yml` — Update Package Documentation
 
 **Triggered by:** `publish.yml` completion
 
@@ -236,7 +261,7 @@ Builds TypeDoc documentation and deploys to GitHub Pages.
 
 ## Post-Release Updates
 
-### Step 9: Update MJ Documentation Site
+### Step 10: Update MJ Documentation Site
 
 Go to [ReadMe Dashboard](https://dash.readme.com/):
 
@@ -247,7 +272,7 @@ Go to [ReadMe Dashboard](https://dash.readme.com/):
 
 > **Note:** The legacy per-version distribution zip (`Distributions/MemberJunction_Code_Bootstrap.zip`) has been retired. `mj install` now sparse-fetches and assembles the project from the tagged source on demand, so there is no longer a version-specific zip URL to update each release.
 
-### Step 10: Update Changelog
+### Step 11: Update Changelog
 
 **Wait until ALL of the following are complete before saving:**
 - [ ] npm packages published
