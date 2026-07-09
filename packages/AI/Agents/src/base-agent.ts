@@ -8154,14 +8154,25 @@ The context is now within limits. Please retry your request with the recovered c
             // as ADDITIONAL `kind:'final-response'` deltas — the only chunks the
             // conversation client renders — while raw chunks keep flowing unchanged for
             // existing consumers. Root-only: a sub-agent's "final" message is a result
-            // for its parent, not the user's reply. One fresh extractor per turn.
-            const finalResponseExtractor =
-                params.onStreaming && (params.parentDepth ?? 0) === 0 && !params.parentAgentHierarchy?.length
-                    ? this.AgentTypeInstance?.CreateFinalResponseStreamExtractor()
-                    : null;
+            // for its parent, not the user's reply — and note the hierarchy check is the
+            // effective discriminator (first-level sub-agents also see parentDepth 0).
+            const wantFinalResponseExtraction =
+                !!params.onStreaming && (params.parentDepth ?? 0) === 0 && !params.parentAgentHierarchy?.length;
+            // One extractor per MODEL ATTEMPT, not per executePrompt call: the prompt
+            // runner's validation-retry loop re-runs the model through this same
+            // callback, and a truncated attempt would leave a shared parser mid-string —
+            // bleeding attempt N's state into attempt N+1's envelope. The raw stream's
+            // isComplete chunk marks each attempt boundary, so we recreate there.
+            let finalResponseExtractor = wantFinalResponseExtraction
+                ? (this.AgentTypeInstance?.CreateFinalResponseStreamExtractor() ?? null)
+                : null;
             // Parallel prompt execution funnels every task's chunks through this same
             // callback; interleaved envelopes would corrupt extraction, so the extractor
-            // binds to the first model that streams and ignores the rest for the turn.
+            // binds to the first model NAME that streams and ignores the rest for the
+            // turn. Known limitation: parallelCount > 1 over the SAME model still
+            // interleaves indistinguishably — chunks carry no task identity — so such
+            // configs may garble the extracted (not the raw) stream until a task
+            // discriminator exists on the chunk contract.
             let extractorModelName: string | undefined | null = null;
             promptParams.onStreaming = params.onStreaming ? (chunk) => {
                 // For streaming, we need to wrap it differently since chunk doesn't have metadata
@@ -8185,16 +8196,23 @@ The context is now within limits. Please retry your request with the recovered c
                                 kind: 'final-response'
                             });
                         }
-                        if (chunk.isComplete && finalResponseExtractor.HasEmitted) {
-                            // Close the tagged stream so the client marks it complete.
-                            params.onStreaming!({
-                                content: '',
-                                isComplete: true,
-                                stepType: 'prompt',
-                                stepEntityId: stepEntity.ID,
-                                modelName: chunk.modelName,
-                                kind: 'final-response'
-                            });
+                        if (chunk.isComplete) {
+                            if (finalResponseExtractor.HasEmitted) {
+                                // Close the tagged stream so the client marks it complete.
+                                params.onStreaming!({
+                                    content: '',
+                                    isComplete: true,
+                                    stepType: 'prompt',
+                                    stepEntityId: stepEntity.ID,
+                                    modelName: chunk.modelName,
+                                    kind: 'final-response'
+                                });
+                            }
+                            // Attempt boundary — a validation retry streams a brand-new
+                            // envelope; parse it with a brand-new extractor.
+                            finalResponseExtractor =
+                                this.AgentTypeInstance?.CreateFinalResponseStreamExtractor() ?? null;
+                            extractorModelName = null;
                         }
                     }
                 }

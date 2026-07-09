@@ -107,6 +107,48 @@ describe('LoopAgentStreamExtractor', () => {
         expect(feedChunked(x, envelope, 3)).toBe('spaced out');
     });
 
+    it('decodes surrogate-pair escapes (emoji) fed whole', () => {
+        const x = new LoopAgentStreamExtractor();
+        const envelope = '{"taskComplete": true, "message": "hi \\ud83d\\ude00!"}';
+        expect(feedChunked(x, envelope, envelope.length)).toBe('hi 😀!');
+    });
+
+    it('never returns a lone high surrogate when an emoji splits across Feed boundaries', () => {
+        const x = new LoopAgentStreamExtractor();
+        const envelope = '{"taskComplete": true, "message": "hi \\ud83d\\ude00!"}';
+        let combined = '';
+        for (let i = 0; i < envelope.length; i += 2) {
+            const emitted = x.Feed(envelope.slice(i, i + 2));
+            if (emitted) {
+                const last = emitted.charCodeAt(emitted.length - 1);
+                expect(last >= 0xd800 && last <= 0xdbff).toBe(false); // well-formed UTF-16 always
+            }
+            combined += emitted;
+        }
+        expect(combined).toBe('hi 😀!');
+    });
+
+    it('recovers from a malformed \\u escape without swallowing the closing quote', () => {
+        const x = new LoopAgentStreamExtractor();
+        const envelope = '{"taskComplete": true, "message": "bad\\u12", "secret": "internal"}';
+        const emitted = feedChunked(x, envelope, 5);
+        expect(emitted).toBe('bad'); // bogus escape dropped, string still closed correctly
+        expect(emitted).not.toContain('internal'); // the next field's value must never leak
+    });
+
+    it('emits nothing when message is not a string (null, number, object)', () => {
+        for (const value of ['null', '42', '{"text": "nope"}']) {
+            const x = new LoopAgentStreamExtractor();
+            expect(x.Feed(`{"taskComplete": true, "message": ${value}}`)).toBe('');
+            expect(x.HasEmitted).toBe(false);
+        }
+    });
+
+    it('treats an envelope wrapped in a root array as the envelope (documented behavior)', () => {
+        const x = new LoopAgentStreamExtractor();
+        expect(feedChunked(x, '[{"taskComplete": true, "message": "in array"}]', 6)).toBe('in array');
+    });
+
     it('returns empty string for empty feeds and after the envelope closes', () => {
         const x = new LoopAgentStreamExtractor();
         expect(x.Feed('')).toBe('');

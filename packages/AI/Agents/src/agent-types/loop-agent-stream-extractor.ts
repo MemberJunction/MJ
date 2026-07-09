@@ -20,7 +20,19 @@
  *
  * Tolerates leading non-JSON (prose/markdown fences) by scanning to the first `{`,
  * handles all JSON string escapes incrementally (including `\uXXXX` split across
- * chunk boundaries), and ignores anything after the envelope's closing brace.
+ * chunk boundaries; a trailing unpaired high surrogate is held back until its pair
+ * arrives so emitted text is always well-formed UTF-16), and ignores anything after
+ * the envelope's closing brace.
+ *
+ * Known, deliberate scope boundaries:
+ * - Chat-type clarifying questions (`nextStep.type:'Chat'` with `taskComplete:false`)
+ *   are user-facing but intentionally NOT streamed — finality is judged solely by the
+ *   root `taskComplete` literal.
+ * - Conversely, a `taskComplete:true` turn that the loop subsequently pre-empts
+ *   (Chat override, client tools, pipeline) streams transiently; later turns and the
+ *   run's completion reconciliation replace it, so the bubble self-corrects.
+ * - A stray `{` in pre-envelope prose makes the parser lock onto the wrong object:
+ *   streaming is silently lost for the turn (never wrong text — the fail-safe bias).
  */
 
 import { AgentFinalResponseStreamExtractor } from './base-agent-type';
@@ -54,6 +66,7 @@ export class LoopAgentStreamExtractor implements AgentFinalResponseStreamExtract
     private finalTurn: boolean | null = null; // null until taskComplete parsed
     private messageBuffer = '';               // message text seen before finality is known
     private out = '';                         // text ready to hand back from Feed()
+    private pendingHighSurrogate = '';        // unpaired trailing high surrogate held for the next Feed
     private emittedAny = false;
 
     /** True once any final-reply text has been emitted (drives the closing tagged chunk). */
@@ -71,8 +84,19 @@ export class LoopAgentStreamExtractor implements AgentFinalResponseStreamExtract
             this.consume(delta[i]);
             if (this.done) break;
         }
-        const emit = this.out;
+        let emit = this.pendingHighSurrogate + this.out;
         this.out = '';
+        this.pendingHighSurrogate = '';
+        // Never emit a trailing unpaired high surrogate (a \uD83D...\uDE00 emoji pair
+        // split across chunk boundaries): hold it for the next Feed so every returned
+        // string is well-formed UTF-16 — a lone surrogate is unencodable on the wire.
+        if (emit) {
+            const last = emit.charCodeAt(emit.length - 1);
+            if (last >= 0xd800 && last <= 0xdbff) {
+                this.pendingHighSurrogate = emit[emit.length - 1];
+                emit = emit.slice(0, -1);
+            }
+        }
         if (emit) this.emittedAny = true;
         return emit;
     }
@@ -146,11 +170,20 @@ export class LoopAgentStreamExtractor implements AgentFinalResponseStreamExtract
 
     private consumeStringChar(c: string): void {
         if (this.unicodeRemaining > 0) {
-            this.unicodeBuffer += c;
-            this.unicodeRemaining--;
-            if (this.unicodeRemaining === 0) {
-                const code = parseInt(this.unicodeBuffer, 16);
-                if (!Number.isNaN(code)) this.appendToSink(String.fromCharCode(code));
+            if (/[0-9a-fA-F]/.test(c)) {
+                this.unicodeBuffer += c;
+                this.unicodeRemaining--;
+                if (this.unicodeRemaining === 0) {
+                    this.appendToSink(String.fromCharCode(parseInt(this.unicodeBuffer, 16)));
+                }
+            } else {
+                // Malformed \uXXXX (fewer than 4 hex digits) — abandon the escape
+                // (emit nothing for it) and reprocess this char normally, so a
+                // structural char here (e.g. the closing quote) keeps its meaning
+                // instead of being swallowed into the bogus escape.
+                this.unicodeRemaining = 0;
+                this.unicodeBuffer = '';
+                this.consumeStringChar(c);
             }
             return;
         }
@@ -214,8 +247,7 @@ export class LoopAgentStreamExtractor implements AgentFinalResponseStreamExtract
                 // message streamed before finality was known — flush it in one piece
                 this.out += this.messageBuffer;
             }
-            if (!this.finalTurn) this.messageBuffer = '';
-            if (this.finalTurn) this.messageBuffer = '';
+            this.messageBuffer = '';
         }
         this.rootKey = null;
         this.literalBuffer = '';
