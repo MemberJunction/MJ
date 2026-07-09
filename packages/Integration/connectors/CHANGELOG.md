@@ -1,5 +1,63 @@
 # @memberjunction/integration-connectors
 
+## 5.45.1
+
+### Patch Changes
+
+- 1740db3: Add the External-Data-Source-backed ingestion connector abstractions (the "heart"): `BaseExternalDataSourceConnector` (family-neutral — resolves the shared `MJ: External Data Sources` row via the EDS router, `TestConnection`, `IntrospectSchema` mapping `ExternalSchemaDescriptor` → `SourceSchemaInfo`, and generic incremental `FetchChanges` that passes a **structured `incrementalSince` watermark bound + raw ordering columns** to `driver.RunView` — the connector writes NO dialect SQL; the EDS driver renders the predicate, quoting, and literal formatting), plus the `BaseSqlExternalDataSourceConnector` (SQL family — **authoritative** discovery) and `BaseDocumentDataSourceConnector` (document/NoSQL family — **non-authoritative** sampled discovery) families. The connection binds to a shared EDS row via `Configuration.externalDataSourceID`; credentials flow through CredentialEngine. Deprecates the SQL-Server-hardcoded, inline-`mssql` `RelationalDBConnector`. Thin per-engine leaves ship as Open Apps in the MemberJunction/Integrations repo.
+- Updated dependencies [00e573c]
+  - @memberjunction/external-data-sources@5.45.1
+  - @memberjunction/integration-engine@5.45.1
+  - @memberjunction/integration-engine-base@5.45.1
+  - @memberjunction/core@5.45.1
+  - @memberjunction/core-entities@5.45.1
+  - @memberjunction/global@5.45.1
+
+## 5.45.0
+
+### Patch Changes
+
+- Updated dependencies [45d121b]
+- Updated dependencies [21e33fe]
+- Updated dependencies [b7cf50f]
+- Updated dependencies [f4f11fa]
+- Updated dependencies [e370816]
+- Updated dependencies [f99cbc1]
+- Updated dependencies [11d5b4e]
+- Updated dependencies [fbee64c]
+- Updated dependencies [81a8aa2]
+- Updated dependencies [82ca89b]
+- Updated dependencies [b2927f1]
+- Updated dependencies [6125dcd]
+- Updated dependencies [c1f2d3d]
+- Updated dependencies [0b1e009]
+  - @memberjunction/core@5.45.0
+  - @memberjunction/core-entities@5.45.0
+  - @memberjunction/integration-engine@5.45.0
+  - @memberjunction/global@5.45.0
+  - @memberjunction/integration-engine-base@5.45.0
+
+## 5.44.0
+
+### Patch Changes
+
+- Updated dependencies [3633fbb]
+- Updated dependencies [1367fbb]
+- Updated dependencies [5396d90]
+- Updated dependencies [7279819]
+- Updated dependencies [d44e430]
+- Updated dependencies [6f74b17]
+- Updated dependencies [be5ab50]
+- Updated dependencies [aa9102d]
+- Updated dependencies [2f926df]
+- Updated dependencies [863a10d]
+- Updated dependencies [2f9b863]
+  - @memberjunction/core-entities@5.44.0
+  - @memberjunction/core@5.44.0
+  - @memberjunction/global@5.44.0
+  - @memberjunction/integration-engine@5.44.0
+  - @memberjunction/integration-engine-base@5.44.0
+
 ## 5.43.0
 
 ### Patch Changes

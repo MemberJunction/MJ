@@ -1,5 +1,416 @@
 # Change Log - @memberjunction/server
 
+## 5.45.1
+
+### Patch Changes
+
+- 572d219: Render agent final-response streaming in the conversation chat. Adds an optional `kind` discriminator to agent streaming chunks — `'final-response'` marks deltas of the user-facing reply — passed through the server's PubSub payload; the conversation client now routes those chunks, accumulates deltas service-side, renders the growing text in the message bubble, and reconciles with the saved final message on completion. Unmarked streams (e.g. Loop-agent JSON turn envelopes) keep today's behavior exactly (dropped), so agents that don't opt in are unaffected.
+- 108a1d3: Fix v5.45 migration bugs: dynamically resolve FK constraint name in APIKeyUsageLog cascade delete (SQL Server + PostgreSQL) and deactivate Skip agent instead of deleting it in Metadata Sync. Add commit-message version override (`[version:X.Y.Z]`) to publish workflow.
+- aedfe44: Fix magic-link redemption on PostgreSQL. The atomic single-use consume SQL was T-SQL-only, so redemption on PG failed with a syntax error and minted no session. buildConsumeInviteSQL is now dialect-aware
+- Updated dependencies [572d219]
+  - @memberjunction/ai-core-plus@5.45.1
+  - @memberjunction/ai-agent-manager-actions@5.45.1
+  - @memberjunction/ai-agent-manager@5.45.1
+  - @memberjunction/ai-agents@5.45.1
+  - @memberjunction/ai-engine-base@5.45.1
+  - @memberjunction/clustering-engine@5.45.1
+  - @memberjunction/aiengine@5.45.1
+  - @memberjunction/tag-engine@5.45.1
+  - @memberjunction/computer-use-engine@5.45.1
+  - @memberjunction/ai-prompts@5.45.1
+  - @memberjunction/ai-vector-sync@5.45.1
+  - @memberjunction/core-actions@5.45.1
+  - @memberjunction/codegen-lib@5.45.1
+  - @memberjunction/graphql-dataprovider@5.45.1
+  - @memberjunction/core-entities-server@5.45.1
+  - @memberjunction/scheduling-engine@5.45.1
+  - @memberjunction/templates@5.45.1
+  - @memberjunction/testing-engine@5.45.1
+  - @memberjunction/ai-vectors-pinecone@5.45.1
+  - @memberjunction/communication-ms-graph@5.45.1
+  - @memberjunction/generic-database-provider@5.45.1
+  - @memberjunction/queue@5.45.1
+  - @memberjunction/sqlserver-dataprovider@5.45.1
+  - @memberjunction/search-engine@5.45.1
+  - @memberjunction/communication-engine@5.45.1
+  - @memberjunction/notifications@5.45.1
+  - @memberjunction/ai-provider-bundle@5.45.1
+  - @memberjunction/postgresql-dataprovider@5.45.1
+  - @memberjunction/schema-engine@5.45.1
+  - @memberjunction/external-change-detection@5.45.1
+  - @memberjunction/entity-communications-server@5.45.1
+  - @memberjunction/integration-schema-builder@5.45.1
+  - @memberjunction/computer-use@5.45.1
+  - @memberjunction/ai@5.45.1
+  - @memberjunction/tag-engine-base@5.45.1
+  - @memberjunction/ai-mcp-client@5.45.1
+  - @memberjunction/ai-bridge-base@5.45.1
+  - @memberjunction/ai-bridge-ringcentral@5.45.1
+  - @memberjunction/ai-bridge-teams@5.45.1
+  - @memberjunction/ai-bridge-twilio@5.45.1
+  - @memberjunction/ai-bridge-vonage@5.45.1
+  - @memberjunction/ai-bridge-server@5.45.1
+  - @memberjunction/remote-browser-base@5.45.1
+  - @memberjunction/remote-browser-cdp@5.45.1
+  - @memberjunction/remote-browser-selfhost@5.45.1
+  - @memberjunction/remote-browser-server@5.45.1
+  - @memberjunction/ai-vectordb@5.45.1
+  - @memberjunction/api-keys@5.45.1
+  - @memberjunction/actions-apollo@5.45.1
+  - @memberjunction/actions-base@5.45.1
+  - @memberjunction/actions-bizapps-accounting@5.45.1
+  - @memberjunction/actions-bizapps-crm@5.45.1
+  - @memberjunction/actions-bizapps-formbuilders@5.45.1
+  - @memberjunction/actions-bizapps-lms@5.45.1
+  - @memberjunction/actions-bizapps-social@5.45.1
+  - @memberjunction/actions@5.45.1
+  - @memberjunction/auth-providers@5.45.1
+  - @memberjunction/communication-types@5.45.1
+  - @memberjunction/entity-communications-base@5.45.1
+  - @memberjunction/communication-sendgrid@5.45.1
+  - @memberjunction/component-registry-client-sdk@5.45.1
+  - @memberjunction/config@5.45.1
+  - @memberjunction/credentials@5.45.1
+  - @memberjunction/doc-utils@5.45.1
+  - @memberjunction/encryption@5.45.1
+  - @memberjunction/integration-engine@5.45.1
+  - @memberjunction/integration-progress-artifacts@5.45.1
+  - @memberjunction/interactive-component-types@5.45.1
+  - @memberjunction/lists-base@5.45.1
+  - @memberjunction/lists@5.45.1
+  - @memberjunction/livekit-room-server@5.45.1
+  - @memberjunction/core@5.45.1
+  - @memberjunction/core-entities@5.45.1
+  - @memberjunction/data-context@5.45.1
+  - @memberjunction/data-context-server@5.45.1
+  - @memberjunction/global@5.45.1
+  - @memberjunction/storage@5.45.1
+  - @memberjunction/record-comparison@5.45.1
+  - @memberjunction/redis-provider@5.45.1
+  - @memberjunction/sql-dialect@5.45.1
+  - @memberjunction/scheduling-actions@5.45.1
+  - @memberjunction/scheduling-engine-base@5.45.1
+  - @memberjunction/scheduling-base-types@5.45.1
+  - @memberjunction/server-extensions-core@5.45.1
+  - @memberjunction/testing-engine-base@5.45.1
+  - @memberjunction/version-history@5.45.1
+  - @memberjunction/esignature@5.45.1
+
+## 5.45.0
+
+### Minor Changes
+
+- 6125dcd: Skill activation governance & observability (v5.45): double activation gate (AISkill.ActivationMode × AIAgent.SkillActivationMode, both defaulting to RequestedOnly — self-activation requires Auto×Auto; /skill user requests unaffected) via new GetAutoActivatableSkillsForAgent; AIAgent.RequirePlanMode forces plan mode on every root run; AIAgentRun.PlanMode stamps plan-mode runs; plan-mode runs block skill activations after approval (re-plan required); AIAgentRunStep.Skills JSON records per-step AgentSkillInvocation provenance (activation type, gate values, agent-stated reason) on Skill/Prompt/Actions/Sub-Agent steps with native-grant precedence; agent-run UX gains a Plan Mode header chip, Skill/Plan step icons, per-step skill chips, and a Skills drill-in tab with provenance cards.
+- c1f2d3d: User Routines (P1.5): user-owned scheduled/monitoring routines that run an Agent, Action, or Prompt on a cron schedule. New UserRoutine/UserRoutineRecipient/UserRoutineRun schema; UserRoutineDispatcherDriver scheduled-job driver (1-minute sweep, claim-before-run, bounded concurrency, per-routine isolation, runs as the owner, Template-driven notifications with OnChange result-hash detection, RequestedSkillIDs pre-arming for Agent targets); pure UserRoutineProcessor schedule/notify primitives shared with MJUserRoutineEntityServer (NextRunAt on save, cron validation) and MJUserRoutineRecipientEntityServer (User-xor-Email); lazy non-startup UserRoutineEngine; new @memberjunction/ng-user-routines widget set (list/editor/history + command-center composite + slide-in, cancelable Before/After events, Agent-only creation with categorical ng-trees picker); conversations bottom-sidebar Routines section gated by ShowRoutines input AND entity-Read permission (hosted in both the generic workspace sidebar and Explorer's Chat wrapper); Routines Explorer app; pure cron preset/describe helpers now in @memberjunction/global (CronUtils); mj-tree gains a DefaultExpansion input ('first-level' | 'all' | 'none'); BaseScheduledJob gains IsHighFrequencyByDesign so by-design pollers (the routine dispatcher) opt out of the high-frequency cron warning; Agent-target routines run inside a dedicated per-routine Conversation (Application-scoped via the Routines app so it stays out of the default chat list; RunAgentInConversation writes proper user/assistant turns; standalone fallback when the app is absent); UserRoutine.ConversationID schema + open-conversation and open-execution-record event chains through the conversations hosts; server-side cascade delete (recipients + run bookkeeping) so routines that have run delete cleanly; agent picker is a compact mj-tree-dropdown (DefaultExpansion pass-through added); mj-slide-panel settles to transform:none when open so position:fixed descendants (dropdown panels) keep true viewport coordinates; time-relative sidebar/card/history text is snapshot-based (NG0100 fix); 16-test live integration suite + live Playwright E2E; Explorer notifications page rebuilt (day-grouped cards, sanitized HTML + Markdown message rendering with expand/collapse previews, snapshot relative times, removal of a test harness that created junk Conversations on Mark-All-Read) and the seeded routine notification template gains a compact Markdown Text body that the dispatcher now prefers for in-app delivery (the HTML document stays for email); new @memberjunction/ng-composer package extracts the conversations message composer (mention editor + dropdown + message input box) so the routine editor's InitialMessage field uses the mention editor without an ng-conversations dependency cycle — and the composer's mention/command triggers are PLUGGABLE: a generic ComposerTriggerProvider contract (TriggerChar/Key/Priority/GetSuggestions, generic MentionSuggestion with provider-supplied presets) with two supply modes (explicit [TriggerProviders] list, or ClassFactory discovery via @RegisterClass(ComposerTriggerProvider,'<key>') filtered by [ExcludedTriggerKeys]), leaving ng-composer with ZERO AI knowledge; the AI plugins moved to ng-conversations (composer-plugins: 'agent-mentions' '@' agents+users w/ configuration presets, 'record-mentions' '#' entities+queries, 'skill-commands' '/' skills — tree-shake-guarded by LoadComposerPlugins(); MentionAutocompleteService moved back to ng-conversations as a BaseSingleton engine shared by plugins and components) plus a new mj-ai-composer wrapped component that proxies the full mj-message-input-box surface with the AI triggers built in and familiar EnableAgentMentions/EnableEntityMentions/EnableSkillCommands convenience flags (the chat composer now uses it); the routine editor uses discovery mode with agent-mentions excluded.
+
+### Patch Changes
+
+- 21e33fe: Move Skip to a client-side Open App and remove server-embedded agent; scope-gate query/view/search resolvers with API-key scope authorization; add credential-store fallback for component registry keys; support Open App in-process lifecycle hooks with interactive prompts.
+- e370816: Fix external-data-source single-record `Load` through the GraphQL transport (Explorer full-record forms).
+
+  The generated single-record GraphQL query resolver ran `SELECT * FROM <baseView>` directly, which has no analogue for external-data-source entities — their data is proxied live from a remote system and no MJ view exists — so opening an external record's **full** form in Explorer failed (`InnerLoad returned false`), even though the grid (`RunView`) and the provider-level single-record `Load` already routed externally.
+  - **`@memberjunction/server`**: new `ResolverBase.LoadExternalRecordByKey` loads an external record by primary key through a `BaseEntity` object, which the data provider dispatches to the external read router (the same path the grid uses), applying the same RLS gate and row post-processing (field decryption / datetime normalization) as the MJ-DB path.
+  - **`@memberjunction/codegen-lib`**: the single-record resolver template now branches on `ExternalDataSourceID` — external entities call `LoadExternalRecordByKey`, while every MJ-DB entity keeps the identical `SELECT * FROM <baseView>` path (the branch is inert without the feature). Record-access audit logging (`AuditRecordAccess`) is preserved on the external branch.
+
+  Verified end-to-end in Explorer against a live PostgreSQL source — the full read-only record form now renders the remote row.
+
+- Updated dependencies [45d121b]
+- Updated dependencies [21e33fe]
+- Updated dependencies [b7cf50f]
+- Updated dependencies [19ec4b0]
+- Updated dependencies [f4f11fa]
+- Updated dependencies [e370816]
+- Updated dependencies [e370816]
+- Updated dependencies [f99cbc1]
+- Updated dependencies [11d5b4e]
+- Updated dependencies [fbee64c]
+- Updated dependencies [81a8aa2]
+- Updated dependencies [82ca89b]
+- Updated dependencies [b2927f1]
+- Updated dependencies [b18fcd0]
+- Updated dependencies [6125dcd]
+- Updated dependencies [ad9f4a3]
+- Updated dependencies [c1f2d3d]
+- Updated dependencies [0b1e009]
+- Updated dependencies [d461df0]
+  - @memberjunction/core@5.45.0
+  - @memberjunction/graphql-dataprovider@5.45.0
+  - @memberjunction/core-entities-server@5.45.0
+  - @memberjunction/codegen-lib@5.45.0
+  - @memberjunction/ai-agents@5.45.0
+  - @memberjunction/core-entities@5.45.0
+  - @memberjunction/generic-database-provider@5.45.0
+  - @memberjunction/integration-engine@5.45.0
+  - @memberjunction/ai-engine-base@5.45.0
+  - @memberjunction/aiengine@5.45.0
+  - @memberjunction/ai-core-plus@5.45.0
+  - @memberjunction/scheduling-engine@5.45.0
+  - @memberjunction/global@5.45.0
+  - @memberjunction/scheduling-engine-base@5.45.0
+  - @memberjunction/ai-agent-manager-actions@5.45.0
+  - @memberjunction/ai-agent-manager@5.45.0
+  - @memberjunction/clustering-engine@5.45.0
+  - @memberjunction/computer-use@5.45.0
+  - @memberjunction/tag-engine@5.45.0
+  - @memberjunction/tag-engine-base@5.45.0
+  - @memberjunction/ai-mcp-client@5.45.0
+  - @memberjunction/computer-use-engine@5.45.0
+  - @memberjunction/ai-prompts@5.45.0
+  - @memberjunction/ai-bridge-base@5.45.0
+  - @memberjunction/ai-bridge-ringcentral@5.45.0
+  - @memberjunction/ai-bridge-teams@5.45.0
+  - @memberjunction/ai-bridge-twilio@5.45.0
+  - @memberjunction/ai-bridge-vonage@5.45.0
+  - @memberjunction/ai-bridge-server@5.45.0
+  - @memberjunction/remote-browser-base@5.45.0
+  - @memberjunction/remote-browser-cdp@5.45.0
+  - @memberjunction/remote-browser-selfhost@5.45.0
+  - @memberjunction/remote-browser-server@5.45.0
+  - @memberjunction/ai-vectordb@5.45.0
+  - @memberjunction/ai-vectors-pinecone@5.45.0
+  - @memberjunction/ai-vector-sync@5.45.0
+  - @memberjunction/api-keys@5.45.0
+  - @memberjunction/actions-apollo@5.45.0
+  - @memberjunction/actions-base@5.45.0
+  - @memberjunction/actions-bizapps-accounting@5.45.0
+  - @memberjunction/actions-bizapps-crm@5.45.0
+  - @memberjunction/actions-bizapps-formbuilders@5.45.0
+  - @memberjunction/actions-bizapps-lms@5.45.0
+  - @memberjunction/actions-bizapps-social@5.45.0
+  - @memberjunction/core-actions@5.45.0
+  - @memberjunction/actions@5.45.0
+  - @memberjunction/auth-providers@5.45.0
+  - @memberjunction/communication-types@5.45.0
+  - @memberjunction/communication-engine@5.45.0
+  - @memberjunction/entity-communications-base@5.45.0
+  - @memberjunction/entity-communications-server@5.45.0
+  - @memberjunction/notifications@5.45.0
+  - @memberjunction/communication-ms-graph@5.45.0
+  - @memberjunction/communication-sendgrid@5.45.0
+  - @memberjunction/component-registry-client-sdk@5.45.0
+  - @memberjunction/credentials@5.45.0
+  - @memberjunction/doc-utils@5.45.0
+  - @memberjunction/encryption@5.45.0
+  - @memberjunction/external-change-detection@5.45.0
+  - @memberjunction/integration-schema-builder@5.45.0
+  - @memberjunction/interactive-component-types@5.45.0
+  - @memberjunction/lists@5.45.0
+  - @memberjunction/livekit-room-server@5.45.0
+  - @memberjunction/data-context@5.45.0
+  - @memberjunction/data-context-server@5.45.0
+  - @memberjunction/queue@5.45.0
+  - @memberjunction/storage@5.45.0
+  - @memberjunction/postgresql-dataprovider@5.45.0
+  - @memberjunction/record-comparison@5.45.0
+  - @memberjunction/redis-provider@5.45.0
+  - @memberjunction/sqlserver-dataprovider@5.45.0
+  - @memberjunction/scheduling-actions@5.45.0
+  - @memberjunction/schema-engine@5.45.0
+  - @memberjunction/search-engine@5.45.0
+  - @memberjunction/server-extensions-core@5.45.0
+  - @memberjunction/templates@5.45.0
+  - @memberjunction/testing-engine@5.45.0
+  - @memberjunction/testing-engine-base@5.45.0
+  - @memberjunction/version-history@5.45.0
+  - @memberjunction/esignature@5.45.0
+  - @memberjunction/ai@5.45.0
+  - @memberjunction/integration-progress-artifacts@5.45.0
+  - @memberjunction/scheduling-base-types@5.45.0
+  - @memberjunction/ai-provider-bundle@5.45.0
+  - @memberjunction/config@5.45.0
+  - @memberjunction/lists-base@5.45.0
+  - @memberjunction/sql-dialect@5.45.0
+
+## 5.44.0
+
+### Minor Changes
+
+- 3633fbb: Agent Skills, Plan Mode, and realtime widget UX.
+
+  **Agent Skills** — portable `SKILL.md` import/export, a first-class Skill step wired into the Loop agent runtime, Skills engine caching + agent-gating resolution, the `AI Skills` resource type with "Can Share Skills" authorization, and the AI Skill sharing panel in the entity forms. Includes the skill-markdown converter/operations and the generated entity + resolver surface for the new Skill entities.
+
+  **Plan Mode** — a human-in-the-loop plan-approval gate for the Loop agent (server + client), threaded through the agent client session/types, the GraphQL AI client, and the conversations composer/message-input UI so a run can pause for plan review before executing.
+
+  **Realtime voice widget UX** — fixes and consolidation in `@memberjunction/ng-conversations`:
+  - Fixed `NG0100 ExpressionChangedAfterItHasBeenCheckedError` when opening the Details panel (defer the `ResizeObserver` seed + callback to a microtask).
+  - The surface/Details panel is now an independent right-hand peek gated on available width (not console chrome / text-reveal), so opening Details keeps the glowing orb and toggling captions off no longer removes the panel; the orb also returns immediately on captions-off.
+  - Type-to-compose: any printable keystroke opens the composer and seeds itself as the first character (removed the dedicated "T" hotkey + hint).
+  - Control consolidation: the banner is now state + window-chrome only (removed duplicate Captions/End controls, folded "pure audio" into the gear's Density = Simple); Captions is promoted to a first-class control in the compact lean dock.
+
+  **Remote Browser** — `RemoteBrowserSnapshot` now honors its documented best-effort contract: it returns an empty snapshot instead of throwing when the underlying browser adapter has been torn down, so the client's periodic live-view poll never surfaces a recurring GraphQL error (with unit coverage).
+
+- 1367fbb: AI Skill permissions (full agent parity) + `/skill` composer invocation. Skills now use the same dedicated-table, **open-by-default** permission model as AI Agents via `MJ: AI Skill Permissions`: a cached runtime helper (`AISkillPermissionHelper`, open-by-default) and a unified-engine provider (`AISkillPermissionProvider`, closed-by-default / Sharing Center), grantee-exclusivity enforced by `MJAISkillPermissionEntityServer`, and a `GetSkillsForAgent(agent, user?)` filter so the model's skill catalog is intersected with the acting user's Run permission. The old `AI Skills` Resource-Type sharing is retired in favor of a skill-scoped permissions grid (`SkillPermissionsPanel`/`Dialog`/`Service`), with the `Can Share Skills` authorization repointed to it. End users invoke a skill for a message by typing `/skill-name` in the conversation composer (mirrors `@agent`/`#entity`; picker filtered by permission, chips use `AISkill.IconClass`/`Color`); selected IDs thread through the client → resolver → runtime chain as `ExecuteAgentParams.requestedSkillIDs` (both the `RunAIAgent` and `RunAIAgentFromConversationDetail` mutations), and `BaseAgent.preActivateRequestedSkills` activates them at run start only if they survive the guard (agent-accepted ∩ user-permitted). Requires the companion Agent Skills migration + CodeGen.
+- 6f74b17: Add an LLM/agentic reasoning pass on top of the embedding/vector duplicate-detection pipeline — "vectors filter, reasoning validates". A small/fast LLM judges high-probability vector candidates (Merge / NotDuplicate / Uncertain) to shrink the human-review set, strengthening or weakening the vector score rather than replacing it. Adds a dual-provider reasoning seam (Prompt/Agent), per-entity gating (EnableLLMReasoning, ReasoningThreshold, AutomationLevel), per-candidate verdict/audit columns, the new @memberjunction/record-comparison engine + resolver/client, and an in-place reasoning UI in the duplicates dashboard. Fully back-compat: EnableLLMReasoning defaults to 0, leaving the vector-only path byte-for-byte unchanged.
+- aa9102d: feat(media+realtime): generic media player, end-to-end media streaming, and the realtime/LiveKit recording stack
+
+  A new media + recording platform spanning the player, storage, server, and the realtime/voice stack.
+
+  **Generic media player (`@memberjunction/ng-media-player`, new package)** — a framework-agnostic
+  `mj-media-player` (transport, click/drag scrubber, playback speed, ±skip, keyboard, fullscreen,
+  multi-track video grid, a real decoded audio waveform that doubles as the scrubber and accepts
+  precomputed `MediaTrack.Peaks`, a time-synced clickable transcript, loading/buffering state with an
+  `aria-live` status, cancelable `Before*` events, and an imperative API) plus an MJStorage-bound
+  `mj-storage-media-player` that resolves a `FileID` to an authenticated, range-streamed source. The
+  artifact audio/video viewers and previews now embed it.
+
+  **MJStorage streaming (`@memberjunction/storage`)** — `FileStorageBase.GetObjectStream` +
+  `SupportsStreaming` + `StreamingNotSupportedError`, implemented for all seven drivers (Box, AWS S3,
+  Azure, GCS, Google Drive, SharePoint, Dropbox).
+
+  **Authenticated media delivery (`@memberjunction/server`)** — a `CreateMediaAccessToken` mutation
+  (short-lived, permission-gated, returns precomputed waveform peaks) and a `GET /media/:fileId?token=`
+  HTTP-Range streaming route — any stored asset is served to the browser by `FileID` with real
+  streaming + permissions, no public links.
+
+  **Realtime co-agent recording (`@memberjunction/ng-conversations`, `@memberjunction/ai-realtime-client`,
+  `@memberjunction/ai-agents`)** — client-direct sessions record a seekable 16-bit WAV with capture-time
+  waveform peaks (a `peaks.json` sidecar); the agent's remote audio is mixed in when its WebRTC track
+  lands (`OnRemoteMediaStream`/`AttachRemoteStream`); transcript cue timing anchors to real audio onset
+  across tool-call gaps; recorded sessions stream back through the player. Plus reactive fixes
+  (`ConversationEngine.EnsureConversationLoaded` in `@memberjunction/core-entities`) so new conversations
+  and recordings appear without a refresh.
+
+  **LiveKit meeting recording (`@memberjunction/livekit-room-server`, `@memberjunction/server`,
+  `@memberjunction/graphql-dataprovider`, `@memberjunction/ng-mj-livekit-room`)** — egress output is
+  registered as an `MJ: Files` row linked to the Meeting-Room `Conversation` (new `RecordingFileID` /
+  `EgressID`), with point-at-sink or copy-to-canonical storage, and played back in the Meet UI.
+
+  **Realtime surface-tab overhaul (`@memberjunction/ng-conversations`)** — channel tabs appear only once
+  used (Whiteboard excepted), each color/icon-coded; the Activity tab is gated, restyled, and
+  right-aligned; agent-run artifacts move out of per-artifact tabs into the Activity tab with a
+  resizable, `UserInfoEngine`-persisted split viewer.
+
+  The Media channel can now show MJStorage files (`fileId`) in addition to URLs. The realtime
+  recordings dashboard (`@memberjunction/ng-dashboards`) and CodeGen-regenerated entity forms
+  (`@memberjunction/ng-core-entity-forms`) reflect the new recording fields.
+
+- 2f926df: feat(prompt-parts): scope-aware, pluggable prompt construction (ScopedPromptPart + PromptComponentResolver)
+
+  Adds a first-class, scope-aware prompt-construction primitive to MJ core. `ScopedPromptPart` is a
+  small, named, role-tagged fragment of prompt text attached to an `AIPrompt` and optionally narrowed
+  by the **same polymorphic scope the agent runtime already carries for memory** (`PrimaryScopeEntity`/
+  `PrimaryScopeRecordID` + `SecondaryScopes`). Any MJ app can control LLM behavior per scope by editing
+  rows, not code.
+  - **Entity + controls:** `__mj.ScopedPromptPart` with `Name`, `Role`, `Sort`, `Text`, `Status`, the
+    polymorphic scope columns, and the resolver controls `MergeBehavior` (`Override` | `Append`) and
+    `Priority`. The inclusion rule is data-driven, not hardcoded.
+  - **Resolution + assembly:** cached on `AIEngine` (`ScopedPromptParts`); resolved by
+    `PromptComponentResolver` — a **template-method** class whose protected hooks (`getCandidates`,
+    `isInScope`, `score`, `selectIncluded`, `order`) are the extension points. Within a part `Name`,
+    the most-specific scope wins (`Override`) or all in-scope parts accumulate (`Append`); distinct
+    names compose additively. Roles are preserved (System/User/Assistant) — assembled messages drive
+    the model directly, not flattened.
+  - **Pluggable:** the agent runtime obtains the resolver via
+    `MJGlobal.ClassFactory.CreateInstance(PromptComponentResolver)`, so a downstream consumer can
+    `@RegisterClass(PromptComponentResolver) class X extends PromptComponentResolver { … }` and override
+    the protected hooks for custom inclusion/scope logic — **no core change required**.
+  - **Agent wiring:** `BaseAgent` resolves + injects scoped parts (role-faithful) alongside memory/RAG,
+    using the run's existing primary/secondary scopes.
+
+  Verified by unit tests (`PromptComponentResolver`) and a full agent run demonstrating the scope cascade.
+
+### Patch Changes
+
+- Updated dependencies [eb38a42]
+- Updated dependencies [3633fbb]
+- Updated dependencies [d88568e]
+- Updated dependencies [1367fbb]
+- Updated dependencies [5396d90]
+- Updated dependencies [91842c3]
+- Updated dependencies [89ea055]
+- Updated dependencies [7279819]
+- Updated dependencies [d44e430]
+- Updated dependencies [e315b2f]
+- Updated dependencies [6f74b17]
+- Updated dependencies [be5ab50]
+- Updated dependencies [aa9102d]
+- Updated dependencies [2f926df]
+- Updated dependencies [00997ee]
+- Updated dependencies [863a10d]
+- Updated dependencies [2f9b863]
+  - @memberjunction/ai-agents@5.44.0
+  - @memberjunction/ai-engine-base@5.44.0
+  - @memberjunction/ai-core-plus@5.44.0
+  - @memberjunction/aiengine@5.44.0
+  - @memberjunction/graphql-dataprovider@5.44.0
+  - @memberjunction/core-entities@5.44.0
+  - @memberjunction/core-entities-server@5.44.0
+  - @memberjunction/core@5.44.0
+  - @memberjunction/global@5.44.0
+  - @memberjunction/ai@5.44.0
+  - @memberjunction/codegen-lib@5.44.0
+  - @memberjunction/ai-vectordb@5.44.0
+  - @memberjunction/record-comparison@5.44.0
+  - @memberjunction/storage@5.44.0
+  - @memberjunction/livekit-room-server@5.44.0
+  - @memberjunction/esignature@5.44.0
+  - @memberjunction/auth-providers@5.44.0
+  - @memberjunction/ai-agent-manager@5.44.0
+  - @memberjunction/core-actions@5.44.0
+  - @memberjunction/scheduling-engine@5.44.0
+  - @memberjunction/testing-engine@5.44.0
+  - @memberjunction/ai-agent-manager-actions@5.44.0
+  - @memberjunction/clustering-engine@5.44.0
+  - @memberjunction/tag-engine@5.44.0
+  - @memberjunction/ai-prompts@5.44.0
+  - @memberjunction/computer-use-engine@5.44.0
+  - @memberjunction/ai-vector-sync@5.44.0
+  - @memberjunction/skip-types@5.44.0
+  - @memberjunction/templates@5.44.0
+  - @memberjunction/ai-vectors-pinecone@5.44.0
+  - @memberjunction/communication-ms-graph@5.44.0
+  - @memberjunction/generic-database-provider@5.44.0
+  - @memberjunction/queue@5.44.0
+  - @memberjunction/sqlserver-dataprovider@5.44.0
+  - @memberjunction/search-engine@5.44.0
+  - @memberjunction/tag-engine-base@5.44.0
+  - @memberjunction/ai-mcp-client@5.44.0
+  - @memberjunction/ai-bridge-server@5.44.0
+  - @memberjunction/remote-browser-base@5.44.0
+  - @memberjunction/remote-browser-server@5.44.0
+  - @memberjunction/api-keys@5.44.0
+  - @memberjunction/actions-apollo@5.44.0
+  - @memberjunction/actions-base@5.44.0
+  - @memberjunction/actions-bizapps-accounting@5.44.0
+  - @memberjunction/actions-bizapps-crm@5.44.0
+  - @memberjunction/actions-bizapps-formbuilders@5.44.0
+  - @memberjunction/actions-bizapps-lms@5.44.0
+  - @memberjunction/actions-bizapps-social@5.44.0
+  - @memberjunction/actions@5.44.0
+  - @memberjunction/communication-types@5.44.0
+  - @memberjunction/communication-engine@5.44.0
+  - @memberjunction/entity-communications-base@5.44.0
+  - @memberjunction/entity-communications-server@5.44.0
+  - @memberjunction/notifications@5.44.0
+  - @memberjunction/communication-sendgrid@5.44.0
+  - @memberjunction/doc-utils@5.44.0
+  - @memberjunction/encryption@5.44.0
+  - @memberjunction/external-change-detection@5.44.0
+  - @memberjunction/integration-engine@5.44.0
+  - @memberjunction/lists@5.44.0
+  - @memberjunction/data-context@5.44.0
+  - @memberjunction/scheduling-actions@5.44.0
+  - @memberjunction/scheduling-engine-base@5.44.0
+  - @memberjunction/testing-engine-base@5.44.0
+  - @memberjunction/version-history@5.44.0
+  - @memberjunction/computer-use@5.44.0
+  - @memberjunction/remote-browser-cdp@5.44.0
+  - @memberjunction/remote-browser-selfhost@5.44.0
+  - @memberjunction/component-registry-client-sdk@5.44.0
+  - @memberjunction/integration-schema-builder@5.44.0
+  - @memberjunction/interactive-component-types@5.44.0
+  - @memberjunction/data-context-server@5.44.0
+  - @memberjunction/postgresql-dataprovider@5.44.0
+  - @memberjunction/redis-provider@5.44.0
+  - @memberjunction/schema-engine@5.44.0
+  - @memberjunction/server-extensions-core@5.44.0
+  - @memberjunction/integration-progress-artifacts@5.44.0
+  - @memberjunction/scheduling-base-types@5.44.0
+  - @memberjunction/ai-provider-bundle@5.44.0
+  - @memberjunction/config@5.44.0
+  - @memberjunction/lists-base@5.44.0
+  - @memberjunction/sql-dialect@5.44.0
+
 ## 5.43.0
 
 ### Minor Changes

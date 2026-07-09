@@ -125,15 +125,28 @@ describe('resolveRealtimeUi — defaults & compactness', () => {
 describe('resolveRealtimeUi — per-affordance gating (flag AND runtime)', () => {
   const consoleSig = signals({ containerWidthPx: 1000, textRevealed: true, disclosureShowPanel: true, surfacePanelEarned: true, disclosureShowComposer: true, disclosureShowGear: true });
 
-  it('surface panel needs the flag + console + an earned panel — but NOT the disclosure level (the on-demand Details/agent door)', () => {
+  it('surface panel needs the flag + an earned panel — but NOT the disclosure level, NOR console chrome (the on-demand Details/agent peek)', () => {
     expect(resolveRealtimeUi(undefined, consoleSig).showSurfacePanel).toBe(true);
     expect(resolveRealtimeUi({ showSurfacePanel: false }, consoleSig).showSurfacePanel).toBe(false);
     expect(resolveRealtimeUi(undefined, { ...consoleSig, surfacePanelEarned: false }).showSurfacePanel).toBe(false);
     // A brand-new user (disclosure level 0) who clicks Details — or has the AGENT open the panel — earns it
     // on demand (surfacePanelEarned) and must see it IMMEDIATELY, without the cross-session level ratchet.
     expect(resolveRealtimeUi(undefined, { ...consoleSig, disclosureShowPanel: false }).showSurfacePanel).toBe(true);
-    // not in orb chrome
-    expect(resolveRealtimeUi({ chrome: 'orb' }, consoleSig).showSurfacePanel).toBe(false);
+    // The panel is an INDEPENDENT right-hand peek: it rides ALONGSIDE the orb, so it shows even in orb
+    // chrome (Details opened with captions off keeps the glowing orb in the main column and slides the
+    // panel in on the right) — provided there's ROOM (width ≥ breakpoint). It must NOT be gated on
+    // console chrome / text-reveal.
+    const orbPeek = signals({ containerWidthPx: 1000, textRevealed: false, surfacePanelEarned: true });
+    expect(resolveRealtimeUi({ chrome: 'auto' }, orbPeek).chrome).toBe('orb'); // captions off → still an orb
+    expect(resolveRealtimeUi({ chrome: 'auto' }, orbPeek).showSurfacePanel).toBe(true); // …but the panel peeks
+    expect(resolveRealtimeUi({ chrome: 'auto' }, orbPeek).showHero).toBe(true); // …and the orb stays put
+    // Forced orb chrome (at a wide width) shows the earned panel too.
+    expect(resolveRealtimeUi({ chrome: 'orb' }, consoleSig).showSurfacePanel).toBe(true);
+    // …but a NARROW overlay never crams the panel beside the orb — it needs room (or a real console).
+    const narrowPeek = signals({ containerWidthPx: 400, textRevealed: false, surfacePanelEarned: true });
+    expect(resolveRealtimeUi({ chrome: 'auto' }, narrowPeek).showSurfacePanel).toBe(false);
+    // A narrow REVIEW/forced console still shows it (console implies the intent + layout for the panel).
+    expect(resolveRealtimeUi({ chrome: 'console' }, narrowPeek).showSurfacePanel).toBe(true);
   });
 
   it('channel focus hides the surface panel and channel strip', () => {

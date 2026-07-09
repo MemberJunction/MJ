@@ -10,11 +10,12 @@ import { RealtimeUxDensity } from './realtime-disclosure';
  *  - LEFT: the glowing agent orb (motion = turn-state), agent name + "Co-Agent" badge,
  *    "speaking as" subline (+ subtle realtime-model suffix), and the state pill that swaps
  *    between a waveform (speaking/listening) and a spinner (connecting/thinking).
- *  - RIGHT (live): the disclosure-gated action cluster — Captions toggle (level 1+), the
- *    gear (level 2+, opens a popover hosting the Simple/Standard/Pro/Auto INTERFACE DENSITY
- *    control — the progressive-disclosure escape hatch — plus the developer-links toggle),
- *    Minimize (hide the call view, call stays live), and the End-call pill (level 2+; below
- *    that the phone-call strip's big End control owns ending).
+ *  - RIGHT (live): STATE + WINDOW-CHROME only — the gear (level 2+, opens a popover hosting the
+ *    Simple/Standard/Pro/Auto INTERFACE DENSITY control — the progressive-disclosure escape hatch,
+ *    where Simple IS the pure-audio surface — plus the developer-links toggle) and Minimize (hide
+ *    the call view, call stays live). Call actions (Mute / Captions / Details / Type / End) live in
+ *    the bottom dock, the single home for each; Captions & End used to duplicate here and were
+ *    removed, and the standalone pure-audio headphones was folded into the gear's Density = Simple.
  *  - RIGHT (review): "Start live session" (resume, affirmative leads) + Close — the
  *    review session's exit lives up here in the header bar, not floating in the body.
  *
@@ -74,12 +75,8 @@ export class RealtimeAgentBannerComponent {
   @Input() ReviewCloseReason: string | null = null;
 
   // ── App-bar action cluster (disclosure-gated by the overlay) ────────────────
-
-  /** Whether captions are currently shown (active state on the captions control). */
-  @Input() CaptionsOn = true;
-
-  /** Whether the captions control renders (disclosure level 1+). */
-  @Input() ShowCaptionsControl = false;
+  // STATE + WINDOW-CHROME only. Captions & End were removed (they duplicated the bottom dock's
+  // controls — one home per control), and "pure audio" was folded into the gear's Density = Simple.
 
   /** Whether the gear (density escape hatch + dev toggle) renders (disclosure level 2+). */
   @Input() ShowGear = false;
@@ -92,23 +89,14 @@ export class RealtimeAgentBannerComponent {
    */
   @Input() ShowDensityPicker = true;
 
-  /** Whether the End-call pill renders here (level 2+; the strip's big End owns it below). */
-  @Input() ShowEnd = false;
-
   /** Whether the Minimize control renders (live sessions only). */
   @Input() ShowMinimize = false;
-
-  /** Whether the "Return to pure audio" control renders (live + disclosure level above 0). */
-  @Input() ShowPureAudio = false;
 
   /** The user's current interface-density override (selected state in the gear popover). */
   @Input() Density: RealtimeUxDensity = 'auto';
 
   /** Emitted with the session record's ID when the dev "Open session" link is clicked. */
   @Output() OpenSessionRequested = new EventEmitter<string>();
-
-  /** Emitted when the user toggles captions; the overlay flips its caption state. */
-  @Output() CaptionsToggled = new EventEmitter<boolean>();
 
   /** Emitted when the user toggles developer links from the gear popover. */
   @Output() DevModeToggled = new EventEmitter<boolean>();
@@ -118,12 +106,6 @@ export class RealtimeAgentBannerComponent {
 
   /** Emitted when the user minimizes the call view (the call stays live). */
   @Output() MinimizeRequested = new EventEmitter<void>();
-
-  /** Emitted when the user asks to return to the pure-audio surface (level 0, this session). */
-  @Output() PureAudioRequested = new EventEmitter<void>();
-
-  /** Emitted when the user ends the call from the app-bar's End pill. */
-  @Output() EndRequested = new EventEmitter<void>();
 
   /** Review only: the user asked to RESUME the reviewed session as a new live call. */
   @Output() StartLiveRequested = new EventEmitter<void>();
@@ -152,12 +134,6 @@ export class RealtimeAgentBannerComponent {
     if (this.SessionID) {
       this.OpenSessionRequested.emit(this.SessionID);
     }
-  }
-
-  /** Toggles the captions control and notifies the overlay. */
-  public ToggleCaptions(): void {
-    this.CaptionsOn = !this.CaptionsOn;
-    this.CaptionsToggled.emit(this.CaptionsOn);
   }
 
   /** Opens/closes the gear popover (stops propagation so the outside-click close skips it). */

@@ -5,3 +5,6 @@
 ## 2024-06-06 - Dynamic ARIA Labels in Angular Charts
 **Learning:** When adding ARIA labels to toggle buttons that expand/collapse charts (e.g., in `ai-agent-run-analytics`), using Angular's property binding (`[attr.aria-label]="condition ? 'Collapse...' : 'Expand...'"`) is highly effective. It ensures screen readers always announce the correct current action state of the toggle, unlike static labels which would become inaccurate after the first click.
 **Action:** Always prefer dynamic state-based `[attr.aria-label]` strings over static strings for elements that act as toggles, and accompany them with `aria-hidden="true"` on the underlying graphical icons (like FontAwesome).
+## 2024-07-04 - Adding aria-labels to Zoom Controls
+**Learning:** Icon-only buttons used for primary controls (like zoom controls) often lack proper aria-labels in custom Angular components. Additionally, the inner `<i>` tags should explicitly receive `aria-hidden="true"` so screen readers don't misinterpret or double-announce the decorative icon.
+**Action:** Always check icon-only controls for both an overarching `aria-label` and `aria-hidden="true"` on the underlying graphical icon component.

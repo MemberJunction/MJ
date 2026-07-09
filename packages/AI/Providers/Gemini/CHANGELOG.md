@@ -1,5 +1,45 @@
 # Change Log - @memberjunction/ai-gemini
 
+## 5.45.1
+
+### Patch Changes
+
+- @memberjunction/ai@5.45.1
+- @memberjunction/global@5.45.1
+
+## 5.45.0
+
+### Patch Changes
+
+- Updated dependencies [c1f2d3d]
+  - @memberjunction/global@5.45.0
+  - @memberjunction/ai@5.45.0
+
+## 5.44.0
+
+### Patch Changes
+
+- 89ea055: feat(ai): SupportsBatchEmbeddings + safe default EmbedTexts on BaseEmbeddings; rename GeminiEmbedding2 → GeminiEmbedding
+
+  `BaseEmbeddings.EmbedTexts` is now a concrete dispatcher on a new `SupportsBatchEmbeddings` getter (default `false`): providers with a native batch endpoint return `true` and implement `embedBatch()`; everyone else inherits a safe per-text fallback (`embedPerText` — bounded concurrency, per-text retry-with-backoff, a hard 1:1 count guard, and a graceful empty-on-failure contract) that can never silently collapse a batch into fewer/blended vectors. A provider that claims batch support but doesn't implement `embedBatch()` throws, keeping the flag and the implementation honest.
+
+  Per-text embedding on the fallback path (and in Gemini's own `EmbedTexts`) now retries transient failures with bounded exponential backoff before giving up, so one transient 429/500 among N texts no longer degrades the whole batch — addressing the failure-rate-scales-with-N concern from review.
+
+  The OpenAI, Azure, Cohere, and Mistral embedding providers declare `SupportsBatchEmbeddings = true` and move their array call into `embedBatch()`. This generalizes the `GeminiEmbedding2` batch-collapse fix to the whole embedding layer and prevents the class of bug for any future provider that only implements single-text `EmbedText`.
+
+  Also renames the `GeminiEmbedding2` class (and its `@RegisterClass` key / `DriverClass`) to `GeminiEmbedding` — the class outlives any single model version. The `DriverClass` change is carried by the AI-models metadata (`metadata/ai-models/.ai-models.json`) and the regenerated class-registration manifests in the bootstrap packages; no hand-written migration.
+
+- a7c1f2f: fix(ai-gemini): EmbedTexts returns one vector per text (was collapsing the batch)
+
+  `GeminiEmbedding2.EmbedTexts` passed the whole `texts` array to `embedContent` as a single `contents` value. Because `gemini-embedding-2` is multimodal, Gemini fused the array into ONE blended vector (`response.embeddings.length === 1`) and the method silently returned that single vector for the whole batch — corrupting any consumer that pairs vectors to records by index (e.g. `EntityVectorSyncer`), which wrecks downstream semantic search/clustering. No error was thrown.
+
+  `EmbedTexts` now issues one `embedContent` call per text with bounded concurrency (max 4 in flight), preserving input order and returning exactly one vector per input text. A hard guard asserts `vectors.length === texts.length` and throws on mismatch so a collapse can never silently corrupt downstream storage. The existing error contract is preserved: on an API/embedding failure it returns an empty `vectors` array (matching the prior behavior and the other MJ embedding providers) rather than throwing, so batch pipelines degrade gracefully. The single-text `EmbedText` and multimodal `EmbedContent` paths are unchanged.
+
+- Updated dependencies [5396d90]
+- Updated dependencies [89ea055]
+  - @memberjunction/global@5.44.0
+  - @memberjunction/ai@5.44.0
+
 ## 5.43.0
 
 ### Minor Changes

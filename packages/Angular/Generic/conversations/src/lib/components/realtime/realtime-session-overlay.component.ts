@@ -551,7 +551,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     }
   }
 
-  /** The bottom dock — the T-to-type hotkey focuses its input. */
+  /** The bottom dock — type-to-compose seeds + focuses its input. */
   @ViewChild(RealtimeComposerComponent) private composer?: RealtimeComposerComponent;
 
   /** Channel keys already auto-revealed this session (first activity only). */
@@ -742,11 +742,19 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     if (!el) {
       return;
     }
-    // Seed an immediate measurement so the first resolve sees a real width, then observe.
-    this.applyContainerWidth(el.getBoundingClientRect ? el.getBoundingClientRect().width : 0);
+    // Seed an immediate measurement so the first resolve sees a real width. Deferred to a
+    // microtask (same reasoning as OnPanelWideChanged above): ngAfterViewInit runs inside the
+    // SAME change-detection pass that already checked bindings derived from Ui (e.g. the
+    // template's `@if (ShowPanelArea)` and `[Compact]`) using the field-initializer's width-0
+    // baseline. Recomputing synchronously here can flip chrome orb→console mid-pass and trip
+    // ExpressionChangedAfterItHasBeenCheckedError (NG0100). Landing the seed measurement in a
+    // fresh microtask lets it recompute in its own CD cycle instead.
+    Promise.resolve().then(() => {
+      this.applyContainerWidth(el.getBoundingClientRect ? el.getBoundingClientRect().width : 0);
+    });
     this.resizeObserver = new ResizeObserver(entries => {
       const width = entries[0]?.contentRect?.width ?? 0;
-      this.ngZone.run(() => this.applyContainerWidth(width));
+      this.ngZone.run(() => Promise.resolve().then(() => this.applyContainerWidth(width)));
     });
     this.resizeObserver.observe(el);
   }
@@ -1187,12 +1195,24 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     this.recomputeUi();
   }
 
-  /** The gear popover picked an interface density — apply + persist + emit. */
+  /**
+   * The gear popover picked an interface density — apply + persist + emit. `Simple` IS the
+   * "pure audio" surface (the standalone headphones control was folded into the gear here): it
+   * returns to the orb-only view AND makes it stick across refresh/next call, so picking it also
+   * closes any open Details peek so the surface is genuinely orb-only — matching the old app-bar
+   * "Pure audio" button exactly. In-session reveals ("Show the conversation", T-to-type, Details)
+   * stay available and ephemeral; switching density back to Standard/Pro/Auto restores the console.
+   */
   public OnDensityChanged(density: RealtimeUxDensity): void {
     this.Disclosure.SetDensity(density);
     this.persistDisclosure(SerializeUxMilestones(this.Disclosure.Milestones));
+    if (density === 'simple') {
+      this.DetailsPeek = false; // Simple = pure audio: collapse the surface peek back to the bare orb.
+    }
     this.DensityChanged.emit(density);
     this.ControlInvoked.emit('density');
+    // Density (and possibly DetailsPeek) changed — re-resolve (marks for check).
+    this.recomputeUi();
   }
 
   /** The hero's "Show the conversation" affordance — turns the text preference on. */
@@ -1200,22 +1220,6 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     this.OnCaptionsToggled(true);
     this.TextRevealed.emit();
     this.ControlInvoked.emit('reveal-text');
-  }
-
-  /**
-   * The app-bar's "Pure audio": returns to the orb-only surface AND makes it stick —
-   * it sets the persisted interface density to `simple` (the same setting the gear
-   * writes), so a refresh / next call still opens pure audio. In-session reveals
-   * ("Show the conversation", T-to-type, Details) remain available and stay ephemeral;
-   * the gear's density control switches back to Standard/Pro/Auto whenever wanted.
-   */
-  public OnPureAudio(): void {
-    this.Disclosure.SetDensity('simple');
-    this.persistDisclosure(SerializeUxMilestones(this.Disclosure.Milestones));
-    this.DetailsPeek = false;
-    this.ControlInvoked.emit('pure-audio');
-    // DetailsPeek + density changed — re-resolve (marks for check).
-    this.recomputeUi();
   }
 
   /** App-bar Minimize: hide the call view (CSS) — the call stays fully live. */
@@ -1254,31 +1258,40 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   }
 
   /**
-   * T-TO-TYPE: pressing T during a live call reveals the composer (raising disclosure to
-   * the engaged level when needed) and focuses its input — typing always exists, it just
-   * whispers until used. Ignored while review/minimized, with modifiers, or when an
-   * editable element already has focus.
+   * TYPE-TO-COMPOSE: during a live call, pressing any single printable character (with nothing
+   * focused) reveals the composer, raises disclosure to the engaged level, AND seeds that very
+   * character into the draft — the user just starts typing and their first key is captured (the
+   * old dedicated "T" key is gone; "t"/"T" now types like any other letter, and the visible
+   * "press T to type" hint was removed in favour of this natural behaviour). Ignored while
+   * review/minimized/inactive, with Ctrl/Cmd/Alt modifiers (don't hijack shortcuts), for
+   * non-printable named keys (Enter/Tab/Arrow/Escape/F-keys → `key.length > 1`), for a bare
+   * Space (ambiguous — no message starts with a space), or when an editable element / a
+   * keyboard-capturing surface (the remote-browser canvas) already holds focus.
    */
   @HostListener('document:keydown', ['$event'])
   public OnDocumentKeydown(event: KeyboardEvent): void {
     if (this.Hidden || this.IsReviewing || !this.realtime.IsActive) {
       return;
     }
-    if ((event.key !== 't' && event.key !== 'T') || event.metaKey || event.ctrlKey || event.altKey) {
+    if (event.metaKey || event.ctrlKey || event.altKey) {
+      return;
+    }
+    if (event.key.length !== 1 || event.key === ' ') {
       return;
     }
     if (this.isEditableTarget(event.target) || this.isKeyboardCapturingSurfaceFocused()) {
       return;
     }
     event.preventDefault();
+    const typedChar = event.key;
     this.OnComposerOpenChanged(true);
-    // The dock may have just been created — focus after this CD pass.
-    setTimeout(() => this.composer?.FocusInput());
+    // The dock may have just been created — seed the typed character + focus after this CD pass.
+    setTimeout(() => this.composer?.AppendAndFocus(typedChar));
   }
 
   /**
    * True when the event target is a native text-editing element (an input, textarea, or contentEditable),
-   * where a bare letter should type — not trigger the T-to-type shortcut.
+   * where a bare letter should type into that element — not trigger type-to-compose.
    *
    * @param eventTarget The keydown event's target.
    * @returns Whether the target is an editable element.
@@ -1303,8 +1316,8 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   }
 
   /**
-   * The composer dock opened (strip Type control / T hotkey) or closed (the dock's hide
-   * control). Opening raises the 'engaged' milestone for the cross-session ratchet —
+   * The composer dock opened (strip Type control / type-to-compose keystroke) or closed (the
+   * dock's hide control). Opening raises the 'engaged' milestone for the cross-session ratchet —
    * but the dock itself stays a per-session, user-owned toggle either way.
    */
   public OnComposerOpenChanged(open: boolean): void {
@@ -1440,7 +1453,13 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     }
     this.persistCaptionsPref();
     this.ControlInvoked.emit('captions');
-    this.cdr.markForCheck();
+    // ShowCaptions feeds the resolver's `textRevealed` signal (buildSignals), so BOTH directions must
+    // re-resolve the view-model. Turning ON already recomputes via Disclosure.Raise → Changed$, but
+    // turning OFF raises nothing — a bare markForCheck() would re-render against a STALE _ui (still
+    // showThread=true / showHero=false), so the hero orb wouldn't return until the next unrelated
+    // interaction recomputed. recomputeUi() rebuilds _ui from the current ShowCaptions and marks for
+    // check itself; it's pure/idempotent, so the redundant call in the ON case is harmless.
+    this.recomputeUi();
   }
 
   /** Reflect the gear toggle from the controls into the dev affordances. */

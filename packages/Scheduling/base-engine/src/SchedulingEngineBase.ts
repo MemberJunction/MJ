@@ -3,9 +3,10 @@
  * @module @memberjunction/scheduling-engine-base
  */
 
-import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, UserInfo } from '@memberjunction/core';
+import { BaseEngine, BaseEnginePropertyConfig, BaseEntityEvent, IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { MJScheduledJobEntity, MJScheduledJobTypeEntity, MJScheduledJobRunEntity } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
+import { Observable, Subject } from 'rxjs';
 
 /**
  * Base engine for scheduling system with metadata caching
@@ -23,6 +24,17 @@ export class SchedulingEngineBase extends BaseEngine<SchedulingEngineBase> {
     private _scheduledJobs: MJScheduledJobEntity[] = [];
     private _scheduledJobRuns: MJScheduledJobRunEntity[] = [];
     private _activePollingInterval: number | null = 10000; // Default 10 seconds, null when no jobs
+
+    /**
+     * Fires whenever the set of active scheduled jobs changes (a job saved, deleted,
+     * or invalidated from another server). Emitted AFTER the Active-only filter has been
+     * re-applied to {@link ScheduledJobs}, so subscribers always observe a reconciled set.
+     *
+     * The server-side execution engine subscribes to this to wake a suspended poll timer
+     * when a job is activated after boot. No-op on the client (no subscribers).
+     * @see MJScheduledJobEntityExtended
+     */
+    private _jobsChanged = new Subject<void>();
 
     /**
      * Configure the engine by loading metadata
@@ -65,7 +77,7 @@ export class SchedulingEngineBase extends BaseEngine<SchedulingEngineBase> {
 
         // Filter jobs to only active if requested
         if (!includeAllJobs) {
-            this._scheduledJobs = this._scheduledJobs.filter(j => j.Status === 'Active');
+            this.reapplyActiveJobFilter();
         }
 
         // Filter runs to last 7 days if loaded
@@ -169,6 +181,62 @@ export class SchedulingEngineBase extends BaseEngine<SchedulingEngineBase> {
             const halfInterval = Math.floor(minInterval / 2);
             this._activePollingInterval = Math.max(10000, Math.min(604800000, halfInterval));
         }
+    }
+
+    /**
+     * Observable that fires whenever the active scheduled-job set changes (save, delete,
+     * or cross-server invalidation). The emitted set has already had the Active-only filter
+     * re-applied. Used server-side to wake a suspended poll timer when a job is activated.
+     */
+    public get JobsChanged$(): Observable<void> {
+        return this._jobsChanged.asObservable();
+    }
+
+    /**
+     * Re-apply the Active-only filter to {@link _scheduledJobs}.
+     *
+     * The base engine's event-driven refresh paths (immediate mutation, remote-invalidate)
+     * maintain the array by primary key but are unaware of our Status filter, so an
+     * activated/deactivated job can leave a stale entry. This restores the invariant that
+     * {@link ScheduledJobs} contains only Active jobs.
+     */
+    private reapplyActiveJobFilter(): void {
+        this._scheduledJobs = this._scheduledJobs.filter(j => j.Status === 'Active');
+    }
+
+    /**
+     * Extend the base auto-refresh handling: after the base engine reconciles our cached
+     * arrays for a Scheduled Jobs change, re-apply the Active-only filter and notify
+     * {@link JobsChanged$} subscribers.
+     *
+     * The `MJ: Scheduled Jobs` config has no Filter/OrderBy, so the base processes its
+     * save/delete/remote-invalidate events via the synchronous immediate-mutation path —
+     * meaning `_scheduledJobs` is fully reconciled by the time `super` resolves. This is NOT
+     * the debounced full-refresh path; if a Filter/OrderBy is ever added to that config,
+     * revisit the timing here.
+     */
+    protected override async HandleIndividualBaseEntityEvent(event: BaseEntityEvent): Promise<boolean> {
+        const handled = await super.HandleIndividualBaseEntityEvent(event);
+
+        if (this.isScheduledJobsEvent(event)) {
+            this.reapplyActiveJobFilter();
+            this._jobsChanged.next();
+        }
+
+        return handled;
+    }
+
+    /**
+     * Determine whether a BaseEntity event targets the `MJ: Scheduled Jobs` entity.
+     * Handles both the save/delete shape (carries a `baseEntity`) and the remote-invalidate
+     * shape (carries an `entityName` string).
+     */
+    private isScheduledJobsEvent(event: BaseEntityEvent): boolean {
+        const target = 'mj: scheduled jobs';
+        const name = event.type === 'remote-invalidate'
+            ? event.entityName
+            : event.baseEntity?.EntityInfo?.Name;
+        return name?.toLowerCase().trim() === target;
     }
 
     /**

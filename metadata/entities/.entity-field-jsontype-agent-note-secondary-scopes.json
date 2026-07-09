@@ -6,7 +6,9 @@
       "the other agent scope fields (ExecuteAgentParams.SecondaryScopes); CodeGen emits a",
       "per-entity prefixed copy of the type (no collision). Applied via mj sync push."
     ],
-    "fields": { "Name": "MJ: AI Agent Notes" },
+    "fields": {
+      "Name": "MJ: AI Agent Notes"
+    },
     "relatedEntities": {
       "MJ: Entity Fields": [
         {
@@ -17,10 +19,16 @@
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agent Notes&Name=SecondaryScopes"
+          },
+          "sync": {
+            "lastModified": "2026-07-01T17:33:48.587Z",
+            "checksum": "cac33d736602eb28b24f302eca53c39ad57251db97ba452defa4d6f3ea1beb51"
           }
         }
       ]
     },
-    "primaryKey": { "ID": "@lookup:MJ: Entities.Name=MJ: AI Agent Notes" }
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: AI Agent Notes"
+    }
   }
 ]

@@ -278,6 +278,14 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="DetectExternalChanges"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
 
     </mj-collapsible-panel>
 
@@ -444,7 +452,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="RowsToPackSampleOrder"
-            Type="code"
+            Type="textarea"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -468,6 +476,14 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="TrustServerCacheCompletely"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="AllowCaching"
             Type="checkbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
@@ -609,16 +625,17 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="AllowCaching"
-            Type="checkbox"
+            FieldName="ExternalDataSourceID"
+            Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
+            LinkType="Record"
         ></mj-form-field>
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="DetectExternalChanges"
-            Type="checkbox"
+            FieldName="ExternalObjectName"
+            Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -644,6 +661,14 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="__mj_UpdatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="CanonicalSchemaName"
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
@@ -2332,11 +2357,61 @@
         }
     </mj-collapsible-panel>
 
+    <!-- ML Model Scoring Bindings Section -->
+    <mj-collapsible-panel
+        SectionKey="mJMLModelScoringBindings"
+        SectionName="ML Model Scoring Bindings"
+        Icon="fa fa-project-diagram"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJMLModelScoringBindings')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: ML Model Scoring Bindings','TargetEntityID')"
+                [NewRecordValues]="NewRecordValues('MJ: ML Model Scoring Bindings')"
+                [AllowLoad]="IsSectionExpanded('mJMLModelScoringBindings')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJMLModelScoringBindings', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- AI Agent Sessions Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAIAgentSessions"
+        SectionName="AI Agent Sessions"
+        Icon="fa fa-robot"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentSessions')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Sessions','LinkedEntityID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Sessions')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentSessions')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentSessions', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <!-- Scoped Prompt Parts Section -->
     <mj-collapsible-panel
         SectionKey="mJScopedPromptParts"
         SectionName="Scoped Prompt Parts"
-        Icon="fa fa-comment-dots"
+        Icon="fa fa-table"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
@@ -2357,25 +2432,25 @@
         }
     </mj-collapsible-panel>
 
-    <!-- ML Model Scoring Bindings Section -->
+    <!-- Scoped Prompt Configs Section -->
     <mj-collapsible-panel
-        SectionKey="mJMLModelScoringBindings"
-        SectionName="ML Model Scoring Bindings"
-        Icon="fa fa-project-diagram"
+        SectionKey="mJScopedPromptConfigs"
+        SectionName="Scoped Prompt Configs"
+        Icon="fa fa-sliders-h"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJMLModelScoringBindings')"
+        [BadgeCount]="GetSectionRowCount('mJScopedPromptConfigs')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: ML Model Scoring Bindings','TargetEntityID')"
-                [NewRecordValues]="NewRecordValues('MJ: ML Model Scoring Bindings')"
-                [AllowLoad]="IsSectionExpanded('mJMLModelScoringBindings')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Scoped Prompt Configs','PrimaryScopeEntityID')"
+                [NewRecordValues]="NewRecordValues('MJ: Scoped Prompt Configs')"
+                [AllowLoad]="IsSectionExpanded('mJScopedPromptConfigs')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJMLModelScoringBindings', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJScopedPromptConfigs', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

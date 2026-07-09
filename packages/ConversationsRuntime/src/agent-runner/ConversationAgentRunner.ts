@@ -67,6 +67,18 @@ export interface ProcessMessageInput {
      */
     onProgress?: AgentExecutionProgressCallback;
     /**
+     * Per-request Plan Mode toggle. When true (and the resolved agent's SupportsPlanMode
+     * capability is on), the root agent must present a plan for human approval before it
+     * may execute Actions/Sub-Agents. Defaults off — no behavior change unless set.
+     */
+    planMode?: boolean;
+    /**
+     * Skill IDs the user requested via `/skill-name` mentions in the composer. Forwarded to the
+     * server, which intersects them with the agent's accepted skills AND the user's Run permission
+     * before any activate. Defaults to none.
+     */
+    requestedSkillIDs?: string[];
+    /**
      * Optional explicit agent ID. When set, wins over the {@link DefaultAgentResolver}
      * chain. Mirrors the widget's `[DefaultAgentId]` input.
      */
@@ -191,6 +203,8 @@ export class ConversationAgentRunner {
                             InputSchema: t.ParameterSchema,
                         })),
                 },
+                ...(input.planMode ? { PlanMode: true } : {}),
+                ...(input.requestedSkillIDs?.length ? { RequestedSkillIDs: input.requestedSkillIDs } : {}),
                 CreateArtifacts: true,
                 CreateNotification: true,
                 OnProgress: input.onProgress
