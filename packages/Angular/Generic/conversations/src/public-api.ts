@@ -87,6 +87,29 @@ export * from './lib/components/global-tasks/global-tasks-panel.component';
 export * from './lib/components/attachment/image-viewer.component';
 export * from './lib/components/overlay/chat-overlay.component';
 
+// Components declared AND exported by ConversationsModule but previously missing
+// from public-api. They are used in the templates of exported components (e.g.
+// mj-conversation-chat-area), so a consumer app compiling in Angular's
+// local-compilation / HMR mode fails to build (NG3004: "Unable to import
+// component … not exported from @memberjunction/ng-conversations") unless every
+// module-exported component is importable from the package entry point.
+export * from './lib/components/collection/artifact-create-modal.component';
+export * from './lib/components/collection/collection-form-modal.component';
+export * from './lib/components/conversation/conversation-agent-picker.component';
+export * from './lib/components/conversation/conversation-mode-picker.component';
+export * from './lib/components/conversation/pinned-messages-panel.component';
+export * from './lib/components/dialogs/input-dialog.component';
+export * from './lib/components/dialogs/rating-dialog.component';
+export * from './lib/components/export/export-modal.component';
+export * from './lib/components/library/library-full-view.component';
+export * from './lib/components/members/members-modal.component';
+export * from './lib/components/message/actionable-commands.component';
+export * from './lib/components/search/search-panel.component';
+export * from './lib/components/shared/user-picker.component';
+export * from './lib/components/tasks/tasks-dropdown.component';
+export * from './lib/components/thread/thread-panel.component';
+export * from './lib/directives/search-shortcut.directive';
+
 // PR 2c — Widget extension surface (slots, events, design tokens)
 export * from './lib/services/conversations-runtime-bootstrap.service';
 export * from './lib/directives/chat-slot.directive';

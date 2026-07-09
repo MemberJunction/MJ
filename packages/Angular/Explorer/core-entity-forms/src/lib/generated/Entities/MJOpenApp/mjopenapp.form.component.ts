@@ -21,6 +21,7 @@ export class MJOpenAppFormComponent extends BaseFormComponent {
             { sectionKey: 'publisherInformation', sectionName: 'Publisher Information', isExpanded: true },
             { sectionKey: 'appConfiguration', sectionName: 'App Configuration', isExpanded: true },
             { sectionKey: 'uIBranding', sectionName: 'UI Branding', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJOpenAppDependenciesDependsOnAppID', sectionName: 'Open App Dependencies (Depends On App ID)', isExpanded: false },
             { sectionKey: 'mJOpenAppDependenciesOpenAppID', sectionName: 'Open App Dependencies (Open App ID)', isExpanded: false },

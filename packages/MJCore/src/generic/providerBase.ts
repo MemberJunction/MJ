@@ -1648,6 +1648,16 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @param contextUser - Optional user context for permissions (required server-side)
      * @returns The query results
      */
+    /**
+     * Whether a saved query is bound to an external data source. The base returns false;
+     * providers that support external data sources override this (consulting query metadata)
+     * so the outer RunQuery CacheLocal layer can defer to InternalRunQuery's own external
+     * TTL caching. Synchronous + non-throwing: resolves from cached metadata only.
+     */
+    protected IsExternalQuery(_params: RunQueryParams): boolean {
+        return false;
+    }
+
     public async RunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
         // Shallow-clone for symmetry with RunView — pipeline must never mutate caller objects
         params = { ...params };
@@ -1665,6 +1675,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         const queryCacheEngaged = params.CacheLocal === true
             && !params.SQL
             && (!!params.QueryID || !!params.QueryName)
+            // External-data-source queries own their own TTL caching inside InternalRunQuery
+            // (runExternalQueryWithCache, keyed to the source's DefaultCacheTTLSeconds). This
+            // outer CacheLocal layer would otherwise write a SECOND, divergent slot with no/foreign
+            // TTL (CacheLocalTTL) — a stale-forever hazard since external data can't be event-invalidated.
+            && !this.IsExternalQuery(params)
             && LocalCacheManager.Instance.IsInitialized;
         let queryFingerprint: string | undefined;
         if (queryCacheEngaged) {
@@ -3409,6 +3424,15 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         }
     }
 
+    /**
+     * @deprecated The reuse-global fast path now builds a shared shell instead — see
+     * {@link CreateSharedMetadataShell}. The metadata graph is immutable after Config,
+     * so re-instantiating every Info object (~1s of synchronous constructor work for a
+     * ~600-entity install) bought no isolation the shell doesn't already provide.
+     * Subclass OVERRIDES of this method are still honored on the fast path (see
+     * {@link CopyMetadataFromGlobalProvider}) for backward compatibility; new
+     * customizations should override {@link CreateSharedMetadataShell} instead.
+     */
     protected CloneAllMetadata(toClone: AllMetadata): AllMetadata {
         // we need to create a copy but can't do it the standard way becuase we need object instances
         // for various things like EntityInfo
@@ -3418,14 +3442,72 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     }
 
     /**
-     * Copies metadata from the global provider to the local instance.
-     * This is used to ensure that the local instance has the latest metadata
-     * information available without having to reload it from the server.
+     * Builds this instance's AllMetadata as a thin shell over another provider's
+     * already-loaded metadata: every metadata array is a PER-INSTANCE shallow copy
+     * whose elements are the SHARED Info object instances, and CurrentUser remains
+     * this instance's own.
+     *
+     * Why sharing the instances is safe — and why this replaced the former deep
+     * clone (CloneAllMetadata) on the reuse-global fast path: the metadata graph is
+     * immutable after Config. Refreshes swap the WHOLE AllMetadata object
+     * (UpdateLocalMetadata), never mutate the Info objects in place, so the only
+     * per-instance datum inside the graph is CurrentUser — which this shell keeps
+     * independent. The deep clone cost ~1s of event-loop-blocking constructor work
+     * per provider on every server request (MemberJunction/MJ#3083); the shell is
+     * ~20 array-of-pointer copies (microseconds).
+     *
+     * Why the array containers are copied rather than aliased: an in-place
+     * `.sort()`/`.push()`/`.splice()` by request-scoped code then stays local to
+     * that provider — matching the clone era's isolation for the common accidental
+     * mutation class — instead of reordering the global graph for every other
+     * in-flight request. Only the top-level AllMetadata collections get this
+     * per-instance protection: everything below them is shared, including the
+     * nested arrays owned by Info objects (`entity.Fields`,
+     * `entity.RelatedEntities`, `application.ApplicationEntities`, ...) — an
+     * in-place mutation of those is process-wide. Property writes on the shared
+     * Info objects themselves are likewise visible process-wide (as they always
+     * were on the client's global provider): treat Info objects and everything
+     * they own as read-only; copy before sorting.
+     *
+     * Override precedence: if a subclass overrides BOTH this method and the
+     * deprecated {@link CloneAllMetadata}, the CloneAllMetadata override wins on
+     * the fast path (see {@link CopyMetadataFromGlobalProvider}) — the
+     * conservative back-compat choice, since pre-#3083 subclasses could only have
+     * customized adoption through CloneAllMetadata. Remove the CloneAllMetadata
+     * override to activate a CreateSharedMetadataShell override.
+     */
+    protected CreateSharedMetadataShell(shared: AllMetadata): AllMetadata {
+        const shell = new AllMetadata();
+        for (const m of AllMetadataArrays) {
+            shell[m.key] = [...(shared[m.key] ?? [])];
+        }
+        shell.CurrentUser = this.CurrentUser; // same semantics the deep clone had — per-instance, not shared
+        return shell;
+    }
+
+    /**
+     * Adopts the global provider's metadata for this instance without reloading it
+     * from the server: shares the (immutable post-Config) metadata arrays by
+     * reference via {@link CreateSharedMetadataShell} and builds this instance's
+     * entity lookup maps.
      */
     protected CopyMetadataFromGlobalProvider(): boolean {
         try {
-            if (Metadata.Provider && Metadata.Provider !== this && Metadata.Provider.AllMetadata) { // global-provider-ok: this method literally clones FROM the global provider on bootstrap
-                this._localMetadata = this.CloneAllMetadata(Metadata.Provider.AllMetadata); // global-provider-ok: bootstrap clone path
+            // Require the global provider to actually HAVE metadata (entities loaded) — a
+            // registered-but-not-yet-configured global would otherwise donate an empty graph
+            // and this Config would "succeed" with zero entities. Falling through to the
+            // normal load path is the correct behavior in that case.
+            const globalMetadata = Metadata.Provider !== this ? Metadata.Provider?.AllMetadata : undefined; // global-provider-ok: this method adopts metadata FROM the global provider on bootstrap
+            if ((globalMetadata?.AllEntities?.length ?? 0) > 0) {
+                // Back-compat: before #3083 this path called the overridable CloneAllMetadata,
+                // so external subclasses could customize adoption (e.g. tenant-filtered deep
+                // clones). Honor such overrides; the base behavior is the cheap shared shell.
+                // If a subclass overrides both, the CloneAllMetadata override deliberately wins.
+                const subclassOverridesClone = this.CloneAllMetadata !== ProviderBase.prototype.CloneAllMetadata;
+                const adopted = subclassOverridesClone
+                    ? this.CloneAllMetadata(globalMetadata)
+                    : this.CreateSharedMetadataShell(globalMetadata);
+                this.UpdateLocalMetadata(adopted);
                 return true;
             }
             return false;

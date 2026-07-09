@@ -34,9 +34,12 @@
  * the JSON *values* parked here are ever transient.
  *
  * Gated everywhere by EntityInfo field presence, so it is a no-op on tables that predate
- * the column. CRUCIAL invariant: when a record has NO unmapped keys, NOTHING is written
- * here — empty across all rows is the signal that no RSU pass is needed, which is what
- * keeps a customs-free sync byte-identical to today (single-stage, zero overhead).
+ * the column. RECONCILE CONTRACT (U4): the overflow is reconciled on EVERY sync via
+ * {@link reconcileOverflowValue} — the record's CURRENT unmapped keys as JSON, or `null` when it
+ * has none. Writing `null` (rather than skipping the write) is what EVICTS a vanished key. A
+ * customs-free sync stays byte-identical NOT by skipping the write but by BaseEntity dirty
+ * tracking: `Set(column, null)` on an already-`null` column compares null-to-null and produces no
+ * UPDATE — only a row that USED to carry overflow and no longer does becomes dirty (the eviction).
  */
 export const CUSTOM_OVERFLOW_COLUMN = '__mj_integration_CustomOverflow';
 
@@ -75,4 +78,20 @@ export function computeUnmappedFields(
  */
 export function hasUnmappedFields(unmapped: Record<string, unknown> | undefined | null): boolean {
     return unmapped != null && Object.keys(unmapped).length > 0;
+}
+
+/**
+ * U4 — the value to write to the overflow column when a record is synced: this record's CURRENT
+ * unmapped keys as JSON, or `null` when it has none. Returning `null` (instead of skipping the write)
+ * is what EVICTS a stale key: when a source column vanishes, the record's unmapped set shrinks (or
+ * empties), so re-writing the reconciled value drops the vanished key from the row's overflow instead
+ * of leaving the prior JSON behind forever (which would also let the key be phantom-promoted, U3).
+ *
+ * Byte-identical-safe: a customs-free row's overflow is already `null`, so writing `null` is a no-op
+ * under MJ's dirty tracking — only a row that USED to carry overflow and no longer does becomes dirty.
+ */
+export function reconcileOverflowValue(
+    unmapped: Record<string, unknown> | undefined | null,
+): string | null {
+    return hasUnmappedFields(unmapped) ? JSON.stringify(unmapped) : null;
 }

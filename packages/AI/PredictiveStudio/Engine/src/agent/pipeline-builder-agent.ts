@@ -38,6 +38,13 @@ export interface PredictiveStudioBuildOutcome {
 /** The agent payload = the modeling plan the conversation accumulated, plus the builder's outcome. */
 export interface PredictiveStudioBuilderPayload extends ModelingPlanSpec {
   BuildResult?: PredictiveStudioBuildOutcome;
+  /**
+   * The count of USER messages in the conversation at the moment the orchestrator last FORCED a build
+   * (stamped by `PredictiveStudioModelDevAgent.determineNextStep`). After a **failed** build this is what
+   * distinguishes the stale "build it" message that triggered the failed attempt (same count → no re-force,
+   * the no-loop guard) from a FRESH user request to retry (higher count → deterministic rebuild).
+   */
+  BuildAttemptUserMessageCount?: number;
 }
 
 /** Project the rich {@link BuildPredictionResult} into the compact, payload-safe outcome (pure → testable). */
@@ -95,9 +102,15 @@ export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
     const outcome = summarizeBuildResult(result);
     const newPayload = { ...payload, BuildResult: outcome } as unknown as P;
     const message = buildOutcomeMessage(outcome);
-    // A failed BUILD (couldn't create/train) is a Failed step; a successful run whose model is merely
-    // HELD (trust gate / leakage) is still a Success step — the build ran and the gate did its job.
-    return this.codeStep<P>(outcome.success ? 'Success' : 'Failed', newPayload, message);
+    // The deterministic builder RAN to a definite outcome — published, held (trust gate / leakage), OR
+    // could-not-build (invalid plan / train error). All three are a successful *run* of this sub-agent:
+    // the outcome (including any error) is recorded on the payload as `BuildResult`. Returning Success
+    // guarantees that payload propagates back to the orchestrator, whose `shouldForceBuild` then sees
+    // `BuildResult` and STOPS — so a deterministic build failure is narrated to the user ("I couldn't
+    // build the prediction: <reason>") ONCE, never retried in a loop. (Genuine can't-run-at-all cases —
+    // no user / no provider, handled above — remain `Failed`.) `BuildResult.success` preserves the real
+    // pass/fail for observability regardless of the step verdict.
+    return this.codeStep<P>('Success', newPayload, message);
   }
 
   /** Builder seam — overridden in unit tests to inject a stub (no DB / sidecar). */

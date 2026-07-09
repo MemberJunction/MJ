@@ -26,7 +26,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (401 classes)
+// @memberjunction/core-entities (405 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -189,6 +189,7 @@ import {
     MJConversationDetailEntityExtended,
     MJConversationDetailRatingEntity,
     MJConversationEntity,
+    MJConversationWidgetInstanceEntity,
     MJCountryEntity,
     MJCredentialCategoryEntity,
     MJCredentialEntity,
@@ -249,6 +250,8 @@ import {
     MJExperimentSessionEntity,
     MJExperimentSessionIterationEntity,
     MJExplorerNavigationItemEntity,
+    MJExternalDataSourceEntity,
+    MJExternalDataSourceTypeEntity,
     MJFileCategoryEntity,
     MJFileEntity,
     MJFileEntityRecordLinkEntity,
@@ -353,6 +356,7 @@ import {
     MJScheduledJobRunEntity,
     MJScheduledJobTypeEntity,
     MJSchemaInfoEntity,
+    MJScopedPromptConfigEntity,
     MJScopedPromptPartEntity,
     MJSearchExecutionLogEntity,
     MJSearchProviderEntity,
@@ -752,6 +756,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJConversationDetailEntityExtended,
     MJConversationDetailRatingEntity,
     MJConversationEntity,
+    MJConversationWidgetInstanceEntity,
     MJCountryEntity,
     MJCredentialCategoryEntity,
     MJCredentialEntity,
@@ -812,6 +817,8 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJExperimentSessionEntity,
     MJExperimentSessionIterationEntity,
     MJExplorerNavigationItemEntity,
+    MJExternalDataSourceEntity,
+    MJExternalDataSourceTypeEntity,
     MJFileCategoryEntity,
     MJFileEntity,
     MJFileEntityRecordLinkEntity,
@@ -916,6 +923,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJScheduledJobRunEntity,
     MJScheduledJobTypeEntity,
     MJSchemaInfoEntity,
+    MJScopedPromptConfigEntity,
     MJScopedPromptPartEntity,
     MJSearchExecutionLogEntity,
     MJSearchProviderEntity,

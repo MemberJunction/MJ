@@ -101,6 +101,8 @@ interface DynamicServerPackage {
   PackageName?: string;
   /** Optional named export to invoke after import (a startup hook). */
   StartupExport?: string;
+  /** Open App name this package belongs to (for tracking). */
+  AppName?: string;
   /** Whether this package should be loaded. Treated as enabled unless explicitly `false`. */
   Enabled?: boolean;
 }

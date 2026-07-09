@@ -1,5 +1,31 @@
 # @memberjunction/ng-livekit-room
 
+## 5.46.0
+
+### Patch Changes
+
+- @memberjunction/ng-whiteboard@5.46.0
+- @memberjunction/ng-ui-components@5.46.0
+- @memberjunction/livekit-room-core@5.46.0
+
+## 5.45.1
+
+### Patch Changes
+
+- @memberjunction/ng-ui-components@5.45.1
+- @memberjunction/ng-whiteboard@5.45.1
+- @memberjunction/livekit-room-core@5.45.1
+
+## 5.45.0
+
+### Patch Changes
+
+- Updated dependencies [13716e4]
+- Updated dependencies [c1f2d3d]
+  - @memberjunction/ng-ui-components@5.45.0
+  - @memberjunction/ng-whiteboard@5.45.0
+  - @memberjunction/livekit-room-core@5.45.0
+
 ## 5.44.0
 
 ### Minor Changes
