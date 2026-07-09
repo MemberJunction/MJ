@@ -22796,6 +22796,29 @@ export const MJOpenAppSchema = z.object({
         * * Display Name: Subpath
         * * SQL Data Type: nvarchar(500)
         * * Description: In-repo subdirectory the app was installed from for multi-app repositories (e.g. 'CRM/HubSpot'). NULL when the app's mj-app.json is at the repository root.`),
+    LastCompletedStep: z.union([z.literal('AngularExcludesUpdated'), z.literal('ConfigUpdated'), z.literal('DbCleanupDone'), z.literal('DependenciesReplaced'), z.literal('FilesRemoved'), z.literal('Finalized'), z.literal('HooksRun'), z.literal('MigrationsApplied'), z.literal('PackagesInstalled'), z.literal('RecordCreated'), z.literal('RecordUpdated')]).nullable().describe(`
+        * * Field Name: LastCompletedStep
+        * * Display Name: Last Completed Step
+        * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values
+    *   * AngularExcludesUpdated
+    *   * ConfigUpdated
+    *   * DbCleanupDone
+    *   * DependenciesReplaced
+    *   * FilesRemoved
+    *   * Finalized
+    *   * HooksRun
+    *   * MigrationsApplied
+    *   * PackagesInstalled
+    *   * RecordCreated
+    *   * RecordUpdated
+        * * Description: The last install/upgrade/remove step that completed successfully for this app while Status is Installing, Upgrading, or Removing. Used to resume a crashed or failed operation from the correct point instead of restarting it entirely. Cleared (NULL) once the operation reaches a terminal state (Active/Disabled/Removed/Error).`),
+    LastCompletedStepTargetVersion: z.string().nullable().describe(`
+        * * Field Name: LastCompletedStepTargetVersion
+        * * Display Name: Last Completed Step Target Version
+        * * SQL Data Type: nvarchar(20)
+        * * Description: The version this app was being upgraded TO when LastCompletedStep was last written, for Upgrade only. A resume only trusts LastCompletedStep when this matches the version currently being requested — otherwise a checkpoint from an interrupted upgrade to a different version could wrongly skip steps for the new target. Cleared alongside LastCompletedStep.`),
     InstalledByUser: z.string().describe(`
         * * Field Name: InstalledByUser
         * * Display Name: Installed By User
@@ -92331,6 +92354,45 @@ export class MJOpenAppEntity extends BaseEntity<MJOpenAppEntityType> {
     }
     set Subpath(value: string | null) {
         this.Set('Subpath', value);
+    }
+
+    /**
+    * * Field Name: LastCompletedStep
+    * * Display Name: Last Completed Step
+    * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values
+    *   * AngularExcludesUpdated
+    *   * ConfigUpdated
+    *   * DbCleanupDone
+    *   * DependenciesReplaced
+    *   * FilesRemoved
+    *   * Finalized
+    *   * HooksRun
+    *   * MigrationsApplied
+    *   * PackagesInstalled
+    *   * RecordCreated
+    *   * RecordUpdated
+    * * Description: The last install/upgrade/remove step that completed successfully for this app while Status is Installing, Upgrading, or Removing. Used to resume a crashed or failed operation from the correct point instead of restarting it entirely. Cleared (NULL) once the operation reaches a terminal state (Active/Disabled/Removed/Error).
+    */
+    get LastCompletedStep(): 'AngularExcludesUpdated' | 'ConfigUpdated' | 'DbCleanupDone' | 'DependenciesReplaced' | 'FilesRemoved' | 'Finalized' | 'HooksRun' | 'MigrationsApplied' | 'PackagesInstalled' | 'RecordCreated' | 'RecordUpdated' | null {
+        return this.Get('LastCompletedStep');
+    }
+    set LastCompletedStep(value: 'AngularExcludesUpdated' | 'ConfigUpdated' | 'DbCleanupDone' | 'DependenciesReplaced' | 'FilesRemoved' | 'Finalized' | 'HooksRun' | 'MigrationsApplied' | 'PackagesInstalled' | 'RecordCreated' | 'RecordUpdated' | null) {
+        this.Set('LastCompletedStep', value);
+    }
+
+    /**
+    * * Field Name: LastCompletedStepTargetVersion
+    * * Display Name: Last Completed Step Target Version
+    * * SQL Data Type: nvarchar(20)
+    * * Description: The version this app was being upgraded TO when LastCompletedStep was last written, for Upgrade only. A resume only trusts LastCompletedStep when this matches the version currently being requested — otherwise a checkpoint from an interrupted upgrade to a different version could wrongly skip steps for the new target. Cleared alongside LastCompletedStep.
+    */
+    get LastCompletedStepTargetVersion(): string | null {
+        return this.Get('LastCompletedStepTargetVersion');
+    }
+    set LastCompletedStepTargetVersion(value: string | null) {
+        this.Set('LastCompletedStepTargetVersion', value);
     }
 
     /**

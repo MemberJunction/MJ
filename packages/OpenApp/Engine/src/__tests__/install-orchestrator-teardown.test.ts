@@ -55,6 +55,7 @@ vi.mock('../install/history-recorder.js', () => ({
     RecordAppDependencies: vi.fn(),
     DeleteAppDependencies: vi.fn(),
     SetAppStatus: vi.fn(),
+    SetAppStep: vi.fn(),
     FindInstalledApp: vi.fn(),
     FindDependentApps: vi.fn(),
     ListInstalledApps: vi.fn(),
