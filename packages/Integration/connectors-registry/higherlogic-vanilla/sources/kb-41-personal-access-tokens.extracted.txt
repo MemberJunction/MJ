@@ -1,0 +1,39 @@
+The APIv2 supports two means of authentication, and both require an access token.
+
+HTTP headerTo authenticate with the HTTP header, pass the access token in the Authorization field with the bearer scheme.
+
+Authorization: Bearer <your_jwt_token>
+﻿✔️﻿ TIP:  This is the preferred way of authenticating against the API because headers are not usually logged on servers. If you're making server-to-server calls, it's worth looking up how to add custom headers in your API client.
+
+Query string parameterIf you can’t add a custom header or you want to avoid pre-flight requests, you can pass the access token in the query string using the access_token parameter.
+
+Generate an access tokenCurrently, you can obtain a personal access token from your user profile. These access tokens are meant for server-to-server integrations, and should not be exposed to HTML pages. 
+
+To obtain a personal access token:
+
+1. Click the MeBox, followed by your profile picture.
+
+2. On the resulting page, select Edit Profile from the dropdown.
+
+
+    
+        
+            
+    
+
+3. Click Access Tokens in the right-hand sidebar.
+
+4. Click Generate New Token.
+
+
+    
+        
+            
+    
+
+5. Give the token a name that will help you remember its use.
+
+6. Click Generate to generate the token and copy the value into your app.
+
+NoteThis requires the Garden > Tokens > Add permission in Roles and Permissions for the relevant Role. 
+API calls using a token will reflect the permissions of the user who generated the token.

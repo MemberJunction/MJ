@@ -1,0 +1,5 @@
+{
+  "pathPrefix": "api/v2",
+  "fetchShape": "rest",
+  "expandToAllObjects": true
+}

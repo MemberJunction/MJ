@@ -1,0 +1,51 @@
+Vanilla's API v2 has been rebuilt from the ground up to enable tighter integrations and lower-level access to all of Higher Logic Vanilla's (Vanilla) features using an API-first strategy.
+
+NOTE: New endpoints will be available as they are completed, so keep an eye out for new product announcements in our release notes.
+
+Before we begin...Looking for the API v2 swagger reference? You can find it in your Dashboard (Settings > API Integrations > API V2), or in our full API reference.
+
+NOTE: The reference in your Dashboard will always be more accurate than the full reference and tailored to your site.
+
+PaginationVanilla uses two types of pagination in the API:
+
+Numbered paginationUsed where possible
+Access to first, last, previous, and next pages
+More paginationUsed where querying the totals of a particular resource would not be performant
+Access to first, previous, and next pages
+Resources that support pagination have page and limit parameters. For example: /api/v2/{RESOURCE}?page={PAGE_NUM}&limit={NUM_ITEMS}
+
+Since the API returns an array of records, the paging information is sent using the Link header.
+
+Link header example:
+
+Link: <https://forum.example.com/api/v2/users?page=1&limit=100>; rel="first",
+<https://forum.example.com/api/v2/users?page=5&limit=100>; rel="next"
+NOTE: The example includes a line break for readability.
+
+Depending on the pagination type, the following rel values are possible:
+
+first - The link relation for the first page of records.
+last - The link relation for the last page of records.
+prev - The link relation for the immediate previous page of records. Only available if page > 1.
+next - The link relation for the immediate next page of records. Only available if more records are available.
+NOTE: Results per page can be lower than the limit even if more pages are available. This is due to rows being removed based on the current user's permissions. It's also possible to have empty pages for the same reason. The Paging-Next header will always be present when more rows are available.
+
+Targeting data with the 'fields' propertyThe fields property is a great feature if you want to retrieve specific data only. You can add it to every API GET call in order to limit which information gets returned.
+
+Include the fields property in your GET call and then list just the relevant fields.
+
+ExampleTo retrieve a list of users so that you can compare their last active date to their total points, use the fields property as shown:
+
+GET /users?page=1&limit=500&fields=name,dateLastActive,points
+
+This returns only the information you requested with the fields property:
+
+
+    
+        
+            
+    
+
+NOTE: The fields property can be used with every GET API call.
+
+TIP: The fields property also works with exporting CSV files from the API.

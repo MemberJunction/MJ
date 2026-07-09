@@ -1,0 +1,2142 @@
+{
+  "totalDoors": 79,
+  "totalPaths": 335,
+  "totalComponentSchemas": 380,
+  "containerFolds": [
+    {
+      "primaryRef": "ProductMessage",
+      "foldedDoors": [
+        "product-message",
+        "product-messages"
+      ]
+    }
+  ],
+  "coverableCount": 51,
+  "informationalCount": 27,
+  "coverable": [
+    {
+      "name": "Addon",
+      "doors": [
+        "addons"
+      ],
+      "pkField": "addonID",
+      "fkFields": [],
+      "listPath": "/addons",
+      "listParams": [
+        "type",
+        "enabled",
+        "themeType",
+        "fields"
+      ],
+      "listDataKey": null,
+      "createPath": null,
+      "createMethod": null,
+      "updatePath": "/addons/{addonID}",
+      "updateMethod": "PATCH",
+      "deletePath": null,
+      "deleteMethod": null,
+      "hasDateUpdated": false,
+      "hasDateInserted": false,
+      "fieldCount": 11
+    },
+    {
+      "name": "Appeal",
+      "doors": [
+        "appeals"
+      ],
+      "pkField": "appealID",
+      "fkFields": [
+        {
+          "field": "insertUserID",
+          "target": "User"
+        },
+        {
+          "field": "assignedUserID",
+          "target": "AssignedUser"
+        },
+        {
+          "field": "appealingUserID",
+          "target": "AppealingUser"
+        },
+        {
+          "field": "escalationID",
+          "target": "Escalation"
+        },
+        {
+          "field": "escalationLogID",
+          "target": "EscalationLog"
+        }
+      ],
+      "listPath": "/appeals",
+      "listParams": [
+        "appealingUserID",
+        "assignedUserID",
+        "type",
+        "escalationID",
+        "escalationLogID",
+        "status",
+        "dateInserted",
+        "page",
+        "limit",
+        "sort",
+        "fields"
+      ],
+      "listDataKey": null,
+      "createPath": "/appeals",
+      "createMethod": "POST",
+      "updatePath": "/appeals/{id}",
+      "updateMethod": "PATCH",
+      "deletePath": null,
+      "deleteMethod": null,
+      "hasDateUpdated": true,
+      "hasDateInserted": true,
+      "fieldCount": 13
+    },
+    {
+      "name": "Article",
+      "doors": [
+        "articles"
+      ],
+      "pkField": "articleID",
+      "fkFields": [
+        {
+          "field": "articleRevisionID",
+          "target": "ArticleRevision"
+        },
+        {
+          "field": "localizedID",
+          "target": "Localized"
+        },
+        {
+          "field": "foreignID",
+          "target": "Foreign"
+        },
+        {
+          "field": "insertUserID",
+          "target": "User"
+        },
+        {
+          "field": "knowledgeCategoryID",
+          "target": "KnowledgeCategory"
+        },
+        {
+          "field": "updateUserID",
+          "target": "User"
+        }
+      ],
+      "listPath": "/articles",
+      "listParams": [
+        "expand",
+        "articleID",
+        "knowledgeBaseID",
+        "knowledgeCategoryID",
+        "siteSectionID",
+        "locale",
+        "only-translated",
+        "limit",
+        "statuses",
+        "featured",
+        "sort",
+        "page",
+        "fields"
+      ],
+      "listDataKey": null,
+      "createPath": "/articles",
+      "createMethod": "POST",
+      "updatePath": "/articles/{id}",
+      "updateMethod": "PATCH",
+      "deletePath": null,
+      "deleteMethod": null,
+      "hasDateUpdated": true,
+      "hasDateInserted": true,
+      "fieldCount": 30
+    },
+    {
+      "name": "AuthenticatorFragment",
+      "doors": [
+        "authenticators"
+      ],
+      "pkField": "authenticatorID",
+      "fkFields": [
+        {
+          "field": "clientID",
+          "target": "Client"
+        }
+      ],
+      "listPath": "/authenticators",
+      "listParams": [
+        "type",
+        "page",
+        "limit",
+        "fields"
+      ],
+      "listDataKey": null,
+      "createPath": null,
+      "createMethod": null,
+      "updatePath": "/authenticators/{id}",
+      "updateMethod": "PATCH",
+      "deletePath": "/authenticators/{id}",
+      "deleteMethod": "DELETE",
+      "hasDateUpdated": false,
+      "hasDateInserted": false,
+      "fieldCount": 14
+    },
+    {
+      "name": "AutomationDispatch",
+      "doors": [
+        "automation-rules"
+      ],
+      "pkField": "automationRuleDispatchUUID",
+      "fkFields": [],
+      "listPath": "/automation-rules/dispatches",
+      "listParams": [
+        "automationRuleID",
+        "automationRuleDispatchUUID",
+        "actionType",
+        "dispatchStatus",
+        "dateUpdated",
+        "dateLastRun",
+        "dateFinished",
+        "page",
+        "limit",
+        "expand",
+        "sort",
+        "fields"
+      ],
+      "listDataKey": null,
+      "createPath": null,
+      "createMethod": null,
+      "updatePath": null,
+      "updateMethod": null,
+      "deletePath": null,
+      "deleteMethod": null,
+      "hasDateUpdated": true,
+      "hasDateInserted": true,
+      "fieldCount": 11
+    },
+    {
+      "name": "Badge",
+      "doors": [
+        "badges"
+      ],
+      "pkField": "badgeID",
+      "fkFields": [],
+      "listPath": "/badges",
+      "listParams": [
+        "page",
+        "limit",
+        "expand",
+        "type",
+        "fields"
+      ],
+      "listDataKey": null,
+      "createPath": "/badges",
+      "createMethod": "POST",
+      "updatePath": "/badges/{id}",
+      "updateMethod": "PATCH",
+      "deletePath": "/badges/{id}",
+      "deleteMethod": "DELETE",
+      "hasDateUpdated": false,
+      "hasDateInserted": false,
+      "fieldCount": 9
+    },
+    {
+      "name": "CategorySchema",
+      "doors": [
+        "categories"
+      ],
+      "pkField": "categoryID",
+      "fkFields": [
+        {
+          "field": "parentCategoryID",
+          "target": "ParentCategory"
+        },
+        {
+          "field": "defaultStatusID",
+          "target": "DefaultStatus"
+        }
+      ],
+      "listPath": "/categories",
+      "listParams": [
+        "categoryID",
+        "parentCategoryID",
+        "parentCategoryCode",
+        "followed",
+        "followedUserID",
+        "maxDepth",
+        "archived",
+        "featured",
+        "page",
+        "limit",
+        "sort",
+        "expand",
+        "siteSectionID",
+        "includeParentCategory",
+        "outputFormat",
+        "layoutViewType",
+        "postTypeID",
+        "postTypeStatus",
+        "filterDiscussionsAdd",
+        "fields"
+      ],
+      "listDataKey": null,
+      "createPath": "/categories",
+      "createMethod": "POST",
+      "updatePath": "/categories/{id}",
+      "updateMethod": "PATCH",
+      "deletePath": "/categories/{id}",
+      "deleteMethod": "DELETE",
+      "hasDateUpdated": false,
+      "hasDateInserted": false,
+      "fieldCount": 25
+    },
+    {
+      "name": "Comment",
+      "doors": [
+        "comments"
+      ],
+      "pkField": "commentID",
+      "fkFields": [
+        {
+          "field": "groupID",
+          "target": "Group"
+        },
+        {
+          "field": "categoryID",
+          "target": "Category"
+        },
+        {
+          "field": "discussionID",
+          "target": "Discussion"
+        },
+        {
+          "field": "parentRecordID",
+          "target": "ParentRecord"
+        },
+        {
+          "field": "parentCommentID",
+          "target": "ParentComment"
+        },
+        {
+          "field": "insertUserID",
+          "target": "User"
+        }
+      ],
+      "listPath": "/comments",
+      "listParams": [
+        "commentID",
+        "dateInserted",
+        "dateUpdated",
+        "discussionID",
+        "parentRecordType",
+        "parentRecordID",
+        "page",
+        "limit",
+        "sort",
+        "insertUserID",
+        "expand",
+        "qna",
+        "quoteParent",
+        "fields"
+      ],
+      "listDataKey": null,
+      "createPath": "/comments",
+      "createMethod": "POST",
+      "updatePath": "/comments/{id}",
+      "updateMethod": "PATCH",
+      "deletePath": "/comments/{id}",
+      "deleteMethod": "DELETE",
+      "hasDateUpdated": true,
+      "hasDateInserted": true,
+      "fieldCount": 25
+    },
+    {
+      "name": "Conversation",
+      "doors": [
+        "conversations"
+      ],
+      "pkField": "conversationID",
+      "fkFields": [
+        {
+          "field": "insertUserID",
+          "target": "User"
+        }
+      ],
+      "listPath": "/conversations",
+      "listParams": [
+        "insertUserID",
+        "participantUserID",
+        "page",
+        "limit",
+        "expand",
+        "fields"
+      ],
+      "listDataKey": null,
+      "createPath": "/conversations",
+      "createMethod": "POST",
+      "updatePath": null,
+      "updateMethod": null,
+      "deletePath": null,
+      "deleteMethod": null,
+      "hasDateUpdated": false,
+      "hasDateInserted": true,
+      "fieldCount": 13
+    },
+    {
+      "name": "DataSource",
+      "doors": [
+        "data-sources"
+      ],
+      "pkField": "dataSourceID",
+      "fkFields": [
+        {
+          "field": "insertUserID",
+          "target": "User"
+        },
+        {
+          "field": "updateUserID",
+          "target": "User"
+        }
+      ],
+      "listPath": "/data-sources",
+      "listParams": [
+        "name",
+        "baseUrl",
+        "authenticationType",
+        "sort",
+        "fields"
+      ],
+      "listDataKey": null,
+      "createPath": "/data-sources",
+      "createMethod": "POST",
+      "updatePath": "/data-sources/{dataSourceID}",
+      "updateMethod": "PATCH",
+      "deletePath": "/data-sources/{dataSourceID}",
+      "deleteMethod": "DELETE",
+      "hasDateUpdated": true,
+      "hasDateInserted": true,
+      "fieldCount": 15
+    },
+    {
+      "name": "Discussion",
+      "doors": [
+        "discussions"
+      ],
+      "pkField": "discussionID",
+      "fkFields": [
+        {
+          "field": "categoryID",
+          "target": "Category"
+        },
+        {
+          "field": "groupID",
+          "target": "Group"
+        },
+        {
+          "field": "insertUserID",
+          "target": "User"
+        },
+        {
+          "field": "lastUserID",
+          "target": "User"
+        },
+        {
+          "field": "statusID",
+          "target": "Status"
+        },
+        {
+          "field": "postTypeID",
+          "target": "PostType"
+        }
+      ],
+      "listPath": "/discussions",
+      "listParams": [
+        "discussionID",
+        "categoryID",
+        "dateInserted",
+        "dateUpdated",
+        "dateLastComment",
+        "slotType",
+        "siteSectionID",
+        "tagID",
+        "tagOperator",
+        "type",
+        "postTypeID",
+        "status",
+        "excludeHiddenCategories",
+        "followed",
+        "userFollowed",
+        "score",
+        "pinned",
+        "pinOrder",
+        "hasComments",
+        "page",
+        "limit",
+        "sort",
+        "insertUserID",
+        "insertUserRoleID",
+        "insertUserRankID",
+        "expand",
+        "resolved",
+        "bookmarkUserID",
+        "participatedUserID",
+        "reactionType",
+        "statusID",
+        "internalStatusID",
+        "suggested",
+        "excerptLength",
+        "excludedCategoryIDs",
+        "PostFieldFilters",
+        "fields"
+      ],
+      "listDataKey": null,
+      "createPath": "/discussions",
+      "createMethod": "POST",
+      "updatePath": "/discussions/{id}",
+      "updateMethod": "PATCH",
+      "deletePath": "/discussions/{id}",
+      "deleteMethod": "DELETE",
+      "hasDateUpdated": true,
+      "hasDateInserted": true,
+      "fieldCount": 42
+    },
+    {
+      "name": "Drafts",
+      "doors": [
+        "drafts"
+      ],
+      "pkField": "draftID",
+      "fkFields": [
+        {
+          "field": "insertUserID",
+          "target": "User"
+        },
+        {
+          "field": "parentRecordID",
+          "target": "ParentRecord"
+        },
+        {
+          "field": "updateUserID",
+          "target": "User"
+        }
+      ],
+      "listPath": "/drafts",
+      "listParams": [
+        "recordType",
+        "parentRecordType",
+        "parentRecordID",
+        "draftStatus",
+        "dateUpdated",
+        "dateScheduled",
+        "sort",
+        "expand",
+        "page",
+        "limit",
+        "fields"
+      ],
+      "listDataKey": null,
+      "createPath": "/drafts",
+      "createMethod": "POST",
+      "updatePath": "/drafts/{id}",
+      "updateMethod": "PATCH",
+      "deletePath": "/drafts/{id}",
+      "deleteMethod": "DELETE",
+      "hasDateUpdated": true,
+      "hasDateInserted": true,
+      "fieldCount": 14
+    },
+    {
+      "name": "emailTemplates",
+      "doors": [
+        "email-templates"
+      ],
+      "pkField": "emailTemplatesID",
+      "fkFields": [
+        {
+          "field": "insertUserID",
+          "target": "User"
+        },
+        {
+          "field": "updateUserID",
+          "target": "User"
+        }
+      ],
+      "listPath": "/email-templates",
+      "listParams": [
+        "expand",
+        "emailTemplateID",
+        "limit",
+        "statuses",
+        "emailType",
+        "sort",
+        "page",
+        "fields"
+      ],
+      "listDataKey": null,
+      "createPath": "/email-templates",
+      "createMethod": "POST",
+      "updatePath": "/email-templates/{id}",
+      "updateMethod": "PATCH",
+      "deletePath": "/email-templates/{id}",
+      "deleteMethod": "DELETE",
+      "hasDateUpdated": true,
+      "hasDateInserted": true,
+      "fieldCount": 14
+    },
+    {
+      "name": "Escalation",
+      "doors": [
+        "escalations"
+      ],
+      "pkField": "recordID",
+      "fkFields": [
+        {
+          "field": "assignedUserID",
+          "target": "AssignedUser"
+        },
+        {
+          "field": "placeRecordID",
+          "target": "PlaceRecord"
+        },
+        {
+          "field": "lastCommentID",
+          "target": "LastComment"
+        },
+        {
+          "field": "lastCommentUserID",
+          "target": "LastCommentUser"
+        }
+      ],
+      "listPath": "/escalations",
+      "listParams": [
+        "escalationID",
+        "recordType",
+        "recordID",
+        "placeRecordType",
+        "placeRecordID",
+        "status",
+        "assignedUserID",
+        "removedUserID",
+        "recordUserID",
+        "recordUserRoleID",
+        "reportReasonID",
+        "page",
+        "limit",
+        "escalationID",
+        "dateInserted",
+        "dateRemoved",
+        "recordIsLive",
+        "hasAssociatedAppeal",
+        "appealStatus",
+        "fields"
+      ],
+      "listDataKey": null,
+      "createPath": "/escalations",
+      "createMethod": "POST",
+      "updatePath": "/escalations/:escalationID",
+      "updateMethod": "PATCH",
+      "deletePath": null,
+      "deleteMethod": null,
+      "hasDateUpdated": false,
+      "hasDateInserted": false,
+      "fieldCount": 27
+    },
+    {
+      "name": "Export",
+      "doors": [
+        "exports"
+      ],
+      "pkField": "exportUUID",
+      "fkFields": [
+        {
+          "field": "insertUserID",
+          "target": "User"
+        },
+        {
+          "field": "updateUserID",
+          "target": "User"
+        },
+        {
+          "field": "jobID",
+          "target": "Job"
+        }
+      ],
+      "listPath": "/exports",
+      "listParams": [
+        "insertUserID",
+        "exportStatus",
+        "page",
+        "limit",
+        "fields"
+      ],
+      "listDataKey": null,
+      "createPath": null,
+      "createMethod": null,
+      "updatePath": null,
+      "updateMethod": null,
+      "deletePath": "/exports/{exportUUID}",
+      "deleteMethod": "DELETE",
+      "hasDateUpdated": true,
+      "hasDateInserted": true,
+      "fieldCount": 19
+    },
+    {
+      "name": "FullCollectionSchema",
+      "doors": [
+        "collections"
+      ],
+      "pkField": "collectionID",
+      "fkFields": [
+        {
+          "field": "insertUserID",
+          "target": "User"
+        },
+        {
+          "field": "updateUserID",
+          "target": "User"
+        }
+      ],
+      "listPath": "/collections",
+      "listParams": [
+        "collectionID",
+        "name",
+        "dateUpdated",
+        "page",
+        "limit",
+        "fields"
+      ],
+      "listDataKey": null,
+      "createPath": "/collections",
+      "createMethod": "POST",
+      "updatePath": "/collections/{id}",
+      "updateMethod": "PATCH",
+      "deletePath": "/collections/{id}",
+      "deleteMethod": "DELETE",
+      "hasDateUpdated": true,
+      "hasDateInserted": true,
+      "fieldCount": 7
+    },
+    {
+      "name": "FullEvent",
+      "doors": [
+        "events"
+      ],
+      "pkField": "eventID",
+      "fkFields": [
+        {
+          "field": "parentRecordID",
+          "target": "ParentRecord"
+        },
+        {
+          "field": "groupID",
+          "target": "Group"
+        },
+        {
+          "field": "insertUserID",
+          "target": "User"
+        },
+        {
+          "field": "updateUserID",
+          "target": "User"
+        },
+        {
+          "field": "foreignID",
+          "target": "Foreign"
+        },
+        {
+          "field": "lastCommentID",
+          "target": "LastComment"
+        },
+        {
+          "field": "lastCommentUserID",
+          "target": "LastCommentUser"
+        }
+      ],
+      "listPath": "/events",
+      "listParams": [
+        "allDayEvent",
+        "groupID",
+        "dateEnds",
+        "dateStarts",
+        "sort",
+        "page",
+        "parentRecordType",
+        "parentRecordID",
+        "requireDescendants",
+        "attendingStatus",
+        "limit",
+        "expand",
+        "fields"
+      ],
+      "listDataKey": null,
+      "createPath": "/events",
+      "createMethod": "POST",
+      "updatePath": "/events/{id}",
+      "updateMethod": "PATCH",
+      "deletePath": "/events/{id}",
+      "deleteMethod": "DELETE",
+      "hasDateUpdated": true,
+      "hasDateInserted": true,
+      "fieldCount": 44
+    },
+    {
+      "name": "FullKnowledgeBaseSchema",
+      "doors": [
+        "knowledge-bases"
+      ],
+      "pkField": "knowledgeBaseID",
+      "fkFields": [
+        {
+          "field": "insertUserID",
+          "target": "User"
+        },
+        {
+          "field": "rootCategoryID",
+          "target": "RootCategory"
+        },
+        {
+          "field": "updateUserID",
+          "target": "User"
+        },
+        {
+          "field": "foreignID",
+          "target": "Foreign"
+        }
+      ],
+      "listPath": "/knowledge-bases",
+      "listParams": [
+        "knowledgeBaseID",
+        "status",
+        "userID",
+        "locale",
+        "sourceLocale",
+        "siteSectionGroup",
+        "expand",
+        "sort",
+        "fields"
+      ],
+      "listDataKey": null,
+      "createPath": "/knowledge-bases",
+      "createMethod": "POST",
+      "updatePath": "/knowledge-bases/{id}",
+      "updateMethod": "PATCH",
+      "deletePath": "/knowledge-bases/{id}",
+      "deleteMethod": "DELETE",
+      "hasDateUpdated": true,
+      "hasDateInserted": true,
+      "fieldCount": 29
+    },
+    {
+      "name": "Group",
+      "doors": [
+        "groups"
+      ],
+      "pkField": "groupID",
+      "fkFields": [],
+      "listPath": "/groups",
+      "listParams": [
+        "groupID",
+        "tagID",
+        "tagOperator",
+        "memberID",
+        "followed",
+        "followedUserID",
+        "sort",
+        "page",
+        "limit",
+        "expand",
+        "membershipStatus",
+        "query",
+        "fields"
+      ],
+      "listDataKey": null,
+      "createPath": "/groups",
+      "createMethod": "POST",
+      "updatePath": "/groups/{id}",
+      "updateMethod": "PATCH",
+      "deletePath": "/groups/{id}",
+      "deleteMethod": "DELETE",
+      "hasDateUpdated": false,
+      "hasDateInserted": false,
+      "fieldCount": 13
+    },
+    {
+      "name": "Icon",
+      "doors": [
+        "icons"
+      ],
+      "pkField": "iconUUID",
+      "fkFields": [
+        {
+          "field": "insertUserID",
+          "target": "User"
+        }
+      ],
+      "listPath": "/icons/active",
+      "listParams": [
+        "fields"
+      ],
+      "listDataKey": null,
+      "createPath": null,
+      "createMethod": null,
+      "updatePath": null,
+      "updateMethod": null,
+      "deletePath": "/icons/:iconUUID",
+      "deleteMethod": "DELETE",
+      "hasDateUpdated": false,
+      "hasDateInserted": true,
+      "fieldCount": 9
+    },
+    {
+      "name": "Keyword",
+      "doors": [
+        "keywords"
+      ],
+      "pkField": "keywordID",
+      "fkFields": [
+        {
+          "field": "insertUserID",
+          "target": "User"
+        }
+      ],
+      "listPath": "/keywords",
+      "listParams": [
+        "tracked",
+        "dateLastUsed",
+        "siteSectionID",
+        "categoryID",
+        "localeCode",
+        "sentiment",
+        "limit",
+        "page",
+        "sort",
+        "fields"
+      ],
+      "listDataKey": null,
+      "createPath": "/keywords",
+      "createMethod": "POST",
+      "updatePath": null,
+      "updateMethod": null,
+      "deletePath": null,
+      "deleteMethod": null,
+      "hasDateUpdated": false,
+      "hasDateInserted": true,
+      "fieldCount": 8
+    },
+    {
+      "name": "KnowledgeCategories",
+      "doors": [
+        "knowledge-categories"
+      ],
+      "pkField": "knowledgeCategoryID",
+      "fkFields": [
+        {
+          "field": "insertUserID",
+          "target": "User"
+        },
+        {
+          "field": "knowledgeBaseID",
+          "target": "KnowledgeBase"
+        },
+        {
+          "field": "lastUpdatedArticleID",
+          "target": "LastUpdatedArticle"
+        },
+        {
+          "field": "lastUpdatedUserID",
+          "target": "LastUpdatedUser"
+        },
+        {
+          "field": "parentID",
+          "target": "Parent"
+        },
+        {
+          "field": "updateUserID",
+          "target": "User"
+        },
+        {
+          "field": "foreignID",
+          "target": "Foreign"
+        }
+      ],
+      "listPath": "/knowledge-categories",
+      "listParams": [
+        "locale",
+        "knowledgeBaseIDs",
+        "knowledgeCategoryID",
+        "fields"
+      ],
+      "listDataKey": null,
+      "createPath": "/knowledge-categories",
+      "createMethod": "POST",
+      "updatePath": "/knowledge-categories/{id}",
+      "updateMethod": "PATCH",
+      "deletePath": "/knowledge-categories/{id}",
+      "deleteMethod": "DELETE",
+      "hasDateUpdated": true,
+      "hasDateInserted": true,
+      "fieldCount": 17
+    },
+    {
+      "name": "LocaleConfig",
+      "doors": [
+        "locales"
+      ],
+      "pkField": "localeID",
+      "fkFields": [],
+      "listPath": "/locales",
+      "listParams": [
+        "fields"
+      ],
+      "listDataKey": null,
+      "createPath": "/locales",
+      "createMethod": "POST",
+      "updatePath": "/locales/{locale}",
+      "updateMethod": "PATCH",
+      "deletePath": null,
+      "deleteMethod": null,
+      "hasDateUpdated": false,
+      "hasDateInserted": false,
+      "fieldCount": 5
+    },
+    {
+      "name": "MediaItem",
+      "doors": [
+        "media"
+      ],
+      "pkField": "mediaID",
+      "fkFields": [
+        {
+          "field": "mediaUUID",
+          "target": "Media"
+        },
+        {
+          "field": "foreignID",
+          "target": "Foreign"
+        },
+        {
+          "field": "insertUserID",
+          "target": "User"
+        }
+      ],
+      "listPath": "/media",
+      "listParams": [
+        "mediaID",
+        "foreignType",
+        "foreignID",
+        "insertUserID",
+        "page",
+        "limit",
+        "fields"
+      ],
+      "listDataKey": null,
+      "createPath": "/media",
+      "createMethod": "POST",
+      "updatePath": null,
+      "updateMethod": null,
+      "deletePath": "/media/{id}",
+      "deleteMethod": "DELETE",
+      "hasDateUpdated": false,
+      "hasDateInserted": true,
+      "fieldCount": 13
+    },
+    {
+      "name": "Message",
+      "doors": [
+        "messages"
+      ],
+      "pkField": "messageID",
+      "fkFields": [
+        {
+          "field": "conversationID",
+          "target": "Conversation"
+        },
+        {
+          "field": "insertUserID",
+          "target": "User"
+        }
+      ],
+      "listPath": "/messages",
+      "listParams": [
+        "conversationID",
+        "insertUserID",
+        "page",
+        "limit",
+        "expand",
+        "fields"
+      ],
+      "listDataKey": null,
+      "createPath": "/messages",
+      "createMethod": "POST",
+      "updatePath": null,
+      "updateMethod": null,
+      "deletePath": null,
+      "deleteMethod": null,
+      "hasDateUpdated": false,
+      "hasDateInserted": true,
+      "fieldCount": 6
+    },
+    {
+      "name": "ModerationMessage",
+      "doors": [
+        "moderation-messages"
+      ],
+      "pkField": "moderationMessageID",
+      "fkFields": [
+        {
+          "field": "recordID",
+          "target": "Record"
+        }
+      ],
+      "listPath": "/moderation-messages",
+      "listParams": [
+        "isEnabled",
+        "recordID",
+        "type",
+        "layoutViewType",
+        "fields"
+      ],
+      "listDataKey": null,
+      "createPath": "/moderation-messages",
+      "createMethod": "POST",
+      "updatePath": "/moderation-messages/{id}",
+      "updateMethod": "PATCH",
+      "deletePath": "/moderation-messages/{id}",
+      "deleteMethod": "DELETE",
+      "hasDateUpdated": false,
+      "hasDateInserted": false,
+      "fieldCount": 11
+    },
+    {
+      "name": "Multisite",
+      "doors": [
+        "multisites"
+      ],
+      "pkField": "multisiteID",
+      "fkFields": [
+        {
+          "field": "siteID",
+          "target": "Site"
+        }
+      ],
+      "listPath": "/multisites",
+      "listParams": [
+        "includeHubSite",
+        "fields"
+      ],
+      "listDataKey": null,
+      "createPath": "/multisites",
+      "createMethod": "POST",
+      "updatePath": null,
+      "updateMethod": null,
+      "deletePath": "/multisites/{multisiteID}",
+      "deleteMethod": "DELETE",
+      "hasDateUpdated": false,
+      "hasDateInserted": true,
+      "fieldCount": 9
+    },
+    {
+      "name": "NotificationSchema",
+      "doors": [
+        "notifications"
+      ],
+      "pkField": "notificationID",
+      "fkFields": [
+        {
+          "field": "recordID",
+          "target": "Record"
+        },
+        {
+          "field": "discussionID",
+          "target": "Discussion"
+        }
+      ],
+      "listPath": "/notifications",
+      "listParams": [
+        "limit",
+        "shouldBatch",
+        "page",
+        "expand",
+        "fields"
+      ],
+      "listDataKey": null,
+      "createPath": null,
+      "createMethod": null,
+      "updatePath": "/notifications/{id}",
+      "updateMethod": "PATCH",
+      "deletePath": null,
+      "deleteMethod": null,
+      "hasDateUpdated": true,
+      "hasDateInserted": true,
+      "fieldCount": 16
+    },
+    {
+      "name": "Polls",
+      "doors": [
+        "polls"
+      ],
+      "pkField": "pollID",
+      "fkFields": [
+        {
+          "field": "discussionID",
+          "target": "Discussion"
+        },
+        {
+          "field": "insertUserID",
+          "target": "User"
+        },
+        {
+          "field": "updateUserID",
+          "target": "User"
+        }
+      ],
+      "listPath": "/polls",
+      "listParams": [
+        "page",
+        "limit",
+        "insertUserID",
+        "expand",
+        "fields"
+      ],
+      "listDataKey": null,
+      "createPath": "/polls",
+      "createMethod": "POST",
+      "updatePath": null,
+      "updateMethod": null,
+      "deletePath": "/polls/{id}",
+      "deleteMethod": "DELETE",
+      "hasDateUpdated": true,
+      "hasDateInserted": true,
+      "fieldCount": 11
+    },
+    {
+      "name": "Product",
+      "doors": [
+        "products"
+      ],
+      "pkField": "productID",
+      "fkFields": [],
+      "listPath": "/products",
+      "listParams": [
+        "expand",
+        "role-token",
+        "fields"
+      ],
+      "listDataKey": null,
+      "createPath": "/products",
+      "createMethod": "POST",
+      "updatePath": "/products/{id}",
+      "updateMethod": "PATCH",
+      "deletePath": "/products/{id}",
+      "deleteMethod": "DELETE",
+      "hasDateUpdated": false,
+      "hasDateInserted": true,
+      "fieldCount": 8
+    },
+    {
+      "name": "ProductMessage",
+      "doors": [
+        "product-message",
+        "product-messages"
+      ],
+      "pkField": "productMessageID",
+      "fkFields": [
+        {
+          "field": "insertUserID",
+          "target": "User"
+        },
+        {
+          "field": "updateUserID",
+          "target": "User"
+        }
+      ],
+      "listPath": "/product-messages",
+      "listParams": [
+        "fields"
+      ],
+      "listDataKey": "data",
+      "createPath": null,
+      "createMethod": null,
+      "updatePath": null,
+      "updateMethod": null,
+      "deletePath": null,
+      "deleteMethod": null,
+      "hasDateUpdated": true,
+      "hasDateInserted": true,
+      "fieldCount": 15
+    },
+    {
+      "name": "ProfileField",
+      "doors": [
+        "profile-fields"
+      ],
+      "pkField": "apiName",
+      "fkFields": [
+        {
+          "field": "salesforceID",
+          "target": "Salesforce"
+        }
+      ],
+      "listPath": "/profile-fields",
+      "listParams": [
+        "dataType",
+        "formType",
+        "visibility",
+        "mutability",
+        "registrationOptions",
+        "enabled",
+        "fields"
+      ],
+      "listDataKey": null,
+      "createPath": "/profile-fields",
+      "createMethod": "POST",
+      "updatePath": "/profile-fields/{apiName}",
+      "updateMethod": "PATCH",
+      "deletePath": "/profile-fields/{apiName}",
+      "deleteMethod": "DELETE",
+      "hasDateUpdated": false,
+      "hasDateInserted": false,
+      "fieldCount": 12
+    },
+    {
+      "name": "Rank",
+      "doors": [
+        "ranks"
+      ],
+      "pkField": "rankID",
+      "fkFields": [],
+      "listPath": "/ranks",
+      "listParams": [
+        "fields"
+      ],
+      "listDataKey": null,
+      "createPath": "/ranks",
+      "createMethod": "POST",
+      "updatePath": "/ranks/{id}",
+      "updateMethod": "PATCH",
+      "deletePath": "/ranks/{id}",
+      "deleteMethod": "DELETE",
+      "hasDateUpdated": false,
+      "hasDateInserted": false,
+      "fieldCount": 8
+    },
+    {
+      "name": "ReactionType",
+      "doors": [
+        "reactions"
+      ],
+      "pkField": "urlCode",
+      "fkFields": [
+        {
+          "field": "tagID",
+          "target": "Tag"
+        }
+      ],
+      "listPath": "/reactions",
+      "listParams": [
+        "fields"
+      ],
+      "listDataKey": null,
+      "createPath": null,
+      "createMethod": null,
+      "updatePath": "/reactions/{urlCode}",
+      "updateMethod": "PATCH",
+      "deletePath": null,
+      "deleteMethod": null,
+      "hasDateUpdated": false,
+      "hasDateInserted": false,
+      "fieldCount": 13
+    },
+    {
+      "name": "Report",
+      "doors": [
+        "reports"
+      ],
+      "pkField": "reportID",
+      "fkFields": [
+        {
+          "field": "recordID",
+          "target": "Record"
+        },
+        {
+          "field": "placeRecordID",
+          "target": "PlaceRecord"
+        },
+        {
+          "field": "recordUserID",
+          "target": "RecordUser"
+        },
+        {
+          "field": "insertUserID",
+          "target": "User"
+        },
+        {
+          "field": "reportedUserID",
+          "target": "ReportedUser"
+        },
+        {
+          "field": "updateUserID",
+          "target": "User"
+        }
+      ],
+      "listPath": "/reports",
+      "listParams": [
+        "recordType",
+        "reportReasonID",
+        "recordID",
+        "placeRecordType",
+        "placeRecordID",
+        "insertUserID",
+        "insertUserRoleID",
+        "removedUserID",
+        "recordUserID",
+        "status",
+        "page",
+        "limit",
+        "reportID",
+        "dateInserted",
+        "dateRemoved",
+        "reporterEmail",
+        "recordIsLive",
+        "fields"
+      ],
+      "listDataKey": null,
+      "createPath": "/reports",
+      "createMethod": "POST",
+      "updatePath": null,
+      "updateMethod": null,
+      "deletePath": null,
+      "deleteMethod": null,
+      "hasDateUpdated": true,
+      "hasDateInserted": true,
+      "fieldCount": 31
+    },
+    {
+      "name": "ReportReason",
+      "doors": [
+        "report-reasons"
+      ],
+      "pkField": "reportReasonID",
+      "fkFields": [
+        {
+          "field": "insertUserID",
+          "target": "User"
+        },
+        {
+          "field": "updateUserID",
+          "target": "User"
+        }
+      ],
+      "listPath": "/report-reasons",
+      "listParams": [
+        "includeDeleted",
+        "fields"
+      ],
+      "listDataKey": null,
+      "createPath": "/report-reasons",
+      "createMethod": "POST",
+      "updatePath": "/report-reasons/:reportReasonID",
+      "updateMethod": "PATCH",
+      "deletePath": "/report-reasons/:reportReasonID",
+      "deleteMethod": "DELETE",
+      "hasDateUpdated": true,
+      "hasDateInserted": true,
+      "fieldCount": 12
+    },
+    {
+      "name": "Role",
+      "doors": [
+        "roles"
+      ],
+      "pkField": "roleID",
+      "fkFields": [],
+      "listPath": "/roles",
+      "listParams": [
+        "personalInfo",
+        "expand",
+        "fields"
+      ],
+      "listDataKey": null,
+      "createPath": "/roles",
+      "createMethod": "POST",
+      "updatePath": "/roles/{id}",
+      "updateMethod": "PATCH",
+      "deletePath": "/roles/{id}",
+      "deleteMethod": "DELETE",
+      "hasDateUpdated": false,
+      "hasDateInserted": false,
+      "fieldCount": 9
+    },
+    {
+      "name": "RoleApplication",
+      "doors": [
+        "role-requests"
+      ],
+      "pkField": "roleRequestID",
+      "fkFields": [
+        {
+          "field": "roleID",
+          "target": "Role"
+        },
+        {
+          "field": "userID",
+          "target": "User"
+        },
+        {
+          "field": "statusUserID",
+          "target": "StatusUser"
+        },
+        {
+          "field": "insertUserID",
+          "target": "User"
+        },
+        {
+          "field": "updateUserID",
+          "target": "User"
+        }
+      ],
+      "listPath": "/role-requests/applications",
+      "listParams": [
+        "roleID",
+        "status",
+        "userID",
+        "page",
+        "offset",
+        "limit",
+        "sort",
+        "expand",
+        "fields"
+      ],
+      "listDataKey": null,
+      "createPath": null,
+      "createMethod": null,
+      "updatePath": null,
+      "updateMethod": null,
+      "deletePath": null,
+      "deleteMethod": null,
+      "hasDateUpdated": true,
+      "hasDateInserted": true,
+      "fieldCount": 18
+    },
+    {
+      "name": "Rule",
+      "doors": [
+        "rules"
+      ],
+      "pkField": "ruleID",
+      "fkFields": [],
+      "listPath": "/rules",
+      "listParams": [
+        "expand",
+        "fields"
+      ],
+      "listDataKey": null,
+      "createPath": "/rules",
+      "createMethod": "POST",
+      "updatePath": "/rules/{id}",
+      "updateMethod": "PATCH",
+      "deletePath": "/rules/{id}",
+      "deleteMethod": "DELETE",
+      "hasDateUpdated": false,
+      "hasDateInserted": false,
+      "fieldCount": 3
+    },
+    {
+      "name": "Sessions",
+      "doors": [
+        "sessions"
+      ],
+      "pkField": "sessionID",
+      "fkFields": [
+        {
+          "field": "userID",
+          "target": "User"
+        }
+      ],
+      "listPath": "/sessions",
+      "listParams": [
+        "filter",
+        "userID",
+        "fields"
+      ],
+      "listDataKey": null,
+      "createPath": null,
+      "createMethod": null,
+      "updatePath": null,
+      "updateMethod": null,
+      "deletePath": null,
+      "deleteMethod": null,
+      "hasDateUpdated": true,
+      "hasDateInserted": true,
+      "fieldCount": 5
+    },
+    {
+      "name": "Status",
+      "doors": [
+        "statuses"
+      ],
+      "pkField": "statusID",
+      "fkFields": [],
+      "listPath": "/statuses",
+      "listParams": [
+        "fields"
+      ],
+      "listDataKey": null,
+      "createPath": "/statuses",
+      "createMethod": "POST",
+      "updatePath": "/statuses/{id}",
+      "updateMethod": "PATCH",
+      "deletePath": "/statuses/{id}",
+      "deleteMethod": "DELETE",
+      "hasDateUpdated": false,
+      "hasDateInserted": false,
+      "fieldCount": 4
+    },
+    {
+      "name": "Subcommunities",
+      "doors": [
+        "subcommunities"
+      ],
+      "pkField": "subcommunityID",
+      "fkFields": [
+        {
+          "field": "productID",
+          "target": "Product"
+        },
+        {
+          "field": "siteSectionID",
+          "target": "SiteSection"
+        }
+      ],
+      "listPath": "/subcommunities",
+      "listParams": [
+        "expand",
+        "role-token",
+        "fields"
+      ],
+      "listDataKey": null,
+      "createPath": "/subcommunities",
+      "createMethod": "POST",
+      "updatePath": "/subcommunities/{id}",
+      "updateMethod": "PATCH",
+      "deletePath": "/subcommunities/{id}",
+      "deleteMethod": "DELETE",
+      "hasDateUpdated": false,
+      "hasDateInserted": false,
+      "fieldCount": 12
+    },
+    {
+      "name": "Tag",
+      "doors": [
+        "tags"
+      ],
+      "pkField": "tagID",
+      "fkFields": [
+        {
+          "field": "parentTagID",
+          "target": "ParentTag"
+        },
+        {
+          "field": "insertUserID",
+          "target": "User"
+        }
+      ],
+      "listPath": "/tags",
+      "listParams": [
+        "query",
+        "tagID",
+        "type",
+        "parentID",
+        "excludeNoCountDiscussion",
+        "replacingTagID",
+        "scope",
+        "scopeType",
+        "page",
+        "limit",
+        "expand",
+        "fields"
+      ],
+      "listDataKey": null,
+      "createPath": "/tags",
+      "createMethod": "POST",
+      "updatePath": "/tags/{id}",
+      "updateMethod": "PATCH",
+      "deletePath": "/tags/{id}",
+      "deleteMethod": "DELETE",
+      "hasDateUpdated": false,
+      "hasDateInserted": true,
+      "fieldCount": 16
+    },
+    {
+      "name": "Theme",
+      "doors": [
+        "themes"
+      ],
+      "pkField": "themeID",
+      "fkFields": [
+        {
+          "field": "revisionID",
+          "target": "Revision"
+        }
+      ],
+      "listPath": "/themes",
+      "listParams": [
+        "expand",
+        "fields"
+      ],
+      "listDataKey": null,
+      "createPath": "/themes",
+      "createMethod": "POST",
+      "updatePath": "/themes/{themeID}",
+      "updateMethod": "PATCH",
+      "deletePath": "/themes/{themeID}",
+      "deleteMethod": "DELETE",
+      "hasDateUpdated": false,
+      "hasDateInserted": false,
+      "fieldCount": 10
+    },
+    {
+      "name": "Token",
+      "doors": [
+        "tokens"
+      ],
+      "pkField": "accessTokenID",
+      "fkFields": [],
+      "listPath": "/tokens",
+      "listParams": [
+        "fields"
+      ],
+      "listDataKey": null,
+      "createPath": "/tokens",
+      "createMethod": "POST",
+      "updatePath": null,
+      "updateMethod": null,
+      "deletePath": "/tokens/{id}",
+      "deleteMethod": "DELETE",
+      "hasDateUpdated": false,
+      "hasDateInserted": true,
+      "fieldCount": 5
+    },
+    {
+      "name": "User",
+      "doors": [
+        "users"
+      ],
+      "pkField": "userID",
+      "fkFields": [
+        {
+          "field": "rankID",
+          "target": "Rank"
+        },
+        {
+          "field": "inviteUserID",
+          "target": "InviteUser"
+        }
+      ],
+      "listPath": "/users",
+      "listParams": [
+        "dateInserted",
+        "dateUpdated",
+        "dateLastActive",
+        "roleID",
+        "roleIDs",
+        "isBanned",
+        "rankIDs",
+        "userID",
+        "name",
+        "email",
+        "query",
+        "ipAddresses",
+        "page",
+        "limit",
+        "cursor",
+        "sort",
+        "fields",
+        "groupID",
+        "membershipStatus",
+        "expand",
+        "ProfileFieldFilters",
+        "followed",
+        "fields"
+      ],
+      "listDataKey": null,
+      "createPath": "/users",
+      "createMethod": "POST",
+      "updatePath": "/users/{id}",
+      "updateMethod": "PATCH",
+      "deletePath": "/users/{id}",
+      "deleteMethod": "DELETE",
+      "hasDateUpdated": true,
+      "hasDateInserted": true,
+      "fieldCount": 30
+    },
+    {
+      "name": "UserFragment",
+      "doors": [
+        "online"
+      ],
+      "pkField": "userID",
+      "fkFields": [
+        {
+          "field": "ssoID",
+          "target": "Sso"
+        }
+      ],
+      "listPath": "/online",
+      "listParams": [
+        "fields"
+      ],
+      "listDataKey": null,
+      "createPath": null,
+      "createMethod": null,
+      "updatePath": null,
+      "updateMethod": null,
+      "deletePath": null,
+      "deleteMethod": null,
+      "hasDateUpdated": false,
+      "hasDateInserted": false,
+      "fieldCount": 10
+    },
+    {
+      "name": "UserMentions",
+      "doors": [
+        "user-mentions"
+      ],
+      "pkField": "userID",
+      "fkFields": [
+        {
+          "field": "recordID",
+          "target": "Record"
+        },
+        {
+          "field": "ParentRecordID",
+          "target": "ParentRecord"
+        }
+      ],
+      "listPath": "/user-mentions/users/{userID}",
+      "listParams": [
+        "userID",
+        "page",
+        "limit",
+        "fields"
+      ],
+      "listDataKey": null,
+      "createPath": null,
+      "createMethod": null,
+      "updatePath": null,
+      "updateMethod": null,
+      "deletePath": null,
+      "deleteMethod": null,
+      "hasDateUpdated": false,
+      "hasDateInserted": true,
+      "fieldCount": 8
+    },
+    {
+      "name": "UserNote",
+      "doors": [
+        "user-notes"
+      ],
+      "pkField": "userNoteID",
+      "fkFields": [
+        {
+          "field": "userID",
+          "target": "User"
+        },
+        {
+          "field": "insertUserID",
+          "target": "User"
+        },
+        {
+          "field": "updateUserID",
+          "target": "User"
+        },
+        {
+          "field": "warningTypeID",
+          "target": "WarningType"
+        },
+        {
+          "field": "ruleID",
+          "target": "Rule"
+        },
+        {
+          "field": "recordID",
+          "target": "Record"
+        }
+      ],
+      "listPath": "/user-notes",
+      "listParams": [
+        "userNoteID",
+        "type",
+        "userID",
+        "insertUserID",
+        "fields"
+      ],
+      "listDataKey": null,
+      "createPath": null,
+      "createMethod": null,
+      "updatePath": null,
+      "updateMethod": null,
+      "deletePath": null,
+      "deleteMethod": null,
+      "hasDateUpdated": true,
+      "hasDateInserted": true,
+      "fieldCount": 20
+    },
+    {
+      "name": "Webhook",
+      "doors": [
+        "webhooks"
+      ],
+      "pkField": "webhookID",
+      "fkFields": [
+        {
+          "field": "foreignID",
+          "target": "Foreign"
+        },
+        {
+          "field": "insertUserID",
+          "target": "User"
+        },
+        {
+          "field": "updateUserID",
+          "target": "User"
+        }
+      ],
+      "listPath": "/webhooks",
+      "listParams": [
+        "page",
+        "limit",
+        "sort",
+        "fields"
+      ],
+      "listDataKey": null,
+      "createPath": "/webhooks",
+      "createMethod": "POST",
+      "updatePath": "/webhooks/{id}",
+      "updateMethod": "PATCH",
+      "deletePath": "/webhooks/{id}",
+      "deleteMethod": "DELETE",
+      "hasDateUpdated": true,
+      "hasDateInserted": true,
+      "fieldCount": 14
+    },
+    {
+      "name": "Widget",
+      "doors": [
+        "widgets"
+      ],
+      "pkField": "name",
+      "fkFields": [
+        {
+          "field": "widgetID",
+          "target": "Widget"
+        }
+      ],
+      "listPath": "/widgets",
+      "listParams": [
+        "fields"
+      ],
+      "listDataKey": null,
+      "createPath": null,
+      "createMethod": null,
+      "updatePath": null,
+      "updateMethod": null,
+      "deletePath": null,
+      "deleteMethod": null,
+      "hasDateUpdated": false,
+      "hasDateInserted": false,
+      "fieldCount": 4
+    }
+  ],
+  "informational": [
+    {
+      "name": "AiProcessingPreferences",
+      "doors": [
+        "ai-processing-preferences"
+      ],
+      "reason": "schema resolvable but no independent identity field (ID/UUID/business-key) found — settings/preferences singleton or type catalog"
+    },
+    {
+      "name": "AiSettings",
+      "doors": [
+        "ai-settings"
+      ],
+      "reason": "pure action/utility endpoint — no record schema resolvable from any GET/POST response"
+    },
+    {
+      "name": "AnalyticsDashboardSection",
+      "doors": [
+        "analytics"
+      ],
+      "reason": "schema resolvable but no independent identity field (ID/UUID/business-key) found — settings/preferences singleton or type catalog"
+    },
+    {
+      "name": "ArticleRevision",
+      "doors": [
+        "article-revisions"
+      ],
+      "reason": "has an identity field but no list or create endpoint reachable — not an independently syncable collection"
+    },
+    {
+      "name": "Assets",
+      "doors": [
+        "assets"
+      ],
+      "reason": "pure action/utility endpoint — no record schema resolvable from any GET/POST response"
+    },
+    {
+      "name": "AuditLog",
+      "doors": [
+        "audit-logs"
+      ],
+      "reason": "has an identity field but no list or create endpoint reachable — not an independently syncable collection"
+    },
+    {
+      "name": "AuthenticatorTypeInfo",
+      "doors": [
+        "authenticator-types"
+      ],
+      "reason": "schema resolvable but no independent identity field (ID/UUID/business-key) found — settings/preferences singleton or type catalog"
+    },
+    {
+      "name": "Calls",
+      "doors": [
+        "calls"
+      ],
+      "reason": "pure action/utility endpoint — no record schema resolvable from any GET/POST response"
+    },
+    {
+      "name": "Config",
+      "doors": [
+        "config"
+      ],
+      "reason": "pure action/utility endpoint — no record schema resolvable from any GET/POST response"
+    },
+    {
+      "name": "ContentGenerator",
+      "doors": [
+        "content-generator"
+      ],
+      "reason": "pure action/utility endpoint — no record schema resolvable from any GET/POST response"
+    },
+    {
+      "name": "Dashboard",
+      "doors": [
+        "dashboard"
+      ],
+      "reason": "schema resolvable but no independent identity field (ID/UUID/business-key) found — settings/preferences singleton or type catalog"
+    },
+    {
+      "name": "Emails",
+      "doors": [
+        "emails"
+      ],
+      "reason": "pure action/utility endpoint — no record schema resolvable from any GET/POST response"
+    },
+    {
+      "name": "Hootsuite",
+      "doors": [
+        "hootsuite"
+      ],
+      "reason": "pure action/utility endpoint — no record schema resolvable from any GET/POST response"
+    },
+    {
+      "name": "Jira",
+      "doors": [
+        "jira"
+      ],
+      "reason": "pure action/utility endpoint — no record schema resolvable from any GET/POST response"
+    },
+    {
+      "name": "JobQueue",
+      "doors": [
+        "job-queue"
+      ],
+      "reason": "pure action/utility endpoint — no record schema resolvable from any GET/POST response"
+    },
+    {
+      "name": "JobQueueFeedback",
+      "doors": [
+        "job-queue-feedback"
+      ],
+      "reason": "pure action/utility endpoint — no record schema resolvable from any GET/POST response"
+    },
+    {
+      "name": "Kbporter",
+      "doors": [
+        "kbporter"
+      ],
+      "reason": "pure action/utility endpoint — no record schema resolvable from any GET/POST response"
+    },
+    {
+      "name": "NotificationPreferences",
+      "doors": [
+        "notification-preferences"
+      ],
+      "reason": "schema resolvable but no independent identity field (ID/UUID/business-key) found — settings/preferences singleton or type catalog"
+    },
+    {
+      "name": "Posts",
+      "doors": [
+        "posts"
+      ],
+      "reason": "virtual union list over already-coverable sibling objects (oneOf), not an independent record type"
+    },
+    {
+      "name": "Resource",
+      "doors": [
+        "resources"
+      ],
+      "reason": "fixed GET-only vendor type catalog keyed by a type discriminator, no create/update/delete — not an independently-lifecycled record set"
+    },
+    {
+      "name": "Rich",
+      "doors": [
+        "rich"
+      ],
+      "reason": "pure action/utility endpoint — no record schema resolvable from any GET/POST response"
+    },
+    {
+      "name": "Salesforce",
+      "doors": [
+        "salesforce"
+      ],
+      "reason": "pure action/utility endpoint — no record schema resolvable from any GET/POST response"
+    },
+    {
+      "name": "SearchResult",
+      "doors": [
+        "search"
+      ],
+      "reason": "virtual union list over already-coverable sibling objects (oneOf), not an independent record type"
+    },
+    {
+      "name": "SiteTotals",
+      "doors": [
+        "site-totals"
+      ],
+      "reason": "pure action/utility endpoint — no record schema resolvable from any GET/POST response"
+    },
+    {
+      "name": "Sprinklr",
+      "doors": [
+        "sprinklr"
+      ],
+      "reason": "pure action/utility endpoint — no record schema resolvable from any GET/POST response"
+    },
+    {
+      "name": "Tick",
+      "doors": [
+        "tick"
+      ],
+      "reason": "pure action/utility endpoint — no record schema resolvable from any GET/POST response"
+    },
+    {
+      "name": "Translation",
+      "doors": [
+        "translations"
+      ],
+      "reason": "schema resolvable but no independent identity field (ID/UUID/business-key) found — settings/preferences singleton or type catalog"
+    }
+  ]
+}

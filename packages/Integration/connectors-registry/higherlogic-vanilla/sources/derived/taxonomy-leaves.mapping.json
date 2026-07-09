@@ -1,0 +1,518 @@
+{
+  "count": 51,
+  "taxonomyLeaves": [
+    "Addon",
+    "Appeal",
+    "Article",
+    "Authenticator",
+    "AutomationDispatch",
+    "Badge",
+    "Category",
+    "Collection",
+    "Comment",
+    "Conversation",
+    "DataSource",
+    "Discussion",
+    "Draft",
+    "EmailTemplate",
+    "Escalation",
+    "Event",
+    "Export",
+    "Group",
+    "Icon",
+    "Keyword",
+    "KnowledgeBase",
+    "KnowledgeCategory",
+    "Locale",
+    "MediaItem",
+    "Message",
+    "ModerationMessage",
+    "Multisite",
+    "Notification",
+    "OnlineUser",
+    "Poll",
+    "Product",
+    "ProductMessage",
+    "ProfileField",
+    "Rank",
+    "ReactionType",
+    "Report",
+    "ReportReason",
+    "Role",
+    "RoleApplication",
+    "Rule",
+    "Session",
+    "Status",
+    "Subcommunity",
+    "Tag",
+    "Theme",
+    "Token",
+    "User",
+    "UserMention",
+    "UserNote",
+    "Webhook",
+    "Widget"
+  ],
+  "mapping": [
+    {
+      "normalizedName": "Addon",
+      "rawName": "Addon",
+      "overrideReason": null,
+      "doors": [
+        "addons"
+      ],
+      "pkField": "addonID"
+    },
+    {
+      "normalizedName": "Appeal",
+      "rawName": "Appeal",
+      "overrideReason": null,
+      "doors": [
+        "appeals"
+      ],
+      "pkField": "appealID"
+    },
+    {
+      "normalizedName": "Article",
+      "rawName": "Article",
+      "overrideReason": null,
+      "doors": [
+        "articles"
+      ],
+      "pkField": "articleID"
+    },
+    {
+      "normalizedName": "Authenticator",
+      "rawName": "AuthenticatorFragment",
+      "overrideReason": "strip vendor \"…Fragment\" suffix",
+      "doors": [
+        "authenticators"
+      ],
+      "pkField": "authenticatorID"
+    },
+    {
+      "normalizedName": "AutomationDispatch",
+      "rawName": "AutomationDispatch",
+      "overrideReason": null,
+      "doors": [
+        "automation-rules"
+      ],
+      "pkField": "automationRuleDispatchUUID"
+    },
+    {
+      "normalizedName": "Badge",
+      "rawName": "Badge",
+      "overrideReason": null,
+      "doors": [
+        "badges"
+      ],
+      "pkField": "badgeID"
+    },
+    {
+      "normalizedName": "Category",
+      "rawName": "CategorySchema",
+      "overrideReason": "strip vendor \"…Schema\" suffix",
+      "doors": [
+        "categories"
+      ],
+      "pkField": "categoryID"
+    },
+    {
+      "normalizedName": "Collection",
+      "rawName": "FullCollectionSchema",
+      "overrideReason": "strip vendor \"Full…Schema\" wrapper naming convention",
+      "doors": [
+        "collections"
+      ],
+      "pkField": "collectionID"
+    },
+    {
+      "normalizedName": "Comment",
+      "rawName": "Comment",
+      "overrideReason": null,
+      "doors": [
+        "comments"
+      ],
+      "pkField": "commentID"
+    },
+    {
+      "normalizedName": "Conversation",
+      "rawName": "Conversation",
+      "overrideReason": null,
+      "doors": [
+        "conversations"
+      ],
+      "pkField": "conversationID"
+    },
+    {
+      "normalizedName": "DataSource",
+      "rawName": "DataSource",
+      "overrideReason": null,
+      "doors": [
+        "data-sources"
+      ],
+      "pkField": "dataSourceID"
+    },
+    {
+      "normalizedName": "Discussion",
+      "rawName": "Discussion",
+      "overrideReason": null,
+      "doors": [
+        "discussions"
+      ],
+      "pkField": "discussionID"
+    },
+    {
+      "normalizedName": "Draft",
+      "rawName": "Drafts",
+      "overrideReason": "pluralized door name; canonical schema-level record is singular",
+      "doors": [
+        "drafts"
+      ],
+      "pkField": "draftID"
+    },
+    {
+      "normalizedName": "EmailTemplate",
+      "rawName": "emailTemplates",
+      "overrideReason": "lowercase-leading vendor schema key + pluralized; canonicalized to PascalCase singular",
+      "doors": [
+        "email-templates"
+      ],
+      "pkField": "emailTemplatesID"
+    },
+    {
+      "normalizedName": "Escalation",
+      "rawName": "Escalation",
+      "overrideReason": null,
+      "doors": [
+        "escalations"
+      ],
+      "pkField": "recordID"
+    },
+    {
+      "normalizedName": "Event",
+      "rawName": "FullEvent",
+      "overrideReason": "strip vendor \"Full…\" wrapper naming convention",
+      "doors": [
+        "events"
+      ],
+      "pkField": "eventID"
+    },
+    {
+      "normalizedName": "Export",
+      "rawName": "Export",
+      "overrideReason": null,
+      "doors": [
+        "exports"
+      ],
+      "pkField": "exportUUID"
+    },
+    {
+      "normalizedName": "Group",
+      "rawName": "Group",
+      "overrideReason": null,
+      "doors": [
+        "groups"
+      ],
+      "pkField": "groupID"
+    },
+    {
+      "normalizedName": "Icon",
+      "rawName": "Icon",
+      "overrideReason": null,
+      "doors": [
+        "icons"
+      ],
+      "pkField": "iconUUID"
+    },
+    {
+      "normalizedName": "Keyword",
+      "rawName": "Keyword",
+      "overrideReason": null,
+      "doors": [
+        "keywords"
+      ],
+      "pkField": "keywordID"
+    },
+    {
+      "normalizedName": "KnowledgeBase",
+      "rawName": "FullKnowledgeBaseSchema",
+      "overrideReason": "strip vendor \"Full…Schema\" wrapper naming convention",
+      "doors": [
+        "knowledge-bases"
+      ],
+      "pkField": "knowledgeBaseID"
+    },
+    {
+      "normalizedName": "KnowledgeCategory",
+      "rawName": "KnowledgeCategories",
+      "overrideReason": "pluralized door name",
+      "doors": [
+        "knowledge-categories"
+      ],
+      "pkField": "knowledgeCategoryID"
+    },
+    {
+      "normalizedName": "Locale",
+      "rawName": "LocaleConfig",
+      "overrideReason": "allOf(Locale, TranslationServiceType) — base record is Locale; no collision since Locale is not separately coverable",
+      "doors": [
+        "locales"
+      ],
+      "pkField": "localeID"
+    },
+    {
+      "normalizedName": "MediaItem",
+      "rawName": "MediaItem",
+      "overrideReason": null,
+      "doors": [
+        "media"
+      ],
+      "pkField": "mediaID"
+    },
+    {
+      "normalizedName": "Message",
+      "rawName": "Message",
+      "overrideReason": null,
+      "doors": [
+        "messages"
+      ],
+      "pkField": "messageID"
+    },
+    {
+      "normalizedName": "ModerationMessage",
+      "rawName": "ModerationMessage",
+      "overrideReason": null,
+      "doors": [
+        "moderation-messages"
+      ],
+      "pkField": "moderationMessageID"
+    },
+    {
+      "normalizedName": "Multisite",
+      "rawName": "Multisite",
+      "overrideReason": null,
+      "doors": [
+        "multisites"
+      ],
+      "pkField": "multisiteID"
+    },
+    {
+      "normalizedName": "Notification",
+      "rawName": "NotificationSchema",
+      "overrideReason": "strip vendor \"…Schema\" suffix",
+      "doors": [
+        "notifications"
+      ],
+      "pkField": "notificationID"
+    },
+    {
+      "normalizedName": "OnlineUser",
+      "rawName": "UserFragment",
+      "overrideReason": "reached only via GET /online; suffix-stripping to \"User\" would collide with the real User leaf",
+      "doors": [
+        "online"
+      ],
+      "pkField": "userID"
+    },
+    {
+      "normalizedName": "Poll",
+      "rawName": "Polls",
+      "overrideReason": "pluralized door name",
+      "doors": [
+        "polls"
+      ],
+      "pkField": "pollID"
+    },
+    {
+      "normalizedName": "Product",
+      "rawName": "Product",
+      "overrideReason": null,
+      "doors": [
+        "products"
+      ],
+      "pkField": "productID"
+    },
+    {
+      "normalizedName": "ProductMessage",
+      "rawName": "ProductMessage",
+      "overrideReason": null,
+      "doors": [
+        "product-message",
+        "product-messages"
+      ],
+      "pkField": "productMessageID"
+    },
+    {
+      "normalizedName": "ProfileField",
+      "rawName": "ProfileField",
+      "overrideReason": null,
+      "doors": [
+        "profile-fields"
+      ],
+      "pkField": "apiName"
+    },
+    {
+      "normalizedName": "Rank",
+      "rawName": "Rank",
+      "overrideReason": null,
+      "doors": [
+        "ranks"
+      ],
+      "pkField": "rankID"
+    },
+    {
+      "normalizedName": "ReactionType",
+      "rawName": "ReactionType",
+      "overrideReason": null,
+      "doors": [
+        "reactions"
+      ],
+      "pkField": "urlCode"
+    },
+    {
+      "normalizedName": "Report",
+      "rawName": "Report",
+      "overrideReason": null,
+      "doors": [
+        "reports"
+      ],
+      "pkField": "reportID"
+    },
+    {
+      "normalizedName": "ReportReason",
+      "rawName": "ReportReason",
+      "overrideReason": null,
+      "doors": [
+        "report-reasons"
+      ],
+      "pkField": "reportReasonID"
+    },
+    {
+      "normalizedName": "Role",
+      "rawName": "Role",
+      "overrideReason": null,
+      "doors": [
+        "roles"
+      ],
+      "pkField": "roleID"
+    },
+    {
+      "normalizedName": "RoleApplication",
+      "rawName": "RoleApplication",
+      "overrideReason": null,
+      "doors": [
+        "role-requests"
+      ],
+      "pkField": "roleRequestID"
+    },
+    {
+      "normalizedName": "Rule",
+      "rawName": "Rule",
+      "overrideReason": null,
+      "doors": [
+        "rules"
+      ],
+      "pkField": "ruleID"
+    },
+    {
+      "normalizedName": "Session",
+      "rawName": "Sessions",
+      "overrideReason": "pluralized door name",
+      "doors": [
+        "sessions"
+      ],
+      "pkField": "sessionID"
+    },
+    {
+      "normalizedName": "Status",
+      "rawName": "Status",
+      "overrideReason": null,
+      "doors": [
+        "statuses"
+      ],
+      "pkField": "statusID"
+    },
+    {
+      "normalizedName": "Subcommunity",
+      "rawName": "Subcommunities",
+      "overrideReason": "pluralized door name",
+      "doors": [
+        "subcommunities"
+      ],
+      "pkField": "subcommunityID"
+    },
+    {
+      "normalizedName": "Tag",
+      "rawName": "Tag",
+      "overrideReason": null,
+      "doors": [
+        "tags"
+      ],
+      "pkField": "tagID"
+    },
+    {
+      "normalizedName": "Theme",
+      "rawName": "Theme",
+      "overrideReason": null,
+      "doors": [
+        "themes"
+      ],
+      "pkField": "themeID"
+    },
+    {
+      "normalizedName": "Token",
+      "rawName": "Token",
+      "overrideReason": null,
+      "doors": [
+        "tokens"
+      ],
+      "pkField": "accessTokenID"
+    },
+    {
+      "normalizedName": "User",
+      "rawName": "User",
+      "overrideReason": null,
+      "doors": [
+        "users"
+      ],
+      "pkField": "userID"
+    },
+    {
+      "normalizedName": "UserMention",
+      "rawName": "UserMentions",
+      "overrideReason": "pluralized door name",
+      "doors": [
+        "user-mentions"
+      ],
+      "pkField": "userID"
+    },
+    {
+      "normalizedName": "UserNote",
+      "rawName": "UserNote",
+      "overrideReason": null,
+      "doors": [
+        "user-notes"
+      ],
+      "pkField": "userNoteID"
+    },
+    {
+      "normalizedName": "Webhook",
+      "rawName": "Webhook",
+      "overrideReason": null,
+      "doors": [
+        "webhooks"
+      ],
+      "pkField": "webhookID"
+    },
+    {
+      "normalizedName": "Widget",
+      "rawName": "Widget",
+      "overrideReason": null,
+      "doors": [
+        "widgets"
+      ],
+      "pkField": "name"
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+The API is rate-limited in order to prevent abuse and protect our origins from attack. Rate limiting is performed on a per-IP basis.
+
+Exceeding the following rate limits will result in a temporary block, during which the service will respond with HTTP 429 Too Many Requests. The block will lift automatically after 1 minute.
+
+GET requestsThese types of requests are limited to 300 requests per 1 minute, per IP.
+
+POST / PUT / PATCH / DELETE requestsThese types of requests are limited to 120 requests per 1 minute, per IP.
+
+Hard LimitsIf you send more than 250 requests within 10 seconds, your IP may become blocked and require manual intervention by Vanilla Support in order to remove the block.

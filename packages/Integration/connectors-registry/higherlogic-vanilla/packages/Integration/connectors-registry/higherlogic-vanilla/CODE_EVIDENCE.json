@@ -1,0 +1,18 @@
+{
+  "Entries": [
+    {
+      "ScriptPath": "scripts/extract-universal-pk.mjs",
+      "ScriptRunAt": "2026-07-09T00:00:00.000Z",
+      "StructuredOutput": {
+        "total": 51,
+        "matchCount": 38,
+        "consistency": 0.7450980392156863,
+        "requiredBar": 0.95,
+        "clearsBar": false,
+        "verdict": "DO NOT EMIT -- consistency below the 95% statistical-significance bar; leave Configuration.universalPK unset (residual gap). 13 real exceptions found: UUID-suffixed PKs (AutomationDispatch.automationRuleDispatchUUID, Export.exportUUID, Icon.iconUUID), string-code PKs (ReactionType.urlCode, ProfileField.apiName, Widget.name), a non-conventional numeric PK (Escalation.recordID, Token.accessTokenID, EmailTemplate.emailTemplatesID, MediaItem.mediaID), and join-style objects reusing userID as their sole exposed PK (OnlineUser, UserMention)."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.universalPK"
+    }
+  ]
+}

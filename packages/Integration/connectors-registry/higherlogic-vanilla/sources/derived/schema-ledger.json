@@ -1,0 +1,77 @@
+{
+  "totalSchemas": 380,
+  "counts": {
+    "coverable": 46,
+    "informational": 10,
+    "topLevelOtherEndpoint": 142,
+    "nestedValueObject": 182,
+    "unaccounted": 0
+  },
+  "sumsToTotal": true,
+  "samples": {
+    "coverable": [
+      "Addon",
+      "Appeal",
+      "Article",
+      "AuthenticatorFragment",
+      "AutomationDispatch",
+      "Badge",
+      "CategorySchema",
+      "Comment",
+      "Conversation",
+      "DataSource",
+      "Discussion",
+      "Escalation",
+      "Export",
+      "FullCollectionSchema",
+      "FullEvent"
+    ],
+    "informational": [
+      "AiProcessingPreferences",
+      "AnalyticsDashboardSection",
+      "ArticleRevision",
+      "AuditLog",
+      "AuthenticatorTypeInfo",
+      "Config",
+      "NotificationPreferences",
+      "Resource",
+      "SearchResult",
+      "Translation"
+    ],
+    "topLevelOtherEndpoint": [
+      "AddMessageInput",
+      "AddMessageResponse",
+      "AnalyticsCatalog",
+      "AnalyticsDashboard",
+      "AnalyticsDashboardFragment",
+      "AnalyticsDataSource",
+      "AppealPatch",
+      "AppealPost",
+      "ArticleAliases",
+      "ArticlePatch",
+      "ArticleSimple",
+      "AuthenticatorDebugInput",
+      "AuthenticatorDebugStatus",
+      "AuthenticatorPatchSchema",
+      "BadgePost"
+    ],
+    "nestedValueObject": [
+      "AISuggestionsSettingsRequest",
+      "AISuggestionsSettingsResponse",
+      "Action",
+      "AiConversation",
+      "AnalysisType",
+      "AnalyticsDataSourceFragment",
+      "AnalyticsDataSourceProperty",
+      "AnalyticsExtractCsv",
+      "AnalyticsExtractJson",
+      "AnalyticsGroupedIntervalResult",
+      "AnalyticsGroupedResult",
+      "AnalyticsIntervalResult",
+      "AnalyticsLimit",
+      "AnalyticsSingleResult",
+      "AnnouncementType"
+    ],
+    "unaccounted": []
+  }
+}

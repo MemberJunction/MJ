@@ -1,0 +1,92 @@
+{
+  "Vendor": "Higher Logic Vanilla",
+  "GeneratedAt": "2026-07-08T15:45:00.000Z",
+  "TopSource": "https://success.vanillaforums.com/kb/articles/1842-api-v2-endpoints (embedded OpenAPI v3 spec, merged with the live open.vanillaforums.com endpoint)",
+  "SourceCount": 10,
+  "ProceedDecision": "PROCEED",
+  "ProceedReason": "A real, machine-readable OpenAPI v3 contract was recovered from TWO independent live/embedded public Vanilla-hosted communities (open.vanillaforums.com's unauthenticated live endpoint + success.vanillaforums.com's KB-embedded snapshot) and merged into a single union spec: 335 paths, 380 component schemas, 79 independently-addressable REST resources ('doors'), of which 51 are COVERABLE record types with real numeric <object>ID PKs, real scalar FK fields, real PageNumber+Link-header pagination, and (for most objects) real Create/Update/Delete paths+methods. This clears the >=0.7 real-OpenAPI-coverage bar the workflow uses to decide whether to raise extraction's K value.",
+  "Sources": [
+    {
+      "URL": "https://open.vanillaforums.com/api/v2/openapi/v3",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "CoversTaxonomies": ["ALL_COVERABLE", "ALL_INFORMATIONAL"],
+      "AccessNotes": "Live, UNAUTHENTICATED GET returns the full OpenAPI v3.0.3 JSON directly (HTTP 200, no permission gate) -- verified fresh via curl (not WebFetch; a 1.6MB JSON schema must be fetched raw in code per the acquire-the-schema-raw discipline, WebFetch would summarize/truncate it). 237 paths, 290 component schemas, servers=[https://open.vanillaforums.com/api/v2]. This is the developer/open-source-flavored public Vanilla community (open.vanillaforums.com) with a narrower addon set enabled than the Success Community (no Knowledge Base/Articles/Analytics-dashboard addons on this instance), but it uniquely carries appeals, authenticator-types, ai-processing-preferences, data-sources, discussions/poll paths not present in the Success Community's snapshot. Saved raw to sources/vanilla-openapi.open-vanillaforums.v3.json."
+    },
+    {
+      "URL": "https://success.vanillaforums.com/kb/articles/1842-api-v2-endpoints",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "CoversTaxonomies": ["ALL_COVERABLE", "ALL_INFORMATIONAL"],
+      "AccessNotes": "The KB article's own React-hydration HTML payload embeds the COMPLETE OpenAPI v3 spec for the Success Community's own live instance (success.vanillaforums.com is itself a Vanilla-powered community, so its Dashboard > Settings > API Integrations > API V2 Swagger is baked into this public KB page as a 'specJson' data island -- the SpectaQL-style whole-schema-embedded-in-HTML pattern). openapi 3.0.2, info.version '2.0-alpha', servers=[https://success.vanillaforums.com/api/v2]. 316 paths, 350 component schemas -- richer than the open.vanillaforums.com instance because this community has the Knowledge Base/Articles, Analytics dashboards, and AI-settings addons enabled. IMPORTANT: the LIVE raw endpoint (https://success.vanillaforums.com/api/v2/openapi/v3) now returns HTTP 403 'Garden.Settings.Manage' for anonymous requests -- confirmed via direct curl, both with and without the historical '?disabled=true' query param seen in the KB page's own displayed example URL. The spec is therefore recovered from the PUBLIC KB page's embedded HTML payload, not the raw endpoint. Extraction method: curl -> save whole 18MB HTML -> Node script (packages/Integration/connectors-registry/higherlogic-vanilla/scripts, ad hoc) that HTML-entity-decodes + JSON-string-unescapes the 'specJson' field (11 embedded copies found at different escape depths on the page; only the most-deeply-escaped copy round-trips cleanly through JSON.parse -- the other 10 are the same payload, not distinct content, confirmed by comparing lengths). WebFetch on this URL returned ONLY the page <title> (SPA hydration payload not surfaced by WebFetch's HTML-to-markdown conversion) and a direct curl of the raw endpoint hit WebFetch's 10MB cap -- both are exactly the 'WebFetch is a summarizer, never source of record' failure mode this discipline warns about; the raw bytes were pulled via Bash/curl and parsed in code instead. Saved raw extracted spec to sources/vanilla-openapi.success-kb-embedded.v3.json."
+    },
+    {
+      "URL": "https://success.vanillaforums.com/kb/articles/40-api-v2-overview",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "CoversTaxonomies": ["INFORMATIONAL: Pagination & Field Selection"],
+      "AccessNotes": "WebFetch returned only the page title (same SPA-hydration issue as article 1842). Body text recovered via curl + a targeted Node extraction of the article's own 'body' JSON field (disambiguated from unrelated embedded-discussion-widget 'body' fields on the same page by anchoring on the exact article name in the surrounding JSON). Confirms: numbered pagination (page+limit params, first/last/prev/next) and 'more' pagination (first/prev/next only, used where totals would be expensive); paging info delivered via the Link response header (RFC 5988 style, rel=first/last/prev/next); a 'Paging-Next' header is always present when more rows exist; a 'fields' query param usable on every GET to select a sparse fieldset (also usable on CSV export). Extracted text saved to sources/kb-40-api-v2-overview.extracted.txt."
+    },
+    {
+      "URL": "https://success.vanillaforums.com/kb/articles/44-rate-limits",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "CoversTaxonomies": ["INFORMATIONAL: Rate Limiting"],
+      "AccessNotes": "WebFetch returned only the page title; body recovered the same targeted-extraction way as article 40 (a plain, non-HTML-entity-encoded 'body' field was found this time -- the encoding style differs per KB render pass, so extraction script tries both the HTML-entity-encoded and the plain-JSON-string forms). Confirms explicit rate limits: GET requests limited to 300 requests / 1 minute / per IP; POST/PUT/PATCH/DELETE limited to 120 requests / 1 minute / per IP; exceeding either returns HTTP 429 Too Many Requests, auto-lifting after 1 minute; a hard limit of >250 requests within 10 seconds can trigger a longer IP block requiring manual Vanilla Support intervention to lift. Feeds Integration.BatchMaxRequestCount / BatchRequestWaitTime. Extracted text saved to sources/kb-44-rate-limits.extracted.txt."
+    },
+    {
+      "URL": "https://success.vanillaforums.com/kb/articles/41-authenticating-apiv2-calls-with-personal-access-tokens",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "CoversTaxonomies": ["INFORMATIONAL: Authentication Mechanics"],
+      "AccessNotes": "WebFetch returned only the page title; body recovered via the same targeted-extraction technique. Confirms: bearer-token auth via 'Authorization: Bearer <token>' header (preferred -- avoids header/token leakage into server logs) OR an 'access_token' query-string parameter (documented fallback for clients that cannot set custom headers / want to avoid CORS preflight); personal access tokens are generated per-user from the user's own profile (MeBox > Edit Profile > Access Tokens > Generate New Token), gated by the 'Garden > Tokens > Add' permission on the generating user's Role, and API calls made with the token carry that user's own permissions (not a separate service-account scope). Extracted text saved to sources/kb-41-personal-access-tokens.extracted.txt."
+    },
+    {
+      "URL": "https://developer.vanillaforums.com",
+      "AccessStatus": "404",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "CoversTaxonomies": [],
+      "AccessNotes": "CONFIRMED DEAD per the task's own instruction -- curl (15s timeout, 3 attempts pattern not needed since the failure is a hard connection failure, not a transient one) returns no HTTP response at all (DNS/connection failure, exit code non-zero, no status line). Do not cite or use. Recorded here only so downstream agents don't re-attempt it and burn a retry budget rediscovering the same dead domain."
+    },
+    {
+      "URL": "https://docs.vanillaforums.com/developer/apiv2-reference/",
+      "AccessStatus": "Reachable",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "CoversTaxonomies": [],
+      "AccessNotes": "Reachable (HTTP 200) but this is NOT a distinct corpus -- it renders the identical 'Help - The Success Community' SPA shell and references success.vanillaforums.com internally 475+ times in the fetched HTML. Treat as an alias/redirect front-door into the same KB already captured via articles 40/41/44/1842, not an independent source. Do not double-count its content."
+    },
+    {
+      "URL": "https://success.vanillaforums.com/kb/articles/202-apiv2-reference-endpoints",
+      "AccessStatus": "404",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "CoversTaxonomies": [],
+      "AccessNotes": "Returns HTTP 200 but the page body itself is 'Article has been deleted' -- this URL surfaced prominently in web search results (likely a stale search-index entry) but the KB article was removed. Do not cite. Marked 404 here (content-dead) despite the transport-level 200 to prevent downstream agents from treating a search-engine hit as evidence of a live reference page."
+    },
+    {
+      "URL": "https://github.com/vanilla/docs",
+      "AccessStatus": "Reachable",
+      "SourceTier": 3,
+      "SourceCategory": "OfficialDocs",
+      "CoversTaxonomies": [],
+      "AccessNotes": "Vendor-owned GitHub org (confirmed live via GitHub API, public, non-private repo) hosting historical/self-hosted-Vanilla developer documentation. Per the operator context doc's own tier hierarchy (its Tier 9), this is behavioral/historical-clue material only -- it documents the older self-hosted OSS product's terminology and cannot be assumed to reflect the current Higher-Logic-hosted cloud API v2 surface. Not used for any hard-constraint field; not deep-crawled given the OpenAPI spec + KB docs already provide Tier-1 authoritative coverage of everything needed."
+    },
+    {
+      "URL": "packages/Integration/connectors-registry/higherlogic-vanilla/sources/contextHLV.md",
+      "AccessStatus": "Reachable",
+      "SourceTier": 3,
+      "SourceCategory": "CommunityFixture",
+      "CoversTaxonomies": ["ALL_COVERABLE", "ALL_INFORMATIONAL (canonical-object naming cross-check only)"],
+      "AccessNotes": "Operator-supplied local context/planning document (not a vendor source). TRUSTED-WHERE-IT-SPEAKS per the task framing: its Tier 0-10 source-authority hierarchy, its named object list (users/roles/categories/discussions/comments/reactions/groups/subcommunities/products/knowledge-base/articles/moderation/webhooks), and its canonical TypeScript object shapes were used ONLY as a cross-check against the independently-derived, code-computed OpenAPI catalog below -- every one of its named objects independently confirmed present in the real spec. Its bespoke mock-lab/Docker-compose/adapter-interface/synthetic-data-volume architecture was explicitly IGNORED per instruction (this SourceAuditor pass produces a real OpenAPI-driven SOURCES.json/SOURCE_STUDY.md, not a mock-lab plan). No claim from this document was used where the real OpenAPI spec or KB docs disagreed or were silent -- none were found to disagree."
+    }
+  ],
+  "PostmanNote": "No official/current Postman collection was found. A single stale community-shared Postman collection link (a legacy getpostman.com/collections/<id> short-link) surfaced in a 2016-era open.vanillaforums.com forum thread; it predates the current 335-path/380-schema API v2 surface by years and could not be verified as current or as vendor-maintained, so it is NOT included as a source (Tier-3 community links are not acceptable evidence for hard-constraint fields, and an unverifiable/likely-stale collection is not acceptable even as Tier-3 informational color). PostmanPaths is therefore empty.",
+  "SDKNote": "No official Higher Logic Vanilla SDK (TypeScript, Python, or otherwise) was found on npm, PyPI, or in vendor documentation. SDKPaths is therefore empty; the OpenAPI spec is the only machine-readable contract."
+}

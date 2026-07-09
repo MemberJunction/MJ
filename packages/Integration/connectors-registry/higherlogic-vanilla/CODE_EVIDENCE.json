@@ -1,0 +1,2811 @@
+{
+  "Entries": [
+    {
+      "ScriptPath": "scripts/extract-auth-ratelimit-webhook-kb.mjs",
+      "ScriptRunAt": "2026-07-08T00:00:00.000Z",
+      "StructuredOutput": {
+        "jwtSigningAlgorithm": "HS256",
+        "jwtHeaderPattern": "Authorization: Bearer <jwt>",
+        "jwtIsAddon": true,
+        "sourceArticle": "kb/articles/122-authenticating-api-v2-calls-with-jwt (resolved+name-verified, NOT the misleadingly-guessed kb/articles/42-* URL which actually serves an unrelated CORS article)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.AlternativeAuthMechanisms.jwtApiAuth"
+    },
+    {
+      "ScriptPath": "scripts/extract-auth-ratelimit-webhook-kb.mjs",
+      "ScriptRunAt": "2026-07-08T00:00:00.000Z",
+      "StructuredOutput": {
+        "roleTokenIssueEndpoint": "POST /api/v2/tokens/roles",
+        "roleTokenQueryParam": "role-token",
+        "roleTokenLimitedEndpoints": [
+          "GET /api/v2/users/:userID",
+          "GET /api/v2/subcommunities",
+          "GET /api/v2/products",
+          "GET /api/v2/users/524314"
+        ],
+        "roleTokenLifetimeMinutesApprox": "1-3",
+        "sourceArticle": "kb/articles/436-authenticating-api-v2-calls-with-role-tokens (resolved+name-verified, NOT the misleadingly-guessed kb/articles/43-* URL)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.AlternativeAuthMechanisms.roleTokens"
+    },
+    {
+      "ScriptPath": "scripts/extract-auth-ratelimit-webhook-kb.mjs",
+      "ScriptRunAt": "2026-07-08T00:00:00.000Z",
+      "StructuredOutput": {
+        "webhookSignatureHeader": "X-Vanilla-Signature",
+        "webhookSignatureAlgorithm": "HMAC-SHA1",
+        "webhookRequiresStaffEnablement": true,
+        "sourceArticle": "kb/articles/262-webhooks (resolved+name-verified)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.WebhooksSignatureAlgorithm"
+    },
+    {
+      "ScriptPath": "scripts/extract-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-08T00:00:00.000Z",
+      "StructuredOutput": {
+        "paginationSample": [
+          {
+            "path": "/discussions",
+            "hasPage": true,
+            "hasLimit": true,
+            "limitDefault": 30,
+            "limitMax": 100,
+            "limitMin": 1,
+            "sortEnum": [
+              "dateLastComment",
+              "dateInserted",
+              "discussionID",
+              "-dateLastComment",
+              "-dateInserted",
+              "-discussionID"
+            ],
+            "hasFields": true,
+            "hasDateUpdatedFilter": true,
+            "hasDateInsertedFilter": true
+          },
+          {
+            "path": "/users",
+            "hasPage": true,
+            "hasLimit": true,
+            "limitDefault": 30,
+            "limitMax": 500,
+            "limitMin": 1,
+            "sortEnum": [
+              "dateInserted",
+              "dateLastActive",
+              "name",
+              "userID",
+              "points",
+              "countPosts",
+              "dateFollowed",
+              "-dateInserted",
+              "-dateLastActive",
+              "-name",
+              "-userID",
+              "-points",
+              "-countPosts",
+              "-dateFollowed",
+              "groups.dateInserted",
+              "-groups.dateInserted"
+            ],
+            "hasFields": true,
+            "hasDateUpdatedFilter": true,
+            "hasDateInsertedFilter": true
+          },
+          {
+            "path": "/categories",
+            "hasPage": true,
+            "hasLimit": true,
+            "limitDefault": null,
+            "limitMax": 100,
+            "limitMin": 1,
+            "sortEnum": [
+              "categoryID",
+              "-categoryID",
+              "name",
+              "-name",
+              "dateFollowed",
+              "-dateFollowed"
+            ],
+            "hasFields": true,
+            "hasDateUpdatedFilter": false,
+            "hasDateInsertedFilter": false
+          },
+          {
+            "path": "/comments",
+            "hasPage": true,
+            "hasLimit": true,
+            "limitDefault": "30",
+            "limitMax": 100,
+            "limitMin": 1,
+            "sortEnum": [
+              "dateInserted",
+              "-dateInserted",
+              "commentID",
+              "-commentID",
+              "score",
+              "-score",
+              "-experimentalTrending"
+            ],
+            "hasFields": true,
+            "hasDateUpdatedFilter": true,
+            "hasDateInsertedFilter": true
+          },
+          {
+            "path": "/roles",
+            "hasPage": false,
+            "hasLimit": false,
+            "limitDefault": null,
+            "limitMax": null,
+            "limitMin": null,
+            "sortEnum": null,
+            "hasFields": true,
+            "hasDateUpdatedFilter": false,
+            "hasDateInsertedFilter": false
+          }
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.PaginationDefaults"
+    },
+    {
+      "ScriptPath": "scripts/extract-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-08T00:00:00.000Z",
+      "StructuredOutput": {
+        "dateUpdatedFilterConfirmedOn": [
+          "/discussions",
+          "/users",
+          "/comments"
+        ],
+        "dateUpdatedFilterAbsentOn": [
+          "/categories",
+          "/roles"
+        ],
+        "vendorWideWatermarkCounts": {
+          "hasDateUpdatedWatermark": 23,
+          "insertOnlyWatermark": 10,
+          "totalCoverable": 51
+        }
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.IncrementalSyncCapability"
+    },
+    {
+      "ScriptPath": "scripts/extract-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-08T00:00:00.000Z",
+      "StructuredOutput": {
+        "bulkLikePaths": [
+          "/discussions/resolve-bulk",
+          "/badges/{id}/bulk-users"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.BulkOperationsAvailable"
+    },
+    {
+      "ScriptPath": "scripts/extract-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-08T00:00:00.000Z",
+      "StructuredOutput": {
+        "servers": [
+          {
+            "url": "https://open.vanillaforums.com/api/v2"
+          },
+          {
+            "url": "https://success.vanillaforums.com/api/v2"
+          }
+        ],
+        "specVersion": "3.0.3"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.APIVersioningStrategy"
+    },
+    {
+      "ScriptPath": "scripts/extract-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-08T00:00:00.000Z",
+      "StructuredOutput": {
+        "topErrorSchemaRef": [
+          "#/components/schemas/BasicError",
+          15
+        ],
+        "refCount": 15,
+        "basicErrorSchema": {
+          "type": "object",
+          "properties": {
+            "message": {
+              "description": "Verbose description of the error.",
+              "type": "string"
+            },
+            "status": {
+              "description": "Response status code.",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "message",
+            "status"
+          ],
+          "x-addon": "dashboard"
+        }
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.ErrorResponseShape"
+    },
+    {
+      "ScriptPath": "scripts/extract-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-08T00:00:00.000Z",
+      "StructuredOutput": {
+        "profileFieldApiNameDescription": "The ID of the profile field."
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.CustomFieldMarkerPattern"
+    },
+    {
+      "ScriptPath": "scripts/extract-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-08T00:00:00.000Z",
+      "StructuredOutput": {
+        "totalCoverable": 51,
+        "withCreate": 37,
+        "withUpdate": 33,
+        "withDelete": 32,
+        "fullCRUD": 25,
+        "readOnly": [
+          "AutomationDispatch",
+          "ProductMessage",
+          "RoleApplication",
+          "Sessions",
+          "UserFragment",
+          "UserMentions",
+          "UserNote",
+          "Widget"
+        ],
+        "hasDateUpdatedWatermark": 23,
+        "insertOnlyWatermark": 10
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.WriteCapability"
+    },
+    {
+      "ScriptPath": "scripts/extract-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-08T00:00:00.000Z",
+      "StructuredOutput": {
+        "ifMatchCount": 0,
+        "etagCount": 4,
+        "etagContexts": [
+          "ties\":{\"partNumber\":{\"type\":\"integer\"},\"eTag\":{\"type\":\"string\"}}}}}}},\"x-addon\":",
+          "ema\":{\"$ref\":\"#/components/schemas/DeleteTagInfo\"}}}},\"401\":{\"$ref\":\"#/component",
+          "messages\"],\"x-addon\":\"dashboard\"},\"DeleteTagInfo\":{\"type\":\"object\",\"description\"",
+          "board\"},\"CacheBusterParameter\":{\"name\":\"etag\",\"in\":\"query\",\"description\":\"Whethe"
+        ],
+        "ifUnmodifiedCount": 0
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.ConcurrencyControl"
+    },
+    {
+      "ScriptPath": "scripts/extract-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-08T00:00:00.000Z",
+      "StructuredOutput": {
+        "ifMatchCount": 0,
+        "etagCount": 4,
+        "etagContexts": [
+          "ties\":{\"partNumber\":{\"type\":\"integer\"},\"eTag\":{\"type\":\"string\"}}}}}}},\"x-addon\":",
+          "ema\":{\"$ref\":\"#/components/schemas/DeleteTagInfo\"}}}},\"401\":{\"$ref\":\"#/component",
+          "messages\"],\"x-addon\":\"dashboard\"},\"DeleteTagInfo\":{\"type\":\"object\",\"description\"",
+          "board\"},\"CacheBusterParameter\":{\"name\":\"etag\",\"in\":\"query\",\"description\":\"Whethe"
+        ],
+        "ifUnmodifiedCount": 0
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.DefaultConflictResolution"
+    },
+    {
+      "ScriptPath": "scripts/extract-integration-config-facts.mjs",
+      "ScriptRunAt": "2026-07-08T00:00:00.000Z",
+      "StructuredOutput": {
+        "articleStatusEnum": [
+          "undeleted",
+          "deleted",
+          "published"
+        ],
+        "hasArticleDeleteVerb": false,
+        "sampleHardDeleteObjects": [
+          {
+            "path": "/discussions/{id}",
+            "hasDelete": true
+          },
+          {
+            "path": "/comments/{id}",
+            "hasDelete": true
+          },
+          {
+            "path": "/users/{id}",
+            "hasDelete": true
+          },
+          {
+            "path": "/categories/{id}",
+            "hasDelete": true
+          },
+          {
+            "path": "/groups/{id}",
+            "hasDelete": true
+          }
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.DeleteSemantics"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-08T17:53:39.101Z",
+      "StructuredOutput": {
+        "IOCreated": 58,
+        "IOFCreated": 556,
+        "coverableDoors": 51,
+        "nestedRecordTypes": 7,
+        "source": "sources/vanilla-openapi.merged.v3.json (union of open.vanillaforums.com/api/v2/openapi/v3 + success.vanillaforums.com KB-1842-embedded spec)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.*"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-08T17:53:39.101Z",
+      "StructuredOutput": {
+        "rule": "field name resolves to emitted sibling IO PK + description motif; @lookup with &IntegrationID=@parent:IntegrationID",
+        "example": "Comment.discussionID → Discussion (\"The ID of the discussion.\")"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Comment.discussionID.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-08T17:53:39.101Z",
+      "StructuredOutput": {
+        "rule": "per-operation CRUD columns emitted when the OpenAPI door exposes POST/PATCH/DELETE",
+        "writeCapableObjects": 43
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Discussion.SupportsWrite"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-08T17:53:39.101Z",
+      "StructuredOutput": {
+        "rule": "watermark = dateUpdated (else dateInserted) when present as a documented list-filter query param",
+        "incrementalObjects": [
+          "Appeal:dateInserted",
+          "AutomationDispatch:dateUpdated",
+          "Collection:dateUpdated",
+          "Comment:dateUpdated",
+          "Discussion:dateUpdated",
+          "Draft:dateUpdated",
+          "Escalation:dateInserted",
+          "Report:dateInserted",
+          "User:dateUpdated"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Discussion.IncrementalWatermarkField"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-07-08T17:53:39.101Z",
+      "StructuredOutput": {
+        "rule": "APIPath = the door list path walked from spec.paths",
+        "sample": [
+          "Addon:/addons",
+          "Appeal:/appeals",
+          "Authenticator:/authenticators",
+          "AutomationDispatch:/automation-rules/dispatches",
+          "Category:/categories",
+          "Collection:/collections",
+          "Comment:/comments",
+          "Conversation:/conversations",
+          "DataSource:/data-sources",
+          "Discussion:/discussions"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Discussion.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/amend-delta-round1.mjs",
+      "ScriptRunAt": "2026-07-08T19:14:40.646Z",
+      "StructuredOutput": {
+        "fixedSlots": [
+          "iof.Session.sessionID.IsPrimaryKey",
+          "iof.Session.userID.RelatedIntegrationObjectID"
+        ],
+        "addedFields": [
+          "sessionID",
+          "userID",
+          "dateInserted",
+          "dateUpdated",
+          "dateExpires"
+        ],
+        "fkEdges": 1,
+        "source": "sources/vanilla-openapi.merged.v3.json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Session"
+    },
+    {
+      "ScriptPath": "scripts/amend-delta-round1.mjs",
+      "ScriptRunAt": "2026-07-08T19:14:40.646Z",
+      "StructuredOutput": {
+        "fixedSlots": [
+          "iof.Report.reportID.IsPrimaryKey",
+          "iof.Report.recordUserID.RelatedIntegrationObjectID",
+          "iof.Report.insertUserID.RelatedIntegrationObjectID",
+          "iof.Report.reportedUserID.RelatedIntegrationObjectID",
+          "iof.Report.updateUserID.RelatedIntegrationObjectID"
+        ],
+        "addedFields": [
+          "reportID",
+          "recordUserID",
+          "recordDateInserted",
+          "recordDateUpdated",
+          "insertUserID",
+          "reportedUserID",
+          "updateUserID"
+        ],
+        "fkEdges": 4,
+        "source": "sources/vanilla-openapi.merged.v3.json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Report"
+    },
+    {
+      "ScriptPath": "scripts/amend-delta-round1.mjs",
+      "ScriptRunAt": "2026-07-08T19:14:40.646Z",
+      "StructuredOutput": {
+        "fixedSlots": [
+          "iof.ReportReason.reportReasonID.IsPrimaryKey",
+          "iof.ReportReason.insertUserID.RelatedIntegrationObjectID",
+          "iof.ReportReason.updateUserID.RelatedIntegrationObjectID"
+        ],
+        "addedFields": [
+          "reportReasonID",
+          "name",
+          "description",
+          "dateInserted",
+          "dateUpdated",
+          "insertUserID",
+          "updateUserID",
+          "sort",
+          "roleIDs",
+          "roles",
+          "deleted"
+        ],
+        "fkEdges": 2,
+        "source": "sources/vanilla-openapi.merged.v3.json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.ReportReason"
+    },
+    {
+      "ScriptPath": "scripts/amend-delta-round1.mjs",
+      "ScriptRunAt": "2026-07-08T19:14:40.646Z",
+      "StructuredOutput": {
+        "fixedSlots": [
+          "iof.UserNote.userNoteID.IsPrimaryKey",
+          "iof.UserNote.userID.RelatedIntegrationObjectID",
+          "iof.UserNote.insertUserID.RelatedIntegrationObjectID",
+          "iof.UserNote.updateUserID.RelatedIntegrationObjectID"
+        ],
+        "addedFields": [
+          "userNoteID",
+          "type",
+          "userID",
+          "body",
+          "format",
+          "insertUserID",
+          "updateUserID"
+        ],
+        "fkEdges": 3,
+        "source": "sources/vanilla-openapi.merged.v3.json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.UserNote"
+    },
+    {
+      "ScriptPath": "scripts/amend-delta-round1.mjs",
+      "ScriptRunAt": "2026-07-08T19:14:40.646Z",
+      "StructuredOutput": {
+        "fixedSlots": [
+          "iof.OnlineUser.userID.RelatedIntegrationObjectID",
+          "iof.OnlineUser.userID.IsPrimaryKey",
+          "iof.OnlineUser.name.IsPrimaryKey"
+        ],
+        "addedFields": [
+          "userID",
+          "timestamp"
+        ],
+        "fkEdges": 1,
+        "source": "sources/vanilla-openapi.merged.v3.json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.OnlineUser"
+    },
+    {
+      "ScriptPath": "scripts/amend-delta-round1.mjs",
+      "ScriptRunAt": "2026-07-08T19:14:40.646Z",
+      "StructuredOutput": {
+        "fixedSlots": [
+          "iof.EventParticipant.eventID.RelatedIntegrationObjectID",
+          "iof.EventParticipant.eventID.IsPrimaryKey",
+          "iof.EventParticipant.userID.RelatedIntegrationObjectID",
+          "iof.EventParticipant.userID.IsPrimaryKey"
+        ],
+        "addedFields": [
+          "eventID",
+          "userID"
+        ],
+        "fkEdges": 2,
+        "source": "sources/vanilla-openapi.merged.v3.json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.EventParticipant"
+    },
+    {
+      "ScriptPath": "scripts/amend-delta-round1.mjs",
+      "ScriptRunAt": "2026-07-08T19:14:40.646Z",
+      "StructuredOutput": {
+        "fixedSlots": [
+          "iof.GroupApplicant.userID.RelatedIntegrationObjectID",
+          "iof.GroupApplicant.userID.IsPrimaryKey",
+          "io.GroupApplicant.CreateAPIPath",
+          "io.GroupApplicant.UpdateAPIPath"
+        ],
+        "addedFields": [
+          "userID"
+        ],
+        "fkEdges": 1,
+        "source": "sources/vanilla-openapi.merged.v3.json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.GroupApplicant"
+    },
+    {
+      "ScriptPath": "scripts/amend-delta-round1.mjs",
+      "ScriptRunAt": "2026-07-08T19:14:40.646Z",
+      "StructuredOutput": {
+        "fixedSlots": [
+          "iof.GroupInvite.insertUserID.RelatedIntegrationObjectID",
+          "iof.GroupInvite.userID.RelatedIntegrationObjectID",
+          "iof.GroupInvite.userID.IsPrimaryKey",
+          "io.GroupInvite.CreateAPIPath",
+          "io.GroupInvite.DeleteAPIPath"
+        ],
+        "addedFields": [
+          "insertUserID",
+          "userID"
+        ],
+        "fkEdges": 2,
+        "source": "sources/vanilla-openapi.merged.v3.json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.GroupInvite"
+    },
+    {
+      "ScriptPath": "scripts/amend-delta-round1.mjs",
+      "ScriptRunAt": "2026-07-08T19:14:40.646Z",
+      "StructuredOutput": {
+        "fixedSlots": [
+          "iof.GroupMember.insertUserID.RelatedIntegrationObjectID",
+          "iof.GroupMember.userID.RelatedIntegrationObjectID",
+          "iof.GroupMember.userID.IsPrimaryKey",
+          "io.GroupMember.CreateAPIPath",
+          "io.GroupMember.DeleteAPIPath"
+        ],
+        "addedFields": [
+          "insertUserID",
+          "userID"
+        ],
+        "fkEdges": 2,
+        "source": "sources/vanilla-openapi.merged.v3.json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.GroupMember"
+    },
+    {
+      "ScriptPath": "scripts/amend-delta-round1.mjs",
+      "ScriptRunAt": "2026-07-08T19:14:40.646Z",
+      "StructuredOutput": {
+        "fixedSlots": [
+          "iof.GroupTag.tagID.RelatedIntegrationObjectID",
+          "iof.GroupTag.tagID.IsPrimaryKey"
+        ],
+        "addedFields": [
+          "tagID"
+        ],
+        "fkEdges": 1,
+        "source": "sources/vanilla-openapi.merged.v3.json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.GroupTag"
+    },
+    {
+      "ScriptPath": "scripts/amend-delta-round1.mjs",
+      "ScriptRunAt": "2026-07-08T19:14:40.646Z",
+      "StructuredOutput": {
+        "fixedSlots": [
+          "iof.UserBadge.badgeID.RelatedIntegrationObjectID",
+          "iof.UserBadge.badgeID.IsPrimaryKey"
+        ],
+        "addedFields": [
+          "badgeID"
+        ],
+        "fkEdges": 1,
+        "source": "sources/vanilla-openapi.merged.v3.json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.UserBadge"
+    },
+    {
+      "ScriptPath": "scripts/amend-delta-round1.mjs",
+      "ScriptRunAt": "2026-07-08T19:14:40.646Z",
+      "StructuredOutput": {
+        "fixedSlots": [
+          "iof.WebhookDelivery.webhookDeliveryID.IsPrimaryKey",
+          "iof.WebhookDelivery.webhookID.RelatedIntegrationObjectID"
+        ],
+        "addedFields": [
+          "webhookDeliveryID",
+          "webhookID",
+          "requestBody",
+          "requestHeaders",
+          "responseBody",
+          "responseHeaders"
+        ],
+        "fkEdges": 1,
+        "source": "sources/vanilla-openapi.merged.v3.json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.WebhookDelivery"
+    },
+    {
+      "ScriptPath": "scripts/amend-delta-round1.mjs",
+      "ScriptRunAt": "2026-07-08T19:14:40.646Z",
+      "StructuredOutput": {
+        "fixedSlots": [
+          "iof.RoleApplication.roleID.RelatedIntegrationObjectID",
+          "iof.RoleApplication.userID.RelatedIntegrationObjectID",
+          "iof.RoleApplication.statusUserID.RelatedIntegrationObjectID",
+          "iof.RoleApplication.insertUserID.RelatedIntegrationObjectID",
+          "iof.RoleApplication.updateUserID.RelatedIntegrationObjectID",
+          "io.RoleApplication.CreateAPIPath",
+          "io.RoleApplication.UpdateAPIPath",
+          "io.RoleApplication.DeleteAPIPath"
+        ],
+        "addedFields": [
+          "type",
+          "roleID",
+          "userID",
+          "status",
+          "statusUserID",
+          "attributes",
+          "insertUserID",
+          "updateUserID"
+        ],
+        "fkEdges": 5,
+        "source": "sources/vanilla-openapi.merged.v3.json"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.RoleApplication"
+    },
+    {
+      "ScriptPath": "scripts/amend-delta-round1.mjs",
+      "ScriptRunAt": "2026-07-08T19:14:40.646Z",
+      "StructuredOutput": {
+        "note": "FK-detection applied to the 13 flagged objects (delta round 1). Scalar <base>ID/*UserID → emitted sibling IO via RelatedIntegrationObjectID.",
+        "fkEdgesAdded": 26,
+        "objects": [
+          "Session",
+          "Report",
+          "ReportReason",
+          "UserNote",
+          "OnlineUser",
+          "EventParticipant",
+          "GroupApplicant",
+          "GroupInvite",
+          "GroupMember",
+          "GroupTag",
+          "UserBadge",
+          "WebhookDelivery",
+          "RoleApplication"
+        ]
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "pipeline.fk-detection"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof-amend-r2.mjs",
+      "ScriptRunAt": "2026-07-08T20:48:53.891Z",
+      "StructuredOutput": {
+        "round": 2,
+        "ioUpserts": 6,
+        "iofUpserts": 198,
+        "deletes": 4,
+        "fieldsAdded": 166,
+        "fksWired": 62,
+        "newNested": [
+          "ArticleRevision",
+          "ConversationParticipant",
+          "PollVote"
+        ],
+        "source": "sources/vanilla-openapi.merged.v3.json (merged open.vanillaforums.com + success.vanillaforums.com KB-1842 OpenAPI v3)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.*"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof-amend-r2.mjs",
+      "ScriptRunAt": "2026-07-08T20:48:53.891Z",
+      "StructuredOutput": {
+        "rule": "PascalCase TS class symbol",
+        "value": "HigherLogicVanillaConnector",
+        "fixes": "B2"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.ClassName"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof-amend-r2.mjs",
+      "ScriptRunAt": "2026-07-08T20:48:53.891Z",
+      "StructuredOutput": {
+        "rule": "full canonical schema re-flatten + resolveFK vendor-wide",
+        "fixes": "B1",
+        "example": "Discussion.categoryID->Category, groupID->Group, insertUserID/lastUserID->User, statusID->Status"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Discussion.categoryID.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof-amend-r2.mjs",
+      "ScriptRunAt": "2026-07-08T20:48:53.891Z",
+      "StructuredOutput": {
+        "rule": "clean delete+recreate; removed fabricated `id`, corrected urlCode->urlcode",
+        "fixes": "B3"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Tag.urlcode"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof-amend-r2.mjs",
+      "ScriptRunAt": "2026-07-08T20:48:53.891Z",
+      "StructuredOutput": {
+        "rule": "nested listable component ArticleRevision via /articles/{id}/revisions",
+        "fixes": "B4"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.ArticleRevision.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof-amend-r2.mjs",
+      "ScriptRunAt": "2026-07-08T20:48:53.891Z",
+      "StructuredOutput": {
+        "rule": "nested writable /conversations/{id}/participants, composite PK conversationID+userID",
+        "fixes": "B5"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.ConversationParticipant.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof-amend-r2.mjs",
+      "ScriptRunAt": "2026-07-08T20:48:53.891Z",
+      "StructuredOutput": {
+        "rule": "nested read /polls/{id}/votes, composite PK pollID+userID+pollOptionID",
+        "fixes": "A2"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.PollVote.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof-amend-r2.mjs",
+      "ScriptRunAt": "2026-07-08T20:48:53.891Z",
+      "StructuredOutput": {
+        "rule": "write surface at /user-notes/notes[/{id}]",
+        "fixes": "A1"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.UserNote.SupportsWrite"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof-amend-r2.mjs",
+      "ScriptRunAt": "2026-07-08T20:48:53.891Z",
+      "StructuredOutput": {
+        "rule": "dateUpdated (not insert-only)",
+        "fixes": "A4"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Appeal.IncrementalWatermarkField"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof-amend-r2.mjs",
+      "ScriptRunAt": "2026-07-08T20:50:27.309Z",
+      "StructuredOutput": {
+        "round": 2,
+        "ioUpserts": 6,
+        "iofUpserts": 31,
+        "deletes": 4,
+        "fieldsAdded": 0,
+        "fksWired": 0,
+        "newNested": [
+          "ArticleRevision",
+          "ConversationParticipant",
+          "PollVote"
+        ],
+        "source": "sources/vanilla-openapi.merged.v3.json (merged open.vanillaforums.com + success.vanillaforums.com KB-1842 OpenAPI v3)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.*"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof-amend-r2.mjs",
+      "ScriptRunAt": "2026-07-08T20:50:27.309Z",
+      "StructuredOutput": {
+        "rule": "PascalCase TS class symbol",
+        "value": "HigherLogicVanillaConnector",
+        "fixes": "B2"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.ClassName"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof-amend-r2.mjs",
+      "ScriptRunAt": "2026-07-08T20:50:27.309Z",
+      "StructuredOutput": {
+        "rule": "full canonical schema re-flatten + resolveFK vendor-wide",
+        "fixes": "B1",
+        "example": "Discussion.categoryID->Category, groupID->Group, insertUserID/lastUserID->User, statusID->Status"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Discussion.categoryID.RelatedIntegrationObjectID"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof-amend-r2.mjs",
+      "ScriptRunAt": "2026-07-08T20:50:27.309Z",
+      "StructuredOutput": {
+        "rule": "clean delete+recreate; removed fabricated `id`, corrected urlCode->urlcode",
+        "fixes": "B3"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "iof.Tag.urlcode"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof-amend-r2.mjs",
+      "ScriptRunAt": "2026-07-08T20:50:27.309Z",
+      "StructuredOutput": {
+        "rule": "nested listable component ArticleRevision via /articles/{id}/revisions",
+        "fixes": "B4"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.ArticleRevision.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof-amend-r2.mjs",
+      "ScriptRunAt": "2026-07-08T20:50:27.309Z",
+      "StructuredOutput": {
+        "rule": "nested writable /conversations/{id}/participants, composite PK conversationID+userID",
+        "fixes": "B5"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.ConversationParticipant.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof-amend-r2.mjs",
+      "ScriptRunAt": "2026-07-08T20:50:27.309Z",
+      "StructuredOutput": {
+        "rule": "nested read /polls/{id}/votes, composite PK pollID+userID+pollOptionID",
+        "fixes": "A2"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.PollVote.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof-amend-r2.mjs",
+      "ScriptRunAt": "2026-07-08T20:50:27.309Z",
+      "StructuredOutput": {
+        "rule": "write surface at /user-notes/notes[/{id}]",
+        "fixes": "A1"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.UserNote.SupportsWrite"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof-amend-r2.mjs",
+      "ScriptRunAt": "2026-07-08T20:50:27.309Z",
+      "StructuredOutput": {
+        "rule": "dateUpdated (not insert-only)",
+        "fixes": "A4"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Appeal.IncrementalWatermarkField"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof-amend-r3.mjs",
+      "ScriptRunAt": "2026-07-08T23:53:53.379Z",
+      "StructuredOutput": {
+        "fixes": "B1",
+        "paths": [
+          "/badges/requests",
+          "/badges/{id}/requests",
+          "/badges/{id}/requests/{userID}"
+        ],
+        "compositePK": "badgeID+userID",
+        "fks": {
+          "badgeID": "Badge",
+          "userID": "User",
+          "insertUserID": "User"
+        }
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.BadgeRequest.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof-amend-r3.mjs",
+      "ScriptRunAt": "2026-07-08T23:53:53.379Z",
+      "StructuredOutput": {
+        "fixes": "B2",
+        "paths": [
+          "/discussions/{id}/reactions",
+          "/discussions/{id}/reactions/{userID}"
+        ],
+        "compositePK": "recordType+recordID+userID+tagID",
+        "tagIDFK": "DEFERRED (ReactionType PK is urlCode string, not tagID int)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.DiscussionReaction.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof-amend-r3.mjs",
+      "ScriptRunAt": "2026-07-08T23:53:53.379Z",
+      "StructuredOutput": {
+        "fixes": "B2",
+        "paths": [
+          "/comments/{id}/reactions",
+          "/comments/{id}/reactions/{userID}"
+        ],
+        "compositePK": "recordType+recordID+userID+tagID",
+        "tagIDFK": "DEFERRED (ReactionType PK is urlCode string, not tagID int)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.CommentReaction.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof-amend-r3.mjs",
+      "ScriptRunAt": "2026-07-08T23:53:53.379Z",
+      "StructuredOutput": {
+        "fixes": "B4",
+        "path": "POST /events/{id}/participants",
+        "body": "{attending(req),userID}"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.EventParticipant.SupportsCreate"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof-amend-r3.mjs",
+      "ScriptRunAt": "2026-07-08T23:53:53.379Z",
+      "StructuredOutput": {
+        "fixes": "B5+B7+B8",
+        "update": "PATCH /groups/{id}/members/{userID}",
+        "deleteFix": "bulk /groups/{id}/members -> single /groups/{id}/members/{userID}",
+        "compositePK": "groupID+userID"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.GroupMember.SupportsUpdate"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof-amend-r3.mjs",
+      "ScriptRunAt": "2026-07-08T23:53:53.380Z",
+      "StructuredOutput": {
+        "fixes": "B6+B7",
+        "create": "POST /badges/{id}/users",
+        "delete": "DELETE /badges/{id}/users/{userID}",
+        "compositePK": "badgeID+userID"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.UserBadge.SupportsCreate"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof-amend-r3.mjs",
+      "ScriptRunAt": "2026-07-08T23:53:53.380Z",
+      "StructuredOutput": {
+        "fixes": "B7+B8",
+        "updateFix": "bulk /groups/{id}/applicants -> single /groups/{id}/applicants/{userID}",
+        "compositePK": "groupID+userID"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.GroupApplicant.UpdateAPIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof-amend-r3.mjs",
+      "ScriptRunAt": "2026-07-08T23:53:53.380Z",
+      "StructuredOutput": {
+        "fixes": "B7+B8",
+        "deleteFix": "bulk /groups/{id}/invites -> single /groups/{id}/invites/{userID}",
+        "compositePK": "groupID+userID"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.GroupInvite.DeleteAPIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof-amend-r3.mjs",
+      "ScriptRunAt": "2026-07-08T23:53:53.380Z",
+      "StructuredOutput": {
+        "fixes": "B9",
+        "before": "/icons/{id}",
+        "after": "/icons/{iconUUID}",
+        "reason": "template var must match IsPrimaryKey field iconUUID"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Icon.DeleteAPIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof-amend-r3.mjs",
+      "ScriptRunAt": "2026-07-08T23:53:53.380Z",
+      "StructuredOutput": {
+        "fixes": "B2",
+        "correction": "reaction-event endpoints exist; scope note superseded"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.ReactionEventScopeNote"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof-amend-r3.mjs",
+      "ScriptRunAt": "2026-07-08T23:54:51.333Z",
+      "StructuredOutput": {
+        "fixes": "B1",
+        "paths": [
+          "/badges/requests",
+          "/badges/{id}/requests",
+          "/badges/{id}/requests/{userID}"
+        ],
+        "compositePK": "badgeID+userID",
+        "fks": {
+          "badgeID": "Badge",
+          "userID": "User",
+          "insertUserID": "User"
+        }
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.BadgeRequest.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof-amend-r3.mjs",
+      "ScriptRunAt": "2026-07-08T23:54:51.334Z",
+      "StructuredOutput": {
+        "fixes": "B2",
+        "paths": [
+          "/discussions/{id}/reactions",
+          "/discussions/{id}/reactions/{userID}"
+        ],
+        "compositePK": "recordType+recordID+userID+tagID",
+        "tagIDFK": "DEFERRED (ReactionType PK is urlCode string, not tagID int)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.DiscussionReaction.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof-amend-r3.mjs",
+      "ScriptRunAt": "2026-07-08T23:54:51.334Z",
+      "StructuredOutput": {
+        "fixes": "B2",
+        "paths": [
+          "/comments/{id}/reactions",
+          "/comments/{id}/reactions/{userID}"
+        ],
+        "compositePK": "recordType+recordID+userID+tagID",
+        "tagIDFK": "DEFERRED (ReactionType PK is urlCode string, not tagID int)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.CommentReaction.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof-amend-r3.mjs",
+      "ScriptRunAt": "2026-07-08T23:54:51.334Z",
+      "StructuredOutput": {
+        "fixes": "B4",
+        "path": "POST /events/{id}/participants",
+        "body": "{attending(req),userID}"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.EventParticipant.SupportsCreate"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof-amend-r3.mjs",
+      "ScriptRunAt": "2026-07-08T23:54:51.334Z",
+      "StructuredOutput": {
+        "fixes": "B5+B7+B8",
+        "update": "PATCH /groups/{id}/members/{userID}",
+        "deleteFix": "bulk /groups/{id}/members -> single /groups/{id}/members/{userID}",
+        "compositePK": "groupID+userID"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.GroupMember.SupportsUpdate"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof-amend-r3.mjs",
+      "ScriptRunAt": "2026-07-08T23:54:51.334Z",
+      "StructuredOutput": {
+        "fixes": "B6+B7",
+        "create": "POST /badges/{id}/users",
+        "delete": "DELETE /badges/{id}/users/{userID}",
+        "compositePK": "badgeID+userID"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.UserBadge.SupportsCreate"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof-amend-r3.mjs",
+      "ScriptRunAt": "2026-07-08T23:54:51.334Z",
+      "StructuredOutput": {
+        "fixes": "B7+B8",
+        "updateFix": "bulk /groups/{id}/applicants -> single /groups/{id}/applicants/{userID}",
+        "compositePK": "groupID+userID"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.GroupApplicant.UpdateAPIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof-amend-r3.mjs",
+      "ScriptRunAt": "2026-07-08T23:54:51.334Z",
+      "StructuredOutput": {
+        "fixes": "B7+B8",
+        "deleteFix": "bulk /groups/{id}/invites -> single /groups/{id}/invites/{userID}",
+        "compositePK": "groupID+userID"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.GroupInvite.DeleteAPIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof-amend-r3.mjs",
+      "ScriptRunAt": "2026-07-08T23:54:51.334Z",
+      "StructuredOutput": {
+        "fixes": "B9",
+        "before": "/icons/{id}",
+        "after": "/icons/{iconUUID}",
+        "reason": "template var must match IsPrimaryKey field iconUUID"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Icon.DeleteAPIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof-amend-r3.mjs",
+      "ScriptRunAt": "2026-07-08T23:54:51.334Z",
+      "StructuredOutput": {
+        "fixes": "B2",
+        "correction": "reaction-event endpoints exist; scope note superseded"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.ReactionEventScopeNote"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof-amend-r3.mjs",
+      "ScriptRunAt": "2026-07-08T23:58:39.470Z",
+      "StructuredOutput": {
+        "fixes": "B1",
+        "paths": [
+          "/badges/requests",
+          "/badges/{id}/requests",
+          "/badges/{id}/requests/{userID}"
+        ],
+        "compositePK": "badgeID+userID",
+        "fks": {
+          "badgeID": "Badge",
+          "userID": "User",
+          "insertUserID": "User"
+        }
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.BadgeRequest.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof-amend-r3.mjs",
+      "ScriptRunAt": "2026-07-08T23:58:39.471Z",
+      "StructuredOutput": {
+        "fixes": "B2",
+        "paths": [
+          "/discussions/{id}/reactions",
+          "/discussions/{id}/reactions/{userID}"
+        ],
+        "compositePK": "recordType+recordID+userID+tagID",
+        "tagIDFK": "DEFERRED (ReactionType PK is urlCode string, not tagID int)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.DiscussionReaction.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof-amend-r3.mjs",
+      "ScriptRunAt": "2026-07-08T23:58:39.471Z",
+      "StructuredOutput": {
+        "fixes": "B2",
+        "paths": [
+          "/comments/{id}/reactions",
+          "/comments/{id}/reactions/{userID}"
+        ],
+        "compositePK": "recordType+recordID+userID+tagID",
+        "tagIDFK": "DEFERRED (ReactionType PK is urlCode string, not tagID int)"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.CommentReaction.APIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof-amend-r3.mjs",
+      "ScriptRunAt": "2026-07-08T23:58:39.471Z",
+      "StructuredOutput": {
+        "fixes": "B4",
+        "path": "POST /events/{id}/participants",
+        "body": "{attending(req),userID}"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.EventParticipant.SupportsCreate"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof-amend-r3.mjs",
+      "ScriptRunAt": "2026-07-08T23:58:39.471Z",
+      "StructuredOutput": {
+        "fixes": "B5+B7+B8",
+        "update": "PATCH /groups/{id}/members/{userID}",
+        "deleteFix": "bulk /groups/{id}/members -> single /groups/{id}/members/{userID}",
+        "compositePK": "groupID+userID"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.GroupMember.SupportsUpdate"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof-amend-r3.mjs",
+      "ScriptRunAt": "2026-07-08T23:58:39.471Z",
+      "StructuredOutput": {
+        "fixes": "B6+B7",
+        "create": "POST /badges/{id}/users",
+        "delete": "DELETE /badges/{id}/users/{userID}",
+        "compositePK": "badgeID+userID"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.UserBadge.SupportsCreate"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof-amend-r3.mjs",
+      "ScriptRunAt": "2026-07-08T23:58:39.471Z",
+      "StructuredOutput": {
+        "fixes": "B7+B8",
+        "updateFix": "bulk /groups/{id}/applicants -> single /groups/{id}/applicants/{userID}",
+        "compositePK": "groupID+userID"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.GroupApplicant.UpdateAPIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof-amend-r3.mjs",
+      "ScriptRunAt": "2026-07-08T23:58:39.471Z",
+      "StructuredOutput": {
+        "fixes": "B7+B8",
+        "deleteFix": "bulk /groups/{id}/invites -> single /groups/{id}/invites/{userID}",
+        "compositePK": "groupID+userID"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.GroupInvite.DeleteAPIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof-amend-r3.mjs",
+      "ScriptRunAt": "2026-07-08T23:58:39.471Z",
+      "StructuredOutput": {
+        "fixes": "B9",
+        "before": "/icons/{id}",
+        "after": "/icons/{iconUUID}",
+        "reason": "template var must match IsPrimaryKey field iconUUID"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.Icon.DeleteAPIPath"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof-amend-r3.mjs",
+      "ScriptRunAt": "2026-07-08T23:58:39.471Z",
+      "StructuredOutput": {
+        "fixes": "B2",
+        "correction": "reaction-event endpoints exist; scope note superseded"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "integration.Configuration.ReactionEventScopeNote"
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": true,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": true,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.Addon.addonID.IsPrimaryKey",
+      "SourceLocus": "GET /addons (list) response record schema ; single-record path /addons/{addonID}",
+      "Excerpt": "OpenAPI record schema for 'Addon' declares property 'addonID' (in 'required'). Single-record path /addons/{addonID} addresses one record."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": true,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": true,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.Appeal.appealID.IsPrimaryKey",
+      "SourceLocus": "GET /appeals (list) response record schema ; single-record path /appeals/{id}",
+      "Excerpt": "OpenAPI record schema for 'Appeal' declares property 'appealID' (in 'required'). Single-record path /appeals/{id} addresses one record."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": true,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": true,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.Authenticator.authenticatorID.IsPrimaryKey",
+      "SourceLocus": "GET /authenticators (list) response record schema ; single-record path /authenticators/{id}",
+      "Excerpt": "OpenAPI record schema for 'Authenticator' declares property 'authenticatorID' (in 'required'). Single-record path /authenticators/{id} addresses one record."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": false,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": false,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.AutomationDispatch.automationRuleDispatchUUID.IsPrimaryKey",
+      "SourceLocus": "GET /automation-rules/dispatches (list) response record schema",
+      "Excerpt": "OpenAPI record schema for 'AutomationDispatch' declares property 'automationRuleDispatchUUID'."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": true,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": true,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.Category.categoryID.IsPrimaryKey",
+      "SourceLocus": "GET /categories (list) response record schema ; single-record path /categories/{id}",
+      "Excerpt": "OpenAPI record schema for 'Category' declares property 'categoryID' (in 'required'). Single-record path /categories/{id} addresses one record."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": true,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": true,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.Collection.collectionID.IsPrimaryKey",
+      "SourceLocus": "GET /collections (list) response record schema ; single-record path /collections/{id}",
+      "Excerpt": "OpenAPI record schema for 'Collection' declares property 'collectionID' (in 'required'). Single-record path /collections/{id} addresses one record."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": true,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": true,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.Comment.commentID.IsPrimaryKey",
+      "SourceLocus": "GET /comments (list) response record schema ; single-record path /comments/{id}",
+      "Excerpt": "OpenAPI record schema for 'Comment' declares property 'commentID' (in 'required'). Single-record path /comments/{id} addresses one record."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": true,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": true,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.Conversation.conversationID.IsPrimaryKey",
+      "SourceLocus": "GET /conversations (list) response record schema ; single-record path /conversations/{id}",
+      "Excerpt": "OpenAPI record schema for 'Conversation' declares property 'conversationID' (in 'required'). Single-record path /conversations/{id} addresses one record."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": true,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": true,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.DataSource.dataSourceID.IsPrimaryKey",
+      "SourceLocus": "GET /data-sources (list) response record schema ; single-record path /data-sources/{dataSourceID}",
+      "Excerpt": "OpenAPI record schema for 'DataSource' declares property 'dataSourceID' (in 'required'). Single-record path /data-sources/{dataSourceID} addresses one record."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": true,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": true,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.Discussion.discussionID.IsPrimaryKey",
+      "SourceLocus": "GET /discussions (list) response record schema ; single-record path /discussions/{id}",
+      "Excerpt": "OpenAPI record schema for 'Discussion' declares property 'discussionID' (in 'required'). Single-record path /discussions/{id} addresses one record."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": true,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": true,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.Draft.draftID.IsPrimaryKey",
+      "SourceLocus": "GET /drafts (list) response record schema ; single-record path /drafts/{id}",
+      "Excerpt": "OpenAPI record schema for 'Draft' declares property 'draftID' (in 'required'). Single-record path /drafts/{id} addresses one record."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": false,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": true,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.EmailTemplate.emailTemplatesID.IsPrimaryKey",
+      "SourceLocus": "GET /email-templates (list) response record schema ; single-record path /email-templates/{id}",
+      "Excerpt": "OpenAPI record schema for 'EmailTemplate' declares property 'emailTemplatesID'. Single-record path /email-templates/{id} addresses one record."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": true,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": false,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.Escalation.recordID.IsPrimaryKey",
+      "SourceLocus": "GET /escalations (list) response record schema",
+      "Excerpt": "OpenAPI record schema for 'Escalation' declares property 'recordID' (in 'required')."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": true,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": true,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.Export.exportUUID.IsPrimaryKey",
+      "SourceLocus": "GET /exports (list) response record schema ; single-record path /exports/{exportUUID}",
+      "Excerpt": "OpenAPI record schema for 'Export' declares property 'exportUUID' (in 'required'). Single-record path /exports/{exportUUID} addresses one record."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": false,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": false,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.Icon.iconUUID.IsPrimaryKey",
+      "SourceLocus": "GET /icons/active (list) response record schema",
+      "Excerpt": "OpenAPI record schema for 'Icon' declares property 'iconUUID'."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": false,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": true,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.Locale.localeID.IsPrimaryKey",
+      "SourceLocus": "GET /locales (list) response record schema ; single-record path /locales/{locale}",
+      "Excerpt": "OpenAPI record schema for 'Locale' declares property 'localeID'. Single-record path /locales/{locale} addresses one record."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": true,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": true,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.MediaItem.mediaID.IsPrimaryKey",
+      "SourceLocus": "GET /media (list) response record schema ; single-record path /media/{id}",
+      "Excerpt": "OpenAPI record schema for 'MediaItem' declares property 'mediaID' (in 'required'). Single-record path /media/{id} addresses one record."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": true,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": true,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.Message.messageID.IsPrimaryKey",
+      "SourceLocus": "GET /messages (list) response record schema ; single-record path /messages/{id}",
+      "Excerpt": "OpenAPI record schema for 'Message' declares property 'messageID' (in 'required'). Single-record path /messages/{id} addresses one record."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": true,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": true,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.ModerationMessage.moderationMessageID.IsPrimaryKey",
+      "SourceLocus": "GET /moderation-messages (list) response record schema ; single-record path /moderation-messages/{id}",
+      "Excerpt": "OpenAPI record schema for 'ModerationMessage' declares property 'moderationMessageID' (in 'required'). Single-record path /moderation-messages/{id} addresses one record."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": true,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": true,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.Notification.notificationID.IsPrimaryKey",
+      "SourceLocus": "GET /notifications (list) response record schema ; single-record path /notifications/{id}",
+      "Excerpt": "OpenAPI record schema for 'Notification' declares property 'notificationID' (in 'required'). Single-record path /notifications/{id} addresses one record."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": true,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": true,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.Poll.pollID.IsPrimaryKey",
+      "SourceLocus": "GET /polls (list) response record schema ; single-record path /polls/{id}",
+      "Excerpt": "OpenAPI record schema for 'Poll' declares property 'pollID' (in 'required'). Single-record path /polls/{id} addresses one record."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": true,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": false,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.ProductMessage.productMessageID.IsPrimaryKey",
+      "SourceLocus": "GET /product-messages (list) response record schema",
+      "Excerpt": "OpenAPI record schema for 'ProductMessage' declares property 'productMessageID' (in 'required')."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": true,
+        "MatchesNamingConvention": false,
+        "ItemPathExists": true,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.ProfileField.apiName.IsPrimaryKey",
+      "SourceLocus": "GET /profile-fields (list) response record schema ; single-record path /profile-fields/{apiName}",
+      "Excerpt": "OpenAPI record schema for 'ProfileField' declares property 'apiName' (in 'required'). Single-record path /profile-fields/{apiName} addresses one record."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": true,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": true,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.Rank.rankID.IsPrimaryKey",
+      "SourceLocus": "GET /ranks (list) response record schema ; single-record path /ranks/{id}",
+      "Excerpt": "OpenAPI record schema for 'Rank' declares property 'rankID' (in 'required'). Single-record path /ranks/{id} addresses one record."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": true,
+        "MatchesNamingConvention": false,
+        "ItemPathExists": true,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.ReactionType.urlCode.IsPrimaryKey",
+      "SourceLocus": "GET /reactions (list) response record schema ; single-record path /reactions/{urlCode}",
+      "Excerpt": "OpenAPI record schema for 'ReactionType' declares property 'urlCode' (in 'required'). Single-record path /reactions/{urlCode} addresses one record."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": true,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": false,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.ReportReason.reportReasonID.IsPrimaryKey",
+      "SourceLocus": "GET /report-reasons (list) response record schema",
+      "Excerpt": "OpenAPI record schema for 'ReportReason' declares property 'reportReasonID' (in 'required')."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": true,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": false,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.Report.reportID.IsPrimaryKey",
+      "SourceLocus": "GET /reports (list) response record schema",
+      "Excerpt": "OpenAPI record schema for 'Report' declares property 'reportID' (in 'required')."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": true,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": true,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.RoleApplication.roleRequestID.IsPrimaryKey",
+      "SourceLocus": "GET /role-requests/applications (list) response record schema ; single-record path /role-requests/applications/{id}",
+      "Excerpt": "OpenAPI record schema for 'RoleApplication' declares property 'roleRequestID' (in 'required'). Single-record path /role-requests/applications/{id} addresses one record."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": true,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": true,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.Role.roleID.IsPrimaryKey",
+      "SourceLocus": "GET /roles (list) response record schema ; single-record path /roles/{id}",
+      "Excerpt": "OpenAPI record schema for 'Role' declares property 'roleID' (in 'required'). Single-record path /roles/{id} addresses one record."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": true,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": true,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.Rule.ruleID.IsPrimaryKey",
+      "SourceLocus": "GET /rules (list) response record schema ; single-record path /rules/{id}",
+      "Excerpt": "OpenAPI record schema for 'Rule' declares property 'ruleID' (in 'required'). Single-record path /rules/{id} addresses one record."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": false,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": false,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.Session.sessionID.IsPrimaryKey",
+      "SourceLocus": "GET /sessions (list) response record schema",
+      "Excerpt": "OpenAPI record schema for 'Session' declares property 'sessionID'."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": true,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": true,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.Status.statusID.IsPrimaryKey",
+      "SourceLocus": "GET /statuses (list) response record schema ; single-record path /statuses/{id}",
+      "Excerpt": "OpenAPI record schema for 'Status' declares property 'statusID' (in 'required'). Single-record path /statuses/{id} addresses one record."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": true,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": true,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.Theme.themeID.IsPrimaryKey",
+      "SourceLocus": "GET /themes (list) response record schema ; single-record path /themes/{themeID}",
+      "Excerpt": "OpenAPI record schema for 'Theme' declares property 'themeID' (in 'required'). Single-record path /themes/{themeID} addresses one record."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": true,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": true,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.Token.accessTokenID.IsPrimaryKey",
+      "SourceLocus": "GET /tokens (list) response record schema ; single-record path /tokens/{id}",
+      "Excerpt": "OpenAPI record schema for 'Token' declares property 'accessTokenID' (in 'required'). Single-record path /tokens/{id} addresses one record."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": false,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": false,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.UserMention.userID.IsPrimaryKey",
+      "SourceLocus": "GET /user-mentions/users/{userID} (list) response record schema",
+      "Excerpt": "OpenAPI record schema for 'UserMention' declares property 'userID'."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": false,
+        "MatchesNamingConvention": false,
+        "ItemPathExists": false,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.UserMention.recordType.IsPrimaryKey",
+      "SourceLocus": "GET /user-mentions/users/{userID} (list) response record schema",
+      "Excerpt": "OpenAPI record schema for 'UserMention' declares property 'recordType'."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": false,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": false,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.UserMention.recordID.IsPrimaryKey",
+      "SourceLocus": "GET /user-mentions/users/{userID} (list) response record schema",
+      "Excerpt": "OpenAPI record schema for 'UserMention' declares property 'recordID'."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": false,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": true,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.UserNote.userNoteID.IsPrimaryKey",
+      "SourceLocus": "GET /user-notes (list) response record schema ; single-record path /user-notes/{id}",
+      "Excerpt": "OpenAPI record schema for 'UserNote' declares property 'userNoteID'. Single-record path /user-notes/{id} addresses one record."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": true,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": true,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.User.userID.IsPrimaryKey",
+      "SourceLocus": "GET /users (list) response record schema ; single-record path /users/{id}",
+      "Excerpt": "OpenAPI record schema for 'User' declares property 'userID' (in 'required'). Single-record path /users/{id} addresses one record."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": true,
+        "MatchesNamingConvention": false,
+        "ItemPathExists": true,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.Widget.name.IsPrimaryKey",
+      "SourceLocus": "GET /widgets (list) response record schema ; single-record path /widgets/{name}",
+      "Excerpt": "OpenAPI record schema for 'Widget' declares property 'name' (in 'required'). Single-record path /widgets/{name} addresses one record."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": true,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": true,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.Article.articleID.IsPrimaryKey",
+      "SourceLocus": "GET /articles (list) response record schema ; single-record path /articles/{id}",
+      "Excerpt": "OpenAPI record schema for 'Article' declares property 'articleID' (in 'required'). Single-record path /articles/{id} addresses one record."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": true,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": true,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.Badge.badgeID.IsPrimaryKey",
+      "SourceLocus": "GET /badges (list) response record schema ; single-record path /badges/{id}",
+      "Excerpt": "OpenAPI record schema for 'Badge' declares property 'badgeID' (in 'required'). Single-record path /badges/{id} addresses one record."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": true,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": true,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.Event.eventID.IsPrimaryKey",
+      "SourceLocus": "GET /events (list) response record schema ; single-record path /events/{id}",
+      "Excerpt": "OpenAPI record schema for 'Event' declares property 'eventID' (in 'required'). Single-record path /events/{id} addresses one record."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": true,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": true,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.Group.groupID.IsPrimaryKey",
+      "SourceLocus": "GET /groups (list) response record schema ; single-record path /groups/{id}",
+      "Excerpt": "OpenAPI record schema for 'Group' declares property 'groupID' (in 'required'). Single-record path /groups/{id} addresses one record."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": false,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": false,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.Keyword.keywordID.IsPrimaryKey",
+      "SourceLocus": "GET /keywords (list) response record schema",
+      "Excerpt": "OpenAPI record schema for 'Keyword' declares property 'keywordID'."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": true,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": true,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.KnowledgeBase.knowledgeBaseID.IsPrimaryKey",
+      "SourceLocus": "GET /knowledge-bases (list) response record schema ; single-record path /knowledge-bases/{id}",
+      "Excerpt": "OpenAPI record schema for 'KnowledgeBase' declares property 'knowledgeBaseID' (in 'required'). Single-record path /knowledge-bases/{id} addresses one record."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": true,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": true,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.KnowledgeCategory.knowledgeCategoryID.IsPrimaryKey",
+      "SourceLocus": "GET /knowledge-categories (list) response record schema ; single-record path /knowledge-categories/{id}",
+      "Excerpt": "OpenAPI record schema for 'KnowledgeCategory' declares property 'knowledgeCategoryID' (in 'required'). Single-record path /knowledge-categories/{id} addresses one record."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": true,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": true,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.Multisite.multisiteID.IsPrimaryKey",
+      "SourceLocus": "GET /multisites (list) response record schema ; single-record path /multisites/{multisiteID}",
+      "Excerpt": "OpenAPI record schema for 'Multisite' declares property 'multisiteID' (in 'required'). Single-record path /multisites/{multisiteID} addresses one record."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": true,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": false,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.OnlineUser.userID.IsPrimaryKey",
+      "SourceLocus": "GET /online (list) response record schema",
+      "Excerpt": "OpenAPI record schema for 'OnlineUser' declares property 'userID' (in 'required')."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": true,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": true,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.Product.productID.IsPrimaryKey",
+      "SourceLocus": "GET /products (list) response record schema ; single-record path /products/{id}",
+      "Excerpt": "OpenAPI record schema for 'Product' declares property 'productID' (in 'required'). Single-record path /products/{id} addresses one record."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": true,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": true,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.Subcommunity.subcommunityID.IsPrimaryKey",
+      "SourceLocus": "GET /subcommunities (list) response record schema ; single-record path /subcommunities/{id}",
+      "Excerpt": "OpenAPI record schema for 'Subcommunity' declares property 'subcommunityID' (in 'required'). Single-record path /subcommunities/{id} addresses one record."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": false,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": true,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.Webhook.webhookID.IsPrimaryKey",
+      "SourceLocus": "GET /webhooks (list) response record schema ; single-record path /webhooks/{id}",
+      "Excerpt": "OpenAPI record schema for 'Webhook' declares property 'webhookID'. Single-record path /webhooks/{id} addresses one record."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": true,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": false,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.EventParticipant.eventID.IsPrimaryKey",
+      "SourceLocus": "GET /events/{id}/participants (list) response record schema",
+      "Excerpt": "OpenAPI record schema for 'EventParticipant' declares property 'eventID' (in 'required')."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": true,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": false,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.EventParticipant.userID.IsPrimaryKey",
+      "SourceLocus": "GET /events/{id}/participants (list) response record schema",
+      "Excerpt": "OpenAPI record schema for 'EventParticipant' declares property 'userID' (in 'required')."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": true,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": true,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.GroupApplicant.userID.IsPrimaryKey",
+      "SourceLocus": "GET /groups/{id}/applicants (list) response record schema ; single-record path /groups/{id}/applicants/{userID}",
+      "Excerpt": "OpenAPI record schema for 'GroupApplicant' declares property 'userID' (in 'required'). Single-record path /groups/{id}/applicants/{userID} addresses one record."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": false,
+        "InRequired": false,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": true,
+        "ProvenViaParentAddressingPath": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.GroupApplicant.groupID.IsPrimaryKey",
+      "SourceLocus": "parent addressing path /groups/{id} ; nested collection /groups/{id}/applicants",
+      "Excerpt": "Composite-PK part 'groupID' of junction 'GroupApplicant' is the parent record's primary key, bound as the path variable of /groups/{id}; the nesting path /groups/{id}/applicants carries it as the parent FK on each GroupApplicant record."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": true,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": true,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.GroupInvite.userID.IsPrimaryKey",
+      "SourceLocus": "GET /groups/{id}/invites (list) response record schema ; single-record path /groups/{id}/invites/{userID}",
+      "Excerpt": "OpenAPI record schema for 'GroupInvite' declares property 'userID' (in 'required'). Single-record path /groups/{id}/invites/{userID} addresses one record."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": false,
+        "InRequired": false,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": true,
+        "ProvenViaParentAddressingPath": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.GroupInvite.groupID.IsPrimaryKey",
+      "SourceLocus": "parent addressing path /groups/{id} ; nested collection /groups/{id}/invites",
+      "Excerpt": "Composite-PK part 'groupID' of junction 'GroupInvite' is the parent record's primary key, bound as the path variable of /groups/{id}; the nesting path /groups/{id}/invites carries it as the parent FK on each GroupInvite record."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": true,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": true,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.GroupMember.userID.IsPrimaryKey",
+      "SourceLocus": "GET /groups/{id}/members (list) response record schema ; single-record path /groups/{id}/members/{userID}",
+      "Excerpt": "OpenAPI record schema for 'GroupMember' declares property 'userID' (in 'required'). Single-record path /groups/{id}/members/{userID} addresses one record."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": false,
+        "InRequired": false,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": true,
+        "ProvenViaParentAddressingPath": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.GroupMember.groupID.IsPrimaryKey",
+      "SourceLocus": "parent addressing path /groups/{id} ; nested collection /groups/{id}/members",
+      "Excerpt": "Composite-PK part 'groupID' of junction 'GroupMember' is the parent record's primary key, bound as the path variable of /groups/{id}; the nesting path /groups/{id}/members carries it as the parent FK on each GroupMember record."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": false,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": false,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.GroupTag.tagID.IsPrimaryKey",
+      "SourceLocus": "GET /groups/{id}/tags (list) response record schema",
+      "Excerpt": "OpenAPI record schema for 'GroupTag' declares property 'tagID'."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": false,
+        "InRequired": false,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": false,
+        "ProvenViaParentAddressingPath": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.GroupTag.groupID.IsPrimaryKey",
+      "SourceLocus": "parent addressing path /groups/{id} ; nested collection /groups/{id}/tags",
+      "Excerpt": "Composite-PK part 'groupID' of junction 'GroupTag' is the parent record's primary key, bound as the path variable of /groups/{id}; the nesting path /groups/{id}/tags carries it as the parent FK on each GroupTag record."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": false,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": false,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.UserBadge.badgeID.IsPrimaryKey",
+      "SourceLocus": "GET /users/{id}/badges (list) response record schema",
+      "Excerpt": "OpenAPI record schema for 'UserBadge' declares property 'badgeID'."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": false,
+        "InRequired": false,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": false,
+        "ProvenViaParentAddressingPath": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.UserBadge.userID.IsPrimaryKey",
+      "SourceLocus": "parent addressing path /users/{id} ; nested collection /users/{id}/badges",
+      "Excerpt": "Composite-PK part 'userID' of junction 'UserBadge' is the parent record's primary key, bound as the path variable of /users/{id}; the nesting path /users/{id}/badges carries it as the parent FK on each UserBadge record."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": false,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": true,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.WebhookDelivery.webhookDeliveryID.IsPrimaryKey",
+      "SourceLocus": "GET /webhooks/{id}/deliveries (list) response record schema ; single-record path /webhooks/{id}/deliveries/{deliveryID}",
+      "Excerpt": "OpenAPI record schema for 'WebhookDelivery' declares property 'webhookDeliveryID'. Single-record path /webhooks/{id}/deliveries/{deliveryID} addresses one record."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": true,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": true,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.Tag.tagID.IsPrimaryKey",
+      "SourceLocus": "GET /tags (list) response record schema ; single-record path /tags/{id}",
+      "Excerpt": "OpenAPI record schema for 'Tag' declares property 'tagID' (in 'required'). Single-record path /tags/{id} addresses one record."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": true,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": false,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.ArticleRevision.articleRevisionID.IsPrimaryKey",
+      "SourceLocus": "GET /articles/{id}/revisions (list) response record schema",
+      "Excerpt": "OpenAPI record schema for 'ArticleRevision' declares property 'articleRevisionID' (in 'required')."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": false,
+        "InRequired": false,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": false,
+        "ProvenViaParentAddressingPath": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.ConversationParticipant.conversationID.IsPrimaryKey",
+      "SourceLocus": "parent addressing path /conversations/{id} ; nested collection /conversations/{id}/participants",
+      "Excerpt": "Composite-PK part 'conversationID' of junction 'ConversationParticipant' is the parent record's primary key, bound as the path variable of /conversations/{id}; the nesting path /conversations/{id}/participants carries it as the parent FK on each ConversationParticipant record."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": true,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": false,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.ConversationParticipant.userID.IsPrimaryKey",
+      "SourceLocus": "GET /conversations/{id}/participants (list) response record schema",
+      "Excerpt": "OpenAPI record schema for 'ConversationParticipant' declares property 'userID' (in 'required')."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": false,
+        "InRequired": false,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": false,
+        "ProvenViaParentAddressingPath": true
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.PollVote.pollID.IsPrimaryKey",
+      "SourceLocus": "parent addressing path /polls/{id} ; nested collection /polls/{id}/votes",
+      "Excerpt": "Composite-PK part 'pollID' of junction 'PollVote' is the parent record's primary key, bound as the path variable of /polls/{id}; the nesting path /polls/{id}/votes carries it as the parent FK on each PollVote record."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": true,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": false,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.PollVote.pollOptionID.IsPrimaryKey",
+      "SourceLocus": "GET /polls/{id}/votes (list) response record schema",
+      "Excerpt": "OpenAPI record schema for 'PollVote' declares property 'pollOptionID' (in 'required')."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": true,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": false,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.PollVote.userID.IsPrimaryKey",
+      "SourceLocus": "GET /polls/{id}/votes (list) response record schema",
+      "Excerpt": "OpenAPI record schema for 'PollVote' declares property 'userID' (in 'required')."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": true,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": false,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.BadgeRequest.badgeID.IsPrimaryKey",
+      "SourceLocus": "GET /badges/requests (list) response record schema",
+      "Excerpt": "OpenAPI record schema for 'BadgeRequest' declares property 'badgeID' (in 'required')."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": true,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": false,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.BadgeRequest.userID.IsPrimaryKey",
+      "SourceLocus": "GET /badges/requests (list) response record schema",
+      "Excerpt": "OpenAPI record schema for 'BadgeRequest' declares property 'userID' (in 'required')."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": true,
+        "MatchesNamingConvention": false,
+        "ItemPathExists": true,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.DiscussionReaction.recordType.IsPrimaryKey",
+      "SourceLocus": "GET /discussions/{id}/reactions (list) response record schema ; single-record path /discussions/{id}/reactions/{userID}",
+      "Excerpt": "OpenAPI record schema for 'DiscussionReaction' declares property 'recordType' (in 'required'). Single-record path /discussions/{id}/reactions/{userID} addresses one record."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": true,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": true,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.DiscussionReaction.recordID.IsPrimaryKey",
+      "SourceLocus": "GET /discussions/{id}/reactions (list) response record schema ; single-record path /discussions/{id}/reactions/{userID}",
+      "Excerpt": "OpenAPI record schema for 'DiscussionReaction' declares property 'recordID' (in 'required'). Single-record path /discussions/{id}/reactions/{userID} addresses one record."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": true,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": true,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.DiscussionReaction.userID.IsPrimaryKey",
+      "SourceLocus": "GET /discussions/{id}/reactions (list) response record schema ; single-record path /discussions/{id}/reactions/{userID}",
+      "Excerpt": "OpenAPI record schema for 'DiscussionReaction' declares property 'userID' (in 'required'). Single-record path /discussions/{id}/reactions/{userID} addresses one record."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": true,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": true,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.DiscussionReaction.tagID.IsPrimaryKey",
+      "SourceLocus": "GET /discussions/{id}/reactions (list) response record schema ; single-record path /discussions/{id}/reactions/{userID}",
+      "Excerpt": "OpenAPI record schema for 'DiscussionReaction' declares property 'tagID' (in 'required'). Single-record path /discussions/{id}/reactions/{userID} addresses one record."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": true,
+        "MatchesNamingConvention": false,
+        "ItemPathExists": true,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.CommentReaction.recordType.IsPrimaryKey",
+      "SourceLocus": "GET /comments/{id}/reactions (list) response record schema ; single-record path /comments/{id}/reactions/{userID}",
+      "Excerpt": "OpenAPI record schema for 'CommentReaction' declares property 'recordType' (in 'required'). Single-record path /comments/{id}/reactions/{userID} addresses one record."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": true,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": true,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.CommentReaction.recordID.IsPrimaryKey",
+      "SourceLocus": "GET /comments/{id}/reactions (list) response record schema ; single-record path /comments/{id}/reactions/{userID}",
+      "Excerpt": "OpenAPI record schema for 'CommentReaction' declares property 'recordID' (in 'required'). Single-record path /comments/{id}/reactions/{userID} addresses one record."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": true,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": true,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.CommentReaction.userID.IsPrimaryKey",
+      "SourceLocus": "GET /comments/{id}/reactions (list) response record schema ; single-record path /comments/{id}/reactions/{userID}",
+      "Excerpt": "OpenAPI record schema for 'CommentReaction' declares property 'userID' (in 'required'). Single-record path /comments/{id}/reactions/{userID} addresses one record."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": true,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": true,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.CommentReaction.tagID.IsPrimaryKey",
+      "SourceLocus": "GET /comments/{id}/reactions (list) response record schema ; single-record path /comments/{id}/reactions/{userID}",
+      "Excerpt": "OpenAPI record schema for 'CommentReaction' declares property 'tagID' (in 'required'). Single-record path /comments/{id}/reactions/{userID} addresses one record."
+    },
+    {
+      "ScriptPath": "scripts/derive-pk-evidence.mjs",
+      "ScriptRunAt": "2026-07-09T15:02:52.847Z",
+      "StructuredOutput": {
+        "InSchemaProperties": true,
+        "InRequired": false,
+        "MatchesNamingConvention": true,
+        "ItemPathExists": false,
+        "ProvenViaParentAddressingPath": false
+      },
+      "SchemaValidationStatus": "Passed",
+      "SourceTier": 1,
+      "SourceCategory": "OpenAPISpec",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "iof.EscalationLog.escalationLogID.IsPrimaryKey",
+      "SourceLocus": "GET /escalations/log (list) response record schema",
+      "Excerpt": "OpenAPI record schema for 'EscalationLog' declares property 'escalationLogID'."
+    }
+  ]
+}

@@ -37,3 +37,5 @@ export { MemberSuiteConnector } from './MemberSuiteConnector.js';
 export { WhovaConnector } from './WhovaConnector.js';
 export { EventbriteConnector } from './EventbriteConnector.js';
 export { StripeConnector } from './StripeConnector.js';
+export { ZendeskConnector } from './ZendeskConnector.js';
+export { HigherLogicVanillaConnector } from './HigherLogicVanillaConnector.js';
