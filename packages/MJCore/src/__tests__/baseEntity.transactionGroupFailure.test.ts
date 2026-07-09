@@ -83,6 +83,9 @@ const mockProvider = {
     async Save(entity: BaseEntity): Promise<Record<string, unknown>> {
         return {}; // resolve without throwing; do not add a transaction
     },
+    async Delete(entity: BaseEntity): Promise<boolean> {
+        return true; // "delete accepted / enqueued"; do not add a transaction
+    },
 } as unknown as IEntityDataProvider;
 
 let productEntityInfo: EntityInfo;
@@ -100,7 +103,7 @@ afterAll(() => {
     Metadata.Provider = null as unknown as ProviderBase;
 });
 
-describe('BaseEntity.Save() TransactionGroup failure (regression: must record, not throw/crash)', () => {
+describe('BaseEntity Save()/Delete() TransactionGroup failure (regression: must record, not throw/crash)', () => {
     let uncaught: Error | null = null;
     let uncaughtHandler: (err: Error) => void;
 
@@ -153,6 +156,40 @@ describe('BaseEntity.Save() TransactionGroup failure (regression: must record, n
         expect(uncaught).toBeNull();
 
         // === Behavior: failure was recorded on the entity, not thrown away ===
+        expect(entity.ResultHistory.length).toBe(historyLenBeforeSubmit + 1);
+        expect(entity.LatestResult).not.toBeNull();
+        expect(entity.LatestResult.Success).toBe(false);
+    });
+
+    // Mirror of the Save() case for the Delete() subscriber. This specifically pins the
+    // "error === undefined" failure shape: FailingTransactionGroup.HandleSubmit RETURNS failed
+    // TransactionResults (rather than throwing), so Submit() emits { success: false, results, error: undefined }
+    // — the exact shape the GraphQL-client transaction group produces on a server-reported failure.
+    // The OLD Delete() subscriber did `error.Errors` here, which is a TypeError when error is
+    // undefined -> rxjs re-throw -> uncaughtException -> process exit. The fix (error?.Errors + guard)
+    // records the failure instead.
+    it('Delete(): records failure and raises NO uncaughtException when the TG fails with error=undefined', async () => {
+        const entity = new TGTestEntity(productEntityInfo, mockProvider);
+        const tg = new FailingTransactionGroup();
+        entity.TransactionGroup = tg;
+
+        const delReturn = await entity.Delete();
+        expect(delReturn).toBe(true); // Delete() returns true immediately, work deferred to the TG
+
+        const historyLenBeforeSubmit = entity.ResultHistory.length;
+
+        tg.AddTransaction(new TransactionItem(entity, 'Delete', '', {}, {}, () => { /* no-op callback */ }));
+
+        const submitResult = await tg.Submit();
+        expect(submitResult).toBe(false);
+
+        // Let any asynchronous rxjs re-throw (the OLD bug) surface on a later tick.
+        await new Promise(resolve => setTimeout(resolve, 50));
+
+        // === Regression guard: the old `error.Errors` TypeError must NOT crash the process ===
+        expect(uncaught).toBeNull();
+
+        // === Behavior: failure recorded on the entity ===
         expect(entity.ResultHistory.length).toBe(historyLenBeforeSubmit + 1);
         expect(entity.LatestResult).not.toBeNull();
         expect(entity.LatestResult.Success).toBe(false);

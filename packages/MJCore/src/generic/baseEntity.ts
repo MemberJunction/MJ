@@ -3290,14 +3290,24 @@ export abstract class BaseEntity<T = unknown> {
                                 this.NewRecord(); // will trigger a new record event here too
                             }
                             else {
-                                // transaction failed, so we need to add a new result to the history here
-                                newResult.Success = false;
-                                newResult.Type = 'delete'
-                                newResult.Message = error && error.message? error.message : error;
-                                newResult.Errors = error.Errors || [];
-                                newResult.OriginalValues = this.Fields.map(f => { return {FieldName: f.CodeName, Value: f.OldValue} });
-                                newResult.EndedAt = new Date();
-                                this.RegisterResultHistoryEntry(newResult);
+                                // Transaction group failed / rolled back. RECORD the failure instead of
+                                // letting this async handler throw — exactly like the Save() subscriber above.
+                                // `error` may be UNDEFINED: the GraphQL-client transaction group signals
+                                // failure by RETURNING failed result items (no thrown error), so the old
+                                // `error.Errors` was a TypeError, which rxjs re-throws on a fresh tick as an
+                                // uncaughtException that exits the host process. Treat `error` as
+                                // possibly-absent, and guard on currentResultCount so a provider that already
+                                // recorded the failure (real providers do, before the notification fires)
+                                // isn't double-recorded.
+                                if (currentResultCount === this.ResultHistory.length) {
+                                    newResult.Success = false;
+                                    newResult.Type = 'delete';
+                                    newResult.Message = error?.message ?? (error != null ? String(error) : 'Transaction group failed');
+                                    newResult.Errors = error?.Errors || [];
+                                    newResult.OriginalValues = this.Fields.map(f => { return {FieldName: f.CodeName, Value: f.OldValue} });
+                                    newResult.EndedAt = new Date();
+                                    this.RegisterResultHistoryEntry(newResult);
+                                }
                             }
                         });
                     }
